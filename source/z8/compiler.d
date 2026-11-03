@@ -4,7 +4,8 @@ import std.algorithm : canFind;
 import std.array : join;
 import std.conv : to;
 import std.format : format;
-import std.string : replace, lastIndexOf;
+import std.string : replace, lastIndexOf, indexOf;
+import std.math : isFinite, abs;
 import z8.lexer;
 
 private enum decimalRuntime = import("z8_decimal_runtime.txt");
@@ -82,6 +83,26 @@ struct SourceUnit { string name, path, source; }
 
 private bool isArray(ValueType type) {
     return [ValueType.intArray, ValueType.boolArray, ValueType.stringArray].canFind(type);
+}
+// Until Java's legacy Double.toString conversion is fully reproduced, reject
+// literal values for which a shorter D rendering may differ from the Java backend.
+private bool safeDecimalLiteral(string text) {
+    auto spelling = text.replace(" ", "").replace("\t", "");
+    auto exponent = spelling.indexOf('e');
+    if (exponent < 0) exponent = spelling.indexOf('E');
+    auto mantissa = exponent < 0 ? spelling : spelling[0 .. exponent];
+    string digits;
+    foreach (c; mantissa) if (c >= '0' && c <= '9') digits ~= c;
+    size_t first, last = digits.length;
+    while (first < last && digits[first] == '0') ++first;
+    while (last > first && digits[last - 1] == '0') --last;
+    if (last - first > 15) return false;
+    try {
+        auto value = spelling.to!double;
+        if (!value.isFinite) return false;
+        if (first == last) return true;
+        return value != 0 && value.abs >= 1e-15 && value.abs < 1e15;
+    } catch (Exception) { return false; }
 }
 private ValueType elementType(ValueType type) {
     switch (type) {
@@ -520,7 +541,9 @@ class Checker {
     private ValueType typeOf(Expression e, ValueType expected = ValueType.voidType) {
         final switch (e.kind) {
             case ExprKind.integer: return ValueType.intType;
-            case ExprKind.decimalLiteral: return ValueType.decimalType;
+            case ExprKind.decimalLiteral:
+                if (!safeDecimalLiteral(e.token.text)) fail("decimal literal cannot yet be converted reliably; use decimal.parse with a string", e.token);
+                return ValueType.decimalType;
             case ExprKind.boolean: return ValueType.boolType;
             case ExprKind.stringLiteral: return ValueType.stringType;
             case ExprKind.arrayLiteral:
@@ -837,7 +860,7 @@ private string emitExprRaw(Expression e) {
         case ExprKind.integer:
             return "(cast(long)(" ~ e.token.text.replace(" ", "").replace("\t", "") ~ "))";
         case ExprKind.decimalLiteral:
-            return "z8_decimal(\"" ~ e.token.text.replace(" ", "").replace("\t", "") ~ "\")";
+            return "z8_decimal_literal(\"" ~ e.token.text.replace(" ", "").replace("\t", "") ~ "\")";
         case ExprKind.boolean: return e.token.text;
         case ExprKind.stringLiteral: return emitStringLiteral(e.token.text);
         case ExprKind.arrayLiteral:

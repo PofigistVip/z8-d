@@ -93,6 +93,15 @@ for _ in range(80):
     d_lines.append(f'writeln((z8_decimal("{a}") / z8_decimal("{b}")).z8_string());')
     cases.append((a, "/", b))
     java_lines.append(f'System.out.println(div(n("{a}"), n("{b}")).toPlainString());')
+def safe_literal():
+    integer = str(rng.randrange(0, 10**9))
+    fraction = f"{rng.randrange(0, 100000):05d}"
+    return ("-" if rng.randrange(2) else "") + integer + "." + fraction
+
+for literal in ["1.00", "0.10", "0.0001", "1.0e+10", "0.0"] + [safe_literal() for _ in range(80)]:
+    cases.append((literal, "literal", ""))
+    d_lines.append(f'writeln(z8_decimal_literal("{literal}").z8_string());')
+    java_lines.append(f'System.out.println(cap(BigDecimal.valueOf(Double.parseDouble("{literal}"))).toPlainString());')
 d_main = d_main.replace("// RANDOM_CASES", "\n".join(d_lines))
 java_main = java_main.replace("// RANDOM_CASES", "\n".join(java_lines))
 

@@ -1,0 +1,15 @@
+public class Arithmetic {
+    public static int run() {
+        if (1.0 != 1.00) return 4;
+        if ((0.10).toString() != "0.1") return 5;
+        decimal first = 1.0;
+        decimal second = decimal.parse("1.00");
+        if (first == second) return 1;
+        if (first < second) return 2;
+        decimal fraction = 1.0 / 3;
+        if (fraction.toString() != "0.333333") return 3;
+        int result = 5;
+        result += 7;
+        return result * 3 + 1;
+    }
+}

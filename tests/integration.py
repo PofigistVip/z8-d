@@ -115,6 +115,11 @@ void main() {
     )
     assert built.returncode == 0, built.stderr
     assert subprocess.run([str(executable)], cwd=directory).returncode == 59
+    for entry, expected in [("demo.cases.Arithmetic.run", 37), ("demo.cases.Text.run", 41), ("demo.cases.Flow.run", 11)]:
+        built = subprocess.run([str(exe), "build", str(root / "examples" / "project"), entry, str(executable)],
+                               capture_output=True, text=True, encoding="utf-8")
+        assert built.returncode == 0, built.stderr
+        assert subprocess.run([str(executable)], cwd=directory).returncode == expected
     invalid_entry = subprocess.run(
         [str(exe), "build", str(root / "examples" / "project"), "demo.Twice.apply", str(executable)],
         capture_output=True, text=True, encoding="utf-8",

@@ -1,0 +1,10 @@
+public class Text {
+    public static int run() {
+        string value = "a😀b😀";
+        if (value.length() != 6) return 1;
+        if (value.indexOf("😀", 2) != 4) return 2;
+        if (value.substring(1, 2) != "😀") return 3;
+        if (!value.startsWith("😀", 1)) return 4;
+        return 41;
+    }
+}

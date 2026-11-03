@@ -50,7 +50,7 @@ with tempfile.TemporaryDirectory() as temporary:
         raise SystemExit("Original compiler did not produce Java files")
     if os.environ.get("Z8_ORACLE_INSPECT"):
         for file in generated:
-            if file.name == "Main.java":
+            if file.name in ("Main.java", "Arithmetic.java"):
                 print(file.read_text(encoding="utf-8"))
     if os.environ.get("Z8_ORACLE_RUN"):
         runtime_jars = list((original / "org.zenframework.z8.server" / "target" / "libs").glob("*.jar"))
@@ -66,11 +66,19 @@ with tempfile.TemporaryDirectory() as temporary:
     public static void main(String[] args) throws Exception {
         org.zenframework.z8.server.config.ServerConfig.load(args[0]);
         System.out.println("RESULT:" + demo.Main.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.Arithmetic.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.Text.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.Flow.z8_run().get());
     }
 }''', encoding="utf-8")
         logging_cache = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "commons-logging" / "commons-logging"
         logging = [p for p in logging_cache.rglob("*.jar") if not p.name.endswith("-sources.jar")]
         run_classpath = os.pathsep.join([str(runtime_jars[0]), str(lang_classes), classpath] + [str(p) for p in logging])
+        # The cached runtime JAR can predate the checked-out sources. Override its
+        # decimal class with the current source before evaluating decimal results.
+        decimal_java = original / "org.zenframework.z8.server" / "src" / "main" / "java" / "org" / "zenframework" / "z8" / "server" / "types" / "decimal.java"
+        subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
+                        "-cp", run_classpath, "-d", str(generated_classes), str(decimal_java)], cwd=temp, check=True)
         generated_sources = [str(p) for p in (project / "out" / "demo").rglob("*.java")]
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
                         "-cp", run_classpath, "-d", str(generated_classes)] + generated_sources + [str(runner)], cwd=temp, check=True)
@@ -83,6 +91,9 @@ with tempfile.TemporaryDirectory() as temporary:
 import std.stdio : writeln;
 void main() {
     writeln(Z8p_64656D6F2E4D61696E.m_run());
+    writeln(Z8p_64656D6F2E63617365732E41726974686D65746963.m_run());
+    writeln(Z8p_64656D6F2E63617365732E54657874.m_run());
+    writeln(Z8p_64656D6F2E63617365732E466C6F77.m_run());
 }
 ''', encoding="utf-8")
         d_binary = temp / ("compare.exe" if os.name == "nt" else "compare")

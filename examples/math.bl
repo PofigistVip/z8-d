@@ -229,12 +229,12 @@ public class Math {
 
     public static bool decimalRules() {
         decimal one = 1.0;
-        decimal other = 1.00;
+        decimal other = decimal.parse("1.00");
         return one != other && one <= other && 1.20 + 0.03 == 1.23;
     }
 
     public static string decimalText() {
-        decimal value = 12345678901234567890123456789012345678.91;
+        decimal value = decimal.parse("12345678901234567890123456789012345678.91");
         return value.toString();
     }
 

@@ -1,0 +1,17 @@
+public class Flow {
+    public static int run() {
+        int[] numbers = {1, 2, 3, 12, 9};
+        int total;
+        for (int value : numbers) {
+            if (value == 2) continue;
+            if (value > 10) break;
+            total += value;
+        }
+        try {
+            throw "problem";
+        } catch (exception caught) {
+            total += caught.getMessage().length();
+        }
+        return total;
+    }
+}

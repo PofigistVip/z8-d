@@ -1,5 +1,7 @@
 private import std.bigint : BigInt;
 private import std.string : indexOf;
+private import std.format : format;
+private import std.math : isFinite;
 
 private BigInt z8_pow10(uint n) { return BigInt(10) ^^ n; }
 private size_t z8_precision(BigInt value) {
@@ -148,6 +150,50 @@ private Z8Decimal z8_decimal(string input) {
 }
 private Z8Decimal z8_decimal_parse(wstring value) {
     return value.length ? z8_decimal(z8_to_utf8(value)) : z8_decimal_from_int(0);
+}
+
+// The original Java backend emits decimal literals as double literals and the
+// runtime constructs BigDecimal through BigDecimal.valueOf(double).
+private Z8Decimal z8_decimal_literal(string input) {
+    double value = input.to!double;
+    if (!value.isFinite) throw new Exception("decimal literal is outside double range");
+    if (value == 0) return z8_decimal("0.0");
+    string shortest;
+    foreach (precision; 1 .. 18) {
+        auto candidate = format("%.*g", precision, value);
+        if (candidate.to!double == value) { shortest = candidate; break; }
+    }
+    if (!shortest.length) throw new Exception("cannot format decimal literal");
+    string sign;
+    if (shortest[0] == '-') { sign = "-"; shortest = shortest[1 .. $]; }
+    auto exponentAt = shortest.indexOf('e');
+    if (exponentAt < 0) exponentAt = shortest.indexOf('E');
+    int exponent;
+    if (exponentAt >= 0) { exponent = shortest[exponentAt + 1 .. $].to!int; shortest = shortest[0 .. exponentAt]; }
+    auto dot = shortest.indexOf('.');
+    auto before = dot < 0 ? shortest.length : cast(size_t)dot;
+    string digits = dot < 0 ? shortest : shortest[0 .. dot] ~ shortest[dot + 1 .. $];
+    size_t leading;
+    while (leading < digits.length && digits[leading] == '0') ++leading;
+    exponent += cast(int)before - cast(int)leading - 1;
+    digits = digits[leading .. $];
+    while (digits.length > 1 && digits[$-1] == '0') digits = digits[0 .. $-1];
+    string rendered;
+    if (exponent >= -3 && exponent < 7) {
+        auto split = exponent + 1;
+        if (split <= 0) {
+            rendered = "0.";
+            foreach (_; 0 .. -split) rendered ~= "0";
+            rendered ~= digits;
+        } else if (split >= cast(int)digits.length) {
+            rendered = digits;
+            foreach (_; 0 .. split - cast(int)digits.length) rendered ~= "0";
+            rendered ~= ".0";
+        } else rendered = digits[0 .. split] ~ "." ~ digits[split .. $];
+    } else {
+        rendered = digits[0 .. 1] ~ "." ~ (digits.length == 1 ? "0" : digits[1 .. $]) ~ "E" ~ exponent.to!string;
+    }
+    return z8_decimal(sign ~ rendered);
 }
 private Z8Decimal z8_decimal_from_int(long value) { return Z8Decimal.make(BigInt(value), 0); }
 private void z8_decimal_add_assign(ref Z8Decimal a, Z8Decimal b) { a = a + b; }
