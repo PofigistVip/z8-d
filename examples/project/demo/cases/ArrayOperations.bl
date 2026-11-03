@@ -1,0 +1,21 @@
+public class ArrayOperations {
+    public static int run() {
+        int[] values = {1, 2, 3};
+        values.add(1, 9);
+        if (!values.contains(9) || values.indexOf(9) != 1) return 1;
+        if (values.removeAt(2) != 2 || !values.remove(9)) return 2;
+        int[] extra = {4, 5};
+        values.addAll(extra);
+        values.reverse();
+        decimal[] decimals = {decimal.parse("1.0"), decimal.parse("1.00")};
+        if (decimals.indexOf(decimal.parse("1.00")) != 1 || decimals.contains(1)) return 3;
+        int[] same = {1, 2};
+        try {
+            same.addAll(same);
+            return 4;
+        } catch (exception expected) {
+            if (same.size() != 3) return 5;
+        }
+        return values[0] * 10 + values.size();
+    }
+}

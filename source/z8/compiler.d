@@ -712,15 +712,29 @@ class Checker {
                     }
                 } else if (isArray(receiver)) {
                     switch (e.token.text) {
-                        case "size": case "isEmpty": case "clear":
+                        case "size": case "isEmpty": case "clear": case "reverse":
                             if (e.arguments.length != 0) fail("incorrect argument count", e.token);
-                            return e.token.text == "size" ? ValueType.intType : e.token.text == "isEmpty" ? ValueType.boolType : ValueType.voidType;
+                            return e.token.text == "size" ? ValueType.intType : e.token.text == "isEmpty" ? ValueType.boolType : e.token.text == "reverse" ? receiver : ValueType.voidType;
                         case "get":
                             if (e.arguments.length != 1 || typeOf(e.arguments[0]) != ValueType.intType) fail("get requires an int index", e.token);
                             return elementType(receiver);
                         case "add":
-                            if (e.arguments.length != 1 || !matches(e.arguments[0], elementType(receiver))) fail("add requires an element of the array type", e.token);
+                            if (e.arguments.length == 1) {
+                                if (!matches(e.arguments[0], elementType(receiver))) fail("add requires an element of the array type", e.token);
+                            } else if (e.arguments.length == 2) {
+                                if (typeOf(e.arguments[0]) != ValueType.intType || !matches(e.arguments[1], elementType(receiver)))
+                                    fail("add requires an int index and an element of the array type", e.token);
+                            } else fail("incorrect argument count", e.token);
                             return receiver;
+                        case "addAll":
+                            if (e.arguments.length != 1 || !matches(e.arguments[0], receiver)) fail("addAll requires an array of the same type", e.token);
+                            return ValueType.voidType;
+                        case "contains": case "indexOf": case "remove":
+                            if (e.arguments.length != 1 || !matches(e.arguments[0], elementType(receiver))) fail("method requires an element of the array type", e.token);
+                            return e.token.text == "indexOf" ? ValueType.intType : ValueType.boolType;
+                        case "removeAt":
+                            if (e.arguments.length != 1 || typeOf(e.arguments[0]) != ValueType.intType) fail("removeAt requires an int index", e.token);
+                            return elementType(receiver);
                         case "set":
                             if (e.arguments.length != 2 || typeOf(e.arguments[0]) != ValueType.intType ||
                                 !matches(e.arguments[1], elementType(receiver))) fail("set requires an int index and an element of the array type", e.token);
@@ -1212,6 +1226,43 @@ class Z8Array(T) {
     bool z8_isEmpty() { return items.length == 0; }
     void z8_clear() { ++z8_version; items.length = 0; }
     Z8Array!T z8_add(T value) { ++z8_version; items ~= value; return this; }
+    Z8Array!T z8_add(long index, T value) {
+        auto i = cast(int)index;
+        if (i < 0 || cast(size_t)i > items.length) throw new Exception("array index out of bounds");
+        items = items[0 .. i] ~ [value] ~ items[i .. $];
+        ++z8_version; return this;
+    }
+    void z8_addAll(Z8Array!T other) {
+        auto expectedVersion = other.z8_version;
+        for (long i = 0; i != other.z8_size(); ++i) {
+            if (expectedVersion != other.z8_version) throw new Exception("array modified during iteration");
+            z8_add(other.z8_get(i));
+        }
+    }
+    long z8_indexOf(T value) {
+        foreach (i, item; items) if (item == value) return cast(long)i;
+        return -1;
+    }
+    bool z8_contains(T value) { return z8_indexOf(value) >= 0; }
+    T z8_removeAt(long index) {
+        auto i = cast(int)index;
+        if (i < 0 || cast(size_t)i >= items.length) throw new Exception("array index out of bounds");
+        auto value = items[i];
+        items = items[0 .. i] ~ items[i + 1 .. $];
+        ++z8_version; return value;
+    }
+    bool z8_remove(T value) {
+        auto index = z8_indexOf(value);
+        if (index < 0) return false;
+        z8_removeAt(index); return true;
+    }
+    Z8Array!T z8_reverse() {
+        for (size_t i = 0; i < items.length / 2; ++i) {
+            auto j = items.length - i - 1;
+            auto value = items[i]; items[i] = items[j]; items[j] = value;
+        }
+        return this;
+    }
     ref T z8_at(long index) {
         auto i = cast(int)index;
         if (i < 0 || cast(size_t)i >= items.length) throw new Exception("array index out of bounds");
