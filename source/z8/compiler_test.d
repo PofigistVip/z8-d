@@ -33,6 +33,10 @@ unittest {
     auto b = SourceUnit("other.B", "B.bl", "class B { public static int g(int x) { return x; } }");
     auto output = compileSources([a, b]);
     assert(output.canFind("Z8p_6F746865722E42.m_g"));
+    assert(compileSources([a, b], "pkg.A.f").canFind("int main()"));
+    bool badEntry;
+    try { compileSources([a, b], "other.B.g"); } catch (CompileException e) { badEntry = true; assert(e.sourceName == "B.bl"); }
+    assert(badEntry);
     rejectsSources([a], "A.bl");
     auto privateB = SourceUnit("other.B", "B.bl", "class B { static int g(int x) { return x; } }");
     rejectsSources([a, privateB], "A.bl");

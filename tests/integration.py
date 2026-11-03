@@ -99,4 +99,17 @@ void main() {
     assert rejected.returncode == 1 and "Broken.bl:1:1" in rejected.stderr and "unresolved import" in rejected.stderr
     assert not rejected.stdout
 
+    executable = directory / ("app.exe" if os.name == "nt" else "app")
+    built = subprocess.run(
+        [str(exe), "build", str(root / "examples" / "project"), "demo.Main.run", str(executable)],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    assert built.returncode == 0, built.stderr
+    assert subprocess.run([str(executable)], cwd=directory).returncode == 14
+    invalid_entry = subprocess.run(
+        [str(exe), "build", str(root / "examples" / "project"), "demo.Twice.apply", str(executable)],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    assert invalid_entry.returncode == 1 and "entry must be" in invalid_entry.stderr
+
 print("Generated D programs and diagnostics verified")

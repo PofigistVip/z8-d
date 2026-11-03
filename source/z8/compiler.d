@@ -657,7 +657,7 @@ string compile(string source) {
 }
 
 /// Each unit name is the dotted path of the .bl file relative to the source root.
-string compileSources(SourceUnit[] units) {
+string compileSources(SourceUnit[] units, string entry = "") {
     if (!units.length) throw new CompileException("no .bl source files found", Position.init);
     Program[] ordered;
     Program[string] programs;
@@ -688,7 +688,28 @@ string compileSources(SourceUnit[] units) {
         try { (new Checker).check(program, programs); }
         catch (CompileException e) { e.sourceName = program.sourceName; throw e; }
     }
-    return emitPrograms(ordered);
+    auto output = emitPrograms(ordered);
+    if (entry.length) {
+        auto dot = entry.lastIndexOf('.');
+        if (dot <= 0 || dot + 1 == entry.length)
+            throw new CompileException("entry must be a qualified class and method name", Position.init);
+        auto ownerName = entry[0 .. dot];
+        auto methodName = entry[dot + 1 .. $];
+        auto owner = ownerName in programs;
+        if (owner is null) throw new CompileException("entry class not found: " ~ ownerName, Position.init);
+        Method target;
+        foreach (candidate; (*owner).methods) if (candidate.name.text == methodName) { target = candidate; break; }
+        if (target is null) throw new CompileException("entry method not found: " ~ entry, Position.init);
+        if (!target.isPublic || target.parameters.length != 0 ||
+            (target.returnType != ValueType.voidType && target.returnType != ValueType.intType)) {
+            auto error = new CompileException("entry must be a public static method with no parameters returning void or int", target.name.position);
+            error.sourceName = (*owner).sourceName; throw error;
+        }
+        auto call = (*owner).emittedName ~ ".m_" ~ target.name.text ~ "()";
+        output ~= target.returnType == ValueType.voidType ? "\nvoid main() { " ~ call ~ "; }\n" :
+            "\nint main() { return cast(int)(" ~ call ~ "); }\n";
+    }
+    return output;
 }
 
 private string emitPrograms(Program[] programs) {
