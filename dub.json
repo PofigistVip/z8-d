@@ -1,0 +1,11 @@
+{
+  "name": "z8-d",
+  "description": "A D implementation of components of the Z8 platform",
+  "license": "LGPL-3.0-or-later",
+  "targetName": "z8d",
+  "sourcePaths": ["source"],
+  "configurations": [
+    { "name": "application", "targetType": "executable" },
+    { "name": "unittest", "targetType": "library", "excludedSourceFiles": ["source/app.d"] }
+  ]
+}
