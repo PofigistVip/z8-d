@@ -17,7 +17,7 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, decimalArray, boolArray, stringArray }
+enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, decimalArray, boolArray, stringArray, selfArray }
 enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, unary, binary, conditional }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
                 whileStmt, doWhileStmt, forStmt, forEachStmt, breakStmt, continueStmt, throwStmt, tryStmt }
@@ -82,8 +82,9 @@ class Program {
 struct SourceUnit { string name, path, source; }
 
 private bool isArray(ValueType type) {
-    return [ValueType.intArray, ValueType.decimalArray, ValueType.boolArray, ValueType.stringArray].canFind(type);
+    return [ValueType.intArray, ValueType.decimalArray, ValueType.boolArray, ValueType.stringArray, ValueType.selfArray].canFind(type);
 }
+private bool hasObjectClass(ValueType type) { return type == ValueType.selfType || type == ValueType.selfArray; }
 // Until Java's legacy Double.toString conversion is fully reproduced, reject
 // literal values for which a shorter D rendering may differ from the Java backend.
 private bool safeDecimalLiteral(string text) {
@@ -110,6 +111,7 @@ private ValueType elementType(ValueType type) {
         case ValueType.decimalArray: return ValueType.decimalType;
         case ValueType.boolArray: return ValueType.boolType;
         case ValueType.stringArray: return ValueType.stringType;
+        case ValueType.selfArray: return ValueType.selfType;
         default: assert(0, "not an array");
     }
 }
@@ -158,7 +160,8 @@ class Parser {
                 case ValueType.decimalType: return ValueType.decimalArray;
                 case ValueType.boolType: return ValueType.boolArray;
                 case ValueType.stringType: return ValueType.stringArray;
-                default: error("void arrays are not supported"); assert(0);
+                case ValueType.selfType: return ValueType.selfArray;
+                default: error("this array element type is not supported"); assert(0);
             }
         }
         return result;
@@ -187,7 +190,7 @@ class Parser {
             auto declaredType = parseType(); auto declaredObjectName = parsedObjectName; auto name = identifier();
             if (current.text != "(") {
                 if (isVirtual || declaredType == ValueType.voidType) error("this field type or modifier is not supported");
-                if (isStatic && (declaredType == ValueType.selfType || declaredType == ValueType.exceptionType))
+                if (isStatic && (hasObjectClass(declaredType) || declaredType == ValueType.exceptionType))
                     error("static object fields are not supported");
                 auto field = new Field; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.isProtected = isProtected; field.isStatic = isStatic; field.objectName = declaredObjectName; field.owner = result;
                 if (accept("=")) field.initializer = initializer();
@@ -272,10 +275,10 @@ class Parser {
         if (accept("for")) {
             auto s = new Statement(StmtKind.forStmt, t);
             expect("(");
-            if (["int", "decimal", "bool", "string"].canFind(current.text) && look(1).kind == TokenKind.identifier && look(2).text == ":") {
+            if (current.kind == TokenKind.identifier && look(1).kind == TokenKind.identifier && look(2).text == ":") {
                 s.kind = StmtKind.forEachStmt;
                 auto item = new Statement(StmtKind.variable, current);
-                item.type = parseType(); item.token = identifier(); s.initial = item;
+                item.type = parseType(); item.objectName = parsedObjectName; item.token = identifier(); s.initial = item;
                 expect(":"); s.expression = expression(); expect(")"); s.children ~= statement(); return s;
             }
             if (current.text != ";") s.initial = simpleStatement(true);
@@ -453,22 +456,23 @@ class Checker {
         return *found;
     }
     private bool matches(Expression e, ValueType expected, Program expectedClass = null) {
+        if (e.kind == ExprKind.arrayLiteral && expected == ValueType.selfArray) e.objectClass = expectedClass;
         auto actual = typeOf(e, expected);
         if (actual == ValueType.intType && expected == ValueType.decimalType) { e.promoteToDecimal = true; return true; }
         if (expected == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual)) {
             e.convertToString = actual; return true;
         }
-        return actual == expected && (expected != ValueType.selfType || isAssignable(e.objectClass, expectedClass));
+        return actual == expected && (expected == ValueType.selfType ? isAssignable(e.objectClass, expectedClass) : expected != ValueType.selfArray || e.objectClass is expectedClass);
     }
     private ValueType checkCall(Method method, Program owner, Expression e) {
         if (e.arguments.length != method.parameters.length) fail("incorrect argument count", e.token);
         foreach (i, arg; e.arguments) {
             auto p = method.parameters[i];
             if (arg.kind == ExprKind.arrayLiteral) fail("array initializer requires a known target", arg.token);
-            auto objectClass = p.type == ValueType.selfType ? resolveClass(owner, p.objectName, p.name) : null;
+            auto objectClass = hasObjectClass(p.type) ? resolveClass(owner, p.objectName, p.name) : null;
             if (!matches(arg, p.type, objectClass)) fail("argument type mismatch", arg.token);
         }
-        if (method.returnType == ValueType.selfType)
+        if (hasObjectClass(method.returnType))
             e.objectClass = resolveClass(owner, method.returnObjectName, method.name);
         return method.returnType;
     }
@@ -477,7 +481,7 @@ class Checker {
         foreach (i, p; left.parameters) {
             auto q = right.parameters[i];
             if (p.type != q.type) return false;
-            if (p.type == ValueType.selfType && resolveClass(left.owner, p.objectName, p.name) !is resolveClass(right.owner, q.objectName, q.name)) return false;
+            if (hasObjectClass(p.type) && resolveClass(left.owner, p.objectName, p.name) !is resolveClass(right.owner, q.objectName, q.name)) return false;
         }
         return true;
     }
@@ -499,6 +503,7 @@ class Checker {
                 auto actual = actualTypes[i];
                 if (actual == p.type) {
                     if (actual == ValueType.selfType && !isAssignable(e.arguments[i].objectClass, resolveClass(candidate.owner, p.objectName, p.name))) applicable = false;
+                    if (actual == ValueType.selfArray && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                 } else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
                 else if (p.type == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual)) weight += 100;
                 else applicable = false;
@@ -562,11 +567,11 @@ class Checker {
                 if (m.isStatic || baseMethod.isStatic || !baseMethod.isVirtual) fail("only virtual instance methods may be overridden", m.name);
                 if (m.returnType != baseMethod.returnType || m.parameters.length != baseMethod.parameters.length)
                     fail("override signature mismatch", m.name);
-                if (m.returnType == ValueType.selfType && resolveClass(program, m.returnObjectName, m.name) !is resolveClass(baseMethod.owner, baseMethod.returnObjectName, baseMethod.name))
+                if (hasObjectClass(m.returnType) && resolveClass(program, m.returnObjectName, m.name) !is resolveClass(baseMethod.owner, baseMethod.returnObjectName, baseMethod.name))
                     fail("override return type mismatch", m.name);
                 foreach (i, p; m.parameters) {
                     auto baseParam = baseMethod.parameters[i];
-                    if (p.type != baseParam.type || (p.type == ValueType.selfType &&
+                    if (p.type != baseParam.type || (hasObjectClass(p.type) &&
                         resolveClass(program, p.objectName, p.name) !is resolveClass(baseMethod.owner, baseParam.objectName, baseParam.name)))
                         fail("override parameter type mismatch", p.name);
                 }
@@ -579,7 +584,7 @@ class Checker {
         }
         variables = null; objectVariables = null; staticContext = false;
         foreach (field; program.fields)
-            if (field.type == ValueType.selfType) field.objectClass = resolveClass(program, field.objectName, field.name);
+            if (hasObjectClass(field.type)) field.objectClass = resolveClass(program, field.objectName, field.name);
         foreach (field; program.fields) {
             staticContext = field.isStatic;
             if (field.isStatic && field.initializer !is null && !isConstantInitializer(field.initializer))
@@ -589,13 +594,13 @@ class Checker {
         }
         foreach (m; program.methods) {
             variables = null; objectVariables = null; returnType = m.returnType; loopDepth = 0; finallyDepth = 0; staticContext = m.isStatic;
-            m.returnObjectClass = m.returnType == ValueType.selfType ? resolveClass(program, m.returnObjectName, m.name) : null;
+            m.returnObjectClass = hasObjectClass(m.returnType) ? resolveClass(program, m.returnObjectName, m.name) : null;
             returnObjectClass = m.returnObjectClass;
             foreach (ref p; m.parameters) {
                 if (p.type == ValueType.voidType) fail("parameter cannot be void", p.name);
                 if (p.name.text in variables) fail("duplicate parameter", p.name);
                 variables[p.name.text] = p.type;
-                if (p.type == ValueType.selfType) {
+                if (hasObjectClass(p.type)) {
                     p.objectClass = resolveClass(program, p.objectName, p.name);
                     objectVariables[p.name.text] = p.objectClass;
                 }
@@ -615,7 +620,7 @@ class Checker {
             case ExprKind.arrayLiteral:
                 if (!isArray(expected)) fail("array initializer requires an array type", e.token);
                 foreach (element; e.arguments)
-                    if (!matches(element, elementType(expected))) fail("array element type mismatch", element.token);
+                    if (!matches(element, elementType(expected), e.objectClass)) fail("array element type mismatch", element.token);
                 e.inferredType = expected; return expected;
             case ExprKind.variable:
                 auto variable = e.token.text in variables;
@@ -626,10 +631,10 @@ class Checker {
                     if (staticContext && !(*field).isStatic) fail("instance field in static context", e.token);
                     e.isField = true;
                     if ((*field).isStatic) e.targetClass = (*field).owner.emittedName;
-                    if ((*field).type == ValueType.selfType) e.objectClass = (*field).objectClass;
+                    if (hasObjectClass((*field).type)) e.objectClass = (*field).objectClass;
                     return (*field).type;
                 }
-                if (*variable == ValueType.selfType) e.objectClass = objectVariables[e.token.text];
+                if (hasObjectClass(*variable)) e.objectClass = objectVariables[e.token.text];
                 return *variable;
             case ExprKind.selfRef:
                 if (staticContext) fail("this in static context", e.token);
@@ -659,7 +664,7 @@ class Checker {
                 if (field is null) fail("unknown field '" ~ e.token.text ~ "'", e.token);
                 if (field.isStatic) fail("static field access through an instance is not supported", e.token);
                 if (!accessible(field.owner, field.isPublic, field.isProtected)) fail("field is not accessible", e.token);
-                if (field.type == ValueType.selfType)
+                if (hasObjectClass(field.type))
                     e.objectClass = field.objectClass !is null ? field.objectClass : resolveClass(field.owner, field.objectName, field.name);
                 return field.type;
             case ExprKind.call:
@@ -754,6 +759,11 @@ class Checker {
                         return ValueType.decimalType;
                     }
                 } else if (isArray(receiver)) {
+                    if (receiver == ValueType.selfArray) {
+                        e.objectClass = e.left.objectClass;
+                        if (!["size", "isEmpty", "clear", "get", "add", "addAll", "removeAt", "set"].canFind(e.token.text))
+                            fail("this method is not yet supported for object arrays", e.token);
+                    }
                     switch (e.token.text) {
                         case "size": case "isEmpty": case "clear": case "reverse": case "sort": case "unique":
                             if (e.arguments.length != 0) fail("incorrect argument count", e.token);
@@ -766,17 +776,17 @@ class Checker {
                             return elementType(receiver);
                         case "add":
                             if (e.arguments.length == 1) {
-                                if (!matches(e.arguments[0], elementType(receiver))) fail("add requires an element of the array type", e.token);
+                                if (!matches(e.arguments[0], elementType(receiver), e.left.objectClass)) fail("add requires an element of the array type", e.token);
                             } else if (e.arguments.length == 2) {
-                                if (typeOf(e.arguments[0]) != ValueType.intType || !matches(e.arguments[1], elementType(receiver)))
+                                if (typeOf(e.arguments[0]) != ValueType.intType || !matches(e.arguments[1], elementType(receiver), e.left.objectClass))
                                     fail("add requires an int index and an element of the array type", e.token);
                             } else fail("incorrect argument count", e.token);
                             return receiver;
                         case "addAll":
                             if (e.arguments.length == 1) {
-                                if (!matches(e.arguments[0], receiver)) fail("addAll requires an array of the same type", e.token);
+                                if (!matches(e.arguments[0], receiver, e.left.objectClass)) fail("addAll requires an array of the same type", e.token);
                             } else if (e.arguments.length == 2) {
-                                if (typeOf(e.arguments[0]) != ValueType.intType || !matches(e.arguments[1], receiver)) fail("addAll requires an int index and an array of the same type", e.token);
+                                if (typeOf(e.arguments[0]) != ValueType.intType || !matches(e.arguments[1], receiver, e.left.objectClass)) fail("addAll requires an int index and an array of the same type", e.token);
                             } else fail("incorrect argument count", e.token);
                             return ValueType.voidType;
                         case "isSubsetOf":
@@ -794,7 +804,7 @@ class Checker {
                             return elementType(receiver);
                         case "set":
                             if (e.arguments.length != 2 || typeOf(e.arguments[0]) != ValueType.intType ||
-                                !matches(e.arguments[1], elementType(receiver))) fail("set requires an int index and an element of the array type", e.token);
+                                !matches(e.arguments[1], elementType(receiver), e.left.objectClass)) fail("set requires an int index and an element of the array type", e.token);
                             return ValueType.voidType;
                         default: break;
                     }
@@ -804,6 +814,7 @@ class Checker {
                 auto array = typeOf(e.left);
                 if (!isArray(array)) fail("indexing requires an array", e.token);
                 if (typeOf(e.right) != ValueType.intType) fail("array index must be int", e.token);
+                if (array == ValueType.selfArray) e.objectClass = e.left.objectClass;
                 return elementType(array);
             case ExprKind.castExpr:
                 if (!matches(e.left, e.castType)) fail("unsupported type cast", e.token);
@@ -850,9 +861,9 @@ class Checker {
                 if (right == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(left)) {
                     e.right.convertToString = left; left = ValueType.stringType;
                 }
-                if (left == ValueType.voidType || left != right || (left == ValueType.selfType && e.right.objectClass !is e.third.objectClass))
+                if (left == ValueType.voidType || left != right || (hasObjectClass(left) && e.right.objectClass !is e.third.objectClass))
                     fail("conditional branch type mismatch", e.token);
-                if (left == ValueType.selfType) e.objectClass = e.right.objectClass;
+                if (hasObjectClass(left)) e.objectClass = e.right.objectClass;
                 return left;
         }
     }
@@ -865,10 +876,10 @@ class Checker {
             case StmtKind.variable:
                 if (s.token.text in variables) fail("duplicate or shadowed variable", s.token);
                 if (s.type == ValueType.voidType) fail("variable cannot be void", s.token);
-                if (s.type == ValueType.selfType) s.objectClass = resolveClass(currentProgram, s.objectName, s.token);
+                if (hasObjectClass(s.type)) s.objectClass = resolveClass(currentProgram, s.objectName, s.token);
                 if (s.expression !is null && !matches(s.expression, s.type, s.objectClass)) fail("initializer type mismatch", s.token);
                 variables[s.token.text] = s.type;
-                if (s.type == ValueType.selfType) objectVariables[s.token.text] = s.objectClass;
+                if (hasObjectClass(s.type)) objectVariables[s.token.text] = s.objectClass;
                 return false;
             case StmtKind.assignment:
                 auto variableType = typeOf(s.target);
@@ -914,6 +925,7 @@ class Checker {
                 auto array = typeOf(s.expression);
                 if (!isArray(array) || elementType(array) != s.initial.type) fail("foreach element type mismatch", s.token);
                 checkStatement(s.initial);
+                if (array == ValueType.selfArray && !isAssignable(s.expression.objectClass, s.initial.objectClass)) fail("foreach element type mismatch", s.token);
                 ++loopDepth; checkStatement(s.children[0]); --loopDepth;
                 variables = old; objectVariables = oldObjects; return false;
             case StmtKind.breakStmt:
@@ -952,6 +964,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.voidType: return "void"; case ValueType.stringType: return "wstring";
         case ValueType.exceptionType: return "Throwable";
         case ValueType.selfType: assert(objectClass !is null); return objectClass.emittedName;
+        case ValueType.selfArray: assert(objectClass !is null); return "Z8Array!(" ~ objectClass.emittedName ~ ")";
         case ValueType.intArray: return "Z8Array!long";
         case ValueType.decimalArray: return "Z8Array!Z8Decimal";
         case ValueType.boolArray: return "Z8Array!bool";
@@ -996,8 +1009,9 @@ private string emitExprRaw(Expression e) {
         case ExprKind.boolean: return e.token.text;
         case ExprKind.stringLiteral: return emitStringLiteral(e.token.text);
         case ExprKind.arrayLiteral:
-            string[] elements; foreach (element; e.arguments) elements ~= emitExpr(element);
-            return "new " ~ dType(e.inferredType) ~ "(" ~ (elements.length ? "[" ~ elements.join(", ") ~ "]" : "") ~ ")";
+            string[] elements; foreach (element; e.arguments)
+                elements ~= e.inferredType == ValueType.selfArray ? "cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(element) ~ ")" : emitExpr(element);
+            return "new " ~ dType(e.inferredType, e.objectClass) ~ "(" ~ (elements.length ? "[" ~ elements.join(", ") ~ "]" : "") ~ ")";
         case ExprKind.variable: return e.isField ? (e.targetClass.length ? e.targetClass ~ ".f_" : "this.f_") ~ e.token.text : "v_" ~ e.token.text;
         case ExprKind.selfRef: return "this";
         case ExprKind.superRef: return "super";
@@ -1080,7 +1094,7 @@ private string emitStatement(Statement s) {
             return "{\nauto " ~ iter ~ " = " ~ emitExpr(s.expression) ~ ";\nauto " ~ versionName ~ " = " ~ iter ~ ".z8_version;\n" ~
                 "for (long " ~ indexName ~ " = 0; " ~ indexName ~ " != " ~ iter ~ ".z8_size(); ++" ~ indexName ~ ") {\n" ~
                 "if (" ~ versionName ~ " != " ~ iter ~ ".z8_version) throw new Exception(\"array modified during iteration\");\n" ~
-                dType(s.initial.type) ~ " v_" ~ s.initial.token.text ~ " = " ~ iter ~ ".z8_get(" ~ indexName ~ ");\n" ~
+                dType(s.initial.type, s.initial.objectClass) ~ " v_" ~ s.initial.token.text ~ " = " ~ iter ~ ".z8_get(" ~ indexName ~ ");\n" ~
                 emitStatement(s.children[0]) ~ "}\n}\n";
         case StmtKind.breakStmt: return "break;\n";
         case StmtKind.continueStmt: return "continue;\n";
@@ -1357,7 +1371,8 @@ class Z8Array(T) {
             static if (is(T == wstring)) result ~= item;
             else static if (is(T == Z8Decimal)) result ~= item.z8_string();
             else static if (is(T == bool)) result ~= item ? "true"w : "false"w;
-            else result ~= z8_int_toString(item);
+            else static if (is(T == long)) result ~= z8_int_toString(item);
+            else throw new Exception("join is not supported for object arrays");
         }
         return result;
     }

@@ -1,0 +1,36 @@
+import demo.Counter;
+import demo.Base;
+import demo.Derived;
+
+public class ObjectArrays {
+    public static Counter[] make() {
+        Counter[] result;
+        Counter first = new Counter;
+        first.add(2);
+        result.add(first);
+        Counter second = new Counter;
+        second.add(4);
+        result.add(second);
+        return result;
+    }
+    public static int sum(Counter[] values) {
+        int total = 0;
+        for (Counter item : values) total += item.value;
+        return total;
+    }
+    public static int run() {
+        Counter[] values = make();
+        values[0].add(1);
+        if (values.size() != 2) return 1;
+        Counter[] literals = {new Counter, new Counter};
+        if (literals[0].value != 3) return 2;
+        Counter[] extra;
+        extra.addAll(literals);
+        extra.set(0, values[0]);
+        if (extra[0].value != 6 || extra.removeAt(1).value != 3) return 3;
+        Base[] inherited;
+        inherited.add(new Derived);
+        for (Base item : inherited) if (item.getValue() != 14) return 4;
+        return sum(values);
+    }
+}

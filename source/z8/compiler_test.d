@@ -79,6 +79,15 @@ unittest {
     auto inheritanceA = SourceUnit("pkg.A", "A.bl", "class A extends B { }");
     auto inheritanceB = SourceUnit("pkg.B", "B.bl", "class B extends A { }");
     rejectsSources([inheritanceA, inheritanceB], "A.bl");
+    auto objectArray = SourceUnit("pkg.A", "A.bl", "class A { B[] values; B[] f(B[] x) { values.add(new B); return x; } }");
+    auto arrayItem = SourceUnit("pkg.B", "B.bl", "class B { }");
+    compileSources([objectArray, arrayItem]);
+    auto wrongArray = SourceUnit("pkg.A", "A.bl", "class A { B[] f(A[] x) { return x; } }");
+    rejectsSources([wrongArray, arrayItem], "A.bl");
+    auto wrongArrayElement = SourceUnit("pkg.A", "A.bl", "class A { void f() { B[] x; x.add(new A); } }");
+    rejectsSources([wrongArrayElement, arrayItem], "A.bl");
+    auto wrongForeach = SourceUnit("pkg.A", "A.bl", "class A { void f() { B[] x; for (A item : x) {} } }");
+    rejectsSources([wrongForeach, arrayItem], "A.bl");
 }
 
 unittest {
@@ -89,6 +98,8 @@ unittest {
     rejects("class A { static int f() { return f(1); } }");
     rejects("class A { int x; static int f() { return x; } }");
     rejects("class A { static A x; }");
+    rejects("class A { static A[] x; }");
+    rejects("class A { static void f() { A[] x = {true}; } }");
     rejects("class A { static int f() { return 1; } static int x = f(); }");
     rejects("class A { int x; static int f() { return A.x; } }");
     rejects("class A { int f() { return 1; } static int g() { return f(); } }");
