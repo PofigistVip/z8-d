@@ -48,4 +48,16 @@ unittest {
     rejects("class A { static int f() { return 1.length(); } }");
     rejects("class A { static int f() { return \"x\".length(1); } }");
     rejects("class A { static int f() { return \"x\".missing(); } }");
+    rejects("class A { static void f() { int[] x = {true}; } }");
+    rejects("class A { static void f() { int[] x = {1}; int y = x[true]; } }");
+    rejects("class A { static void f() { bool[] x = {true}; x.add(1); } }");
+    rejects("class A { static void f() { int[] x; x.set(0, true); } }");
+    rejects("class A { static int f() { return {}; } }");
+    rejects("class A { static void f() { int x = 1; x[0] = 2; } }");
+    rejects("class A { static void f() { int[] x; bool y = x == x; } }");
+    rejects("class A { static void f() { int[][] x; } }");
+    rejects("class A { static void f() { string[] x = {\"ok\", false}; } }");
+    rejects("class A { static int[] f() { return {1, false}; } }");
+    rejects("class A { static void f() { int[] x; x.clear(1); } }");
+    rejects("class A { static void f() { int[] x; x.add(1, 2); } }");
 }

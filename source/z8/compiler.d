@@ -12,8 +12,8 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, boolType, stringType }
-enum ExprKind { integer, boolean, stringLiteral, variable, call, memberCall, unary, binary }
+enum ValueType { voidType, intType, boolType, stringType, intArray, boolArray, stringArray }
+enum ExprKind { integer, boolean, stringLiteral, arrayLiteral, variable, call, memberCall, index, unary, binary }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
                 whileStmt, doWhileStmt, forStmt, breakStmt, continueStmt }
 
@@ -30,6 +30,7 @@ class Statement {
     Token token;
     ValueType type;
     Expression expression;
+    Expression target;
     Statement[] children;
     Statement initial, step;
     string assignmentOperator;
@@ -43,6 +44,18 @@ class Method {
     Statement body;
 }
 class Program { Token name; Method[] methods; }
+
+private bool isArray(ValueType type) {
+    return [ValueType.intArray, ValueType.boolArray, ValueType.stringArray].canFind(type);
+}
+private ValueType elementType(ValueType type) {
+    switch (type) {
+        case ValueType.intArray: return ValueType.intType;
+        case ValueType.boolArray: return ValueType.boolType;
+        case ValueType.stringArray: return ValueType.stringType;
+        default: assert(0, "not an array");
+    }
+}
 
 class Parser {
     private Token[] tokens;
@@ -65,13 +78,24 @@ class Parser {
     }
     private void error(string message) { throw new CompileException(message, current.position); }
     private ValueType parseType() {
+        ValueType result;
         switch (take().text) {
-            case "void": return ValueType.voidType;
-            case "int": return ValueType.intType;
-            case "bool": return ValueType.boolType;
-            case "string": return ValueType.stringType;
+            case "void": result = ValueType.voidType; break;
+            case "int": result = ValueType.intType; break;
+            case "bool": result = ValueType.boolType; break;
+            case "string": result = ValueType.stringType; break;
             default: throw new CompileException("only void, int, bool and string are supported", tokens[index-1].position);
         }
+        if (accept("[")) {
+            expect("]");
+            switch (result) {
+                case ValueType.intType: return ValueType.intArray;
+                case ValueType.boolType: return ValueType.boolArray;
+                case ValueType.stringType: return ValueType.stringArray;
+                default: error("void arrays are not supported"); assert(0);
+            }
+        }
+        return result;
     }
     Program parse() {
         auto result = new Program;
@@ -114,7 +138,7 @@ class Parser {
         }
         if (accept("return")) {
             auto s = new Statement(StmtKind.returnStmt, t);
-            if (current.text != ";") s.expression = expression();
+            if (current.text != ";") s.expression = initializer();
             expect(";"); return s;
         }
         if (accept("if")) {
@@ -146,20 +170,36 @@ class Parser {
     }
     private Statement simpleStatement(bool allowDeclaration) {
         auto t = current;
-        if ((t.text == "int" || t.text == "bool" || t.text == "string") && look(1).kind == TokenKind.identifier) {
+        if ((t.text == "int" || t.text == "bool" || t.text == "string") &&
+            (look(1).kind == TokenKind.identifier || (look(1).text == "[" && look(2).text == "]"))) {
             if (!allowDeclaration) error("variable declaration is not allowed here");
             auto s = new Statement(StmtKind.variable, t);
             s.type = parseType(); s.token = identifier();
-            if (accept("=")) s.expression = expression();
+            if (accept("=")) s.expression = initializer();
             return s;
         }
-        if (t.kind == TokenKind.identifier && ["=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^="].canFind(look(1).text)) {
-            auto s = new Statement(StmtKind.assignment, take());
-            s.assignmentOperator = take().text; s.expression = expression(); return s;
-        }
         auto e = expression();
-        if (e.kind != ExprKind.call) throw new CompileException("only method calls may be used as expression statements", e.token.position);
+        if (["=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^="].canFind(current.text)) {
+            if (e.kind != ExprKind.variable && e.kind != ExprKind.index)
+                throw new CompileException("assignment target must be a variable or array element", e.token.position);
+            auto s = new Statement(StmtKind.assignment, t);
+            s.target = e; s.assignmentOperator = take().text; s.expression = initializer(); return s;
+        }
+        if (e.kind != ExprKind.call && e.kind != ExprKind.memberCall)
+            throw new CompileException("only method calls may be used as expression statements", e.token.position);
         auto s = new Statement(StmtKind.expressionStmt, t); s.expression = e; return s;
+    }
+    private Expression initializer() {
+        if (current.text != "{") return expression();
+        auto init = new Expression(ExprKind.arrayLiteral, take());
+        if (current.text != "}") {
+            do {
+                init.arguments ~= expression();
+                if (current.text != ",") break;
+                take();
+            } while (current.text != "}");
+        }
+        expect("}"); return init;
     }
     private static int precedence(string op) {
         switch (op) {
@@ -185,11 +225,16 @@ class Parser {
             take(); auto result = new Expression(ExprKind.unary, t); result.left = unary(); return result;
         }
         auto result = atom();
-        while (accept(".")) {
-            auto member = new Expression(ExprKind.memberCall, identifier());
-            member.left = result; expect("(");
-            if (current.text != ")") do { member.arguments ~= expression(); } while (accept(","));
-            expect(")"); result = member;
+        while (current.text == "." || current.text == "[") {
+            if (accept("[")) {
+                auto access = new Expression(ExprKind.index, tokens[index - 1]);
+                access.left = result; access.right = expression(); expect("]"); result = access;
+            } else {
+                expect("."); auto member = new Expression(ExprKind.memberCall, identifier());
+                member.left = result; expect("(");
+                if (current.text != ")") do { member.arguments ~= initializer(); } while (accept(","));
+                expect(")"); result = member;
+            }
         }
         return result;
     }
@@ -203,7 +248,7 @@ class Parser {
             take();
             if (accept("(")) {
                 auto call = new Expression(ExprKind.call, t);
-                if (current.text != ")") do { call.arguments ~= expression(); } while (accept(","));
+                if (current.text != ")") do { call.arguments ~= initializer(); } while (accept(","));
                 expect(")"); return call;
             }
             return new Expression(ExprKind.variable, t);
@@ -236,11 +281,16 @@ class Checker {
             if (returnType != ValueType.voidType && !returns) fail("method may finish without returning a value", m.name);
         }
     }
-    private ValueType typeOf(Expression e) {
+    private ValueType typeOf(Expression e, ValueType expected = ValueType.voidType) {
         final switch (e.kind) {
             case ExprKind.integer: return ValueType.intType;
             case ExprKind.boolean: return ValueType.boolType;
             case ExprKind.stringLiteral: return ValueType.stringType;
+            case ExprKind.arrayLiteral:
+                if (!isArray(expected)) fail("array initializer requires an array type", e.token);
+                foreach (element; e.arguments)
+                    if (typeOf(element) != elementType(expected)) fail("array element type mismatch", element.token);
+                e.inferredType = expected; return expected;
             case ExprKind.variable:
                 auto variable = e.token.text in variables;
                 if (variable is null) fail("unknown variable '" ~ e.token.text ~ "'", e.token);
@@ -250,14 +300,39 @@ class Checker {
                 if (method is null) fail("unknown method '" ~ e.token.text ~ "'", e.token);
                 if (e.arguments.length != (*method).parameters.length) fail("incorrect argument count", e.token);
                 foreach (i, arg; e.arguments)
-                    if (typeOf(arg) != (*method).parameters[i].type) fail("argument type mismatch", arg.token);
+                    if (typeOf(arg, (*method).parameters[i].type) != (*method).parameters[i].type) fail("argument type mismatch", arg.token);
                 return (*method).returnType;
             case ExprKind.memberCall:
-                if (typeOf(e.left) != ValueType.stringType) fail("only string member methods are supported", e.token);
-                if (e.arguments.length != 0) fail("incorrect argument count", e.token);
-                if (e.token.text == "length") return ValueType.intType;
-                if (e.token.text == "isEmpty") return ValueType.boolType;
-                fail("unsupported string method '" ~ e.token.text ~ "'", e.token); assert(0);
+                auto receiver = typeOf(e.left);
+                e.inferredType = receiver;
+                if (receiver == ValueType.stringType) {
+                    if (e.arguments.length != 0) fail("incorrect argument count", e.token);
+                    if (e.token.text == "length") return ValueType.intType;
+                    if (e.token.text == "isEmpty") return ValueType.boolType;
+                } else if (isArray(receiver)) {
+                    switch (e.token.text) {
+                        case "size": case "isEmpty": case "clear":
+                            if (e.arguments.length != 0) fail("incorrect argument count", e.token);
+                            return e.token.text == "size" ? ValueType.intType : e.token.text == "isEmpty" ? ValueType.boolType : ValueType.voidType;
+                        case "get":
+                            if (e.arguments.length != 1 || typeOf(e.arguments[0]) != ValueType.intType) fail("get requires an int index", e.token);
+                            return elementType(receiver);
+                        case "add":
+                            if (e.arguments.length != 1 || typeOf(e.arguments[0]) != elementType(receiver)) fail("add requires an element of the array type", e.token);
+                            return receiver;
+                        case "set":
+                            if (e.arguments.length != 2 || typeOf(e.arguments[0]) != ValueType.intType ||
+                                typeOf(e.arguments[1]) != elementType(receiver)) fail("set requires an int index and an element of the array type", e.token);
+                            return ValueType.voidType;
+                        default: break;
+                    }
+                }
+                fail("unsupported member method '" ~ e.token.text ~ "'", e.token); assert(0);
+            case ExprKind.index:
+                auto array = typeOf(e.left);
+                if (!isArray(array)) fail("indexing requires an array", e.token);
+                if (typeOf(e.right) != ValueType.intType) fail("array index must be int", e.token);
+                return elementType(array);
             case ExprKind.unary:
                 auto operand = typeOf(e.left);
                 if (e.token.text == "!" && operand == ValueType.boolType) return operand;
@@ -265,7 +340,7 @@ class Checker {
                 fail("invalid unary operand", e.token); assert(0);
             case ExprKind.binary:
                 auto left = typeOf(e.left), right = typeOf(e.right), op = e.token.text;
-                if (left != right || left == ValueType.voidType) fail("operand type mismatch", e.token);
+                if (left != right || left == ValueType.voidType || isArray(left)) fail("operand type mismatch", e.token);
                 if (["==", "!="].canFind(op)) return ValueType.boolType;
                 if ((left == ValueType.intType || left == ValueType.stringType) && ["<", ">", "<=", ">="].canFind(op)) return ValueType.boolType;
                 if (left == ValueType.stringType && op == "+") { e.inferredType = ValueType.stringType; return ValueType.stringType; }
@@ -282,22 +357,24 @@ class Checker {
                 variables = old; return returns;
             case StmtKind.variable:
                 if (s.token.text in variables) fail("duplicate or shadowed variable", s.token);
-                if (s.expression !is null && typeOf(s.expression) != s.type) fail("initializer type mismatch", s.token);
+                if (s.expression !is null && typeOf(s.expression, s.type) != s.type) fail("initializer type mismatch", s.token);
                 variables[s.token.text] = s.type; return false;
             case StmtKind.assignment:
-                auto variable = s.token.text in variables;
-                if (variable is null) fail("unknown variable '" ~ s.token.text ~ "'", s.token);
-                if (typeOf(s.expression) != *variable) fail("assignment type mismatch", s.token);
-                s.type = *variable;
-                if (s.assignmentOperator != "=" && *variable != ValueType.intType &&
-                    !(*variable == ValueType.stringType && s.assignmentOperator == "+="))
+                auto variableType = typeOf(s.target);
+                if (typeOf(s.expression, variableType) != variableType) fail("assignment type mismatch", s.token);
+                s.type = variableType;
+                if (s.assignmentOperator != "=" && variableType != ValueType.intType &&
+                    !(variableType == ValueType.stringType && s.assignmentOperator == "+="))
                     fail("invalid compound assignment operands", s.token);
                 return false;
             case StmtKind.expressionStmt:
-                typeOf(s.expression); return false;
+                typeOf(s.expression);
+                if (s.expression.kind == ExprKind.memberCall && s.expression.inferredType == ValueType.stringType)
+                    fail("string query cannot be used as a statement", s.token);
+                return false;
             case StmtKind.returnStmt:
                 if (s.expression is null) { if (returnType != ValueType.voidType) fail("return value required", s.token); }
-                else if (returnType == ValueType.voidType || typeOf(s.expression) != returnType) fail("return type mismatch", s.token);
+                else if (returnType == ValueType.voidType || typeOf(s.expression, returnType) != returnType) fail("return type mismatch", s.token);
                 return true;
             case StmtKind.ifStmt:
                 if (typeOf(s.expression) != ValueType.boolType) fail("if condition must be bool", s.token);
@@ -331,6 +408,9 @@ private string dType(ValueType type) {
     final switch (type) {
         case ValueType.intType: return "long"; case ValueType.boolType: return "bool";
         case ValueType.voidType: return "void"; case ValueType.stringType: return "wstring";
+        case ValueType.intArray: return "Z8Array!long";
+        case ValueType.boolArray: return "Z8Array!bool";
+        case ValueType.stringArray: return "Z8Array!wstring";
     }
 }
 /// The Java runtime stores strings as UTF-16; preserve its code-unit ordering.
@@ -360,13 +440,22 @@ private string emitExpr(Expression e) {
             return "(cast(long)(" ~ e.token.text.replace(" ", "").replace("\t", "") ~ "))";
         case ExprKind.boolean: return e.token.text;
         case ExprKind.stringLiteral: return emitStringLiteral(e.token.text);
+        case ExprKind.arrayLiteral:
+            string[] elements; foreach (element; e.arguments) elements ~= emitExpr(element);
+            return "new " ~ dType(e.inferredType) ~ "(" ~ (elements.length ? "[" ~ elements.join(", ") ~ "]" : "") ~ ")";
         case ExprKind.variable: return "v_" ~ e.token.text;
         case ExprKind.call:
             string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
             return "m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
         case ExprKind.memberCall:
+            if (isArray(e.inferredType)) {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return "(" ~ emitExpr(e.left) ~ ").z8_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
+            }
             auto value = "(" ~ emitExpr(e.left) ~ ").length";
             return e.token.text == "length" ? "cast(long)(" ~ value ~ ")" : "(" ~ value ~ " == 0)";
+        case ExprKind.index:
+            return "(" ~ emitExpr(e.left) ~ ").z8_at(" ~ emitExpr(e.right) ~ ")";
         case ExprKind.unary: return "(" ~ e.token.text ~ emitExpr(e.left) ~ ")";
         case ExprKind.binary:
             if (e.token.text == "/" || e.token.text == "%")
@@ -399,12 +488,13 @@ private string emitStatement(Statement s) {
 private string emitSimple(Statement s) {
     if (s.kind == StmtKind.variable)
         return dType(s.type) ~ " v_" ~ s.token.text ~ " = " ~
-            (s.expression !is null ? emitExpr(s.expression) : s.type == ValueType.intType ? "0" : s.type == ValueType.stringType ? `""w` : "false");
+            (s.expression !is null ? emitExpr(s.expression) : isArray(s.type) ? "new " ~ dType(s.type) ~ "()" :
+             s.type == ValueType.intType ? "0" : s.type == ValueType.stringType ? `""w` : "false");
     if (s.kind == StmtKind.expressionStmt) return emitExpr(s.expression);
     assert(s.kind == StmtKind.assignment);
-    auto name = "v_" ~ s.token.text;
+    auto name = emitExpr(s.target);
     if (s.assignmentOperator == "/=" || s.assignmentOperator == "%=")
-        return name ~ " = " ~ (s.assignmentOperator == "/=" ? "z8_div(" : "z8_mod(") ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
+        return (s.assignmentOperator == "/=" ? "z8_div_assign(" : "z8_mod_assign(") ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
     auto op = s.type == ValueType.stringType && s.assignmentOperator == "+=" ? "~=" : s.assignmentOperator;
     return name ~ " " ~ op ~ " " ~ emitExpr(s.expression);
 }
@@ -421,6 +511,24 @@ private long z8_mod(long a, long b) {
     if (b == 0) throw new Exception("division by zero");
     if (a == long.min && b == -1) return 0;
     return a % b;
+}
+private void z8_div_assign(ref long a, long b) { a = z8_div(a, b); }
+private void z8_mod_assign(ref long a, long b) { a = z8_mod(a, b); }
+class Z8Array(T) {
+    private T[] items;
+    this() {}
+    this(T[] values) { items = values; }
+    long z8_size() { return cast(long)items.length; }
+    bool z8_isEmpty() { return items.length == 0; }
+    void z8_clear() { items.length = 0; }
+    Z8Array!T z8_add(T value) { items ~= value; return this; }
+    ref T z8_at(long index) {
+        auto i = cast(int)index;
+        if (i < 0 || cast(size_t)i >= items.length) throw new Exception("array index out of bounds");
+        return items[i];
+    }
+    T z8_get(long index) { return z8_at(index); }
+    void z8_set(long index, T value) { z8_at(index) = value; }
 }
 class Z8_` ~ program.name.text ~ " {\n";
     foreach (m; program.methods) {

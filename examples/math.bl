@@ -117,4 +117,54 @@ public class Math {
         }
         return sum;
     }
+
+    public static int sum(int[] values) {
+        int result;
+        for (int i; i < values.size(); i += 1)
+            result += values[i];
+        return result;
+    }
+
+    public static int[] makeValues() {
+        return {2, 4, 6,};
+    }
+
+    public static int updateArray() {
+        int[] values = {2, 4};
+        int[] alias = values;
+        alias[0] += 3;
+        alias.add(7);
+        alias.set(1, 10);
+        return sum(values);
+    }
+
+    public static int literalArgument() {
+        return sum({3, 5});
+    }
+
+    public static bool emptyArray() {
+        int[] values;
+        values.add(1);
+        values.clear();
+        values = {};
+        return values.isEmpty();
+    }
+
+    public static bool mixedArrays() {
+        bool[] flags = {true, false};
+        string[] words = {"one", "two"};
+        flags[1] = true;
+        words[0] += "!";
+        return flags.get(1) && words[0] == "one!";
+    }
+
+    public static int indexEvaluatedOnce() {
+        int[] values = {8};
+        values[values.add(0).size() - 2] /= 2;
+        return values.size() * 10 + values[0];
+    }
+
+    public static int elementAt(int[] values, int index) {
+        return values[index];
+    }
 }

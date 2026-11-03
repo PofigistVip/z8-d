@@ -39,6 +39,17 @@ void main() {
     assert(!Z8_Math.m_stringIsEmpty("x"w));
     assert(Z8_Math.m_escapedLiteral() == [cast(wchar)65, 9, 34, 92, 39, 90]);
     assert(Z8_Math.m_nestedLoops() == 3);
+    assert(Z8_Math.m_sum(Z8_Math.m_makeValues()) == 12);
+    assert(Z8_Math.m_updateArray() == 22);
+    assert(Z8_Math.m_literalArgument() == 8);
+    assert(Z8_Math.m_emptyArray());
+    assert(Z8_Math.m_mixedArrays());
+    assert(Z8_Math.m_indexEvaluatedOnce() == 24);
+    auto numbers = new Z8Array!long([cast(long)42]);
+    assert(Z8_Math.m_elementAt(numbers, 4294967296L) == 42);
+    bool badIndex;
+    try { Z8_Math.m_elementAt(numbers, -1); } catch (Exception) { badIndex = true; }
+    assert(badIndex);
     auto astral = [cast(wchar)0xD83D, cast(wchar)0xDE00].idup;
     auto bmp = [cast(wchar)0xE000].idup;
     assert(Z8_Math.m_compareStrings(astral, bmp));
