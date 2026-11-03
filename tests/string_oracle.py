@@ -40,6 +40,16 @@ void main() {
     writeln(invalidReplace);
     writeln(z8_int_parse("-8000000000000000"w, 16));
     writeln(z8_int_parse("7FL"w, 16));
+    foreach (n; [long.min, -256L, -1L, 0L, 1L, 255L, long.max]) {
+        foreach (radix; [-1L, 2L, 8L, 10L, 16L, 36L, 37L, 4294967312L])
+            writeln(z8_int_toString(n, radix));
+        writeln(z8_int_toHexString(n));
+        writeln(z8_int_toBinaryString(n));
+        foreach (shift; [-65L, -1L, 0L, 1L, 63L, 64L, 65L]) {
+            writeln(z8_int_leftShift(n, shift));
+            writeln(z8_int_rightShift(n, shift));
+        }
+    }
     bool failed; try { z8_str_substring(s, -1, 1); } catch (Exception) { failed = true; }
     writeln(failed);
 }
@@ -75,6 +85,16 @@ public class StringOracle {
         System.out.println(invalidReplace);
         System.out.println(Long.parseLong("-8000000000000000", 16));
         System.out.println(Long.parseLong("7F", 16));
+        for (long n : new long[] { Long.MIN_VALUE, -256L, -1L, 0L, 1L, 255L, Long.MAX_VALUE }) {
+            for (long radix : new long[] { -1L, 2L, 8L, 10L, 16L, 36L, 37L, 4294967312L })
+                System.out.println(Long.toString(n, (int)radix));
+            System.out.println(Long.toHexString(n));
+            System.out.println(Long.toBinaryString(n));
+            for (long shift : new long[] { -65L, -1L, 0L, 1L, 63L, 64L, 65L }) {
+                System.out.println(n << shift);
+                System.out.println(n >> shift);
+            }
+        }
         boolean failed = false; try { s.substring(-1, 0); } catch (Exception e) { failed = true; }
         System.out.println(failed);
     }

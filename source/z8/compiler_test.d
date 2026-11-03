@@ -120,6 +120,9 @@ unittest {
     rejects("class A { static string f() { return \"a\" - \"b\"; } }");
     rejects("class A { static void f() { string x = \"x\"; x -= \"y\"; } }");
     rejects("class A { static int f() { return 1.length(); } }");
+    rejects("class A { static int f() { return 1.and(true); } }");
+    rejects("class A { static int f() { return 1.leftShift(); } }");
+    rejects("class A { static string f() { return 1.toString(true); } }");
     rejects("class A { static int f() { return \"x\".length(1); } }");
     rejects("class A { static int f() { return \"x\".missing(); } }");
     rejects("class A { static void f() { int[] x = {true}; } }");

@@ -78,6 +78,7 @@ with tempfile.TemporaryDirectory() as temporary:
         System.out.println("RESULT:" + demo.cases.StaticState.z8_run().get());
         System.out.println("RESULT:" + demo.cases.StaticUser.z8_run().get());
         System.out.println("RESULT:" + demo.cases.InstanceOverloads.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.IntegerMethods.z8_run().get());
     }
 }''', encoding="utf-8")
         logging_cache = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "commons-logging" / "commons-logging"
@@ -102,6 +103,9 @@ with tempfile.TemporaryDirectory() as temporary:
         string_java = decimal_java.with_name("string.java")
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
                         "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), str(string_java)], cwd=temp, check=True)
+        integer_java = decimal_java.with_name("integer.java")
+        subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
+                        "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), str(integer_java), str(decimal_java.with_name("date.java"))], cwd=temp, check=True)
         generated_sources = [str(p) for p in (project / "out" / "demo").rglob("*.java")]
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
                         "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes)] + generated_sources + [str(runner)], cwd=temp, check=True)
@@ -126,6 +130,7 @@ void main() {
     writeln(Z8p_64656D6F2E63617365732E5374617469635374617465.m_run());
     writeln(Z8p_64656D6F2E63617365732E53746174696355736572.m_run());
     writeln(Z8p_64656D6F2E63617365732E496E7374616E63654F7665726C6F616473.m_run());
+    writeln(Z8p_64656D6F2E63617365732E496E74656765724D6574686F6473.m_run());
 }
 ''', encoding="utf-8")
         d_binary = temp / ("compare.exe" if os.name == "nt" else "compare")

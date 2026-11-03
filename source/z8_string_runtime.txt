@@ -96,6 +96,29 @@ private bool z8_bool_parse(wstring value) {
 }
 private long z8_int_abs(long value) { return value == long.min ? value : value < 0 ? -value : value; }
 private long z8_int_signum(long value) { return value < 0 ? -1 : value > 0 ? 1 : 0; }
+private long z8_int_not(long value) { return ~value; }
+private long z8_int_and(long value, long other) { return value & other; }
+private long z8_int_or(long value, long other) { return value | other; }
+private long z8_int_xor(long value, long other) { return value ^ other; }
+private long z8_int_leftShift(long value, long count) { return value << cast(uint)(count & 63); }
+private long z8_int_rightShift(long value, long count) { return value >> cast(uint)(count & 63); }
+private wstring z8_int_format(ulong value, int radix, bool negative = false) {
+    immutable wchar[] digits = "0123456789abcdefghijklmnopqrstuvwxyz"w;
+    wchar[] reversed;
+    do { reversed ~= digits[cast(size_t)(value % radix)]; value /= radix; } while (value);
+    if (negative) reversed ~= '-';
+    wchar[] result = new wchar[reversed.length];
+    foreach (i; 0 .. reversed.length) result[i] = reversed[$ - 1 - i];
+    return result.idup;
+}
+private wstring z8_int_toString(long value, long base = 10) {
+    auto radix = cast(int)base;
+    if (radix < 2 || radix > 36) radix = 10;
+    auto magnitude = value < 0 ? 0UL - cast(ulong)value : cast(ulong)value;
+    return z8_int_format(magnitude, radix, value < 0);
+}
+private wstring z8_int_toHexString(long value) { return z8_int_format(cast(ulong)value, 16); }
+private wstring z8_int_toBinaryString(long value) { return z8_int_format(cast(ulong)value, 2); }
 private long z8_int_parse(wstring value, long radix = 10) {
     auto base = cast(int)radix;
     if (base < 2 || base > 36 || value.length == 0) throw new Exception("invalid integer");

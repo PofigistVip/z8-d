@@ -1,0 +1,18 @@
+public class IntegerMethods {
+    public static int run() {
+        int value = -1;
+        int bits = 13;
+        int one = 1;
+        int zero = 0;
+        int number = 255;
+        if (value.toHexString() != "ffffffffffffffff") return 1;
+        if (value.toBinaryString().length() != 64) return 2;
+        if (value.toString(16) != "-1") return 3;
+        if (number.toString(16) != "ff") return 4;
+        if (number.toString(1) != "255") return 5;
+        if (bits.and(6) != 4 || bits.or(2) != 15 || bits.xor(5) != 8) return 6;
+        if (zero.not() != -1) return 7;
+        if (one.leftShift(65) != 2 || value.rightShift(68) != -1) return 8;
+        return 89;
+    }
+}

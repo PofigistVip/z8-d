@@ -728,9 +728,18 @@ class Checker {
                         default: break;
                     }
                 } else if (receiver == ValueType.intType) {
-                    checkArguments(e, []);
-                    if (e.token.text == "toString") return ValueType.stringType;
-                    if (e.token.text == "abs" || e.token.text == "signum") return ValueType.intType;
+                    switch (e.token.text) {
+                        case "toString":
+                            checkArguments(e, e.arguments.length ? [ValueType.intType] : []);
+                            return ValueType.stringType;
+                        case "toHexString": case "toBinaryString":
+                            checkArguments(e, []); return ValueType.stringType;
+                        case "abs": case "signum": case "not":
+                            checkArguments(e, []); return ValueType.intType;
+                        case "and": case "or": case "xor": case "leftShift": case "rightShift":
+                            checkArguments(e, [ValueType.intType]); return ValueType.intType;
+                        default: break;
+                    }
                 } else if (receiver == ValueType.boolType) {
                     checkArguments(e, []);
                     if (e.token.text == "toString") return ValueType.stringType;
@@ -1009,8 +1018,8 @@ private string emitExprRaw(Expression e) {
                 return receiver ~ ".z8_round(" ~ args.join(", ") ~ ")";
             }
             if (e.inferredType == ValueType.intType) {
-                if (e.token.text == "toString") return "(" ~ emitExpr(e.left) ~ ").to!string.to!wstring";
-                return "z8_int_" ~ e.token.text ~ "(" ~ emitExpr(e.left) ~ ")";
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return "z8_int_" ~ e.token.text ~ "(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
             }
             if (e.inferredType == ValueType.boolType) return "(" ~ emitExpr(e.left) ~ " ? \"true\"w : \"false\"w)";
             if (e.token.text == "toString") return emitExpr(e.left);
