@@ -73,6 +73,7 @@ with tempfile.TemporaryDirectory() as temporary:
         System.out.println("RESULT:" + demo.cases.Overloads.z8_run().get());
         System.out.println("RESULT:" + demo.cases.OverloadUser.z8_run().get());
         System.out.println("RESULT:" + demo.cases.Rounding.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.PrimitiveParse.z8_run().get());
     }
 }''', encoding="utf-8")
         logging_cache = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "commons-logging" / "commons-logging"
@@ -83,6 +84,9 @@ with tempfile.TemporaryDirectory() as temporary:
         decimal_java = original / "org.zenframework.z8.server" / "src" / "main" / "java" / "org" / "zenframework" / "z8" / "server" / "types" / "decimal.java"
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
                         "-cp", run_classpath, "-d", str(generated_classes), str(decimal_java)], cwd=temp, check=True)
+        bool_java = decimal_java.with_name("bool.java")
+        subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
+                        "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), str(bool_java)], cwd=temp, check=True)
         generated_sources = [str(p) for p in (project / "out" / "demo").rglob("*.java")]
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
                         "-cp", run_classpath, "-d", str(generated_classes)] + generated_sources + [str(runner)], cwd=temp, check=True)
@@ -102,6 +106,7 @@ void main() {
     writeln(Z8p_64656D6F2E63617365732E4F7665726C6F616473.m_run());
     writeln(Z8p_64656D6F2E63617365732E4F7665726C6F616455736572.m_run());
     writeln(Z8p_64656D6F2E63617365732E526F756E64696E67.m_run());
+    writeln(Z8p_64656D6F2E63617365732E5072696D69746976655061727365.m_run());
 }
 ''', encoding="utf-8")
         d_binary = temp / ("compare.exe" if os.name == "nt" else "compare")

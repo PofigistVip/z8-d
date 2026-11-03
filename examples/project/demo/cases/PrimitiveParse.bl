@@ -1,0 +1,14 @@
+public class PrimitiveParse {
+    public static int run() {
+        if (!bool.parse("YeS") || !bool.parse("1") || bool.parse("NO") || bool.parse("")) return 1;
+        string value = " \tHello \n";
+        if (value.trim() != "Hello" || value.trimLeft() != "Hello \n" || value.trimRight() != " \tHello") return 2;
+        if ("abc".left(2) != "ab" || "abc".right(2) != "bc") return 3;
+        try {
+            bool parsed = bool.parse("unknown");
+            return 4;
+        } catch (exception expected) {
+            return 67;
+        }
+    }
+}

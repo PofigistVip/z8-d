@@ -47,6 +47,30 @@ private wstring z8_str_charAt(wstring value, long index) {
     if (i < 0 || cast(size_t)i >= value.length) throw new Exception("string index out of bounds");
     return value[cast(size_t)i .. cast(size_t)i + 1];
 }
+private wstring z8_str_trimLeft(wstring value) {
+    size_t start;
+    while (start < value.length && value[start] <= ' ') ++start;
+    return value[start .. $];
+}
+private wstring z8_str_trimRight(wstring value) {
+    auto end = value.length;
+    while (end > 0 && value[end - 1] <= ' ') --end;
+    return value[0 .. end];
+}
+private wstring z8_str_trim(wstring value) { return z8_str_trimRight(z8_str_trimLeft(value)); }
+private wstring z8_str_left(wstring value, long count) { return z8_str_substring(value, 0, count); }
+private wstring z8_str_right(wstring value, long count) {
+    auto start = cast(int)(cast(long)cast(int)value.length - cast(int)count);
+    if (start < 0) start = 0;
+    return z8_str_substring(value, start);
+}
+private bool z8_bool_parse(wstring value) {
+    import std.uni : toLower;
+    auto text = value.to!string.toLower;
+    if (text == "" || text == "0" || text == "false" || text == "no" || text == "n" || text == "bool.false") return false;
+    if (text == "1" || text == "true" || text == "yes" || text == "y" || text == "bool.true") return true;
+    throw new Exception("invalid bool");
+}
 private long z8_int_abs(long value) { return value == long.min ? value : value < 0 ? -value : value; }
 private long z8_int_signum(long value) { return value < 0 ? -1 : value > 0 ? 1 : 0; }
 private long z8_int_parse(wstring value, long radix = 10) {

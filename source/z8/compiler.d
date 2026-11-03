@@ -643,8 +643,11 @@ class Checker {
                 return checkCall(selected, selected.owner, e);
             case ExprKind.memberCall:
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) &&
-                    (e.left.token.text == "int" || e.left.token.text == "decimal")) {
+                    (e.left.token.text == "int" || e.left.token.text == "decimal" || e.left.token.text == "bool")) {
                     if (e.token.text != "parse") fail("unsupported static type method", e.token);
+                    if (e.left.token.text == "bool") {
+                        checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_bool_parse"; return ValueType.boolType;
+                    }
                     if (e.left.token.text == "decimal") {
                         checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_decimal_parse"; return ValueType.decimalType;
                     }
@@ -674,7 +677,7 @@ class Checker {
                     return checkCall(target, target.owner, e);
                 } else if (receiver == ValueType.stringType) {
                     switch (e.token.text) {
-                        case "length": case "isEmpty": case "toString":
+                        case "length": case "isEmpty": case "toString": case "trim": case "trimLeft": case "trimRight":
                             checkArguments(e, []);
                             return e.token.text == "length" ? ValueType.intType : e.token.text == "isEmpty" ? ValueType.boolType : ValueType.stringType;
                         case "compare": case "endsWith":
@@ -687,6 +690,7 @@ class Checker {
                             checkArguments(e, e.arguments.length == 1 ? [ValueType.intType] : [ValueType.intType, ValueType.intType]);
                             return ValueType.stringType;
                         case "charAt": checkArguments(e, [ValueType.intType]); return ValueType.stringType;
+                        case "left": case "right": checkArguments(e, [ValueType.intType]); return ValueType.stringType;
                         default: break;
                     }
                 } else if (receiver == ValueType.intType) {

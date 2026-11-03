@@ -27,6 +27,9 @@ void main() {
     writeln(z8_str_charAt(s, 1).length);
     writeln(z8_str_compare("a"w, "abc"w));
     writeln(z8_str_compare("b"w, "a"w));
+    writeln(z8_str_trim(" \tword\u00A0 "w) == "word\u00A0"w);
+    writeln(z8_str_left("abc"w, 2) == "ab"w);
+    writeln(z8_str_right("abc"w, 2) == "bc"w);
     writeln(z8_int_parse("-8000000000000000"w, 16));
     writeln(z8_int_parse("7FL"w, 16));
     bool failed; try { z8_str_substring(s, -1, 1); } catch (Exception) { failed = true; }
@@ -51,6 +54,9 @@ public class StringOracle {
         System.out.println(String.valueOf(s.charAt(1)).length());
         System.out.println("a".compareTo("abc"));
         System.out.println("b".compareTo("a"));
+        System.out.println(" \tword\u00A0 ".trim().equals("word\u00A0"));
+        System.out.println("abc".substring(0, 2).equals("ab"));
+        System.out.println("abc".substring(1).equals("bc"));
         System.out.println(Long.parseLong("-8000000000000000", 16));
         System.out.println(Long.parseLong("7F", 16));
         boolean failed = false; try { s.substring(-1, 0); } catch (Exception e) { failed = true; }

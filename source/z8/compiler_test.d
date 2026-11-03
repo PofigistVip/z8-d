@@ -150,6 +150,7 @@ unittest {
     rejects("class A { static string f() { return \"a\".substring(true); } }");
     rejects("class A { static int f() { int[] x; return int.parse(x); } }");
     rejects("class A { static decimal f() { int[] x; return decimal.parse(x); } }");
+    rejects("class A { static bool f() { int[] x; return bool.parse(x); } }");
     rejects("class A { static int f() { return (int)1.5; } }");
     rejects("class A { static bool f() { return (bool)\"true\"; } }");
     rejects("class A { static decimal f() { return 8966366107597250171.7934341923; } }");
