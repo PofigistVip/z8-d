@@ -17,7 +17,7 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, boolArray, stringArray }
+enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, decimalArray, boolArray, stringArray }
 enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, unary, binary, conditional }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
                 whileStmt, doWhileStmt, forStmt, forEachStmt, breakStmt, continueStmt, throwStmt, tryStmt }
@@ -82,7 +82,7 @@ class Program {
 struct SourceUnit { string name, path, source; }
 
 private bool isArray(ValueType type) {
-    return [ValueType.intArray, ValueType.boolArray, ValueType.stringArray].canFind(type);
+    return [ValueType.intArray, ValueType.decimalArray, ValueType.boolArray, ValueType.stringArray].canFind(type);
 }
 // Until Java's legacy Double.toString conversion is fully reproduced, reject
 // literal values for which a shorter D rendering may differ from the Java backend.
@@ -107,6 +107,7 @@ private bool safeDecimalLiteral(string text) {
 private ValueType elementType(ValueType type) {
     switch (type) {
         case ValueType.intArray: return ValueType.intType;
+        case ValueType.decimalArray: return ValueType.decimalType;
         case ValueType.boolArray: return ValueType.boolType;
         case ValueType.stringArray: return ValueType.stringType;
         default: assert(0, "not an array");
@@ -154,6 +155,7 @@ class Parser {
             expect("]");
             switch (result) {
                 case ValueType.intType: return ValueType.intArray;
+                case ValueType.decimalType: return ValueType.decimalArray;
                 case ValueType.boolType: return ValueType.boolArray;
                 case ValueType.stringType: return ValueType.stringArray;
                 default: error("void arrays are not supported"); assert(0);
@@ -269,7 +271,7 @@ class Parser {
         if (accept("for")) {
             auto s = new Statement(StmtKind.forStmt, t);
             expect("(");
-            if (["int", "bool", "string"].canFind(current.text) && look(1).kind == TokenKind.identifier && look(2).text == ":") {
+            if (["int", "decimal", "bool", "string"].canFind(current.text) && look(1).kind == TokenKind.identifier && look(2).text == ":") {
                 s.kind = StmtKind.forEachStmt;
                 auto item = new Statement(StmtKind.variable, current);
                 item.type = parseType(); item.token = identifier(); s.initial = item;
@@ -549,7 +551,7 @@ class Checker {
             case ExprKind.arrayLiteral:
                 if (!isArray(expected)) fail("array initializer requires an array type", e.token);
                 foreach (element; e.arguments)
-                    if (typeOf(element) != elementType(expected)) fail("array element type mismatch", element.token);
+                    if (!matches(element, elementType(expected))) fail("array element type mismatch", element.token);
                 e.inferredType = expected; return expected;
             case ExprKind.variable:
                 auto variable = e.token.text in variables;
@@ -659,11 +661,11 @@ class Checker {
                             if (e.arguments.length != 1 || typeOf(e.arguments[0]) != ValueType.intType) fail("get requires an int index", e.token);
                             return elementType(receiver);
                         case "add":
-                            if (e.arguments.length != 1 || typeOf(e.arguments[0]) != elementType(receiver)) fail("add requires an element of the array type", e.token);
+                            if (e.arguments.length != 1 || !matches(e.arguments[0], elementType(receiver))) fail("add requires an element of the array type", e.token);
                             return receiver;
                         case "set":
                             if (e.arguments.length != 2 || typeOf(e.arguments[0]) != ValueType.intType ||
-                                typeOf(e.arguments[1]) != elementType(receiver)) fail("set requires an int index and an element of the array type", e.token);
+                                !matches(e.arguments[1], elementType(receiver))) fail("set requires an int index and an element of the array type", e.token);
                             return ValueType.voidType;
                         default: break;
                     }
@@ -822,6 +824,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.exceptionType: return "Throwable";
         case ValueType.selfType: assert(objectClass !is null); return objectClass.emittedName;
         case ValueType.intArray: return "Z8Array!long";
+        case ValueType.decimalArray: return "Z8Array!Z8Decimal";
         case ValueType.boolArray: return "Z8Array!bool";
         case ValueType.stringArray: return "Z8Array!wstring";
     }

@@ -1,0 +1,10 @@
+public class DecimalArray {
+    public static int run() {
+        decimal[] values = {0.1, 0.2, 3};
+        values.add(4);
+        decimal total;
+        for (decimal value : values) total += value;
+        if (total.toString() != "7.3") return 1;
+        return 47;
+    }
+}

@@ -5,6 +5,8 @@ public class Text {
         if (value.indexOf("😀", 2) != 4) return 2;
         if (value.substring(1, 2) != "😀") return 3;
         if (!value.startsWith("😀", 1)) return 4;
+        string[] converted = {"answer", 42, true};
+        if (converted[1] != "42" || converted[2] != "true") return 5;
         return 41;
     }
 }

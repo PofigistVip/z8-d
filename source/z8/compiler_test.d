@@ -20,6 +20,8 @@ unittest {
     assert(output.canFind("class Z8_Math"));
     assert(output.canFind("static long m_add(long v_a, long v_b)"));
     assert(output.canFind("m_add(v_a, (cast(long)(2)))"));
+    auto decimalArrays = compile("class A { static void f() { decimal[] values = {1, 2.5}; values.add(3); values.set(0, 4); } }");
+    assert(decimalArrays.canFind("Z8Array!Z8Decimal"));
 }
 
 private void rejectsSources(SourceUnit[] sources, string expectedFile) {
@@ -122,7 +124,7 @@ unittest {
     rejects("class A { static void f() { int x = 1; x[0] = 2; } }");
     rejects("class A { static void f() { int[] x; bool y = x == x; } }");
     rejects("class A { static void f() { int[][] x; } }");
-    rejects("class A { static void f() { string[] x = {\"ok\", false}; } }");
+    rejects("class A { static void f() { int[] bad; string[] x = {\"ok\", bad}; } }");
     rejects("class A { static int[] f() { return {1, false}; } }");
     rejects("class A { static int f(int[] x) { return 1; } static int g() { return f({1}); } }");
     rejects("class A { static void f() { int[] x; x.clear(1); } }");
@@ -147,4 +149,5 @@ unittest {
     rejects("class A { static int f() { return (int)1.5; } }");
     rejects("class A { static bool f() { return (bool)\"true\"; } }");
     rejects("class A { static decimal f() { return 8966366107597250171.7934341923; } }");
+    rejects("class A { static void f() { decimal[] x = {1.0, false}; } }");
 }
