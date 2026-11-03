@@ -1,0 +1,18 @@
+import demo.Base;
+import demo.Derived;
+
+public class ObjectCasts {
+    public static int run() {
+        Base base = new Derived;
+        Derived derived = (Derived)base;
+        Base again = (Base)derived;
+        try {
+            Base plain = new Base;
+            Derived invalid = (Derived)plain;
+            return 1;
+        } catch (exception expected) {
+            if (again.getValue() != 14) return 2;
+        }
+        return again.getValue();
+    }
+}

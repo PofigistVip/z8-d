@@ -354,7 +354,11 @@ class Parser {
         if (["+", "-", "!", "~"].canFind(t.text)) {
             take(); auto result = new Expression(ExprKind.unary, t); result.left = unary(); return result;
         }
-        if (current.text == "(" && ["int", "decimal", "bool", "string"].canFind(look(1).text) && look(2).text == ")") {
+        bool primitiveCast = ["int", "decimal", "bool", "string"].canFind(look(1).text);
+        bool objectCast = look(1).kind == TokenKind.identifier &&
+            (look(3).kind == TokenKind.identifier || [TokenKind.integerLiteral, TokenKind.decimalLiteral, TokenKind.booleanLiteral, TokenKind.stringLiteral].canFind(look(3).kind) ||
+             ["(", "this", "super", "new", "!", "~"].canFind(look(3).text));
+        if (current.text == "(" && look(2).text == ")" && (primitiveCast || objectCast)) {
             take(); auto castExpression = new Expression(ExprKind.castExpr, current);
             castExpression.castType = parseType(); expect(")"); castExpression.left = unary(); return castExpression;
         }
@@ -851,6 +855,14 @@ class Checker {
                 if (array == ValueType.selfArray) e.objectClass = e.left.objectClass;
                 return elementType(array);
             case ExprKind.castExpr:
+                if (e.castType == ValueType.selfType) {
+                    auto target = resolveClass(currentProgram, e.token.text, e.token);
+                    if (typeOf(e.left) != ValueType.selfType ||
+                        (!isAssignable(e.left.objectClass, target) && !isAssignable(target, e.left.objectClass)))
+                        fail("unsupported object cast", e.token);
+                    e.objectClass = target;
+                    return ValueType.selfType;
+                }
                 if (!matches(e.left, e.castType)) fail("unsupported type cast", e.token);
                 return e.castType;
             case ExprKind.unary:
@@ -1101,7 +1113,8 @@ private string emitExprRaw(Expression e) {
         case ExprKind.index:
             if (e.inferredType == ValueType.stringMap) return "(" ~ emitExpr(e.left) ~ ").z8_get(" ~ emitExpr(e.right) ~ ")";
             return "(" ~ emitExpr(e.left) ~ ").z8_at(" ~ emitExpr(e.right) ~ ")";
-        case ExprKind.castExpr: return emitExpr(e.left);
+        case ExprKind.castExpr:
+            return e.castType == ValueType.selfType ? "z8_cast!(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")" : emitExpr(e.left);
         case ExprKind.unary: return "(" ~ e.token.text ~ emitExpr(e.left) ~ ")";
         case ExprKind.binary:
             if ((e.token.text == "/" || e.token.text == "%") && e.inferredType != ValueType.decimalType)
@@ -1321,6 +1334,11 @@ private T z8_new(T)() {
     auto value = new T();
     static if (__traits(hasMember, T, "m_constructor")) value.m_constructor();
     return value;
+}
+private T z8_cast(T, U)(U value) {
+    auto result = cast(T)value;
+    if (value !is null && result is null) throw new Exception("invalid object cast");
+    return result;
 }
 private long z8_div(long a, long b) {
     if (b == 0) throw new Exception("division by zero");

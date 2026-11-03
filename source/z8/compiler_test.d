@@ -95,6 +95,11 @@ unittest {
     rejectsSources([wrongArrayElement, arrayItem], "A.bl");
     auto wrongForeach = SourceUnit("pkg.A", "A.bl", "class A { void f() { B[] x; for (A item : x) {} } }");
     rejectsSources([wrongForeach, arrayItem], "A.bl");
+    auto invalidCast = SourceUnit("pkg.A", "A.bl", "class A { static B f() { A a; return (B)a; } }");
+    rejectsSources([invalidCast, arrayItem], "A.bl");
+    auto badCastValue = SourceUnit("pkg.A", "A.bl", "class A { static B f() { return (B)1; } }");
+    rejectsSources([badCastValue, arrayItem], "A.bl");
+    compile("class A { static int f(int x) { return (x) + 2; } }");
 }
 
 unittest {
