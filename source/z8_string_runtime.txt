@@ -64,6 +64,29 @@ private wstring z8_str_right(wstring value, long count) {
     if (start < 0) start = 0;
     return z8_str_substring(value, start);
 }
+private wstring z8_str_insert(wstring value, long index, wstring what) {
+    auto i = cast(int)index;
+    if (i < 0 || cast(size_t)i > value.length) throw new Exception("string index out of bounds");
+    return value[0 .. cast(size_t)i] ~ what ~ value[cast(size_t)i .. $];
+}
+private wstring z8_str_replace(wstring value, long index, long count, wstring replacement) {
+    auto i = cast(int)index;
+    auto end = cast(int)(cast(long)i + cast(int)count);
+    if (i < 0 || end < 0 || cast(size_t)i > value.length || cast(size_t)end > value.length)
+        throw new Exception("string index out of bounds");
+    return value[0 .. cast(size_t)i] ~ replacement ~ value[cast(size_t)end .. $];
+}
+private wstring z8_str_padding(wstring value, long length, wstring padding, bool left) {
+    auto requested = cast(int)length;
+    if (requested <= 0 || cast(size_t)requested <= value.length) return value;
+    if (!padding.length) padding = " "w;
+    auto count = cast(size_t)requested - value.length;
+    wchar[] fill = new wchar[count];
+    foreach (i; 0 .. count) fill[i] = padding[i % padding.length];
+    return left ? fill.idup ~ value : value ~ fill.idup;
+}
+private wstring z8_str_padLeft(wstring value, long length, wstring padding = " "w) { return z8_str_padding(value, length, padding, true); }
+private wstring z8_str_padRight(wstring value, long length, wstring padding = " "w) { return z8_str_padding(value, length, padding, false); }
 private bool z8_bool_parse(wstring value) {
     import std.uni : toLower;
     auto text = value.to!string.toLower;

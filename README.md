@@ -91,7 +91,7 @@ Z8; также поддерживается `for (тип элемент : мас
 представлены `wstring` (UTF-16), включая сравнение по кодовым единицам Java.
 Поддерживаются конкатенация, сравнения, `length`, `isEmpty`, `compare`, `startsWith`,
 `endsWith`, `indexOf`, `lastIndexOf`, `substring`, `charAt`, `trim`, `trimLeft`,
-`trimRight`, `left` и `right`; остальные методы строк
+`trimRight`, `left`, `right`, `insert`, `replace`, `padLeft` и `padRight`; остальные методы строк
 ещё не перенесены. Для массивов поддерживаются инициализаторы `{...}`,
 индексация, методы `size`, `isEmpty`, `get`, `set`, `add`, `addAll`, `contains`,
 `indexOf`, `remove`, `removeAt`, `reverse` и `clear`. Массивы передаются по ссылке;

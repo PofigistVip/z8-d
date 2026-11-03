@@ -7,6 +7,10 @@ public class Text {
         if (!value.startsWith("😀", 1)) return 4;
         string[] converted = {"answer", 42, true};
         if (converted[1] != "42" || converted[2] != "true") return 5;
+        if (value.insert(1, "X") != "aX😀b😀") return 6;
+        if (value.replace(1, 2, "X") != "aXb😀") return 7;
+        if ("ab".padLeft(7, "xy") != "xyxyxab") return 8;
+        if ("ab".padRight(5, "") != "ab   ") return 9;
         return 41;
     }
 }

@@ -82,7 +82,12 @@ with tempfile.TemporaryDirectory() as temporary:
 }''', encoding="utf-8")
         logging_cache = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "commons-logging" / "commons-logging"
         logging = [p for p in logging_cache.rglob("*.jar") if not p.name.endswith("-sources.jar")]
-        run_classpath = os.pathsep.join([str(runtime_jars[0]), str(lang_classes), classpath] + [str(p) for p in logging])
+        commons_cache = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "org.zenframework.z8.dependencies.commons"
+        commons = [p for p in commons_cache.rglob("*.jar") if "3.4-cert" in p.parts and not p.name.endswith("-sources.jar") and
+                   (p.name.startswith("commons-lang-2.6-") or p.name.startswith("commons-fileupload-"))]
+        if len(commons) < 2:
+            raise SystemExit("Cached Commons Lang and FileUpload dependencies are required to compile the original string runtime")
+        run_classpath = os.pathsep.join([str(runtime_jars[0]), str(lang_classes), classpath] + [str(p) for p in logging + commons])
         # The cached runtime JAR can predate the checked-out sources. Override its
         # decimal class with the current source before evaluating decimal results.
         decimal_java = original / "org.zenframework.z8.server" / "src" / "main" / "java" / "org" / "zenframework" / "z8" / "server" / "types" / "decimal.java"
@@ -94,6 +99,9 @@ with tempfile.TemporaryDirectory() as temporary:
         collection_java = decimal_java.parent.parent / "runtime" / "RCollection.java"
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
                         "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), str(collection_java)], cwd=temp, check=True)
+        string_java = decimal_java.with_name("string.java")
+        subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
+                        "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), str(string_java)], cwd=temp, check=True)
         generated_sources = [str(p) for p in (project / "out" / "demo").rglob("*.java")]
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
                         "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes)] + generated_sources + [str(runner)], cwd=temp, check=True)

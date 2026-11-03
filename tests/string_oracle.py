@@ -30,6 +30,14 @@ void main() {
     writeln(z8_str_trim(" \tword\u00A0 "w) == "word\u00A0"w);
     writeln(z8_str_left("abc"w, 2) == "ab"w);
     writeln(z8_str_right("abc"w, 2) == "bc"w);
+    writeln(z8_str_insert(s, 1, "X"w) == "aX"w ~ emoji ~ "b"w ~ emoji);
+    writeln(z8_str_replace(s, 1, 2, "X"w) == "aXb"w ~ emoji);
+    writeln(z8_str_replace("abcd"w, 2, -1, "X"w) == "abXbcd"w);
+    writeln(z8_str_padLeft("ab"w, 7, "xy"w) == "xyxyxab"w);
+    writeln(z8_str_padRight("ab"w, 5, ""w) == "ab   "w);
+    writeln(z8_str_padLeft("abc"w, 4294967295L) == "abc"w);
+    bool invalidReplace; try { z8_str_replace(s, 1, 100, ""w); } catch (Exception) { invalidReplace = true; }
+    writeln(invalidReplace);
     writeln(z8_int_parse("-8000000000000000"w, 16));
     writeln(z8_int_parse("7FL"w, 16));
     bool failed; try { z8_str_substring(s, -1, 1); } catch (Exception) { failed = true; }
@@ -57,6 +65,14 @@ public class StringOracle {
         System.out.println(" \tword\u00A0 ".trim().equals("word\u00A0"));
         System.out.println("abc".substring(0, 2).equals("ab"));
         System.out.println("abc".substring(1).equals("bc"));
+        System.out.println((s.substring(0, 1) + "X" + s.substring(1)).equals("aX" + emoji + "b" + emoji));
+        System.out.println((s.substring(0, 1) + "X" + s.substring(3)).equals("aXb" + emoji));
+        System.out.println(("abcd".substring(0, 2) + "X" + "abcd".substring(1)).equals("abXbcd"));
+        System.out.println("xyxyxab".equals("xyxyx" + "ab"));
+        System.out.println("ab   ".equals("ab" + "   "));
+        System.out.println((int)4294967295L <= "abc".length());
+        boolean invalidReplace = false; try { s.substring(101); } catch (Exception e) { invalidReplace = true; }
+        System.out.println(invalidReplace);
         System.out.println(Long.parseLong("-8000000000000000", 16));
         System.out.println(Long.parseLong("7F", 16));
         boolean failed = false; try { s.substring(-1, 0); } catch (Exception e) { failed = true; }

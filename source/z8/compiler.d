@@ -720,6 +720,11 @@ class Checker {
                             return ValueType.stringType;
                         case "charAt": checkArguments(e, [ValueType.intType]); return ValueType.stringType;
                         case "left": case "right": checkArguments(e, [ValueType.intType]); return ValueType.stringType;
+                        case "insert": checkArguments(e, [ValueType.intType, ValueType.stringType]); return ValueType.stringType;
+                        case "replace": checkArguments(e, [ValueType.intType, ValueType.intType, ValueType.stringType]); return ValueType.stringType;
+                        case "padLeft": case "padRight":
+                            checkArguments(e, e.arguments.length == 1 ? [ValueType.intType] : [ValueType.intType, ValueType.stringType]);
+                            return ValueType.stringType;
                         default: break;
                     }
                 } else if (receiver == ValueType.intType) {
