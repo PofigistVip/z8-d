@@ -1,0 +1,12 @@
+public class InstanceOverloads {
+    int total;
+    public void add(int value) { total += value; }
+    public void add(string value) { total += value.length(); }
+
+    public static int run() {
+        InstanceOverloads instance;
+        instance.add(5);
+        instance.add("abc");
+        return instance.total + 73;
+    }
+}
