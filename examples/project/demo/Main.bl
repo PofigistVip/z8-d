@@ -9,6 +9,7 @@ public class Main {
         Holder holder;
         holder.bump();
         Base base = new Derived;
-        return Numbers.sum({1, 2, 3}) + Twice.apply(4) + Counter.run() + second.value + holder.counter.value + base.getValue();
+        int[] numbers = {1, 2, 3};
+        return Numbers.sum(numbers) + Twice.apply(4) + Counter.run() + second.value + holder.counter.value + base.getValue();
     }
 }

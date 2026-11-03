@@ -73,6 +73,7 @@ void main() {
     assert(Z8_Math.m_stringOperations());
     assert(Z8_Math.m_primitiveText());
     assert(Z8_Math.m_parsePrimitives());
+    assert(Z8_Math.m_conversions() == "42:true:2:7"w);
     auto astral = [cast(wchar)0xD83D, cast(wchar)0xDE00].idup;
     auto bmp = [cast(wchar)0xE000].idup;
     assert(Z8_Math.m_compareStrings(astral, bmp));

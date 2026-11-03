@@ -108,7 +108,7 @@ unittest {
     rejects("class A { static void f() {} static bool g() { return f() == f(); } }");
     rejects("class A { static void f() {} static int g() { return f(); } }");
     rejects("class A { static void f() { for (; true; int x = 1) {} } }");
-    rejects("class A { static string f() { return 1; } }");
+    rejects("class A { static string f() { int[] value; return value; } }");
     rejects("class A { static string f() { return \"a\" - \"b\"; } }");
     rejects("class A { static void f() { string x = \"x\"; x -= \"y\"; } }");
     rejects("class A { static int f() { return 1.length(); } }");
@@ -124,6 +124,7 @@ unittest {
     rejects("class A { static void f() { int[][] x; } }");
     rejects("class A { static void f() { string[] x = {\"ok\", false}; } }");
     rejects("class A { static int[] f() { return {1, false}; } }");
+    rejects("class A { static int f(int[] x) { return 1; } static int g() { return f({1}); } }");
     rejects("class A { static void f() { int[] x; x.clear(1); } }");
     rejects("class A { static void f() { int[] x; x.add(1, 2); } }");
     rejects("class A { static void f() { int[] x; for (bool y : x) {} } }");
@@ -139,8 +140,10 @@ unittest {
     rejects("class A { static void f() { try {} catch (exception e) {} e.getMessage(); } }");
     rejects("class A { static int f() { return 1.0; } }");
     rejects("class A { static decimal f() { return 1.0 + true; } }");
-    rejects("class A { static bool f() { return \"a\".startsWith(1); } }");
+    rejects("class A { static bool f() { int[] x; return \"a\".startsWith(x); } }");
     rejects("class A { static string f() { return \"a\".substring(true); } }");
-    rejects("class A { static int f() { return int.parse(true); } }");
-    rejects("class A { static decimal f() { return decimal.parse(1); } }");
+    rejects("class A { static int f() { int[] x; return int.parse(x); } }");
+    rejects("class A { static decimal f() { int[] x; return decimal.parse(x); } }");
+    rejects("class A { static int f() { return (int)1.5; } }");
+    rejects("class A { static bool f() { return (bool)\"true\"; } }");
 }

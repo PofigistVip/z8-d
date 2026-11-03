@@ -1,7 +1,7 @@
 public class Base {
     protected int value = 2;
 
-    protected void constructor() {
+    virtual protected void constructor() {
         value += 4;
     }
 

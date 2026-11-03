@@ -17,7 +17,7 @@ class CompileException : Exception {
 }
 
 enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, boolArray, stringArray }
-enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, unary, binary, conditional }
+enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, unary, binary, conditional }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
                 whileStmt, doWhileStmt, forStmt, forEachStmt, breakStmt, continueStmt, throwStmt, tryStmt }
 
@@ -30,6 +30,8 @@ class Expression {
     string targetClass;
     bool isField, instanceCall;
     bool promoteToDecimal;
+    ValueType convertToString;
+    ValueType castType;
     string emittedOperator;
     string builtinCall;
     Program objectClass;
@@ -180,7 +182,6 @@ class Parser {
             if (method.name.text == "constructor") {
                 if (method.isStatic || method.returnType != ValueType.voidType || method.parameters.length)
                     throw new CompileException("constructor must be an instance void method without parameters", method.name.position);
-                method.isVirtual = true;
             }
             method.body = statement();
             if (method.body.kind != StmtKind.block)
@@ -321,6 +322,10 @@ class Parser {
         if (["+", "-", "!", "~"].canFind(t.text)) {
             take(); auto result = new Expression(ExprKind.unary, t); result.left = unary(); return result;
         }
+        if (current.text == "(" && ["int", "decimal", "bool", "string"].canFind(look(1).text) && look(2).text == ")") {
+            take(); auto castExpression = new Expression(ExprKind.castExpr, current);
+            castExpression.castType = parseType(); expect(")"); castExpression.left = unary(); return castExpression;
+        }
         auto result = atom();
         while (current.text == "." || current.text == "[") {
             if (accept("[")) {
@@ -414,12 +419,16 @@ class Checker {
     private bool matches(Expression e, ValueType expected, Program expectedClass = null) {
         auto actual = typeOf(e, expected);
         if (actual == ValueType.intType && expected == ValueType.decimalType) { e.promoteToDecimal = true; return true; }
+        if (expected == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual)) {
+            e.convertToString = actual; return true;
+        }
         return actual == expected && (expected != ValueType.selfType || isAssignable(e.objectClass, expectedClass));
     }
     private ValueType checkCall(Method method, Program owner, Expression e) {
         if (e.arguments.length != method.parameters.length) fail("incorrect argument count", e.token);
         foreach (i, arg; e.arguments) {
             auto p = method.parameters[i];
+            if (arg.kind == ExprKind.arrayLiteral) fail("array initializer requires a known target", arg.token);
             auto objectClass = p.type == ValueType.selfType ? resolveClass(owner, p.objectName, p.name) : null;
             if (!matches(arg, p.type, objectClass)) fail("argument type mismatch", arg.token);
         }
@@ -642,6 +651,9 @@ class Checker {
                 if (!isArray(array)) fail("indexing requires an array", e.token);
                 if (typeOf(e.right) != ValueType.intType) fail("array index must be int", e.token);
                 return elementType(array);
+            case ExprKind.castExpr:
+                if (!matches(e.left, e.castType)) fail("unsupported type cast", e.token);
+                return e.castType;
             case ExprKind.unary:
                 auto operand = typeOf(e.left);
                 if (e.token.text == "!" && operand == ValueType.boolType) return operand;
@@ -650,6 +662,12 @@ class Checker {
                 fail("invalid unary operand", e.token); assert(0);
             case ExprKind.binary:
                 auto left = typeOf(e.left), right = typeOf(e.right), op = e.token.text;
+                if (op == "+" && left == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(right)) {
+                    e.right.convertToString = right; right = ValueType.stringType;
+                }
+                if (op == "+" && right == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(left)) {
+                    e.left.convertToString = left; left = ValueType.stringType;
+                }
                 if (left == ValueType.decimalType && right == ValueType.intType) { e.right.promoteToDecimal = true; right = ValueType.decimalType; }
                 if (left == ValueType.intType && right == ValueType.decimalType) {
                     e.left.promoteToDecimal = true; left = ValueType.decimalType;
@@ -672,6 +690,12 @@ class Checker {
                 auto left = typeOf(e.right), right = typeOf(e.third);
                 if (left == ValueType.decimalType && right == ValueType.intType) { e.third.promoteToDecimal = true; right = ValueType.decimalType; }
                 if (left == ValueType.intType && right == ValueType.decimalType) { e.right.promoteToDecimal = true; left = ValueType.decimalType; }
+                if (left == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(right)) {
+                    e.third.convertToString = right; right = ValueType.stringType;
+                }
+                if (right == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(left)) {
+                    e.right.convertToString = left; left = ValueType.stringType;
+                }
                 if (left == ValueType.voidType || left != right || (left == ValueType.selfType && e.right.objectClass !is e.third.objectClass))
                     fail("conditional branch type mismatch", e.token);
                 if (left == ValueType.selfType) e.objectClass = e.right.objectClass;
@@ -802,7 +826,11 @@ private string emitStringLiteral(string text) {
 }
 private string emitExpr(Expression e) {
     auto value = emitExprRaw(e);
-    return e.promoteToDecimal ? "z8_decimal_from_int(" ~ value ~ ")" : value;
+    if (e.promoteToDecimal) value = "z8_decimal_from_int(" ~ value ~ ")";
+    if (e.convertToString == ValueType.intType) return "(" ~ value ~ ").to!string.to!wstring";
+    if (e.convertToString == ValueType.boolType) return "(" ~ value ~ " ? \"true\"w : \"false\"w)";
+    if (e.convertToString == ValueType.decimalType) return "(" ~ value ~ ").z8_string()";
+    return value;
 }
 private string emitExprRaw(Expression e) {
     final switch (e.kind) {
@@ -856,6 +884,7 @@ private string emitExprRaw(Expression e) {
             return e.token.text == "length" ? "cast(long)(" ~ value ~ ")" : "(" ~ value ~ " == 0)";
         case ExprKind.index:
             return "(" ~ emitExpr(e.left) ~ ").z8_at(" ~ emitExpr(e.right) ~ ")";
+        case ExprKind.castExpr: return emitExpr(e.left);
         case ExprKind.unary: return "(" ~ e.token.text ~ emitExpr(e.left) ~ ")";
         case ExprKind.binary:
             if ((e.token.text == "/" || e.token.text == "%") && e.inferredType != ValueType.decimalType)

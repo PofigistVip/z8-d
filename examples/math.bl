@@ -139,7 +139,8 @@ public class Math {
     }
 
     public static int literalArgument() {
-        return sum({3, 5});
+        int[] values = {3, 5};
+        return sum(values);
     }
 
     public static bool emptyArray() {
@@ -266,5 +267,11 @@ public class Math {
             && int.parse("7FL", 16) == 127 && int.parse("+42") == 42
             && decimal.parse("1e2").toString() == "100"
             && decimal.parse("") == 0;
+    }
+
+    public static string conversions() {
+        decimal amount = (decimal)2;
+        string label = 42;
+        return label + ":" + true + ":" + amount + ":" + (string)7;
     }
 }
