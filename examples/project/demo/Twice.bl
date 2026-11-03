@@ -1,0 +1,5 @@
+public class Twice {
+    public static int apply(int value) {
+        return value * 2;
+    }
+}

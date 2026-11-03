@@ -1,0 +1,8 @@
+public class Numbers {
+    public static int sum(int[] values) {
+        int total;
+        for (int i; i < values.size(); i += 1)
+            total += values[i];
+        return total;
+    }
+}

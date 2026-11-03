@@ -22,6 +22,31 @@ unittest {
     assert(output.canFind("m_add(v_a, (cast(long)(2)))"));
 }
 
+private void rejectsSources(SourceUnit[] sources, string expectedFile) {
+    bool failed;
+    try { compileSources(sources); } catch (CompileException e) { failed = true; assert(e.sourceName == expectedFile); }
+    assert(failed);
+}
+
+unittest {
+    auto a = SourceUnit("pkg.A", "A.bl", "import other.B; class A { public static int f() { return B.g(2); } }");
+    auto b = SourceUnit("other.B", "B.bl", "class B { public static int g(int x) { return x; } }");
+    auto output = compileSources([a, b]);
+    assert(output.canFind("Z8p_6F746865722E42.m_g"));
+    rejectsSources([a], "A.bl");
+    auto privateB = SourceUnit("other.B", "B.bl", "class B { static int g(int x) { return x; } }");
+    rejectsSources([a, privateB], "A.bl");
+    auto invalidB = SourceUnit("other.B", "B.bl", "class B { public static int g() { return true; } }");
+    rejectsSources([a, invalidB], "A.bl"); // the call has the wrong arity
+    auto wrongName = SourceUnit("other.NotB", "B.bl", "class B { }");
+    rejectsSources([wrongName], "B.bl");
+    auto badImport = SourceUnit("pkg.A", "A.bl", "import other.B; import third.B; class A { }");
+    auto third = SourceUnit("third.B", "third.bl", "class B { }");
+    rejectsSources([badImport, b, third], "A.bl");
+    auto syntax = SourceUnit("pkg.C", "C.bl", "class C { $");
+    rejectsSources([syntax], "C.bl");
+}
+
 unittest {
     rejects("class A { static int f() { return true; } }");
     rejects("class A { static int f() { if (true) return 1; } }");

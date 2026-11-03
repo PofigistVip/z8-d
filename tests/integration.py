@@ -68,4 +68,20 @@ void main() {
     assert rejected.returncode == 1 and "return type mismatch" in rejected.stderr
     assert not rejected.stdout
 
-print("Generated D program and diagnostics verified")
+    project = subprocess.run(
+        [str(exe), "project", str(root / "examples" / "project")],
+        capture_output=True, text=True, encoding="utf-8", check=True,
+    )
+    project_class = "Z8p_" + "demo.Main".encode("utf-8").hex().upper()
+    generated.write_text(project.stdout + "\nvoid main() { assert(" + project_class + ".m_run() == 14); }\n", encoding="utf-8")
+    subprocess.run(["dmd", str(generated), "-of=" + str(binary)], cwd=directory, check=True)
+    subprocess.run([str(binary)], cwd=directory, check=True)
+
+    bad_root = directory / "bad_project"
+    bad_root.mkdir()
+    (bad_root / "Broken.bl").write_text("import missing.Type; class Broken {}", encoding="utf-8")
+    rejected = subprocess.run([str(exe), "project", str(bad_root)], capture_output=True, text=True, encoding="utf-8")
+    assert rejected.returncode == 1 and "Broken.bl:1:1" in rejected.stderr and "unresolved import" in rejected.stderr
+    assert not rejected.stdout
+
+print("Generated D programs and diagnostics verified")

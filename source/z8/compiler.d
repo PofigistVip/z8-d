@@ -4,11 +4,12 @@ import std.algorithm : canFind;
 import std.array : join;
 import std.conv : to;
 import std.format : format;
-import std.string : replace;
+import std.string : replace, lastIndexOf;
 import z8.lexer;
 
 class CompileException : Exception {
     Position position;
+    string sourceName;
     this(string message, Position position) { super(message); this.position = position; }
 }
 
@@ -23,6 +24,7 @@ class Expression {
     Expression left, right;
     Expression[] arguments;
     ValueType inferredType;
+    string targetClass;
     this(ExprKind kind, Token token) { this.kind = kind; this.token = token; }
 }
 class Statement {
@@ -42,8 +44,16 @@ class Method {
     Token name;
     Parameter[] parameters;
     Statement body;
+    bool isPublic;
 }
-class Program { Token name; Method[] methods; }
+struct Import { string name; Token token; }
+class Program {
+    Token name;
+    Method[] methods;
+    Import[] imports;
+    string qualifiedName, sourceName, emittedName;
+}
+struct SourceUnit { string name, path, source; }
 
 private bool isArray(ValueType type) {
     return [ValueType.intArray, ValueType.boolArray, ValueType.stringArray].canFind(type);
@@ -99,6 +109,12 @@ class Parser {
     }
     Program parse() {
         auto result = new Program;
+        while (current.text == "import") {
+            auto start = take();
+            string name = identifier().text;
+            while (accept(".")) name ~= "." ~ identifier().text;
+            expect(";"); result.imports ~= Import(name, start);
+        }
         accept("public"); accept("final"); expect("class"); result.name = identifier(); expect("{");
         while (current.text != "}") {
             if (current.kind == TokenKind.endOfFile) error("expected '}'");
@@ -111,6 +127,7 @@ class Parser {
             }
             if (!isStatic) error("only static methods are supported");
             auto method = new Method;
+            method.isPublic = isPublic;
             method.returnType = parseType(); method.name = identifier(); expect("(");
             if (current.text != ")") {
                 do {
@@ -260,11 +277,33 @@ class Parser {
 /// Checks the entire program before emitting code; unsupported constructs fail closed.
 class Checker {
     private Method[string] methods;
+    private Program[string] visibleClasses;
+    private Program currentProgram;
     private ValueType[string] variables;
     private ValueType returnType;
     private size_t loopDepth;
     private void fail(string message, Token t) { throw new CompileException(message, t.position); }
-    void check(Program program) {
+    void check(Program program, Program[string] allPrograms = null) {
+        currentProgram = program;
+        visibleClasses = null;
+        visibleClasses[program.name.text] = program;
+        auto dot = program.qualifiedName.lastIndexOf('.');
+        auto packageName = dot < 0 ? "" : program.qualifiedName[0 .. dot + 1];
+        foreach (qualified, target; allPrograms) {
+            auto targetDot = qualified.lastIndexOf('.');
+            auto targetPackage = targetDot < 0 ? "" : qualified[0 .. targetDot + 1];
+            if (targetPackage == packageName) visibleClasses[target.name.text] = target;
+        }
+        Program[string] imported;
+        foreach (item; program.imports) {
+            auto found = item.name in allPrograms;
+            if (found is null) fail("unresolved import '" ~ item.name ~ "'", item.token);
+            auto simpleName = (*found).name.text;
+            auto oldImport = simpleName in imported;
+            if (oldImport !is null && *oldImport !is *found) fail("ambiguous imports for '" ~ simpleName ~ "'", item.token);
+            imported[simpleName] = *found;
+            visibleClasses[simpleName] = *found;
+        }
         methods = null;
         foreach (m; program.methods) {
             if (m.name.text in methods) fail("duplicate or overloaded method", m.name);
@@ -303,6 +342,19 @@ class Checker {
                     if (typeOf(arg, (*method).parameters[i].type) != (*method).parameters[i].type) fail("argument type mismatch", arg.token);
                 return (*method).returnType;
             case ExprKind.memberCall:
+                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables)) {
+                    auto owner = e.left.token.text in visibleClasses;
+                    if (owner is null) fail("unknown class or variable '" ~ e.left.token.text ~ "'", e.left.token);
+                    Method target;
+                    foreach (candidate; (*owner).methods) if (candidate.name.text == e.token.text) { target = candidate; break; }
+                    if (target is null) fail("unknown method '" ~ e.token.text ~ "'", e.token);
+                    if (*owner !is currentProgram && !target.isPublic) fail("method is not public", e.token);
+                    if (e.arguments.length != target.parameters.length) fail("incorrect argument count", e.token);
+                    foreach (i, arg; e.arguments)
+                        if (typeOf(arg, target.parameters[i].type) != target.parameters[i].type) fail("argument type mismatch", arg.token);
+                    e.targetClass = (*owner).emittedName;
+                    return target.returnType;
+                }
                 auto receiver = typeOf(e.left);
                 e.inferredType = receiver;
                 if (receiver == ValueType.stringType) {
@@ -448,6 +500,10 @@ private string emitExpr(Expression e) {
             string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
             return "m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
         case ExprKind.memberCall:
+            if (e.targetClass.length) {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return e.targetClass ~ ".m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
+            }
             if (isArray(e.inferredType)) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return "(" ~ emitExpr(e.left) ~ ").z8_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
@@ -500,7 +556,50 @@ private string emitSimple(Statement s) {
 }
 string compile(string source) {
     auto program = (new Parser(source)).parse();
-    (new Checker).check(program);
+    program.qualifiedName = program.name.text;
+    program.emittedName = "Z8_" ~ program.name.text;
+    Program[string] programs;
+    programs[program.qualifiedName] = program;
+    (new Checker).check(program, programs);
+    return emitPrograms([program]);
+}
+
+/// Each unit name is the dotted path of the .bl file relative to the source root.
+string compileSources(SourceUnit[] units) {
+    if (!units.length) throw new CompileException("no .bl source files found", Position.init);
+    Program[] ordered;
+    Program[string] programs;
+    foreach (unit; units) {
+        Program program;
+        try { program = (new Parser(unit.source)).parse(); }
+        catch (LexException e) {
+            auto wrapped = new CompileException(e.msg, e.position); wrapped.sourceName = unit.path; throw wrapped;
+        } catch (CompileException e) { e.sourceName = unit.path; throw e; }
+        auto dot = unit.name.lastIndexOf('.');
+        auto simpleName = dot < 0 ? unit.name : unit.name[dot + 1 .. $];
+        if (program.name.text != simpleName) {
+            auto error = new CompileException("class name must match its file name", program.name.position);
+            error.sourceName = unit.path; throw error;
+        }
+        if (unit.name in programs) {
+            auto error = new CompileException("duplicate source '" ~ unit.name ~ "'", program.name.position);
+            error.sourceName = unit.path; throw error;
+        }
+        program.sourceName = unit.path;
+        program.qualifiedName = unit.name;
+        program.emittedName = "Z8p_";
+        foreach (i; 0 .. unit.name.length) program.emittedName ~= format("%02X", cast(ubyte)unit.name[i]);
+        programs[unit.name] = program;
+        ordered ~= program;
+    }
+    foreach (program; ordered) {
+        try { (new Checker).check(program, programs); }
+        catch (CompileException e) { e.sourceName = program.sourceName; throw e; }
+    }
+    return emitPrograms(ordered);
+}
+
+private string emitPrograms(Program[] programs) {
     string result = `// Generated by z8-d. Supported Z8 subset only.
 private long z8_div(long a, long b) {
     if (b == 0) throw new Exception("division by zero");
@@ -530,11 +629,15 @@ class Z8Array(T) {
     T z8_get(long index) { return z8_at(index); }
     void z8_set(long index, T value) { z8_at(index) = value; }
 }
-class Z8_` ~ program.name.text ~ " {\n";
-    foreach (m; program.methods) {
-        string[] params;
-        foreach (p; m.parameters) params ~= dType(p.type) ~ " v_" ~ p.name.text;
-        result ~= "static " ~ dType(m.returnType) ~ " m_" ~ m.name.text ~ "(" ~ params.join(", ") ~ ")\n" ~ emitStatement(m.body);
+`;
+    foreach (program; programs) {
+        result ~= "class " ~ program.emittedName ~ " {\n";
+        foreach (m; program.methods) {
+            string[] params;
+            foreach (p; m.parameters) params ~= dType(p.type) ~ " v_" ~ p.name.text;
+            result ~= "static " ~ dType(m.returnType) ~ " m_" ~ m.name.text ~ "(" ~ params.join(", ") ~ ")\n" ~ emitStatement(m.body);
+        }
+        result ~= "}\n";
     }
-    return result ~ "}\n";
+    return result;
 }
