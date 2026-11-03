@@ -74,6 +74,10 @@ void main() {
     assert(Z8_Math.m_primitiveText());
     assert(Z8_Math.m_parsePrimitives());
     assert(Z8_Math.m_conversions() == "42:true:2:7"w);
+    assert(z8_decimal("1.20").z8_round(1, 7).z8_string() == "1.2"w);
+    bool roundingFailed;
+    try { z8_decimal("1.25").z8_round(1, 7); } catch (Exception) { roundingFailed = true; }
+    assert(roundingFailed);
     auto astral = [cast(wchar)0xD83D, cast(wchar)0xDE00].idup;
     auto bmp = [cast(wchar)0xE000].idup;
     assert(Z8_Math.m_compareStrings(astral, bmp));
@@ -115,7 +119,7 @@ void main() {
     )
     assert built.returncode == 0, built.stderr
     assert subprocess.run([str(executable)], cwd=directory).returncode == 59
-    for entry, expected in [("demo.cases.Arithmetic.run", 37), ("demo.cases.Text.run", 41), ("demo.cases.Flow.run", 11), ("demo.cases.DecimalArray.run", 47), ("demo.cases.Overloads.run", 53), ("demo.cases.OverloadUser.run", 53)]:
+    for entry, expected in [("demo.cases.Arithmetic.run", 37), ("demo.cases.Text.run", 41), ("demo.cases.Flow.run", 11), ("demo.cases.DecimalArray.run", 47), ("demo.cases.Overloads.run", 53), ("demo.cases.OverloadUser.run", 53), ("demo.cases.Rounding.run", 61)]:
         built = subprocess.run([str(exe), "build", str(root / "examples" / "project"), entry, str(executable)],
                                capture_output=True, text=True, encoding="utf-8")
         assert built.returncode == 0, built.stderr

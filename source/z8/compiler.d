@@ -700,8 +700,12 @@ class Checker {
                     if (e.arguments.length != 0) fail("incorrect argument count", e.token);
                     if (e.token.text == "getMessage") return ValueType.stringType;
                 } else if (receiver == ValueType.decimalType) {
-                    if (e.arguments.length != 0) fail("incorrect argument count", e.token);
-                    if (e.token.text == "toString") return ValueType.stringType;
+                    if (e.token.text == "toString") { checkArguments(e, []); return ValueType.stringType; }
+                    if (e.token.text == "round") {
+                        if (e.arguments.length == 0) return ValueType.intType;
+                        checkArguments(e, e.arguments.length == 1 ? [ValueType.intType] : [ValueType.intType, ValueType.intType]);
+                        return ValueType.decimalType;
+                    }
                 } else if (isArray(receiver)) {
                     switch (e.token.text) {
                         case "size": case "isEmpty": case "clear":
@@ -945,7 +949,13 @@ private string emitExprRaw(Expression e) {
                 return "(" ~ emitExpr(e.left) ~ ").z8_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
             }
             if (e.inferredType == ValueType.exceptionType) return "z8_message(" ~ emitExpr(e.left) ~ ")";
-            if (e.inferredType == ValueType.decimalType) return "(" ~ emitExpr(e.left) ~ ").z8_string()";
+            if (e.inferredType == ValueType.decimalType) {
+                auto receiver = "(" ~ emitExpr(e.left) ~ ")";
+                if (e.token.text == "toString") return receiver ~ ".z8_string()";
+                if (!e.arguments.length) return receiver ~ ".z8_round_int()";
+                string[] args; foreach (arg; e.arguments) args ~= emitExpr(arg);
+                return receiver ~ ".z8_round(" ~ args.join(", ") ~ ")";
+            }
             if (e.inferredType == ValueType.intType) {
                 if (e.token.text == "toString") return "(" ~ emitExpr(e.left) ~ ").to!string.to!wstring";
                 return "z8_int_" ~ e.token.text ~ "(" ~ emitExpr(e.left) ~ ")";

@@ -102,6 +102,15 @@ for literal in ["1.00", "0.10", "0.0001", "1.0e+10", "0.0"] + [safe_literal() fo
     cases.append((literal, "literal", ""))
     d_lines.append(f'writeln(z8_decimal_literal("{literal}").z8_string());')
     java_lines.append(f'System.out.println(cap(BigDecimal.valueOf(Double.parseDouble("{literal}"))).toPlainString());')
+for value in ["1.25", "-1.25", "1.35", "-1.35", "0.04", "-0.04", "999.95"]:
+    for mode in range(7):
+        cases.append((value, "round", mode))
+        d_lines.append(f'writeln(z8_decimal("{value}").z8_round(1, {mode}).z8_string());')
+        java_lines.append(f'System.out.println(cap(n("{value}").setScale(1, RoundingMode.valueOf({mode}))).toPlainString());')
+for value in ["-1.5", "-0.5", "0.49999999999999994", "0.5", "1.5", "9223372036854775808"]:
+    cases.append((value, "round-int", ""))
+    d_lines.append(f'writeln(z8_decimal("{value}").z8_round_int());')
+    java_lines.append(f'System.out.println(Math.round(n("{value}").doubleValue()));')
 d_main = d_main.replace("// RANDOM_CASES", "\n".join(d_lines))
 java_main = java_main.replace("// RANDOM_CASES", "\n".join(java_lines))
 

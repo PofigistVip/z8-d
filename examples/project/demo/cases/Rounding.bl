@@ -1,0 +1,9 @@
+public class Rounding {
+    public static int run() {
+        decimal value = decimal.parse("1.255");
+        if (value.round(2).toString() != "1.26") return 1;
+        if (decimal.parse("-1.25").round(1, 6).toString() != "-1.2") return 2;
+        if (decimal.parse("-1.5").round() != -1) return 3;
+        return 61;
+    }
+}

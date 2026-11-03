@@ -2,6 +2,7 @@ private import std.bigint : BigInt;
 private import std.string : indexOf;
 private import std.format : format;
 private import std.math : isFinite;
+private import std.math : floor;
 
 private BigInt z8_pow10(uint n) { return BigInt(10) ^^ n; }
 private size_t z8_precision(BigInt value) {
@@ -99,6 +100,34 @@ struct Z8Decimal {
         auto left = coefficient * z8_pow10(cast(uint)(cast(long)common - scale));
         auto right = other.coefficient * z8_pow10(cast(uint)(cast(long)common - other.scale));
         return left < right ? -1 : left > right ? 1 : 0;
+    }
+    Z8Decimal z8_round(long digits, long roundingMode = 4) const {
+        auto target = cast(int)digits;
+        auto mode = cast(int)roundingMode;
+        if (mode < 0 || mode > 7) throw new Exception("invalid rounding mode");
+        auto difference = cast(long)target - scale;
+        if (difference >= 0)
+            return make(coefficient * z8_pow10(cast(uint)difference), target);
+        auto divisor = z8_pow10(cast(uint)-difference);
+        auto quotient = coefficient / divisor;
+        auto remainder = coefficient % divisor;
+        if (remainder != 0) {
+            if (mode == 7) throw new Exception("rounding necessary");
+            auto twice = z8_abs(remainder) * 2;
+            bool increment = mode == 0 || (mode == 2 && coefficient > 0) || (mode == 3 && coefficient < 0) ||
+                (mode == 4 && twice >= divisor) || (mode == 5 && twice > divisor) ||
+                (mode == 6 && (twice > divisor || (twice == divisor && quotient % 2 != 0)));
+            if (increment) quotient += coefficient < 0 ? -1 : 1;
+        }
+        return make(quotient, target);
+    }
+    long z8_round_int() const {
+        auto value = z8_string().to!string.to!double;
+        if (value >= cast(double)long.max) return long.max;
+        if (value <= cast(double)long.min) return long.min;
+        auto rounded = floor(value);
+        if (value - rounded >= 0.5) rounded += 1;
+        return cast(long)rounded;
     }
     wstring z8_string() const {
         string digits = coefficient.to!string;
