@@ -13,6 +13,10 @@ public class Counter {
         return result;
     }
 
+    public static Counter makeCopy(Counter source) {
+        return source.copy();
+    }
+
     public static int run() {
         Counter first;
         first.add(4);

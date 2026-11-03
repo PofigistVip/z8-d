@@ -2,6 +2,12 @@ import demo.util.Numbers;
 
 public class Main {
     public static int run() {
-        return Numbers.sum({1, 2, 3}) + Twice.apply(4) + Counter.run();
+        Counter first = new Counter;
+        first.add(5);
+        Counter second = Counter.makeCopy(first);
+        second.add(1);
+        Holder holder;
+        holder.bump();
+        return Numbers.sum({1, 2, 3}) + Twice.apply(4) + Counter.run() + second.value + holder.counter.value;
     }
 }

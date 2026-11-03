@@ -51,7 +51,16 @@ unittest {
     rejectsSources([syntax], "C.bl");
     auto usesObject = SourceUnit("pkg.A", "A.bl", "import other.B; class A { static void f() { B.make(); } }");
     auto createsObject = SourceUnit("other.B", "B.bl", "class B { public static B make() { return new B; } }");
-    rejectsSources([usesObject, createsObject], "A.bl");
+    compileSources([usesObject, createsObject]);
+    auto wrongArgument = SourceUnit("pkg.A", "A.bl", "import other.B; class A { static void f() { B.take(new A); } }");
+    auto takesB = SourceUnit("other.B", "B.bl", "class B { public static void take(B value) {} }");
+    rejectsSources([wrongArgument, takesB], "A.bl");
+    auto hiddenField = SourceUnit("other.B", "B.bl", "class B { int secret; }");
+    auto readsField = SourceUnit("pkg.A", "A.bl", "import other.B; class A { static int f() { B b; return b.secret; } }");
+    rejectsSources([readsField, hiddenField], "A.bl");
+    auto cycleA = SourceUnit("pkg.A", "A.bl", "class A { B next; }");
+    auto cycleB = SourceUnit("pkg.B", "B.bl", "class B { A next; }");
+    rejectsSources([cycleA, cycleB], "B.bl");
 }
 
 unittest {
@@ -65,6 +74,7 @@ unittest {
     rejects("class A { static int f() { return this.f(); } }");
     rejects("class A { static A f() { return new Other; } }");
     rejects("class A { int f() { return 1; } static int g() { return A.f(); } }");
+    rejects("class A { void item; }");
     rejects("class A { A next; }");
     rejects("class A { static int f() { while (true) return 1; } }");
     rejects("class A { static int f() { if (true) { int x = 1; } return x; } }");

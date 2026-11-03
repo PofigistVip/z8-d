@@ -88,7 +88,7 @@ void main() {
         capture_output=True, text=True, encoding="utf-8", check=True,
     )
     project_class = "Z8p_" + "demo.Main".encode("utf-8").hex().upper()
-    generated.write_text(project.stdout + "\nvoid main() { assert(" + project_class + ".m_run() == 31); }\n", encoding="utf-8")
+    generated.write_text(project.stdout + "\nvoid main() { assert(" + project_class + ".m_run() == 45); }\n", encoding="utf-8")
     subprocess.run(["dmd", str(generated), "-of=" + str(binary)], cwd=directory, check=True)
     subprocess.run([str(binary)], cwd=directory, check=True)
 
@@ -105,7 +105,7 @@ void main() {
         capture_output=True, text=True, encoding="utf-8",
     )
     assert built.returncode == 0, built.stderr
-    assert subprocess.run([str(executable)], cwd=directory).returncode == 31
+    assert subprocess.run([str(executable)], cwd=directory).returncode == 45
     invalid_entry = subprocess.run(
         [str(exe), "build", str(root / "examples" / "project"), "demo.Twice.apply", str(executable)],
         capture_output=True, text=True, encoding="utf-8",

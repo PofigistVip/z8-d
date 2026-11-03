@@ -1,0 +1,7 @@
+public class Holder {
+    public Counter counter;
+
+    public void bump() {
+        counter.add(2);
+    }
+}
