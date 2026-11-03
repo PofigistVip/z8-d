@@ -88,6 +88,9 @@ unittest {
     rejects("class A { static int f(int x) { return x + true; } }");
     rejects("class A { static int f() { return f(1); } }");
     rejects("class A { int x; static int f() { return x; } }");
+    rejects("class A { static A x; }");
+    rejects("class A { static int f() { return 1; } static int x = f(); }");
+    rejects("class A { int x; static int f() { return A.x; } }");
     rejects("class A { int f() { return 1; } static int g() { return f(); } }");
     rejects("class A { static int f() { return this.f(); } }");
     rejects("class A { static A f() { return new Other; } }");

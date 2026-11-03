@@ -66,7 +66,7 @@ class Method {
     Program owner;
     bool isVirtual, overrides;
 }
-class Field { ValueType type; Token name; Expression initializer; bool isPublic, isProtected; string objectName; Program objectClass; Program owner; }
+class Field { ValueType type; Token name; Expression initializer; bool isPublic, isProtected, isStatic; string objectName; Program objectClass; Program owner; }
 struct Import { string name; Token token; }
 class Program {
     Token name;
@@ -186,9 +186,10 @@ class Parser {
             }
             auto declaredType = parseType(); auto declaredObjectName = parsedObjectName; auto name = identifier();
             if (current.text != "(") {
-                if (isStatic) error("static fields are not supported");
                 if (isVirtual || declaredType == ValueType.voidType) error("this field type or modifier is not supported");
-                auto field = new Field; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.isProtected = isProtected; field.objectName = declaredObjectName; field.owner = result;
+                if (isStatic && (declaredType == ValueType.selfType || declaredType == ValueType.exceptionType))
+                    error("static object fields are not supported");
+                auto field = new Field; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.isProtected = isProtected; field.isStatic = isStatic; field.objectName = declaredObjectName; field.owner = result;
                 if (accept("=")) field.initializer = initializer();
                 expect(";"); result.fields ~= field; continue;
             }
@@ -403,6 +404,18 @@ class Checker {
     private size_t loopDepth;
     private size_t finallyDepth;
     private void fail(string message, Token t) { throw new CompileException(message, t.position); }
+    private static bool isConstantInitializer(Expression expression) {
+        switch (expression.kind) {
+            case ExprKind.integer: case ExprKind.decimalLiteral: case ExprKind.boolean: case ExprKind.stringLiteral: return true;
+            case ExprKind.arrayLiteral:
+                foreach (item; expression.arguments) if (!isConstantInitializer(item)) return false;
+                return true;
+            case ExprKind.castExpr: case ExprKind.unary: return isConstantInitializer(expression.left);
+            case ExprKind.binary: return isConstantInitializer(expression.left) && isConstantInitializer(expression.right);
+            case ExprKind.conditional: return isConstantInitializer(expression.left) && isConstantInitializer(expression.right) && isConstantInitializer(expression.third);
+            default: return false;
+        }
+    }
     void bindBase(Program program, Program[string] programs) {
         currentProgram = program; allClasses = programs;
         if (program.baseName.length) {
@@ -568,9 +581,13 @@ class Checker {
         variables = null; objectVariables = null; staticContext = false;
         foreach (field; program.fields)
             if (field.type == ValueType.selfType) field.objectClass = resolveClass(program, field.objectName, field.name);
-        foreach (field; program.fields)
+        foreach (field; program.fields) {
+            staticContext = field.isStatic;
+            if (field.isStatic && field.initializer !is null && !isConstantInitializer(field.initializer))
+                fail("static field initializer must be a constant expression", field.name);
             if (field.initializer !is null && !matches(field.initializer, field.type, field.objectClass))
                 fail("field initializer type mismatch", field.name);
+        }
         foreach (m; program.methods) {
             variables = null; objectVariables = null; returnType = m.returnType; loopDepth = 0; finallyDepth = 0; staticContext = m.isStatic;
             m.returnObjectClass = m.returnType == ValueType.selfType ? resolveClass(program, m.returnObjectName, m.name) : null;
@@ -607,8 +624,9 @@ class Checker {
                     auto field = e.token.text in fields;
                     if (field is null) fail("unknown variable '" ~ e.token.text ~ "'", e.token);
                     if (!accessible((*field).owner, (*field).isPublic, (*field).isProtected)) fail("field is not accessible", e.token);
-                    if (staticContext) fail("instance field in static context", e.token);
+                    if (staticContext && !(*field).isStatic) fail("instance field in static context", e.token);
                     e.isField = true;
+                    if ((*field).isStatic) e.targetClass = (*field).owner.emittedName;
                     if ((*field).type == ValueType.selfType) e.objectClass = (*field).objectClass;
                     return (*field).type;
                 }
@@ -627,9 +645,20 @@ class Checker {
                 e.objectClass = resolveClass(currentProgram, e.token.text, e.token);
                 return ValueType.selfType;
             case ExprKind.field:
+                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields)) {
+                    auto owner = e.left.token.text in visibleClasses;
+                    if (owner is null) fail("unknown class or variable '" ~ e.left.token.text ~ "'", e.left.token);
+                    auto staticField = lookupField(*owner, e.token.text);
+                    if (staticField is null) fail("unknown field '" ~ e.token.text ~ "'", e.token);
+                    if (!staticField.isStatic) fail("instance field cannot be accessed on a class", e.token);
+                    if (!accessible(staticField.owner, staticField.isPublic, staticField.isProtected)) fail("field is not accessible", e.token);
+                    e.targetClass = staticField.owner.emittedName;
+                    return staticField.type;
+                }
                 if (typeOf(e.left) != ValueType.selfType) fail("field access requires an object", e.token);
                 auto field = lookupField(e.left.objectClass, e.token.text);
                 if (field is null) fail("unknown field '" ~ e.token.text ~ "'", e.token);
+                if (field.isStatic) fail("static field access through an instance is not supported", e.token);
                 if (!accessible(field.owner, field.isPublic, field.isProtected)) fail("field is not accessible", e.token);
                 if (field.type == ValueType.selfType)
                     e.objectClass = field.objectClass !is null ? field.objectClass : resolveClass(field.owner, field.objectName, field.name);
@@ -941,11 +970,11 @@ private string emitExprRaw(Expression e) {
         case ExprKind.arrayLiteral:
             string[] elements; foreach (element; e.arguments) elements ~= emitExpr(element);
             return "new " ~ dType(e.inferredType) ~ "(" ~ (elements.length ? "[" ~ elements.join(", ") ~ "]" : "") ~ ")";
-        case ExprKind.variable: return e.isField ? "this.f_" ~ e.token.text : "v_" ~ e.token.text;
+        case ExprKind.variable: return e.isField ? (e.targetClass.length ? e.targetClass ~ ".f_" : "this.f_") ~ e.token.text : "v_" ~ e.token.text;
         case ExprKind.selfRef: return "this";
         case ExprKind.superRef: return "super";
         case ExprKind.newSelf: return "z8_new!(" ~ e.objectClass.emittedName ~ ")()";
-        case ExprKind.field: return "(" ~ emitExpr(e.left) ~ ").f_" ~ e.token.text;
+        case ExprKind.field: return (e.targetClass.length ? e.targetClass : "(" ~ emitExpr(e.left) ~ ")") ~ ".f_" ~ e.token.text;
         case ExprKind.call:
             string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
             return "m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
@@ -1107,6 +1136,7 @@ private void checkDefaultConstruction(Program[] programs) {
             visit(program.baseClass);
         }
         foreach (field; program.fields) {
+            if (field.isStatic) continue;
             if (field.type != ValueType.selfType) continue;
             Program target;
             if (field.initializer is null) target = field.objectClass;
@@ -1276,13 +1306,23 @@ class Z8Array(T) {
     foreach (program; programs) {
         result ~= "class " ~ program.emittedName ~ (program.baseClass is null ? "" : " : " ~ program.baseClass.emittedName) ~ " {\n";
         result ~= "alias Z8Self = " ~ program.emittedName ~ ";\n";
-        foreach (field; program.fields) result ~= dType(field.type, field.objectClass) ~ " f_" ~ field.name.text ~ ";\n";
-        if (program.fields.length) {
+        bool hasInstanceFields, hasStaticFields;
+        foreach (field; program.fields) {
+            result ~= (field.isStatic ? "__gshared " : "") ~ dType(field.type, field.objectClass) ~ " f_" ~ field.name.text ~ ";\n";
+            if (field.isStatic) hasStaticFields = true; else hasInstanceFields = true;
+        }
+        if (hasInstanceFields) {
             result ~= "this() {\n";
             foreach (field; program.fields)
-                if (field.initializer is null) result ~= "this.f_" ~ field.name.text ~ " = " ~ defaultValue(field.type, field.objectClass) ~ ";\n";
+                if (!field.isStatic && field.initializer is null) result ~= "this.f_" ~ field.name.text ~ " = " ~ defaultValue(field.type, field.objectClass) ~ ";\n";
             foreach (field; program.fields)
-                if (field.initializer !is null) result ~= "this.f_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
+                if (!field.isStatic && field.initializer !is null) result ~= "this.f_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
+            result ~= "}\n";
+        }
+        if (hasStaticFields) {
+            result ~= "shared static this() {\n";
+            foreach (field; program.fields) if (field.isStatic)
+                result ~= "f_" ~ field.name.text ~ " = " ~ (field.initializer is null ? defaultValue(field.type, field.objectClass) : emitExpr(field.initializer)) ~ ";\n";
             result ~= "}\n";
         }
         foreach (m; program.methods) {

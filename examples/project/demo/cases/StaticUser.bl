@@ -1,0 +1,7 @@
+public class StaticUser {
+    public static int run() {
+        StaticState.count = 4;
+        StaticState.increase();
+        return StaticState.count + 66;
+    }
+}

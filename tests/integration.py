@@ -101,7 +101,11 @@ void main() {
         capture_output=True, text=True, encoding="utf-8", check=True,
     )
     project_class = "Z8p_" + "demo.Main".encode("utf-8").hex().upper()
-    generated.write_text(project.stdout + "\nvoid main() { assert(" + project_class + ".m_run() == 59); }\n", encoding="utf-8")
+    static_class = "Z8p_" + "demo.cases.StaticState".encode("utf-8").hex().upper()
+    generated.write_text(project.stdout + "\nimport core.thread : Thread;\nvoid main() { assert(" + project_class +
+                         ".m_run() == 59); auto worker = new Thread({ " + static_class +
+                         ".f_count = 123; }); worker.start(); worker.join(); assert(" + static_class +
+                         ".f_count == 123); }\n", encoding="utf-8")
     subprocess.run(["dmd", str(generated), "-of=" + str(binary)], cwd=directory, check=True)
     subprocess.run([str(binary)], cwd=directory, check=True)
 
@@ -119,7 +123,7 @@ void main() {
     )
     assert built.returncode == 0, built.stderr
     assert subprocess.run([str(executable)], cwd=directory).returncode == 59
-    for entry, expected in [("demo.cases.Arithmetic.run", 37), ("demo.cases.Text.run", 41), ("demo.cases.Flow.run", 11), ("demo.cases.DecimalArray.run", 47), ("demo.cases.Overloads.run", 53), ("demo.cases.OverloadUser.run", 53), ("demo.cases.Rounding.run", 61), ("demo.cases.PrimitiveParse.run", 67), ("demo.cases.ArrayOperations.run", 54)]:
+    for entry, expected in [("demo.cases.Arithmetic.run", 37), ("demo.cases.Text.run", 41), ("demo.cases.Flow.run", 11), ("demo.cases.DecimalArray.run", 47), ("demo.cases.Overloads.run", 53), ("demo.cases.OverloadUser.run", 53), ("demo.cases.Rounding.run", 61), ("demo.cases.PrimitiveParse.run", 67), ("demo.cases.ArrayOperations.run", 54), ("demo.cases.StaticState.run", 70), ("demo.cases.StaticUser.run", 71)]:
         built = subprocess.run([str(exe), "build", str(root / "examples" / "project"), entry, str(executable)],
                                capture_output=True, text=True, encoding="utf-8")
         assert built.returncode == 0, built.stderr

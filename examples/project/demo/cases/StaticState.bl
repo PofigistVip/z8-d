@@ -1,0 +1,20 @@
+public class StaticState {
+    public static int count = 2;
+    public static int[] hits = {1, 2};
+    public static bool flag;
+
+    public static void increase() { count += 1; }
+
+    public static int run() {
+        count = 2;
+        flag = true;
+        increase();
+        int[] same = hits;
+        same.add(3);
+        int result = count + hits.size();
+        hits.clear();
+        hits.add(1);
+        hits.add(2);
+        return result + 64;
+    }
+}
