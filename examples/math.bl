@@ -167,4 +167,23 @@ public class Math {
     public static int elementAt(int[] values, int index) {
         return values[index];
     }
+
+    public static int sumWithForeach(int[] values) {
+        int result;
+        for (int value : values) {
+            if (value < 0) continue;
+            if (value > 10) break;
+            result += value;
+        }
+        return result;
+    }
+
+    public static int choose(bool condition, int x) {
+        return condition ? x + 1 : x == 0 ? 7 : 10 / x;
+    }
+
+    public static void modifyDuringIteration() {
+        int[] values = {1, 2};
+        for (int value : values) values.add(value);
+    }
 }

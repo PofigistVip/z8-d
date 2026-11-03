@@ -14,14 +14,14 @@ class CompileException : Exception {
 }
 
 enum ValueType { voidType, intType, boolType, stringType, intArray, boolArray, stringArray }
-enum ExprKind { integer, boolean, stringLiteral, arrayLiteral, variable, call, memberCall, index, unary, binary }
+enum ExprKind { integer, boolean, stringLiteral, arrayLiteral, variable, call, memberCall, index, unary, binary, conditional }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
-                whileStmt, doWhileStmt, forStmt, breakStmt, continueStmt }
+                whileStmt, doWhileStmt, forStmt, forEachStmt, breakStmt, continueStmt }
 
 class Expression {
     ExprKind kind;
     Token token;
-    Expression left, right;
+    Expression left, right, third;
     Expression[] arguments;
     ValueType inferredType;
     string targetClass;
@@ -177,6 +177,12 @@ class Parser {
         if (accept("for")) {
             auto s = new Statement(StmtKind.forStmt, t);
             expect("(");
+            if (["int", "bool", "string"].canFind(current.text) && look(1).kind == TokenKind.identifier && look(2).text == ":") {
+                s.kind = StmtKind.forEachStmt;
+                auto item = new Statement(StmtKind.variable, current);
+                item.type = parseType(); item.token = identifier(); s.initial = item;
+                expect(":"); s.expression = expression(); expect(")"); s.children ~= statement(); return s;
+            }
             if (current.text != ";") s.initial = simpleStatement(true);
             expect(";"); s.expression = expression(); expect(";");
             s.step = simpleStatement(false); expect(")"); s.children ~= statement(); return s;
@@ -233,6 +239,10 @@ class Parser {
             auto op = take(); auto p = precedence(op.text);
             auto node = new Expression(ExprKind.binary, op);
             node.left = left; node.right = expression(p + 1); left = node;
+        }
+        if (minPrecedence == 1 && current.text == "?") {
+            auto node = new Expression(ExprKind.conditional, take());
+            node.left = left; node.right = expression(); expect(":"); node.third = expression(); left = node;
         }
         return left;
     }
@@ -399,6 +409,11 @@ class Checker {
                 if (left == ValueType.intType && ["+", "-", "*", "/", "%", "&", "|", "^"].canFind(op)) return ValueType.intType;
                 if (left == ValueType.boolType && ["&&", "||"].canFind(op)) return ValueType.boolType;
                 fail("invalid binary operands", e.token); assert(0);
+            case ExprKind.conditional:
+                if (typeOf(e.left) != ValueType.boolType) fail("conditional expression requires a bool condition", e.token);
+                auto left = typeOf(e.right), right = typeOf(e.third);
+                if (left == ValueType.voidType || left != right) fail("conditional branch type mismatch", e.token);
+                return left;
         }
     }
     private bool checkStatement(Statement s) {
@@ -446,6 +461,13 @@ class Checker {
                 if (s.initial !is null) checkStatement(s.initial);
                 if (typeOf(s.expression) != ValueType.boolType) fail("loop condition must be bool", s.token);
                 checkStatement(s.step);
+                ++loopDepth; checkStatement(s.children[0]); --loopDepth;
+                variables = old; return false;
+            case StmtKind.forEachStmt:
+                auto old = variables.dup;
+                auto array = typeOf(s.expression);
+                if (!isArray(array) || elementType(array) != s.initial.type) fail("foreach element type mismatch", s.token);
+                checkStatement(s.initial);
                 ++loopDepth; checkStatement(s.children[0]); --loopDepth;
                 variables = old; return false;
             case StmtKind.breakStmt:
@@ -517,6 +539,8 @@ private string emitExpr(Expression e) {
             if (e.token.text == "/" || e.token.text == "%")
                 return (e.token.text == "/" ? "z8_div(" : "z8_mod(") ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             return "(" ~ emitExpr(e.left) ~ " " ~ (e.token.text == "+" && e.inferredType == ValueType.stringType ? "~" : e.token.text) ~ " " ~ emitExpr(e.right) ~ ")";
+        case ExprKind.conditional:
+            return "(" ~ emitExpr(e.left) ~ " ? " ~ emitExpr(e.right) ~ " : " ~ emitExpr(e.third) ~ ")";
     }
 }
 private string emitStatement(Statement s) {
@@ -537,6 +561,14 @@ private string emitStatement(Statement s) {
             return "do {\n" ~ emitStatement(s.children[0]) ~ "} while (" ~ emitExpr(s.expression) ~ ");\n";
         case StmtKind.forStmt:
             return "for (" ~ (s.initial is null ? "" : emitSimple(s.initial)) ~ "; " ~ emitExpr(s.expression) ~ "; " ~ emitSimple(s.step) ~ ") {\n" ~ emitStatement(s.children[0]) ~ "}\n";
+        case StmtKind.forEachStmt:
+            auto suffix = s.token.position.offset.to!string;
+            auto iter = "z8_iter_" ~ suffix, versionName = "z8_version_" ~ suffix, indexName = "z8_index_" ~ suffix;
+            return "{\nauto " ~ iter ~ " = " ~ emitExpr(s.expression) ~ ";\nauto " ~ versionName ~ " = " ~ iter ~ ".z8_version;\n" ~
+                "for (long " ~ indexName ~ " = 0; " ~ indexName ~ " != " ~ iter ~ ".z8_size(); ++" ~ indexName ~ ") {\n" ~
+                "if (" ~ versionName ~ " != " ~ iter ~ ".z8_version) throw new Exception(\"array modified during iteration\");\n" ~
+                dType(s.initial.type) ~ " v_" ~ s.initial.token.text ~ " = " ~ iter ~ ".z8_get(" ~ indexName ~ ");\n" ~
+                emitStatement(s.children[0]) ~ "}\n}\n";
         case StmtKind.breakStmt: return "break;\n";
         case StmtKind.continueStmt: return "continue;\n";
     }
@@ -615,12 +647,13 @@ private void z8_div_assign(ref long a, long b) { a = z8_div(a, b); }
 private void z8_mod_assign(ref long a, long b) { a = z8_mod(a, b); }
 class Z8Array(T) {
     private T[] items;
+    size_t z8_version;
     this() {}
     this(T[] values) { items = values; }
     long z8_size() { return cast(long)items.length; }
     bool z8_isEmpty() { return items.length == 0; }
-    void z8_clear() { items.length = 0; }
-    Z8Array!T z8_add(T value) { items ~= value; return this; }
+    void z8_clear() { ++z8_version; items.length = 0; }
+    Z8Array!T z8_add(T value) { ++z8_version; items ~= value; return this; }
     ref T z8_at(long index) {
         auto i = cast(int)index;
         if (i < 0 || cast(size_t)i >= items.length) throw new Exception("array index out of bounds");

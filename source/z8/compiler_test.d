@@ -85,4 +85,9 @@ unittest {
     rejects("class A { static int[] f() { return {1, false}; } }");
     rejects("class A { static void f() { int[] x; x.clear(1); } }");
     rejects("class A { static void f() { int[] x; x.add(1, 2); } }");
+    rejects("class A { static void f() { int[] x; for (bool y : x) {} } }");
+    rejects("class A { static void f() { int x = 1; for (int y : x) {} } }");
+    rejects("class A { static int f() { return 1 ? 2 : 3; } }");
+    rejects("class A { static int f() { return true ? 2 : false; } }");
+    rejects("class A { static int f() { int[] x; for (int y : x) {} return y; } }");
 }

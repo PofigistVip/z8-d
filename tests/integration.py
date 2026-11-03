@@ -50,6 +50,14 @@ void main() {
     bool badIndex;
     try { Z8_Math.m_elementAt(numbers, -1); } catch (Exception) { badIndex = true; }
     assert(badIndex);
+    auto forEachValues = new Z8Array!long([cast(long)1, -5, 2, 11, 3]);
+    assert(Z8_Math.m_sumWithForeach(forEachValues) == 3);
+    assert(Z8_Math.m_choose(true, 0) == 1);
+    assert(Z8_Math.m_choose(false, 0) == 7);
+    assert(Z8_Math.m_choose(false, 2) == 5);
+    bool modified;
+    try { Z8_Math.m_modifyDuringIteration(); } catch (Exception) { modified = true; }
+    assert(modified);
     auto astral = [cast(wchar)0xD83D, cast(wchar)0xDE00].idup;
     auto bmp = [cast(wchar)0xE000].idup;
     assert(Z8_Math.m_compareStrings(astral, bmp));
