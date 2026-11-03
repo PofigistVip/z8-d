@@ -1,0 +1,32 @@
+public class Math {
+    public static int add(int a, int b) {
+        return a + b;
+    }
+
+    public static bool positive(int value) {
+        return value > 0;
+    }
+
+    public static int calculate(int value) {
+        int result = add(value, 2);
+        if (positive(result))
+            result = result * 3;
+        return result;
+    }
+
+    public static int divide(int a, int b) {
+        return a / b;
+    }
+
+    public static int remainder(int a, int b) {
+        return a % b;
+    }
+
+    public static bool nonzeroAndPositive(int a) {
+        return a != 0 && divide(10, a) > 0;
+    }
+
+    public static int minimum() {
+        return -9223372036854775808;
+    }
+}
