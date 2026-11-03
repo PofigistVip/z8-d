@@ -1,0 +1,29 @@
+public class ArrayAdvanced {
+    public static int run() {
+        int[] values = {3, 1, 2, 1};
+        int[] unique = values.unique();
+        if (unique.join(",") != "3,1,2" || values.size() != 4) return 1;
+        values.sort();
+        if (values.join(",") != "1,1,2,3") return 2;
+        values.removeAll(1);
+        if (values.join() != "123") return 3;
+        int[] more = {7, 8};
+        values.addAll(1, more);
+        if (values.join(",") != "1,7,8,2,3") return 4;
+        if (!more.isSubsetOf(values) || values.isSubsetOf(more)) return 5;
+        values.removeAll(more);
+        if (values.join(",") != "1,2,3") return 6;
+        decimal[] amounts = {decimal.parse("1.00"), decimal.parse("1.0"), decimal.parse("1.00")};
+        decimal[] distinct = amounts.unique();
+        if (distinct.join(",") != "1.00,1.0") return 7;
+        amounts.sort();
+        if (amounts.join(",") != "1.00,1.0,1.00") return 8;
+        bool[] flags = {true, false};
+        flags.sort();
+        if (flags.join(",") != "false,true") return 9;
+        string[] words = {"b", "a"};
+        words.sort();
+        if (words.join("/") != "a/b") return 10;
+        return 97;
+    }
+}

@@ -140,6 +140,10 @@ unittest {
     rejects("class A { static void f() { int[] x; x.add(true, 2); } }");
     rejects("class A { static void f() { int[] x; x.contains(true); } }");
     rejects("class A { static void f() { int[] x; bool[] y; x.addAll(y); } }");
+    rejects("class A { static void f() { int[] x; x.addAll(true, x); } }");
+    rejects("class A { static void f() { int[] x; x.isSubsetOf(true); } }");
+    rejects("class A { static void f() { int[] x; x.removeAll(false); } }");
+    rejects("class A { static string f() { int[] x; return x.join(x); } }");
     rejects("class A { static void f() { int[] x; for (bool y : x) {} } }");
     rejects("class A { static void f() { int x = 1; for (int y : x) {} } }");
     rejects("class A { static int f() { return 1 ? 2 : 3; } }");
