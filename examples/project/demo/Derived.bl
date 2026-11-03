@@ -1,6 +1,11 @@
 public class Derived extends Base {
     public int bonus = 3;
 
+    protected void constructor() {
+        super.constructor();
+        bonus += 1;
+    }
+
     public int getValue() {
         return super.getValue() + bonus + extra() - 2;
     }

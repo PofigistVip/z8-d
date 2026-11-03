@@ -91,6 +91,9 @@ unittest {
     rejects("class A { static A f() { return new Other; } }");
     rejects("class A { int f() { return 1; } static int g() { return A.f(); } }");
     rejects("class A { void item; }");
+    rejects("class A { static void constructor() {} }");
+    rejects("class A { int constructor() { return 1; } }");
+    rejects("class A { void constructor(int value) {} }");
     rejects("class A { A next; }");
     rejects("class A { static int f() { while (true) return 1; } }");
     rejects("class A { static int f() { if (true) { int x = 1; } return x; } }");

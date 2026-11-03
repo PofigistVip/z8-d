@@ -164,13 +164,18 @@ class Parser {
             if (isVirtual && isStatic) error("a static method cannot be virtual");
             method.isPublic = isPublic; method.isProtected = isProtected; method.isStatic = isStatic; method.isVirtual = isVirtual; method.owner = result;
             method.returnType = declaredType; method.returnObjectName = declaredObjectName; method.name = name; expect("(");
-            if (method.name.text == "constructor") error("Z8 constructors are not supported yet");
             if (current.text != ")") {
                 do {
                     Parameter p; p.type = parseType(); p.objectName = parsedObjectName; p.name = identifier(); method.parameters ~= p;
                 } while (accept(","));
             }
-            expect(")"); method.body = statement();
+            expect(")");
+            if (method.name.text == "constructor") {
+                if (method.isStatic || method.returnType != ValueType.voidType || method.parameters.length)
+                    throw new CompileException("constructor must be an instance void method without parameters", method.name.position);
+                method.isVirtual = true;
+            }
+            method.body = statement();
             if (method.body.kind != StmtKind.block)
                 throw new CompileException("method body must be a block", method.body.token.position);
             result.methods ~= method;
@@ -746,7 +751,7 @@ private string emitExpr(Expression e) {
         case ExprKind.variable: return e.isField ? "this.f_" ~ e.token.text : "v_" ~ e.token.text;
         case ExprKind.selfRef: return "this";
         case ExprKind.superRef: return "super";
-        case ExprKind.newSelf: return "new " ~ e.objectClass.emittedName ~ "()";
+        case ExprKind.newSelf: return "z8_new!(" ~ e.objectClass.emittedName ~ ")()";
         case ExprKind.field: return "(" ~ emitExpr(e.left) ~ ").f_" ~ e.token.text;
         case ExprKind.call:
             string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
@@ -829,7 +834,8 @@ private string emitSimple(Statement s) {
 }
 private string defaultValue(ValueType type, Program objectClass = null) {
     if (type == ValueType.exceptionType) return "new Exception(null)";
-    if (type == ValueType.selfType || isArray(type)) return "new " ~ dType(type, objectClass) ~ "()";
+    if (type == ValueType.selfType) return "z8_new!(" ~ dType(type, objectClass) ~ ")()";
+    if (isArray(type)) return "new " ~ dType(type, objectClass) ~ "()";
     if (type == ValueType.intType) return "0";
     if (type == ValueType.stringType) return `""w`;
     assert(type == ValueType.boolType); return "false";
@@ -965,6 +971,11 @@ private string emitPrograms(Program[] programs) {
 private import std.conv : to;
 private string z8_to_utf8(wstring value) { return value.to!string; }
 private wstring z8_message(Throwable value) { return value.msg.to!wstring; }
+private T z8_new(T)() {
+    auto value = new T();
+    static if (__traits(hasMember, T, "m_constructor")) value.m_constructor();
+    return value;
+}
 private long z8_div(long a, long b) {
     if (b == 0) throw new Exception("division by zero");
     if (a == long.min && b == -1) return long.min;
