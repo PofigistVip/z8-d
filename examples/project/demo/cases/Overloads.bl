@@ -1,0 +1,12 @@
+public class Overloads {
+    public static int choose(int value) { return 10; }
+    public static int choose(decimal value) { return 20; }
+    public static int choose(string value) { return 23; }
+    private static int visible(int value) { return 1; }
+    public static int visible(string value) { return 7; }
+
+    public static int run(int value) { return value; }
+    public static int run() {
+        return choose(3) + choose(1.5) + choose("a") + visible("x") - 7;
+    }
+}

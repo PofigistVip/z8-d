@@ -1,0 +1,5 @@
+public class OverloadUser {
+    public static int run() {
+        return Overloads.visible("x") + 46;
+    }
+}

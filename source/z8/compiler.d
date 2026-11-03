@@ -459,6 +459,47 @@ class Checker {
             e.objectClass = resolveClass(owner, method.returnObjectName, method.name);
         return method.returnType;
     }
+    private bool sameParameters(Method left, Method right) {
+        if (left.parameters.length != right.parameters.length) return false;
+        foreach (i, p; left.parameters) {
+            auto q = right.parameters[i];
+            if (p.type != q.type) return false;
+            if (p.type == ValueType.selfType && resolveClass(left.owner, p.objectName, p.name) !is resolveClass(right.owner, q.objectName, q.name)) return false;
+        }
+        return true;
+    }
+    // Z8 ranks direct casts ahead of conversions defined by an operator.
+    private Method selectStaticOverload(Method first, Expression e) {
+        if (!first.isStatic) return first;
+        ValueType[] actualTypes;
+        foreach (arg; e.arguments) {
+            if (arg.kind == ExprKind.arrayLiteral) fail("array initializer requires a known target", arg.token);
+            actualTypes ~= typeOf(arg);
+        }
+        Method best;
+        int bestWeight = int.max;
+        bool ambiguous;
+        foreach (candidate; first.owner.methods) {
+            if (candidate.name.text != first.name.text || !candidate.isStatic || candidate.parameters.length != e.arguments.length) continue;
+            if (!accessible(candidate.owner, candidate.isPublic, candidate.isProtected)) continue;
+            int weight; bool applicable = true;
+            foreach (i, p; candidate.parameters) {
+                auto actual = actualTypes[i];
+                if (actual == p.type) {
+                    if (actual == ValueType.selfType && !isAssignable(e.arguments[i].objectClass, resolveClass(candidate.owner, p.objectName, p.name))) applicable = false;
+                } else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
+                else if (p.type == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual)) weight += 100;
+                else applicable = false;
+                if (!applicable) break;
+            }
+            if (!applicable) continue;
+            if (weight < bestWeight) { best = candidate; bestWeight = weight; ambiguous = false; }
+            else if (weight == bestWeight) ambiguous = true;
+        }
+        if (best is null) fail("no matching static method overload", e.token);
+        if (ambiguous) fail("ambiguous static method overload", e.token);
+        return best;
+    }
     private void checkArguments(Expression e, ValueType[] types) {
         if (e.arguments.length != types.length) fail("incorrect argument count", e.token);
         foreach (i, arg; e.arguments) if (!matches(arg, types[i])) fail("argument type mismatch", arg.token);
@@ -495,11 +536,17 @@ class Checker {
             if (field.name.text in fields) fail("duplicate field", field.name);
             fields[field.name.text] = field;
         }
+        Method[][string] ownOverloads;
         foreach (m; program.methods) {
             auto inherited = m.name.text in methods;
             if (inherited !is null) {
                 auto baseMethod = *inherited;
-                if (baseMethod.owner is program) fail("duplicate or overloaded method", m.name);
+                if (baseMethod.owner is program) {
+                    if (!m.isStatic || !baseMethod.isStatic) fail("only static method overloads are supported", m.name);
+                    foreach (previous; ownOverloads[m.name.text]) if (sameParameters(previous, m)) fail("duplicate method signature", m.name);
+                    ownOverloads[m.name.text] ~= m;
+                    continue;
+                }
                 if (m.isStatic || baseMethod.isStatic || !baseMethod.isVirtual) fail("only virtual instance methods may be overridden", m.name);
                 if (m.returnType != baseMethod.returnType || m.parameters.length != baseMethod.parameters.length)
                     fail("override signature mismatch", m.name);
@@ -516,6 +563,7 @@ class Checker {
                 m.isVirtual = true; m.overrides = true;
             }
             methods[m.name.text] = m;
+            ownOverloads[m.name.text] ~= m;
         }
         variables = null; objectVariables = null; staticContext = false;
         foreach (field; program.fields)
@@ -589,9 +637,10 @@ class Checker {
             case ExprKind.call:
                 auto method = e.token.text in methods;
                 if (method is null) fail("unknown method '" ~ e.token.text ~ "'", e.token);
-                if (!accessible((*method).owner, (*method).isPublic, (*method).isProtected)) fail("method is not accessible", e.token);
                 if (staticContext && !(*method).isStatic) fail("instance method in static context", e.token);
-                return checkCall(*method, (*method).owner, e);
+                auto selected = selectStaticOverload(*method, e);
+                if (!accessible(selected.owner, selected.isPublic, selected.isProtected)) fail("method is not accessible", e.token);
+                return checkCall(selected, selected.owner, e);
             case ExprKind.memberCall:
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) &&
                     (e.left.token.text == "int" || e.left.token.text == "decimal")) {
@@ -607,8 +656,9 @@ class Checker {
                     if (owner is null) fail("unknown class or variable '" ~ e.left.token.text ~ "'", e.left.token);
                     auto target = lookupMethod(*owner, e.token.text);
                     if (target is null) fail("unknown method '" ~ e.token.text ~ "'", e.token);
-                    if (!accessible(target.owner, target.isPublic, target.isProtected)) fail("method is not accessible", e.token);
                     if (!target.isStatic) fail("instance method cannot be called on a class", e.token);
+                    target = selectStaticOverload(target, e);
+                    if (!accessible(target.owner, target.isPublic, target.isProtected)) fail("method is not accessible", e.token);
                     e.targetClass = (*owner).emittedName;
                     return checkCall(target, target.owner, e);
                 }
@@ -1095,7 +1145,15 @@ string compileSources(SourceUnit[] units, string entry = "") {
         auto owner = ownerName in programs;
         if (owner is null) throw new CompileException("entry class not found: " ~ ownerName, Position.init);
         Method target;
-        foreach (candidate; (*owner).methods) if (candidate.name.text == methodName) { target = candidate; break; }
+        Method named;
+        foreach (candidate; (*owner).methods) if (candidate.name.text == methodName) {
+            named = candidate;
+            if (candidate.parameters.length == 0) { target = candidate; break; }
+        }
+        if (target is null && named !is null) {
+            auto error = new CompileException("entry must be a public static method with no parameters returning void or int", named.name.position);
+            error.sourceName = (*owner).sourceName; throw error;
+        }
         if (target is null) throw new CompileException("entry method not found: " ~ entry, Position.init);
         if (!target.isPublic || !target.isStatic || target.parameters.length != 0 ||
             (target.returnType != ValueType.voidType && target.returnType != ValueType.intType)) {
