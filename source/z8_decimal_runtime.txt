@@ -1,0 +1,137 @@
+private import std.bigint : BigInt;
+private import std.string : indexOf;
+
+private BigInt z8_pow10(uint n) { return BigInt(10) ^^ n; }
+private size_t z8_precision(BigInt value) {
+    auto digits = value.to!string;
+    return digits.length - (digits[0] == '-' ? 1 : 0);
+}
+private BigInt z8_abs(BigInt value) { return value < 0 ? -value : value; }
+private int z8_scale(long value) {
+    if (value < int.min || value > int.max) throw new Exception("decimal scale out of range");
+    return cast(int)value;
+}
+
+struct Z8Decimal {
+    BigInt coefficient;
+    int scale;
+
+    private static Z8Decimal make(BigInt coefficient, int scale) {
+        auto precision = z8_precision(coefficient);
+        if (precision > 38) {
+            auto discarded = cast(uint)(precision - 38);
+            auto divisor = z8_pow10(discarded);
+            auto remainder = coefficient % divisor;
+            coefficient /= divisor;
+            if (remainder > 0) coefficient += 1; // BigDecimal RoundingMode.CEILING
+            scale = z8_scale(cast(long)scale - discarded);
+        }
+        Z8Decimal result;
+        result.coefficient = coefficient; result.scale = scale;
+        return result;
+    }
+
+    Z8Decimal opBinary(string op)(Z8Decimal other) const if (op == "+" || op == "-" || op == "*" || op == "/" || op == "%") {
+        static if (op == "*") return make(coefficient * other.coefficient, z8_scale(cast(long)scale + other.scale));
+        else static if (op == "/") return z8_divide(other);
+        else {
+            auto common = scale > other.scale ? scale : other.scale;
+            auto left = coefficient * z8_pow10(cast(uint)(cast(long)common - scale));
+            auto right = other.coefficient * z8_pow10(cast(uint)(cast(long)common - other.scale));
+            static if (op == "+") return make(left + right, common);
+            else static if (op == "-") return make(left - right, common);
+            else {
+                if (right == 0) throw new Exception("division by zero");
+                auto quotient = left / right;
+                auto preferred = cast(long)scale - other.scale;
+                long quotientScale = preferred;
+                if (quotient != 0 && preferred < 0) {
+                    long zeros;
+                    while (zeros < -preferred && quotient % 10 == 0) { quotient /= 10; ++zeros; }
+                    quotientScale = -zeros;
+                }
+                auto remainderScale = cast(long)other.scale + quotientScale;
+                if (remainderScale < scale) remainderScale = scale;
+                auto remainder = left % right;
+                if (remainderScale < common) remainder /= z8_pow10(cast(uint)(common - remainderScale));
+                return make(remainder, z8_scale(remainderScale));
+            }
+        }
+    }
+    private Z8Decimal z8_divide(Z8Decimal other) const {
+        if (other.coefficient == 0) throw new Exception("division by zero");
+        if (coefficient == 0) return make(BigInt(0), z8_scale(cast(long)scale - other.scale));
+        auto aPrecision = cast(long)z8_precision(coefficient);
+        auto bPrecision = cast(long)z8_precision(other.coefficient);
+        auto precision = aPrecision + (10 * bPrecision + 2) / 3;
+        auto magnitudeA = z8_abs(coefficient), magnitudeB = z8_abs(other.coefficient);
+        auto shift = aPrecision - bPrecision;
+        bool below = shift >= 0 ? magnitudeA < magnitudeB * z8_pow10(cast(uint)shift)
+                                : magnitudeA * z8_pow10(cast(uint)-shift) < magnitudeB;
+        auto exponent = shift + cast(long)other.scale - scale - (below ? 1 : 0);
+        auto targetScale = precision - 1 - exponent;
+        auto power = targetScale + other.scale - scale;
+        BigInt numerator = BigInt(coefficient.to!string);
+        BigInt denominator = other.coefficient;
+        if (power >= 0) numerator *= z8_pow10(cast(uint)power);
+        else denominator *= z8_pow10(cast(uint)-power);
+        auto quotient = numerator / denominator;
+        auto remainder = numerator % denominator;
+        if (remainder != 0 && z8_abs(remainder) * 2 >= z8_abs(denominator))
+            quotient += (numerator < 0) == (denominator < 0) ? 1 : -1;
+        if (z8_precision(quotient) > precision) { quotient /= 10; --targetScale; }
+        if (remainder == 0) {
+            auto preferred = cast(long)scale - other.scale;
+            while (targetScale > preferred && quotient % 10 == 0) { quotient /= 10; --targetScale; }
+        }
+        if (targetScale < int.min || targetScale > int.max) throw new Exception("decimal scale out of range");
+        return make(quotient, cast(int)targetScale);
+    }
+    Z8Decimal opUnary(string op)() const if (op == "+" || op == "-") {
+        static if (op == "+") return this;
+        else return make(-coefficient, scale);
+    }
+    bool opEquals(const Z8Decimal other) const { return scale == other.scale && coefficient == other.coefficient; }
+    int opCmp(const Z8Decimal other) const {
+        auto common = scale > other.scale ? scale : other.scale;
+        auto left = coefficient * z8_pow10(cast(uint)(cast(long)common - scale));
+        auto right = other.coefficient * z8_pow10(cast(uint)(cast(long)common - other.scale));
+        return left < right ? -1 : left > right ? 1 : 0;
+    }
+    wstring z8_string() const {
+        string digits = coefficient.to!string;
+        string sign;
+        if (digits[0] == '-') { sign = "-"; digits = digits[1 .. $]; }
+        if (scale <= 0) {
+            if (coefficient == 0) return "0"w;
+            foreach (_; 0 .. -cast(long)scale) digits ~= "0";
+            return (sign ~ digits).to!wstring;
+        }
+        if (cast(size_t)scale >= digits.length) {
+            string zeros;
+            foreach (_; 0 .. cast(size_t)scale - digits.length) zeros ~= "0";
+            return (sign ~ "0." ~ zeros ~ digits).to!wstring;
+        }
+        auto splitAt = digits.length - cast(size_t)scale;
+        return (sign ~ digits[0 .. splitAt] ~ "." ~ digits[splitAt .. $]).to!wstring;
+    }
+}
+
+private Z8Decimal z8_decimal(string input) {
+    auto expIndex = input.indexOf('e');
+    if (expIndex < 0) expIndex = input.indexOf('E');
+    int exponent;
+    if (expIndex >= 0) { exponent = input[expIndex + 1 .. $].to!int; input = input[0 .. expIndex]; }
+    auto point = input.indexOf('.');
+    int scale;
+    if (point >= 0) { scale = cast(int)(input.length - point - 1); input = input[0 .. point] ~ input[point + 1 .. $]; }
+    if (input.length && input[0] == '+') input = input[1 .. $];
+    if (input.length == 0 || input == "-") throw new Exception("invalid decimal");
+    return Z8Decimal.make(BigInt(input), z8_scale(cast(long)scale - exponent));
+}
+private Z8Decimal z8_decimal_from_int(long value) { return Z8Decimal.make(BigInt(value), 0); }
+private void z8_decimal_add_assign(ref Z8Decimal a, Z8Decimal b) { a = a + b; }
+private void z8_decimal_sub_assign(ref Z8Decimal a, Z8Decimal b) { a = a - b; }
+private void z8_decimal_mul_assign(ref Z8Decimal a, Z8Decimal b) { a = a * b; }
+private void z8_decimal_div_assign(ref Z8Decimal a, Z8Decimal b) { a = a / b; }
+private void z8_decimal_mod_assign(ref Z8Decimal a, Z8Decimal b) { a = a % b; }

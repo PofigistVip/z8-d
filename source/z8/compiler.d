@@ -7,14 +7,16 @@ import std.format : format;
 import std.string : replace, lastIndexOf;
 import z8.lexer;
 
+private enum decimalRuntime = import("z8_decimal_runtime.txt");
+
 class CompileException : Exception {
     Position position;
     string sourceName;
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, boolType, stringType, exceptionType, selfType, intArray, boolArray, stringArray }
-enum ExprKind { integer, boolean, stringLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, unary, binary, conditional }
+enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, boolArray, stringArray }
+enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, unary, binary, conditional }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
                 whileStmt, doWhileStmt, forStmt, forEachStmt, breakStmt, continueStmt, throwStmt, tryStmt }
 
@@ -26,6 +28,7 @@ class Expression {
     ValueType inferredType;
     string targetClass;
     bool isField, instanceCall;
+    bool promoteToDecimal;
     Program objectClass;
     this(ExprKind kind, Token token) { this.kind = kind; this.token = token; }
 }
@@ -113,6 +116,7 @@ class Parser {
         switch (token.text) {
             case "void": result = ValueType.voidType; break;
             case "int": result = ValueType.intType; break;
+            case "decimal": result = ValueType.decimalType; break;
             case "bool": result = ValueType.boolType; break;
             case "string": result = ValueType.stringType; break;
             case "exception": result = ValueType.exceptionType; break;
@@ -337,6 +341,7 @@ class Parser {
         if (accept("super")) return new Expression(ExprKind.superRef, t);
         if (accept("new")) return new Expression(ExprKind.newSelf, identifier());
         if (t.kind == TokenKind.integerLiteral) { take(); return new Expression(ExprKind.integer, t); }
+        if (t.kind == TokenKind.decimalLiteral) { take(); return new Expression(ExprKind.decimalLiteral, t); }
         if (t.kind == TokenKind.booleanLiteral) { take(); return new Expression(ExprKind.boolean, t); }
         if (t.kind == TokenKind.stringLiteral) { take(); return new Expression(ExprKind.stringLiteral, t); }
         if (t.kind == TokenKind.identifier) {
@@ -405,6 +410,7 @@ class Checker {
     }
     private bool matches(Expression e, ValueType expected, Program expectedClass = null) {
         auto actual = typeOf(e, expected);
+        if (actual == ValueType.intType && expected == ValueType.decimalType) { e.promoteToDecimal = true; return true; }
         return actual == expected && (expected != ValueType.selfType || isAssignable(e.objectClass, expectedClass));
     }
     private ValueType checkCall(Method method, Program owner, Expression e) {
@@ -498,6 +504,7 @@ class Checker {
     private ValueType typeOf(Expression e, ValueType expected = ValueType.voidType) {
         final switch (e.kind) {
             case ExprKind.integer: return ValueType.intType;
+            case ExprKind.decimalLiteral: return ValueType.decimalType;
             case ExprKind.boolean: return ValueType.boolType;
             case ExprKind.stringLiteral: return ValueType.stringType;
             case ExprKind.arrayLiteral:
@@ -572,6 +579,9 @@ class Checker {
                 } else if (receiver == ValueType.exceptionType) {
                     if (e.arguments.length != 0) fail("incorrect argument count", e.token);
                     if (e.token.text == "getMessage") return ValueType.stringType;
+                } else if (receiver == ValueType.decimalType) {
+                    if (e.arguments.length != 0) fail("incorrect argument count", e.token);
+                    if (e.token.text == "toString") return ValueType.stringType;
                 } else if (isArray(receiver)) {
                     switch (e.token.text) {
                         case "size": case "isEmpty": case "clear":
@@ -600,19 +610,25 @@ class Checker {
                 auto operand = typeOf(e.left);
                 if (e.token.text == "!" && operand == ValueType.boolType) return operand;
                 if (["+", "-", "~"].canFind(e.token.text) && operand == ValueType.intType) return operand;
+                if (["+", "-"].canFind(e.token.text) && operand == ValueType.decimalType) return operand;
                 fail("invalid unary operand", e.token); assert(0);
             case ExprKind.binary:
                 auto left = typeOf(e.left), right = typeOf(e.right), op = e.token.text;
+                if (left == ValueType.decimalType && right == ValueType.intType) { e.right.promoteToDecimal = true; right = ValueType.decimalType; }
+                if (left == ValueType.intType && right == ValueType.decimalType) { e.left.promoteToDecimal = true; left = ValueType.decimalType; }
                 if (left != right || left == ValueType.voidType || left == ValueType.exceptionType || left == ValueType.selfType || isArray(left)) fail("operand type mismatch", e.token);
                 if (["==", "!="].canFind(op)) return ValueType.boolType;
-                if ((left == ValueType.intType || left == ValueType.stringType) && ["<", ">", "<=", ">="].canFind(op)) return ValueType.boolType;
+                if ((left == ValueType.intType || left == ValueType.decimalType || left == ValueType.stringType) && ["<", ">", "<=", ">="].canFind(op)) return ValueType.boolType;
                 if (left == ValueType.stringType && op == "+") { e.inferredType = ValueType.stringType; return ValueType.stringType; }
+                if (left == ValueType.decimalType && ["+", "-", "*", "/", "%"].canFind(op)) { e.inferredType = ValueType.decimalType; return ValueType.decimalType; }
                 if (left == ValueType.intType && ["+", "-", "*", "/", "%", "&", "|", "^"].canFind(op)) return ValueType.intType;
                 if (left == ValueType.boolType && ["&&", "||"].canFind(op)) return ValueType.boolType;
                 fail("invalid binary operands", e.token); assert(0);
             case ExprKind.conditional:
                 if (typeOf(e.left) != ValueType.boolType) fail("conditional expression requires a bool condition", e.token);
                 auto left = typeOf(e.right), right = typeOf(e.third);
+                if (left == ValueType.decimalType && right == ValueType.intType) { e.third.promoteToDecimal = true; right = ValueType.decimalType; }
+                if (left == ValueType.intType && right == ValueType.decimalType) { e.right.promoteToDecimal = true; left = ValueType.decimalType; }
                 if (left == ValueType.voidType || left != right || (left == ValueType.selfType && e.right.objectClass !is e.third.objectClass))
                     fail("conditional branch type mismatch", e.token);
                 if (left == ValueType.selfType) e.objectClass = e.right.objectClass;
@@ -638,7 +654,8 @@ class Checker {
                 if (!matches(s.expression, variableType, s.target.objectClass)) fail("assignment type mismatch", s.token);
                 s.type = variableType;
                 if (s.assignmentOperator != "=" && variableType != ValueType.intType &&
-                    !(variableType == ValueType.stringType && s.assignmentOperator == "+="))
+                    !(variableType == ValueType.stringType && s.assignmentOperator == "+=") &&
+                    !(variableType == ValueType.decimalType && ["+=", "-=", "*=", "/=", "%="].canFind(s.assignmentOperator)))
                     fail("invalid compound assignment operands", s.token);
                 return false;
             case StmtKind.expressionStmt:
@@ -710,6 +727,7 @@ class Checker {
 private string dType(ValueType type, Program objectClass = null) {
     final switch (type) {
         case ValueType.intType: return "long"; case ValueType.boolType: return "bool";
+        case ValueType.decimalType: return "Z8Decimal";
         case ValueType.voidType: return "void"; case ValueType.stringType: return "wstring";
         case ValueType.exceptionType: return "Throwable";
         case ValueType.selfType: assert(objectClass !is null); return objectClass.emittedName;
@@ -740,9 +758,15 @@ private string emitStringLiteral(string text) {
     return "[" ~ units.join(", ") ~ "].idup";
 }
 private string emitExpr(Expression e) {
+    auto value = emitExprRaw(e);
+    return e.promoteToDecimal ? "z8_decimal_from_int(" ~ value ~ ")" : value;
+}
+private string emitExprRaw(Expression e) {
     final switch (e.kind) {
         case ExprKind.integer:
             return "(cast(long)(" ~ e.token.text.replace(" ", "").replace("\t", "") ~ "))";
+        case ExprKind.decimalLiteral:
+            return "z8_decimal(\"" ~ e.token.text.replace(" ", "").replace("\t", "") ~ "\")";
         case ExprKind.boolean: return e.token.text;
         case ExprKind.stringLiteral: return emitStringLiteral(e.token.text);
         case ExprKind.arrayLiteral:
@@ -770,13 +794,14 @@ private string emitExpr(Expression e) {
                 return "(" ~ emitExpr(e.left) ~ ").z8_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
             }
             if (e.inferredType == ValueType.exceptionType) return "z8_message(" ~ emitExpr(e.left) ~ ")";
+            if (e.inferredType == ValueType.decimalType) return "(" ~ emitExpr(e.left) ~ ").z8_string()";
             auto value = "(" ~ emitExpr(e.left) ~ ").length";
             return e.token.text == "length" ? "cast(long)(" ~ value ~ ")" : "(" ~ value ~ " == 0)";
         case ExprKind.index:
             return "(" ~ emitExpr(e.left) ~ ").z8_at(" ~ emitExpr(e.right) ~ ")";
         case ExprKind.unary: return "(" ~ e.token.text ~ emitExpr(e.left) ~ ")";
         case ExprKind.binary:
-            if (e.token.text == "/" || e.token.text == "%")
+            if ((e.token.text == "/" || e.token.text == "%") && e.inferredType != ValueType.decimalType)
                 return (e.token.text == "/" ? "z8_div(" : "z8_mod(") ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             return "(" ~ emitExpr(e.left) ~ " " ~ (e.token.text == "+" && e.inferredType == ValueType.stringType ? "~" : e.token.text) ~ " " ~ emitExpr(e.right) ~ ")";
         case ExprKind.conditional:
@@ -827,6 +852,10 @@ private string emitSimple(Statement s) {
     if (s.kind == StmtKind.expressionStmt) return emitExpr(s.expression);
     assert(s.kind == StmtKind.assignment);
     auto name = emitExpr(s.target);
+    if (s.type == ValueType.decimalType && s.assignmentOperator != "=") {
+        auto op = s.assignmentOperator == "+=" ? "add" : s.assignmentOperator == "-=" ? "sub" : s.assignmentOperator == "*=" ? "mul" : s.assignmentOperator == "/=" ? "div" : "mod";
+        return "z8_decimal_" ~ op ~ "_assign(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
+    }
     if (s.assignmentOperator == "/=" || s.assignmentOperator == "%=")
         return (s.assignmentOperator == "/=" ? "z8_div_assign(" : "z8_mod_assign(") ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
     auto op = s.type == ValueType.stringType && s.assignmentOperator == "+=" ? "~=" : s.assignmentOperator;
@@ -834,6 +863,7 @@ private string emitSimple(Statement s) {
 }
 private string defaultValue(ValueType type, Program objectClass = null) {
     if (type == ValueType.exceptionType) return "new Exception(null)";
+    if (type == ValueType.decimalType) return "z8_decimal_from_int(0)";
     if (type == ValueType.selfType) return "z8_new!(" ~ dType(type, objectClass) ~ ")()";
     if (isArray(type)) return "new " ~ dType(type, objectClass) ~ "()";
     if (type == ValueType.intType) return "0";
@@ -1006,6 +1036,7 @@ class Z8Array(T) {
     void z8_set(long index, T value) { z8_at(index) = value; }
 }
 `;
+    result ~= "\n" ~ decimalRuntime ~ "\n";
     foreach (program; programs) {
         result ~= "class " ~ program.emittedName ~ (program.baseClass is null ? "" : " : " ~ program.baseClass.emittedName) ~ " {\n";
         result ~= "alias Z8Self = " ~ program.emittedName ~ ";\n";

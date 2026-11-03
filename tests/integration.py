@@ -65,6 +65,10 @@ void main() {
     assert(Z8_Math.m_cleanupOnReturn(cleanup) == 1);
     assert(cleanup.z8_size() == 1 && cleanup.z8_get(0) == 5);
     assert(Z8_Math.m_caughtEmptyMessage());
+    assert(Z8_Math.m_price(z8_decimal("0.10"), 2).z8_string() == "0.30"w);
+    assert(Z8_Math.m_decimalRules());
+    assert(Z8_Math.m_decimalText() == "12345678901234567890123456789012345679"w);
+    assert(Z8_Math.m_decimalDivision() == "0.333333"w);
     auto astral = [cast(wchar)0xD83D, cast(wchar)0xDE00].idup;
     auto bmp = [cast(wchar)0xE000].idup;
     assert(Z8_Math.m_compareStrings(astral, bmp));
