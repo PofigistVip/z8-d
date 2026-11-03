@@ -32,6 +32,7 @@ void main() {
     writeln((z8_decimal("5.00") % z8_decimal("2.0")).z8_string());
     writeln(z8_decimal("1.0") == z8_decimal("1.00"));
     writeln(z8_decimal("1.0") <= z8_decimal("1.00"));
+    writeln(Z8_Math.m_mixedDecimalComparison());
     // RANDOM_CASES
 }
 '''
@@ -65,6 +66,8 @@ public class DecimalOracle {
         System.out.println(cap(n("5.00").remainder(n("2.0"))).toPlainString());
         System.out.println(n("1.0").equals(n("1.00")));
         System.out.println(n("1.0").compareTo(n("1.00")) <= 0);
+        System.out.println(n("1.0").compareTo(BigDecimal.ONE) >= 0 && !(n("1.0").compareTo(BigDecimal.ONE) > 0)
+            && n("1.0").compareTo(BigDecimal.ONE) <= 0 && !(n("1.0").compareTo(BigDecimal.ONE) < 0));
         // RANDOM_CASES
     }
 }
@@ -107,7 +110,7 @@ with tempfile.TemporaryDirectory() as temporary:
     d_results, java_results = d_output.splitlines(), java_output.splitlines()
     assert len(d_results) == len(java_results)
     for i, (actual, expected) in enumerate(zip(d_results, java_results)):
-        detail = cases[i - 17] if i >= 17 else "fixed"
+        detail = cases[i - 18] if i >= 18 else "fixed"
         assert actual == expected, f"case {i} {detail}: D={actual}, Java={expected}"
 
 print("Decimal results match Java BigDecimal reference")

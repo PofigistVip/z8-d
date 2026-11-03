@@ -118,6 +118,23 @@ struct Z8Decimal {
 }
 
 private Z8Decimal z8_decimal(string input) {
+    size_t cursor;
+    if (cursor < input.length && (input[cursor] == '+' || input[cursor] == '-')) ++cursor;
+    bool hasDigit, hasPoint;
+    while (cursor < input.length && input[cursor] != 'e' && input[cursor] != 'E') {
+        if (input[cursor] >= '0' && input[cursor] <= '9') hasDigit = true;
+        else if (input[cursor] == '.' && !hasPoint) hasPoint = true;
+        else throw new Exception("invalid decimal");
+        ++cursor;
+    }
+    if (!hasDigit) throw new Exception("invalid decimal");
+    if (cursor < input.length) {
+        ++cursor;
+        if (cursor < input.length && (input[cursor] == '+' || input[cursor] == '-')) ++cursor;
+        auto exponentStart = cursor;
+        while (cursor < input.length && input[cursor] >= '0' && input[cursor] <= '9') ++cursor;
+        if (cursor != input.length || cursor == exponentStart) throw new Exception("invalid decimal exponent");
+    }
     auto expIndex = input.indexOf('e');
     if (expIndex < 0) expIndex = input.indexOf('E');
     int exponent;
@@ -128,6 +145,9 @@ private Z8Decimal z8_decimal(string input) {
     if (input.length && input[0] == '+') input = input[1 .. $];
     if (input.length == 0 || input == "-") throw new Exception("invalid decimal");
     return Z8Decimal.make(BigInt(input), z8_scale(cast(long)scale - exponent));
+}
+private Z8Decimal z8_decimal_parse(wstring value) {
+    return value.length ? z8_decimal(z8_to_utf8(value)) : z8_decimal_from_int(0);
 }
 private Z8Decimal z8_decimal_from_int(long value) { return Z8Decimal.make(BigInt(value), 0); }
 private void z8_decimal_add_assign(ref Z8Decimal a, Z8Decimal b) { a = a + b; }

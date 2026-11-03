@@ -8,6 +8,7 @@ import std.string : replace, lastIndexOf;
 import z8.lexer;
 
 private enum decimalRuntime = import("z8_decimal_runtime.txt");
+private enum stringRuntime = import("z8_string_runtime.txt");
 
 class CompileException : Exception {
     Position position;
@@ -29,6 +30,8 @@ class Expression {
     string targetClass;
     bool isField, instanceCall;
     bool promoteToDecimal;
+    string emittedOperator;
+    string builtinCall;
     Program objectClass;
     this(ExprKind kind, Token token) { this.kind = kind; this.token = token; }
 }
@@ -424,6 +427,10 @@ class Checker {
             e.objectClass = resolveClass(owner, method.returnObjectName, method.name);
         return method.returnType;
     }
+    private void checkArguments(Expression e, ValueType[] types) {
+        if (e.arguments.length != types.length) fail("incorrect argument count", e.token);
+        foreach (i, arg; e.arguments) if (!matches(arg, types[i])) fail("argument type mismatch", arg.token);
+    }
     void check(Program program, Program[string] allPrograms = null) {
         currentProgram = program;
         allClasses = allPrograms;
@@ -552,6 +559,15 @@ class Checker {
                 if (staticContext && !(*method).isStatic) fail("instance method in static context", e.token);
                 return checkCall(*method, (*method).owner, e);
             case ExprKind.memberCall:
+                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) &&
+                    (e.left.token.text == "int" || e.left.token.text == "decimal")) {
+                    if (e.token.text != "parse") fail("unsupported static type method", e.token);
+                    if (e.left.token.text == "decimal") {
+                        checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_decimal_parse"; return ValueType.decimalType;
+                    }
+                    checkArguments(e, e.arguments.length == 1 ? [ValueType.stringType] : [ValueType.stringType, ValueType.intType]);
+                    e.builtinCall = "z8_int_parse"; return ValueType.intType;
+                }
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields)) {
                     auto owner = e.left.token.text in visibleClasses;
                     if (owner is null) fail("unknown class or variable '" ~ e.left.token.text ~ "'", e.left.token);
@@ -573,9 +589,29 @@ class Checker {
                     e.instanceCall = true;
                     return checkCall(target, target.owner, e);
                 } else if (receiver == ValueType.stringType) {
-                    if (e.arguments.length != 0) fail("incorrect argument count", e.token);
-                    if (e.token.text == "length") return ValueType.intType;
-                    if (e.token.text == "isEmpty") return ValueType.boolType;
+                    switch (e.token.text) {
+                        case "length": case "isEmpty": case "toString":
+                            checkArguments(e, []);
+                            return e.token.text == "length" ? ValueType.intType : e.token.text == "isEmpty" ? ValueType.boolType : ValueType.stringType;
+                        case "compare": case "endsWith":
+                            checkArguments(e, [ValueType.stringType]);
+                            return e.token.text == "compare" ? ValueType.intType : ValueType.boolType;
+                        case "indexOf": case "lastIndexOf": case "startsWith":
+                            checkArguments(e, e.arguments.length == 1 ? [ValueType.stringType] : [ValueType.stringType, ValueType.intType]);
+                            return e.token.text == "startsWith" ? ValueType.boolType : ValueType.intType;
+                        case "substring":
+                            checkArguments(e, e.arguments.length == 1 ? [ValueType.intType] : [ValueType.intType, ValueType.intType]);
+                            return ValueType.stringType;
+                        case "charAt": checkArguments(e, [ValueType.intType]); return ValueType.stringType;
+                        default: break;
+                    }
+                } else if (receiver == ValueType.intType) {
+                    checkArguments(e, []);
+                    if (e.token.text == "toString") return ValueType.stringType;
+                    if (e.token.text == "abs" || e.token.text == "signum") return ValueType.intType;
+                } else if (receiver == ValueType.boolType) {
+                    checkArguments(e, []);
+                    if (e.token.text == "toString") return ValueType.stringType;
                 } else if (receiver == ValueType.exceptionType) {
                     if (e.arguments.length != 0) fail("incorrect argument count", e.token);
                     if (e.token.text == "getMessage") return ValueType.stringType;
@@ -615,7 +651,14 @@ class Checker {
             case ExprKind.binary:
                 auto left = typeOf(e.left), right = typeOf(e.right), op = e.token.text;
                 if (left == ValueType.decimalType && right == ValueType.intType) { e.right.promoteToDecimal = true; right = ValueType.decimalType; }
-                if (left == ValueType.intType && right == ValueType.decimalType) { e.left.promoteToDecimal = true; left = ValueType.decimalType; }
+                if (left == ValueType.intType && right == ValueType.decimalType) {
+                    e.left.promoteToDecimal = true; left = ValueType.decimalType;
+                    // integer's mixed decimal comparisons in the original runtime use the inverse inclusive relation.
+                    if (op == "<") e.emittedOperator = "<=";
+                    else if (op == "<=") e.emittedOperator = "<";
+                    else if (op == ">") e.emittedOperator = ">=";
+                    else if (op == ">=") e.emittedOperator = ">";
+                }
                 if (left != right || left == ValueType.voidType || left == ValueType.exceptionType || left == ValueType.selfType || isArray(left)) fail("operand type mismatch", e.token);
                 if (["==", "!="].canFind(op)) return ValueType.boolType;
                 if ((left == ValueType.intType || left == ValueType.decimalType || left == ValueType.stringType) && ["<", ">", "<=", ">="].canFind(op)) return ValueType.boolType;
@@ -781,6 +824,10 @@ private string emitExprRaw(Expression e) {
             string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
             return "m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
         case ExprKind.memberCall:
+            if (e.builtinCall.length) {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return e.builtinCall ~ "(" ~ args.join(", ") ~ ")";
+            }
             if (e.instanceCall) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return "(" ~ emitExpr(e.left) ~ ").m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
@@ -795,6 +842,16 @@ private string emitExprRaw(Expression e) {
             }
             if (e.inferredType == ValueType.exceptionType) return "z8_message(" ~ emitExpr(e.left) ~ ")";
             if (e.inferredType == ValueType.decimalType) return "(" ~ emitExpr(e.left) ~ ").z8_string()";
+            if (e.inferredType == ValueType.intType) {
+                if (e.token.text == "toString") return "(" ~ emitExpr(e.left) ~ ").to!string.to!wstring";
+                return "z8_int_" ~ e.token.text ~ "(" ~ emitExpr(e.left) ~ ")";
+            }
+            if (e.inferredType == ValueType.boolType) return "(" ~ emitExpr(e.left) ~ " ? \"true\"w : \"false\"w)";
+            if (e.token.text == "toString") return emitExpr(e.left);
+            if (e.token.text != "length" && e.token.text != "isEmpty") {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return "z8_str_" ~ e.token.text ~ "(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
+            }
             auto value = "(" ~ emitExpr(e.left) ~ ").length";
             return e.token.text == "length" ? "cast(long)(" ~ value ~ ")" : "(" ~ value ~ " == 0)";
         case ExprKind.index:
@@ -803,7 +860,8 @@ private string emitExprRaw(Expression e) {
         case ExprKind.binary:
             if ((e.token.text == "/" || e.token.text == "%") && e.inferredType != ValueType.decimalType)
                 return (e.token.text == "/" ? "z8_div(" : "z8_mod(") ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
-            return "(" ~ emitExpr(e.left) ~ " " ~ (e.token.text == "+" && e.inferredType == ValueType.stringType ? "~" : e.token.text) ~ " " ~ emitExpr(e.right) ~ ")";
+            auto op = e.emittedOperator.length ? e.emittedOperator : e.token.text == "+" && e.inferredType == ValueType.stringType ? "~" : e.token.text;
+            return "(" ~ emitExpr(e.left) ~ " " ~ op ~ " " ~ emitExpr(e.right) ~ ")";
         case ExprKind.conditional:
             return "(" ~ emitExpr(e.left) ~ " ? " ~ emitExpr(e.right) ~ " : " ~ emitExpr(e.third) ~ ")";
     }
@@ -1036,7 +1094,7 @@ class Z8Array(T) {
     void z8_set(long index, T value) { z8_at(index) = value; }
 }
 `;
-    result ~= "\n" ~ decimalRuntime ~ "\n";
+    result ~= "\n" ~ decimalRuntime ~ "\n" ~ stringRuntime ~ "\n";
     foreach (program; programs) {
         result ~= "class " ~ program.emittedName ~ (program.baseClass is null ? "" : " : " ~ program.baseClass.emittedName) ~ " {\n";
         result ~= "alias Z8Self = " ~ program.emittedName ~ ";\n";

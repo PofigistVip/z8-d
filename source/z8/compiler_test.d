@@ -139,4 +139,8 @@ unittest {
     rejects("class A { static void f() { try {} catch (exception e) {} e.getMessage(); } }");
     rejects("class A { static int f() { return 1.0; } }");
     rejects("class A { static decimal f() { return 1.0 + true; } }");
+    rejects("class A { static bool f() { return \"a\".startsWith(1); } }");
+    rejects("class A { static string f() { return \"a\".substring(true); } }");
+    rejects("class A { static int f() { return int.parse(true); } }");
+    rejects("class A { static decimal f() { return decimal.parse(1); } }");
 }

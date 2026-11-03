@@ -69,6 +69,10 @@ void main() {
     assert(Z8_Math.m_decimalRules());
     assert(Z8_Math.m_decimalText() == "12345678901234567890123456789012345679"w);
     assert(Z8_Math.m_decimalDivision() == "0.333333"w);
+    assert(Z8_Math.m_mixedDecimalComparison());
+    assert(Z8_Math.m_stringOperations());
+    assert(Z8_Math.m_primitiveText());
+    assert(Z8_Math.m_parsePrimitives());
     auto astral = [cast(wchar)0xD83D, cast(wchar)0xDE00].idup;
     auto bmp = [cast(wchar)0xE000].idup;
     assert(Z8_Math.m_compareStrings(astral, bmp));

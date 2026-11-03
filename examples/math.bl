@@ -242,4 +242,29 @@ public class Math {
         value /= 3;
         return value.toString();
     }
+
+    public static bool mixedDecimalComparison() {
+        return 1 < 1.0 && !(1 <= 1.0) && 1 > 1.0 && !(1 >= 1.0);
+    }
+
+    public static bool stringOperations() {
+        string value = "a😀b😀";
+        return value.startsWith("😀", 1) && value.endsWith("😀")
+            && value.indexOf("😀", 2) == 4 && value.lastIndexOf("😀") == 4
+            && value.substring(1, 2) == "😀" && value.charAt(1).length() == 1
+            && "a".compare("abc") == -2 && "b".compare("a") == 1;
+    }
+
+    public static bool primitiveText() {
+        int value = -42;
+        return value.abs() == 42 && value.signum() == -1
+            && value.toString() == "-42" && true.toString() == "true";
+    }
+
+    public static bool parsePrimitives() {
+        return int.parse("-8000000000000000", 16) == minimum()
+            && int.parse("7FL", 16) == 127 && int.parse("+42") == 42
+            && decimal.parse("1e2").toString() == "100"
+            && decimal.parse("") == 0;
+    }
 }
