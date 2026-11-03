@@ -1,0 +1,5 @@
+public class OverloadDerived extends OverloadBase {
+    public int choose(int value) { return value + 20; }
+    public int choose(bool value) { return value ? 30 : 0; }
+    public int callInherited() { return choose("abc"); }
+}

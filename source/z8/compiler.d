@@ -495,8 +495,14 @@ class Checker {
         Method best;
         int bestWeight = int.max;
         bool ambiguous;
-        foreach (candidate; first.owner.methods) {
-            if (candidate.name.text != first.name.text || candidate.isStatic != first.isStatic || candidate.parameters.length != e.arguments.length) continue;
+        Method[] seen;
+        for (auto owner = first.owner; owner !is null; owner = owner.baseClass) foreach (candidate; owner.methods) {
+            if (candidate.name.text != first.name.text || candidate.isStatic != first.isStatic) continue;
+            bool hidden;
+            foreach (previous; seen) if (sameParameters(previous, candidate)) { hidden = true; break; }
+            if (hidden) continue;
+            seen ~= candidate;
+            if (candidate.parameters.length != e.arguments.length) continue;
             if (!accessible(candidate.owner, candidate.isPublic, candidate.isProtected)) continue;
             int weight; bool applicable = true;
             foreach (i, p; candidate.parameters) {
@@ -556,14 +562,18 @@ class Checker {
         Method[][string] ownOverloads;
         foreach (m; program.methods) {
             auto inherited = m.name.text in methods;
-            if (inherited !is null) {
-                auto baseMethod = *inherited;
-                if (baseMethod.owner is program) {
-                    if (m.isStatic != baseMethod.isStatic) fail("mixing static and instance overloads is not supported", m.name);
-                    foreach (previous; ownOverloads[m.name.text]) if (sameParameters(previous, m)) fail("duplicate method signature", m.name);
-                    ownOverloads[m.name.text] ~= m;
-                    continue;
-                }
+            auto previousOverloads = m.name.text in ownOverloads;
+            if (previousOverloads !is null) foreach (previous; *previousOverloads) {
+                if (m.isStatic != previous.isStatic) fail("mixing static and instance overloads is not supported", m.name);
+                if (sameParameters(previous, m)) fail("duplicate method signature", m.name);
+            }
+            Method baseMethod;
+            for (auto base = program.baseClass; base !is null && baseMethod is null; base = base.baseClass)
+                foreach (candidate; base.methods)
+                    if (candidate.name.text == m.name.text && sameParameters(candidate, m)) { baseMethod = candidate; break; }
+            if (inherited !is null && (*inherited).owner !is program && (m.isStatic || (*inherited).isStatic))
+                fail("inherited static method overloads are not supported", m.name);
+            if (baseMethod !is null) {
                 if (m.isStatic || baseMethod.isStatic || !baseMethod.isVirtual) fail("only virtual instance methods may be overridden", m.name);
                 if (m.returnType != baseMethod.returnType || m.parameters.length != baseMethod.parameters.length)
                     fail("override signature mismatch", m.name);
@@ -1409,6 +1419,17 @@ class Z8Array(T) {
             result ~= "}\n";
         }
         foreach (m; program.methods) {
+            if (program.baseClass !is null) {
+                bool hasInheritedName;
+                for (auto base = program.baseClass; base !is null; base = base.baseClass)
+                    foreach (candidate; base.methods) if (candidate.name.text == m.name.text && !candidate.isStatic) {
+                        hasInheritedName = true;
+                    }
+                bool firstName = true;
+                foreach (earlier; program.methods) { if (earlier is m) break; if (earlier.name.text == m.name.text) firstName = false; }
+                if (firstName && hasInheritedName)
+                    result ~= "alias m_" ~ m.name.text ~ " = " ~ program.baseClass.emittedName ~ ".m_" ~ m.name.text ~ ";\n";
+            }
             string[] params;
             foreach (p; m.parameters) params ~= dType(p.type, p.objectClass) ~ " v_" ~ p.name.text;
             auto modifiers = m.isStatic ? "static " : m.overrides ? "override " : m.isVirtual ? "" : "final ";

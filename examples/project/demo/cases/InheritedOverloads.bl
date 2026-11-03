@@ -1,0 +1,7 @@
+public class InheritedOverloads {
+    public static int run() {
+        OverloadDerived item = new OverloadDerived;
+        OverloadBase base = item;
+        return item.choose(2) + item.choose("a") + item.choose(true) + item.callInherited() + base.choose(3);
+    }
+}

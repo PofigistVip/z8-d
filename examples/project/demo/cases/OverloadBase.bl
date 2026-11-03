@@ -1,0 +1,4 @@
+public class OverloadBase {
+    virtual public int choose(int value) { return value + 1; }
+    public int choose(string value) { return value.length() + 10; }
+}
