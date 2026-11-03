@@ -14,7 +14,7 @@ class CompileException : Exception {
 }
 
 enum ValueType { voidType, intType, boolType, stringType, exceptionType, selfType, intArray, boolArray, stringArray }
-enum ExprKind { integer, boolean, stringLiteral, arrayLiteral, variable, selfRef, newSelf, field, call, memberCall, index, unary, binary, conditional }
+enum ExprKind { integer, boolean, stringLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, unary, binary, conditional }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
                 whileStmt, doWhileStmt, forStmt, forEachStmt, breakStmt, continueStmt, throwStmt, tryStmt }
 
@@ -50,12 +50,14 @@ class Method {
     Token name;
     Parameter[] parameters;
     Statement body;
-    bool isPublic;
+    bool isPublic, isProtected;
     bool isStatic;
     string returnObjectName;
     Program returnObjectClass;
+    Program owner;
+    bool isVirtual, overrides;
 }
-class Field { ValueType type; Token name; Expression initializer; bool isPublic; string objectName; Program objectClass; }
+class Field { ValueType type; Token name; Expression initializer; bool isPublic, isProtected; string objectName; Program objectClass; Program owner; }
 struct Import { string name; Token token; }
 class Program {
     Token name;
@@ -63,6 +65,10 @@ class Program {
     Field[] fields;
     Import[] imports;
     string qualifiedName, sourceName, emittedName;
+    string baseName;
+    Token baseToken;
+    Program baseClass;
+    bool isFinal;
 }
 struct SourceUnit { string name, path, source; }
 
@@ -133,28 +139,30 @@ class Parser {
             while (accept(".")) name ~= "." ~ identifier().text;
             expect(";"); result.imports ~= Import(name, start);
         }
-        accept("public"); accept("final"); expect("class"); result.name = identifier(); className = result.name.text; expect("{");
+        accept("public"); result.isFinal = accept("final"); expect("class"); result.name = identifier(); className = result.name.text;
+        if (accept("extends")) { result.baseToken = identifier(); result.baseName = result.baseToken.text; }
+        expect("{");
         while (current.text != "}") {
             if (current.kind == TokenKind.endOfFile) error("expected '}'");
             bool isStatic;
-            bool isPublic, hasAccess, isVirtual;
+            bool isPublic = true, isProtected, hasAccess, isVirtual;
             while (["public", "private", "protected", "static", "virtual"].canFind(current.text)) {
                 if (current.text == "static") { if (isStatic) error("duplicate static modifier"); isStatic = true; }
                 else if (current.text == "virtual") { if (isVirtual) error("duplicate virtual modifier"); isVirtual = true; }
-                else { if (hasAccess) error("duplicate access modifier"); hasAccess = true; isPublic = current.text == "public"; }
+                else { if (hasAccess) error("duplicate access modifier"); hasAccess = true; isPublic = current.text == "public"; isProtected = current.text == "protected"; }
                 take();
             }
             auto declaredType = parseType(); auto declaredObjectName = parsedObjectName; auto name = identifier();
             if (current.text != "(") {
                 if (isStatic) error("static fields are not supported");
                 if (isVirtual || declaredType == ValueType.voidType) error("this field type or modifier is not supported");
-                auto field = new Field; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.objectName = declaredObjectName;
+                auto field = new Field; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.isProtected = isProtected; field.objectName = declaredObjectName; field.owner = result;
                 if (accept("=")) field.initializer = initializer();
                 expect(";"); result.fields ~= field; continue;
             }
             auto method = new Method;
             if (isVirtual && isStatic) error("a static method cannot be virtual");
-            method.isPublic = isPublic; method.isStatic = isStatic;
+            method.isPublic = isPublic; method.isProtected = isProtected; method.isStatic = isStatic; method.isVirtual = isVirtual; method.owner = result;
             method.returnType = declaredType; method.returnObjectName = declaredObjectName; method.name = name; expect("(");
             if (method.name.text == "constructor") error("Z8 constructors are not supported yet");
             if (current.text != ")") {
@@ -321,6 +329,7 @@ class Parser {
         auto t = current;
         if (accept("(")) { auto result = expression(); expect(")"); return result; }
         if (accept("this")) return new Expression(ExprKind.selfRef, t);
+        if (accept("super")) return new Expression(ExprKind.superRef, t);
         if (accept("new")) return new Expression(ExprKind.newSelf, identifier());
         if (t.kind == TokenKind.integerLiteral) { take(); return new Expression(ExprKind.integer, t); }
         if (t.kind == TokenKind.booleanLiteral) { take(); return new Expression(ExprKind.boolean, t); }
@@ -353,6 +362,30 @@ class Checker {
     private size_t loopDepth;
     private size_t finallyDepth;
     private void fail(string message, Token t) { throw new CompileException(message, t.position); }
+    void bindBase(Program program, Program[string] programs) {
+        currentProgram = program; allClasses = programs;
+        if (program.baseName.length) {
+            program.baseClass = resolveClass(program, program.baseName, program.baseToken);
+            if (program.baseClass.isFinal) fail("cannot extend a final class", program.baseToken);
+        }
+    }
+    private static Method lookupMethod(Program owner, string name) {
+        for (auto current = owner; current !is null; current = current.baseClass)
+            foreach (candidate; current.methods) if (candidate.name.text == name) return candidate;
+        return null;
+    }
+    private static Field lookupField(Program owner, string name) {
+        for (auto current = owner; current !is null; current = current.baseClass)
+            foreach (candidate; current.fields) if (candidate.name.text == name) return candidate;
+        return null;
+    }
+    private static bool isAssignable(Program actual, Program expected) {
+        for (auto current = actual; current !is null; current = current.baseClass) if (current is expected) return true;
+        return false;
+    }
+    private bool accessible(Program owner, bool isPublic, bool isProtected) {
+        return owner is currentProgram || isPublic || (isProtected && isAssignable(currentProgram, owner));
+    }
     private Program resolveClass(Program owner, string name, Token site) {
         if (name == owner.name.text) return owner;
         foreach (item; owner.imports) {
@@ -367,7 +400,7 @@ class Checker {
     }
     private bool matches(Expression e, ValueType expected, Program expectedClass = null) {
         auto actual = typeOf(e, expected);
-        return actual == expected && (expected != ValueType.selfType || e.objectClass is expectedClass);
+        return actual == expected && (expected != ValueType.selfType || isAssignable(e.objectClass, expectedClass));
     }
     private ValueType checkCall(Method method, Program owner, Expression e) {
         if (e.arguments.length != method.parameters.length) fail("incorrect argument count", e.token);
@@ -404,12 +437,34 @@ class Checker {
         }
         methods = null;
         fields = null;
+        for (auto base = program.baseClass; base !is null; base = base.baseClass) {
+            foreach (field; base.fields) if (!(field.name.text in fields)) fields[field.name.text] = field;
+            foreach (method; base.methods) if (!(method.name.text in methods)) methods[method.name.text] = method;
+        }
         foreach (field; program.fields) {
             if (field.name.text in fields) fail("duplicate field", field.name);
             fields[field.name.text] = field;
         }
         foreach (m; program.methods) {
-            if (m.name.text in methods) fail("duplicate or overloaded method", m.name);
+            auto inherited = m.name.text in methods;
+            if (inherited !is null) {
+                auto baseMethod = *inherited;
+                if (baseMethod.owner is program) fail("duplicate or overloaded method", m.name);
+                if (m.isStatic || baseMethod.isStatic || !baseMethod.isVirtual) fail("only virtual instance methods may be overridden", m.name);
+                if (m.returnType != baseMethod.returnType || m.parameters.length != baseMethod.parameters.length)
+                    fail("override signature mismatch", m.name);
+                if (m.returnType == ValueType.selfType && resolveClass(program, m.returnObjectName, m.name) !is resolveClass(baseMethod.owner, baseMethod.returnObjectName, baseMethod.name))
+                    fail("override return type mismatch", m.name);
+                foreach (i, p; m.parameters) {
+                    auto baseParam = baseMethod.parameters[i];
+                    if (p.type != baseParam.type || (p.type == ValueType.selfType &&
+                        resolveClass(program, p.objectName, p.name) !is resolveClass(baseMethod.owner, baseParam.objectName, baseParam.name)))
+                        fail("override parameter type mismatch", p.name);
+                }
+                if (baseMethod.isPublic && !m.isPublic) fail("override cannot reduce public access", m.name);
+                if (baseMethod.isProtected && !m.isPublic && !m.isProtected) fail("override cannot reduce protected access", m.name);
+                m.isVirtual = true; m.overrides = true;
+            }
             methods[m.name.text] = m;
         }
         variables = null; objectVariables = null; staticContext = false;
@@ -450,6 +505,7 @@ class Checker {
                 if (variable is null) {
                     auto field = e.token.text in fields;
                     if (field is null) fail("unknown variable '" ~ e.token.text ~ "'", e.token);
+                    if (!accessible((*field).owner, (*field).isPublic, (*field).isProtected)) fail("field is not accessible", e.token);
                     if (staticContext) fail("instance field in static context", e.token);
                     e.isField = true;
                     if ((*field).type == ValueType.selfType) e.objectClass = (*field).objectClass;
@@ -461,46 +517,49 @@ class Checker {
                 if (staticContext) fail("this in static context", e.token);
                 e.objectClass = currentProgram;
                 return ValueType.selfType;
+            case ExprKind.superRef:
+                if (staticContext) fail("super in static context", e.token);
+                if (currentProgram.baseClass is null) fail("super requires a base class", e.token);
+                e.objectClass = currentProgram.baseClass;
+                return ValueType.selfType;
             case ExprKind.newSelf:
                 e.objectClass = resolveClass(currentProgram, e.token.text, e.token);
                 return ValueType.selfType;
             case ExprKind.field:
                 if (typeOf(e.left) != ValueType.selfType) fail("field access requires an object", e.token);
-                Field field;
-                foreach (candidate; e.left.objectClass.fields) if (candidate.name.text == e.token.text) { field = candidate; break; }
+                auto field = lookupField(e.left.objectClass, e.token.text);
                 if (field is null) fail("unknown field '" ~ e.token.text ~ "'", e.token);
-                if (e.left.objectClass !is currentProgram && !field.isPublic) fail("field is not public", e.token);
+                if (!accessible(field.owner, field.isPublic, field.isProtected)) fail("field is not accessible", e.token);
                 if (field.type == ValueType.selfType)
-                    e.objectClass = field.objectClass !is null ? field.objectClass : resolveClass(e.left.objectClass, field.objectName, field.name);
+                    e.objectClass = field.objectClass !is null ? field.objectClass : resolveClass(field.owner, field.objectName, field.name);
                 return field.type;
             case ExprKind.call:
                 auto method = e.token.text in methods;
                 if (method is null) fail("unknown method '" ~ e.token.text ~ "'", e.token);
+                if (!accessible((*method).owner, (*method).isPublic, (*method).isProtected)) fail("method is not accessible", e.token);
                 if (staticContext && !(*method).isStatic) fail("instance method in static context", e.token);
-                return checkCall(*method, currentProgram, e);
+                return checkCall(*method, (*method).owner, e);
             case ExprKind.memberCall:
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields)) {
                     auto owner = e.left.token.text in visibleClasses;
                     if (owner is null) fail("unknown class or variable '" ~ e.left.token.text ~ "'", e.left.token);
-                    Method target;
-                    foreach (candidate; (*owner).methods) if (candidate.name.text == e.token.text) { target = candidate; break; }
+                    auto target = lookupMethod(*owner, e.token.text);
                     if (target is null) fail("unknown method '" ~ e.token.text ~ "'", e.token);
-                    if (*owner !is currentProgram && !target.isPublic) fail("method is not public", e.token);
+                    if (!accessible(target.owner, target.isPublic, target.isProtected)) fail("method is not accessible", e.token);
                     if (!target.isStatic) fail("instance method cannot be called on a class", e.token);
                     e.targetClass = (*owner).emittedName;
-                    return checkCall(target, *owner, e);
+                    return checkCall(target, target.owner, e);
                 }
                 auto receiver = typeOf(e.left);
                 e.inferredType = receiver;
                 if (receiver == ValueType.selfType) {
                     auto owner = e.left.objectClass;
-                    Method target;
-                    foreach (candidate; owner.methods) if (candidate.name.text == e.token.text) { target = candidate; break; }
+                    auto target = lookupMethod(owner, e.token.text);
                     if (target is null) fail("unknown method '" ~ e.token.text ~ "'", e.token);
-                    if (owner !is currentProgram && !target.isPublic) fail("method is not public", e.token);
+                    if (!accessible(target.owner, target.isPublic, target.isProtected)) fail("method is not accessible", e.token);
                     if (target.isStatic) fail("static method call through an instance is not supported", e.token);
                     e.instanceCall = true;
-                    return checkCall(target, owner, e);
+                    return checkCall(target, target.owner, e);
                 } else if (receiver == ValueType.stringType) {
                     if (e.arguments.length != 0) fail("incorrect argument count", e.token);
                     if (e.token.text == "length") return ValueType.intType;
@@ -686,6 +745,7 @@ private string emitExpr(Expression e) {
             return "new " ~ dType(e.inferredType) ~ "(" ~ (elements.length ? "[" ~ elements.join(", ") ~ "]" : "") ~ ")";
         case ExprKind.variable: return e.isField ? "this.f_" ~ e.token.text : "v_" ~ e.token.text;
         case ExprKind.selfRef: return "this";
+        case ExprKind.superRef: return "super";
         case ExprKind.newSelf: return "new " ~ e.objectClass.emittedName ~ "()";
         case ExprKind.field: return "(" ~ emitExpr(e.left) ~ ").f_" ~ e.token.text;
         case ExprKind.call:
@@ -780,9 +840,30 @@ string compile(string source) {
     program.emittedName = "Z8_" ~ program.name.text;
     Program[string] programs;
     programs[program.qualifiedName] = program;
+    prepareInheritance([program], programs);
     (new Checker).check(program, programs);
     checkDefaultConstruction([program]);
     return emitPrograms([program]);
+}
+
+private void prepareInheritance(Program[] ordered, Program[string] programs) {
+    foreach (program; ordered) {
+        try { (new Checker).bindBase(program, programs); }
+        catch (CompileException e) { e.sourceName = program.sourceName; throw e; }
+    }
+    bool[string] active, finished;
+    void visit(Program program) {
+        if (program.qualifiedName in finished) return;
+        if (program.qualifiedName in active) {
+            auto error = new CompileException("cyclic inheritance", program.baseToken.position);
+            error.sourceName = program.sourceName; throw error;
+        }
+        active[program.qualifiedName] = true;
+        if (program.baseClass !is null) visit(program.baseClass);
+        active.remove(program.qualifiedName);
+        finished[program.qualifiedName] = true;
+    }
+    foreach (program; ordered) visit(program);
 }
 
 /// Prevent unbounded recursive allocation of automatically created object fields.
@@ -791,6 +872,13 @@ private void checkDefaultConstruction(Program[] programs) {
     void visit(Program program) {
         if (program.qualifiedName in finished) return;
         active[program.qualifiedName] = true;
+        if (program.baseClass !is null) {
+            if (program.baseClass.qualifiedName in active) {
+                auto error = new CompileException("recursive automatic object construction", program.baseToken.position);
+                error.sourceName = program.sourceName; throw error;
+            }
+            visit(program.baseClass);
+        }
         foreach (field; program.fields) {
             if (field.type != ValueType.selfType) continue;
             Program target;
@@ -837,10 +925,16 @@ string compileSources(SourceUnit[] units, string entry = "") {
         programs[unit.name] = program;
         ordered ~= program;
     }
-    foreach (program; ordered) {
+    prepareInheritance(ordered, programs);
+    bool[string] checked;
+    void checkInOrder(Program program) {
+        if (program.qualifiedName in checked) return;
+        if (program.baseClass !is null) checkInOrder(program.baseClass);
         try { (new Checker).check(program, programs); }
         catch (CompileException e) { e.sourceName = program.sourceName; throw e; }
+        checked[program.qualifiedName] = true;
     }
+    foreach (program; ordered) checkInOrder(program);
     checkDefaultConstruction(ordered);
     auto output = emitPrograms(ordered);
     if (entry.length) {
@@ -902,7 +996,7 @@ class Z8Array(T) {
 }
 `;
     foreach (program; programs) {
-        result ~= "class " ~ program.emittedName ~ " {\n";
+        result ~= "class " ~ program.emittedName ~ (program.baseClass is null ? "" : " : " ~ program.baseClass.emittedName) ~ " {\n";
         result ~= "alias Z8Self = " ~ program.emittedName ~ ";\n";
         foreach (field; program.fields) result ~= dType(field.type, field.objectClass) ~ " f_" ~ field.name.text ~ ";\n";
         if (program.fields.length) {
@@ -916,7 +1010,8 @@ class Z8Array(T) {
         foreach (m; program.methods) {
             string[] params;
             foreach (p; m.parameters) params ~= dType(p.type, p.objectClass) ~ " v_" ~ p.name.text;
-            result ~= (m.isStatic ? "static " : "") ~ dType(m.returnType, m.returnObjectClass) ~ " m_" ~ m.name.text ~ "(" ~ params.join(", ") ~ ")\n" ~ emitStatement(m.body);
+            auto modifiers = m.isStatic ? "static " : m.overrides ? "override " : m.isVirtual ? "" : "final ";
+            result ~= modifiers ~ dType(m.returnType, m.returnObjectClass) ~ " m_" ~ m.name.text ~ "(" ~ params.join(", ") ~ ")\n" ~ emitStatement(m.body);
         }
         result ~= "}\n";
     }

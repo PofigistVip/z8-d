@@ -1,0 +1,11 @@
+public class Base {
+    protected int value = 2;
+
+    protected int extra() {
+        return value;
+    }
+
+    virtual public int getValue() {
+        return value;
+    }
+}

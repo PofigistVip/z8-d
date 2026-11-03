@@ -38,8 +38,10 @@ unittest {
     try { compileSources([a, b], "other.B.g"); } catch (CompileException e) { badEntry = true; assert(e.sourceName == "B.bl"); }
     assert(badEntry);
     rejectsSources([a], "A.bl");
-    auto privateB = SourceUnit("other.B", "B.bl", "class B { static int g(int x) { return x; } }");
+    auto privateB = SourceUnit("other.B", "B.bl", "class B { private static int g(int x) { return x; } }");
     rejectsSources([a, privateB], "A.bl");
+    auto defaultPublic = SourceUnit("other.B", "B.bl", "class B { static int g(int x) { return x; } }");
+    compileSources([a, defaultPublic]);
     auto invalidB = SourceUnit("other.B", "B.bl", "class B { public static int g() { return true; } }");
     rejectsSources([a, invalidB], "A.bl"); // the call has the wrong arity
     auto wrongName = SourceUnit("other.NotB", "B.bl", "class B { }");
@@ -55,12 +57,26 @@ unittest {
     auto wrongArgument = SourceUnit("pkg.A", "A.bl", "import other.B; class A { static void f() { B.take(new A); } }");
     auto takesB = SourceUnit("other.B", "B.bl", "class B { public static void take(B value) {} }");
     rejectsSources([wrongArgument, takesB], "A.bl");
-    auto hiddenField = SourceUnit("other.B", "B.bl", "class B { int secret; }");
+    auto hiddenField = SourceUnit("other.B", "B.bl", "class B { private int secret; }");
     auto readsField = SourceUnit("pkg.A", "A.bl", "import other.B; class A { static int f() { B b; return b.secret; } }");
     rejectsSources([readsField, hiddenField], "A.bl");
+    auto protectedField = SourceUnit("other.B", "B.bl", "class B { protected int secret; }");
+    rejectsSources([readsField, protectedField], "A.bl");
     auto cycleA = SourceUnit("pkg.A", "A.bl", "class A { B next; }");
     auto cycleB = SourceUnit("pkg.B", "B.bl", "class B { A next; }");
     rejectsSources([cycleA, cycleB], "B.bl");
+    auto base = SourceUnit("pkg.Base", "Base.bl", "class Base { public int f() { return 1; } }");
+    auto derived = SourceUnit("pkg.Derived", "Derived.bl", "class Derived extends Base { public int f() { return 2; } }");
+    rejectsSources([derived, base], "Derived.bl");
+    auto virtualBase = SourceUnit("pkg.Base", "Base.bl", "class Base { virtual public int f() { return 1; } }");
+    compileSources([derived, virtualBase]);
+    auto badOverride = SourceUnit("pkg.Derived", "Derived.bl", "class Derived extends Base { public bool f() { return true; } }");
+    rejectsSources([badOverride, virtualBase], "Derived.bl");
+    auto finalBase = SourceUnit("pkg.Base", "Base.bl", "final class Base { }");
+    rejectsSources([derived, finalBase], "Derived.bl");
+    auto inheritanceA = SourceUnit("pkg.A", "A.bl", "class A extends B { }");
+    auto inheritanceB = SourceUnit("pkg.B", "B.bl", "class B extends A { }");
+    rejectsSources([inheritanceA, inheritanceB], "A.bl");
 }
 
 unittest {

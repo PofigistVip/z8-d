@@ -8,6 +8,7 @@ public class Main {
         second.add(1);
         Holder holder;
         holder.bump();
-        return Numbers.sum({1, 2, 3}) + Twice.apply(4) + Counter.run() + second.value + holder.counter.value;
+        Base base = new Derived;
+        return Numbers.sum({1, 2, 3}) + Twice.apply(4) + Counter.run() + second.value + holder.counter.value + base.getValue();
     }
 }
