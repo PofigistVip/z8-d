@@ -49,6 +49,9 @@ unittest {
     rejectsSources([badImport, b, third], "A.bl");
     auto syntax = SourceUnit("pkg.C", "C.bl", "class C { $");
     rejectsSources([syntax], "C.bl");
+    auto usesObject = SourceUnit("pkg.A", "A.bl", "import other.B; class A { static void f() { B.make(); } }");
+    auto createsObject = SourceUnit("other.B", "B.bl", "class B { public static B make() { return new B; } }");
+    rejectsSources([usesObject, createsObject], "A.bl");
 }
 
 unittest {
@@ -57,7 +60,12 @@ unittest {
     rejects("class A { static int f() { return missing; } }");
     rejects("class A { static int f(int x) { return x + true; } }");
     rejects("class A { static int f() { return f(1); } }");
-    rejects("class A { int f() { return 1; } }");
+    rejects("class A { int x; static int f() { return x; } }");
+    rejects("class A { int f() { return 1; } static int g() { return f(); } }");
+    rejects("class A { static int f() { return this.f(); } }");
+    rejects("class A { static A f() { return new Other; } }");
+    rejects("class A { int f() { return 1; } static int g() { return A.f(); } }");
+    rejects("class A { A next; }");
     rejects("class A { static int f() { while (true) return 1; } }");
     rejects("class A { static int f() { if (true) { int x = 1; } return x; } }");
     rejects("class A { static int f(int x) { int x = 1; return x; } }");

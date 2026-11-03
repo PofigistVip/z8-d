@@ -13,8 +13,8 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, boolType, stringType, exceptionType, intArray, boolArray, stringArray }
-enum ExprKind { integer, boolean, stringLiteral, arrayLiteral, variable, call, memberCall, index, unary, binary, conditional }
+enum ValueType { voidType, intType, boolType, stringType, exceptionType, selfType, intArray, boolArray, stringArray }
+enum ExprKind { integer, boolean, stringLiteral, arrayLiteral, variable, selfRef, newSelf, field, call, memberCall, index, unary, binary, conditional }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
                 whileStmt, doWhileStmt, forStmt, forEachStmt, breakStmt, continueStmt, throwStmt, tryStmt }
 
@@ -25,6 +25,7 @@ class Expression {
     Expression[] arguments;
     ValueType inferredType;
     string targetClass;
+    bool isField, instanceCall;
     this(ExprKind kind, Token token) { this.kind = kind; this.token = token; }
 }
 class Statement {
@@ -47,11 +48,14 @@ class Method {
     Parameter[] parameters;
     Statement body;
     bool isPublic;
+    bool isStatic;
 }
+class Field { ValueType type; Token name; Expression initializer; bool isPublic; }
 struct Import { string name; Token token; }
 class Program {
     Token name;
     Method[] methods;
+    Field[] fields;
     Import[] imports;
     string qualifiedName, sourceName, emittedName;
 }
@@ -72,6 +76,7 @@ private ValueType elementType(ValueType type) {
 class Parser {
     private Token[] tokens;
     private size_t index;
+    private string className;
     this(string source) {
         auto lexer = new Lexer(source);
         do { tokens ~= lexer.next(); } while (tokens[$-1].kind != TokenKind.endOfFile);
@@ -91,13 +96,16 @@ class Parser {
     private void error(string message) { throw new CompileException(message, current.position); }
     private ValueType parseType() {
         ValueType result;
-        switch (take().text) {
+        auto token = take();
+        switch (token.text) {
             case "void": result = ValueType.voidType; break;
             case "int": result = ValueType.intType; break;
             case "bool": result = ValueType.boolType; break;
             case "string": result = ValueType.stringType; break;
             case "exception": result = ValueType.exceptionType; break;
-            default: throw new CompileException("unsupported type", tokens[index-1].position);
+            default:
+                if (token.text == className) result = ValueType.selfType;
+                else throw new CompileException("unsupported type", token.position);
         }
         if (accept("[")) {
             expect("]");
@@ -118,7 +126,7 @@ class Parser {
             while (accept(".")) name ~= "." ~ identifier().text;
             expect(";"); result.imports ~= Import(name, start);
         }
-        accept("public"); accept("final"); expect("class"); result.name = identifier(); expect("{");
+        accept("public"); accept("final"); expect("class"); result.name = identifier(); className = result.name.text; expect("{");
         while (current.text != "}") {
             if (current.kind == TokenKind.endOfFile) error("expected '}'");
             bool isStatic;
@@ -128,10 +136,19 @@ class Parser {
                 else { if (isPublic) error("duplicate public modifier"); isPublic = true; }
                 take();
             }
-            if (!isStatic) error("only static methods are supported");
+            auto declaredType = parseType(); auto name = identifier();
+            if (current.text != "(") {
+                if (isStatic) error("static fields are not supported");
+                if (declaredType == ValueType.voidType || declaredType == ValueType.selfType)
+                    error("this field type is not supported");
+                auto field = new Field; field.type = declaredType; field.name = name; field.isPublic = isPublic;
+                if (accept("=")) field.initializer = initializer();
+                expect(";"); result.fields ~= field; continue;
+            }
             auto method = new Method;
-            method.isPublic = isPublic;
-            method.returnType = parseType(); method.name = identifier(); expect("(");
+            method.isPublic = isPublic; method.isStatic = isStatic;
+            method.returnType = declaredType; method.name = name; expect("(");
+            if (method.name.text == "constructor") error("Z8 constructors are not supported yet");
             if (current.text != ")") {
                 do {
                     Parameter p; p.type = parseType(); p.name = identifier(); method.parameters ~= p;
@@ -218,7 +235,7 @@ class Parser {
     }
     private Statement simpleStatement(bool allowDeclaration) {
         auto t = current;
-        if ((t.text == "int" || t.text == "bool" || t.text == "string" || t.text == "exception") &&
+        if ((t.text == "int" || t.text == "bool" || t.text == "string" || t.text == "exception" || t.text == className) &&
             (look(1).kind == TokenKind.identifier || (look(1).text == "[" && look(2).text == "]"))) {
             if (!allowDeclaration) error("variable declaration is not allowed here");
             auto s = new Statement(StmtKind.variable, t);
@@ -228,7 +245,7 @@ class Parser {
         }
         auto e = expression();
         if (["=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^="].canFind(current.text)) {
-            if (e.kind != ExprKind.variable && e.kind != ExprKind.index)
+            if (e.kind != ExprKind.variable && e.kind != ExprKind.index && e.kind != ExprKind.field)
                 throw new CompileException("assignment target must be a variable or array element", e.token.position);
             auto s = new Statement(StmtKind.assignment, t);
             s.target = e; s.assignmentOperator = take().text; s.expression = initializer(); return s;
@@ -282,8 +299,10 @@ class Parser {
                 auto access = new Expression(ExprKind.index, tokens[index - 1]);
                 access.left = result; access.right = expression(); expect("]"); result = access;
             } else {
-                expect("."); auto member = new Expression(ExprKind.memberCall, identifier());
-                member.left = result; expect("(");
+                expect("."); auto member = new Expression(ExprKind.field, identifier());
+                member.left = result;
+                if (!accept("(")) { result = member; continue; }
+                member.kind = ExprKind.memberCall;
                 if (current.text != ")") do { member.arguments ~= initializer(); } while (accept(","));
                 expect(")"); result = member;
             }
@@ -293,6 +312,8 @@ class Parser {
     private Expression atom() {
         auto t = current;
         if (accept("(")) { auto result = expression(); expect(")"); return result; }
+        if (accept("this")) return new Expression(ExprKind.selfRef, t);
+        if (accept("new")) return new Expression(ExprKind.newSelf, identifier());
         if (t.kind == TokenKind.integerLiteral) { take(); return new Expression(ExprKind.integer, t); }
         if (t.kind == TokenKind.booleanLiteral) { take(); return new Expression(ExprKind.boolean, t); }
         if (t.kind == TokenKind.stringLiteral) { take(); return new Expression(ExprKind.stringLiteral, t); }
@@ -312,8 +333,10 @@ class Parser {
 /// Checks the entire program before emitting code; unsupported constructs fail closed.
 class Checker {
     private Method[string] methods;
+    private Field[string] fields;
     private Program[string] visibleClasses;
     private Program currentProgram;
+    private bool staticContext;
     private ValueType[string] variables;
     private ValueType returnType;
     private size_t loopDepth;
@@ -341,12 +364,21 @@ class Checker {
             visibleClasses[simpleName] = *found;
         }
         methods = null;
+        fields = null;
+        foreach (field; program.fields) {
+            if (field.name.text in fields) fail("duplicate field", field.name);
+            fields[field.name.text] = field;
+        }
         foreach (m; program.methods) {
             if (m.name.text in methods) fail("duplicate or overloaded method", m.name);
             methods[m.name.text] = m;
         }
+        variables = null; staticContext = false;
+        foreach (field; program.fields)
+            if (field.initializer !is null && typeOf(field.initializer, field.type) != field.type)
+                fail("field initializer type mismatch", field.name);
         foreach (m; program.methods) {
-            variables = null; returnType = m.returnType; loopDepth = 0; finallyDepth = 0;
+            variables = null; returnType = m.returnType; loopDepth = 0; finallyDepth = 0; staticContext = m.isStatic;
             foreach (p; m.parameters) {
                 if (p.type == ValueType.voidType) fail("parameter cannot be void", p.name);
                 if (p.name.text in variables) fail("duplicate parameter", p.name);
@@ -368,23 +400,46 @@ class Checker {
                 e.inferredType = expected; return expected;
             case ExprKind.variable:
                 auto variable = e.token.text in variables;
-                if (variable is null) fail("unknown variable '" ~ e.token.text ~ "'", e.token);
+                if (variable is null) {
+                    auto field = e.token.text in fields;
+                    if (field is null) fail("unknown variable '" ~ e.token.text ~ "'", e.token);
+                    if (staticContext) fail("instance field in static context", e.token);
+                    e.isField = true; return (*field).type;
+                }
                 return *variable;
+            case ExprKind.selfRef:
+                if (staticContext) fail("this in static context", e.token);
+                return ValueType.selfType;
+            case ExprKind.newSelf:
+                if (e.token.text != currentProgram.name.text) fail("only the current class can be instantiated", e.token);
+                return ValueType.selfType;
+            case ExprKind.field:
+                if (typeOf(e.left) != ValueType.selfType) fail("field access requires an instance of the current class", e.token);
+                auto field = e.token.text in fields;
+                if (field is null) fail("unknown field '" ~ e.token.text ~ "'", e.token);
+                return (*field).type;
             case ExprKind.call:
                 auto method = e.token.text in methods;
                 if (method is null) fail("unknown method '" ~ e.token.text ~ "'", e.token);
+                if (staticContext && !(*method).isStatic) fail("instance method in static context", e.token);
                 if (e.arguments.length != (*method).parameters.length) fail("incorrect argument count", e.token);
                 foreach (i, arg; e.arguments)
                     if (typeOf(arg, (*method).parameters[i].type) != (*method).parameters[i].type) fail("argument type mismatch", arg.token);
                 return (*method).returnType;
             case ExprKind.memberCall:
-                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables)) {
+                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields)) {
                     auto owner = e.left.token.text in visibleClasses;
                     if (owner is null) fail("unknown class or variable '" ~ e.left.token.text ~ "'", e.left.token);
                     Method target;
                     foreach (candidate; (*owner).methods) if (candidate.name.text == e.token.text) { target = candidate; break; }
                     if (target is null) fail("unknown method '" ~ e.token.text ~ "'", e.token);
                     if (*owner !is currentProgram && !target.isPublic) fail("method is not public", e.token);
+                    if (!target.isStatic) fail("instance method cannot be called on a class", e.token);
+                    if (*owner !is currentProgram) {
+                        if (target.returnType == ValueType.selfType) fail("cross-class object signatures are not supported", e.token);
+                        foreach (parameter; target.parameters)
+                            if (parameter.type == ValueType.selfType) fail("cross-class object signatures are not supported", e.token);
+                    }
                     if (e.arguments.length != target.parameters.length) fail("incorrect argument count", e.token);
                     foreach (i, arg; e.arguments)
                         if (typeOf(arg, target.parameters[i].type) != target.parameters[i].type) fail("argument type mismatch", arg.token);
@@ -393,7 +448,16 @@ class Checker {
                 }
                 auto receiver = typeOf(e.left);
                 e.inferredType = receiver;
-                if (receiver == ValueType.stringType) {
+                if (receiver == ValueType.selfType) {
+                    auto target = e.token.text in methods;
+                    if (target is null) fail("unknown method '" ~ e.token.text ~ "'", e.token);
+                    if ((*target).isStatic) fail("static method call through an instance is not supported", e.token);
+                    if (e.arguments.length != (*target).parameters.length) fail("incorrect argument count", e.token);
+                    foreach (i, arg; e.arguments)
+                        if (typeOf(arg, (*target).parameters[i].type) != (*target).parameters[i].type) fail("argument type mismatch", arg.token);
+                    e.instanceCall = true;
+                    return (*target).returnType;
+                } else if (receiver == ValueType.stringType) {
                     if (e.arguments.length != 0) fail("incorrect argument count", e.token);
                     if (e.token.text == "length") return ValueType.intType;
                     if (e.token.text == "isEmpty") return ValueType.boolType;
@@ -431,7 +495,7 @@ class Checker {
                 fail("invalid unary operand", e.token); assert(0);
             case ExprKind.binary:
                 auto left = typeOf(e.left), right = typeOf(e.right), op = e.token.text;
-                if (left != right || left == ValueType.voidType || left == ValueType.exceptionType || isArray(left)) fail("operand type mismatch", e.token);
+                if (left != right || left == ValueType.voidType || left == ValueType.exceptionType || left == ValueType.selfType || isArray(left)) fail("operand type mismatch", e.token);
                 if (["==", "!="].canFind(op)) return ValueType.boolType;
                 if ((left == ValueType.intType || left == ValueType.stringType) && ["<", ">", "<=", ">="].canFind(op)) return ValueType.boolType;
                 if (left == ValueType.stringType && op == "+") { e.inferredType = ValueType.stringType; return ValueType.stringType; }
@@ -534,6 +598,7 @@ private string dType(ValueType type) {
         case ValueType.intType: return "long"; case ValueType.boolType: return "bool";
         case ValueType.voidType: return "void"; case ValueType.stringType: return "wstring";
         case ValueType.exceptionType: return "Throwable";
+        case ValueType.selfType: return "Z8Self";
         case ValueType.intArray: return "Z8Array!long";
         case ValueType.boolArray: return "Z8Array!bool";
         case ValueType.stringArray: return "Z8Array!wstring";
@@ -569,11 +634,18 @@ private string emitExpr(Expression e) {
         case ExprKind.arrayLiteral:
             string[] elements; foreach (element; e.arguments) elements ~= emitExpr(element);
             return "new " ~ dType(e.inferredType) ~ "(" ~ (elements.length ? "[" ~ elements.join(", ") ~ "]" : "") ~ ")";
-        case ExprKind.variable: return "v_" ~ e.token.text;
+        case ExprKind.variable: return e.isField ? "this.f_" ~ e.token.text : "v_" ~ e.token.text;
+        case ExprKind.selfRef: return "this";
+        case ExprKind.newSelf: return "new Z8Self()";
+        case ExprKind.field: return "(" ~ emitExpr(e.left) ~ ").f_" ~ e.token.text;
         case ExprKind.call:
             string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
             return "m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
         case ExprKind.memberCall:
+            if (e.instanceCall) {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return "(" ~ emitExpr(e.left) ~ ").m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
+            }
             if (e.targetClass.length) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return e.targetClass ~ ".m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
@@ -636,8 +708,7 @@ private string emitStatement(Statement s) {
 private string emitSimple(Statement s) {
     if (s.kind == StmtKind.variable)
         return dType(s.type) ~ " v_" ~ s.token.text ~ " = " ~
-            (s.expression !is null ? emitExpr(s.expression) : s.type == ValueType.exceptionType ? "new Exception(null)" : isArray(s.type) ? "new " ~ dType(s.type) ~ "()" :
-             s.type == ValueType.intType ? "0" : s.type == ValueType.stringType ? `""w` : "false");
+            (s.expression !is null ? emitExpr(s.expression) : defaultValue(s.type));
     if (s.kind == StmtKind.expressionStmt) return emitExpr(s.expression);
     assert(s.kind == StmtKind.assignment);
     auto name = emitExpr(s.target);
@@ -645,6 +716,13 @@ private string emitSimple(Statement s) {
         return (s.assignmentOperator == "/=" ? "z8_div_assign(" : "z8_mod_assign(") ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
     auto op = s.type == ValueType.stringType && s.assignmentOperator == "+=" ? "~=" : s.assignmentOperator;
     return name ~ " " ~ op ~ " " ~ emitExpr(s.expression);
+}
+private string defaultValue(ValueType type) {
+    if (type == ValueType.exceptionType) return "new Exception(null)";
+    if (type == ValueType.selfType || isArray(type)) return "new " ~ dType(type) ~ "()";
+    if (type == ValueType.intType) return "0";
+    if (type == ValueType.stringType) return `""w`;
+    assert(type == ValueType.boolType); return "false";
 }
 string compile(string source) {
     auto program = (new Parser(source)).parse();
@@ -700,7 +778,7 @@ string compileSources(SourceUnit[] units, string entry = "") {
         Method target;
         foreach (candidate; (*owner).methods) if (candidate.name.text == methodName) { target = candidate; break; }
         if (target is null) throw new CompileException("entry method not found: " ~ entry, Position.init);
-        if (!target.isPublic || target.parameters.length != 0 ||
+        if (!target.isPublic || !target.isStatic || target.parameters.length != 0 ||
             (target.returnType != ValueType.voidType && target.returnType != ValueType.intType)) {
             auto error = new CompileException("entry must be a public static method with no parameters returning void or int", target.name.position);
             error.sourceName = (*owner).sourceName; throw error;
@@ -749,10 +827,19 @@ class Z8Array(T) {
 `;
     foreach (program; programs) {
         result ~= "class " ~ program.emittedName ~ " {\n";
+        result ~= "alias Z8Self = " ~ program.emittedName ~ ";\n";
+        foreach (field; program.fields) result ~= dType(field.type) ~ " f_" ~ field.name.text ~ ";\n";
+        if (program.fields.length) {
+            result ~= "this() {\n";
+            foreach (field; program.fields) result ~= "this.f_" ~ field.name.text ~ " = " ~ defaultValue(field.type) ~ ";\n";
+            foreach (field; program.fields)
+                if (field.initializer !is null) result ~= "this.f_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
+            result ~= "}\n";
+        }
         foreach (m; program.methods) {
             string[] params;
             foreach (p; m.parameters) params ~= dType(p.type) ~ " v_" ~ p.name.text;
-            result ~= "static " ~ dType(m.returnType) ~ " m_" ~ m.name.text ~ "(" ~ params.join(", ") ~ ")\n" ~ emitStatement(m.body);
+            result ~= (m.isStatic ? "static " : "") ~ dType(m.returnType) ~ " m_" ~ m.name.text ~ "(" ~ params.join(", ") ~ ")\n" ~ emitStatement(m.body);
         }
         result ~= "}\n";
     }

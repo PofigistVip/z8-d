@@ -1,0 +1,23 @@
+public class Counter {
+    public int value = 3;
+    public int[] history;
+
+    public void add(int amount) {
+        value += amount;
+        this.history.add(value);
+    }
+
+    public Counter copy() {
+        Counter result = new Counter;
+        result.value = this.value;
+        return result;
+    }
+
+    public static int run() {
+        Counter first;
+        first.add(4);
+        Counter second = first.copy();
+        second.add(2);
+        return first.value + second.value + first.history.size();
+    }
+}

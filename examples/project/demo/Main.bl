@@ -2,6 +2,6 @@ import demo.util.Numbers;
 
 public class Main {
     public static int run() {
-        return Numbers.sum({1, 2, 3}) + Twice.apply(4);
+        return Numbers.sum({1, 2, 3}) + Twice.apply(4) + Counter.run();
     }
 }
