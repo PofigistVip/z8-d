@@ -1,0 +1,12 @@
+public class StringMap {
+    public static int run() {
+        string[string] values;
+        values.add("a", "one");
+        values.add("b", "two");
+        if (!values.containsKey("a") || !values.containsValue("two")) return 1;
+        if (values["a"] != "one" || values.get("b") != "two") return 2;
+        if (values.size() != 2) return 3;
+        values.clear();
+        return values.isEmpty() ? 103 : 4;
+    }
+}

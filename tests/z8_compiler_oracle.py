@@ -82,6 +82,7 @@ with tempfile.TemporaryDirectory() as temporary:
         System.out.println("RESULT:" + demo.cases.ArrayAdvanced.z8_run().get());
         System.out.println("RESULT:" + demo.cases.ObjectArrays.z8_run().get());
         System.out.println("RESULT:" + demo.cases.InheritedOverloads.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.StringMap.z8_run().get());
     }
 }''', encoding="utf-8")
         logging_cache = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "commons-logging" / "commons-logging"
@@ -103,6 +104,9 @@ with tempfile.TemporaryDirectory() as temporary:
         collection_java = decimal_java.parent.parent / "runtime" / "RCollection.java"
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
                         "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), str(collection_java)], cwd=temp, check=True)
+        map_java = collection_java.with_name("RLinkedHashMap.java")
+        subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
+                        "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), str(map_java)], cwd=temp, check=True)
         string_java = decimal_java.with_name("string.java")
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
                         "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), str(string_java)], cwd=temp, check=True)
@@ -137,6 +141,7 @@ void main() {
     writeln(Z8p_64656D6F2E63617365732E4172726179416476616E636564.m_run());
     writeln(Z8p_64656D6F2E63617365732E4F626A656374417272617973.m_run());
     writeln(Z8p_64656D6F2E63617365732E496E686572697465644F7665726C6F616473.m_run());
+    writeln(Z8p_64656D6F2E63617365732E537472696E674D6170.m_run());
 }
 ''', encoding="utf-8")
         d_binary = temp / ("compare.exe" if os.name == "nt" else "compare")

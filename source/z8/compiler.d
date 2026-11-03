@@ -17,7 +17,7 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, decimalArray, boolArray, stringArray, selfArray }
+enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, decimalArray, boolArray, stringArray, selfArray, stringMap }
 enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, unary, binary, conditional }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
                 whileStmt, doWhileStmt, forStmt, forEachStmt, breakStmt, continueStmt, throwStmt, tryStmt }
@@ -154,6 +154,10 @@ class Parser {
                 else throw new CompileException("unsupported type", token.position);
         }
         if (accept("[")) {
+            if (current.text != "]") {
+                if (result != ValueType.stringType || !accept("string")) error("only string[string] maps are supported");
+                expect("]"); return ValueType.stringMap;
+            }
             expect("]");
             switch (result) {
                 case ValueType.intType: return ValueType.intArray;
@@ -190,7 +194,7 @@ class Parser {
             auto declaredType = parseType(); auto declaredObjectName = parsedObjectName; auto name = identifier();
             if (current.text != "(") {
                 if (isVirtual || declaredType == ValueType.voidType) error("this field type or modifier is not supported");
-                if (isStatic && (hasObjectClass(declaredType) || declaredType == ValueType.exceptionType))
+                if (isStatic && (hasObjectClass(declaredType) || declaredType == ValueType.exceptionType || declaredType == ValueType.stringMap))
                     error("static object fields are not supported");
                 auto field = new Field; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.isProtected = isProtected; field.isStatic = isStatic; field.objectName = declaredObjectName; field.owner = result;
                 if (accept("=")) field.initializer = initializer();
@@ -292,7 +296,8 @@ class Parser {
     private Statement simpleStatement(bool allowDeclaration) {
         auto t = current;
         if ((t.kind == TokenKind.identifier) &&
-            (look(1).kind == TokenKind.identifier || (look(1).text == "[" && look(2).text == "]"))) {
+            (look(1).kind == TokenKind.identifier || (look(1).text == "[" &&
+             (look(2).text == "]" || (look(3).text == "]" && look(4).kind == TokenKind.identifier))))) {
             if (!allowDeclaration) error("variable declaration is not allowed here");
             auto s = new Statement(StmtKind.variable, t);
             s.type = parseType(); s.objectName = parsedObjectName; s.token = identifier();
@@ -768,6 +773,19 @@ class Checker {
                         checkArguments(e, e.arguments.length == 1 ? [ValueType.intType] : [ValueType.intType, ValueType.intType]);
                         return ValueType.decimalType;
                     }
+                } else if (receiver == ValueType.stringMap) {
+                    switch (e.token.text) {
+                        case "size": case "isEmpty": case "clear":
+                            checkArguments(e, []);
+                            return e.token.text == "size" ? ValueType.intType : e.token.text == "isEmpty" ? ValueType.boolType : ValueType.voidType;
+                        case "containsKey": case "containsValue":
+                            checkArguments(e, [ValueType.stringType]); return ValueType.boolType;
+                        case "get":
+                            checkArguments(e, [ValueType.stringType]); return ValueType.stringType;
+                        case "add":
+                            checkArguments(e, [ValueType.stringType, ValueType.stringType]); return ValueType.voidType;
+                        default: break;
+                    }
                 } else if (isArray(receiver)) {
                     if (receiver == ValueType.selfArray) {
                         e.objectClass = e.left.objectClass;
@@ -822,6 +840,11 @@ class Checker {
                 fail("unsupported member method '" ~ e.token.text ~ "'", e.token); assert(0);
             case ExprKind.index:
                 auto array = typeOf(e.left);
+                if (array == ValueType.stringMap) {
+                    if (!matches(e.right, ValueType.stringType)) fail("map key must be string", e.token);
+                    e.inferredType = ValueType.stringMap;
+                    return ValueType.stringType;
+                }
                 if (!isArray(array)) fail("indexing requires an array", e.token);
                 if (typeOf(e.right) != ValueType.intType) fail("array index must be int", e.token);
                 if (array == ValueType.selfArray) e.objectClass = e.left.objectClass;
@@ -852,7 +875,7 @@ class Checker {
                     else if (op == ">") e.emittedOperator = ">=";
                     else if (op == ">=") e.emittedOperator = ">";
                 }
-                if (left != right || left == ValueType.voidType || left == ValueType.exceptionType || left == ValueType.selfType || isArray(left)) fail("operand type mismatch", e.token);
+                if (left != right || left == ValueType.voidType || left == ValueType.exceptionType || left == ValueType.selfType || left == ValueType.stringMap || isArray(left)) fail("operand type mismatch", e.token);
                 if (["==", "!="].canFind(op)) return ValueType.boolType;
                 if ((left == ValueType.intType || left == ValueType.decimalType || left == ValueType.stringType) && ["<", ">", "<=", ">="].canFind(op)) return ValueType.boolType;
                 if (left == ValueType.stringType && op == "+") { e.inferredType = ValueType.stringType; return ValueType.stringType; }
@@ -894,6 +917,7 @@ class Checker {
             case StmtKind.assignment:
                 auto variableType = typeOf(s.target);
                 if (!matches(s.expression, variableType, s.target.objectClass)) fail("assignment type mismatch", s.token);
+                if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.stringMap && s.assignmentOperator != "=") fail("compound assignment to a map entry is not supported", s.token);
                 s.type = variableType;
                 if (s.assignmentOperator != "=" && variableType != ValueType.intType &&
                     !(variableType == ValueType.stringType && s.assignmentOperator == "+=") &&
@@ -975,6 +999,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.exceptionType: return "Throwable";
         case ValueType.selfType: assert(objectClass !is null); return objectClass.emittedName;
         case ValueType.selfArray: assert(objectClass !is null); return "Z8Array!(" ~ objectClass.emittedName ~ ")";
+        case ValueType.stringMap: return "Z8StringMap";
         case ValueType.intArray: return "Z8Array!long";
         case ValueType.decimalArray: return "Z8Array!Z8Decimal";
         case ValueType.boolArray: return "Z8Array!bool";
@@ -1047,6 +1072,10 @@ private string emitExprRaw(Expression e) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return "(" ~ emitExpr(e.left) ~ ").z8_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
             }
+            if (e.inferredType == ValueType.stringMap) {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return "(" ~ emitExpr(e.left) ~ ").z8_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
+            }
             if (e.inferredType == ValueType.exceptionType) return "z8_message(" ~ emitExpr(e.left) ~ ")";
             if (e.inferredType == ValueType.decimalType) {
                 auto receiver = "(" ~ emitExpr(e.left) ~ ")";
@@ -1068,6 +1097,7 @@ private string emitExprRaw(Expression e) {
             auto value = "(" ~ emitExpr(e.left) ~ ").length";
             return e.token.text == "length" ? "cast(long)(" ~ value ~ ")" : "(" ~ value ~ " == 0)";
         case ExprKind.index:
+            if (e.inferredType == ValueType.stringMap) return "(" ~ emitExpr(e.left) ~ ").z8_get(" ~ emitExpr(e.right) ~ ")";
             return "(" ~ emitExpr(e.left) ~ ").z8_at(" ~ emitExpr(e.right) ~ ")";
         case ExprKind.castExpr: return emitExpr(e.left);
         case ExprKind.unary: return "(" ~ e.token.text ~ emitExpr(e.left) ~ ")";
@@ -1123,6 +1153,8 @@ private string emitSimple(Statement s) {
             (s.expression !is null ? emitExpr(s.expression) : defaultValue(s.type, s.objectClass));
     if (s.kind == StmtKind.expressionStmt) return emitExpr(s.expression);
     assert(s.kind == StmtKind.assignment);
+    if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.stringMap)
+        return "(" ~ emitExpr(s.target.left) ~ ").z8_add(" ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
     auto name = emitExpr(s.target);
     if (s.type == ValueType.decimalType && s.assignmentOperator != "=") {
         auto op = s.assignmentOperator == "+=" ? "add" : s.assignmentOperator == "-=" ? "sub" : s.assignmentOperator == "*=" ? "mul" : s.assignmentOperator == "/=" ? "div" : "mod";
@@ -1137,6 +1169,7 @@ private string defaultValue(ValueType type, Program objectClass = null) {
     if (type == ValueType.exceptionType) return "new Exception(null)";
     if (type == ValueType.decimalType) return "z8_decimal_from_int(0)";
     if (type == ValueType.selfType) return "z8_new!(" ~ dType(type, objectClass) ~ ")()";
+    if (type == ValueType.stringMap) return "new Z8StringMap()";
     if (isArray(type)) return "new " ~ dType(type, objectClass) ~ "()";
     if (type == ValueType.intType) return "0";
     if (type == ValueType.stringType) return `""w`;
@@ -1299,6 +1332,23 @@ private long z8_mod(long a, long b) {
 }
 private void z8_div_assign(ref long a, long b) { a = z8_div(a, b); }
 private void z8_mod_assign(ref long a, long b) { a = z8_mod(a, b); }
+class Z8StringMap {
+    private wstring[wstring] entries;
+    long z8_size() { return cast(long)entries.length; }
+    bool z8_isEmpty() { return entries.length == 0; }
+    void z8_clear() { entries.clear(); }
+    bool z8_containsKey(wstring key) { return (key in entries) !is null; }
+    bool z8_containsValue(wstring value) {
+        foreach (item; entries) if (item == value) return true;
+        return false;
+    }
+    void z8_add(wstring key, wstring value) { entries[key] = value; }
+    wstring z8_get(wstring key) {
+        auto found = key in entries;
+        if (found is null) throw new Exception("map key is absent");
+        return *found;
+    }
+}
 class Z8Array(T) {
     private T[] items;
     size_t z8_version;

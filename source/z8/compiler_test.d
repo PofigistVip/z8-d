@@ -106,6 +106,10 @@ unittest {
     rejects("class A { int x; static int f() { return x; } }");
     rejects("class A { static A x; }");
     rejects("class A { static A[] x; }");
+    rejects("class A { static string[string] x; }");
+    rejects("class A { static void f() { int[string] x; } }");
+    rejects("class A { static void f() { string[string] x; x[\"a\"] += \"b\"; } }");
+    rejects("class A { static void f() { string[string] x; int[] key; x.add(key, \"b\"); } }");
     rejects("class A { static void f() { A[] x = {true}; } }");
     rejects("class A { static int f() { return 1; } static int x = f(); }");
     rejects("class A { int x; static int f() { return A.x; } }");

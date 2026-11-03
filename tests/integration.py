@@ -96,6 +96,23 @@ void main() {
     assert rejected.returncode == 1 and "return type mismatch" in rejected.stderr
     assert not rejected.stdout
 
+    map_file = directory / "MapCheck.bl"
+    map_file.write_text('''class MapCheck {
+        static bool run() {
+            string[string] value;
+            string[string] alias = value;
+            value["key"] = "first";
+            alias["key"] = "second";
+            if (value["key"] != "second" || value.size() != 1) return false;
+            try { string absent = value["missing"]; } catch (exception e) { return true; }
+            return false;
+        }
+    }''', encoding="utf-8")
+    map_source = subprocess.check_output([str(exe), "compile", str(map_file)], text=True, encoding="utf-8")
+    generated.write_text(map_source + "\nvoid main() { assert(Z8_MapCheck.m_run()); }\n", encoding="utf-8")
+    subprocess.run(["dmd", str(generated), "-of=" + str(binary)], cwd=directory, check=True)
+    subprocess.run([str(binary)], cwd=directory, check=True)
+
     project = subprocess.run(
         [str(exe), "project", str(root / "examples" / "project")],
         capture_output=True, text=True, encoding="utf-8", check=True,
@@ -123,7 +140,7 @@ void main() {
     )
     assert built.returncode == 0, built.stderr
     assert subprocess.run([str(executable)], cwd=directory).returncode == 59
-    for entry, expected in [("demo.cases.Arithmetic.run", 37), ("demo.cases.Text.run", 41), ("demo.cases.Flow.run", 11), ("demo.cases.DecimalArray.run", 47), ("demo.cases.Overloads.run", 53), ("demo.cases.OverloadUser.run", 53), ("demo.cases.Rounding.run", 61), ("demo.cases.PrimitiveParse.run", 67), ("demo.cases.ArrayOperations.run", 54), ("demo.cases.StaticState.run", 70), ("demo.cases.StaticUser.run", 71), ("demo.cases.InstanceOverloads.run", 81), ("demo.cases.IntegerMethods.run", 89), ("demo.cases.ArrayAdvanced.run", 97), ("demo.cases.ObjectArrays.run", 13), ("demo.cases.InheritedOverloads.run", 99)]:
+    for entry, expected in [("demo.cases.Arithmetic.run", 37), ("demo.cases.Text.run", 41), ("demo.cases.Flow.run", 11), ("demo.cases.DecimalArray.run", 47), ("demo.cases.Overloads.run", 53), ("demo.cases.OverloadUser.run", 53), ("demo.cases.Rounding.run", 61), ("demo.cases.PrimitiveParse.run", 67), ("demo.cases.ArrayOperations.run", 54), ("demo.cases.StaticState.run", 70), ("demo.cases.StaticUser.run", 71), ("demo.cases.InstanceOverloads.run", 81), ("demo.cases.IntegerMethods.run", 89), ("demo.cases.ArrayAdvanced.run", 97), ("demo.cases.ObjectArrays.run", 13), ("demo.cases.InheritedOverloads.run", 99), ("demo.cases.StringMap.run", 103)]:
         built = subprocess.run([str(exe), "build", str(root / "examples" / "project"), entry, str(executable)],
                                capture_output=True, text=True, encoding="utf-8")
         assert built.returncode == 0, built.stderr
