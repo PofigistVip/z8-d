@@ -107,10 +107,15 @@ for value in ["1.25", "-1.25", "1.35", "-1.35", "0.04", "-0.04", "999.95"]:
         cases.append((value, "round", mode))
         d_lines.append(f'writeln(z8_decimal("{value}").z8_round(1, {mode}).z8_string());')
         java_lines.append(f'System.out.println(cap(n("{value}").setScale(1, RoundingMode.valueOf({mode}))).toPlainString());')
-for value in ["-1.5", "-0.5", "0.49999999999999994", "0.5", "1.5", "9223372036854775808"]:
+for value in ["-1.5", "-0.5", "0.49999999999999994", "0.5", "1.5", "9223372036854775808", "1e309", "-1e309", "1e-325"]:
     cases.append((value, "round-int", ""))
     d_lines.append(f'writeln(z8_decimal("{value}").z8_round_int());')
     java_lines.append(f'System.out.println(Math.round(n("{value}").doubleValue()));')
+for value in ["-9223372036854775809", "-1.1", "-0.0001", "0.000", "0.01", "1.9999999999999999", "9223372036854775808", "1e-325", "-1e-325", "1e309"]:
+    for method, java_expr in [("signum", "(long)Math.signum(x)"), ("ceil", "(long)Math.ceil(x)"), ("floor", "(long)Math.floor(x)")]:
+        cases.append((value, method, ""))
+        d_lines.append(f'writeln(z8_decimal("{value}").z8_{method}());')
+        java_lines.append(f'{{ double x = n("{value}").doubleValue(); System.out.println({java_expr}); }}')
 d_main = d_main.replace("// RANDOM_CASES", "\n".join(d_lines))
 java_main = java_main.replace("// RANDOM_CASES", "\n".join(java_lines))
 

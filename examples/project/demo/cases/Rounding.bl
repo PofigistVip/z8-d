@@ -4,6 +4,11 @@ public class Rounding {
         if (value.round(2).toString() != "1.26") return 1;
         if (decimal.parse("-1.25").round(1, 6).toString() != "-1.2") return 2;
         if (decimal.parse("-1.5").round() != -1) return 3;
+        if (decimal.parse("-1.25").floor() != -2 || decimal.parse("-1.25").ceil() != -1) return 4;
+        if (decimal.parse("1.9999999999999999").floor() != 2) return 5;
+        if (decimal.parse("1e-325").signum() != 0) return 6;
+        if (decimal.parse("-1e-325").ceil() != 0) return 7;
+        if (decimal.parse("1e309").round() != 9223372036854775807) return 8;
         return 61;
     }
 }

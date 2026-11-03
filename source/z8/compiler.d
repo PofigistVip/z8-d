@@ -768,6 +768,7 @@ class Checker {
                     if (e.token.text == "getMessage") return ValueType.stringType;
                 } else if (receiver == ValueType.decimalType) {
                     if (e.token.text == "toString") { checkArguments(e, []); return ValueType.stringType; }
+                    if (["signum", "ceil", "floor"].canFind(e.token.text)) { checkArguments(e, []); return ValueType.intType; }
                     if (e.token.text == "round") {
                         if (e.arguments.length == 0) return ValueType.intType;
                         checkArguments(e, e.arguments.length == 1 ? [ValueType.intType] : [ValueType.intType, ValueType.intType]);
@@ -1080,6 +1081,7 @@ private string emitExprRaw(Expression e) {
             if (e.inferredType == ValueType.decimalType) {
                 auto receiver = "(" ~ emitExpr(e.left) ~ ")";
                 if (e.token.text == "toString") return receiver ~ ".z8_string()";
+                if (["signum", "ceil", "floor"].canFind(e.token.text)) return receiver ~ ".z8_" ~ e.token.text ~ "()";
                 if (!e.arguments.length) return receiver ~ ".z8_round_int()";
                 string[] args; foreach (arg; e.arguments) args ~= emitExpr(arg);
                 return receiver ~ ".z8_round(" ~ args.join(", ") ~ ")";

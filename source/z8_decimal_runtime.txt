@@ -2,7 +2,7 @@ private import std.bigint : BigInt;
 private import std.string : indexOf;
 private import std.format : format;
 private import std.math : isFinite;
-private import std.math : floor;
+private import std.math : floor, ceil;
 
 private BigInt z8_pow10(uint n) { return BigInt(10) ^^ n; }
 private size_t z8_precision(BigInt value) {
@@ -121,14 +121,31 @@ struct Z8Decimal {
         }
         return make(quotient, target);
     }
+    private double z8_as_double() const {
+        import core.stdc.stdlib : strtod;
+        import std.string : toStringz;
+        auto text = z8_string().to!string;
+        return strtod(text.toStringz, null);
+    }
     long z8_round_int() const {
-        auto value = z8_string().to!string.to!double;
+        auto value = z8_as_double();
         if (value >= cast(double)long.max) return long.max;
         if (value <= cast(double)long.min) return long.min;
         auto rounded = floor(value);
         if (value - rounded >= 0.5) rounded += 1;
         return cast(long)rounded;
     }
+    private long z8_integral_double(double value) const {
+        if (value >= cast(double)long.max) return long.max;
+        if (value <= cast(double)long.min) return long.min;
+        return cast(long)value;
+    }
+    long z8_signum() const {
+        auto value = z8_as_double();
+        return value < 0 ? -1 : value > 0 ? 1 : 0;
+    }
+    long z8_ceil() const { return z8_integral_double(ceil(z8_as_double())); }
+    long z8_floor() const { return z8_integral_double(floor(z8_as_double())); }
     wstring z8_string() const {
         string digits = coefficient.to!string;
         string sign;
