@@ -1,10 +1,11 @@
 """Build a generated D program and check its observable results and diagnostics."""
 from pathlib import Path
+import os
 import subprocess
 import tempfile
 
 root = Path(__file__).resolve().parents[1]
-exe = root / ("z8d.exe" if __import__("os").name == "nt" else "z8d")
+exe = root / ("z8d.exe" if os.name == "nt" else "z8d")
 source = root / "examples" / "math.bl"
 result = subprocess.run([str(exe), "compile", str(source)], capture_output=True, text=True, encoding="utf-8", check=True)
 
@@ -22,13 +23,32 @@ void main() {
     assert(Z8_Math.m_divide(-7, 3) == -2);
     assert(Z8_Math.m_remainder(-7, 3) == -1);
     assert(Z8_Math.m_minimum() == long.min);
+    assert(Z8_Math.m_sumOddUntilSeven(100) == 16);
+    assert(Z8_Math.m_sumOddUntilSeven(0) == 0);
+    assert(Z8_Math.m_countDown(0) == 1);
+    assert(Z8_Math.m_countDown(4) == 4);
+    assert(Z8_Math.m_halve(16) == 4);
+    assert(Z8_Math.m_incrementInLoop(0) == 3);
+    assert(Z8_Math.m_divideInPlace(long.min, -1) == long.min);
+    assert(Z8_Math.m_defaultValues());
+    assert(Z8_Math.m_greeting("world"w) == "Hello, world!\\n"w);
+    assert(Z8_Math.m_emptyString());
+    assert(Z8_Math.m_unicodeLiteral() == [cast(wchar)0x0416, cast(wchar)0xD83D, cast(wchar)0xDE00]);
+    assert(Z8_Math.m_unicodeLength() == 3);
+    assert(Z8_Math.m_stringIsEmpty(""w));
+    assert(!Z8_Math.m_stringIsEmpty("x"w));
+    assert(Z8_Math.m_escapedLiteral() == [cast(wchar)65, 9, 34, 92, 39, 90]);
+    assert(Z8_Math.m_nestedLoops() == 3);
+    auto astral = [cast(wchar)0xD83D, cast(wchar)0xDE00].idup;
+    auto bmp = [cast(wchar)0xE000].idup;
+    assert(Z8_Math.m_compareStrings(astral, bmp));
     assert(!Z8_Math.m_nonzeroAndPositive(0));
     bool threw;
     try { Z8_Math.m_divide(1, 0); } catch (Exception) { threw = true; }
     assert(threw);
 }
 """, encoding="utf-8")
-    binary = directory / ("check.exe" if __import__("os").name == "nt" else "check")
+    binary = directory / ("check.exe" if os.name == "nt" else "check")
     subprocess.run(["dmd", str(generated), "-of=" + str(binary)], cwd=directory, check=True)
     subprocess.run([str(binary)], cwd=directory, check=True)
     bad = directory / "bad.bl"

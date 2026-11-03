@@ -29,4 +29,92 @@ public class Math {
     public static int minimum() {
         return -9223372036854775808;
     }
+
+    public static int sumOddUntilSeven(int limit) {
+        int sum = 0;
+        for (int i = 0; i < limit; i += 1) {
+            if (i > 7) break;
+            if (i % 2 == 0) continue;
+            sum += i;
+        }
+        return sum;
+    }
+
+    public static int countDown(int value) {
+        int count = 0;
+        do {
+            count += 1;
+            value -= 1;
+        } while (value > 0);
+        return count;
+    }
+
+    public static int halve(int value) {
+        int count = 0;
+        while (value > 1) {
+            value /= 2;
+            count += 1;
+        }
+        return count;
+    }
+
+    public static int incrementInLoop(int value) {
+        for (; value < 3; value += 1) noop();
+        return value;
+    }
+
+    public static void noop() { return; }
+
+    public static int divideInPlace(int a, int b) {
+        a /= b;
+        return a;
+    }
+
+    public static bool defaultValues() {
+        int count;
+        bool flag;
+        return count == 0 && !flag;
+    }
+
+    public static string greeting(string name) {
+        string message;
+        message += "Hello, ";
+        return message + name + "!\n";
+    }
+
+    public static bool emptyString() {
+        string value;
+        return value == "";
+    }
+
+    public static bool compareStrings(string a, string b) {
+        return a < b;
+    }
+
+    public static string unicodeLiteral() {
+        return "Ж😀";
+    }
+
+    public static int unicodeLength() {
+        return unicodeLiteral().length();
+    }
+
+    public static bool stringIsEmpty(string value) {
+        return value.isEmpty();
+    }
+
+    public static string escapedLiteral() {
+        return "A\t\"\\\'Z";
+    }
+
+    public static int nestedLoops() {
+        int sum = 0;
+        for (int i = 0; i < 3; i += 1) {
+            for (int j = 0; j < 3; j += 1) {
+                if (j == 1) break;
+                sum += 1;
+            }
+        }
+        return sum;
+    }
 }

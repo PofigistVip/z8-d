@@ -34,4 +34,18 @@ unittest {
     rejects("class A { static int f(int x) { int x = 1; return x; } }");
     rejects("class A { static int f() { return 1; } static int f() { return 2; } }");
     rejects("class A { static int f(void x) { return 1; } }");
+    rejects("class A { static void f() { break; } }");
+    rejects("class A { static void f() { continue; } }");
+    rejects("class A { static void f() { while (1) { break; } } }");
+    rejects("class A { static void f() { for (int i = 0; i < 1; i += 1) {} i = 2; } }");
+    rejects("class A { static void f() { bool x = true; x += true; } }");
+    rejects("class A { static void f() {} static bool g() { return f() == f(); } }");
+    rejects("class A { static void f() {} static int g() { return f(); } }");
+    rejects("class A { static void f() { for (; true; int x = 1) {} } }");
+    rejects("class A { static string f() { return 1; } }");
+    rejects("class A { static string f() { return \"a\" - \"b\"; } }");
+    rejects("class A { static void f() { string x = \"x\"; x -= \"y\"; } }");
+    rejects("class A { static int f() { return 1.length(); } }");
+    rejects("class A { static int f() { return \"x\".length(1); } }");
+    rejects("class A { static int f() { return \"x\".missing(); } }");
 }
