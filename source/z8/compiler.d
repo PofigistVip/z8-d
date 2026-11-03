@@ -13,10 +13,10 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, boolType, stringType, intArray, boolArray, stringArray }
+enum ValueType { voidType, intType, boolType, stringType, exceptionType, intArray, boolArray, stringArray }
 enum ExprKind { integer, boolean, stringLiteral, arrayLiteral, variable, call, memberCall, index, unary, binary, conditional }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
-                whileStmt, doWhileStmt, forStmt, forEachStmt, breakStmt, continueStmt }
+                whileStmt, doWhileStmt, forStmt, forEachStmt, breakStmt, continueStmt, throwStmt, tryStmt }
 
 class Expression {
     ExprKind kind;
@@ -36,6 +36,8 @@ class Statement {
     Statement[] children;
     Statement initial, step;
     string assignmentOperator;
+    Token catchName;
+    bool hasCatch, hasFinally;
     this(StmtKind kind, Token token) { this.kind = kind; this.token = token; }
 }
 struct Parameter { ValueType type; Token name; }
@@ -94,7 +96,8 @@ class Parser {
             case "int": result = ValueType.intType; break;
             case "bool": result = ValueType.boolType; break;
             case "string": result = ValueType.stringType; break;
-            default: throw new CompileException("only void, int, bool and string are supported", tokens[index-1].position);
+            case "exception": result = ValueType.exceptionType; break;
+            default: throw new CompileException("unsupported type", tokens[index-1].position);
         }
         if (accept("[")) {
             expect("]");
@@ -158,6 +161,28 @@ class Parser {
             if (current.text != ";") s.expression = initializer();
             expect(";"); return s;
         }
+        if (accept("throw")) {
+            auto s = new Statement(StmtKind.throwStmt, t); s.expression = expression(); expect(";"); return s;
+        }
+        if (accept("try")) {
+            auto s = new Statement(StmtKind.tryStmt, t);
+            if (current.text != "{") error("try requires a block");
+            s.children ~= statement();
+            if (accept("catch")) {
+                s.hasCatch = true; expect("(");
+                if (parseType() != ValueType.exceptionType) error("only exception catch is supported");
+                s.catchName = identifier(); expect(")");
+                if (current.text != "{") error("catch requires a block");
+                s.children ~= statement();
+            }
+            if (accept("finally")) {
+                s.hasFinally = true;
+                if (current.text != "{") error("finally requires a block");
+                s.children ~= statement();
+            }
+            if (!s.hasCatch && !s.hasFinally) error("try requires catch or finally");
+            return s;
+        }
         if (accept("if")) {
             auto s = new Statement(StmtKind.ifStmt, t);
             expect("("); s.expression = expression(); expect(")");
@@ -193,7 +218,7 @@ class Parser {
     }
     private Statement simpleStatement(bool allowDeclaration) {
         auto t = current;
-        if ((t.text == "int" || t.text == "bool" || t.text == "string") &&
+        if ((t.text == "int" || t.text == "bool" || t.text == "string" || t.text == "exception") &&
             (look(1).kind == TokenKind.identifier || (look(1).text == "[" && look(2).text == "]"))) {
             if (!allowDeclaration) error("variable declaration is not allowed here");
             auto s = new Statement(StmtKind.variable, t);
@@ -292,6 +317,7 @@ class Checker {
     private ValueType[string] variables;
     private ValueType returnType;
     private size_t loopDepth;
+    private size_t finallyDepth;
     private void fail(string message, Token t) { throw new CompileException(message, t.position); }
     void check(Program program, Program[string] allPrograms = null) {
         currentProgram = program;
@@ -320,7 +346,7 @@ class Checker {
             methods[m.name.text] = m;
         }
         foreach (m; program.methods) {
-            variables = null; returnType = m.returnType; loopDepth = 0;
+            variables = null; returnType = m.returnType; loopDepth = 0; finallyDepth = 0;
             foreach (p; m.parameters) {
                 if (p.type == ValueType.voidType) fail("parameter cannot be void", p.name);
                 if (p.name.text in variables) fail("duplicate parameter", p.name);
@@ -371,6 +397,9 @@ class Checker {
                     if (e.arguments.length != 0) fail("incorrect argument count", e.token);
                     if (e.token.text == "length") return ValueType.intType;
                     if (e.token.text == "isEmpty") return ValueType.boolType;
+                } else if (receiver == ValueType.exceptionType) {
+                    if (e.arguments.length != 0) fail("incorrect argument count", e.token);
+                    if (e.token.text == "getMessage") return ValueType.stringType;
                 } else if (isArray(receiver)) {
                     switch (e.token.text) {
                         case "size": case "isEmpty": case "clear":
@@ -402,7 +431,7 @@ class Checker {
                 fail("invalid unary operand", e.token); assert(0);
             case ExprKind.binary:
                 auto left = typeOf(e.left), right = typeOf(e.right), op = e.token.text;
-                if (left != right || left == ValueType.voidType || isArray(left)) fail("operand type mismatch", e.token);
+                if (left != right || left == ValueType.voidType || left == ValueType.exceptionType || isArray(left)) fail("operand type mismatch", e.token);
                 if (["==", "!="].canFind(op)) return ValueType.boolType;
                 if ((left == ValueType.intType || left == ValueType.stringType) && ["<", ">", "<=", ">="].canFind(op)) return ValueType.boolType;
                 if (left == ValueType.stringType && op == "+") { e.inferredType = ValueType.stringType; return ValueType.stringType; }
@@ -440,6 +469,7 @@ class Checker {
                     fail("string query cannot be used as a statement", s.token);
                 return false;
             case StmtKind.returnStmt:
+                if (finallyDepth) fail("return inside finally is not supported", s.token);
                 if (s.expression is null) { if (returnType != ValueType.voidType) fail("return value required", s.token); }
                 else if (returnType == ValueType.voidType || typeOf(s.expression, returnType) != returnType) fail("return type mismatch", s.token);
                 return true;
@@ -473,7 +503,28 @@ class Checker {
             case StmtKind.breakStmt:
             case StmtKind.continueStmt:
                 if (loopDepth == 0) fail(s.token.text ~ " outside loop", s.token);
+                if (finallyDepth) fail(s.token.text ~ " inside finally is not supported", s.token);
                 return false;
+            case StmtKind.throwStmt:
+                s.type = typeOf(s.expression);
+                if (s.type != ValueType.exceptionType && s.type != ValueType.stringType) fail("throw requires exception or string", s.token);
+                return true;
+            case StmtKind.tryStmt:
+                auto old = variables.dup;
+                auto tryReturns = checkStatement(s.children[0]);
+                bool catchReturns = true, finallyReturns;
+                if (s.hasCatch) {
+                    variables = old.dup;
+                    if (s.catchName.text in variables) fail("duplicate or shadowed variable", s.catchName);
+                    variables[s.catchName.text] = ValueType.exceptionType;
+                    catchReturns = checkStatement(s.children[1]);
+                }
+                variables = old.dup;
+                if (s.hasFinally) {
+                    ++finallyDepth; finallyReturns = checkStatement(s.children[$-1]); --finallyDepth;
+                }
+                variables = old;
+                return (tryReturns && catchReturns) || finallyReturns;
         }
     }
 }
@@ -482,6 +533,7 @@ private string dType(ValueType type) {
     final switch (type) {
         case ValueType.intType: return "long"; case ValueType.boolType: return "bool";
         case ValueType.voidType: return "void"; case ValueType.stringType: return "wstring";
+        case ValueType.exceptionType: return "Throwable";
         case ValueType.intArray: return "Z8Array!long";
         case ValueType.boolArray: return "Z8Array!bool";
         case ValueType.stringArray: return "Z8Array!wstring";
@@ -530,6 +582,7 @@ private string emitExpr(Expression e) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return "(" ~ emitExpr(e.left) ~ ").z8_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
             }
+            if (e.inferredType == ValueType.exceptionType) return "z8_message(" ~ emitExpr(e.left) ~ ")";
             auto value = "(" ~ emitExpr(e.left) ~ ").length";
             return e.token.text == "length" ? "cast(long)(" ~ value ~ ")" : "(" ~ value ~ " == 0)";
         case ExprKind.index:
@@ -571,12 +624,19 @@ private string emitStatement(Statement s) {
                 emitStatement(s.children[0]) ~ "}\n}\n";
         case StmtKind.breakStmt: return "break;\n";
         case StmtKind.continueStmt: return "continue;\n";
+        case StmtKind.throwStmt:
+            return "throw " ~ (s.type == ValueType.stringType ? "new Exception(z8_to_utf8(" ~ emitExpr(s.expression) ~ "))" : emitExpr(s.expression)) ~ ";\n";
+        case StmtKind.tryStmt:
+            auto result = "try " ~ emitStatement(s.children[0]);
+            if (s.hasCatch) result ~= "catch (Throwable v_" ~ s.catchName.text ~ ") " ~ emitStatement(s.children[1]);
+            if (s.hasFinally) result ~= "finally " ~ emitStatement(s.children[$-1]);
+            return result;
     }
 }
 private string emitSimple(Statement s) {
     if (s.kind == StmtKind.variable)
         return dType(s.type) ~ " v_" ~ s.token.text ~ " = " ~
-            (s.expression !is null ? emitExpr(s.expression) : isArray(s.type) ? "new " ~ dType(s.type) ~ "()" :
+            (s.expression !is null ? emitExpr(s.expression) : s.type == ValueType.exceptionType ? "new Exception(null)" : isArray(s.type) ? "new " ~ dType(s.type) ~ "()" :
              s.type == ValueType.intType ? "0" : s.type == ValueType.stringType ? `""w` : "false");
     if (s.kind == StmtKind.expressionStmt) return emitExpr(s.expression);
     assert(s.kind == StmtKind.assignment);
@@ -633,6 +693,9 @@ string compileSources(SourceUnit[] units) {
 
 private string emitPrograms(Program[] programs) {
     string result = `// Generated by z8-d. Supported Z8 subset only.
+private import std.conv : to;
+private string z8_to_utf8(wstring value) { return value.to!string; }
+private wstring z8_message(Throwable value) { return value.msg.to!wstring; }
 private long z8_div(long a, long b) {
     if (b == 0) throw new Exception("division by zero");
     if (a == long.min && b == -1) return long.min;

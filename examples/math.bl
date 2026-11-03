@@ -186,4 +186,37 @@ public class Math {
         int[] values = {1, 2};
         for (int value : values) values.add(value);
     }
+
+    public static int caughtMessageLength() {
+        try {
+            throw "bad😀";
+        } catch (exception problem) {
+            return problem.getMessage().length();
+        }
+    }
+
+    public static int divisionOrFallback(int a, int b) {
+        try {
+            return a / b;
+        } catch (exception problem) {
+            return 77;
+        }
+    }
+
+    public static int cleanupOnReturn(int[] values) {
+        try {
+            return 1;
+        } finally {
+            values.add(5);
+        }
+    }
+
+    public static bool caughtEmptyMessage() {
+        exception problem;
+        try {
+            throw problem;
+        } catch (exception caught) {
+            return caught.getMessage().isEmpty();
+        }
+    }
 }

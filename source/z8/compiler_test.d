@@ -90,4 +90,10 @@ unittest {
     rejects("class A { static int f() { return 1 ? 2 : 3; } }");
     rejects("class A { static int f() { return true ? 2 : false; } }");
     rejects("class A { static int f() { int[] x; for (int y : x) {} return y; } }");
+    rejects("class A { static void f() { throw 1; } }");
+    rejects("class A { static void f() { try {} } }");
+    rejects("class A { static void f() { try {} catch (int e) {} } }");
+    rejects("class A { static void f() { try {} finally { return; } } }");
+    rejects("class A { static int f() { try { return 1; } catch (exception e) {} } }");
+    rejects("class A { static void f() { try {} catch (exception e) {} e.getMessage(); } }");
 }

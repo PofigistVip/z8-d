@@ -58,6 +58,13 @@ void main() {
     bool modified;
     try { Z8_Math.m_modifyDuringIteration(); } catch (Exception) { modified = true; }
     assert(modified);
+    assert(Z8_Math.m_caughtMessageLength() == 5);
+    assert(Z8_Math.m_divisionOrFallback(10, 0) == 77);
+    assert(Z8_Math.m_divisionOrFallback(10, 2) == 5);
+    auto cleanup = new Z8Array!long();
+    assert(Z8_Math.m_cleanupOnReturn(cleanup) == 1);
+    assert(cleanup.z8_size() == 1 && cleanup.z8_get(0) == 5);
+    assert(Z8_Math.m_caughtEmptyMessage());
     auto astral = [cast(wchar)0xD83D, cast(wchar)0xDE00].idup;
     auto bmp = [cast(wchar)0xE000].idup;
     assert(Z8_Math.m_compareStrings(astral, bmp));
