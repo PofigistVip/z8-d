@@ -1,5 +1,7 @@
 public class PrimitiveParse {
     public static int run() {
+        if (int.parse("١٢٣") != 123 || int.parse("ＦＦ", 16) != 255 || int.parse("१२", 8) != 10) return 30;
+        if (decimal.parse("１２.٣٤").toString() != "12.34" || decimal.parse("١e٣").toString() != "1000") return 31;
         if (!bool.parse("YeS") || !bool.parse("1") || bool.parse("NO") || bool.parse("")) return 1;
         string value = " \tHello \n";
         if (value.trim() != "Hello" || value.trimLeft() != "Hello \n" || value.trimRight() != " \tHello") return 2;

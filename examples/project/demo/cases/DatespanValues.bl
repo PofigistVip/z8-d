@@ -1,5 +1,7 @@
 public class DatespanValues {
     public static int run() {
+        datespan unicode = datespan.parse("١ ٠٢:٠٣:٠٤");
+        if (unicode.days() != 1 || unicode.hours() != 2 || unicode.minutes() != 3 || unicode.seconds() != 4) return 30;
         datespan value = '2 03:04:05';
         if (value.days() != 2 || value.hours() != 3 || value.minutes() != 4 || value.seconds() != 5) return 1;
         if (value.milliseconds() != 183845000 || value.totalHours() != 51 || value.totalSeconds() != 183845) return 2;

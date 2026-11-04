@@ -140,7 +140,7 @@ void z8_date_setTime(Z8Date x, long hour, long minute, long second, long millise
 
 private Z8Date z8_date_parse_impl(wstring input, bool iso) {
     if (input is null) return null;
-    auto text = input.to!string;
+    auto text = input;
     if (!text.length) {
         if (iso) return z8_date_min;
         auto result = new Z8Date(z8_date_min.value);
@@ -155,20 +155,20 @@ private Z8Date z8_date_parse_impl(wstring input, bool iso) {
     }
     if (text.length < 16 || text[4] != '-' || text[7] != '-' || (text[10] != 'T' && text[10] != ' ') || text[13] != ':')
         throw new Exception("invalid date");
-    auto year = text[0..4].to!int, month = text[5..7].to!int, day = text[8..10].to!int;
-    auto hour = text[11..13].to!int, minute = text[14..16].to!int;
+    auto year = z8_java_normalize_digits(text[0..4]).to!int, month = z8_java_normalize_digits(text[5..7]).to!int, day = z8_java_normalize_digits(text[8..10]).to!int;
+    auto hour = z8_java_normalize_digits(text[11..13]).to!int, minute = z8_java_normalize_digits(text[14..16]).to!int;
     int second, millisecond;
     size_t index = 16;
     if (index < text.length && text[index] == ':') {
         if (index + 3 > text.length) throw new Exception("invalid date");
-        second = text[index+1..index+3].to!int;
+        second = z8_java_normalize_digits(text[index+1..index+3]).to!int;
         index += 3;
     }
     if (index < text.length && text[index] == '.') {
         auto begin = ++index;
-        while (index < text.length && text[index] >= '0' && text[index] <= '9') ++index;
+        while (index < text.length && z8_java_digit(text[index]) >= 0 && z8_java_digit(text[index]) < 10) ++index;
         if (begin == index) throw new Exception("invalid date");
-        millisecond = text[begin..index].to!int;
+        millisecond = z8_java_normalize_digits(text[begin..index]).to!int;
     }
     bool convertToDefault;
     bool hasOffset;
@@ -182,12 +182,14 @@ private Z8Date z8_date_parse_impl(wstring input, bool iso) {
                 (index + 9 == text.length && text[index+6] != ':'))
                 throw new Exception("invalid date offset");
             auto sign = text[index] == '-' ? -1 : 1;
-            auto offsetHours = text[index+1..index+3].to!int;
-            auto offsetMinutes = text[index+4..index+6].to!int;
-            auto offsetSeconds = index + 9 == text.length ? text[index+7..index+9].to!int : 0;
+            auto offsetHours = z8_java_normalize_digits(text[index+1..index+3]).to!int;
+            auto offsetMinutes = z8_java_normalize_digits(text[index+4..index+6]).to!int;
+            auto offsetSeconds = index + 9 == text.length ? z8_java_normalize_digits(text[index+7..index+9]).to!int : 0;
             // date.parse uses SimpleDateFormat for this exact ISO spelling;
             // parseIsoString follows the original's separate offset calculation.
             convertToDefault = !iso && index == 19 && text.length == 25;
+            if (convertToDefault) foreach (part; [text[0..4], text[5..7], text[8..10], text[11..13], text[14..16], text[17..19], text[20..22], text[23..25]])
+                foreach (c; part) if (c < '0' || c > '9') convertToDefault = false;
             offset = sign * offsetHours * 3600 + (convertToDefault ? sign : 1) * offsetMinutes * 60 + offsetSeconds;
             hasOffset = true;
             index = text.length;
@@ -216,9 +218,9 @@ Z8Date z8_date_parse(wstring input, wstring pattern) {
         auto begin = ti;
         if (ti < input.length && (input[ti] == '-' || input[ti] == '+')) ++ti;
         auto digits = ti;
-        while (ti < input.length && input[ti] >= '0' && input[ti] <= '9' && (!fixed || ti - digits < width)) ++ti;
+        while (ti < input.length && z8_java_digit(input[ti]) >= 0 && z8_java_digit(input[ti]) < 10 && (!fixed || ti - digits < width)) ++ti;
         if (ti == digits || (fixed && ti - digits != width)) throw new Exception("invalid date");
-        return input[begin .. ti].to!int;
+        return z8_java_normalize_digits(input[begin .. ti]).to!int;
     }
     void literal(wchar c) {
         if (ti == input.length || input[ti++] != c) throw new Exception("invalid date");
@@ -239,7 +241,7 @@ Z8Date z8_date_parse(wstring input, wstring pattern) {
                 auto begin = ti;
                 year = number(width, adjacent);
                 hasWeekYear = c == 'Y';
-                twoDigitYear = width <= 2 && ti - begin == 2 && input[begin] >= '0' && input[begin] <= '9';
+                twoDigitYear = width <= 2 && ti - begin == 2 && z8_java_digit(input[begin]) >= 0 && z8_java_digit(input[begin]) < 10;
                 break;
             case 'M': case 'L': month = width > 2 ? z8_date_parse_month(input, ti) : number(width, adjacent); break;
             case 'd': day = number(width, adjacent); useDayOfYear = false; explicitDay = true; break;

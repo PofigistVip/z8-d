@@ -20,18 +20,18 @@ Z8Datespan z8_datespan_literal(string text) {
         clock[1].to!int * z8_minute + clock[2].to!int * z8_second);
 }
 Z8Datespan z8_datespan_parse(wstring input) {
-    auto text = z8_string_required(input).to!string;
+    auto text = z8_string_required(input);
     long days, hours, minutes, seconds;
-    if (text.length < 3) seconds = text.to!int;
-    else if (text.length < 6) { minutes = text[0..2].to!int; seconds = text[3..5].to!int; }
-    else if (text.length < 9) { hours = text[0..2].to!int; minutes = text[3..5].to!int; seconds = text[6..8].to!int; }
+    if (text.length < 3) seconds = z8_java_normalize_digits(text).to!int;
+    else if (text.length < 6) { minutes = z8_java_normalize_digits(text[0..2]).to!int; seconds = z8_java_normalize_digits(text[3..5]).to!int; }
+    else if (text.length < 9) { hours = z8_java_normalize_digits(text[0..2]).to!int; minutes = z8_java_normalize_digits(text[3..5]).to!int; seconds = z8_java_normalize_digits(text[6..8]).to!int; }
     else {
         import std.string : indexOf;
         auto space = text.indexOf(' ');
         if (space < 0 || cast(size_t)space + 9 > text.length) throw new Exception("invalid datespan");
         auto i = cast(size_t)space;
-        days = text[0..i].to!int; hours = text[i+1..i+3].to!int;
-        minutes = text[i+4..i+6].to!int; seconds = text[i+7..i+9].to!int;
+        days = z8_java_normalize_digits(text[0..i]).to!int; hours = z8_java_normalize_digits(text[i+1..i+3]).to!int;
+        minutes = z8_java_normalize_digits(text[i+4..i+6]).to!int; seconds = z8_java_normalize_digits(text[i+7..i+9]).to!int;
     }
     return new Z8Datespan(days * z8_day + hours * z8_hour + minutes * z8_minute + seconds * z8_second);
 }

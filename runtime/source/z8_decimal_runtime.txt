@@ -208,7 +208,8 @@ Z8Decimal z8_decimal(string input) {
 }
 Z8Decimal z8_decimal_parse(wstring value) {
     value = z8_string_required(value);
-    return value.length ? z8_decimal(z8_to_utf8(value)) : z8_decimal_from_int(0);
+    if (!value.length) return z8_decimal_from_int(0);
+    return z8_decimal(z8_java_normalize_digits(value));
 }
 
 // The original Java backend emits decimal literals as double literals and the

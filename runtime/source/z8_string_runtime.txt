@@ -179,6 +179,29 @@ wstring z8_int_toString(long value, long base = 10) {
 }
 wstring z8_int_toHexString(long value) { return z8_int_format(cast(ulong)value, 16); }
 wstring z8_int_toBinaryString(long value) { return z8_int_format(cast(ulong)value, 2); }
+int z8_java_digit(wchar c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'z') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'Z') return c - 'A' + 10;
+    if (c >= 0xFF21 && c <= 0xFF3A) return c - 0xFF21 + 10;
+    if (c >= 0xFF41 && c <= 0xFF5A) return c - 0xFF41 + 10;
+    immutable wchar[] starts = [0x0660,0x06F0,0x07C0,0x0966,0x09E6,0x0A66,0x0AE6,0x0B66,0x0BE6,
+        0x0C66,0x0CE6,0x0D66,0x0E50,0x0ED0,0x0F20,0x1040,0x1090,0x17E0,0x1810,0x1946,
+        0x19D0,0x1A80,0x1A90,0x1B50,0x1BB0,0x1C40,0x1C50,0xA620,0xA8D0,0xA900,
+        0xA9D0,0xAA50,0xABF0,0xFF10];
+    foreach (start; starts) if (c >= start && c < start + 10) return c - start;
+    return -1;
+}
+string z8_java_normalize_digits(wstring value) {
+    string normalized;
+    foreach (wchar c; value) {
+        auto digit = z8_java_digit(c);
+        if (digit >= 0 && digit < 10) normalized ~= cast(char)('0' + digit);
+        else if (c < 128) normalized ~= cast(char)c;
+        else throw new Exception("invalid numeric character");
+    }
+    return normalized;
+}
 long z8_int_parse(wstring value, long radix = 10) {
     auto base = cast(int)radix;
     if (base < 2 || base > 36 || value.length == 0) throw new Exception("invalid integer");
@@ -189,8 +212,7 @@ long z8_int_parse(wstring value, long radix = 10) {
     if (i == value.length) throw new Exception("invalid integer");
     ulong magnitude, limit = cast(ulong)long.max + (negative ? 1UL : 0UL);
     for (; i < value.length; ++i) {
-        auto c = value[i];
-        int digit = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'z' ? c - 'a' + 10 : c >= 'A' && c <= 'Z' ? c - 'A' + 10 : -1;
+        int digit = z8_java_digit(value[i]);
         if (digit < 0 || digit >= base || magnitude > (limit - cast(ulong)digit) / cast(ulong)base)
             throw new Exception("invalid integer");
         magnitude = magnitude * cast(ulong)base + cast(ulong)digit;
