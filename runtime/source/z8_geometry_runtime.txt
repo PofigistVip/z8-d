@@ -5,7 +5,87 @@ class Z8Geometry {
     double x = 0, y = 0;
     Z8Geometry[] children;
     bool hasChildren;
+    wstring rawHex;
+    bool parsed = true;
     override bool opEquals(Object other) { return z8_geometry_equals(this, cast(Z8Geometry)other); }
+}
+
+Z8Geometry z8_geometry_fromHexString(wstring text) {
+    text = z8_string_required(text);
+    auto result = new Z8Geometry();
+    if (text.length) { result.rawHex = text; result.parsed = false; }
+    return result;
+}
+private void z8_geometry_ensure(Z8Geometry value) {
+    z8_nonnull(value);
+    if (value.parsed) return;
+    auto text = value.rawHex;
+    size_t position;
+    int nibble(wchar c) {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        throw new Exception("invalid geometry hex digit");
+    }
+    ubyte readByte() {
+        if (position + 2 > text.length) throw new Exception("truncated geometry");
+        auto result = cast(ubyte)((nibble(text[position]) << 4) | nibble(text[position + 1]));
+        position += 2; return result;
+    }
+    uint readInt() {
+        uint result;
+        foreach (i; 0 .. 4) result |= cast(uint)readByte() << (8 * i);
+        return result;
+    }
+    double readDouble() {
+        union Bits { double number; ulong bits; }
+        Bits bits; bits.bits = 0;
+        foreach (i; 0 .. 8) bits.bits |= cast(ulong)readByte() << (8 * i);
+        return bits.number;
+    }
+    Z8Geometry readPoint(int srs) {
+        auto point = new Z8Geometry();
+        point.shape = 1; point.srs = srs; point.x = readDouble(); point.y = readDouble();
+        return point;
+    }
+    Z8Geometry[] readPoints(int srs) {
+        auto count = cast(int)readInt();
+        if (count < 0 || cast(size_t)count > (text.length - position) / 32) throw new Exception("invalid geometry point count");
+        Z8Geometry[] points;
+        foreach (_; 0 .. count) points ~= readPoint(srs);
+        return points;
+    }
+    Z8Geometry readGeometry() {
+        if (readByte() != 1) throw new Exception("unsupported geometry byte order");
+        auto type = readInt();
+        if (type & 0xC0000000u) throw new Exception("unsupported geometry dimensions");
+        auto srs = (type & 0x20000000u) != 0 ? cast(int)readInt() : 0;
+        if (srs < 0) srs = 0;
+        auto shape = cast(int)(type & 0x1FFFFFFFu);
+        if (shape == 1) return readPoint(srs);
+        auto result = new Z8Geometry();
+        result.shape = shape; result.srs = srs; result.hasChildren = true;
+        if (shape == 2) result.children = readPoints(srs);
+        else if (shape == 3) {
+            auto count = cast(int)readInt();
+            if (count < 0 || cast(size_t)count > (text.length - position) / 8) throw new Exception("invalid geometry ring count");
+            foreach (_; 0 .. count) {
+                auto ring = new Z8Geometry();
+                ring.shape = 0; ring.srs = srs; ring.hasChildren = true; ring.children = readPoints(srs);
+                result.children ~= ring;
+            }
+        } else if (shape >= 4 && shape <= 7) {
+            auto count = cast(int)readInt();
+            if (count < 0 || cast(size_t)count > (text.length - position) / 10) throw new Exception("invalid geometry component count");
+            foreach (_; 0 .. count) result.children ~= readGeometry();
+        } else throw new Exception("unsupported geometry shape");
+        return result;
+    }
+    auto decoded = readGeometry();
+    value.shape = decoded.shape; value.srs = decoded.srs;
+    value.x = decoded.x; value.y = decoded.y;
+    value.children = decoded.children; value.hasChildren = decoded.hasChildren;
+    value.parsed = true;
 }
 
 Z8Geometry z8_geometry_none(long srs) {
@@ -35,17 +115,17 @@ Z8Geometry z8_geometry_ring(Z8Array!Z8Geometry values) { return z8_geometry_comp
 Z8Geometry z8_geometry_polygon(Z8Array!Z8Geometry values) { return z8_geometry_compound(values, 3); }
 Z8Geometry z8_geometry_collection(Z8Array!Z8Geometry values) { return z8_geometry_compound(values, 7); }
 Z8Array!Z8Geometry z8_geometry_points(Z8Geometry value) {
-    z8_nonnull(value);
+    z8_geometry_ensure(value);
     if (!value.hasChildren) throw new Exception("geometry has no point list");
     return new Z8Array!Z8Geometry(value.children.dup);
 }
-long z8_geometry_shape(Z8Geometry value) { return z8_nonnull(value).shape; }
-long z8_geometry_srs(Z8Geometry value) { return z8_nonnull(value).srs; }
+long z8_geometry_shape(Z8Geometry value) { z8_geometry_ensure(value); return value.shape; }
+long z8_geometry_srs(Z8Geometry value) { z8_geometry_ensure(value); return value.srs; }
 private Z8Decimal z8_geometry_decimal(double value) { return z8_decimal_literal(format("%.17g", value)); }
-Z8Decimal z8_geometry_x(Z8Geometry value) { return z8_geometry_decimal(z8_nonnull(value).x); }
-Z8Decimal z8_geometry_y(Z8Geometry value) { return z8_geometry_decimal(z8_nonnull(value).y); }
+Z8Decimal z8_geometry_x(Z8Geometry value) { z8_geometry_ensure(value); return z8_geometry_decimal(value.x); }
+Z8Decimal z8_geometry_y(Z8Geometry value) { z8_geometry_ensure(value); return z8_geometry_decimal(value.y); }
 private double[4] z8_geometry_bounds(Z8Geometry value) {
-    z8_nonnull(value);
+    z8_geometry_ensure(value);
     if (value.shape == -1 || value.shape == 1) return [value.x, value.y, value.x, value.y];
     if (!value.hasChildren) throw new Exception("geometry has no point list");
     double[4] bounds = [0.0, 0.0, 0.0, 0.0];
@@ -70,13 +150,14 @@ Z8Decimal z8_geometry_width(Z8Geometry value) { auto b = z8_geometry_bounds(valu
 Z8Decimal z8_geometry_height(Z8Geometry value) { auto b = z8_geometry_bounds(value); return z8_geometry_decimal(b[3] - b[1]); }
 private double z8_geometry_length_value(Z8Geometry value) {
     import std.math : sqrt;
-    z8_nonnull(value);
+    z8_geometry_ensure(value);
     if (value.shape == -1 || value.shape == 1 || value.shape == 4) return 0;
     if (!value.hasChildren) throw new Exception("geometry has no point list");
     double result = 0;
     if (value.shape == 2) {
         foreach (i; 0 .. value.children.length) if (i + 1 < value.children.length) {
             auto a = z8_nonnull(value.children[i]), b = z8_nonnull(value.children[i + 1]);
+            z8_geometry_ensure(a); z8_geometry_ensure(b);
             if (a.shape != 1 || b.shape != 1) throw new Exception("line contains non-point geometry");
             auto dx = a.x - b.x, dy = a.y - b.y;
             result += sqrt(dx * dx + dy * dy);
@@ -88,7 +169,7 @@ private double z8_geometry_length_value(Z8Geometry value) {
 }
 Z8Decimal z8_geometry_length(Z8Geometry value) { return z8_geometry_decimal(z8_geometry_length_value(value)); }
 Z8Geometry z8_geometry_center(Z8Geometry value) {
-    z8_nonnull(value);
+    z8_geometry_ensure(value);
     if (value.shape == -1 || value.shape == 1) return value;
     auto b = z8_geometry_bounds(value);
     auto result = new Z8Geometry();
@@ -99,6 +180,7 @@ Z8Geometry z8_geometry_center(Z8Geometry value) {
 
 wstring z8_geometry_to_string(Z8Geometry value) {
     z8_nonnull(value);
+    if (value.rawHex !is null) return value.rawHex;
     if (value.shape == -1) return ""w;
     string result;
     void putByte(ubyte b) { result ~= format("%02X", cast(uint)b); }
@@ -108,14 +190,15 @@ wstring z8_geometry_to_string(Z8Geometry value) {
         Bits valueBits; valueBits.number = n;
         foreach (i; 0 .. 8) putByte(cast(ubyte)(valueBits.bits >> (i * 8)));
     }
-    void putPoint(Z8Geometry point) { z8_nonnull(point); putDouble(point.x); putDouble(point.y); }
+    void putPoint(Z8Geometry point) { z8_geometry_ensure(point); putDouble(point.x); putDouble(point.y); }
     void writePoints(Z8Geometry shape) {
+        z8_geometry_ensure(shape);
         if (!shape.hasChildren) throw new Exception("geometry has no point list");
         putInt(cast(uint)shape.children.length);
         foreach (point; shape.children) putPoint(point);
     }
     void writeGeometry(Z8Geometry shape) {
-        z8_nonnull(shape);
+        z8_geometry_ensure(shape);
         putByte(1);
         putInt(shape.srs != 0 ? cast(uint)shape.shape | 0x20000000u : cast(uint)shape.shape);
         if (shape.srs != 0) putInt(cast(uint)shape.srs);
@@ -144,6 +227,6 @@ long z8_geometry_hashCode(Z8Geometry value) {
     return cast(long)cast(int)hash;
 }
 bool z8_geometry_equals(Z8Geometry left, Z8Geometry right) {
-    if (left is null || right is null || left.shape == -1) return false;
+    if (left is null || right is null || (left.rawHex is null && left.shape == -1)) return false;
     return z8_geometry_to_string(left) == z8_geometry_to_string(right);
 }

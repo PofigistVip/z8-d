@@ -477,6 +477,9 @@ class Checker {
                     checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_file_" ~ e.token.text; return ValueType.stringType;
                 }
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "geometry") {
+                    if (e.token.text == "fromHexString") {
+                        checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_geometry_fromHexString"; return ValueType.geometryType;
+                    }
                     if (e.token.text == "none") {
                         checkArguments(e, [ValueType.intType]); e.builtinCall = "z8_geometry_none"; return ValueType.geometryType;
                     }

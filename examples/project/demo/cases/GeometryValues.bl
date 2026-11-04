@@ -9,6 +9,11 @@ public class GeometryValues {
         if (point.center().x() != 1.5) return 5;
         string encoded = point.toString();
         if (encoded != "0101000020E6100000000000000000F83F00000000000002C0") return 6;
+        geometry decoded = geometry.fromHexString(encoded.toLowerCase());
+        if (decoded.toString() != encoded.toLowerCase() || decoded.shape() != geometry.Point || decoded.y() != -2.25) return 17;
+        geometry invalid = geometry.fromHexString("GG");
+        if (invalid.toString() != "GG") return 18;
+        try { int shape = invalid.shape(); return 19; } catch (exception expected) {}
         primary boxed = point;
         if (!(boxed instanceof geometry) || ((geometry)boxed).srs() != 4326) return 7;
         if (boxed.toString() != encoded || boxed.hashCode() != point.hashCode()) return 8;
@@ -19,6 +24,8 @@ public class GeometryValues {
         if (line.length() != 5.0 || line.width() != 3.0 || line.height() != 4.0) return 11;
         if (line.center().x() != 1.5 || line.center().y() != 2.0) return 12;
         if (line.toString() != "0102000020E6100000020000000000000000000000000000000000000000000000000008400000000000001040") return 15;
+        geometry decodedLine = geometry.fromHexString(line.toString());
+        if (decodedLine.points().size() != 2 || decodedLine.length() != 5.0) return 20;
         geometry[] components = {line};
         geometry group = geometry.collection(components);
         if (group.shape() != geometry.Collection || group.length() != 5.0) return 13;
@@ -27,6 +34,10 @@ public class GeometryValues {
         geometry polygon = geometry.polygon(rings);
         if (polygon.shape() != geometry.Polygon || polygon.width() != 3.0) return 14;
         if (polygon.toString() != "0103000020E610000001000000020000000000000000000000000000000000000000000000000008400000000000001040") return 16;
+        geometry decodedPolygon = geometry.fromHexString(polygon.toString());
+        if (decodedPolygon.points().first().points().size() != 2 || decodedPolygon.width() != 3.0) return 21;
+        geometry decodedGroup = geometry.fromHexString(group.toString());
+        if (decodedGroup.shape() != geometry.Collection || decodedGroup.length() != 5.0) return 22;
         return 199;
     }
 }
