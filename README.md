@@ -44,6 +44,7 @@ python tests/integration.py
 python tests/compound_assignment.py
 python tests/map_initializers.py
 python tests/integer_maps.py
+python tests/guid_maps.py
 python tests/qualified_names.py
 python tests/records.py
 python tests/decimal_oracle.py
@@ -302,7 +303,8 @@ Unicode D и может отличаться от Java при специфичн
 Типы массивов объектов должны совпадать; элементы могут принадлежать классам-наследникам.
 Для отображений поддерживаются `string[string]`, `primary[string]`, `int[string]`, `int[int]`,
 `string[int]`, `primary[int]`, а также `bool` и `decimal` со строковыми или
-целочисленными ключами: создание, передача по ссылке,
+целочисленными ключами. Для `guid`-ключей поддерживаются значения `string`,
+`int`, `bool`, `decimal` и `primary`. Доступны создание, передача по ссылке,
 чтение и присваивание по ключу, `add` (значения или другого отображения), `get`,
 `remove`, `keys`, `values`, `size`, `isEmpty`, `containsKey`, операторы `+` и `+=`,
 `containsValue` и `clear`. Результат отсутствующего ключа можно сравнить с `null`

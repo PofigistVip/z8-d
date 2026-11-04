@@ -25,12 +25,15 @@ unittest {
         bool[int] flags = {(1, true)};
         decimal[string] prices = {("a", 1.0)};
         if (flags[1] && prices["a"] != null) return 3;
+        string[guid] names = {(guid.create(1), "one")};
+        if (names[guid.create(1)] != "one") return 4;
         if (values.containsKey(absent) && labels[1] == "one") return values[3];
         return 0;
     } }});
     rejects(q{class A { static void f() { int[int] x = {("a", 1)}; } }});
     rejects(q{class A { static void f() { string[int] x; x.add("a", "b"); } }});
     rejects(q{class A { static void f() { decimal[int] x = {(1, 2)}; } }});
+    rejects(q{class A { static void f() { string[guid] x = {(1, "wrong")}; } }});
 }
 
 unittest {

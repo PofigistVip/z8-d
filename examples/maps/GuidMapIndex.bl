@@ -1,0 +1,22 @@
+public class GuidMapIndex {
+    public static int run() {
+        guid key = guid.create(7);
+        int[guid] values;
+        values[key] = 4;
+        values[null] = null;
+        if (values[guid.create(7)] != 4 || !values.containsKey(null) || values[null] != null) return 1;
+        string[guid] names;
+        names[key] = "seven";
+        if (names[guid.create(7)] != "seven") return 2;
+        bool[guid] flags;
+        flags[key] = true;
+        if (!flags[guid.create(7)]) return 3;
+        decimal[guid] amounts;
+        amounts[key] = 2;
+        if (amounts[guid.create(7)] != 2) return 4;
+        primary[guid] mixed;
+        mixed[key] = "value";
+        if ((string)mixed[guid.create(7)] != "value") return 5;
+        return 145;
+    }
+}

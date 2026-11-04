@@ -1,0 +1,91 @@
+// Hash GUIDs by their value while retaining the original key for keys().
+private struct Z8GuidMapKey { ulong major, minor; }
+
+class Z8GuidMap(V) {
+    static if (is(V == long) || is(V == bool) || is(V == Z8Decimal)) alias Element = Z8Optional!V;
+    else static if (is(V == wstring) || is(V == Z8Primary)) alias Element = V;
+    else static assert(0, "unsupported GUID-key map value");
+    private struct Entry { Z8Guid key; Element value; }
+    private Entry[Z8GuidMapKey] entries;
+    private bool hasNullKey;
+    private Element nullKeyValue;
+
+    private static Z8GuidMapKey keyOf(Z8Guid key) { return Z8GuidMapKey(key.majorBits, key.minorBits); }
+    private static bool valueEquals(Element left, Element right) {
+        static if (is(V == long) || is(V == bool) || is(V == Z8Decimal))
+            return left.present == right.present && (!left.present || left.value == right.value);
+        else static if (is(V == wstring)) return z8_string_equals(left, right);
+        else return left is right || (left !is null && left == right);
+    }
+
+    long z8_size() { return cast(long)entries.length + (hasNullKey ? 1 : 0); }
+    bool z8_isEmpty() { return entries.length == 0 && !hasNullKey; }
+    void z8_clear() { entries.clear(); hasNullKey = false; nullKeyValue = Element.init; }
+    bool z8_containsKey(Z8Guid key) { return key is null ? hasNullKey : (keyOf(key) in entries) !is null; }
+    bool z8_containsValue(Element value) {
+        if (hasNullKey && valueEquals(value, nullKeyValue)) return true;
+        foreach (entry; entries) if (valueEquals(value, entry.value)) return true;
+        return false;
+    }
+    Element z8_add(Z8Guid key, Element value) {
+        if (key is null) {
+            auto previous = hasNullKey ? nullKeyValue : Element.init;
+            hasNullKey = true; nullKeyValue = value; return previous;
+        }
+        auto normalized = keyOf(key);
+        auto found = normalized in entries;
+        if (found !is null) {
+            auto previous = found.value;
+            found.value = value;
+            return previous;
+        }
+        entries[normalized] = Entry(key, value);
+        return Element.init;
+    }
+    void z8_add(Z8GuidMap!V other) {
+        z8_nonnull(other);
+        if (other is this) return;
+        foreach (entry; other.entries) z8_add(entry.key, entry.value);
+        if (other.hasNullKey) z8_add(null, other.nullKeyValue);
+    }
+    Element z8_get(Z8Guid key) {
+        if (key is null) return hasNullKey ? nullKeyValue : Element.init;
+        auto found = keyOf(key) in entries;
+        return found is null ? Element.init : found.value;
+    }
+    Element z8_remove(Z8Guid key) {
+        if (key is null) {
+            auto previous = hasNullKey ? nullKeyValue : Element.init;
+            hasNullKey = false; nullKeyValue = Element.init; return previous;
+        }
+        auto normalized = keyOf(key);
+        auto found = normalized in entries;
+        if (found is null) return Element.init;
+        auto previous = found.value;
+        entries.remove(normalized);
+        return previous;
+    }
+    Z8Array!Z8Guid z8_keys() {
+        auto result = new Z8Array!Z8Guid();
+        foreach (entry; entries) result.z8_add(entry.key);
+        if (hasNullKey) result.z8_add(null);
+        return result;
+    }
+    Z8Array!V z8_values() {
+        auto result = new Z8Array!V();
+        foreach (entry; entries) result.z8_add(entry.value);
+        if (hasNullKey) result.z8_add(nullKeyValue);
+        return result;
+    }
+}
+Z8GuidMap!V z8_map_union(V)(Z8GuidMap!V left, Z8GuidMap!V right) {
+    auto result = new Z8GuidMap!V();
+    result.z8_add(z8_nonnull(left));
+    result.z8_add(z8_nonnull(right));
+    return result;
+}
+void z8_map_add_assign(V)(ref Z8GuidMap!V left, lazy Z8GuidMap!V previous, lazy Z8GuidMap!V right) {
+    auto oldValue = previous;
+    auto newValue = right;
+    left = z8_map_union(oldValue, newValue);
+}

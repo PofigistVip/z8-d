@@ -1,0 +1,41 @@
+public class GuidMaps {
+    public static int run() {
+        guid first = '00000000-0000-0000-0000-000000000001';
+        guid equal = guid.create(1);
+        guid second = '00000000-0000-0000-0000-000000000002';
+        guid absent = null;
+        string[guid] labels = {(first, "one"), (second, "two")};
+        if (labels[equal] != "one" || labels.add(equal, "updated") != "one" || labels.size() != 2) return 1;
+        labels.add(absent, "null-key");
+        if (!labels.containsKey(null) || labels.get(null) != "null-key") return 2;
+        guid[] keys = labels.keys();
+        int nullCount = 0;
+        int firstCount = 0;
+        for (guid item : keys) {
+            if (item == null) nullCount += 1;
+            else if (item == equal) firstCount += 1;
+        }
+        if (nullCount != 1 || firstCount != 1 || labels.values().size() != 3) return 3;
+        string[guid] more = {(first, "other")};
+        string[guid] joined = labels + more;
+        if (joined[first] != "other" || labels[first] != "updated") return 4;
+        labels += more;
+        if (labels[first] != "other" || labels.remove(null) != "null-key") return 5;
+
+        int[guid] counts = {(first, 42)};
+        int missing = null;
+        counts.add(absent, missing);
+        if (counts[equal] != 42 || !counts.containsValue(null) || counts.get(null) != null) return 6;
+        bool[guid] flags = {(first, true)};
+        flags.add(second, false);
+        if (!flags[equal] || flags[second] || flags.values().size() != 2) return 7;
+        decimal[guid] amounts = {(first, decimal.parse("1.00"))};
+        amounts.add(second, 2);
+        if (!amounts.containsValue(decimal.parse("1.00")) || amounts.containsValue(decimal.parse("1.0"))) return 8;
+        if (amounts[second] != 2) return 9;
+        primary[guid] mixed = {(first, "text"), (second, 12)};
+        if ((string)mixed[equal] != "text" || (int)mixed[second] != 12) return 10;
+        try { labels.add(null, null); return 11; } catch (exception expected) {}
+        return 153;
+    }
+}
