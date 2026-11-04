@@ -130,11 +130,13 @@ void z8_date_setZoneOffset(Z8Date x, long offset) {
 
 void z8_date_set(Z8Date x, long year, long month, long day, long hour, long minute, long second, long millisecond = 0) {
     auto target = z8_nonnull(x);
-    auto t = SysTime(DateTime(cast(int)year, 1, 1), target.value.timezone);
+    // Normalize calendar fields before applying the zone; adding elapsed days in
+    // the target zone would shift local time across a daylight-saving boundary.
+    auto t = SysTime(DateTime(cast(int)year, 1, 1), UTC());
     t.add!"months"(cast(int)month - 1, AllowDayOverflow.no);
     t += dur!"days"(cast(int)day - 1) + dur!"hours"(cast(int)hour) + dur!"minutes"(cast(int)minute) +
         dur!"seconds"(cast(int)second) + dur!"msecs"(cast(int)millisecond);
-    target.value = t;
+    target.value = SysTime(DateTime(t.year, cast(int)t.month, t.day, t.hour, t.minute, t.second), target.value.timezone) + t.fracSecs;
 }
 void z8_date_setDate(Z8Date x, long year, long month, long day) {
     z8_date_set(x, year, month, day, z8_date_hours(x), z8_date_minutes(x), z8_date_seconds(x));

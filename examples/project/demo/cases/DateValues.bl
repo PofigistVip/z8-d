@@ -30,6 +30,10 @@ public class DateValues {
         if (date.parse("2010-07-15 12:00 MSD", "yyyy-MM-dd HH:mm z").ticks() != summer2010.ticks()) return 49;
         date summer1918 = '15/07/1918 12:00:00';
         if (summer1918.zoneOffset() != 9079000 || summer1918.toString("Z") != "+0431" || summer1918.toIsoString() != "1918-07-15T12:00:00+02:31") return 50;
+        date setSummer = '01/01/2010';
+        setSummer.set(2010, 7, 15, 12, 0, 0);
+        if (setSummer.ticks() != summer2010.ticks()) return 51;
+        if (date.parse("2010-07-15 12:00", "yyyy-MM-dd HH:mm").ticks() != summer2010.ticks()) return 52;
         if (value.toString("yyyy-MM-dd HH:mm:ss.SSS XXX") != "2024-02-29 12:30:45.000 +03:00") return 35;
         if (value.toString("yy/M/d H:m:s Z") != "24/2/29 12:30:45 +0300") return 36;
         if (value.toString("yyyy 'at' HH:mm") != "2024 at 12:30") return 37;
