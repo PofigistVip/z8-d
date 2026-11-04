@@ -6,10 +6,7 @@ import std.conv : to;
 import std.format : format;
 import std.string : replace;
 import z8.compiler_model;
-
-private enum coreRuntime = import("z8_core_runtime.txt");
-private enum decimalRuntime = import("z8_decimal_runtime.txt");
-private enum stringRuntime = import("z8_string_runtime.txt");
+import z8.runtime_source : runtimeSource;
 
 private string dType(ValueType type, Program objectClass = null) {
     final switch (type) {
@@ -313,8 +310,7 @@ private string defaultValue(ValueType type, Program objectClass = null) {
     assert(type == ValueType.boolType); return "false";
 }
 package string emitPrograms(Program[] programs) {
-    string result = coreRuntime;
-    result ~= "\n" ~ decimalRuntime ~ "\n" ~ stringRuntime ~ "\n";
+    string result = runtimeSource;
     foreach (program; programs) {
         if (program.isEnum) {
             result ~= "class " ~ program.emittedName ~ " {\n";
