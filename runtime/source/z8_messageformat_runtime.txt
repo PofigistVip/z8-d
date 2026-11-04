@@ -150,6 +150,33 @@ private wstring z8_message_value(Z8Primary value) {
         case Z8PrimaryKind.binary: case Z8PrimaryKind.date: throw new Exception("unsupported MessageFormat value");
     }
 }
+private wstring z8_message_formatted_date(Z8Primary value, wstring style, bool timeOnly) {
+    import std.string : strip;
+    z8_nonnull(value);
+    long ticks;
+    switch (value.kind) {
+        case Z8PrimaryKind.integer: ticks = value.integerValue; break;
+        case Z8PrimaryKind.datespan: ticks = z8_datespan_milliseconds(value.datespanValue); break;
+        case Z8PrimaryKind.decimal:
+            if (value.decimalValue.nan) return "null"w;
+            ticks = value.decimalValue.z8_round(0, 1).coefficient.to!long;
+            break;
+        default: throw new Exception("MessageFormat date argument is not numeric");
+    }
+    style = style.strip();
+    if (timeOnly) {
+        if (style == ""w || style == "medium"w) style = "H:mm:ss"w;
+        else if (style == "short"w) style = "H:mm"w;
+        else if (style == "long"w) style = "H:mm:ss z"w;
+        else if (style == "full"w) style = "H:mm:ss z"w;
+    } else {
+        if (style == ""w || style == "medium"w) style = "dd.MM.yyyy"w;
+        else if (style == "short"w) style = "dd.MM.yy"w;
+        else if (style == "long"w) style = "d MMMM y 'г'."w;
+        else if (style == "full"w) style = "d MMMM y 'г'."w;
+    }
+    return z8_date_toString(z8_date_from_ticks(ticks), style);
+}
 private wstring z8_message_choice(wstring style, Z8Primary value, Z8Array!Z8Primary values) {
     import std.string : strip;
     z8_nonnull(value);
@@ -219,7 +246,7 @@ wstring z8_string_format(wstring pattern, Z8Array!Z8Primary values) {
                 number = number * 10 + pattern[i++] - '0';
             }
             if (i == begin || i == pattern.length) throw new Exception("unsupported MessageFormat pattern");
-            bool numeric, choice;
+            bool numeric, choice, dateFormat, timeFormat;
             wstring style;
             if (pattern[i] == ',') {
                 import std.string : strip;
@@ -228,7 +255,8 @@ wstring z8_string_format(wstring pattern, Z8Array!Z8Primary values) {
                 if (i == pattern.length) throw new Exception("unsupported MessageFormat pattern");
                 auto kind = pattern[kindStart .. i].strip();
                 numeric = kind == "number"w; choice = kind == "choice"w;
-                if (!numeric && !choice) throw new Exception("unsupported MessageFormat pattern");
+                dateFormat = kind == "date"w; timeFormat = kind == "time"w;
+                if (!numeric && !choice && !dateFormat && !timeFormat) throw new Exception("unsupported MessageFormat pattern");
                 if (pattern[i] == ',') {
                     auto styleStart = ++i;
                     size_t depth;
@@ -250,7 +278,9 @@ wstring z8_string_format(wstring pattern, Z8Array!Z8Primary values) {
             ++i;
             if (number >= cast(size_t)values.z8_size()) result ~= "{"w ~ number.to!wstring ~ "}"w;
             else result ~= numeric ? z8_message_formatted_number(values.z8_get(cast(long)number), style) :
-                choice ? z8_message_choice(style, values.z8_get(cast(long)number), values) : z8_message_value(values.z8_get(cast(long)number));
+                choice ? z8_message_choice(style, values.z8_get(cast(long)number), values) :
+                (dateFormat || timeFormat) ? z8_message_formatted_date(values.z8_get(cast(long)number), style, timeFormat) :
+                z8_message_value(values.z8_get(cast(long)number));
         } else result ~= c;
     }
     return result.length ? result : ""w;
