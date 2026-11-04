@@ -17,7 +17,7 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, decimalArray, boolArray, stringArray, selfArray, stringMap, nullType, nullableString, enumType, enumArray }
+enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, decimalArray, boolArray, stringArray, selfArray, stringMap, nullType, nullableString, enumType, enumArray, optionalInt, optionalBool, optionalDecimal }
 enum NullableStringMode { none, required, nullAsEmpty }
 enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, nullLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, instanceOf, unary, binary, conditional, elvis }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
@@ -40,6 +40,7 @@ class Expression {
     NullableStringMode nullableStringMode;
     bool nullableStringReceiver, nullableStringLeft;
     bool enumConstant;
+    bool optionalRequired, optionalNullComparison, optionalNullOnLeft;
     this(ExprKind kind, Token token) { this.kind = kind; this.token = token; }
 }
 class Statement {
@@ -92,6 +93,23 @@ private bool isArray(ValueType type) {
 }
 private bool hasObjectClass(ValueType type) { return type == ValueType.selfType || type == ValueType.selfArray || type == ValueType.enumType || type == ValueType.enumArray; }
 private bool isNullableReference(ValueType type) { return type == ValueType.selfType || type == ValueType.enumType || type == ValueType.stringMap || type == ValueType.nullableString || isArray(type); }
+private bool isOptionalPrimitive(ValueType type) { return [ValueType.optionalInt, ValueType.optionalBool, ValueType.optionalDecimal].canFind(type); }
+private ValueType optionalBaseType(ValueType type) {
+    switch (type) {
+        case ValueType.optionalInt: return ValueType.intType;
+        case ValueType.optionalBool: return ValueType.boolType;
+        case ValueType.optionalDecimal: return ValueType.decimalType;
+        default: assert(0, "not an optional primitive");
+    }
+}
+private ValueType optionalForArray(ValueType type) {
+    switch (type) {
+        case ValueType.intArray: return ValueType.optionalInt;
+        case ValueType.boolArray: return ValueType.optionalBool;
+        case ValueType.decimalArray: return ValueType.optionalDecimal;
+        default: assert(0, "not a primitive array");
+    }
+}
 // Until Java's legacy Double.toString conversion is fully reproduced, reject
 // literal values for which a shorter D rendering may differ from the Java backend.
 private bool safeDecimalLiteral(string text) {
@@ -531,6 +549,18 @@ class Checker {
     private bool matches(Expression e, ValueType expected, Program expectedClass = null) {
         if (e.kind == ExprKind.arrayLiteral && (expected == ValueType.selfArray || expected == ValueType.enumArray)) e.objectClass = expectedClass;
         auto actual = typeOf(e, expected);
+        if (isOptionalPrimitive(actual) && optionalBaseType(actual) == expected) {
+            e.optionalRequired = true; return true;
+        }
+        if (isOptionalPrimitive(actual)) {
+            auto base = optionalBaseType(actual);
+            if (base == ValueType.intType && expected == ValueType.decimalType) {
+                e.optionalRequired = true; e.promoteToDecimal = true; return true;
+            }
+            if (expected == ValueType.stringType) {
+                e.optionalRequired = true; e.convertToString = base; return true;
+            }
+        }
         if (actual == ValueType.nullableString && expected == ValueType.stringType) {
             e.nullableStringMode = NullableStringMode.required; return true;
         }
@@ -587,6 +617,7 @@ class Checker {
             int weight; bool applicable = true;
             foreach (i, p; candidate.parameters) {
                 auto actual = actualTypes[i];
+                if (isOptionalPrimitive(actual)) actual = optionalBaseType(actual);
                 if ((actual == ValueType.nullType && isNullableReference(p.type)) ||
                     (actual == ValueType.nullableString && p.type == ValueType.stringType)) {
                     // Null is equally applicable to each supported reference type.
@@ -906,7 +937,7 @@ class Checker {
                             checkArguments(e, []);
                             if (receiver == ValueType.stringArray) return ValueType.nullableString;
                             if (receiver == ValueType.selfArray || receiver == ValueType.enumArray) return elementType(receiver);
-                            fail("first and last require a nullable element type", e.token); assert(0);
+                            return optionalForArray(receiver);
                         case "get":
                             if (e.arguments.length != 1 || typeOf(e.arguments[0]) != ValueType.intType) fail("get requires an int index", e.token);
                             return elementType(receiver);
@@ -990,6 +1021,15 @@ class Checker {
                 fail("invalid unary operand", e.token); assert(0);
             case ExprKind.binary:
                 auto left = typeOf(e.left), right = typeOf(e.right), op = e.token.text;
+                if ((isOptionalPrimitive(left) && right == ValueType.nullType) ||
+                    (isOptionalPrimitive(right) && left == ValueType.nullType)) {
+                    if (!["==", "!="].canFind(op)) fail("null supports only equality comparisons", e.token);
+                    e.optionalNullComparison = true;
+                    e.optionalNullOnLeft = left == ValueType.nullType;
+                    return ValueType.boolType;
+                }
+                if (isOptionalPrimitive(left) || isOptionalPrimitive(right))
+                    fail("nullable primitive requires a null check or ?: first", e.token);
                 if (left == ValueType.enumType && right == ValueType.enumType) {
                     if (e.left.objectClass !is e.right.objectClass || !["==", "!="].canFind(op))
                         fail("invalid enum operands", e.token);
@@ -1061,6 +1101,11 @@ class Checker {
                 return left;
             case ExprKind.elvis:
                 auto left = typeOf(e.left);
+                if (isOptionalPrimitive(left)) {
+                    if (!matches(e.right, optionalBaseType(left))) fail("elvis branch type mismatch", e.token);
+                    e.inferredType = left;
+                    return optionalBaseType(left);
+                }
                 if (!isNullableReference(left)) fail("elvis requires a supported reference type", e.token);
                 if (left == ValueType.nullableString && typeOf(e.right) == ValueType.nullableString)
                     fail("nullable string fallback is not supported", e.token);
@@ -1187,6 +1232,9 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.nullableString: return "wstring";
         case ValueType.enumType: assert(objectClass !is null); return objectClass.emittedName;
         case ValueType.enumArray: assert(objectClass !is null); return "Z8Array!(" ~ objectClass.emittedName ~ ")";
+        case ValueType.optionalInt: return "Z8Optional!long";
+        case ValueType.optionalBool: return "Z8Optional!bool";
+        case ValueType.optionalDecimal: return "Z8Optional!Z8Decimal";
     }
 }
 /// The Java runtime stores strings as UTF-16; preserve its code-unit ordering.
@@ -1212,6 +1260,7 @@ private string emitStringLiteral(string text) {
 }
 private string emitExpr(Expression e) {
     auto value = emitExprRaw(e);
+    if (e.optionalRequired) value = "z8_optional_require(" ~ value ~ ")";
     if (e.nullableStringMode == NullableStringMode.required) value = "z8_string_required(" ~ value ~ ")";
     if (e.nullableStringMode == NullableStringMode.nullAsEmpty) value = "z8_string_or_empty(" ~ value ~ ")";
     if (e.kind == ExprKind.conditional && isNullableReference(e.inferredType))
@@ -1304,6 +1353,10 @@ private string emitExprRaw(Expression e) {
             return "(cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ") !is null)";
         case ExprKind.unary: return "(" ~ e.token.text ~ emitExpr(e.left) ~ ")";
         case ExprKind.binary:
+            if (e.optionalNullComparison) {
+                auto value = e.optionalNullOnLeft ? e.right : e.left;
+                return (e.token.text == "==" ? "" : "!") ~ "z8_optional_is_null(" ~ emitExpr(value) ~ ")";
+            }
             if (e.inferredType == ValueType.nullType)
                 return "(" ~ emitExpr(e.left) ~ (e.token.text == "==" ? " is " : " !is ") ~ emitExpr(e.right) ~ ")";
             if (e.inferredType == ValueType.stringMap)
@@ -1319,6 +1372,8 @@ private string emitExprRaw(Expression e) {
         case ExprKind.conditional:
             return "(" ~ emitExpr(e.left) ~ " ? " ~ emitExpr(e.right) ~ " : " ~ emitExpr(e.third) ~ ")";
         case ExprKind.elvis:
+            if (isOptionalPrimitive(e.inferredType))
+                return "z8_optional_elvis(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             return "z8_elvis!(" ~ dType(e.inferredType, e.objectClass) ~ ")(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
     }
 }
@@ -1569,6 +1624,13 @@ private T z8_nonnull(T)(T value) {
     return value;
 }
 private T z8_elvis(T)(T value, lazy T fallback) { return value !is null ? value : fallback; }
+struct Z8Optional(T) { bool present; T value; }
+private bool z8_optional_is_null(T)(Z8Optional!T value) { return !value.present; }
+private T z8_optional_require(T)(Z8Optional!T value) {
+    if (!value.present) throw new Exception("null primitive");
+    return value.value;
+}
+private T z8_optional_elvis(T)(Z8Optional!T value, lazy T fallback) { return value.present ? value.value : fallback; }
 private auto z8_invoke(string name, T, Args...)(T value, Args args) {
     if (value is null) throw new Exception("null reference");
     return __traits(getMember, value, name)(args);
@@ -1658,15 +1720,15 @@ class Z8Array(T) {
     this(T[] values) { items = values; }
     long z8_size() { return cast(long)items.length; }
     bool z8_isEmpty() { return items.length == 0; }
-    T z8_first() {
-        static if (is(T == class)) return items.length ? items[0] : null;
-        else static if (is(T == wstring)) return !items.length ? null : items[0].length ? items[0] : ""w;
-        else throw new Exception("first is not supported for this element type");
-    }
-    T z8_last() {
-        static if (is(T == class)) return items.length ? items[$ - 1] : null;
-        else static if (is(T == wstring)) return !items.length ? null : items[$ - 1].length ? items[$ - 1] : ""w;
-        else throw new Exception("last is not supported for this element type");
+    static if (is(T == class)) {
+        T z8_first() { return items.length ? items[0] : null; }
+        T z8_last() { return items.length ? items[$ - 1] : null; }
+    } else static if (is(T == wstring)) {
+        T z8_first() { return !items.length ? null : items[0].length ? items[0] : ""w; }
+        T z8_last() { return !items.length ? null : items[$ - 1].length ? items[$ - 1] : ""w; }
+    } else {
+        Z8Optional!T z8_first() { return items.length ? Z8Optional!T(true, items[0]) : Z8Optional!T.init; }
+        Z8Optional!T z8_last() { return items.length ? Z8Optional!T(true, items[$ - 1]) : Z8Optional!T.init; }
     }
     void z8_clear() { ++z8_version; items.length = 0; }
     Z8Array!T z8_add(T value) { ++z8_version; items ~= value; return this; }

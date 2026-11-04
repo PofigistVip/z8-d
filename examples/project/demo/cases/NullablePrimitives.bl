@@ -1,0 +1,31 @@
+public class NullablePrimitives {
+    private static int fallbackCalls;
+    private static int fallback() { fallbackCalls += 1; return 7; }
+    public static int run() {
+        int[] numbers;
+        if (numbers.first() != null || null != numbers.last()) return 1;
+        if ((numbers.first() ?: fallback()) != 7 || fallbackCalls != 1) return 2;
+        numbers.add(0);
+        numbers.add(5);
+        if (numbers.first() == null || numbers.last() == null) return 3;
+        int first = numbers.first();
+        int last = numbers.last() ?: fallback();
+        if (first != 0 || last != 5 || fallbackCalls != 1) return 4;
+        decimal promoted = numbers.last();
+        string text = numbers.last();
+        if (promoted.toString() != "5" || text != "5") return 10;
+        bool[] flags;
+        if (flags.first() != null || (flags.last() ?: true) != true) return 5;
+        flags.add(false);
+        bool value = flags.first();
+        if (value || flags.first() == null || (flags.first() ?: true)) return 6;
+        decimal[] amounts;
+        if (amounts.first() != null) return 7;
+        decimal defaultAmount = amounts.first() ?: 5;
+        if (defaultAmount.toString() != "5") return 9;
+        amounts.add(decimal.parse("1.20"));
+        decimal amount = amounts.last();
+        if (amount.toString() != "1.20") return 8;
+        return 131;
+    }
+}
