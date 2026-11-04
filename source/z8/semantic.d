@@ -401,7 +401,7 @@ class Checker {
                         e.emittedOverride = "z8_guid_zero()"; return ValueType.guidType;
                     }
                     if (e.left.token.text == "date" && ["Min", "Max"].canFind(e.token.text)) {
-                        e.emittedOverride = e.token.text == "Min" ? "z8_date_from_ticks(-62135769600000L)" : "z8_date_from_ticks(95617584000000L)";
+                        e.emittedOverride = e.token.text == "Min" ? "z8_date_min" : "z8_date_max";
                         return ValueType.dateType;
                     }
                     if (e.left.token.text == "geometry") {
@@ -1169,6 +1169,11 @@ class Checker {
                 if (variableType == ValueType.fileType && s.assignmentOperator == "=" &&
                     [ValueType.stringType, ValueType.nullableString].canFind(typeOf(s.expression))) {
                     s.filePathAssignment = true; s.type = variableType; return false;
+                }
+                if (variableType == ValueType.dateType && s.assignmentOperator == "=" &&
+                    [ValueType.intType, ValueType.optionalInt].canFind(typeOf(s.expression))) {
+                    if (!matches(s.expression, ValueType.intType)) fail("date ticks must be int", s.token);
+                    s.dateTickAssignment = true; s.type = variableType; return false;
                 }
                 if (s.target.kind == ExprKind.index && isMap(s.target.inferredType))
                     variableType = s.target.inferredType == ValueType.stringMap ? ValueType.stringType : ValueType.primaryType;

@@ -40,6 +40,17 @@ public class DateValues {
         if (offset.addHour(1).hours() != 14 || offset.addHour(1).zoneOffset() != 10800000) return 25;
         if (offset.addHour(0).zoneOffset() != 7200000 || offset.addHour(0).hours() != 12) return 26;
         if (offset.addMonth(1).hours() != 12 || offset.addDay(1).hours() != 12 || offset.addYear(1).hours() != 12) return 27;
+        date assigned = '29/02/2024 12:30:45';
+        date assignedAlias = assigned;
+        assigned = 0;
+        if (assignedAlias.ticks() != 0) return 28;
+        int savedMin = date.Min.ticks();
+        date.Min = 1709199045000;
+        if (date.Min.ticks() != 1709199045000 || date.parse("").ticks() != 1709199045000) return 29;
+        date minAlias = date.parseIsoString("");
+        minAlias = 0;
+        if (date.Min.ticks() != 0) return 30;
+        date.Min = savedMin;
         return 193;
     }
 }

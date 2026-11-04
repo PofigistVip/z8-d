@@ -20,6 +20,17 @@ Z8Date z8_date_now() { return new Z8Date(Clock.currTime(z8_date_timezone())); }
 Z8Date z8_date_from_ticks(long ticks) {
     return new Z8Date(SysTime.fromUnixTime(0, z8_date_timezone()) + dur!"msecs"(ticks));
 }
+__gshared Z8Date z8_date_min, z8_date_max;
+shared static this() {
+    z8_date_min = z8_date_from_ticks(-62135769600000L);
+    z8_date_max = z8_date_from_ticks(95617584000000L);
+}
+void z8_date_assign(Z8Date value, long ticks) {
+    auto target = z8_nonnull(value);
+    auto zone = target.explicitOffset ? z8_date_timezone() : target.value.timezone;
+    target.value = SysTime.fromUnixTime(0, zone) + dur!"msecs"(ticks);
+    target.explicitOffset = false;
+}
 Z8Date z8_date_literal(string text) {
     import std.string : strip, split;
     auto parts = text.strip().split();
@@ -75,7 +86,12 @@ void z8_date_setTime(Z8Date x, long hour, long minute, long second, long millise
 private Z8Date z8_date_parse_impl(wstring input, bool iso) {
     if (input is null) return null;
     auto text = input.to!string;
-    if (!text.length) return z8_date_from_ticks(-62135769600000L);
+    if (!text.length) {
+        if (iso) return z8_date_min;
+        auto result = new Z8Date(z8_date_min.value);
+        result.explicitOffset = z8_date_min.explicitOffset;
+        return result;
+    }
     if (!iso) {
         bool digits = true;
         foreach (c; text) if (c < '0' || c > '9') { digits = false; break; }
