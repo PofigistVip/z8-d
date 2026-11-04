@@ -44,6 +44,7 @@ python tests/integration.py
 python tests/compound_assignment.py
 python tests/map_initializers.py
 python tests/qualified_names.py
+python tests/records.py
 python tests/decimal_oracle.py
 python tests/string_oracle.py
 python tests/lexer_oracle.py path/to/original-z8 --corpus
@@ -116,6 +117,9 @@ UTF-16, `line` и `column` отсчитываются с нуля. Пробел�
 В объявлениях типов, `extends`, приведениях и `instanceof` можно использовать полное имя класса
 без отдельного `import`. Для доступа к статическим членам используется короткое имя
 класса с импортом при необходимости: прямое обращение через полное имя исходный Z8 отвергает.
+Поддерживаются GUID-записи `records` без атрибутов: они доступны как статические
+члены с заданной видимостью, проверяются конфликты имён и GUID. Атрибуты записей и
+их регистрация в таблицах ещё не реализованы.
 Поддерживаются явные приведения между базовым и производным классами с проверкой
 типа во время выполнения; другие объектные приведения пока не реализованы.
 Для таких классов также поддерживается проверка типа `instanceof`.

@@ -2,7 +2,7 @@ module z8.semantic;
 
 import std.algorithm : canFind;
 import std.conv : to;
-import std.string : lastIndexOf, indexOf;
+import std.string : lastIndexOf, indexOf, icmp;
 import z8.compiler_model;
 import z8.lexer : Token;
 
@@ -281,6 +281,12 @@ class Checker {
         foreach (field; program.fields) {
             if (field.name.text in fields) fail("duplicate field", field.name);
             fields[field.name.text] = field;
+        }
+        foreach (field; program.fields) if (field.isRecord) {
+            for (auto owner = program; owner !is null; owner = owner.baseClass)
+                foreach (other; owner.fields) if (other.isRecord && other !is field &&
+                    icmp(field.initializer.token.text, other.initializer.token.text) == 0)
+                    fail("duplicate record GUID", field.initializer.token);
         }
         Method[][string] ownOverloads;
         foreach (m; program.methods) {

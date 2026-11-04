@@ -107,6 +107,29 @@ class Parser {
         }
         return result;
     }
+    private void parseRecords(Program program) {
+        expect("{");
+        while (current.text != "}") {
+            if (current.text == "[") error("record attributes are not supported yet");
+            bool isPublic, isProtected, hasAccess;
+            while (["public", "private", "protected"].canFind(current.text)) {
+                if (hasAccess) error("duplicate access modifier");
+                hasAccess = true; isPublic = current.text == "public"; isProtected = current.text == "protected";
+                take();
+            }
+            if (current.text == "[") error("record attributes are not supported yet");
+            auto name = identifier();
+            expect("=");
+            if (current.kind != TokenKind.guidLiteral) error("record requires a GUID literal");
+            auto value = new Expression(ExprKind.guidLiteral, take());
+            expect(";");
+            auto field = new Field;
+            field.type = ValueType.guidType; field.name = name; field.initializer = value;
+            field.isStatic = true; field.isRecord = true; field.isPublic = isPublic || !hasAccess; field.isProtected = isProtected; field.owner = program;
+            program.fields ~= field;
+        }
+        expect("}");
+    }
     Program parse() {
         auto result = new Program;
         while (current.text == "import") {
@@ -154,6 +177,7 @@ class Parser {
                 else { if (hasAccess) error("duplicate access modifier"); hasAccess = true; isPublic = current.text == "public"; isProtected = current.text == "protected"; }
                 take();
             }
+            if (accept("records")) { parseRecords(result); continue; }
             auto declaredFinal = accept("final");
             auto declaredType = parseType(); auto declaredObjectName = parsedObjectName; auto name = identifier();
             if (current.text != "(") {

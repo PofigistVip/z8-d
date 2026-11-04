@@ -112,6 +112,44 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     generated = list((project / "out").rglob("*.java"))
     if not generated:
         raise SystemExit("Original compiler did not produce Java files")
+    # Plain record declarations compile in BL, although the original Java
+    # backend expects a table superclass for initStaticRecords().
+    record_project = temp / "record-project"
+    record_source = record_project / "src" / "bl"
+    record_source.mkdir(parents=True)
+    for path in (root / "examples" / "records").glob("*.bl"):
+        shutil.copy2(path, record_source / path.name)
+    record_command = ["java", "-cp", str(classes) + os.pathsep + classpath,
+                      "org.zenframework.z8.compiler.cmd.Main", str(record_project),
+                      "-sources:src/bl", "-requires:" + str(lang), "-output:out"]
+    record_result = subprocess.run(record_command, cwd=temp, capture_output=True, text=True, encoding="utf-8")
+    if record_result.returncode:
+        raise SystemExit("Original Z8 rejected record fixtures:\n" + record_result.stdout + record_result.stderr)
+    record_java = (record_project / "out" / "RecordSet.java").read_text(encoding="utf-8")
+    if "initStaticRecords()" not in record_java or " First = " not in record_java:
+        raise SystemExit("Original Z8 did not generate the expected record declarations")
+    default_access = record_source / "DefaultRecord.bl"
+    default_access.write_text('''public class DefaultRecord {
+        public static guid get() { return RecordSet.Default; }
+    }''', encoding="utf-8")
+    record_result = subprocess.run(record_command, cwd=temp, capture_output=True, text=True, encoding="utf-8")
+    if record_result.returncode:
+        raise SystemExit("Original Z8 rejected default-access record:\n" + record_result.stdout)
+    inaccessible = record_source / "InaccessibleRecord.bl"
+    inaccessible.write_text('''public class InaccessibleRecord {
+        public static guid get() { return RecordSet.Hidden; }
+    }''', encoding="utf-8")
+    record_result = subprocess.run(record_command, cwd=temp, capture_output=True, text=True, encoding="utf-8")
+    if record_result.returncode == 0 or "not visible" not in record_result.stdout:
+        raise SystemExit("Original Z8 did not reject a non-public record access:\n" + record_result.stdout)
+    inaccessible.unlink()
+    (record_source / "DuplicateRecord.bl").write_text('''public class DuplicateRecord extends RecordSet {
+        records { Other = '00000000-0000-0000-0000-000000000001'; }
+    }''', encoding="utf-8")
+    record_result = subprocess.run(record_command, cwd=temp, capture_output=True, text=True, encoding="utf-8")
+    if record_result.returncode == 0 or "id conflicts" not in record_result.stdout:
+        raise SystemExit("Original Z8 did not reject a duplicate inherited record GUID:\n" + record_result.stdout)
+    print("Original Z8 verified GUID records, visibility, and inherited duplicate checks")
     if os.environ.get("Z8_ORACLE_INSPECT"):
         for file in generated:
             if file.name in ("Main.java", "Arithmetic.java", "EnumCases.java", "Flavor.java", "NullableObjectField.java", "LifecycleBase.java", "LifecycleChild.java", "LifecycleCases.java", "LifecycleOwner.java", "LifecycleReentrant.java", "LifecycleTrigger.java", "FileValues.java"):

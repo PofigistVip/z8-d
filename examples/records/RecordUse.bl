@@ -1,0 +1,9 @@
+public class RecordUse {
+    public static int run() {
+        if (RecordSet.First != '00000000-0000-0000-0000-000000000001') return 1;
+        if (RecordSet.hidden() != '00000000-0000-0000-0000-000000000002') return 2;
+        RecordSet.First = '00000000-0000-0000-0000-000000000003';
+        if (RecordSet.First != '00000000-0000-0000-0000-000000000003') return 3;
+        return 163;
+    }
+}

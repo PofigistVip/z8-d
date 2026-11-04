@@ -11,6 +11,20 @@ private void rejects(string source) {
 }
 
 unittest {
+    compile(`class A { records {
+        public First = '00000000-0000-0000-0000-000000000001';
+        private Second = '00000000-0000-0000-0000-000000000002';
+    } static guid f() { First = '00000000-0000-0000-0000-000000000003'; return Second; } }`);
+    rejects(q{class A { records { First = 1; } }});
+    rejects(`class A { records { [name "value"] First = '00000000-0000-0000-0000-000000000001'; } }`);
+    rejects(`class A { guid First; records { First = '00000000-0000-0000-0000-000000000001'; } }`);
+    rejects(`class A { records {
+        First = 'abcdef00-0000-0000-0000-000000000001';
+        Second = 'ABCDEF00-0000-0000-0000-000000000001';
+    } }`);
+}
+
+unittest {
     auto source = "class A { static void f() { return; int x = 1; } }";
     bool reported;
     try { compile(source); } catch (CompileException e) {
@@ -148,6 +162,17 @@ unittest {
     auto staticCall = SourceUnit("other.User", "User.bl", "class User { static int run() { return pkg.Static.f(3); } }");
     rejectsSources([staticField, staticType], "User.bl");
     rejectsSources([staticCall, staticType], "User.bl");
+    auto records = SourceUnit("pkg.Records", "Records.bl", `class Records { records {
+        public Open = '00000000-0000-0000-0000-000000000001';
+        private Hidden = '00000000-0000-0000-0000-000000000002';
+        Default = '00000000-0000-0000-0000-000000000003';
+    } }`);
+    auto recordUser = SourceUnit("other.User", "User.bl", "import pkg.Records; class User { static guid f() { return Records.Open; } static guid g() { return Records.Default; } }");
+    auto hiddenUser = SourceUnit("other.User", "User.bl", "import pkg.Records; class User { static guid f() { return Records.Hidden; } }");
+    compileSources([recordUser, records]);
+    rejectsSources([hiddenUser, records], "User.bl");
+    auto duplicateRecord = SourceUnit("pkg.Child", "Child.bl", `class Child extends Records { records { Other = '00000000-0000-0000-0000-000000000001'; } }`);
+    rejectsSources([duplicateRecord, records], "Child.bl");
 }
 
 unittest {

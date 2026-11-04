@@ -1,0 +1,9 @@
+public class RecordSet {
+    records {
+        public First = '00000000-0000-0000-0000-000000000001';
+        private Hidden = '00000000-0000-0000-0000-000000000002';
+        Default = '00000000-0000-0000-0000-000000000004';
+    }
+
+    public static guid hidden() { return Hidden; }
+}
