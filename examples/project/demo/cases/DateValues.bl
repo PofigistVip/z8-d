@@ -6,6 +6,8 @@ public class DateValues {
         if (converted.day() != 29 || dayOf(ticksValue, 1) != 29) return 31;
         date explicitDate = (date)ticksValue;
         if (explicitDate.ticks() != ticksValue) return 32;
+        if ('01/01/2023'.weekOfYear() != 52 || '02/01/2023'.weekOfYear() != 1) return 33;
+        if ('01/01/2024'.weekOfYear() != 1 || '01/01/2025'.weekOfYear() != 53 || '06/01/2025'.weekOfYear() != 1) return 34;
         date value = '29/02/2024 12:30:45';
         if (value.year() != 2024 || value.month() != 2 || value.day() != 29 || value.quarter() != 1) return 1;
         if (value.hours() != 12 || value.minutes() != 30 || value.seconds() != 45 || value.milliseconds() != 0) return 2;

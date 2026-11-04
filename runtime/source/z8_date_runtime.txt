@@ -53,6 +53,18 @@ long z8_date_month(Z8Date x) { return cast(int)z8_nonnull(x).value.month; }
 long z8_date_day(Z8Date x) { return z8_nonnull(x).value.day; }
 long z8_date_dayOfWeek(Z8Date x) { return cast(int)z8_nonnull(x).value.dayOfWeek + 1; }
 long z8_date_dayOfYear(Z8Date x) { return z8_nonnull(x).value.dayOfYear; }
+long z8_date_weekOfYear(Z8Date x) {
+    auto time = z8_nonnull(x).value;
+    int firstMonday(int year) {
+        auto jan1 = SysTime(DateTime(year, 1, 1), time.timezone);
+        return (1 - cast(int)jan1.dayOfWeek + 7) % 7;
+    }
+    auto index = time.dayOfYear - 1;
+    auto first = firstMonday(time.year);
+    if (index >= first) return 1 + (index - first) / 7;
+    auto lastYear = SysTime(DateTime(time.year - 1, 12, 31), time.timezone);
+    return 1 + (lastYear.dayOfYear - 1 - firstMonday(time.year - 1)) / 7;
+}
 long z8_date_daysInMonth(Z8Date x) { return z8_nonnull(x).value.daysInMonth; }
 long z8_date_hours(Z8Date x) { return z8_nonnull(x).value.hour; }
 long z8_date_minutes(Z8Date x) { return z8_nonnull(x).value.minute; }
