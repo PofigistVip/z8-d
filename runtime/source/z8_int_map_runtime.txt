@@ -2,6 +2,7 @@
 class Z8IntMap(V) {
     static if (is(V == long)) alias Element = Z8Optional!long;
     else static if (is(V == wstring)) alias Element = wstring;
+    else static if (is(V == Z8Primary)) alias Element = Z8Primary;
     else static assert(0, "unsupported integer-key map value");
 
     private Element[long] entries;
@@ -11,7 +12,8 @@ class Z8IntMap(V) {
     private static bool valueEquals(Element left, Element right) {
         static if (is(V == long))
             return left.present == right.present && (!left.present || left.value == right.value);
-        else return z8_string_equals(left, right);
+        else static if (is(V == wstring)) return z8_string_equals(left, right);
+        else return left is right || (left !is null && left == right);
     }
 
     long z8_size() { return cast(long)entries.length + (hasNullKey ? 1 : 0); }
@@ -19,8 +21,8 @@ class Z8IntMap(V) {
     void z8_clear() { entries.clear(); hasNullKey = false; nullKeyValue = Element.init; }
     bool z8_containsKey(Z8Optional!long key) { return key.present ? (key.value in entries) !is null : hasNullKey; }
     bool z8_containsValue(Element value) {
-        if (hasNullKey && valueEquals(nullKeyValue, value)) return true;
-        foreach (item; entries) if (valueEquals(item, value)) return true;
+        if (hasNullKey && valueEquals(value, nullKeyValue)) return true;
+        foreach (item; entries) if (valueEquals(value, item)) return true;
         return false;
     }
     Element z8_add(Z8Optional!long key, Element value) {

@@ -49,6 +49,15 @@ public class IntegerMaps {
         empty.add(values);
         empty.add(empty);
         if (empty[1] != 99 || empty.size() != values.size()) return 19;
+        primary[int] mixed = {(1, 42), (2, "text"), (3, true)};
+        mixed.add(key, nullValue);
+        if ((int)mixed[1] != 42 || (string)mixed[2] != "text" || !(bool)mixed[3]) return 21;
+        if (!mixed.containsKey(null) || mixed.get(null) != null || !mixed.containsValue(42)) return 22;
+        primary[int] more = {(1, 9)};
+        primary[int] joined = mixed + more;
+        if ((int)joined[1] != 9 || (int)mixed[1] != 42 || joined.values().size() != 4) return 23;
+        mixed += more;
+        if ((int)mixed[1] != 9 || mixed.remove(null) != null || mixed.containsKey(null)) return 24;
         return 149;
     }
 }

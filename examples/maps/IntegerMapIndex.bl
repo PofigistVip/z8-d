@@ -8,6 +8,10 @@ public class IntegerMapIndex {
         words[-1] = "value";
         words[null] = null;
         if (words[-1] != "value" || !words.containsKey(null) || words[null] != null) return 2;
+        primary[int] mixed;
+        mixed[5] = 42;
+        mixed[null] = null;
+        if ((int)mixed[5] != 42 || !mixed.containsKey(null) || mixed[null] != null) return 3;
         return 143;
     }
 }

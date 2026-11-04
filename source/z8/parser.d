@@ -85,8 +85,8 @@ class Parser {
                 if (accept("string") && (result == ValueType.stringType || result == ValueType.primaryType)) {
                     expect("]"); return result == ValueType.stringType ? ValueType.stringMap : ValueType.primaryStringMap;
                 }
-                if (accept("int") && (result == ValueType.intType || result == ValueType.stringType)) {
-                    expect("]"); return result == ValueType.intType ? ValueType.intIntMap : ValueType.stringIntMap;
+                if (accept("int") && (result == ValueType.intType || result == ValueType.stringType || result == ValueType.primaryType)) {
+                    expect("]"); return result == ValueType.intType ? ValueType.intIntMap : result == ValueType.primaryType ? ValueType.primaryIntMap : ValueType.stringIntMap;
                 }
                 error("unsupported map key or value type");
             }

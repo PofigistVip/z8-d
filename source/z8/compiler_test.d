@@ -18,6 +18,8 @@ unittest {
         values.add(absent, 5);
         string[int] labels = {(1, "one")};
         labels.add(2, "two");
+        primary[int] mixed = {(1, 42), (2, "text")};
+        if ((int)mixed[1] != 42) return 1;
         if (values.containsKey(absent) && labels[1] == "one") return values[3];
         return 0;
     } }});
