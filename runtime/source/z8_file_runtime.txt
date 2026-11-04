@@ -1,4 +1,18 @@
 // File metadata, path helpers and filesystem operations.
+private __gshared string z8_file_working_root, z8_file_storage_root;
+void z8_file_set_roots(string working, string storage = "") {
+    import std.file : getcwd;
+    import std.path : absolutePath, buildPath, isAbsolute;
+    working = absolutePath(working.length ? working : getcwd());
+    if (!storage.length) storage = buildPath(working, "storage");
+    else if (!isAbsolute(storage)) storage = buildPath(working, storage);
+    z8_file_working_root = working;
+    z8_file_storage_root = absolutePath(storage);
+}
+shared static this() {
+    import std.process : environment;
+    z8_file_set_roots(environment.get("Z8_WORKING_PATH", ""), environment.get("Z8_STORAGE_PATH", ""));
+}
 class Z8File {
     Z8Guid id, user;
     wstring name = ""w, path = ""w, author = ""w;
@@ -145,7 +159,20 @@ wstring z8_file_folder(Z8File value) {
 }
 
 private string z8_file_system_path(Z8File value) {
-    return z8_string_required(z8_nonnull(value).path).to!string;
+    import std.path : buildPath, isAbsolute;
+    import std.string : startsWith;
+    auto path = z8_string_required(z8_nonnull(value).path).to!string;
+    if (isAbsolute(path)) return path;
+    if (path.startsWith("storage")) {
+        auto suffix = path["storage".length .. $];
+        version (Windows) {
+            while (suffix.length && (suffix[0] == '/' || suffix[0] == '\\')) suffix = suffix[1 .. $];
+        } else {
+            while (suffix.length && suffix[0] == '/') suffix = suffix[1 .. $];
+        }
+        return suffix.length ? buildPath(z8_file_storage_root, suffix) : z8_file_storage_root;
+    }
+    return path.length ? buildPath(z8_file_working_root, path) : z8_file_working_root;
 }
 bool z8_file_exists(Z8File value) {
     import std.file : exists;
@@ -183,10 +210,10 @@ Z8Date z8_file_lastModified(Z8File value) {
     return new Z8Date(t);
 }
 private Z8File z8_file_from_disk(string path) {
-    import std.file : exists, isFile, getSize, getcwd;
+    import std.file : exists, isFile, getSize;
     import std.path : absolutePath, relativePath, dirSeparator;
     auto full = absolutePath(path);
-    auto working = absolutePath(getcwd());
+    auto working = z8_file_working_root;
     auto prefix = working ~ dirSeparator;
     import std.string : startsWith;
     auto stored = full.startsWith(prefix) ? relativePath(full, working) : full;
@@ -240,11 +267,11 @@ private Z8File z8_file_write_bytes(Z8File value, const(ubyte)[] contents, bool a
     import std.path : dirName, buildPath;
     import std.stdio : File;
     import std.uuid : randomUUID;
-    auto path = z8_file_system_path(value);
-    if (!path.length) {
+    string path;
+    if (!z8_string_required(z8_nonnull(value).path).length) {
         path = buildPath(tempDir(), "z8-" ~ randomUUID().to!string ~ ".txt");
         z8_file_assign(value, path.to!wstring);
-    }
+    } else path = z8_file_system_path(value);
     auto parent = dirName(path);
     if (parent.length) mkdirRecurse(parent);
     auto output = File(path, append ? "ab" : "wb");
