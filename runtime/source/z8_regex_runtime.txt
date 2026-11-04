@@ -22,8 +22,16 @@ private wstring z8_regex_pattern(wstring pattern) {
     while (i < pattern.length) {
         auto c = pattern[i++];
         if (c == '\\') {
-            result ~= c;
-            if (i < pattern.length) result ~= pattern[i++];
+            if (i == pattern.length) { result ~= c; continue; }
+            auto escape = pattern[i++];
+            wstring chars;
+            if (escape == 'd' || escape == 'D') chars = "0-9"w;
+            else if (escape == 'w' || escape == 'W') chars = "A-Za-z0-9_"w;
+            else if (escape == 's' || escape == 'S') chars = " \\t\\n\\x0B\\f\\r"w;
+            if (chars.length && (!inClass || (escape >= 'a' && escape <= 'z'))) {
+                if (inClass) result ~= chars;
+                else result ~= "["w ~ ((escape >= 'A' && escape <= 'Z') ? "^"w : ""w) ~ chars ~ "]"w;
+            } else { result ~= c; result ~= escape; }
         } else if (c == '[') { inClass = true; result ~= c; }
         else if (c == ']' && inClass) { inClass = false; result ~= c; }
         else if (!inClass && c == '(' && i + 2 < pattern.length && pattern[i] == '?' && pattern[i + 1] == '<' &&
