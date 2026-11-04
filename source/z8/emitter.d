@@ -467,6 +467,12 @@ private string emitStatement(Statement s) {
     }
 }
 private string emitSimple(Statement s) {
+    if (s.kind == StmtKind.variable && s.userOperatorAssignment) {
+        auto temporary = "z8_initial_" ~ s.token.position.offset.to!string;
+        return dStorageType(s.type, s.objectClass) ~ " v_" ~ s.token.text ~ " = (() { auto " ~ temporary ~ " = " ~
+            defaultValue(s.type, s.objectClass, s.hasContainer) ~ "; z8_nonnull(" ~ temporary ~ ").z8op_assign(" ~
+            emitExpr(s.expression) ~ "); return " ~ temporary ~ "; })()";
+    }
     if (s.kind == StmtKind.variable)
         return dStorageType(s.type, s.objectClass) ~ " v_" ~ s.token.text ~ " = " ~
             (s.expression !is null ? emitExpr(s.expression) : s.type == ValueType.intType ? "z8_optional_wrap(0L)" : s.type == ValueType.boolType ? "z8_optional_wrap(false)" : s.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(s.type, s.objectClass, s.hasContainer));

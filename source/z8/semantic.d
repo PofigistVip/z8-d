@@ -1443,6 +1443,17 @@ class Checker {
                 return left;
         }
     }
+    private bool useAssignmentOperator(Program target, Expression value, Token site, bool direct) {
+        auto method = lookupMethod(target, "operator=");
+        if (method is null) return false;
+        auto call = new Expression(ExprKind.call, site);
+        call.arguments = [value];
+        auto selected = selectOverload(method, call, true, true);
+        if (selected is null) return false;
+        if (direct) fail("assignment with both direct and operator conversions is not supported yet", site);
+        checkCall(selected, selected.owner, call);
+        return true;
+    }
     private bool checkStatement(Statement s, bool allowUninitializedEnum = false) {
         final switch (s.kind) {
             case StmtKind.block:
@@ -1457,7 +1468,12 @@ class Checker {
                 if (s.type == ValueType.primaryType && s.expression is null && !allowUninitializedEnum) fail("primary variables require an initializer", s.token);
                 if (s.type == ValueType.voidType) fail("variable cannot be void", s.token);
                 if (hasObjectClass(s.type)) s.objectClass = resolveClass(currentProgram, s.objectName, s.token);
-                if (s.expression !is null && !matchesInitializer(s.expression, s.type, s.objectClass)) fail("initializer type mismatch", s.token);
+                if (s.expression !is null) {
+                    auto direct = matchesInitializer(s.expression, s.type, s.objectClass);
+                    if (s.type == ValueType.selfType)
+                        s.userOperatorAssignment = useAssignmentOperator(s.objectClass, s.expression, s.token, direct);
+                    if (!direct && !s.userOperatorAssignment) fail("initializer type mismatch", s.token);
+                }
                 variables[s.token.text] = s.type;
                 if (hasObjectClass(s.type)) objectVariables[s.token.text] = s.objectClass;
                 return false;
@@ -1466,21 +1482,12 @@ class Checker {
                 if (variableType == ValueType.nullableString) variableType = ValueType.stringType;
                 if (isOptionalPrimitive(variableType)) variableType = optionalBaseType(variableType);
                 if (s.target.enumConstant) fail("enum constants cannot be assigned", s.token);
-                if (variableType == ValueType.selfType && s.assignmentOperator == "=") {
-                    auto method = lookupMethod(s.target.objectClass, "operator=");
-                    if (method !is null) {
-                        auto call = new Expression(ExprKind.call, s.token);
-                        call.arguments = [s.expression];
-                        auto selected = selectOverload(method, call, true, true);
-                        if (selected !is null) {
-                            if (matchesStored(s.expression, variableType, s.target.objectClass))
-                                fail("assignment with both direct and operator conversions is not supported yet", s.token);
-                            checkCall(selected, selected.owner, call);
-                            s.userOperatorAssignment = true;
-                            s.type = variableType;
-                            return false;
-                        }
-                    }
+                if (variableType == ValueType.selfType && s.assignmentOperator == "=" &&
+                    lookupMethod(s.target.objectClass, "operator=") !is null && useAssignmentOperator(s.target.objectClass, s.expression, s.token,
+                                          matchesStored(s.expression, variableType, s.target.objectClass))) {
+                    s.userOperatorAssignment = true;
+                    s.type = variableType;
+                    return false;
                 }
                 if (variableType == ValueType.fileType && s.assignmentOperator == "=" &&
                     [ValueType.stringType, ValueType.nullableString].canFind(typeOf(s.expression))) {

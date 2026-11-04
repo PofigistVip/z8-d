@@ -7,6 +7,9 @@ public class AssignmentValue {
     public static AssignmentValue empty() { return null; }
     public static int mark() { effects = effects * 10 + 2; return 9; }
     public static int run() {
+        AssignmentValue initialNumber = 14;
+        AssignmentValue initialText = "xy";
+        if (initialNumber.amount != 14 || initialText.amount != 2) return 5;
         AssignmentValue value = new AssignmentValue;
         value = 42;
         if (value.amount != 42) return 1;
