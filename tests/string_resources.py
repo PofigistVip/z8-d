@@ -19,6 +19,8 @@ void main() {
     assert(z8_string_new("$greeting$"w) == "Привет"w);
     assert(z8_string_new("$nested$"w) == "$greeting$"w);
     assert(z8_nullable_string_binary!"+"("$"w, "greeting$"w) == "Привет"w);
+    auto missingPath = z8_file_parse("[{size:0}]"w).z8_first();
+    assert(missingPath.path !is null && missingPath.path.length == 0);
     z8_string_clear_resources();
     assert(z8_string_new("$greeting$"w) == "greeting"w);
 }

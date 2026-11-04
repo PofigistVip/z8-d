@@ -48,7 +48,7 @@ wstring z8_file_extension(wstring value) {
 void z8_file_assign(Z8File value, wstring path) {
     import std.path : baseName;
     z8_nonnull(value).path = z8_string_required(path);
-    value.name = baseName(path.to!string).to!wstring;
+    value.name = z8_string_new(baseName(path.to!string).to!wstring);
 }
 Z8File z8_file_from_path(wstring path) { auto result = new Z8File(); z8_file_assign(result, path); return result; }
 wstring z8_file_path(Z8File value) { return z8_nonnull(value).path; }
@@ -94,21 +94,22 @@ Z8Array!Z8File z8_file_parse(wstring input) {
         throw new Exception("invalid file metadata field");
     }
     auto result = new Z8Array!Z8File();
+    wstring wrapString(wstring text) { return z8_string_new(z8_string_or_empty(text)); }
     foreach (item; json.array) {
         auto values = item.object;
         auto value = new Z8File();
-        value.path = "file" in values ? field(values, "file") : field(values, "path", null);
-        value.name = field(values, "name");
+        value.path = wrapString("file" in values ? field(values, "file") : field(values, "path", null));
+        value.name = wrapString(field(values, "name"));
         auto size = field(values, "size");
         if (!size.length) throw new Exception("invalid file size");
         value.size = z8_optional_wrap(size.to!long);
         value.id = z8_guid_parse(field(values, "id"));
         value.user = z8_guid_parse(field(values, "user"));
-        value.author = field(values, "author");
+        value.author = wrapString(field(values, "author"));
         auto time = field(values, "time");
         value.time = time.canFind('/') ? z8_date_parse(time, "D/M/y H:m:s"w) : z8_date_parse(time);
         if (auto details = "details" in values) {
-            foreach (key, unused; details.object) value.details.z8_add(key.to!wstring, field(details.object, key));
+            foreach (key, unused; details.object) value.details.z8_add(wrapString(key.to!wstring), wrapString(field(details.object, key)));
         }
         result.z8_add(value);
     }
@@ -216,7 +217,7 @@ private Z8File z8_file_from_disk(string path) {
     auto prefix = working ~ dirSeparator;
     import std.string : startsWith;
     auto stored = full.startsWith(prefix) ? relativePath(full, working) : full;
-    auto result = z8_file_from_path(stored.to!wstring);
+    auto result = z8_file_from_path(z8_string_new(stored.to!wstring));
     result.size = z8_optional_wrap(exists(full) && isFile(full) ? cast(long)getSize(full) : 0L);
     result.time = z8_file_lastModified(result);
     return result;

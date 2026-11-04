@@ -31,6 +31,11 @@ public class FileValues {
         try { file.parse("[{}]"); return 12; } catch (exception ignored) {}
         file[] alternate = file.parse("[{\"file\":\"other.txt\",\"path\":\"ignored.txt\",\"size\":0}]");
         if (alternate.first().path != "other.txt") return 13;
+        file resourceName = "dir/$unregistered$";
+        if (resourceName.name != "unregistered" || resourceName.path != "dir/$unregistered$") return 19;
+        file[] resourceFields = file.parse("[{path:'$raw.path$',name:'$raw.name$',size:0,author:'$author$',details:{'$key$':'$value$'}}]");
+        if (resourceFields.first().path != "raw.path" || resourceFields.first().name != "raw.name" || resourceFields.first().author != "author") return 20;
+        if (resourceFields.first().details.get("key") != "value") return 21;
         return 211;
     }
 }
