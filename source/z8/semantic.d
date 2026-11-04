@@ -202,7 +202,7 @@ class Checker {
         bool ambiguous;
         Method[] seen;
         for (auto owner = first.owner; owner !is null; owner = owner.baseClass) foreach (candidate; owner.methods) {
-            if (candidate.name.text != first.name.text || candidate.isStatic != first.isStatic) continue;
+            if (candidate.name.text != first.name.text) continue;
             bool hidden;
             foreach (previous; seen) if (sameParameters(previous, candidate)) { hidden = true; break; }
             if (hidden) continue;
@@ -296,7 +296,6 @@ class Checker {
         foreach (m; program.methods) {
             auto previousOverloads = m.name.text in ownOverloads;
             if (previousOverloads !is null) foreach (previous; *previousOverloads) {
-                if (m.isStatic != previous.isStatic) fail("mixing static and instance overloads is not supported", m.name);
                 if (sameParameters(previous, m)) fail("duplicate method signature", m.name);
             }
             Method baseMethod;
@@ -713,8 +712,8 @@ class Checker {
                     if (owner is null) fail("unknown class or variable '" ~ e.left.token.text ~ "'", e.left.token);
                     auto target = lookupMethod(*owner, e.token.text);
                     if (target is null) fail("unknown method '" ~ e.token.text ~ "'", e.token);
-                    if (!target.isStatic) fail("instance method cannot be called on a class", e.token);
                     target = selectOverload(target, e);
+                    if (!target.isStatic) fail("instance method cannot be called on a class", e.token);
                     if (!accessible(target.owner, target.isPublic, target.isProtected)) fail("method is not accessible", e.token);
                     e.targetClass = target.owner.emittedName;
                     return checkCall(target, target.owner, e);
@@ -875,10 +874,12 @@ class Checker {
                     auto owner = e.left.objectClass;
                     auto target = lookupMethod(owner, e.token.text);
                     if (target is null) fail("unknown method '" ~ e.token.text ~ "'", e.token);
-                    if (target.isStatic) fail("static method call through an instance is not supported", e.token);
                     target = selectOverload(target, e);
                     if (!accessible(target.owner, target.isPublic, target.isProtected)) fail("method is not accessible", e.token);
-                    e.instanceCall = true;
+                    if (target.isStatic) {
+                        e.staticInstanceCall = true;
+                        e.targetClass = target.owner.emittedName;
+                    } else e.instanceCall = true;
                     return checkCall(target, target.owner, e);
                 } else if (receiver == ValueType.primaryType) {
                     checkArguments(e, []);

@@ -1,0 +1,21 @@
+public class MixedOverloads {
+    static int effects;
+    public static int choose(int value) { return value + 10; }
+    public int choose(string value) { return value.length() + 20; }
+    public static void add(int value) { effects += value; }
+    public void add(string value) { effects += value.length(); }
+    public static MixedOverloads receiver() { effects += 1; return new MixedOverloads; }
+    public int invoke() { return choose(1) + choose("abc"); }
+    public static int run() {
+        effects = 0;
+        MixedOverloads obj = new MixedOverloads;
+        if (obj.choose("ab") != 22 || MixedOverloads.choose(3) != 13 || obj.invoke() != 34) return 1;
+        if (receiver().choose(3) != 13 || effects != 1) return 2;
+        receiver().add(5);
+        obj.add("ab");
+        if (effects != 9) return 3;
+        MixedOverloads missing = null;
+        try { missing.choose(1); return 4; } catch (exception expected) {}
+        return 165;
+    }
+}

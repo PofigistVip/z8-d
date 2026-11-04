@@ -352,7 +352,9 @@ unittest {
     rejects("class A { static int f(int x) { int x = 1; return x; } }");
     rejects("class A { static int f() { return 1; } static int f() { return 2; } }");
     rejects("class A { static int f(int x) { return x; } static bool f(int x) { return true; } }");
-    rejects("class A { static int f(int x) { return x; } int f(bool x) { return 1; } }");
+    compile("class A { static int f(int x) { return x; } int f(bool x) { return 1; } }");
+    rejects("class A { static int f(int x) { return x; } int f(bool x) { return 1; } static int g() { return f(true); } }");
+    rejects("class A { static int f(int x) { return x; } int f(bool x) { return 1; } static int g() { return A.f(true); } }");
     rejects("class A { static int f(decimal x) { return 1; } static int f(string x) { return 2; } static int g() { return f(1); } }");
     rejects("class A { static int f(void x) { return 1; } }");
     rejects("class A { static void f() { break; } }");

@@ -1,10 +1,15 @@
 public class StaticOverloadChild extends StaticOverloadBase {
     public static int select(string value) { return value.length() + 30; }
+    public int blend(string value) { return value.length() + 70; }
+    public int inheritedCalls() { return blend(1) + blend(true) + blend("x"); }
     public static int same(int value) { return value + 40; }
     public static int run() {
         if (select(2) != 12 || select("abc") != 33 || same(2) != 42) return 1;
         if (StaticOverloadChild.select(3) != 13 || StaticOverloadChild.select("x") != 31) return 2;
         if (StaticOverloadBase.same(2) != 22 || StaticOverloadChild.same(2) != 42) return 3;
+        StaticOverloadChild instance = new StaticOverloadChild;
+        if (instance.blend(1) != 51 || instance.blend(true) != 60 || instance.blend("x") != 71) return 4;
+        if (instance.inheritedCalls() != 182 || StaticOverloadChild.blend(2) != 52) return 5;
         return 163;
     }
 }

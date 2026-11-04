@@ -1,0 +1,26 @@
+"""Compile and run mixed static and instance overloads."""
+from pathlib import Path
+import os
+import shutil
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+compiler = root / ("z8d.exe" if os.name == "nt" else "z8d")
+fixtures = [
+    (root / "examples" / "project" / "demo" / "cases" / "MixedOverloads.bl", 165),
+]
+
+with tempfile.TemporaryDirectory() as directory:
+    temp = Path(directory)
+    for index, (fixture, expected) in enumerate(fixtures):
+        source = temp / f"source{index}"
+        source.mkdir()
+        shutil.copy2(fixture, source / fixture.name)
+        executable = temp / (f"mixed_overloads{index}.exe" if os.name == "nt" else f"mixed_overloads{index}")
+        subprocess.run([str(compiler), "build", str(source), fixture.stem + ".run", str(executable)], check=True)
+        result = subprocess.run([str(executable)])
+        if result.returncode != expected:
+            raise SystemExit(f"{fixture.name} failed: {result.returncode}")
+
+print("mixed overloads verified")

@@ -281,6 +281,12 @@ private string emitExprRaw(Expression e) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return "z8_nullable_string_call!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
             }
+            if (e.staticInstanceCall) {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                auto call = e.targetClass ~ ".m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
+                if (e.left.kind == ExprKind.superRef) return call;
+                return "({ auto z8_receiver = " ~ emitReceiver(e.left) ~ "; return " ~ call ~ "; })()";
+            }
             if (e.instanceCall) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return emitReceiver(e.left) ~ ".m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
