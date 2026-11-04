@@ -46,6 +46,20 @@ public class StringMap {
         string[string] additional;
         additional.add("a", "merged");
         additional.add("other", "new");
+        string[string] combined = values + additional;
+        if (combined["a"] != "merged" || values["a"] != "changed") return 26;
+        string[string] alias = combined;
+        combined += additional;
+        if (combined["other"] != "new") return 27;
+        combined.add("fresh", "value");
+        if (alias.containsKey("fresh")) return 28;
+        string[string] missing = null;
+        try {
+            combined += missing;
+            return 29;
+        } catch (exception expectedMerge) {
+            if (!combined.containsKey("fresh")) return 30;
+        }
         values.add(additional);
         values.add(values);
         if (values["a"] != "merged" || values["other"] != "new") return 22;
