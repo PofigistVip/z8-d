@@ -105,12 +105,16 @@ unittest {
     auto enumWrite = SourceUnit("pkg.A", "A.bl", "class A { void f() { Mode.One = Mode.Two; } }");
     rejectsSources([enumWrite, enumType], "A.bl");
     auto enumArray = SourceUnit("pkg.A", "A.bl", "class A { void f() { Mode[] values; } }");
-    rejectsSources([enumArray, enumType], "A.bl");
+    compileSources([enumArray, enumType]);
     auto enumChild = SourceUnit("pkg.A", "A.bl", "class A extends Mode { }");
     rejectsSources([enumChild, enumType], "A.bl");
     auto otherEnum = SourceUnit("pkg.Other", "Other.bl", "enum Other { One }");
     auto enumCompare = SourceUnit("pkg.A", "A.bl", "class A { bool f() { return Mode.One == Other.One; } }");
     rejectsSources([enumCompare, enumType, otherEnum], "A.bl");
+    auto enumArrayMismatch = SourceUnit("pkg.A", "A.bl", "class A { void f() { Mode[] x; Other[] y; x.addAll(y); } }");
+    rejectsSources([enumArrayMismatch, enumType, otherEnum], "A.bl");
+    auto enumForeachMismatch = SourceUnit("pkg.A", "A.bl", "class A { void f() { Mode[] x; for (Other item : x) {} } }");
+    rejectsSources([enumForeachMismatch, enumType, otherEnum], "A.bl");
     auto wrongForeach = SourceUnit("pkg.A", "A.bl", "class A { void f() { B[] x; for (A item : x) {} } }");
     rejectsSources([wrongForeach, arrayItem], "A.bl");
     auto invalidCast = SourceUnit("pkg.A", "A.bl", "class A { static B f() { A a; return (B)a; } }");

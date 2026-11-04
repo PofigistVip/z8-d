@@ -16,6 +16,16 @@ public class EnumCases {
         if (isGreen(null)) return 5;
         Flavor alternative = empty ?: Flavor.Green;
         if (alternative != object.color) return 6;
+        Flavor[] values = {Flavor.Blue, Flavor.Red, Flavor.Blue, null};
+        if (values.size() != 4 || !values.contains(Flavor.Blue)) return 7;
+        Flavor[] unique = values.unique();
+        if (unique.size() != 3 || unique[2] != null) return 8;
+        int count = 0;
+        for (Flavor valueInArray : values) if (valueInArray == Flavor.Blue) count += 1;
+        if (count != 2) return 9;
+        Flavor[] other = {Flavor.Green};
+        Flavor[] combined = unique + other;
+        if (combined.size() != 4 || combined[3] != Flavor.Green) return 10;
         return 127;
     }
 }

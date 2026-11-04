@@ -17,7 +17,7 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, decimalArray, boolArray, stringArray, selfArray, stringMap, nullType, nullableString, enumType }
+enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, decimalArray, boolArray, stringArray, selfArray, stringMap, nullType, nullableString, enumType, enumArray }
 enum NullableStringMode { none, required, nullAsEmpty }
 enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, nullLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, instanceOf, unary, binary, conditional, elvis }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
@@ -88,9 +88,9 @@ class Program {
 struct SourceUnit { string name, path, source; }
 
 private bool isArray(ValueType type) {
-    return [ValueType.intArray, ValueType.decimalArray, ValueType.boolArray, ValueType.stringArray, ValueType.selfArray].canFind(type);
+    return [ValueType.intArray, ValueType.decimalArray, ValueType.boolArray, ValueType.stringArray, ValueType.selfArray, ValueType.enumArray].canFind(type);
 }
-private bool hasObjectClass(ValueType type) { return type == ValueType.selfType || type == ValueType.selfArray || type == ValueType.enumType; }
+private bool hasObjectClass(ValueType type) { return type == ValueType.selfType || type == ValueType.selfArray || type == ValueType.enumType || type == ValueType.enumArray; }
 private bool isNullableReference(ValueType type) { return type == ValueType.selfType || type == ValueType.enumType || type == ValueType.stringMap || type == ValueType.nullableString || isArray(type); }
 // Until Java's legacy Double.toString conversion is fully reproduced, reject
 // literal values for which a shorter D rendering may differ from the Java backend.
@@ -119,6 +119,7 @@ private ValueType elementType(ValueType type) {
         case ValueType.boolArray: return ValueType.boolType;
         case ValueType.stringArray: return ValueType.stringType;
         case ValueType.selfArray: return ValueType.selfType;
+        case ValueType.enumArray: return ValueType.enumType;
         default: assert(0, "not an array");
     }
 }
@@ -510,8 +511,7 @@ class Checker {
         if (type != ValueType.selfType && type != ValueType.selfArray) return type;
         auto target = resolveClass(owner, objectName, site);
         if (!target.isEnum) return type;
-        if (type == ValueType.selfArray) fail("enum arrays are not supported", site);
-        return ValueType.enumType;
+        return type == ValueType.selfArray ? ValueType.enumArray : ValueType.enumType;
     }
     void prepareDeclarations(Program program, Program[string] programs) {
         currentProgram = program; allClasses = programs;
@@ -529,7 +529,7 @@ class Checker {
         }
     }
     private bool matches(Expression e, ValueType expected, Program expectedClass = null) {
-        if (e.kind == ExprKind.arrayLiteral && expected == ValueType.selfArray) e.objectClass = expectedClass;
+        if (e.kind == ExprKind.arrayLiteral && (expected == ValueType.selfArray || expected == ValueType.enumArray)) e.objectClass = expectedClass;
         auto actual = typeOf(e, expected);
         if (actual == ValueType.nullableString && expected == ValueType.stringType) {
             e.nullableStringMode = NullableStringMode.required; return true;
@@ -542,7 +542,7 @@ class Checker {
             e.convertToString = actual; return true;
         }
         return actual == expected && (expected == ValueType.selfType ? isAssignable(e.objectClass, expectedClass) :
-            (expected != ValueType.selfArray && expected != ValueType.enumType) || e.objectClass is expectedClass);
+            (expected != ValueType.selfArray && expected != ValueType.enumType && expected != ValueType.enumArray) || e.objectClass is expectedClass);
     }
     private ValueType checkCall(Method method, Program owner, Expression e) {
         if (e.arguments.length != method.parameters.length) fail("incorrect argument count", e.token);
@@ -594,6 +594,7 @@ class Checker {
                     if (actual == ValueType.selfType && !isAssignable(e.arguments[i].objectClass, resolveClass(candidate.owner, p.objectName, p.name))) applicable = false;
                     if (actual == ValueType.selfArray && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                     if (actual == ValueType.enumType && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
+                    if (actual == ValueType.enumArray && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                 } else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
                 else if (p.type == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual)) weight += 100;
                 else applicable = false;
@@ -889,7 +890,7 @@ class Checker {
                         default: break;
                     }
                 } else if (isArray(receiver)) {
-                    if (receiver == ValueType.selfArray) {
+                    if (receiver == ValueType.selfArray || receiver == ValueType.enumArray) {
                         e.objectClass = e.left.objectClass;
                         if (!["size", "isEmpty", "clear", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
                             fail("this method is not yet supported for object arrays", e.token);
@@ -952,7 +953,7 @@ class Checker {
                 }
                 if (!isArray(array)) fail("indexing requires an array", e.token);
                 if (typeOf(e.right) != ValueType.intType) fail("array index must be int", e.token);
-                if (array == ValueType.selfArray) e.objectClass = e.left.objectClass;
+                if (array == ValueType.selfArray || array == ValueType.enumArray) e.objectClass = e.left.objectClass;
                 return elementType(array);
             case ExprKind.castExpr:
                 if (e.castType == ValueType.selfType) {
@@ -995,7 +996,7 @@ class Checker {
                     return ValueType.stringMap;
                 }
                 if (isArray(left) && left == right && op == "+") {
-                    if (left == ValueType.selfArray && e.left.objectClass !is e.right.objectClass)
+                    if ((left == ValueType.selfArray || left == ValueType.enumArray) && e.left.objectClass !is e.right.objectClass)
                         fail("array element type mismatch", e.token);
                     e.inferredType = left;
                     e.objectClass = e.left.objectClass;
@@ -1065,7 +1066,7 @@ class Checker {
                 return left == ValueType.nullableString ? ValueType.stringType : left;
         }
     }
-    private bool checkStatement(Statement s) {
+    private bool checkStatement(Statement s, bool allowUninitializedEnum = false) {
         final switch (s.kind) {
             case StmtKind.block:
                 auto old = variables.dup; auto oldObjects = objectVariables.dup; bool returns;
@@ -1074,7 +1075,7 @@ class Checker {
             case StmtKind.variable:
                 if (s.token.text in variables) fail("duplicate or shadowed variable", s.token);
                 s.type = resolveDeclaredType(s.type, currentProgram, s.objectName, s.token);
-                if (s.type == ValueType.enumType && s.expression is null) fail("enum variables require an initializer", s.token);
+                if (s.type == ValueType.enumType && s.expression is null && !allowUninitializedEnum) fail("enum variables require an initializer", s.token);
                 if (s.type == ValueType.voidType) fail("variable cannot be void", s.token);
                 if (hasObjectClass(s.type)) s.objectClass = resolveClass(currentProgram, s.objectName, s.token);
                 if (s.expression !is null && !matches(s.expression, s.type, s.objectClass)) fail("initializer type mismatch", s.token);
@@ -1129,9 +1130,10 @@ class Checker {
             case StmtKind.forEachStmt:
                 auto old = variables.dup; auto oldObjects = objectVariables.dup;
                 auto array = typeOf(s.expression);
+                checkStatement(s.initial, true);
                 if (!isArray(array) || elementType(array) != s.initial.type) fail("foreach element type mismatch", s.token);
-                checkStatement(s.initial);
                 if (array == ValueType.selfArray && !isAssignable(s.expression.objectClass, s.initial.objectClass)) fail("foreach element type mismatch", s.token);
+                if (array == ValueType.enumArray && s.expression.objectClass !is s.initial.objectClass) fail("foreach element type mismatch", s.token);
                 ++loopDepth; checkStatement(s.children[0]); --loopDepth;
                 variables = old; objectVariables = oldObjects; return false;
             case StmtKind.breakStmt:
@@ -1179,6 +1181,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.nullType: assert(0, "null has no concrete D type");
         case ValueType.nullableString: return "wstring";
         case ValueType.enumType: assert(objectClass !is null); return objectClass.emittedName;
+        case ValueType.enumArray: assert(objectClass !is null); return "Z8Array!(" ~ objectClass.emittedName ~ ")";
     }
 }
 /// The Java runtime stores strings as UTF-16; preserve its code-unit ordering.
@@ -1229,7 +1232,7 @@ private string emitExprRaw(Expression e) {
         case ExprKind.nullLiteral: return e.inferredType == ValueType.voidType ? "null" : "cast(" ~ dType(e.inferredType, e.objectClass) ~ ")null";
         case ExprKind.arrayLiteral:
             string[] elements; foreach (element; e.arguments)
-                elements ~= e.inferredType == ValueType.selfArray ? "cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(element) ~ ")" : emitExpr(element);
+                elements ~= (e.inferredType == ValueType.selfArray || e.inferredType == ValueType.enumArray) ? "cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(element) ~ ")" : emitExpr(element);
             return "new " ~ dType(e.inferredType, e.objectClass) ~ "(" ~ (elements.length ? "[" ~ elements.join(", ") ~ "]" : "") ~ ")";
         case ExprKind.variable: return e.isField ? (e.targetClass.length ? e.targetClass ~ ".f_" : "this.f_") ~ e.token.text : "v_" ~ e.token.text;
         case ExprKind.selfRef: return "this";
