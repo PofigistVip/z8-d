@@ -47,8 +47,8 @@ class Parser {
         }
         if (accept("[")) {
             if (current.text != "]") {
-                if (result != ValueType.stringType || !accept("string")) error("only string[string] maps are supported");
-                expect("]"); return ValueType.stringMap;
+                if ((result != ValueType.stringType && result != ValueType.primaryType) || !accept("string")) error("only string[string] and primary[string] maps are supported");
+                expect("]"); return result == ValueType.stringType ? ValueType.stringMap : ValueType.primaryStringMap;
             }
             expect("]");
             switch (result) {
@@ -112,7 +112,7 @@ class Parser {
             auto declaredType = parseType(); auto declaredObjectName = parsedObjectName; auto name = identifier();
             if (current.text != "(") {
                 if (isVirtual || declaredType == ValueType.voidType) error("this field type or modifier is not supported");
-                if (isStatic && (declaredType == ValueType.selfArray || declaredType == ValueType.exceptionType || declaredType == ValueType.stringMap))
+                if (isStatic && (declaredType == ValueType.selfArray || declaredType == ValueType.exceptionType || isMap(declaredType)))
                     error("static object fields are not supported");
                 auto field = new Field; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.isProtected = isProtected; field.isStatic = isStatic; field.objectName = declaredObjectName; field.owner = result;
                 if (accept("=")) field.initializer = initializer();

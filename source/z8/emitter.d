@@ -22,6 +22,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.selfType: assert(objectClass !is null); return objectClass.emittedName;
         case ValueType.selfArray: assert(objectClass !is null); return "Z8Array!(" ~ objectClass.emittedName ~ ")";
         case ValueType.stringMap: return "Z8StringMap";
+        case ValueType.primaryStringMap: return "Z8PrimaryMap";
         case ValueType.intArray: return "Z8Array!long";
         case ValueType.decimalArray: return "Z8Array!Z8Decimal";
         case ValueType.boolArray: return "Z8Array!bool";
@@ -173,7 +174,7 @@ private string emitExprRaw(Expression e) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return "z8_invoke!\"z8_" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
             }
-            if (e.inferredType == ValueType.stringMap) {
+            if (isMap(e.inferredType)) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return "z8_invoke!\"z8_" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
             }
@@ -199,7 +200,7 @@ private string emitExprRaw(Expression e) {
             auto value = "(" ~ emitExpr(e.left) ~ ").length";
             return e.token.text == "length" ? "cast(long)(" ~ value ~ ")" : "(" ~ value ~ " == 0)";
         case ExprKind.index:
-            if (e.inferredType == ValueType.stringMap) return "z8_invoke!\"z8_get\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            if (isMap(e.inferredType)) return "z8_invoke!\"z8_get\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             return "z8_array_at(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
         case ExprKind.castExpr:
             if (e.primaryCast) return "z8_primary_cast!(" ~ dType(e.castType) ~ ")(" ~ emitExpr(e.left) ~ ")";
@@ -247,7 +248,7 @@ private string emitExprRaw(Expression e) {
                 return "z8_guid_compare!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.inferredType == ValueType.datespanType)
                 return "z8_datespan_binary!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
-            if (e.inferredType == ValueType.stringMap)
+            if (isMap(e.inferredType))
                 return "z8_map_union(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (isArray(e.inferredType))
                 return "z8_array_union(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
@@ -308,10 +309,10 @@ private string emitSimple(Statement s) {
             (s.expression !is null ? emitExpr(s.expression) : s.type == ValueType.intType ? "z8_optional_wrap(0L)" : s.type == ValueType.boolType ? "z8_optional_wrap(false)" : s.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(s.type, s.objectClass, s.hasContainer));
     if (s.kind == StmtKind.expressionStmt) return emitExpr(s.expression);
     assert(s.kind == StmtKind.assignment);
-    if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.stringMap)
+    if (s.target.kind == ExprKind.index && isMap(s.target.inferredType))
         return "z8_invoke!\"z8_add\"(" ~ emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
     auto name = emitExpr(s.target);
-    if (s.type == ValueType.stringMap && s.assignmentOperator == "+=")
+    if (isMap(s.type) && s.assignmentOperator == "+=")
         return "z8_map_add_assign(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (isArray(s.type) && s.assignmentOperator == "+=")
         return "z8_array_add_assign(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
@@ -332,6 +333,7 @@ private string defaultValue(ValueType type, Program objectClass = null, bool has
     if (type == ValueType.decimalType) return "z8_decimal_from_int(0)";
     if (type == ValueType.selfType) return "z8_new!(" ~ dType(type, objectClass) ~ ")(" ~ (hasContainer ? "this" : "") ~ ")";
     if (type == ValueType.stringMap) return "new Z8StringMap()";
+    if (type == ValueType.primaryStringMap) return "new Z8PrimaryMap()";
     if (isArray(type)) return "new " ~ dType(type, objectClass) ~ "()";
     if (type == ValueType.intType) return "0";
     if (type == ValueType.stringType) return `""w`;

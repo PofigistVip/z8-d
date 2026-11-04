@@ -1,0 +1,65 @@
+class Z8PrimaryMap {
+    private Z8Primary[wstring] entries;
+    private bool hasNullKey;
+    private Z8Primary nullKeyValue;
+    long z8_size() { return cast(long)entries.length + (hasNullKey ? 1 : 0); }
+    bool z8_isEmpty() { return entries.length == 0 && !hasNullKey; }
+    void z8_clear() { entries.clear(); hasNullKey = false; nullKeyValue = null; }
+    bool z8_containsKey(wstring key) { return key is null ? hasNullKey : (key in entries) !is null; }
+    bool z8_containsValue(Z8Primary value) {
+        if (hasNullKey && (value is nullKeyValue || (value !is null && value == nullKeyValue))) return true;
+        foreach (item; entries) if (value is item || (value !is null && value == item)) return true;
+        return false;
+    }
+    Z8Primary z8_add(wstring key, Z8Primary value) {
+        if (key is null) {
+            auto previous = hasNullKey ? nullKeyValue : null;
+            hasNullKey = true; nullKeyValue = value; return previous;
+        }
+        auto found = key in entries;
+        auto previous = found is null ? null : *found;
+        entries[key] = value;
+        return previous;
+    }
+    void z8_add(Z8PrimaryMap other) {
+        z8_nonnull(other);
+        if (other is this) return;
+        foreach (key, value; other.entries) z8_add(key, value);
+        if (other.hasNullKey) z8_add(null, other.nullKeyValue);
+    }
+    Z8Array!wstring z8_keys() {
+        auto result = new Z8Array!wstring();
+        foreach (key, value; entries) result.z8_add(key);
+        if (hasNullKey) result.z8_add(null);
+        return result;
+    }
+    Z8Array!Z8Primary z8_values() {
+        auto result = new Z8Array!Z8Primary();
+        foreach (value; entries) result.z8_add(value);
+        if (hasNullKey) result.z8_add(nullKeyValue);
+        return result;
+    }
+    Z8Primary z8_get(wstring key) {
+        if (key is null) return hasNullKey ? nullKeyValue : null;
+        auto found = key in entries;
+        return found is null ? null : *found;
+    }
+    Z8Primary z8_remove(wstring key) {
+        if (key is null) {
+            auto previous = hasNullKey ? nullKeyValue : null;
+            hasNullKey = false; nullKeyValue = null; return previous;
+        }
+        auto found = key in entries;
+        if (found is null) return null;
+        auto previous = *found;
+        entries.remove(key);
+        return previous;
+    }
+}
+Z8PrimaryMap z8_map_union(Z8PrimaryMap left, Z8PrimaryMap right) {
+    auto result = new Z8PrimaryMap();
+    result.z8_add(z8_nonnull(left));
+    result.z8_add(z8_nonnull(right));
+    return result;
+}
+void z8_map_add_assign(ref Z8PrimaryMap left, Z8PrimaryMap right) { left = z8_map_union(left, right); }

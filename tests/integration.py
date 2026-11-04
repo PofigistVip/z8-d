@@ -96,6 +96,19 @@ void main() {
     binary = directory / ("check.exe" if os.name == "nt" else "check")
     subprocess.run(["dmd", str(generated), *import_args(), str(runtime_lib), "-of=" + str(binary)], cwd=directory, check=True)
     subprocess.run([str(binary)], cwd=directory, check=True)
+
+    primary_map_file = directory / "PrimaryMapCheck.bl"
+    primary_map_file.write_text('''class PrimaryMapCheck { static bool run() {
+        primary[string] values;
+        values["number"] = 7;
+        if ((int)values["number"] != 7) return false;
+        values["number"] = null;
+        return values.containsKey("number") && values["number"] == null;
+    } }''', encoding="utf-8")
+    primary_map_source = subprocess.check_output([str(exe), "compile", str(primary_map_file)], text=True, encoding="utf-8")
+    generated.write_text(primary_map_source + "\nvoid main() { assert(Z8_PrimaryMapCheck.m_run()); }\n", encoding="utf-8")
+    subprocess.run(["dmd", str(generated), *import_args(), str(runtime_lib), "-of=" + str(binary)], cwd=directory, check=True)
+    subprocess.run([str(binary)], cwd=directory, check=True)
     bad = directory / "bad.bl"
     bad.write_text("class Bad { static int f() { return true; } }", encoding="utf-8")
     rejected = subprocess.run([str(exe), "compile", str(bad)], capture_output=True, text=True, encoding="utf-8")

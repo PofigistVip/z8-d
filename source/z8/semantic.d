@@ -571,22 +571,23 @@ class Checker {
                         checkArguments(e, e.arguments.length == 1 ? [ValueType.intType] : [ValueType.intType, ValueType.intType]);
                         return ValueType.decimalType;
                     }
-                } else if (receiver == ValueType.stringMap) {
+                } else if (isMap(receiver)) {
+                    auto mapValue = receiver == ValueType.stringMap ? ValueType.stringType : ValueType.primaryType;
                     switch (e.token.text) {
                         case "size": case "isEmpty": case "clear":
                             checkArguments(e, []);
                             return e.token.text == "size" ? ValueType.intType : e.token.text == "isEmpty" ? ValueType.boolType : ValueType.voidType;
-                        case "containsKey": case "containsValue":
-                            checkArguments(e, [ValueType.stringType]); return ValueType.boolType;
+                        case "containsKey": checkArguments(e, [ValueType.stringType]); return ValueType.boolType;
+                        case "containsValue": checkArguments(e, [mapValue]); return ValueType.boolType;
                         case "get":
-                            checkArguments(e, [ValueType.stringType]); return ValueType.nullableString;
+                            checkArguments(e, [ValueType.stringType]); return receiver == ValueType.stringMap ? ValueType.nullableString : ValueType.primaryType;
                         case "remove":
-                            checkArguments(e, [ValueType.stringType]); return ValueType.nullableString;
+                            checkArguments(e, [ValueType.stringType]); return receiver == ValueType.stringMap ? ValueType.nullableString : ValueType.primaryType;
                         case "add":
-                            if (e.arguments.length == 1) { checkArguments(e, [ValueType.stringMap]); return ValueType.voidType; }
-                            checkArguments(e, [ValueType.stringType, ValueType.stringType]); return ValueType.nullableString;
-                        case "keys": case "values":
-                            checkArguments(e, []); return ValueType.stringArray;
+                            if (e.arguments.length == 1) { checkArguments(e, [receiver]); return ValueType.voidType; }
+                            checkArguments(e, [ValueType.stringType, mapValue]); return receiver == ValueType.stringMap ? ValueType.nullableString : ValueType.primaryType;
+                        case "keys": checkArguments(e, []); return ValueType.stringArray;
+                        case "values": checkArguments(e, []); return receiver == ValueType.stringMap ? ValueType.stringArray : ValueType.primaryArray;
                         default: break;
                     }
                 } else if (isArray(receiver)) {
@@ -651,10 +652,10 @@ class Checker {
                 fail("unsupported member method '" ~ e.token.text ~ "'", e.token); assert(0);
             case ExprKind.index:
                 auto array = typeOf(e.left);
-                if (array == ValueType.stringMap) {
+                if (isMap(array)) {
                     if (!matches(e.right, ValueType.stringType)) fail("map key must be string", e.token);
-                    e.inferredType = ValueType.stringMap;
-                    return ValueType.nullableString;
+                    e.inferredType = array;
+                    return array == ValueType.stringMap ? ValueType.nullableString : ValueType.primaryType;
                 }
                 if (!isArray(array)) fail("indexing requires an array", e.token);
                 if (!matches(e.right, ValueType.intType)) fail("array index must be int", e.token);
@@ -784,9 +785,9 @@ class Checker {
                     e.emittedOperator = op == "==" ? "is" : "!is";
                     return ValueType.boolType;
                 }
-                if (left == ValueType.stringMap && right == ValueType.stringMap && op == "+") {
-                    e.inferredType = ValueType.stringMap;
-                    return ValueType.stringMap;
+                if (isMap(left) && left == right && op == "+") {
+                    e.inferredType = left;
+                    return left;
                 }
                 if (isArray(left) && left == right && op == "+") {
                     if ((left == ValueType.selfArray || left == ValueType.enumArray) && e.left.objectClass !is e.right.objectClass)
@@ -827,7 +828,7 @@ class Checker {
                     else if (op == ">") e.emittedOperator = ">=";
                     else if (op == ">=") e.emittedOperator = ">";
                 }
-                if (left != right || left == ValueType.voidType || left == ValueType.exceptionType || left == ValueType.primaryType || left == ValueType.binaryType || left == ValueType.selfType || left == ValueType.stringMap || isArray(left)) fail("operand type mismatch", e.token);
+                if (left != right || left == ValueType.voidType || left == ValueType.exceptionType || left == ValueType.primaryType || left == ValueType.binaryType || left == ValueType.selfType || isMap(left) || isArray(left)) fail("operand type mismatch", e.token);
                 if (["==", "!="].canFind(op)) return ValueType.boolType;
                 if ((left == ValueType.intType || left == ValueType.decimalType || left == ValueType.stringType) && ["<", ">", "<=", ">="].canFind(op)) return ValueType.boolType;
                 if (left == ValueType.stringType && op == "+") { e.inferredType = ValueType.stringType; return ValueType.stringType; }
@@ -911,7 +912,7 @@ class Checker {
                 if (s.token.text in variables) fail("duplicate or shadowed variable", s.token);
                 s.type = resolveDeclaredType(s.type, currentProgram, s.objectName, s.token);
                 if (s.type == ValueType.enumType && s.expression is null && !allowUninitializedEnum) fail("enum variables require an initializer", s.token);
-                if (s.type == ValueType.primaryType && s.expression is null) fail("primary variables require an initializer", s.token);
+                if (s.type == ValueType.primaryType && s.expression is null && !allowUninitializedEnum) fail("primary variables require an initializer", s.token);
                 if (s.type == ValueType.voidType) fail("variable cannot be void", s.token);
                 if (hasObjectClass(s.type)) s.objectClass = resolveClass(currentProgram, s.objectName, s.token);
                 if (s.expression !is null && !matchesStored(s.expression, s.type, s.objectClass)) fail("initializer type mismatch", s.token);
@@ -923,16 +924,16 @@ class Checker {
                 if (variableType == ValueType.nullableString) variableType = ValueType.stringType;
                 if (isOptionalPrimitive(variableType)) variableType = optionalBaseType(variableType);
                 if (s.target.enumConstant) fail("enum constants cannot be assigned", s.token);
-                if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.stringMap)
-                    variableType = ValueType.stringType;
+                if (s.target.kind == ExprKind.index && isMap(s.target.inferredType))
+                    variableType = s.target.inferredType == ValueType.stringMap ? ValueType.stringType : ValueType.primaryType;
                 if ((s.target.kind != ExprKind.index || [ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(s.target.inferredType)) && (s.assignmentOperator == "=" || variableType == ValueType.intType || variableType == ValueType.decimalType) ?
                     !matchesStored(s.expression, variableType, s.target.objectClass) :
                     !matches(s.expression, variableType, s.target.objectClass)) fail("assignment type mismatch", s.token);
-                if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.stringMap && s.assignmentOperator != "=") fail("compound assignment to a map entry is not supported", s.token);
+                if (s.target.kind == ExprKind.index && isMap(s.target.inferredType) && s.assignmentOperator != "=") fail("compound assignment to a map entry is not supported", s.token);
                 s.type = variableType;
                 if (s.assignmentOperator != "=" && variableType != ValueType.intType &&
                     !(variableType == ValueType.stringType && s.assignmentOperator == "+=") &&
-                    !(variableType == ValueType.stringMap && s.assignmentOperator == "+=") &&
+                    !(isMap(variableType) && s.assignmentOperator == "+=") &&
                     !(isArray(variableType) && s.assignmentOperator == "+=") &&
                     !(variableType == ValueType.decimalType && ["+=", "-=", "*=", "/=", "%="].canFind(s.assignmentOperator)))
                     fail("invalid compound assignment operands", s.token);

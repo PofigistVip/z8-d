@@ -54,6 +54,23 @@ public class PrimaryValues {
         if ((int)values.first() != 1 || (int)values.last() != 1) return 23;
         values.remove(1);
         if (values.size() != 3 || !(values.first() instanceof bool)) return 24;
+        int count = 0;
+        for (primary item : values) { if (item != null) count += 1; }
+        if (count != 3) return 31;
+        primary[string] properties;
+        properties.add("number", 42);
+        properties.add("text", "hello");
+        properties.add(null, true);
+        if (properties.size() != 3 || !properties.containsKey(null) || !properties.containsValue(42)) return 25;
+        if ((int)properties["number"] != 42 || (string)properties.get("text") != "hello") return 26;
+        if ((bool)properties.remove(null) != true || properties.get("absent") != null) return 27;
+        if (properties.keys().size() != 2 || properties.values().size() != 2) return 28;
+        primary[string] other;
+        other.add("number", 7);
+        primary[string] combined = properties + other;
+        if ((int)combined.get("number") != 7 || (int)properties.get("number") != 42) return 29;
+        properties += other;
+        if ((int)properties.get("number") != 7) return 30;
         value = null;
         if ((value instanceof int) || (int)value != null) return 15;
         try {
