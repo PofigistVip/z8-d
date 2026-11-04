@@ -68,7 +68,7 @@ private string emitStringLiteral(string text) {
     if (value.length == 0) return `z8_string_new(""w)`;
     string[] units;
     foreach (c; value) units ~= format("cast(wchar)0x%04X", cast(uint)c);
-    return "[" ~ units.join(", ") ~ "].idup";
+    return "z8_string_new([" ~ units.join(", ") ~ "].idup)";
 }
 private string dStorageType(ValueType type, Program objectClass = null) {
     return type == ValueType.intType ? "Z8Optional!long" : type == ValueType.boolType ? "Z8Optional!bool" : type == ValueType.decimalType ? "Z8Optional!Z8Decimal" : dType(type, objectClass);
@@ -126,7 +126,12 @@ private string emitExpr(Expression e) {
     if (!e.emittedOverride.length && e.kind == ExprKind.memberCall &&
         ((e.inferredType == ValueType.stringType && ["toString", "substring", "left", "right", "charAt", "trim", "trimLeft", "trimRight",
             "padLeft", "padRight", "insert", "replace", "toLowerCase", "toUpperCase", "replaceFirst", "replaceAll", "format", "getGroup"].canFind(e.token.text)) ||
-         ["z8_string_replicate", "z8_string_concat", "z8_string_fromBinary"].canFind(e.builtinCall)))
+         ["z8_string_replicate", "z8_string_concat", "z8_string_fromBinary",
+          "z8_file_read", "z8_file_toJson", "z8_file_to_string", "z8_file_name", "z8_file_baseName",
+          "z8_file_extension", "z8_file_fileName", "z8_file_folder", "z8_file_baseName_instance",
+          "z8_file_extension_instance", "z8_binary_base_name", "z8_binary_extension", "z8_binary_to_string",
+          "z8_guid_to_string", "z8_primary_to_string", "z8_geometry_to_string", "z8_geometry_toGeoJson",
+          "z8_date_toString", "z8_date_toIsoString", "z8_datespan_to_string"].canFind(e.builtinCall)))
         value = "z8_string_new(" ~ value ~ ")";
     if (e.nonNullStringResult) value = "z8_string_or_empty(" ~ value ~ ")";
     if (e.optionalRequired) value = "z8_optional_require(" ~ value ~ ")";
@@ -309,6 +314,8 @@ private string emitExprRaw(Expression e) {
                 return "z8_array_union(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.nullableStringLeft)
                 return "z8_nullable_string_binary!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            if (e.token.text == "+" && e.inferredType == ValueType.stringType)
+                return "z8_string_new(" ~ emitExpr(e.left) ~ " ~ " ~ emitExpr(e.right) ~ ")";
             if ((e.token.text == "/" || e.token.text == "%") && e.inferredType != ValueType.decimalType)
                 return (e.token.text == "/" ? "z8_div(" : "z8_mod(") ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             auto op = e.emittedOperator.length ? e.emittedOperator : e.token.text == "+" && e.inferredType == ValueType.stringType ? "~" : e.token.text;

@@ -198,10 +198,11 @@ Z8Array!wstring z8_regex_split(wstring value, wstring pattern, long limit = 0) {
         auto start = input.length - match.post.length - match.hit.length;
         if (start == 0 && !match.hit.length) continue;
         if (cast(int)limit > 0 && result.z8_size() >= cast(int)limit - 1) break;
-        result.z8_add(z8_string_new(input[previous .. start]));
+        result.z8_add(input[previous .. start]);
         previous = start + match.hit.length; split = true;
     }
-    result.z8_add(z8_string_new(input[previous .. $]));
+    result.z8_add(input[previous .. $]);
     if (cast(int)limit == 0 && split) while (result.z8_size() && !result.z8_last().length) result.z8_removeAt(result.z8_size() - 1);
+    foreach (ref item; result.items) item = z8_string_new(item);
     return result;
 }

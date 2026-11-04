@@ -2,6 +2,12 @@ import org.zenframework.z8.lang.encoding;
 public class StringExtras {
     public static int run() {
         string text = "AbC";
+        if ("$$" != "") return 52;
+        if (("$" + "missing.resource" + "$") != "missing.resource") return 53;
+        if ("!missing.resource!".replace(0, 1, "$").replace(17, 1, "$") != "missing.resource") return 54;
+        if (file.name("/$missing.resource$") != "missing.resource") return 55;
+        string[] resourceParts = "a,$$".split(",");
+        if (resourceParts.size() != 2 || resourceParts[1] != "") return 56;
         if (text.toLowerCase() != "abc" || text.toUpperCase() != "ABC") return 1;
         if ("straße".toUpperCase() != "STRASSE") return 2;
         if ("Hello".firstToLowerCase() != "hello" || "world".firstToUpperCase() != "World") return 3;

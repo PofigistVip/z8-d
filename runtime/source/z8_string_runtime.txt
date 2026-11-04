@@ -28,12 +28,14 @@ wstring z8_str_toUpperCase(wstring value) {
     return result.length ? result.idup : ""w;
 }
 wstring z8_str_firstToLowerCase(wstring value) {
-    if (!value.length || (value[0] >= 0xD800 && value[0] <= 0xDFFF)) return value.length ? value : ""w;
-    return z8_str_toLowerCase(value[0 .. 1]) ~ value[1 .. $];
+    if (!value.length) return value;
+    if (value[0] >= 0xD800 && value[0] <= 0xDFFF) return z8_string_new(value);
+    return z8_string_new(z8_str_toLowerCase(value[0 .. 1]) ~ value[1 .. $]);
 }
 wstring z8_str_firstToUpperCase(wstring value) {
-    if (!value.length || (value[0] >= 0xD800 && value[0] <= 0xDFFF)) return value.length ? value : ""w;
-    return z8_str_toUpperCase(value[0 .. 1]) ~ value[1 .. $];
+    if (!value.length) return value;
+    if (value[0] >= 0xD800 && value[0] <= 0xDFFF) return z8_string_new(value);
+    return z8_string_new(z8_str_toUpperCase(value[0 .. 1]) ~ value[1 .. $]);
 }
 wstring z8_string_replicate(wstring value, long count) {
     value = z8_string_required(value);

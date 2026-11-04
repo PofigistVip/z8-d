@@ -9,8 +9,19 @@ wstring z8_string_required(wstring value) {
     return value;
 }
 wstring z8_string_or_empty(wstring value) { return value is null ? ""w : value; }
+// Resource lookup mirrors Resources.getByKey; configure resources at startup.
+private __gshared wstring[wstring] z8_string_resources;
+void z8_string_set_resource(wstring key, wstring value) {
+    z8_string_resources[z8_string_required(key).idup] = z8_string_required(value).idup;
+}
+void z8_string_clear_resources() { z8_string_resources = null; }
 wstring z8_string_new(wstring value) {
     if (value is null) return null;
+    if (value.length >= 2 && value[0] == '$' && value[$ - 1] == '$') {
+        auto key = value[1 .. $ - 1];
+        auto resource = key in z8_string_resources;
+        value = resource is null ? key : *resource;
+    }
     auto buffer = new wchar[value.length + 1];
     buffer[0 .. value.length] = value[];
     return cast(wstring)buffer[0 .. value.length];
@@ -20,7 +31,7 @@ void z8_string_add_assign(ref wstring left, wstring right) {
 }
 auto z8_nullable_string_binary(string op)(wstring value, wstring other) {
     value = z8_string_required(value);
-    static if (op == "+") { auto result = value ~ other; return result.length ? result : ""w; }
+    static if (op == "+") return z8_string_new(value ~ other);
     else static if (op == "==") return value == other;
     else static if (op == "!=") return value != other;
     else static if (op == "<") return z8_str_compare(value, other) < 0;
