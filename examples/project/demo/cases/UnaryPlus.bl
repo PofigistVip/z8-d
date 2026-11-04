@@ -1,0 +1,13 @@
+public class UnaryPlus {
+    static int effects;
+    public int operator + () { effects += 1; return 99; }
+    public static int run() {
+        effects = 0;
+        UnaryPlus value = new UnaryPlus;
+        UnaryPlus copy = +value;
+        if (copy == null || +true != true || +"text" != "text") return 1;
+        int number = +(+3);
+        if (number != 3 || effects != 0) return 2;
+        return 177;
+    }
+}

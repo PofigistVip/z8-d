@@ -10,6 +10,7 @@ compiler = root / ("z8d.exe" if os.name == "nt" else "z8d")
 fixtures = [
     (root / "examples" / "project" / "demo" / "cases" / "UnaryOperators.bl", 167),
     (root / "examples" / "project" / "demo" / "cases" / "UnaryComplement.bl", 169),
+    (root / "examples" / "project" / "demo" / "cases" / "UnaryPlus.bl", 177),
     # The original Java backend gives these two operators the same method name.
     (root / "examples" / "operators" / "UnaryCombined.bl", 173),
 ]

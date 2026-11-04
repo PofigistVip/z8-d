@@ -381,7 +381,13 @@ class Parser {
     }
     private Expression unary() {
         auto t = current;
-        if (["+", "-", "!", "~"].canFind(t.text)) {
+        // In the original grammar unary + leaves the operand unchanged and
+        // does not call an operator, even for non-numeric types.
+        if (accept("+")) {
+            if (current.text == "null") error("null is not a unary operand");
+            return unary();
+        }
+        if (["-", "!", "~"].canFind(t.text)) {
             take(); auto result = new Expression(ExprKind.unary, t); result.left = unary(); return result;
         }
         auto castEnd = current.text == "(" ? afterType(1) : 0;
