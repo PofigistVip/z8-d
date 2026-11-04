@@ -5,6 +5,8 @@ public class GuidValues {
         guid value = '00112233-4455-6677-8899-AABBCCDDEEFF';
         if (value.toString() != "00112233-4455-6677-8899-AABBCCDDEEFF") return 2;
         if (value != guid.parse("00112233445566778899aabbccddeeff")) return 3;
+        if (guid.parse("1-2-3-4-5").toString() != "00000001-0002-0003-0004-000000000005") return 12;
+        if (guid.parse("1-FFFFF-3-4-5").toString() != "0000000F-FFFF-0003-0004-000000000005") return 13;
         if (guid.parse("") != guid.Null) return 41;
         if (guid.parse(null) != null) return 42;
         guid numbers = guid.create(123, 456);

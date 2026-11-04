@@ -12,25 +12,26 @@ Z8Guid z8_guid_create(long minor) { return new Z8Guid(0, cast(ulong)minor); }
 Z8Guid z8_guid_create(long major, long minor) { return new Z8Guid(cast(ulong)major, cast(ulong)minor); }
 
 Z8Guid z8_guid_literal(string text) {
-    import std.string : strip;
+    import std.string : strip, split;
     if (!text.length || text.strip() == "" || text.strip() == "0") return z8_guid_zero();
     if (text.length == 32) text = text[0..8] ~ "-" ~ text[8..12] ~ "-" ~ text[12..16] ~ "-" ~ text[16..20] ~ "-" ~ text[20..32];
-    if (text.length != 36 || text[8] != '-' || text[13] != '-' || text[18] != '-' || text[23] != '-')
-        throw new Exception("invalid guid");
-    ulong major, minor;
-    size_t count;
-    foreach (char c; text) {
-        if (c == '-') continue;
-        uint digit;
-        if (c >= '0' && c <= '9') digit = c - '0';
-        else if (c >= 'a' && c <= 'f') digit = c - 'a' + 10;
-        else if (c >= 'A' && c <= 'F') digit = c - 'A' + 10;
-        else throw new Exception("invalid guid");
-        if (count++ < 16) major = (major << 4) | digit;
-        else minor = (minor << 4) | digit;
+    auto parts = text.split("-");
+    if (parts.length != 5) throw new Exception("invalid guid");
+    ulong[5] numbers;
+    foreach (i, part; parts) {
+        if (!part.length) throw new Exception("invalid guid");
+        foreach (char c; part) {
+            uint digit;
+            if (c >= '0' && c <= '9') digit = c - '0';
+            else if (c >= 'a' && c <= 'f') digit = c - 'a' + 10;
+            else if (c >= 'A' && c <= 'F') digit = c - 'A' + 10;
+            else throw new Exception("invalid guid");
+            if (numbers[i] > (cast(ulong)long.max - digit) / 16) throw new Exception("guid component out of range");
+            numbers[i] = numbers[i] * 16 + digit;
+        }
     }
-    if (count != 32) throw new Exception("invalid guid");
-    return new Z8Guid(major, minor);
+    return new Z8Guid((numbers[0] << 32) | (numbers[1] << 16) | numbers[2],
+                      (numbers[3] << 48) | numbers[4]);
 }
 Z8Guid z8_guid_parse(wstring text) { return text is null ? null : z8_guid_literal(text.to!string); }
 Z8Guid z8_guid_create_random() {
