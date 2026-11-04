@@ -2,6 +2,26 @@ private import std.datetime : SysTime, DateTime, Clock, TimeZone, SimpleTimeZone
 version (Windows) private import std.datetime : WindowsTimeZone;
 else version (Posix) private import std.datetime : PosixTimeZone;
 
+private enum wstring[] z8_month_short = ["янв"w,"фев"w,"мар"w,"апр"w,"мая"w,"июн"w,"июл"w,"авг"w,"сен"w,"окт"w,"ноя"w,"дек"w];
+private enum wstring[] z8_month_long = ["января"w,"февраля"w,"марта"w,"апреля"w,"мая"w,"июня"w,"июля"w,"августа"w,"сентября"w,"октября"w,"ноября"w,"декабря"w];
+private enum wstring[] z8_month_standalone_short = ["Янв."w,"Февр."w,"Март"w,"Апр."w,"Май"w,"Июнь"w,"Июль"w,"Авг."w,"Сент."w,"Окт."w,"Нояб."w,"Дек."w];
+private enum wstring[] z8_month_standalone_long = ["Январь"w,"Февраль"w,"Март"w,"Апрель"w,"Май"w,"Июнь"w,"Июль"w,"Август"w,"Сентябрь"w,"Октябрь"w,"Ноябрь"w,"Декабрь"w];
+private enum wstring[] z8_weekday_short = ["Вс"w,"Пн"w,"Вт"w,"Ср"w,"Чт"w,"Пт"w,"Сб"w];
+private enum wstring[] z8_weekday_long = ["воскресенье"w,"понедельник"w,"вторник"w,"среда"w,"четверг"w,"пятница"w,"суббота"w];
+private int z8_date_parse_month(wstring input, ref size_t index) {
+    size_t longest;
+    int month;
+    foreach (forms; [z8_month_short, z8_month_long, z8_month_standalone_short, z8_month_standalone_long]) {
+        foreach (i, candidate; forms) if (candidate.length > longest && index + candidate.length <= input.length &&
+            z8_str_toLowerCase(input[index .. index + candidate.length]) == z8_str_toLowerCase(candidate)) {
+            longest = candidate.length; month = cast(int)i + 1;
+        }
+    }
+    if (!longest) throw new Exception("invalid date month");
+    index += longest;
+    return month;
+}
+
 private immutable(TimeZone) z8_date_timezone() {
     version (Windows) return WindowsTimeZone.getTimeZone("Russian Standard Time");
     else version (Posix) return PosixTimeZone.getTimeZone("Europe/Moscow");
@@ -176,7 +196,7 @@ Z8Date z8_date_parse(wstring input, wstring pattern) {
     pattern = z8_string_required(pattern);
     if (!input.length) return z8_date_parse(input);
     int year = 1970, month = 1, day = 1, hour, minute, second, millisecond, dayOfYear;
-    bool useDayOfYear, twoDigitYear;
+    bool useDayOfYear, twoDigitYear, twelveHour, afternoon;
     int offset;
     bool hasOffset, quoted;
     size_t pi, ti;
@@ -208,10 +228,19 @@ Z8Date z8_date_parse(wstring input, wstring pattern) {
                 year = number(width, adjacent);
                 twoDigitYear = width <= 2 && ti - begin == 2 && input[begin] >= '0' && input[begin] <= '9';
                 break;
-            case 'M': if (width > 2) throw new Exception("unsupported date format"); month = number(width, adjacent); break;
+            case 'M': case 'L': month = width > 2 ? z8_date_parse_month(input, ti) : number(width, adjacent); break;
             case 'd': day = number(width, adjacent); useDayOfYear = false; break;
             case 'D': dayOfYear = number(width, adjacent); useDayOfYear = true; break;
-            case 'H': hour = number(width, adjacent); break;
+            case 'H': hour = number(width, adjacent); twelveHour = false; break;
+            case 'k': hour = number(width, adjacent); if (hour == 24) hour = 0; twelveHour = false; break;
+            case 'K': hour = number(width, adjacent); twelveHour = true; break;
+            case 'h': hour = number(width, adjacent); if (hour == 12) hour = 0; twelveHour = true; break;
+            case 'a':
+                if (ti + 2 > input.length) throw new Exception("invalid date AM/PM");
+                auto ampm = z8_str_toLowerCase(input[ti .. ti + 2]);
+                if (ampm != "am"w && ampm != "pm"w) throw new Exception("invalid date AM/PM");
+                afternoon = ampm == "pm"w; ti += 2;
+                break;
             case 'm': minute = number(width, adjacent); break;
             case 's': second = number(width, adjacent); break;
             case 'S': millisecond = number(width, adjacent); break;
@@ -234,6 +263,7 @@ Z8Date z8_date_parse(wstring input, wstring pattern) {
         }
     }
     if (quoted) throw new Exception("unterminated date format quote");
+    if (twelveHour && afternoon) hour += 12;
     SysTime centuryStart;
     if (twoDigitYear) {
         centuryStart = Clock.currTime(z8_date_timezone());
@@ -341,7 +371,16 @@ wstring z8_date_toString(Z8Date value, wstring pattern) {
                 number = t.year + (cast(int)t.month == 12 && z8_date_format_week(t) == 1 ? 1 : 0);
                 if (count == 2) number %= 100;
                 break;
-            case 'M': if (count > 2) throw new Exception("unsupported date format"); number = cast(int)t.month; break;
+            case 'M': case 'L':
+                if (count <= 2) number = cast(int)t.month;
+                else {
+                    numeric = false;
+                    auto index = cast(size_t)t.month - 1;
+                    bool standalone = c == 'L' || pattern.length == count;
+                    result ~= standalone ? (count == 3 ? z8_month_standalone_short[index] : z8_month_standalone_long[index]) :
+                        (count == 3 ? z8_month_short[index] : z8_month_long[index]);
+                }
+                break;
             case 'd': number = t.day; break;
             case 'D': number = t.dayOfYear; break;
             case 'u': number = (cast(int)t.dayOfWeek + 6) % 7 + 1; break;
@@ -355,6 +394,8 @@ wstring z8_date_toString(Z8Date value, wstring pattern) {
             case 'k': number = t.hour == 0 ? 24 : t.hour; break;
             case 'K': number = t.hour % 12; break;
             case 'h': number = t.hour % 12 == 0 ? 12 : t.hour % 12; break;
+            case 'E': numeric = false; result ~= count < 4 ? z8_weekday_short[cast(int)t.dayOfWeek] : z8_weekday_long[cast(int)t.dayOfWeek]; break;
+            case 'a': numeric = false; result ~= t.hour < 12 ? "AM"w : "PM"w; break;
             case 'm': number = t.minute; break;
             case 's': number = t.second; break;
             case 'S': number = t.fracSecs.total!"msecs"; break;

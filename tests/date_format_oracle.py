@@ -13,7 +13,7 @@ import java.util.*;
 public class DateFormatOracle {
     public static void main(String[] args) {
         TimeZone.setDefault(TimeZone.getTimeZone("Europe/Moscow"));
-        SimpleDateFormat format = new SimpleDateFormat("YYYY-ww W F u k K h D");
+        SimpleDateFormat format = new SimpleDateFormat("YYYY-ww W F u k K h D d MMMM MMM LLLL LLL EEEE E a");
         int hash = 0;
         for (int year = 2015; year <= 2035; year++)
             for (int month = 0; month < 12; month++) {
@@ -42,9 +42,12 @@ void main() {
         auto first = z8_date_literal(format("01/%02d/%04d 12:30:45", month, year));
         foreach (day; 1 .. cast(int)z8_date_daysInMonth(first) + 1) {
             auto date = z8_date_literal(format("%02d/%02d/%04d 12:30:45", day, month, year));
-            auto value = z8_date_toString(date, "YYYY-ww W F u k K h D"w);
+            auto value = z8_date_toString(date, "YYYY-ww W F u k K h D d MMMM MMM LLLL LLL EEEE E a"w);
             foreach (wchar c; value) hash = 31u * hash + c;
             hash = 31u * hash + '|';
+            auto pattern = "d MMMM yyyy hh:mm:ss a"w;
+            auto reparsed = z8_date_parse(z8_date_toString(date, pattern), pattern);
+            assert(z8_date_ticks(reparsed) == z8_date_ticks(date));
         }
     }
     writefln("%08X", hash);
@@ -54,4 +57,4 @@ void main() {
     subprocess.run(["dmd", str(source), *import_args(), str(runtime_lib), "-of=" + str(executable)], cwd=temp, check=True)
     actual = subprocess.check_output([str(executable)], cwd=temp, text=True).strip()
     assert expected == actual, f"Java={expected}, D={actual}"
-print("Numeric calendar formats match Java across 21 years")
+print("Calendar formats match Java across 21 years")
