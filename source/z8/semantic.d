@@ -411,6 +411,11 @@ class Checker {
                     if (e.token.text == "isEqualDate") {
                         checkArguments(e, [ValueType.dateType, ValueType.dateType]); e.builtinCall = "z8_date_isEqualDate"; return ValueType.boolType;
                     }
+                    if (e.token.text == "parse" || e.token.text == "parseIsoString") {
+                        checkArguments(e, [ValueType.stringType]);
+                        e.builtinCall = e.token.text == "parse" ? "z8_date_parse" : "z8_date_parseIsoString";
+                        return ValueType.dateType;
+                    }
                     fail("unsupported static date method", e.token);
                 }
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "datespan") {
@@ -478,6 +483,15 @@ class Checker {
                 }
                 e.inferredType = receiver;
                 if (receiver == ValueType.dateType) {
+                    if (["set", "setDate", "setTime"].canFind(e.token.text)) {
+                        auto count = e.arguments.length;
+                        if ((e.token.text == "set" && count != 6 && count != 7) ||
+                            (e.token.text == "setDate" && count != 3) ||
+                            (e.token.text == "setTime" && count != 3 && count != 4))
+                            fail("incorrect argument count", e.token);
+                        foreach (argument; e.arguments) if (!matches(argument, ValueType.intType)) fail("argument type mismatch", argument.token);
+                        e.builtinCall = "z8_date_" ~ e.token.text; return ValueType.voidType;
+                    }
                     if (["addYear", "addQuarter", "addMonth", "addDay", "addHour", "addMinute", "addSecond", "addMillisecond"].canFind(e.token.text)) {
                         checkArguments(e, [ValueType.intType]); e.builtinCall = "z8_date_" ~ e.token.text; return ValueType.dateType;
                     }

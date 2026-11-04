@@ -15,6 +15,23 @@ public class DateValues {
         if (value.truncMonth().toString() != "2024-02-01T00:00:00+03:00") return 10;
         if (value.truncSecond().toString() != "2024-02-29T12:30:00+03:00") return 11;
         if (!date.isEqualDate(value, value.addHour(1)) || value >= next) return 12;
+        date alias = value;
+        value.setDate(2020, 1, 2);
+        value.setTime(3, 4, 5, 678);
+        if (alias.toIsoString() != "2020-01-02T03:04:05.678+03:00") return 13;
+        value.set(2024, 2, 31, 4, 5, 6);
+        if (value.toString() != "2024-03-02T04:05:06+03:00") return 14;
+        date parsed = date.parse("2024-02-29T12:30:45+03:00");
+        if (parsed.ticks() != 1709199045000 || date.parse("1709199045000") != parsed) return 15;
+        date zoned = date.parseIsoString("2024-02-29T12:30:45.067+02:00");
+        if (zoned.toIsoString() != "2024-02-29T12:30:45.067+02:00") return 16;
+        if (zoned.toString() != "2024-02-29T13:30:45+03:00") return 17;
+        if (date.parse(null) != null || date.parseIsoString(null) != null) return 18;
+        date negativeZone = date.parseIsoString("2024-02-29T12:30:45-05:30");
+        if (negativeZone.toIsoString() != "2024-02-29T12:30:45-04:30") return 19;
+        date standardParse = date.parse("2024-02-29T12:30:45-05:30");
+        if (standardParse.toString() != "2024-02-29T21:00:45+03:00") return 20;
+        if (date.parseIsoString("2024-02-29T12:30:45Z").toIsoString() != "2024-02-29T12:30:45+03:00") return 21;
         return 193;
     }
 }
