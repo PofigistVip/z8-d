@@ -63,6 +63,49 @@ wstring z8_file_to_string(Z8File value) {
     fields["details"] = JSONValue(details);
     return JSONValue(fields).toString().to!wstring;
 }
+Z8Array!Z8File z8_file_parse(wstring input) {
+    import std.json : JSONValue, JSONType, parseJSON;
+    auto json = parseJSON(z8_string_required(input).to!string);
+    wstring field(JSONValue[string] values, string key, wstring fallback = ""w) {
+        auto p = key in values;
+        if (p is null || p.type == JSONType.null_) return fallback;
+        if (p.type == JSONType.string) return p.str.to!wstring;
+        if (p.type == JSONType.integer) return p.integer.to!wstring;
+        if (p.type == JSONType.uinteger) return p.uinteger.to!wstring;
+        if (p.type == JSONType.true_) return "true"w;
+        if (p.type == JSONType.false_) return "false"w;
+        throw new Exception("invalid file metadata field");
+    }
+    auto result = new Z8Array!Z8File();
+    foreach (item; json.array) {
+        auto values = item.object;
+        auto value = new Z8File();
+        value.path = "file" in values ? field(values, "file") : field(values, "path", null);
+        value.name = field(values, "name");
+        auto size = field(values, "size");
+        if (!size.length) throw new Exception("invalid file size");
+        value.size = z8_optional_wrap(size.to!long);
+        value.id = z8_guid_parse(field(values, "id"));
+        value.user = z8_guid_parse(field(values, "user"));
+        value.author = field(values, "author");
+        auto time = field(values, "time");
+        value.time = z8_date_parse(time);
+        if (auto details = "details" in values) {
+            foreach (key, unused; details.object) value.details.z8_add(key.to!wstring, field(details.object, key));
+        }
+        result.z8_add(value);
+    }
+    return result;
+}
+wstring z8_file_toJson(Z8Array!Z8File values) {
+    z8_nonnull(values);
+    wstring result = "["w;
+    foreach (i; 0 .. values.z8_size()) {
+        if (i) result ~= ","w;
+        result ~= z8_file_to_string(values.z8_get(i));
+    }
+    return result ~ "]"w;
+}
 bool z8_file_compare(string op)(Z8File left, Z8File right) {
     import std.path : absolutePath;
     auto a = absolutePath(z8_file_system_path(left));

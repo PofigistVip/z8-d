@@ -13,6 +13,15 @@ public class FileValues {
         if (!files.contains(another)) return 6;
         another.id = guid.create(1);
         if (files.contains(another)) return 7;
+        file[] parsed = file.parse("[{\"path\":\"docs/a.txt\",\"name\":\"a.txt\",\"size\":42,\"id\":\"00000000-0000-0000-0000-000000000001\",\"author\":\"me\",\"details\":{\"kind\":\"text\"}}]");
+        if (parsed.size() != 1 || parsed.first().path != "docs/a.txt" || parsed.first().size != 42) return 8;
+        if (parsed.first().id != guid.create(1) || parsed.first().author != "me" || parsed.first().details.get("kind") != "text") return 9;
+        file[] roundtrip = file.parse(file.toJson(parsed));
+        if (roundtrip.first().name != "a.txt" || roundtrip.first().id != guid.create(1) || roundtrip.first().details.get("kind") != "text") return 10;
+        if (file.parse("[]").size() != 0) return 11;
+        try { file.parse("[{}]"); return 12; } catch (exception ignored) {}
+        file[] alternate = file.parse("[{\"file\":\"other.txt\",\"path\":\"ignored.txt\",\"size\":0}]");
+        if (alternate.first().path != "other.txt") return 13;
         return 211;
     }
 }

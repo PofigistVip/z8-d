@@ -473,6 +473,12 @@ class Checker {
                     fail("unsupported static string method", e.token);
                 }
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "file") {
+                    if (e.token.text == "parse") {
+                        checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_file_parse"; return ValueType.fileArray;
+                    }
+                    if (e.token.text == "toJson") {
+                        checkArguments(e, [ValueType.fileArray]); e.builtinCall = "z8_file_toJson"; return ValueType.stringType;
+                    }
                     if (!["name", "baseName", "extension"].canFind(e.token.text)) fail("unsupported static file method", e.token);
                     checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_file_" ~ e.token.text; return ValueType.stringType;
                 }
