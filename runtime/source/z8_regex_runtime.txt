@@ -20,6 +20,8 @@ private wstring z8_regex_pattern(wstring pattern) {
     size_t classDepth;
     size_t i;
     bool quoted;
+    bool unicodeClasses;
+    bool[] scopes;
     int captures;
     int[wstring] named;
     while (i < pattern.length) {
@@ -44,6 +46,7 @@ private wstring z8_regex_pattern(wstring pattern) {
                 ++i;
                 continue;
             }
+            if (unicodeClasses && "dDwWsS"w.canFind(escape)) { result ~= '\\'; result ~= escape; continue; }
             wstring chars;
             if (escape == 'd' || escape == 'D') chars = "0-9"w;
             else if (escape == 'w' || escape == 'W') chars = "A-Za-z0-9_"w;
@@ -52,10 +55,9 @@ private wstring z8_regex_pattern(wstring pattern) {
                 if (classDepth && escape >= 'a' && escape <= 'z') result ~= chars;
                 else result ~= "["w ~ ((escape >= 'A' && escape <= 'Z') ? "^"w : ""w) ~ chars ~ "]"w;
             } else { result ~= c; result ~= escape; }
-        } else if (c == '[') { ++classDepth; result ~= c; }
-        else if (c == ']' && classDepth) { --classDepth; result ~= c; }
-        else if (!classDepth && c == '(' && i + 2 < pattern.length && pattern[i] == '?' && pattern[i + 1] == '<' &&
+        } else if (!classDepth && c == '(' && i + 2 < pattern.length && pattern[i] == '?' && pattern[i + 1] == '<' &&
                  pattern[i + 2] != '=' && pattern[i + 2] != '!') {
+            scopes ~= unicodeClasses;
             i += 2;
             auto begin = i;
             while (i < pattern.length && pattern[i] != '>') ++i;
@@ -63,8 +65,36 @@ private wstring z8_regex_pattern(wstring pattern) {
             auto name = pattern[begin .. i++];
             named[name] = ++captures;
             result ~= "(?P<"w ~ name ~ ">"w;
-        } else {
-            if (!classDepth && c == '(' && (i == pattern.length || pattern[i] != '?')) ++captures;
+        } else if (!classDepth && c == '(' && i + 1 < pattern.length && pattern[i] == '?') {
+            size_t cursor = i + 1;
+            bool negative, sawUnicode, nextUnicode = unicodeClasses;
+            wstring enabled, disabled;
+            while (cursor < pattern.length) {
+                auto flag = pattern[cursor];
+                if (flag == '-') { negative = true; ++cursor; continue; }
+                if (!"idmsuxU"w.canFind(flag)) break;
+                if (flag == 'U') { sawUnicode = true; nextUnicode = !negative; }
+                else if (negative) disabled ~= flag;
+                else enabled ~= flag;
+                ++cursor;
+            }
+            if (sawUnicode && cursor < pattern.length && (pattern[cursor] == ')' || pattern[cursor] == ':')) {
+                auto flags = enabled ~ (disabled.length ? "-"w ~ disabled : ""w);
+                if (pattern[cursor] == ':') {
+                    scopes ~= unicodeClasses;
+                    result ~= flags.length ? "(?"w ~ flags ~ ":"w : "(?:"w;
+                } else if (flags.length) result ~= "(?"w ~ flags ~ ")"w;
+                unicodeClasses = nextUnicode;
+                i = cursor + 1;
+                continue;
+            }
+            scopes ~= unicodeClasses;
+            result ~= c;
+        } else if (c == '[') { ++classDepth; result ~= c; }
+        else if (c == ']' && classDepth) { --classDepth; result ~= c; }
+        else {
+            if (!classDepth && c == '(') { scopes ~= unicodeClasses; if (i == pattern.length || pattern[i] != '?') ++captures; }
+            if (!classDepth && c == ')' && scopes.length) { unicodeClasses = scopes[$ - 1]; scopes.length--; }
             result ~= c;
         }
     }

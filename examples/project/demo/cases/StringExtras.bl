@@ -30,6 +30,8 @@ public class StringExtras {
         if (!"Ab".matches("(?i)ab") || !"5".matches("\\d") || "١".matches("\\d") || "é".matches("\\w")) return 38;
         if (" ".matches("\\s") || !"5".matches("[\\d]")) return 39;
         if (!"١".matches("[\\D]") || !"5".matches("[^\\D]") || "5".matches("[0\\D]")) return 41;
+        if (!"١".matches("(?U)\\d") || !"é".matches("(?U)\\w")) return 48;
+        if (!"١5".matches("(?U:\\d)\\d") || "١١".matches("(?U:\\d)\\d")) return 49;
         string[] split = "a,,b,,".split(",");
         if (split.size() != 3 || split[1] != "" || split[2] != "b") return 14;
         string[] limited = "a,,b,,".split(",", 2);
