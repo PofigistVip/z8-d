@@ -22,11 +22,15 @@ unittest {
         if ((int)mixed[1] != 42) return 1;
         int[string] scores = {("one", 1)};
         if (scores["one"] != 1) return 2;
+        bool[int] flags = {(1, true)};
+        decimal[string] prices = {("a", 1.0)};
+        if (flags[1] && prices["a"] != null) return 3;
         if (values.containsKey(absent) && labels[1] == "one") return values[3];
         return 0;
     } }});
     rejects(q{class A { static void f() { int[int] x = {("a", 1)}; } }});
     rejects(q{class A { static void f() { string[int] x; x.add("a", "b"); } }});
+    rejects(q{class A { static void f() { decimal[int] x = {(1, 2)}; } }});
 }
 
 unittest {
@@ -318,7 +322,7 @@ unittest {
     compile("class A { static string f() { string[string] x; return x.get(\"a\") ?: x.get(\"b\"); } }");
     rejects("class A { static A[] x; }");
     rejects("class A { static string[string] x; }");
-    rejects("class A { static void f() { bool[string] x; } }");
+    rejects("class A { static void f() { geometry[string] x; } }");
     rejects("class A { static void f() { string[string] x; x[\"a\"] += \"b\"; } }");
     rejects("class A { static void f() { string[string] x; int[] key; x.add(key, \"b\"); } }");
     rejects("class A { static void f() { string[string] x; int[] key; x.remove(key); } }");

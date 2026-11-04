@@ -16,6 +16,20 @@ public class IntegerMapIndex {
         scores["one"] = 1;
         scores[null] = null;
         if (scores["one"] != 1 || !scores.containsKey(null) || scores[null] != null) return 4;
+        bool[int] flags;
+        flags[1] = true;
+        flags[null] = null;
+        if (!flags[1] || !flags.containsKey(null) || flags[null] != null) return 5;
+        bool[string] namedFlags;
+        namedFlags["yes"] = true;
+        if (!namedFlags["yes"]) return 7;
+        decimal[string] amounts;
+        amounts["one"] = 1.0;
+        amounts[null] = null;
+        if (amounts["one"] != 1.0 || !amounts.containsKey(null) || amounts[null] != null) return 6;
+        decimal[int] numericAmounts;
+        numericAmounts[2] = 2;
+        if (numericAmounts[2] != 2) return 8;
         return 143;
     }
 }

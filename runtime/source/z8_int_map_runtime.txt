@@ -1,6 +1,6 @@
 // Integer keys use value equality and retain a distinct null key, as in Z8.
 class Z8IntMap(V) {
-    static if (is(V == long)) alias Element = Z8Optional!long;
+    static if (is(V == long) || is(V == bool) || is(V == Z8Decimal)) alias Element = Z8Optional!V;
     else static if (is(V == wstring)) alias Element = wstring;
     else static if (is(V == Z8Primary)) alias Element = Z8Primary;
     else static assert(0, "unsupported integer-key map value");
@@ -10,7 +10,7 @@ class Z8IntMap(V) {
     private Element nullKeyValue;
 
     private static bool valueEquals(Element left, Element right) {
-        static if (is(V == long))
+        static if (is(V == long) || is(V == bool) || is(V == Z8Decimal))
             return left.present == right.present && (!left.present || left.value == right.value);
         else static if (is(V == wstring)) return z8_string_equals(left, right);
         else return left is right || (left !is null && left == right);

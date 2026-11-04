@@ -9,6 +9,7 @@ root = Path(__file__).resolve().parents[1]
 compiler = root / ("z8d.exe" if os.name == "nt" else "z8d")
 fixtures = [
     (root / "examples" / "project" / "demo" / "cases" / "IntegerMaps.bl", 149),
+    (root / "examples" / "project" / "demo" / "cases" / "PrimitiveMapValues.bl", 151),
     # The original BL compiler accepts indexed assignment but emits invalid Java.
     (root / "examples" / "maps" / "IntegerMapIndex.bl", 143),
 ]

@@ -439,7 +439,14 @@ class Checker {
                         if (valueType == ValueType.stringType) {
                             if (![ValueType.stringType, ValueType.nullableString].canFind(typeOf(entry.right)))
                                 fail("map value type mismatch", entry.right.token);
-                        } else if (!matchesStored(entry.right, valueType)) fail("map value type mismatch", entry.right.token);
+                        } else {
+                            // Array/map type casts in the original use inheritance,
+                            // not scalar conversion operators such as int -> decimal.
+                            if (valueType == ValueType.decimalType &&
+                                ![ValueType.decimalType, ValueType.optionalDecimal].canFind(typeOf(entry.right)))
+                                fail("map value type mismatch", entry.right.token);
+                            if (!matchesStored(entry.right, valueType)) fail("map value type mismatch", entry.right.token);
+                        }
                     }
                     e.inferredType = expected; return expected;
                 }

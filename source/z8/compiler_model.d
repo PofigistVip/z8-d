@@ -12,7 +12,7 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, decimalType, boolType, stringType, guidType, binaryType, datespanType, dateType, geometryType, fileType, exceptionType, encodingType, primaryType, selfType, intArray, decimalArray, decimalMatrix, boolArray, stringArray, guidArray, binaryArray, datespanArray, dateArray, geometryArray, fileArray, exceptionArray, primaryArray, selfArray, stringMap, primaryStringMap, intStringMap, intIntMap, stringIntMap, primaryIntMap, nullType, nullableString, enumType, enumArray, optionalInt, optionalBool, optionalDecimal }
+enum ValueType { voidType, intType, decimalType, boolType, stringType, guidType, binaryType, datespanType, dateType, geometryType, fileType, exceptionType, encodingType, primaryType, selfType, intArray, decimalArray, decimalMatrix, boolArray, stringArray, guidArray, binaryArray, datespanArray, dateArray, geometryArray, fileArray, exceptionArray, primaryArray, selfArray, stringMap, primaryStringMap, intStringMap, boolStringMap, decimalStringMap, intIntMap, stringIntMap, primaryIntMap, boolIntMap, decimalIntMap, nullType, nullableString, enumType, enumArray, optionalInt, optionalBool, optionalDecimal }
 enum NullableStringMode { none, required, nullAsEmpty }
 enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, guidLiteral, binaryLiteral, datespanLiteral, dateLiteral, nullLiteral, arrayLiteral, mapEntry, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, instanceOf, unary, binary, conditional, elvis }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
@@ -106,14 +106,17 @@ package bool isArray(ValueType type) {
     return [ValueType.intArray, ValueType.decimalArray, ValueType.decimalMatrix, ValueType.boolArray, ValueType.stringArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.primaryArray, ValueType.selfArray, ValueType.enumArray].canFind(type);
 }
 package bool isReferenceArray(ValueType type) { return [ValueType.selfArray, ValueType.enumArray, ValueType.primaryArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.decimalMatrix].canFind(type); }
-package bool isMap(ValueType type) { return [ValueType.stringMap, ValueType.primaryStringMap, ValueType.intStringMap, ValueType.intIntMap, ValueType.stringIntMap, ValueType.primaryIntMap].canFind(type); }
+package bool isMap(ValueType type) { return [ValueType.stringMap, ValueType.primaryStringMap, ValueType.intStringMap, ValueType.boolStringMap, ValueType.decimalStringMap, ValueType.intIntMap, ValueType.stringIntMap, ValueType.primaryIntMap, ValueType.boolIntMap, ValueType.decimalIntMap].canFind(type); }
 package ValueType mapKeyType(ValueType type) {
     assert(isMap(type));
-    return [ValueType.intIntMap, ValueType.stringIntMap, ValueType.primaryIntMap].canFind(type) ? ValueType.intType : ValueType.stringType;
+    return [ValueType.intIntMap, ValueType.stringIntMap, ValueType.primaryIntMap, ValueType.boolIntMap, ValueType.decimalIntMap].canFind(type) ? ValueType.intType : ValueType.stringType;
 }
 package ValueType mapValueType(ValueType type) {
     assert(isMap(type));
-    return [ValueType.intIntMap, ValueType.intStringMap].canFind(type) ? ValueType.intType : [ValueType.primaryStringMap, ValueType.primaryIntMap].canFind(type) ? ValueType.primaryType : ValueType.stringType;
+    if ([ValueType.intIntMap, ValueType.intStringMap].canFind(type)) return ValueType.intType;
+    if ([ValueType.boolIntMap, ValueType.boolStringMap].canFind(type)) return ValueType.boolType;
+    if ([ValueType.decimalIntMap, ValueType.decimalStringMap].canFind(type)) return ValueType.decimalType;
+    return [ValueType.primaryStringMap, ValueType.primaryIntMap].canFind(type) ? ValueType.primaryType : ValueType.stringType;
 }
 package ValueType mapKeyArrayType(ValueType type) {
     assert(isMap(type));
@@ -122,7 +125,23 @@ package ValueType mapKeyArrayType(ValueType type) {
 package ValueType mapValueArrayType(ValueType type) {
     assert(isMap(type));
     auto value = mapValueType(type);
-    return value == ValueType.intType ? ValueType.intArray : value == ValueType.primaryType ? ValueType.primaryArray : ValueType.stringArray;
+    return value == ValueType.intType ? ValueType.intArray : value == ValueType.boolType ? ValueType.boolArray : value == ValueType.decimalType ? ValueType.decimalArray : value == ValueType.primaryType ? ValueType.primaryArray : ValueType.stringArray;
+}
+package ValueType mapType(ValueType value, ValueType key) {
+    if (key == ValueType.stringType) {
+        if (value == ValueType.stringType) return ValueType.stringMap;
+        if (value == ValueType.primaryType) return ValueType.primaryStringMap;
+        if (value == ValueType.intType) return ValueType.intStringMap;
+        if (value == ValueType.boolType) return ValueType.boolStringMap;
+        if (value == ValueType.decimalType) return ValueType.decimalStringMap;
+    } else if (key == ValueType.intType) {
+        if (value == ValueType.intType) return ValueType.intIntMap;
+        if (value == ValueType.stringType) return ValueType.stringIntMap;
+        if (value == ValueType.primaryType) return ValueType.primaryIntMap;
+        if (value == ValueType.boolType) return ValueType.boolIntMap;
+        if (value == ValueType.decimalType) return ValueType.decimalIntMap;
+    }
+    return ValueType.voidType;
 }
 package ValueType mapValueReadType(ValueType type) {
     auto value = mapValueType(type);

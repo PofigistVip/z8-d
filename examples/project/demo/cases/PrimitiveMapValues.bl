@@ -1,0 +1,44 @@
+public class PrimitiveMapValues {
+    public static int run() {
+        bool[int] flags = {(1, true), (2, false)};
+        bool absent = null;
+        flags.add(null, absent);
+        if (!flags[1] || flags[2] || !flags.containsValue(null) || !flags.containsKey(null)) return 1;
+        bool[int] extraFlags = {(1, false)};
+        bool[int] joinedFlags = flags + extraFlags;
+        if (joinedFlags[1] || !flags[1] || joinedFlags.values().size() != 3) return 2;
+        flags += extraFlags;
+        if (flags[1] || flags.remove(null) != null || flags.containsKey(null)) return 3;
+
+        bool[string] names = {("yes", true), ("no", false)};
+        string nullKey = null;
+        names.add(nullKey, absent);
+        if (!names["yes"] || names["no"] || !names.containsValue(null)) return 4;
+        names.add("no", true);
+        if (!names["no"] || names.keys().size() != 3) return 5;
+
+        decimal[int] prices = {(1, decimal.parse("1.00"))};
+        decimal missing = null;
+        prices.add(null, missing);
+        if (!prices.containsValue(decimal.parse("1.00")) || prices.containsValue(decimal.parse("1.0"))) return 6;
+        prices.add(2, 2);
+        if (prices[2] != 2 || prices.get(null) != null || !prices.containsValue(null)) return 7;
+        decimal[int] extraPrices = {(1, decimal.parse("3.00"))};
+        decimal[int] joinedPrices = prices + extraPrices;
+        if (joinedPrices[1] != decimal.parse("3.00") || prices[1] != decimal.parse("1.00")) return 8;
+
+        decimal[string] amounts = {("value", decimal.parse("4.00"))};
+        amounts.add(nullKey, missing);
+        amounts.add("integer", 5);
+        if (!amounts.containsValue(decimal.parse("4.00")) || amounts.containsValue(decimal.parse("4.0"))) return 9;
+        if (amounts["integer"] != 5 || amounts.get(null) != null || amounts.values().size() != 3) return 10;
+        decimal[string] other = {("value", decimal.parse("6.00"))};
+        amounts += other;
+        if (amounts["value"] != decimal.parse("6.00")) return 11;
+        try { amounts.add(null, null); return 12; } catch (exception expected) {}
+        try { flags.add(null, null); return 13; } catch (exception expectedFlags) {}
+        try { names.add(null, null); return 14; } catch (exception expectedNames) {}
+        try { prices.add(null, null); return 15; } catch (exception expectedPrices) {}
+        return 151;
+    }
+}
