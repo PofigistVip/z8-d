@@ -1,0 +1,15 @@
+public class StringExtras {
+    public static int run() {
+        string text = "AbC";
+        if (text.toLowerCase() != "abc" || text.toUpperCase() != "ABC") return 1;
+        if ("straße".toUpperCase() != "STRASSE") return 2;
+        if ("Hello".firstToLowerCase() != "hello" || "world".firstToUpperCase() != "World") return 3;
+        if (text.compareNoCase("aBc") != 0 || "abc".compareNoCase("abd") >= 0) return 4;
+        if (string.replicate("xy", 3) != "xyxyxy" || string.replicate("", -1) != "") return 5;
+        string[] words = {"a", "", "b"};
+        if (string.concat(words, "-") != "a--b") return 6;
+        binary data = '104, 105';
+        if (string.fromBinary(data) != "hi" || data.length() != 0) return 7;
+        return 227;
+    }
+}

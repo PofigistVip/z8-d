@@ -196,6 +196,10 @@ private string emitExprRaw(Expression e) {
                 auto receiver = "(" ~ emitExpr(e.left) ~ ")";
                 if (e.token.text == "toString") return receiver ~ ".z8_string()";
                 if (["signum", "ceil", "floor"].canFind(e.token.text)) return receiver ~ ".z8_" ~ e.token.text ~ "()";
+                if (["abs", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "toRadians", "toDegrees", "exp", "ln", "log10", "sqrt", "cbrt", "power"].canFind(e.token.text)) {
+                    string[] args; foreach (arg; e.arguments) args ~= emitExpr(arg);
+                    return "z8_decimal_math!\"" ~ e.token.text ~ "\"(" ~ receiver ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
+                }
                 if (!e.arguments.length) return receiver ~ ".z8_round_int()";
                 string[] args; foreach (arg; e.arguments) args ~= emitExpr(arg);
                 return receiver ~ ".z8_round(" ~ args.join(", ") ~ ")";

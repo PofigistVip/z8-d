@@ -438,6 +438,18 @@ class Checker {
                 if (!accessible(selected.owner, selected.isPublic, selected.isProtected)) fail("method is not accessible", e.token);
                 return checkCall(selected, selected.owner, e);
             case ExprKind.memberCall:
+                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "string") {
+                    if (e.token.text == "replicate") {
+                        checkArguments(e, [ValueType.stringType, ValueType.intType]); e.builtinCall = "z8_string_replicate"; return ValueType.stringType;
+                    }
+                    if (e.token.text == "concat") {
+                        checkArguments(e, [ValueType.stringArray, ValueType.stringType]); e.builtinCall = "z8_string_concat"; return ValueType.stringType;
+                    }
+                    if (e.token.text == "fromBinary") {
+                        checkArguments(e, [ValueType.binaryType]); e.builtinCall = "z8_string_fromBinary"; return ValueType.stringType;
+                    }
+                    fail("unsupported static string method", e.token);
+                }
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "file") {
                     if (!["name", "baseName", "extension"].canFind(e.token.text)) fail("unsupported static file method", e.token);
                     checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_file_" ~ e.token.text; return ValueType.stringType;
@@ -662,11 +674,12 @@ class Checker {
                 } else if (receiver == ValueType.stringType) {
                     switch (e.token.text) {
                         case "length": case "isEmpty": case "toString": case "trim": case "trimLeft": case "trimRight":
+                        case "toLowerCase": case "toUpperCase": case "firstToLowerCase": case "firstToUpperCase":
                             checkArguments(e, []);
                             return e.token.text == "length" ? ValueType.intType : e.token.text == "isEmpty" ? ValueType.boolType : ValueType.stringType;
-                        case "compare": case "endsWith":
+                        case "compare": case "compareNoCase": case "endsWith":
                             checkArguments(e, [ValueType.stringType]);
-                            return e.token.text == "compare" ? ValueType.intType : ValueType.boolType;
+                            return e.token.text == "endsWith" ? ValueType.boolType : ValueType.intType;
                         case "indexOf": case "lastIndexOf": case "startsWith":
                             checkArguments(e, e.arguments.length == 1 ? [ValueType.stringType] : [ValueType.stringType, ValueType.intType]);
                             return e.token.text == "startsWith" ? ValueType.boolType : ValueType.intType;
@@ -683,6 +696,10 @@ class Checker {
                         default: break;
                     }
                 } else if (receiver == ValueType.intType) {
+                    if (["sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "toRadians", "toDegrees", "exp", "ln", "log10", "sqrt", "cbrt"].canFind(e.token.text)) {
+                        checkArguments(e, []); return ValueType.decimalType;
+                    }
+                    if (e.token.text == "power") { checkArguments(e, [ValueType.decimalType]); return ValueType.decimalType; }
                     switch (e.token.text) {
                         case "toString":
                             checkArguments(e, e.arguments.length ? [ValueType.intType] : []);
@@ -703,6 +720,10 @@ class Checker {
                     if (e.token.text == "getMessage") return ValueType.stringType;
                 } else if (receiver == ValueType.decimalType) {
                     if (e.token.text == "toString") { checkArguments(e, []); return ValueType.stringType; }
+                    if (["abs", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "toRadians", "toDegrees", "exp", "ln", "log10", "sqrt", "cbrt"].canFind(e.token.text)) {
+                        checkArguments(e, []); return ValueType.decimalType;
+                    }
+                    if (e.token.text == "power") { checkArguments(e, [ValueType.decimalType]); return ValueType.decimalType; }
                     if (["signum", "ceil", "floor"].canFind(e.token.text)) { checkArguments(e, []); return ValueType.intType; }
                     if (e.token.text == "round") {
                         if (e.arguments.length == 0) return ValueType.intType;

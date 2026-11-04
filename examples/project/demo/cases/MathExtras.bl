@@ -1,0 +1,18 @@
+public class MathExtras {
+    public static int run() {
+        int zero = 0;
+        if (zero.sin().toString() != "0.0" || zero.cos().toString() != "1.0") return 1;
+        if ((1).sin().toString() != "0.8414709848078965" || (180).toRadians().toString() != "3.141592653589793") return 9;
+        if ((4).sqrt().toString() != "2.0" || (8).cbrt().toString() != "2.0") return 2;
+        if ((2).power(3).toString() != "8.0" || (-1.5).abs().toString() != "1.5") return 3;
+        if ((2).power(0.5).toString() != "1.4142135623730951" || (-8).cbrt().toString() != "-2.0") return 10;
+        decimal value = 4.0;
+        if (value.sqrt().toString() != "2.0" || value.power(2).toString() != "16.0") return 4;
+        decimal nan = (-1).sqrt();
+        if (nan.toString() != "NaN" || nan.hashCode() != 0 || nan != nan || nan <= 0) return 5;
+        if ((nan + 1).toString() != "NaN" || nan.round(2).toString() != "NaN") return 6;
+        try { int ignored = nan.floor(); return 7; } catch (exception expected) {}
+        try { decimal infinity = (0).ln(); return 8; } catch (exception expectedInfinity) {}
+        return 229;
+    }
+}

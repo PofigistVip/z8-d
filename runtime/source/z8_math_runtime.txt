@@ -1,0 +1,57 @@
+private Z8Decimal z8_math_result(double value) {
+    import std.math : isNaN, isFinite;
+    if (isNaN(value)) return z8_decimal_nan();
+    if (!isFinite(value)) throw new Exception("non-finite decimal result");
+    return z8_decimal_literal(format("%.17g", value));
+}
+private Z8Decimal z8_math_unary(string name)(double x) {
+    import std.math : sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, exp, log, log10, sqrt, cbrt, fabs, PI;
+    static if (name == "abs") return z8_math_result(fabs(x));
+    else static if (name == "sin") return z8_math_result(sin(x));
+    else static if (name == "cos") return z8_math_result(cos(x));
+    else static if (name == "tan") return z8_math_result(tan(x));
+    else static if (name == "asin") return z8_math_result(asin(x));
+    else static if (name == "acos") return z8_math_result(acos(x));
+    else static if (name == "atan") return z8_math_result(atan(x));
+    else static if (name == "sinh") return z8_math_result(sinh(x));
+    else static if (name == "cosh") return z8_math_result(cosh(x));
+    else static if (name == "tanh") return z8_math_result(tanh(x));
+    else static if (name == "toRadians") return z8_math_result(x / 180.0 * cast(double)PI);
+    else static if (name == "toDegrees") return z8_math_result(x * 180.0 / cast(double)PI);
+    else static if (name == "exp") return z8_math_result(exp(x));
+    else static if (name == "ln") return z8_math_result(log(x));
+    else static if (name == "log10") return z8_math_result(log10(x));
+    else static if (name == "sqrt") return z8_math_result(sqrt(x));
+    else static if (name == "cbrt") return z8_math_result(cast(double)cbrt(x));
+    else static assert(0, "unsupported math method");
+}
+Z8Decimal z8_decimal_math(string name)(Z8Decimal value) if (name != "power") {
+    return value.nan ? z8_decimal_nan() : z8_math_unary!name(value.z8_as_double());
+}
+Z8Decimal z8_decimal_math(string name)(Z8Decimal value, Z8Decimal power) if (name == "power") {
+    import std.math : pow;
+    if (value.nan || power.nan) return z8_decimal_nan();
+    return z8_math_result(pow(value.z8_as_double(), power.z8_as_double()));
+}
+
+Z8Decimal z8_int_sin(long x) { return z8_math_unary!"sin"(cast(double)x); }
+Z8Decimal z8_int_cos(long x) { return z8_math_unary!"cos"(cast(double)x); }
+Z8Decimal z8_int_tan(long x) { return z8_math_unary!"tan"(cast(double)x); }
+Z8Decimal z8_int_asin(long x) { return z8_math_unary!"asin"(cast(double)x); }
+Z8Decimal z8_int_acos(long x) { return z8_math_unary!"acos"(cast(double)x); }
+Z8Decimal z8_int_atan(long x) { return z8_math_unary!"atan"(cast(double)x); }
+Z8Decimal z8_int_sinh(long x) { return z8_math_unary!"sinh"(cast(double)x); }
+Z8Decimal z8_int_cosh(long x) { return z8_math_unary!"cosh"(cast(double)x); }
+Z8Decimal z8_int_tanh(long x) { return z8_math_unary!"tanh"(cast(double)x); }
+Z8Decimal z8_int_toRadians(long x) { return z8_math_unary!"toRadians"(cast(double)x); }
+Z8Decimal z8_int_toDegrees(long x) { return z8_math_unary!"toDegrees"(cast(double)x); }
+Z8Decimal z8_int_exp(long x) { return z8_math_unary!"exp"(cast(double)x); }
+Z8Decimal z8_int_ln(long x) { return z8_math_unary!"ln"(cast(double)x); }
+Z8Decimal z8_int_log10(long x) { return z8_math_unary!"log10"(cast(double)x); }
+Z8Decimal z8_int_sqrt(long x) { return z8_math_unary!"sqrt"(cast(double)x); }
+Z8Decimal z8_int_cbrt(long x) { return z8_math_unary!"cbrt"(cast(double)x); }
+Z8Decimal z8_int_power(long x, Z8Decimal power) {
+    import std.math : pow;
+    if (power.nan) throw new Exception("null decimal value");
+    return z8_math_result(pow(cast(double)x, power.z8_as_double()));
+}

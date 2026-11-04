@@ -4,6 +4,62 @@ long z8_str_compare(wstring a, wstring b) {
     foreach (i; 0 .. length) if (a[i] != b[i]) return cast(long)a[i] - cast(long)b[i];
     return cast(long)a.length - cast(long)b.length;
 }
+long z8_str_compareNoCase(wstring a, wstring b) {
+    import std.uni : toUpper, toLower;
+    b = z8_string_required(b);
+    auto length = a.length < b.length ? a.length : b.length;
+    foreach (i; 0 .. length) {
+        if (a[i] == b[i]) continue;
+        auto upperA = toUpper(cast(dchar)a[i]), upperB = toUpper(cast(dchar)b[i]);
+        if (upperA == upperB) continue;
+        auto lowerA = toLower(upperA), lowerB = toLower(upperB);
+        if (lowerA != lowerB) return cast(long)lowerA - cast(long)lowerB;
+    }
+    return cast(long)a.length - cast(long)b.length;
+}
+wstring z8_str_toLowerCase(wstring value) {
+    import std.uni : toLower;
+    auto result = toLower(value);
+    return result.length ? result.idup : ""w;
+}
+wstring z8_str_toUpperCase(wstring value) {
+    import std.uni : toUpper;
+    auto result = toUpper(value);
+    return result.length ? result.idup : ""w;
+}
+wstring z8_str_firstToLowerCase(wstring value) {
+    if (!value.length || (value[0] >= 0xD800 && value[0] <= 0xDFFF)) return value.length ? value : ""w;
+    return z8_str_toLowerCase(value[0 .. 1]) ~ value[1 .. $];
+}
+wstring z8_str_firstToUpperCase(wstring value) {
+    if (!value.length || (value[0] >= 0xD800 && value[0] <= 0xDFFF)) return value.length ? value : ""w;
+    return z8_str_toUpperCase(value[0 .. 1]) ~ value[1 .. $];
+}
+wstring z8_string_replicate(wstring value, long count) {
+    value = z8_string_required(value);
+    auto n = cast(int)count;
+    if (cast(int)(cast(long)value.length * n) < 0) throw new Exception("invalid string capacity");
+    wstring result = ""w;
+    for (int i = 0; i < n; ++i) result ~= value;
+    return result;
+}
+wstring z8_string_concat(Z8Array!wstring values, wstring delimiter) {
+    z8_nonnull(values);
+    wstring result = ""w;
+    foreach (i; 0 .. values.z8_size()) {
+        if (i) result ~= z8_string_required(delimiter);
+        result ~= z8_string_required(values.z8_get(i));
+    }
+    if (values.z8_size()) z8_string_required(delimiter);
+    return result;
+}
+wstring z8_string_fromBinary(Z8Binary value) {
+    z8_nonnull(value);
+    auto result = cast(string)value.data[value.position .. $];
+    value.position = value.data.length;
+    auto converted = result.to!wstring;
+    return converted.length ? converted : ""w;
+}
 bool z8_str_startsWith(wstring value, wstring prefix, long offset = 0) {
     prefix = z8_string_required(prefix);
     auto start = cast(int)offset;

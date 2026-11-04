@@ -110,6 +110,7 @@ long z8_primary_hash(Z8Primary value) {
             break;
         case Z8PrimaryKind.boolean: hash = value.booleanValue ? 1231u : 1237u; break;
         case Z8PrimaryKind.decimal:
+            if (value.decimalValue.nan) return 0;
             hash = 31u * z8_bigint_java_hash(value.decimalValue.coefficient) + cast(uint)value.decimalValue.scale;
             break;
         case Z8PrimaryKind.text:

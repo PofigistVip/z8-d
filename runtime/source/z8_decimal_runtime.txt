@@ -18,6 +18,7 @@ int z8_scale(long value) {
 struct Z8Decimal {
     BigInt coefficient;
     int scale;
+    bool nan;
 
     private static Z8Decimal make(BigInt coefficient, int scale) {
         auto precision = z8_precision(coefficient);
@@ -35,6 +36,7 @@ struct Z8Decimal {
     }
 
     Z8Decimal opBinary(string op)(Z8Decimal other) const if (op == "+" || op == "-" || op == "*" || op == "/" || op == "%") {
+        if (nan || other.nan) return z8_decimal_nan();
         static if (op == "*") return make(coefficient * other.coefficient, z8_scale(cast(long)scale + other.scale));
         else static if (op == "/") return z8_divide(other);
         else {
@@ -91,17 +93,20 @@ struct Z8Decimal {
         return make(quotient, cast(int)targetScale);
     }
     Z8Decimal opUnary(string op)() const if (op == "+" || op == "-") {
+        if (nan) return z8_decimal_nan();
         static if (op == "+") return this;
         else return make(-coefficient, scale);
     }
-    bool opEquals(const Z8Decimal other) const { return scale == other.scale && coefficient == other.coefficient; }
+    bool opEquals(const Z8Decimal other) const { return nan || other.nan ? nan && other.nan : scale == other.scale && coefficient == other.coefficient; }
     int opCmp(const Z8Decimal other) const {
+        if (nan || other.nan) return nan == other.nan ? 0 : nan ? 1 : -1;
         auto common = scale > other.scale ? scale : other.scale;
         auto left = coefficient * z8_pow10(cast(uint)(cast(long)common - scale));
         auto right = other.coefficient * z8_pow10(cast(uint)(cast(long)common - other.scale));
         return left < right ? -1 : left > right ? 1 : 0;
     }
     Z8Decimal z8_round(long digits, long roundingMode = 4) const {
+        if (nan) return z8_decimal_nan();
         auto target = cast(int)digits;
         auto mode = cast(int)roundingMode;
         if (mode < 0 || mode > 7) throw new Exception("invalid rounding mode");
@@ -122,12 +127,14 @@ struct Z8Decimal {
         return make(quotient, target);
     }
     private double z8_as_double() const {
+        if (nan) return double.nan;
         import core.stdc.stdlib : strtod;
         import std.string : toStringz;
         auto text = z8_string().to!string;
         return strtod(text.toStringz, null);
     }
     long z8_round_int() const {
+        if (nan) throw new Exception("round(NaN)");
         auto value = z8_as_double();
         if (value >= cast(double)long.max) return long.max;
         if (value <= cast(double)long.min) return long.min;
@@ -141,12 +148,14 @@ struct Z8Decimal {
         return cast(long)value;
     }
     long z8_signum() const {
+        if (nan) throw new Exception("signum(NaN)");
         auto value = z8_as_double();
         return value < 0 ? -1 : value > 0 ? 1 : 0;
     }
-    long z8_ceil() const { return z8_integral_double(ceil(z8_as_double())); }
-    long z8_floor() const { return z8_integral_double(floor(z8_as_double())); }
+    long z8_ceil() const { if (nan) throw new Exception("ceil(NaN)"); return z8_integral_double(ceil(z8_as_double())); }
+    long z8_floor() const { if (nan) throw new Exception("floor(NaN)"); return z8_integral_double(floor(z8_as_double())); }
     wstring z8_string() const {
+        if (nan) return "NaN"w;
         string digits = coefficient.to!string;
         string sign;
         if (digits[0] == '-') { sign = "-"; digits = digits[1 .. $]; }
@@ -164,6 +173,8 @@ struct Z8Decimal {
         return (sign ~ digits[0 .. splitAt] ~ "." ~ digits[splitAt .. $]).to!wstring;
     }
 }
+
+Z8Decimal z8_decimal_nan() { Z8Decimal result; result.nan = true; return result; }
 
 Z8Decimal z8_decimal(string input) {
     size_t cursor;
