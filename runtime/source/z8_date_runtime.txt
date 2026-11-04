@@ -211,6 +211,50 @@ private wstring z8_date_format(Z8Date x, bool milliseconds) {
 }
 wstring z8_date_toString(Z8Date x) { return z8_date_format(x, false); }
 wstring z8_date_toIsoString(Z8Date x) { return z8_date_format(x, true); }
+wstring z8_date_toString(Z8Date value, wstring pattern) {
+    auto t = z8_nonnull(value).value;
+    t.timezone = z8_date_timezone();
+    pattern = z8_string_required(pattern);
+    wstring result;
+    bool quoted;
+    size_t i;
+    while (i < pattern.length) {
+        auto c = pattern[i++];
+        if (c == '\'') {
+            if (i < pattern.length && pattern[i] == '\'') { result ~= '\''; ++i; }
+            else quoted = !quoted;
+            continue;
+        }
+        if (quoted || !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))) { result ~= c; continue; }
+        size_t count = 1;
+        while (i < pattern.length && pattern[i] == c) { ++count; ++i; }
+        long number;
+        bool numeric = true;
+        switch (c) {
+            case 'y': number = count == 2 ? t.year % 100 : t.year; break;
+            case 'M': if (count > 2) throw new Exception("unsupported date format"); number = cast(int)t.month; break;
+            case 'd': number = t.day; break;
+            case 'H': number = t.hour; break;
+            case 'm': number = t.minute; break;
+            case 's': number = t.second; break;
+            case 'S': number = t.fracSecs.total!"msecs"; break;
+            case 'Z': case 'X':
+                numeric = false;
+                if (c == 'X' && count > 3) throw new Exception("invalid date format");
+                auto offset = t.utcOffset.total!"minutes";
+                if (c == 'X' && offset == 0) { result ~= 'Z'; break; }
+                auto absolute = offset < 0 ? -offset : offset;
+                auto zone = format("%s%02d", offset < 0 ? "-" : "+", absolute / 60);
+                if (c == 'Z' || count >= 2) zone ~= (c == 'X' && count == 3 ? ":" : "") ~ format("%02d", absolute % 60);
+                result ~= zone.to!wstring;
+                break;
+            default: throw new Exception("unsupported date format");
+        }
+        if (numeric) result ~= format("%0*d", cast(int)count, number).to!wstring;
+    }
+    if (quoted) throw new Exception("unterminated date format quote");
+    return result.length ? result : ""w;
+}
 
 auto z8_date_binary(string op)(Z8Date left, Z8Date right) {
     auto a = z8_date_ticks(left);

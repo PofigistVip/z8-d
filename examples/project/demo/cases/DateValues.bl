@@ -14,6 +14,9 @@ public class DateValues {
         if (value.dayOfWeek() != 5 || value.dayOfYear() != 60 || value.daysInMonth() != 29) return 3;
         if (value.ticks() != 1709199045000 || value.toString() != "2024-02-29T12:30:45+03:00") return 4;
         if (value.toIsoString() != "2024-02-29T12:30:45+03:00") return 5;
+        if (value.toString("yyyy-MM-dd HH:mm:ss.SSS XXX") != "2024-02-29 12:30:45.000 +03:00") return 35;
+        if (value.toString("yy/M/d H:m:s Z") != "24/2/29 12:30:45 +0300") return 36;
+        if (value.toString("yyyy 'at' HH:mm") != "2024 at 12:30") return 37;
         date next = value.addYear(1);
         if (next.toString() != "2025-02-28T12:30:45+03:00" || value.year() != 2024) return 6;
         if (value.addMonth(1).toString() != "2024-03-29T12:30:45+03:00") return 7;

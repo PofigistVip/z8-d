@@ -649,6 +649,9 @@ class Checker {
                     fail("unsupported geometry method", e.token);
                 }
                 if (receiver == ValueType.dateType) {
+                    if (e.token.text == "toString" && e.arguments.length == 1) {
+                        checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_date_toString"; return ValueType.stringType;
+                    }
                     if (e.token.text == "setZoneOffset") {
                         checkArguments(e, [ValueType.intType]); e.builtinCall = "z8_date_setZoneOffset"; return ValueType.voidType;
                     }
