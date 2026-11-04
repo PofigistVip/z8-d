@@ -24,6 +24,9 @@ public class StringExtras {
         if ("ab-ab".replaceFirst("(a)(b)", "<$0>") != "<ab>-ab") return 13;
         if ("HELLO-A".replaceAll("(?<word>[A-Z]+)", "<${word}>") != "<HELLO>-<A>") return 36;
         if (!"AB".matches("(?<first>A)B")) return 37;
+        if (!"abab0".matches("(?<pair>ab)\\k<pair>0") || !".a[".matches("\\Q.a[\\E")) return 42;
+        if (!"xyzy".matches("(x)(?<tail>y)z\\k<tail>") || !"foo-bar".matches("\\Qfoo-bar\\E")) return 43;
+        if (!"]".matches("[\\Q]\\E]")) return 44;
         if (!"Ab".matches("(?i)ab") || !"5".matches("\\d") || "١".matches("\\d") || "é".matches("\\w")) return 38;
         if (" ".matches("\\s") || !"5".matches("[\\d]")) return 39;
         if (!"١".matches("[\\D]") || !"5".matches("[^\\D]") || "5".matches("[0\\D]")) return 41;

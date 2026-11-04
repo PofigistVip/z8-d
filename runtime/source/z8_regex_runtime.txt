@@ -19,11 +19,31 @@ private wstring z8_regex_pattern(wstring pattern) {
     wstring result;
     size_t classDepth;
     size_t i;
+    bool quoted;
+    int captures;
+    int[wstring] named;
     while (i < pattern.length) {
         auto c = pattern[i++];
+        if (quoted) {
+            if (c == '\\' && i < pattern.length && pattern[i] == 'E') { ++i; quoted = false; continue; }
+            if ("\\.^$|?*+()[]{}-"w.canFind(c)) result ~= '\\';
+            result ~= c;
+            continue;
+        }
         if (c == '\\') {
             if (i == pattern.length) { result ~= c; continue; }
             auto escape = pattern[i++];
+            if (escape == 'Q') { quoted = true; continue; }
+            if (!classDepth && escape == 'k' && i < pattern.length && pattern[i] == '<') {
+                auto begin = ++i;
+                while (i < pattern.length && pattern[i] != '>') ++i;
+                if (i == pattern.length || i == begin) throw new Exception("invalid named regex backreference");
+                auto group = pattern[begin .. i] in named;
+                if (group is null) throw new Exception("unknown named regex group");
+                result ~= "(?:\\"w ~ (*group).to!wstring ~ ")"w;
+                ++i;
+                continue;
+            }
             wstring chars;
             if (escape == 'd' || escape == 'D') chars = "0-9"w;
             else if (escape == 'w' || escape == 'W') chars = "A-Za-z0-9_"w;
@@ -36,8 +56,17 @@ private wstring z8_regex_pattern(wstring pattern) {
         else if (c == ']' && classDepth) { --classDepth; result ~= c; }
         else if (!classDepth && c == '(' && i + 2 < pattern.length && pattern[i] == '?' && pattern[i + 1] == '<' &&
                  pattern[i + 2] != '=' && pattern[i + 2] != '!') {
-            result ~= "(?P<"w; i += 2;
-        } else result ~= c;
+            i += 2;
+            auto begin = i;
+            while (i < pattern.length && pattern[i] != '>') ++i;
+            if (i == pattern.length || i == begin) throw new Exception("invalid named regex group");
+            auto name = pattern[begin .. i++];
+            named[name] = ++captures;
+            result ~= "(?P<"w ~ name ~ ">"w;
+        } else {
+            if (!classDepth && c == '(' && (i == pattern.length || pattern[i] != '?')) ++captures;
+            result ~= c;
+        }
     }
     return result.length ? result : ""w;
 }
