@@ -1,0 +1,32 @@
+public class GeometryValues {
+    public static int run() {
+        geometry empty;
+        if (empty.shape() != geometry.None || empty.srs() != geometry.DefaultSRS || empty.hashCode() != 0) return 1;
+        geometry point = geometry.point(1.5, -2.25, 4326);
+        if (point.shape() != geometry.Point || point.srs() != 4326) return 2;
+        if (point.x() != 1.5 || point.y() != -2.25 || point.x1() != 1.5 || point.y2() != -2.25) return 3;
+        if (point.width() != 0.0 || point.height() != 0.0 || point.length() != 0.0) return 4;
+        if (point.center().x() != 1.5) return 5;
+        string encoded = point.toString();
+        if (encoded != "0101000020E6100000000000000000F83F00000000000002C0") return 6;
+        primary boxed = point;
+        if (!(boxed instanceof geometry) || ((geometry)boxed).srs() != 4326) return 7;
+        if (boxed.toString() != encoded || boxed.hashCode() != point.hashCode()) return 8;
+        if (geometry.none(0).srs() != 0 || geometry.StrPoint != "POINT") return 9;
+        geometry[] points = {geometry.point(0, 0, 4326), geometry.point(3, 4, 4326)};
+        geometry line = geometry.line(points);
+        if (line.shape() != geometry.Line || line.srs() != 4326 || line.points().size() != 2) return 10;
+        if (line.length() != 5.0 || line.width() != 3.0 || line.height() != 4.0) return 11;
+        if (line.center().x() != 1.5 || line.center().y() != 2.0) return 12;
+        if (line.toString() != "0102000020E6100000020000000000000000000000000000000000000000000000000008400000000000001040") return 15;
+        geometry[] components = {line};
+        geometry group = geometry.collection(components);
+        if (group.shape() != geometry.Collection || group.length() != 5.0) return 13;
+        geometry ring = geometry.ring(points);
+        geometry[] rings = {ring};
+        geometry polygon = geometry.polygon(rings);
+        if (polygon.shape() != geometry.Polygon || polygon.width() != 3.0) return 14;
+        if (polygon.toString() != "0103000020E610000001000000020000000000000000000000000000000000000000000000000008400000000000001040") return 16;
+        return 199;
+    }
+}

@@ -40,6 +40,7 @@ class Parser {
             case "binary": result = ValueType.binaryType; break;
             case "datespan": result = ValueType.datespanType; break;
             case "date": result = ValueType.dateType; break;
+            case "geometry": result = ValueType.geometryType; break;
             case "exception": result = ValueType.exceptionType; break;
             case "primary": result = ValueType.primaryType; break;
             default:
@@ -62,6 +63,7 @@ class Parser {
                 case ValueType.binaryType: return ValueType.binaryArray;
                 case ValueType.datespanType: return ValueType.datespanArray;
                 case ValueType.dateType: return ValueType.dateArray;
+                case ValueType.geometryType: return ValueType.geometryArray;
                 case ValueType.selfType: return ValueType.selfArray;
                 default: error("this array element type is not supported"); assert(0);
             }

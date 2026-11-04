@@ -19,6 +19,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.binaryType: return "Z8Binary";
         case ValueType.datespanType: return "Z8Datespan";
         case ValueType.dateType: return "Z8Date";
+        case ValueType.geometryType: return "Z8Geometry";
         case ValueType.primaryType: return "Z8Primary";
         case ValueType.selfType: assert(objectClass !is null); return objectClass.emittedName;
         case ValueType.selfArray: assert(objectClass !is null); return "Z8Array!(" ~ objectClass.emittedName ~ ")";
@@ -33,6 +34,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.binaryArray: return "Z8Array!Z8Binary";
         case ValueType.datespanArray: return "Z8Array!Z8Datespan";
         case ValueType.dateArray: return "Z8Array!Z8Date";
+        case ValueType.geometryArray: return "Z8Array!Z8Geometry";
         case ValueType.nullType: assert(0, "null has no concrete D type");
         case ValueType.nullableString: return "wstring";
         case ValueType.enumType: assert(objectClass !is null); return objectClass.emittedName;
@@ -148,7 +150,7 @@ private string emitExprRaw(Expression e) {
         case ExprKind.memberCall:
             if (e.builtinCall.length) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
-                if ((e.inferredType == ValueType.binaryType || e.inferredType == ValueType.datespanType || e.inferredType == ValueType.dateType) && e.left !is null)
+                if ((e.inferredType == ValueType.binaryType || e.inferredType == ValueType.datespanType || e.inferredType == ValueType.dateType || e.inferredType == ValueType.geometryType) && e.left !is null)
                     return e.builtinCall ~ "(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
                 if (e.builtinCall == "z8_primary_to_string" || e.builtinCall == "z8_primary_hash" || e.builtinCall == "z8_primary_hash_value" ||
                     ["z8_guid_to_string", "z8_guid_hash", "z8_guid_major", "z8_guid_minor", "z8_guid_components"].canFind(e.builtinCall))
@@ -338,6 +340,7 @@ private string defaultValue(ValueType type, Program objectClass = null, bool has
     if (type == ValueType.binaryType) return "new Z8Binary()";
     if (type == ValueType.datespanType) return "new Z8Datespan()";
     if (type == ValueType.dateType) return "z8_date_now()";
+    if (type == ValueType.geometryType) return "new Z8Geometry()";
     if (type == ValueType.decimalType) return "z8_decimal_from_int(0)";
     if (type == ValueType.selfType) return "z8_new!(" ~ dType(type, objectClass) ~ ")(" ~ (hasContainer ? "this" : "") ~ ")";
     if (type == ValueType.stringMap) return "new Z8StringMap()";

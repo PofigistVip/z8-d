@@ -1,5 +1,5 @@
 // The original primary class is the common base for Z8 scalar values.
-enum Z8PrimaryKind { integer, boolean, decimal, text, guid, binary, datespan }
+enum Z8PrimaryKind { integer, boolean, decimal, text, guid, binary, datespan, geometry }
 
 class Z8Primary {
     Z8PrimaryKind kind;
@@ -10,6 +10,7 @@ class Z8Primary {
     Z8Guid guidValue;
     Z8Binary binaryValue;
     Z8Datespan datespanValue;
+    Z8Geometry geometryValue;
 
     override bool opEquals(Object other) {
         auto right = cast(Z8Primary)other;
@@ -22,6 +23,7 @@ class Z8Primary {
             case Z8PrimaryKind.guid: return z8_guid_compare!"=="(guidValue, right.guidValue);
             case Z8PrimaryKind.binary: return binaryValue is right.binaryValue;
             case Z8PrimaryKind.datespan: return z8_datespan_binary!"=="(datespanValue, right.datespanValue);
+            case Z8PrimaryKind.geometry: return z8_geometry_equals(geometryValue, right.geometryValue);
         }
     }
 }
@@ -53,6 +55,12 @@ Z8Primary z8_primary_box(T)(T value) {
         boxed.kind = Z8PrimaryKind.datespan;
         boxed.datespanValue = value;
         return boxed;
+    } else static if (is(T == Z8Geometry)) {
+        if (value is null) return null;
+        auto boxed = new Z8Primary();
+        boxed.kind = Z8PrimaryKind.geometry;
+        boxed.geometryValue = value;
+        return boxed;
     } else {
         auto boxed = new Z8Primary();
         static if (is(T == long)) { boxed.kind = Z8PrimaryKind.integer; boxed.integerValue = value; }
@@ -73,6 +81,7 @@ wstring z8_primary_to_string(Z8Primary value) {
         case Z8PrimaryKind.guid: return z8_guid_to_string(value.guidValue);
         case Z8PrimaryKind.binary: return z8_binary_to_string(value.binaryValue);
         case Z8PrimaryKind.datespan: return z8_datespan_to_string(value.datespanValue);
+        case Z8PrimaryKind.geometry: return z8_geometry_to_string(value.geometryValue);
     }
 }
 
@@ -109,6 +118,7 @@ long z8_primary_hash(Z8Primary value) {
         case Z8PrimaryKind.guid: return z8_guid_hash(value.guidValue);
         case Z8PrimaryKind.binary: return z8_binary_hash(value.binaryValue);
         case Z8PrimaryKind.datespan: return z8_datespan_hashCode(value.datespanValue);
+        case Z8PrimaryKind.geometry: return z8_geometry_hashCode(value.geometryValue);
     }
     return cast(long)cast(int)hash;
 }
@@ -125,6 +135,7 @@ bool z8_primary_is(T)(Z8Primary value) {
     else static if (is(T == Z8Guid)) return value.kind == Z8PrimaryKind.guid;
     else static if (is(T == Z8Binary)) return value.kind == Z8PrimaryKind.binary;
     else static if (is(T == Z8Datespan)) return value.kind == Z8PrimaryKind.datespan;
+    else static if (is(T == Z8Geometry)) return value.kind == Z8PrimaryKind.geometry;
     else static assert(0, "unsupported primary instanceof target");
 }
 
@@ -135,11 +146,12 @@ Z8Optional!T z8_primary_cast(T)(Z8Primary value) if (is(T == long) || is(T == bo
     else static if (is(T == bool)) return z8_optional_wrap(value.booleanValue);
     else return z8_optional_wrap(value.decimalValue);
 }
-T z8_primary_cast(T)(Z8Primary value) if (is(T == wstring) || is(T == Z8Guid) || is(T == Z8Binary) || is(T == Z8Datespan)) {
+T z8_primary_cast(T)(Z8Primary value) if (is(T == wstring) || is(T == Z8Guid) || is(T == Z8Binary) || is(T == Z8Datespan) || is(T == Z8Geometry)) {
     if (value is null) return null;
     if (!z8_primary_is!T(value)) throw new Exception("invalid primary cast");
     static if (is(T == wstring)) return value.textValue;
     else static if (is(T == Z8Guid)) return value.guidValue;
     else static if (is(T == Z8Binary)) return value.binaryValue;
-    else return value.datespanValue;
+    else static if (is(T == Z8Datespan)) return value.datespanValue;
+    else return value.geometryValue;
 }

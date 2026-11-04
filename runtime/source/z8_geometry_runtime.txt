@@ -1,0 +1,149 @@
+// Geometry values and their nested component geometries.
+class Z8Geometry {
+    int shape = -1;
+    int srs = 3857;
+    double x = 0, y = 0;
+    Z8Geometry[] children;
+    bool hasChildren;
+    override bool opEquals(Object other) { return z8_geometry_equals(this, cast(Z8Geometry)other); }
+}
+
+Z8Geometry z8_geometry_none(long srs) {
+    auto result = new Z8Geometry();
+    result.srs = cast(int)srs;
+    return result;
+}
+Z8Geometry z8_geometry_point(Z8Decimal x, Z8Decimal y, long srs) {
+    auto result = new Z8Geometry();
+    result.shape = 1; result.srs = cast(int)srs;
+    result.x = x.z8_as_double(); result.y = y.z8_as_double();
+    return result;
+}
+private Z8Geometry z8_geometry_compound(Z8Array!Z8Geometry values, int shape) {
+    auto result = new Z8Geometry();
+    result.shape = shape;
+    if (values !is null) {
+        result.hasChildren = true;
+        foreach (i; 0 .. values.z8_size()) result.children ~= values.z8_get(i);
+        if (result.children.length) result.srs = cast(int)z8_geometry_srs(result.children[0]);
+    }
+    return result;
+}
+Z8Geometry z8_geometry_line(Z8Array!Z8Geometry values) { return z8_geometry_compound(values, 2); }
+Z8Geometry z8_geometry_multiLine(Z8Array!Z8Geometry values) { return z8_geometry_compound(values, 5); }
+Z8Geometry z8_geometry_ring(Z8Array!Z8Geometry values) { return z8_geometry_compound(values, 0); }
+Z8Geometry z8_geometry_polygon(Z8Array!Z8Geometry values) { return z8_geometry_compound(values, 3); }
+Z8Geometry z8_geometry_collection(Z8Array!Z8Geometry values) { return z8_geometry_compound(values, 7); }
+Z8Array!Z8Geometry z8_geometry_points(Z8Geometry value) {
+    z8_nonnull(value);
+    if (!value.hasChildren) throw new Exception("geometry has no point list");
+    return new Z8Array!Z8Geometry(value.children.dup);
+}
+long z8_geometry_shape(Z8Geometry value) { return z8_nonnull(value).shape; }
+long z8_geometry_srs(Z8Geometry value) { return z8_nonnull(value).srs; }
+private Z8Decimal z8_geometry_decimal(double value) { return z8_decimal_literal(format("%.17g", value)); }
+Z8Decimal z8_geometry_x(Z8Geometry value) { return z8_geometry_decimal(z8_nonnull(value).x); }
+Z8Decimal z8_geometry_y(Z8Geometry value) { return z8_geometry_decimal(z8_nonnull(value).y); }
+private double[4] z8_geometry_bounds(Z8Geometry value) {
+    z8_nonnull(value);
+    if (value.shape == -1 || value.shape == 1) return [value.x, value.y, value.x, value.y];
+    if (!value.hasChildren) throw new Exception("geometry has no point list");
+    double[4] bounds = [0.0, 0.0, 0.0, 0.0];
+    bool first = true;
+    foreach (child; value.children) {
+        auto part = z8_geometry_bounds(child);
+        if (first) { bounds = part; first = false; }
+        else {
+            if (part[0] < bounds[0]) bounds[0] = part[0];
+            if (part[1] < bounds[1]) bounds[1] = part[1];
+            if (part[2] > bounds[2]) bounds[2] = part[2];
+            if (part[3] > bounds[3]) bounds[3] = part[3];
+        }
+    }
+    return bounds;
+}
+Z8Decimal z8_geometry_x1(Z8Geometry value) { return z8_geometry_decimal(z8_geometry_bounds(value)[0]); }
+Z8Decimal z8_geometry_y1(Z8Geometry value) { return z8_geometry_decimal(z8_geometry_bounds(value)[1]); }
+Z8Decimal z8_geometry_x2(Z8Geometry value) { return z8_geometry_decimal(z8_geometry_bounds(value)[2]); }
+Z8Decimal z8_geometry_y2(Z8Geometry value) { return z8_geometry_decimal(z8_geometry_bounds(value)[3]); }
+Z8Decimal z8_geometry_width(Z8Geometry value) { auto b = z8_geometry_bounds(value); return z8_geometry_decimal(b[2] - b[0]); }
+Z8Decimal z8_geometry_height(Z8Geometry value) { auto b = z8_geometry_bounds(value); return z8_geometry_decimal(b[3] - b[1]); }
+private double z8_geometry_length_value(Z8Geometry value) {
+    import std.math : sqrt;
+    z8_nonnull(value);
+    if (value.shape == -1 || value.shape == 1 || value.shape == 4) return 0;
+    if (!value.hasChildren) throw new Exception("geometry has no point list");
+    double result = 0;
+    if (value.shape == 2) {
+        foreach (i; 0 .. value.children.length) if (i + 1 < value.children.length) {
+            auto a = z8_nonnull(value.children[i]), b = z8_nonnull(value.children[i + 1]);
+            if (a.shape != 1 || b.shape != 1) throw new Exception("line contains non-point geometry");
+            auto dx = a.x - b.x, dy = a.y - b.y;
+            result += sqrt(dx * dx + dy * dy);
+        }
+    } else if (value.shape == 5 || value.shape == 7) {
+        foreach (child; value.children) result += z8_geometry_length_value(child);
+    } else throw new Exception("length is unsupported for this geometry shape");
+    return result;
+}
+Z8Decimal z8_geometry_length(Z8Geometry value) { return z8_geometry_decimal(z8_geometry_length_value(value)); }
+Z8Geometry z8_geometry_center(Z8Geometry value) {
+    z8_nonnull(value);
+    if (value.shape == -1 || value.shape == 1) return value;
+    auto b = z8_geometry_bounds(value);
+    auto result = new Z8Geometry();
+    result.shape = 1; result.srs = value.srs;
+    result.x = (b[0] + b[2]) / 2; result.y = (b[1] + b[3]) / 2;
+    return result;
+}
+
+wstring z8_geometry_to_string(Z8Geometry value) {
+    z8_nonnull(value);
+    if (value.shape == -1) return ""w;
+    string result;
+    void putByte(ubyte b) { result ~= format("%02X", cast(uint)b); }
+    void putInt(uint n) { foreach (i; 0 .. 4) putByte(cast(ubyte)(n >> (i * 8))); }
+    void putDouble(double n) {
+        union Bits { double number; ulong bits; }
+        Bits valueBits; valueBits.number = n;
+        foreach (i; 0 .. 8) putByte(cast(ubyte)(valueBits.bits >> (i * 8)));
+    }
+    void putPoint(Z8Geometry point) { z8_nonnull(point); putDouble(point.x); putDouble(point.y); }
+    void writePoints(Z8Geometry shape) {
+        if (!shape.hasChildren) throw new Exception("geometry has no point list");
+        putInt(cast(uint)shape.children.length);
+        foreach (point; shape.children) putPoint(point);
+    }
+    void writeGeometry(Z8Geometry shape) {
+        z8_nonnull(shape);
+        putByte(1);
+        putInt(shape.srs != 0 ? cast(uint)shape.shape | 0x20000000u : cast(uint)shape.shape);
+        if (shape.srs != 0) putInt(cast(uint)shape.srs);
+        switch (shape.shape) {
+            case 1: putPoint(shape); break;
+            case 2: writePoints(shape); break;
+            case 3:
+                if (!shape.hasChildren) throw new Exception("geometry has no rings");
+                putInt(cast(uint)shape.children.length);
+                foreach (ring; shape.children) writePoints(z8_nonnull(ring));
+                break;
+            case 4: case 5: case 6: case 7:
+                if (!shape.hasChildren) throw new Exception("geometry has no components");
+                putInt(cast(uint)shape.children.length);
+                foreach (child; shape.children) writeGeometry(child);
+                break;
+            default: throw new Exception("unsupported geometry shape");
+        }
+    }
+    writeGeometry(value);
+    return result.to!wstring;
+}
+long z8_geometry_hashCode(Z8Geometry value) {
+    uint hash;
+    foreach (wchar c; z8_geometry_to_string(value)) hash = 31u * hash + c;
+    return cast(long)cast(int)hash;
+}
+bool z8_geometry_equals(Z8Geometry left, Z8Geometry right) {
+    if (left is null || right is null || left.shape == -1) return false;
+    return z8_geometry_to_string(left) == z8_geometry_to_string(right);
+}

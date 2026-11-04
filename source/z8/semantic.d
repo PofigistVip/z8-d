@@ -1,6 +1,7 @@
 module z8.semantic;
 
 import std.algorithm : canFind;
+import std.conv : to;
 import std.string : lastIndexOf, indexOf;
 import z8.compiler_model;
 import z8.lexer : Token;
@@ -96,7 +97,7 @@ class Checker {
         if (e.kind == ExprKind.arrayLiteral && (expected == ValueType.selfArray || expected == ValueType.enumArray)) e.objectClass = expectedClass;
         auto actual = typeOf(e, expected);
         if (expected == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType,
-            ValueType.optionalInt, ValueType.optionalBool, ValueType.optionalDecimal, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType, ValueType.datespanType].canFind(actual)) {
+            ValueType.optionalInt, ValueType.optionalBool, ValueType.optionalDecimal, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType].canFind(actual)) {
             e.boxPrimary = true; return true;
         }
         if (isOptionalPrimitive(actual) && optionalBaseType(actual) == expected) {
@@ -189,7 +190,7 @@ class Checker {
                     if (actual == ValueType.enumType && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                     if (actual == ValueType.enumArray && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                 } else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
-                else if (p.type == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType, ValueType.datespanType].canFind(actual)) { }
+                else if (p.type == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType].canFind(actual)) { }
                 else if (p.type == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual)) weight += 100;
                 else if (p.type == ValueType.stringType && actual == ValueType.guidType) weight += 100;
                 else if (p.type == ValueType.stringType && actual == ValueType.datespanType) weight += 100;
@@ -366,6 +367,20 @@ class Checker {
                         e.emittedOverride = e.token.text == "Min" ? "z8_date_from_ticks(-62135769600000L)" : "z8_date_from_ticks(95617584000000L)";
                         return ValueType.dateType;
                     }
+                    if (e.left.token.text == "geometry") {
+                        auto names = ["None", "Ring", "Point", "Line", "Polygon", "MultiPoint", "MultiLine", "MultiPolygon", "Collection", "DefaultSRS"];
+                        foreach (i, name; names) if (e.token.text == name) {
+                            e.emittedOverride = (i == 9 ? 3857 : cast(int)i - 1).to!string ~ "L";
+                            e.enumConstant = true; return ValueType.intType;
+                        }
+                        auto stringNames = ["StrNone", "StrRing", "StrPoint", "StrLine", "StrPolygon", "StrMultiPoint", "StrMultiLine", "StrMultiPolygon", "StrCollection"];
+                        auto values = ["NONE", "RING", "POINT", "LINE", "POLYGON", "MULTIPOINT", "MULTILINE", "MULTIPOLYGON", "GEOMETRYCOLLECTION"];
+                        foreach (i, name; stringNames) if (e.token.text == name) {
+                            e.emittedOverride = "\"" ~ values[i] ~ "\"w";
+                            e.enumConstant = true; return ValueType.stringType;
+                        }
+                        fail("unknown geometry constant", e.token);
+                    }
                     auto owner = e.left.token.text in visibleClasses;
                     if (owner is null) fail("unknown class or variable '" ~ e.left.token.text ~ "'", e.left.token);
                     if ((*owner).isEnum) {
@@ -404,6 +419,20 @@ class Checker {
                 if (!accessible(selected.owner, selected.isPublic, selected.isProtected)) fail("method is not accessible", e.token);
                 return checkCall(selected, selected.owner, e);
             case ExprKind.memberCall:
+                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "geometry") {
+                    if (e.token.text == "none") {
+                        checkArguments(e, [ValueType.intType]); e.builtinCall = "z8_geometry_none"; return ValueType.geometryType;
+                    }
+                    if (e.token.text == "point") {
+                        checkArguments(e, [ValueType.decimalType, ValueType.decimalType, ValueType.intType]);
+                        e.builtinCall = "z8_geometry_point"; return ValueType.geometryType;
+                    }
+                    if (["line", "multiLine", "ring", "polygon", "collection"].canFind(e.token.text)) {
+                        checkArguments(e, [ValueType.geometryArray]);
+                        e.builtinCall = "z8_geometry_" ~ e.token.text; return ValueType.geometryType;
+                    }
+                    fail("unsupported static geometry method", e.token);
+                }
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "date") {
                     if (["now", "today", "tomorrow", "yesterday"].canFind(e.token.text)) {
                         checkArguments(e, []); e.builtinCall = "z8_date_" ~ e.token.text; return ValueType.dateType;
@@ -482,6 +511,19 @@ class Checker {
                     receiver = ValueType.stringType;
                 }
                 e.inferredType = receiver;
+                if (receiver == ValueType.geometryType) {
+                    checkArguments(e, []);
+                    if (e.token.text == "shape" || e.token.text == "srs" || e.token.text == "hashCode") {
+                        e.builtinCall = "z8_geometry_" ~ e.token.text; return ValueType.intType;
+                    }
+                    if (["x", "y", "x1", "y1", "x2", "y2", "width", "height", "length"].canFind(e.token.text)) {
+                        e.builtinCall = "z8_geometry_" ~ e.token.text; return ValueType.decimalType;
+                    }
+                    if (e.token.text == "center") { e.builtinCall = "z8_geometry_center"; return ValueType.geometryType; }
+                    if (e.token.text == "points") { e.builtinCall = "z8_geometry_points"; return ValueType.geometryArray; }
+                    if (e.token.text == "toString") { e.builtinCall = "z8_geometry_to_string"; return ValueType.stringType; }
+                    fail("unsupported geometry method", e.token);
+                }
                 if (receiver == ValueType.dateType) {
                     if (["set", "setDate", "setTime"].canFind(e.token.text)) {
                         auto count = e.arguments.length;
@@ -710,7 +752,7 @@ class Checker {
                 return array == ValueType.stringArray ? ValueType.nullableString : storedValueType(elementType(array));
             case ExprKind.castExpr:
                 if (typeOf(e.left) == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType,
-                    ValueType.stringType, ValueType.guidType, ValueType.binaryType, ValueType.datespanType].canFind(e.castType)) {
+                    ValueType.stringType, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType].canFind(e.castType)) {
                     e.primaryCast = true;
                     return e.castType == ValueType.stringType ? ValueType.nullableString : storedValueType(e.castType);
                 }
@@ -740,6 +782,7 @@ class Checker {
                         case "guid": e.castType = ValueType.guidType; break;
                         case "binary": e.castType = ValueType.binaryType; break;
                         case "datespan": e.castType = ValueType.datespanType; break;
+                        case "geometry": e.castType = ValueType.geometryType; break;
                         case "primary": e.castType = ValueType.primaryType; break;
                         default: fail("unsupported primary instanceof target", e.token);
                     }
@@ -887,7 +930,7 @@ class Checker {
                     else if (op == ">") e.emittedOperator = ">=";
                     else if (op == ">=") e.emittedOperator = ">";
                 }
-                if (left != right || left == ValueType.voidType || left == ValueType.exceptionType || left == ValueType.primaryType || left == ValueType.binaryType || left == ValueType.selfType || isMap(left) || isArray(left)) fail("operand type mismatch", e.token);
+                if (left != right || left == ValueType.voidType || left == ValueType.exceptionType || left == ValueType.primaryType || left == ValueType.binaryType || left == ValueType.geometryType || left == ValueType.selfType || isMap(left) || isArray(left)) fail("operand type mismatch", e.token);
                 if (["==", "!="].canFind(op)) return ValueType.boolType;
                 if ((left == ValueType.intType || left == ValueType.decimalType || left == ValueType.stringType) && ["<", ">", "<=", ">="].canFind(op)) return ValueType.boolType;
                 if (left == ValueType.stringType && op == "+") { e.inferredType = ValueType.stringType; return ValueType.stringType; }

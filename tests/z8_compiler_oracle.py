@@ -107,6 +107,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         System.out.println("RESULT:" + demo.cases.DatespanValues.z8_run().get());
         System.out.println("RESULT:" + demo.cases.DateValues.z8_run().get());
         System.out.println("RESULT:" + demo.cases.BasicArrays.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.GeometryValues.z8_run().get());
     }
 }''', encoding="utf-8")
         logging_cache = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "commons-logging" / "commons-logging"
@@ -151,6 +152,8 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                         "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), str(decimal_java.with_name("guid.java"))], cwd=temp, check=True)
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
                         "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), str(decimal_java.with_name("datespan.java"))], cwd=temp, check=True)
+        subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
+                        "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), str(decimal_java.with_name("geometry.java"))], cwd=temp, check=True)
         # The cached file class predates current file.java. Its filename helpers
         # delegate to FilenameUtils in current source, while zip is not exercised
         # by this oracle. Adapt only these dependencies in a temporary copy.
@@ -226,14 +229,15 @@ void main() {
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E446174657370616E56616C756573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4461746556616C756573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4261736963417272617973.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E47656F6D6574727956616C756573.m_run()));
 }
 ''', encoding="utf-8")
         d_binary = temp / ("compare.exe" if os.name == "nt" else "compare")
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_results = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        if original_results[-6:] != ["173", "179", "181", "191", "193", "197"]:
-            raise SystemExit(f"Basic types fixture failed in original Z8: {original_results[-6:]}")
+        if original_results[-7:] != ["173", "179", "181", "191", "193", "197", "199"]:
+            raise SystemExit(f"Basic types fixture failed in original Z8: {original_results[-7:]}")
         if original_results != d_results:
             raise SystemExit(f"Original Z8: {original_results!r}; z8-d: {d_results!r}")
         print(f"Matched {len(d_results)} program results against the original compiler and runtime (CLASS from current source)")
