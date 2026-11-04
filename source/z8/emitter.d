@@ -29,6 +29,10 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.boolArray: return "Z8Array!bool";
         case ValueType.stringArray: return "Z8Array!wstring";
         case ValueType.primaryArray: return "Z8Array!Z8Primary";
+        case ValueType.guidArray: return "Z8Array!Z8Guid";
+        case ValueType.binaryArray: return "Z8Array!Z8Binary";
+        case ValueType.datespanArray: return "Z8Array!Z8Datespan";
+        case ValueType.dateArray: return "Z8Array!Z8Date";
         case ValueType.nullType: assert(0, "null has no concrete D type");
         case ValueType.nullableString: return "wstring";
         case ValueType.enumType: assert(objectClass !is null); return objectClass.emittedName;

@@ -1,6 +1,10 @@
 class Z8Guid {
     ulong majorBits, minorBits;
     this(ulong majorBits = 0, ulong minorBits = 0) { this.majorBits = majorBits; this.minorBits = minorBits; }
+    override bool opEquals(Object other) {
+        auto right = cast(Z8Guid)other;
+        return right !is null && majorBits == right.majorBits && minorBits == right.minorBits;
+    }
 }
 
 Z8Guid z8_guid_zero() { return new Z8Guid(); }

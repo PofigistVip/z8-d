@@ -1,6 +1,10 @@
 class Z8Datespan {
     long ticks;
     this(long ticks = 0) { this.ticks = ticks; }
+    override bool opEquals(Object other) {
+        auto right = cast(Z8Datespan)other;
+        return right !is null && ticks == right.ticks;
+    }
 }
 
 enum long z8_second = 1000, z8_minute = 60 * z8_second, z8_hour = 60 * z8_minute, z8_day = 24 * z8_hour;

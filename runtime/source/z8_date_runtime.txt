@@ -10,6 +10,10 @@ private immutable(TimeZone) z8_date_timezone() {
 class Z8Date {
     SysTime value;
     this(SysTime value) { this.value = value; }
+    override bool opEquals(Object other) {
+        auto right = cast(Z8Date)other;
+        return right !is null && value == right.value;
+    }
 }
 Z8Date z8_date_now() { return new Z8Date(Clock.currTime(z8_date_timezone())); }
 Z8Date z8_date_from_ticks(long ticks) {

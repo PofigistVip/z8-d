@@ -637,7 +637,7 @@ class Checker {
                         default: break;
                     }
                 } else if (isArray(receiver)) {
-                    if (receiver == ValueType.selfArray || receiver == ValueType.enumArray || receiver == ValueType.primaryArray) {
+                    if (isReferenceArray(receiver)) {
                         e.objectClass = e.left.objectClass;
                         if (!["size", "isEmpty", "clear", "first", "last", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
                             fail("this method is not yet supported for object arrays", e.token);
@@ -652,7 +652,7 @@ class Checker {
                         case "first": case "last":
                             checkArguments(e, []);
                             if (receiver == ValueType.stringArray) return ValueType.nullableString;
-                            if (receiver == ValueType.selfArray || receiver == ValueType.enumArray || receiver == ValueType.primaryArray) return elementType(receiver);
+                            if (isReferenceArray(receiver)) return elementType(receiver);
                             return optionalForArray(receiver);
                         case "get":
                             if (e.arguments.length != 1 || !matches(e.arguments[0], ValueType.intType)) fail("get requires an int index", e.token);

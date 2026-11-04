@@ -209,32 +209,37 @@ void main() {
     assert subprocess.run([str(executable)], cwd=directory).returncode == 59
     built = subprocess.run([str(exe), "build", str(root / "examples" / "project"),
                             "demo.cases.PrimaryValues.run", str(executable)],
-                           capture_output=True, text=True, encoding="utf-8")
+                           capture_output=True, text=True, encoding="utf-8", env=with_prebuilt_runtime)
     assert built.returncode == 0, built.stderr
     assert subprocess.run([str(executable)], cwd=directory).returncode == 173
     built = subprocess.run([str(exe), "build", str(root / "examples" / "project"),
                             "demo.cases.GuidValues.run", str(executable)],
-                           capture_output=True, text=True, encoding="utf-8")
+                           capture_output=True, text=True, encoding="utf-8", env=with_prebuilt_runtime)
     assert built.returncode == 0, built.stderr
     assert subprocess.run([str(executable)], cwd=directory).returncode == 179
     built = subprocess.run([str(exe), "build", str(root / "examples" / "project"),
                             "demo.cases.BinaryValues.run", str(executable)],
-                           capture_output=True, text=True, encoding="utf-8")
+                           capture_output=True, text=True, encoding="utf-8", env=with_prebuilt_runtime)
     assert built.returncode == 0, built.stderr
     assert subprocess.run([str(executable)], cwd=directory).returncode == 181
     built = subprocess.run([str(exe), "build", str(root / "examples" / "project"),
                             "demo.cases.DatespanValues.run", str(executable)],
-                           capture_output=True, text=True, encoding="utf-8")
+                           capture_output=True, text=True, encoding="utf-8", env=with_prebuilt_runtime)
     assert built.returncode == 0, built.stderr
     assert subprocess.run([str(executable)], cwd=directory).returncode == 191
     built = subprocess.run([str(exe), "build", str(root / "examples" / "project"),
                             "demo.cases.DateValues.run", str(executable)],
-                           capture_output=True, text=True, encoding="utf-8")
+                           capture_output=True, text=True, encoding="utf-8", env=with_prebuilt_runtime)
     assert built.returncode == 0, built.stderr
     assert subprocess.run([str(executable)], cwd=directory).returncode == 193
+    built = subprocess.run([str(exe), "build", str(root / "examples" / "project"),
+                            "demo.cases.BasicArrays.run", str(executable)],
+                           capture_output=True, text=True, encoding="utf-8", env=with_prebuilt_runtime)
+    assert built.returncode == 0, built.stderr
+    assert subprocess.run([str(executable)], cwd=directory).returncode == 197
     for entry, expected in [("demo.cases.Arithmetic.run", 37), ("demo.cases.Text.run", 41), ("demo.cases.Flow.run", 11), ("demo.cases.DecimalArray.run", 47), ("demo.cases.Overloads.run", 53), ("demo.cases.OverloadUser.run", 53), ("demo.cases.Rounding.run", 61), ("demo.cases.PrimitiveParse.run", 67), ("demo.cases.ArrayOperations.run", 54), ("demo.cases.StaticState.run", 70), ("demo.cases.StaticUser.run", 71), ("demo.cases.InstanceOverloads.run", 81), ("demo.cases.IntegerMethods.run", 89), ("demo.cases.ArrayAdvanced.run", 97), ("demo.cases.ObjectArrays.run", 13), ("demo.cases.InheritedOverloads.run", 99), ("demo.cases.StringMap.run", 103), ("demo.cases.ObjectCasts.run", 14), ("demo.cases.NullObjects.run", 107), ("demo.cases.InstanceChecks.run", 109), ("demo.cases.ElvisObjects.run", 113), ("demo.cases.EnumCases.run", 127), ("demo.cases.NullablePrimitives.run", 131), ("demo.cases.NullableStrings.run", 137), ("demo.cases.NullableIntegers.run", 139), ("demo.cases.NullableBooleans.run", 149), ("demo.cases.NullableDecimals.run", 151), ("demo.cases.NullableArrays.run", 157), ("demo.cases.NullableObjectField.run", 163), ("demo.cases.LifecycleCases.run", 167), ("demo.cases.LifecyclePhases.run", 169)]:
         built = subprocess.run([str(exe), "build", str(root / "examples" / "project"), entry, str(executable)],
-                               capture_output=True, text=True, encoding="utf-8")
+                               capture_output=True, text=True, encoding="utf-8", env=with_prebuilt_runtime)
         assert built.returncode == 0, built.stderr
         assert subprocess.run([str(executable)], cwd=directory).returncode == expected
     invalid_entry = subprocess.run(

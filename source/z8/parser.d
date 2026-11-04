@@ -58,6 +58,10 @@ class Parser {
                 case ValueType.boolType: return ValueType.boolArray;
                 case ValueType.stringType: return ValueType.stringArray;
                 case ValueType.primaryType: return ValueType.primaryArray;
+                case ValueType.guidType: return ValueType.guidArray;
+                case ValueType.binaryType: return ValueType.binaryArray;
+                case ValueType.datespanType: return ValueType.datespanArray;
+                case ValueType.dateType: return ValueType.dateArray;
                 case ValueType.selfType: return ValueType.selfArray;
                 default: error("this array element type is not supported"); assert(0);
             }
