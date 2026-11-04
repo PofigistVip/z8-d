@@ -29,6 +29,9 @@ unittest {
     assert(output.canFind("m_add(v_a, z8_optional_wrap((cast(long)(2))))"));
     auto decimalArrays = compile("class A { static void f() { decimal[] values = {1, 2.5}; values.add(3); values.set(0, 4); } }");
     assert(decimalArrays.canFind("Z8Array!Z8Decimal"));
+    compile("import org.zenframework.z8.lang.Math; class A { static decimal f() { return Math.max(1, 2.5) + Math.PI; } }");
+    rejects("import org.zenframework.z8.lang.Math; class A { static decimal f() { return Math.max(true, 1); } }");
+    rejects("import org.zenframework.z8.lang.Math; class A { static decimal f() { return Math.sin(); } }");
 }
 
 private void rejectsSources(SourceUnit[] sources, string expectedFile) {

@@ -55,3 +55,37 @@ Z8Decimal z8_int_power(long x, Z8Decimal power) {
     if (power.nan) throw new Exception("null decimal value");
     return z8_math_result(pow(cast(double)x, power.z8_as_double()));
 }
+
+// Native org.zenframework.z8.lang.Math methods.
+Z8Decimal z8_math_pi() { return z8_decimal_literal("3.141592653589793"); }
+long z8_math_max(long a, long b) { return a >= b ? a : b; }
+long z8_math_min(long a, long b) { return a <= b ? a : b; }
+private Z8Decimal z8_math_copy_decimal(Z8Decimal value) {
+    if (value.nan) throw new Exception("null decimal value");
+    return value;
+}
+Z8Decimal z8_math_max(Z8Decimal a, Z8Decimal b) { return z8_math_copy_decimal(a >= b ? a : b); }
+Z8Decimal z8_math_min(Z8Decimal a, Z8Decimal b) { return z8_math_copy_decimal(a <= b ? a : b); }
+Z8Decimal z8_math_max(long a, Z8Decimal b) { auto n = z8_decimal_from_int(a); return z8_math_copy_decimal(n > b ? n : b); }
+Z8Decimal z8_math_min(long a, Z8Decimal b) { auto n = z8_decimal_from_int(a); return z8_math_copy_decimal(n < b ? n : b); }
+Z8Decimal z8_math_max(Z8Decimal a, long b) { return z8_math_max(a, z8_decimal_from_int(b)); }
+Z8Decimal z8_math_min(Z8Decimal a, long b) { return z8_math_min(a, z8_decimal_from_int(b)); }
+private Z8Date z8_math_copy_date(Z8Date value) {
+    z8_nonnull(value);
+    auto result = new Z8Date(value.value);
+    result.explicitOffset = value.explicitOffset; result.fullFirstWeek = value.fullFirstWeek;
+    return result;
+}
+Z8Date z8_math_max(Z8Date a, Z8Date b) { return z8_math_copy_date(z8_date_binary!">="(a, b) ? a : b); }
+Z8Date z8_math_min(Z8Date a, Z8Date b) { return z8_math_copy_date(z8_date_binary!"<="(a, b) ? a : b); }
+Z8Decimal z8_math_sin(Z8Decimal value) { return z8_decimal_math!"sin"(value); }
+Z8Decimal z8_math_cos(Z8Decimal value) { return z8_decimal_math!"cos"(value); }
+Z8Decimal z8_math_hypot(Z8Decimal a, Z8Decimal b) {
+    import std.math : hypot;
+    if (a.nan || b.nan) throw new Exception("null decimal value");
+    return z8_math_result(cast(double)hypot(a.z8_as_double(), b.z8_as_double()));
+}
+Z8Decimal z8_math_random() {
+    import std.random : uniform01;
+    return z8_math_result(uniform01!double);
+}

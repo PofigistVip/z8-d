@@ -14,6 +14,7 @@ class Checker {
     private Program[string] allClasses;
     private Program currentProgram;
     private bool staticContext, fieldInitialization;
+    private bool importedMath;
     private ValueType[string] variables;
     private Program[string] objectVariables;
     private ValueType returnType;
@@ -241,6 +242,7 @@ class Checker {
     void check(Program program, Program[string] allPrograms = null) {
         currentProgram = program;
         allClasses = allPrograms;
+        importedMath = false;
         visibleClasses = null;
         visibleClasses[program.name.text] = program;
         auto dot = program.qualifiedName.lastIndexOf('.');
@@ -253,6 +255,7 @@ class Checker {
         Program[string] imported;
         foreach (item; program.imports) {
             if (item.name == "org.zenframework.z8.lang.encoding") continue;
+            if (item.name == "org.zenframework.z8.lang.Math") { importedMath = true; continue; }
             auto found = item.name in allPrograms;
             if (found is null) fail("unresolved import '" ~ item.name ~ "'", item.token);
             auto simpleName = (*found).name.text;
@@ -412,6 +415,10 @@ class Checker {
                     if (e.left.token.text == "guid" && e.token.text == "Null") {
                         e.emittedOverride = "z8_guid_zero()"; return ValueType.guidType;
                     }
+                    if (e.left.token.text == "Math" && importedMath) {
+                        if (e.token.text != "PI") fail("unknown Math field", e.token);
+                        e.emittedOverride = "z8_math_pi()"; e.enumConstant = true; return ValueType.decimalType;
+                    }
                     if (e.left.token.text == "date" && ["Min", "Max"].canFind(e.token.text)) {
                         e.emittedOverride = e.token.text == "Min" ? "z8_date_min" : "z8_date_max";
                         return ValueType.dateType;
@@ -486,6 +493,30 @@ class Checker {
                 if (!accessible(selected.owner, selected.isPublic, selected.isProtected)) fail("method is not accessible", e.token);
                 return checkCall(selected, selected.owner, e);
             case ExprKind.memberCall:
+                if (e.left.kind == ExprKind.variable && e.left.token.text == "Math" && importedMath &&
+                    !(e.left.token.text in variables) && !(e.left.token.text in fields)) {
+                    if (e.token.text == "random") {
+                        checkArguments(e, []); e.builtinCall = "z8_math_random"; return ValueType.decimalType;
+                    }
+                    if (["sin", "cos", "hypot"].canFind(e.token.text)) {
+                        checkArguments(e, e.token.text == "hypot" ? [ValueType.decimalType, ValueType.decimalType] : [ValueType.decimalType]);
+                        e.builtinCall = "z8_math_" ~ e.token.text; return ValueType.decimalType;
+                    }
+                    if (["min", "max"].canFind(e.token.text)) {
+                        if (e.arguments.length != 2) fail("incorrect argument count", e.token);
+                        auto a = typeOf(e.arguments[0]), b = typeOf(e.arguments[1]);
+                        if (isOptionalPrimitive(a)) a = optionalBaseType(a);
+                        if (isOptionalPrimitive(b)) b = optionalBaseType(b);
+                        if (a == ValueType.dateType && b == ValueType.dateType) {
+                            checkArguments(e, [a, b]); e.builtinCall = "z8_math_" ~ e.token.text; return ValueType.dateType;
+                        }
+                        if (![ValueType.intType, ValueType.decimalType].canFind(a) || ![ValueType.intType, ValueType.decimalType].canFind(b))
+                            fail("argument type mismatch", e.token);
+                        checkArguments(e, [a, b]); e.builtinCall = "z8_math_" ~ e.token.text;
+                        return a == ValueType.intType && b == ValueType.intType ? ValueType.intType : ValueType.decimalType;
+                    }
+                    fail("unsupported Math method", e.token);
+                }
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "string") {
                     if (e.token.text == "replicate") {
                         checkArguments(e, [ValueType.stringType, ValueType.intType]); e.builtinCall = "z8_string_replicate"; return ValueType.stringType;

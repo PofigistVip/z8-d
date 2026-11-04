@@ -91,6 +91,8 @@ private string emitExpr(Expression e) {
         }
         string[] savedOverrides;
         ValueType[] savedBinaryConversions;
+        ValueType[] savedStringConversions;
+        bool[] savedPromotions;
         bool[] savedFileConversions, savedExceptionConversions, savedDateConversions;
         foreach (i, argument; e.arguments) {
             savedOverrides ~= argument.emittedOverride;
@@ -100,10 +102,12 @@ private string emitExpr(Expression e) {
             savedDateConversions ~= argument.convertToDate;
             auto required = argument.optionalRequired, promote = argument.promoteToDecimal;
             auto convert = argument.convertToString;
+            savedPromotions ~= promote; savedStringConversions ~= convert;
             if (required) { argument.optionalRequired = false; argument.promoteToDecimal = false; argument.convertToString = ValueType.voidType; argument.convertToDate = false; }
             auto name = "z8_arg_" ~ suffix ~ "_" ~ i.to!string;
             value ~= "auto " ~ name ~ " = " ~ emitExpr(argument) ~ "; ";
-            argument.optionalRequired = required; argument.promoteToDecimal = promote; argument.convertToString = convert;
+            argument.optionalRequired = required; argument.promoteToDecimal = required && promote;
+            argument.convertToString = required ? convert : ValueType.voidType;
             argument.convertToBinary = ValueType.voidType;
             argument.makeFile = false; argument.makeException = false;
             argument.convertToDate = required ? savedDateConversions[$ - 1] : false;
@@ -113,6 +117,7 @@ private string emitExpr(Expression e) {
         if (!e.builtinCall.length) e.left.emittedOverride = savedReceiver;
         foreach (i, argument; e.arguments) {
             argument.emittedOverride = savedOverrides[i];
+            argument.promoteToDecimal = savedPromotions[i]; argument.convertToString = savedStringConversions[i];
             argument.convertToBinary = savedBinaryConversions[i];
             argument.makeFile = savedFileConversions[i]; argument.makeException = savedExceptionConversions[i];
             argument.convertToDate = savedDateConversions[i];

@@ -1,3 +1,4 @@
+import org.zenframework.z8.lang.Math;
 public class MathExtras {
     public static int run() {
         int zero = 0;
@@ -13,6 +14,22 @@ public class MathExtras {
         if ((nan + 1).toString() != "NaN" || nan.round(2).toString() != "NaN") return 6;
         try { int ignored = nan.floor(); return 7; } catch (exception expected) {}
         try { decimal infinity = (0).ln(); return 8; } catch (exception expectedInfinity) {}
+        if (Math.PI.toString() != "3.141592653589793" || Math.max(2, 3) != 3 || Math.min(2, 3) != 2) return 11;
+        decimal equal = decimal.parse("1.00");
+        if (Math.max(1, equal).toString() != "1.00" || Math.min(1, equal).toString() != "1.00") return 12;
+        if (Math.max(equal, 1).toString() != "1.00" || Math.min(equal, 1).toString() != "1.00") return 13;
+        if (Math.max(2.0, 1.0) != 2.0 || Math.min(2.0, 1.0) != 1.0) return 14;
+        if (Math.sin(0).toString() != "0.0" || Math.cos(0).toString() != "1.0" || Math.hypot(3, 4).toString() != "5.0") return 15;
+        decimal random = Math.random();
+        if (random < 0 || random >= 1) return 16;
+        date earlier = '01/01/2024';
+        date later = '02/01/2024';
+        date chosen = Math.max(earlier, later);
+        chosen = 0;
+        if (later.ticks() == 0 || Math.min(earlier, later).day() != 1) return 17;
+        if (Math.sin(nan).toString() != "NaN" || Math.min(nan, 1) != 1) return 18;
+        try { decimal bad = Math.max(nan, 1); return 19; } catch (exception expectedNaN) {}
+        try { decimal bad = Math.hypot(nan, 1); return 20; } catch (exception expectedNaNHypot) {}
         return 229;
     }
 }
