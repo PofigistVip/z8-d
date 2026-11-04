@@ -138,7 +138,7 @@ long z8_primary_hash(Z8Primary value) {
         case Z8PrimaryKind.binary: return z8_binary_hash(value.binaryValue);
         case Z8PrimaryKind.datespan: return z8_datespan_hashCode(value.datespanValue);
         case Z8PrimaryKind.geometry: return z8_geometry_hashCode(value.geometryValue);
-        case Z8PrimaryKind.date: throw new Exception("date hashCode is not yet supported");
+        case Z8PrimaryKind.date: return z8_date_hashCode(value.dateValue);
         case Z8PrimaryKind.file: return z8_file_hashCode(value.fileValue);
     }
     return cast(long)cast(int)hash;

@@ -693,7 +693,7 @@ class Checker {
                         checkArguments(e, [ValueType.intType]); e.builtinCall = "z8_date_" ~ e.token.text; return ValueType.dateType;
                     }
                     checkArguments(e, []);
-                    if (["ticks", "year", "quarter", "month", "weekOfYear", "day", "dayOfWeek", "dayOfYear", "daysInMonth", "hours", "minutes", "seconds", "milliseconds", "zoneOffset"].canFind(e.token.text)) {
+                    if (["ticks", "year", "quarter", "month", "weekOfYear", "day", "dayOfWeek", "dayOfYear", "daysInMonth", "hours", "minutes", "seconds", "milliseconds", "zoneOffset", "hashCode"].canFind(e.token.text)) {
                         e.builtinCall = "z8_date_" ~ e.token.text; return ValueType.intType;
                     }
                     if (["truncYear", "truncQuarter", "truncMonth", "truncDay", "truncHour", "truncMinute", "truncSecond"].canFind(e.token.text)) {

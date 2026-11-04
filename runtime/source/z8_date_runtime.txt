@@ -10,6 +10,7 @@ private immutable(TimeZone) z8_date_timezone() {
 class Z8Date {
     SysTime value;
     bool explicitOffset;
+    bool fullFirstWeek;
     this(SysTime value) { this.value = value; }
     override bool opEquals(Object other) {
         auto right = cast(Z8Date)other;
@@ -54,7 +55,9 @@ long z8_date_day(Z8Date x) { return z8_nonnull(x).value.day; }
 long z8_date_dayOfWeek(Z8Date x) { return cast(int)z8_nonnull(x).value.dayOfWeek + 1; }
 long z8_date_dayOfYear(Z8Date x) { return z8_nonnull(x).value.dayOfYear; }
 long z8_date_weekOfYear(Z8Date x) {
-    auto time = z8_nonnull(x).value;
+    auto target = z8_nonnull(x);
+    target.fullFirstWeek = true;
+    auto time = target.value;
     int firstMonday(int year) {
         auto jan1 = SysTime(DateTime(year, 1, 1), time.timezone);
         return (1 - cast(int)jan1.dayOfWeek + 7) % 7;
@@ -64,6 +67,14 @@ long z8_date_weekOfYear(Z8Date x) {
     if (index >= first) return 1 + (index - first) / 7;
     auto lastYear = SysTime(DateTime(time.year - 1, 12, 31), time.timezone);
     return 1 + (lastYear.dayOfYear - 1 - firstMonday(time.year - 1)) / 7;
+}
+long z8_date_hashCode(Z8Date x) {
+    auto target = z8_nonnull(x);
+    auto ticks = cast(ulong)z8_date_ticks(target);
+    // OpenJDK ZoneInfo hash for Europe/Moscow and the Russian locale's calendar settings.
+    uint settings = 1u | (2u << 1) | ((target.fullFirstWeek ? 7u : 1u) << 4) | (cast(uint)-1071621955 << 7);
+    auto hash = cast(uint)ticks ^ cast(uint)(ticks >> 32) ^ settings ^ 577736u;
+    return cast(long)cast(int)hash;
 }
 long z8_date_daysInMonth(Z8Date x) { return z8_nonnull(x).value.daysInMonth; }
 long z8_date_hours(Z8Date x) { return z8_nonnull(x).value.hour; }
@@ -102,6 +113,7 @@ private Z8Date z8_date_parse_impl(wstring input, bool iso) {
         if (iso) return z8_date_min;
         auto result = new Z8Date(z8_date_min.value);
         result.explicitOffset = z8_date_min.explicitOffset;
+        result.fullFirstWeek = z8_date_min.fullFirstWeek;
         return result;
     }
     if (!iso) {
@@ -228,6 +240,7 @@ private Z8Date z8_date_added(Z8Date original, SysTime time, long amount, bool ca
     }
     auto result = new Z8Date(time);
     result.explicitOffset = original.explicitOffset && amount == 0;
+    result.fullFirstWeek = original.fullFirstWeek;
     return result;
 }
 Z8Date z8_date_addYear(Z8Date x, long n) { auto t = z8_nonnull(x).value; t.add!"years"(cast(int)n, AllowDayOverflow.no); return z8_date_added(x, t, n, true); }
