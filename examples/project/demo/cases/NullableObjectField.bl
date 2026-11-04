@@ -1,0 +1,19 @@
+import demo.Counter;
+import demo.Base;
+
+public class NullableObjectField extends Base {
+    private Counter item = null;
+    public static int run() {
+        NullableObjectField instance = new NullableObjectField;
+        Base base = instance;
+        if (!(base instanceof NullableObjectField)) return 2;
+        try { int ignored = base.getValue(); return 3; } catch (exception expectedBase) { }
+        instance = new NullableObjectField;
+        try {
+            Counter value = instance.item;
+            return 1;
+        } catch (exception expected) {
+            return 163;
+        }
+    }
+}

@@ -733,8 +733,6 @@ class Checker {
             if (hasObjectClass(field.type)) field.objectClass = resolveClass(program, field.objectName, field.name);
         foreach (field; program.fields) {
             staticContext = field.isStatic;
-            if (field.type == ValueType.selfType && field.initializer !is null && field.initializer.kind == ExprKind.nullLiteral)
-                fail("null object field initializer is not supported", field.name);
             if (field.isStatic && field.initializer !is null && !isConstantInitializer(field.initializer))
                 fail("static field initializer must be a constant expression", field.name);
             if (field.initializer !is null && !matchesStored(field.initializer, field.type, field.objectClass))
@@ -1776,11 +1774,12 @@ private auto z8_nullable_string_call(string name, Args...)(wstring value, Args a
 }
 private T z8_new(T)() {
     auto value = new T();
-    static if (__traits(hasMember, T, "m_constructor")) value.m_constructor();
+    static if (__traits(hasMember, T, "m_constructor") && !__traits(hasMember, T, "z8_invalid_object_field")) value.m_constructor();
     return value;
 }
 private T z8_nonnull(T)(T value) {
     if (value is null) throw new Exception("null reference");
+    static if (__traits(hasMember, T, "z8_validate_object")) value.z8_validate_object();
     return value;
 }
 private T z8_elvis(T)(T value, lazy T fallback) { return value !is null ? value : fallback; }
@@ -2174,6 +2173,16 @@ class Z8Array(T) {
         }
         result ~= "class " ~ program.emittedName ~ (program.baseClass is null ? "" : " : " ~ program.baseClass.emittedName) ~ " {\n";
         result ~= "alias Z8Self = " ~ program.emittedName ~ ";\n";
+        bool invalidObjectField;
+        foreach (field; program.fields)
+            if (!field.isStatic && field.type == ValueType.selfType && field.initializer !is null && field.initializer.kind == ExprKind.nullLiteral) {
+                invalidObjectField = true; break;
+            }
+        if (invalidObjectField) result ~= "enum bool z8_invalid_object_field = true;\n";
+        result ~= (program.baseClass is null ? "" : "override ") ~ "void z8_validate_object() { ";
+        if (program.baseClass !is null) result ~= "super.z8_validate_object(); ";
+        if (invalidObjectField) result ~= "throw new Exception(\"null object field initializer\"); ";
+        result ~= "}\n";
         bool hasInstanceFields, hasStaticFields;
         foreach (field; program.fields) {
             result ~= (field.isStatic ? "__gshared " : "") ~ dStorageType(field.type, field.objectClass) ~ " f_" ~ field.name.text ~ ";\n";
