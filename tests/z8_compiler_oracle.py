@@ -51,7 +51,7 @@ with tempfile.TemporaryDirectory() as temporary:
         raise SystemExit("Original compiler did not produce Java files")
     if os.environ.get("Z8_ORACLE_INSPECT"):
         for file in generated:
-            if file.name in ("Main.java", "Arithmetic.java", "EnumCases.java", "Flavor.java", "NullableObjectField.java"):
+            if file.name in ("Main.java", "Arithmetic.java", "EnumCases.java", "Flavor.java", "NullableObjectField.java", "LifecycleBase.java", "LifecycleChild.java", "LifecycleCases.java"):
                 print(file.read_text(encoding="utf-8"))
     if os.environ.get("Z8_ORACLE_RUN"):
         runtime_jars = list((original / "org.zenframework.z8.server" / "target" / "libs").glob("*.jar"))
@@ -96,6 +96,7 @@ with tempfile.TemporaryDirectory() as temporary:
         System.out.println("RESULT:" + demo.cases.NullableDecimals.z8_run().get());
         System.out.println("RESULT:" + demo.cases.NullableArrays.z8_run().get());
         System.out.println("RESULT:" + demo.cases.NullableObjectField.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.LifecycleCases.z8_run().get());
     }
 }''', encoding="utf-8")
         logging_cache = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "commons-logging" / "commons-logging"
@@ -167,6 +168,7 @@ void main() {
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4E756C6C61626C65446563696D616C73.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4E756C6C61626C65417272617973.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4E756C6C61626C654F626A6563744669656C64.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4C6966656379636C654361736573.m_run()));
 }
 ''', encoding="utf-8")
         d_binary = temp / ("compare.exe" if os.name == "nt" else "compare")

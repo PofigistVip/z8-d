@@ -1,6 +1,6 @@
 module z8.emitter;
 
-import std.algorithm : canFind;
+import std.algorithm : canFind, sort;
 import std.array : join;
 import std.conv : to;
 import std.format : format;
@@ -100,7 +100,7 @@ private string emitExpr(Expression e) {
 }
 private string emitReceiver(Expression e) {
     if (e.kind == ExprKind.selfRef || e.kind == ExprKind.superRef) return "(" ~ emitExpr(e) ~ ")";
-    return "z8_nonnull(" ~ emitExpr(e) ~ ")";
+    return "z8_nonnull(" ~ emitExpr(e) ~ (e.fieldInitialization ? ", 0" : "") ~ ")";
 }
 private string emitExprRaw(Expression e) {
     final switch (e.kind) {
@@ -309,6 +309,39 @@ private string defaultValue(ValueType type, Program objectClass = null) {
     if (type == ValueType.stringType) return `""w`;
     assert(type == ValueType.boolType); return "false";
 }
+private bool referencesField(Expression expression, string name) {
+    if (expression is null) return false;
+    if ((expression.kind == ExprKind.variable || expression.kind == ExprKind.field) && expression.token.text == name) return true;
+    if (referencesField(expression.left, name) || referencesField(expression.right, name) || referencesField(expression.third, name)) return true;
+    foreach (argument; expression.arguments) if (referencesField(argument, name)) return true;
+    return false;
+}
+
+private Field[] orderedReferenceFields(Program program) {
+    Field[] references;
+    void collect(Program current) {
+        if (current.baseClass !is null) collect(current.baseClass);
+        foreach (field; current.fields)
+            if (!field.isStatic && field.type == ValueType.selfType && field.initializer !is null) references ~= field;
+    }
+    collect(program);
+    sort!((a, b) => a.name.text < b.name.text)(references);
+    bool[] checked = new bool[references.length];
+    for (size_t index = 0; index < references.length; ++index) {
+        if (checked[index]) continue;
+        auto right = references[index].initializer;
+        for (size_t i = index + 1; i < references.length; ++i) {
+            if (!referencesField(right, references[i].name.text)) continue;
+            auto dependency = references[i];
+            auto wasChecked = checked[i];
+            for (size_t j = i; j > index; --j) { references[j] = references[j - 1]; checked[j] = checked[j - 1]; }
+            references[index] = dependency; checked[index] = wasChecked; ++index;
+        }
+        checked[index] = true;
+    }
+    return references;
+}
+
 package string emitPrograms(Program[] programs) {
     string result = runtimeSource;
     foreach (program; programs) {
@@ -323,30 +356,34 @@ package string emitPrograms(Program[] programs) {
             result ~= "}\n";
             continue;
         }
-        result ~= "class " ~ program.emittedName ~ (program.baseClass is null ? "" : " : " ~ program.baseClass.emittedName) ~ " {\n";
+        result ~= "class " ~ program.emittedName ~ " : " ~ (program.baseClass is null ? "Z8Object" : program.baseClass.emittedName) ~ " {\n";
         result ~= "alias Z8Self = " ~ program.emittedName ~ ";\n";
-        bool invalidObjectField;
-        foreach (field; program.fields)
-            if (!field.isStatic && field.type == ValueType.selfType && field.initializer !is null && field.initializer.kind == ExprKind.nullLiteral) {
-                invalidObjectField = true; break;
-            }
-        if (invalidObjectField) result ~= "enum bool z8_invalid_object_field = true;\n";
-        result ~= (program.baseClass is null ? "" : "override ") ~ "void z8_validate_object() { ";
-        if (program.baseClass !is null) result ~= "super.z8_validate_object(); ";
-        if (invalidObjectField) result ~= "throw new Exception(\"null object field initializer\"); ";
-        result ~= "}\n";
-        bool hasInstanceFields, hasStaticFields;
+        bool hasStaticFields;
         foreach (field; program.fields) {
             result ~= (field.isStatic ? "__gshared " : "") ~ dStorageType(field.type, field.objectClass) ~ " f_" ~ field.name.text ~ ";\n";
-            if (field.isStatic) hasStaticFields = true; else hasInstanceFields = true;
+            if (field.isStatic) hasStaticFields = true;
         }
-        if (hasInstanceFields) {
-            result ~= "this() {\n";
-            foreach (field; program.fields)
-                if (!field.isStatic && field.initializer is null) result ~= "this.f_" ~ field.name.text ~ " = " ~ (field.type == ValueType.intType ? "z8_optional_wrap(0L)" : field.type == ValueType.boolType ? "z8_optional_wrap(false)" : field.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(field.type, field.objectClass)) ~ ";\n";
-            foreach (field; program.fields)
-                if (!field.isStatic && field.initializer !is null) result ~= "this.f_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
-            result ~= "}\n";
+        result ~= "override void z8_allocate_fields() {\nsuper.z8_allocate_fields();\n";
+        foreach (field; program.fields) if (!field.isStatic && field.initializer is null) {
+            auto initial = field.type == ValueType.intType ? "z8_optional_wrap(0L)" :
+                field.type == ValueType.boolType ? "z8_optional_wrap(false)" :
+                field.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(field.type, field.objectClass);
+            result ~= "this.f_" ~ field.name.text ~ " = " ~ initial ~ ";\n";
+        }
+        result ~= "}\noverride void z8_init_references() {\n";
+        foreach (field; orderedReferenceFields(program))
+            result ~= "this.f_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
+        result ~= "}\noverride void z8_init_values() {\nsuper.z8_init_values();\n";
+        foreach (field; program.fields) if (!field.isStatic) {
+            if (field.type == ValueType.selfType)
+                result ~= "if (this.f_" ~ field.name.text ~ " is null) throw new Exception(\"null object field initializer\");\n";
+            else if (field.initializer !is null)
+                result ~= "this.f_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
+        }
+        result ~= "}\n";
+        foreach (method; program.methods) if (method.name.text == "constructor") {
+            result ~= "override void z8_call_constructor() { this.m_constructor(); }\n";
+            break;
         }
         if (hasStaticFields) {
             result ~= "shared static this() {\n";

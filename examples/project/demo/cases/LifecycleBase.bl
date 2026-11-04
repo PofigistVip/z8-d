@@ -1,0 +1,5 @@
+public class LifecycleBase {
+    public int baseValue = LifecycleEvents.mark(1);
+    virtual protected void constructor() { LifecycleEvents.mark(3); }
+    virtual public int read() { return baseValue; }
+}

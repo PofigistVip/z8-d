@@ -25,7 +25,7 @@ class Expression {
     Expression[] arguments;
     ValueType inferredType;
     string targetClass;
-    bool isField, instanceCall;
+    bool isField, instanceCall, fieldInitialization;
     bool promoteToDecimal;
     ValueType convertToString;
     ValueType castType;

@@ -1,0 +1,5 @@
+public class LifecycleChild extends LifecycleBase {
+    public int childValue = LifecycleEvents.mark(2);
+    protected void constructor() { LifecycleEvents.mark(4); super.constructor(); LifecycleEvents.mark(5); }
+    public int read() { return baseValue + childValue; }
+}

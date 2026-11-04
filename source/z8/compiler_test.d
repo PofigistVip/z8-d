@@ -70,7 +70,7 @@ unittest {
     rejectsSources([readsField, protectedField], "A.bl");
     auto cycleA = SourceUnit("pkg.A", "A.bl", "class A { B next; }");
     auto cycleB = SourceUnit("pkg.B", "B.bl", "class B { A next; }");
-    rejectsSources([cycleA, cycleB], "B.bl");
+    compileSources([cycleA, cycleB]);
     auto base = SourceUnit("pkg.Base", "Base.bl", "class Base { public int f() { return 1; } }");
     auto derived = SourceUnit("pkg.Derived", "Derived.bl", "class Derived extends Base { public int f() { return 2; } }");
     rejectsSources([derived, base], "Derived.bl");
@@ -168,7 +168,7 @@ unittest {
     rejects("class A { static void constructor() {} }");
     rejects("class A { int constructor() { return 1; } }");
     rejects("class A { void constructor(int value) {} }");
-    rejects("class A { A next; }");
+    compile("class A { A next; }");
     rejects("class A { static int f() { while (true) return 1; } }");
     rejects("class A { static int f() { if (true) { int x = 1; } return x; } }");
     rejects("class A { static int f(int x) { int x = 1; return x; } }");

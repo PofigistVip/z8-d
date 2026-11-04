@@ -12,7 +12,7 @@ class Checker {
     private Program[string] visibleClasses;
     private Program[string] allClasses;
     private Program currentProgram;
-    private bool staticContext;
+    private bool staticContext, fieldInitialization;
     private ValueType[string] variables;
     private Program[string] objectVariables;
     private ValueType returnType;
@@ -267,11 +267,13 @@ class Checker {
             if (hasObjectClass(field.type)) field.objectClass = resolveClass(program, field.objectName, field.name);
         foreach (field; program.fields) {
             staticContext = field.isStatic;
+            fieldInitialization = !field.isStatic;
             if (field.isStatic && field.initializer !is null && !isConstantInitializer(field.initializer))
                 fail("static field initializer must be a constant expression", field.name);
             if (field.initializer !is null && !matchesStored(field.initializer, field.type, field.objectClass))
                 fail("field initializer type mismatch", field.name);
         }
+        fieldInitialization = false;
         foreach (m; program.methods) {
             variables = null; objectVariables = null; returnType = m.returnType; loopDepth = 0; finallyDepth = 0; staticContext = m.isStatic;
             m.returnObjectClass = hasObjectClass(m.returnType) ? resolveClass(program, m.returnObjectName, m.name) : null;
@@ -290,6 +292,7 @@ class Checker {
         }
     }
     private ValueType typeOf(Expression e, ValueType expected = ValueType.voidType) {
+        e.fieldInitialization = fieldInitialization;
         auto result = typeOfRaw(e, expected);
         if (result == ValueType.stringType && (e.kind == ExprKind.memberCall || e.kind == ExprKind.binary))
             e.nonNullStringResult = true;

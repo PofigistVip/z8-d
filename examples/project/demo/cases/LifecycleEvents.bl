@@ -1,0 +1,4 @@
+public class LifecycleEvents {
+    public static int events;
+    public static int mark(int value) { events = events * 10 + value; return value; }
+}

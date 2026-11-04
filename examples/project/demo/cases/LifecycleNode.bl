@@ -1,0 +1,4 @@
+public class LifecycleNode {
+    public LifecycleNode next;
+    public int value;
+}

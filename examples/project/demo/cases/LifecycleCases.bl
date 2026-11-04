@@ -1,0 +1,16 @@
+public class LifecycleCases {
+    public static int run() {
+        LifecycleEvents.events = 0;
+        LifecycleBase value = new LifecycleChild;
+        if (LifecycleEvents.events != 0) return 1;
+        if (value == null || !(value instanceof LifecycleChild)) return 2;
+        if (LifecycleEvents.events != 0) return 3;
+        if (value.read() != 3) return 4;
+        if (LifecycleEvents.events != 12435) return 5;
+        if (value.read() != 3 || LifecycleEvents.events != 12435) return 6;
+        LifecycleNode node;
+        node.next.value = 11;
+        if (node.next.value != 11 || node.next.next == null) return 7;
+        return 167;
+    }
+}

@@ -8,12 +8,13 @@ public class NullableObjectField extends Base {
         Base base = instance;
         if (!(base instanceof NullableObjectField)) return 2;
         try { int ignored = base.getValue(); return 3; } catch (exception expectedBase) { }
+        if (base.getValue() != 2) return 4;
         instance = new NullableObjectField;
         try {
             Counter value = instance.item;
             return 1;
-        } catch (exception expected) {
-            return 163;
-        }
+        } catch (exception expected) { }
+        if (instance.item != null) return 5;
+        return 163;
     }
 }

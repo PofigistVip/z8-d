@@ -17,7 +17,6 @@ string compile(string source) {
     prepareInheritance([program], programs);
     (new Checker).prepareDeclarations(program, programs);
     (new Checker).check(program, programs);
-    checkDefaultConstruction([program]);
     return emitPrograms([program]);
 }
 
@@ -39,38 +38,6 @@ private void prepareInheritance(Program[] ordered, Program[string] programs) {
         finished[program.qualifiedName] = true;
     }
     foreach (program; ordered) visit(program);
-}
-
-/// Prevent unbounded recursive allocation of automatically created object fields.
-private void checkDefaultConstruction(Program[] programs) {
-    bool[string] active, finished;
-    void visit(Program program) {
-        if (program.qualifiedName in finished) return;
-        active[program.qualifiedName] = true;
-        if (program.baseClass !is null) {
-            if (program.baseClass.qualifiedName in active) {
-                auto error = new CompileException("recursive automatic object construction", program.baseToken.position);
-                error.sourceName = program.sourceName; throw error;
-            }
-            visit(program.baseClass);
-        }
-        foreach (field; program.fields) {
-            if (field.isStatic) continue;
-            if (field.type != ValueType.selfType) continue;
-            Program target;
-            if (field.initializer is null) target = field.objectClass;
-            else if (field.initializer.kind == ExprKind.newSelf) target = field.initializer.objectClass;
-            if (target is null) continue;
-            if (target.qualifiedName in active) {
-                auto error = new CompileException("recursive automatic object construction", field.name.position);
-                error.sourceName = program.sourceName; throw error;
-            }
-            visit(target);
-        }
-        active.remove(program.qualifiedName);
-        finished[program.qualifiedName] = true;
-    }
-    foreach (program; programs) visit(program);
 }
 
 /// Each unit name is the dotted path of the .bl file relative to the source root.
@@ -115,7 +82,6 @@ string compileSources(SourceUnit[] units, string entry = "") {
         checked[program.qualifiedName] = true;
     }
     foreach (program; ordered) checkInOrder(program);
-    checkDefaultConstruction(ordered);
     auto output = emitPrograms(ordered);
     if (entry.length) {
         auto dot = entry.lastIndexOf('.');
