@@ -25,10 +25,20 @@ class Parser {
         if (current.kind != TokenKind.identifier) error("expected identifier");
         return take();
     }
+    private Token qualifiedIdentifier() {
+        auto result = identifier();
+        while (accept(".")) {
+            auto part = identifier();
+            result.text ~= "." ~ part.text;
+            result.position.length = part.position.offset + part.position.length - result.position.offset;
+        }
+        return result;
+    }
     // Look past a supported type without consuming it; zero means no type.
     private size_t afterType(size_t i = 0) {
         if (look(i).kind != TokenKind.identifier) return 0;
         ++i;
+        while (look(i).text == "." && look(i + 1).kind == TokenKind.identifier) i += 2;
         while (look(i).text == "[") {
             ++i;
             if (look(i).text != "]") ++i;
@@ -44,12 +54,12 @@ class Parser {
     }
     private bool isTypedInitializerStart() {
         auto i = afterType();
-        return i != 0 && look(1).text == "[" && look(i).text == "{";
+        return i != 0 && look(i - 1).text == "]" && look(i).text == "{";
     }
     private void error(string message) { throw new CompileException(message, current.position); }
     private ValueType parseType() {
         ValueType result;
-        auto token = take();
+        auto token = current.kind == TokenKind.identifier ? qualifiedIdentifier() : take();
         parsedObjectName = "";
         switch (token.text) {
             case "void": result = ValueType.voidType; break;
@@ -131,7 +141,7 @@ class Parser {
             if (current.kind != TokenKind.endOfFile) error("only one type per file is supported");
             return result;
         }
-        if (accept("extends")) { result.baseToken = identifier(); result.baseName = result.baseToken.text; }
+        if (accept("extends")) { result.baseToken = qualifiedIdentifier(); result.baseName = result.baseToken.text; }
         expect("{");
         while (current.text != "}") {
             if (current.kind == TokenKind.endOfFile) error("expected '}'");
@@ -326,7 +336,7 @@ class Parser {
             node.left = left; node.right = initializer(); left = node;
         }
         if (minPrecedence == 1 && accept("instanceof")) {
-            auto node = new Expression(ExprKind.instanceOf, identifier());
+            auto node = new Expression(ExprKind.instanceOf, qualifiedIdentifier());
             node.left = left; left = node;
         }
         return left;
@@ -336,13 +346,20 @@ class Parser {
         if (["+", "-", "!", "~"].canFind(t.text)) {
             take(); auto result = new Expression(ExprKind.unary, t); result.left = unary(); return result;
         }
-        bool primitiveCast = ["int", "decimal", "bool", "string"].canFind(look(1).text);
-        bool objectCast = look(1).kind == TokenKind.identifier &&
-            (look(3).kind == TokenKind.identifier || [TokenKind.integerLiteral, TokenKind.decimalLiteral, TokenKind.booleanLiteral, TokenKind.stringLiteral].canFind(look(3).kind) ||
-             ["(", "this", "super", "new", "!", "~"].canFind(look(3).text));
-        if (current.text == "(" && look(2).text == ")" && (primitiveCast || objectCast)) {
+        auto castEnd = current.text == "(" ? afterType(1) : 0;
+        bool primitiveCast = castEnd == 2 && ["int", "decimal", "bool", "string"].canFind(look(1).text);
+        bool objectCast = castEnd != 0 && look(castEnd - 1).kind == TokenKind.identifier &&
+            (look(castEnd + 1).kind == TokenKind.identifier || [TokenKind.integerLiteral, TokenKind.decimalLiteral, TokenKind.booleanLiteral, TokenKind.stringLiteral].canFind(look(castEnd + 1).kind) ||
+             ["(", "this", "super", "new", "!", "~", "null"].canFind(look(castEnd + 1).text));
+        if (castEnd != 0 && look(castEnd).text == ")" && (primitiveCast || objectCast)) {
             take(); auto castExpression = new Expression(ExprKind.castExpr, current);
-            castExpression.castType = parseType(); expect(")"); castExpression.left = unary(); return castExpression;
+            castExpression.castType = parseType();
+            if (castExpression.castType == ValueType.selfType) {
+                castExpression.token.text = parsedObjectName;
+                auto last = tokens[index - 1];
+                castExpression.token.position.length = last.position.offset + last.position.length - castExpression.token.position.offset;
+            }
+            expect(")"); castExpression.left = unary(); return castExpression;
         }
         auto result = atom();
         while (current.text == "." || current.text == "[") {

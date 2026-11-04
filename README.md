@@ -43,6 +43,7 @@ dub run -- build examples/project demo.Main.run example-app
 python tests/integration.py
 python tests/compound_assignment.py
 python tests/map_initializers.py
+python tests/qualified_names.py
 python tests/decimal_oracle.py
 python tests/string_oracle.py
 python tests/lexer_oracle.py path/to/original-z8 --corpus
@@ -112,6 +113,8 @@ UTF-16, `line` и `column` отсчитываются с нуля. Пробел�
 Поддерживается одиночное наследование через `extends`, публичные и защищённые
 унаследованные члены, `super` и переопределение виртуальных методов с совпадающими
 сигнатурами. Полное поведение объектов и сложные сценарии наследования ещё не перенесены.
+В объявлениях типов, `extends`, приведениях и `instanceof` можно использовать полное имя класса
+без отдельного `import`.
 Поддерживаются явные приведения между базовым и производным классами с проверкой
 типа во время выполнения; другие объектные приведения пока не реализованы.
 Для таких классов также поддерживается проверка типа `instanceof`.

@@ -162,6 +162,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         System.out.println("RESULT:" + demo.cases.NullableObjectField.z8_run().get());
         System.out.println("RESULT:" + demo.cases.LifecycleCases.z8_run().get());
         System.out.println("RESULT:" + demo.cases.LifecyclePhases.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.QualifiedNames.z8_run().get());
         System.out.println("RESULT:" + demo.cases.MapInitializers.z8_run().get());
         System.out.println("RESULT:" + demo.cases.CompoundCases.z8_run().get());
         System.out.println("RESULT:" + demo.cases.FinalDeclarations.z8_run().get());
@@ -294,6 +295,7 @@ void main() {
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4E756C6C61626C654F626A6563744669656C64.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4C6966656379636C654361736573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4C6966656379636C65506861736573.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E5175616C69666965644E616D6573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4D6170496E697469616C697A657273.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E436F6D706F756E644361736573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E46696E616C4465636C61726174696F6E73.m_run()));
@@ -317,8 +319,8 @@ void main() {
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_results = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        if original_results[-17:-13] != ["171", "251", "28", "241"]:
-            raise SystemExit(f"Language fixtures failed in original Z8: {original_results[-17:-13]}")
+        if original_results[-18:-13] != ["167", "171", "251", "28", "241"]:
+            raise SystemExit(f"Language fixtures failed in original Z8: {original_results[-18:-13]}")
         if original_results[-13:] != ["173", "179", "181", "191", "193", "197", "199", "211", "223", "227", "229", "233", "239"]:
             raise SystemExit(f"Basic types fixture failed in original Z8: {original_results[-13:]}")
         if original_results != d_results:

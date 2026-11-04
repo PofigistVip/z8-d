@@ -66,6 +66,11 @@ class Checker {
         return owner is currentProgram || isPublic || (isProtected && isAssignable(currentProgram, owner));
     }
     private Program resolveClass(Program owner, string name, Token site) {
+        if (name.indexOf('.') >= 0) {
+            auto qualified = name in allClasses;
+            if (qualified is null) fail("unknown class '" ~ name ~ "'", site);
+            return *qualified;
+        }
         if (name == owner.name.text) return owner;
         foreach (item; owner.imports) {
             auto found = item.name in allClasses;

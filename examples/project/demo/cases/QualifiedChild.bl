@@ -1,0 +1,3 @@
+public class QualifiedChild extends demo.cases.QualifiedBase {
+    public int extra = 4;
+}

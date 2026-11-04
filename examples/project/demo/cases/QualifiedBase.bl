@@ -1,0 +1,3 @@
+public class QualifiedBase {
+    public int value = 7;
+}

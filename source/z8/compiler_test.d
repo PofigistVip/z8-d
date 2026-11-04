@@ -109,6 +109,24 @@ private void rejectsSources(SourceUnit[] sources, string expectedFile) {
 }
 
 unittest {
+    auto base = SourceUnit("pkg.Base", "Base.bl", "class Base { public int value = 7; }");
+    auto child = SourceUnit("pkg.Child", "Child.bl", "class Child extends pkg.Base { }");
+    auto user = SourceUnit("other.User", "User.bl", q{class User {
+        static int run() {
+            pkg.Child child;
+            pkg.Base base = child;
+            pkg.Child recovered = (pkg.Child)base;
+            pkg.Base[] values = pkg.Base[] {base, child};
+            for (pkg.Base value : values) { if (!(value instanceof pkg.Base)) return 1; }
+            return 0;
+        }
+    }});
+    compileSources([user, child, base]);
+    auto bad = SourceUnit("other.Bad", "Bad.bl", "class Bad { missing.Base value; }");
+    rejectsSources([bad, base], "Bad.bl");
+}
+
+unittest {
     auto a = SourceUnit("pkg.A", "A.bl", "import other.B; class A { public static int f() { return B.g(2); } }");
     auto b = SourceUnit("other.B", "B.bl", "class B { public static int g(int x) { return x; } }");
     auto output = compileSources([a, b]);

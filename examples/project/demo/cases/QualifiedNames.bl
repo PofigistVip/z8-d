@@ -1,0 +1,21 @@
+public class QualifiedNames {
+    public demo.cases.QualifiedBase member;
+
+    static int read(demo.cases.QualifiedBase value) { return value.value; }
+
+    public static int run() {
+        demo.cases.QualifiedChild child;
+        demo.cases.QualifiedBase base = child;
+        if (!(base instanceof demo.cases.QualifiedChild)) return 1;
+        demo.cases.QualifiedChild recovered = (demo.cases.QualifiedChild)base;
+        if (recovered.extra != 4) return 4;
+        demo.cases.QualifiedBase[] values = demo.cases.QualifiedBase[] {base, child};
+        int total = 0;
+        for (demo.cases.QualifiedBase value : values) total += read(value);
+        if (total != 14 || child.extra != 4) return 2;
+        demo.Counter counter;
+        demo.Counter[] counters = demo.Counter[] {counter};
+        for (demo.Counter item : counters) { if (item.value != 3) return 3; }
+        return 167;
+    }
+}
