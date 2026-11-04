@@ -63,16 +63,26 @@ void main(string[] args) {
     actual = subprocess.check_output(command, cwd=temp, text=True, encoding="utf-8").splitlines()
     assert actual == expected, (expected, actual)
     override = temp / "override.nls"
-    override.write_text('<properties><entry key="hello">override</entry></properties>', encoding="utf-8")
+    override.write_bytes(('<?xml version="1.0" encoding="UTF-16"?>'
+        '<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">'
+        '<properties><entry key="hello">Переопределено</entry></properties>').encode("utf-16"))
+    utf16_expected = subprocess.check_output(["java", "-Dfile.encoding=UTF-8", "-cp", str(temp), "NlsOracle", str(override)], cwd=temp, text=True, encoding="utf-8").splitlines()
+    assert utf16_expected[2] == "Переопределено"
+    override_be = temp / "override_be.nls"
+    override_be.write_bytes(b"\xfe\xff" + ('<?xml version="1.0" encoding="UTF-16"?>'
+        '<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">'
+        '<properties><entry key="hello">Итог</entry></properties>').encode("utf-16-be"))
+    be_expected = subprocess.check_output(["java", "-Dfile.encoding=UTF-8", "-cp", str(temp), "NlsOracle", str(override_be)], cwd=temp, text=True, encoding="utf-8").splitlines()
+    assert be_expected[2] == "Итог"
     autoload = temp / "autoload.d"
     autoload.write_text('''import z8.runtime;
 void main() {
-    assert(z8_string_new("$hello$"w) == "override"w);
+    assert(z8_string_new("$hello$"w) == "Итог"w);
     assert(z8_bool_parse("ДА"w));
 }
 ''', encoding="utf-8")
     auto_exe = temp / ("autoload.exe" if os.name == "nt" else "autoload")
     subprocess.run(["dmd", str(autoload), *import_args(), str(runtime_lib), "-of=" + str(auto_exe)], cwd=temp, check=True)
-    environment = dict(os.environ, Z8_NLS_FILES=os.pathsep.join((str(nls), str(override))))
+    environment = dict(os.environ, Z8_NLS_FILES=os.pathsep.join((str(nls), str(override), str(override_be))))
     subprocess.run([str(auto_exe)], cwd=temp, env=environment, check=True)
 print("NLS resources match Java XML properties")
