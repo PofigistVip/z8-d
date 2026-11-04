@@ -93,6 +93,10 @@ unittest {
     rejectsSources([wrongArray, arrayItem], "A.bl");
     auto wrongArrayElement = SourceUnit("pkg.A", "A.bl", "class A { void f() { B[] x; x.add(new A); } }");
     rejectsSources([wrongArrayElement, arrayItem], "A.bl");
+    auto wrongArrayMethod = SourceUnit("pkg.A", "A.bl", "class A { void f() { B[] x; x.contains(new A); } }");
+    rejectsSources([wrongArrayMethod, arrayItem], "A.bl");
+    auto wrongArrayRemoval = SourceUnit("pkg.A", "A.bl", "class A { void f() { B[] x; A[] y; x.removeAll(y); } }");
+    rejectsSources([wrongArrayRemoval, arrayItem], "A.bl");
     auto wrongForeach = SourceUnit("pkg.A", "A.bl", "class A { void f() { B[] x; for (A item : x) {} } }");
     rejectsSources([wrongForeach, arrayItem], "A.bl");
     auto invalidCast = SourceUnit("pkg.A", "A.bl", "class A { static B f() { A a; return (B)a; } }");

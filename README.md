@@ -109,7 +109,8 @@ Z8; также поддерживается `for (тип элемент : мас
 `indexOf`, `remove`, `removeAt`, `removeAll`, `reverse`, `sort`, `unique`,
 `isSubsetOf`, `join`, `clear` и операторы `+` и `+=`. Массивы передаются по ссылке;
 для массивов объектов поддерживаются литералы, индексация, `foreach`, `size`,
-`isEmpty`, `clear`, `get`, `add`, `addAll`, `set`, `removeAt` и передача в методы.
+`isEmpty`, `clear`, `get`, `add`, `addAll`, `set`, `removeAt`, `contains`,
+`indexOf`, `remove`, `removeAll`, `isSubsetOf`, `reverse`, `unique` и передача в методы.
 Типы массивов объектов должны совпадать; элементы могут принадлежать классам-наследникам.
 Для отображений поддерживается только `string[string]`: создание, передача по ссылке,
 чтение и присваивание по ключу, `add` (значения или другого отображения), `get`,

@@ -39,6 +39,34 @@ public class ObjectArrays {
         } catch (exception expected) {
             if (joined.size() != 5) return 7;
         }
+        Counter[] repeated = {values[0], values[0], values[1]};
+        if (!repeated.contains(values[0]) || repeated.indexOf(values[1]) != 2) return 8;
+        Counter[] distinct = repeated.unique();
+        if (distinct.size() != 2 || !distinct.isSubsetOf(repeated)) return 9;
+        if (!repeated.remove(values[0]) || repeated.size() != 2) return 10;
+        Counter[] removal = {values[1]};
+        repeated.removeAll(removal);
+        if (repeated.size() != 1 || repeated[0].value != 6) return 11;
+        Counter[] nullable = {null, values[0], null};
+        if (nullable.unique().size() != 2) return 12;
+        try {
+            int index = nullable.indexOf(values[0]);
+            return 14;
+        } catch (exception expectedNullElement) {
+        }
+        try {
+            bool found = nullable.contains(values[0]);
+            return 15;
+        } catch (exception expectedNullContains) {
+        }
+        if (!nullable.remove(values[0]) || nullable.size() != 2) return 13;
+        Counter[] same = {null, values[0]};
+        try {
+            same.removeAll(same);
+            return 16;
+        } catch (exception expectedPartialRemoval) {
+            if (same.size() != 1 || same[0].value != 6) return 17;
+        }
         Base[] inherited;
         inherited.add(new Derived);
         for (Base item : inherited) if (item.getValue() != 14) return 4;

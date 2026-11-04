@@ -828,7 +828,7 @@ class Checker {
                 } else if (isArray(receiver)) {
                     if (receiver == ValueType.selfArray) {
                         e.objectClass = e.left.objectClass;
-                        if (!["size", "isEmpty", "clear", "get", "add", "addAll", "removeAt", "set"].canFind(e.token.text))
+                        if (!["size", "isEmpty", "clear", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
                             fail("this method is not yet supported for object arrays", e.token);
                     }
                     switch (e.token.text) {
@@ -857,14 +857,17 @@ class Checker {
                             } else fail("incorrect argument count", e.token);
                             return ValueType.voidType;
                         case "isSubsetOf":
-                            if (e.arguments.length != 1 || !matches(e.arguments[0], receiver)) fail("isSubsetOf requires an array of the same type", e.token);
+                            if (e.arguments.length != 1 || !matches(e.arguments[0], receiver, e.left.objectClass)) fail("isSubsetOf requires an array of the same type", e.token);
                             return ValueType.boolType;
                         case "removeAll":
                             if (e.arguments.length != 1) fail("incorrect argument count", e.token);
-                            if (typeOf(e.arguments[0]) != receiver && !matches(e.arguments[0], elementType(receiver))) fail("removeAll requires an element or array of the same type", e.token);
+                            auto argType = typeOf(e.arguments[0]);
+                            if (argType == receiver) {
+                                if (!matches(e.arguments[0], receiver, e.left.objectClass)) fail("removeAll requires an array of the same type", e.token);
+                            } else if (!matches(e.arguments[0], elementType(receiver), e.left.objectClass)) fail("removeAll requires an element or array of the same type", e.token);
                             return receiver;
                         case "contains": case "indexOf": case "remove":
-                            if (e.arguments.length != 1 || !matches(e.arguments[0], elementType(receiver))) fail("method requires an element of the array type", e.token);
+                            if (e.arguments.length != 1 || !matches(e.arguments[0], elementType(receiver), e.left.objectClass)) fail("method requires an element of the array type", e.token);
                             return e.token.text == "indexOf" ? ValueType.intType : ValueType.boolType;
                         case "removeAt":
                             if (e.arguments.length != 1 || typeOf(e.arguments[0]) != ValueType.intType) fail("removeAt requires an int index", e.token);
@@ -1586,7 +1589,13 @@ class Z8Array(T) {
         }
     }
     long z8_indexOf(T value) {
-        foreach (i, item; items) if (item == value) return cast(long)i;
+        foreach (i, item; items) {
+            static if (is(T == class)) {
+                if (item is value) return cast(long)i;
+                if (item is null) throw new Exception("null array element");
+            }
+            if (item == value) return cast(long)i;
+        }
         return -1;
     }
     bool z8_contains(T value) { return z8_indexOf(value) >= 0; }
@@ -1603,18 +1612,33 @@ class Z8Array(T) {
         ++z8_version; return value;
     }
     bool z8_remove(T value) {
-        auto index = z8_indexOf(value);
-        if (index < 0) return false;
-        z8_removeAt(index); return true;
+        static if (is(T == class)) {
+            foreach (i, item; items) {
+                if (item is value || (value !is null && value == item)) {
+                    z8_removeAt(cast(long)i); return true;
+                }
+            }
+            return false;
+        } else {
+            auto index = z8_indexOf(value);
+            if (index < 0) return false;
+            z8_removeAt(index); return true;
+        }
     }
     Z8Array!T z8_removeAll(T value) { z8_remove(value); return this; }
     Z8Array!T z8_removeAll(Z8Array!T values) {
         z8_nonnull(values);
-        size_t i;
-        while (i < items.length) {
-            if (values.z8_contains(items[i])) z8_removeAt(cast(long)i);
-            else ++i;
+        auto originalLength = items.length;
+        size_t read, write;
+        try {
+            for (; read < originalLength; ++read)
+                if (!values.z8_contains(items[read])) items[write++] = items[read];
+        } catch (Throwable error) {
+            for (; read < originalLength; ++read) items[write++] = items[read];
+            if (write != originalLength) { items.length = write; ++z8_version; }
+            throw error;
         }
+        if (write != originalLength) { items.length = write; ++z8_version; }
         return this;
     }
     Z8Array!T z8_reverse() {
@@ -1633,7 +1657,13 @@ class Z8Array(T) {
     }
     Z8Array!T z8_unique() {
         auto result = new Z8Array!T();
-        foreach (item; items) if (!result.z8_contains(item)) result.z8_add(item);
+        foreach (item; items) {
+            static if (is(T == class)) {
+                bool found;
+                foreach (existing; result.items) if (item is existing || (item !is null && item == existing)) { found = true; break; }
+                if (!found) result.z8_add(item);
+            } else if (!result.z8_contains(item)) result.z8_add(item);
+        }
         return result;
     }
     wstring z8_join(wstring separator = ""w) {
