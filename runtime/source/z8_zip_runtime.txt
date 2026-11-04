@@ -1,0 +1,65 @@
+// ZIP operations for files and binary values.
+private ubyte[] z8_zip_path(string source) {
+    import std.file : isDir, dirEntries, SpanMode, read;
+    import std.path : baseName;
+    import std.zip : ZipArchive, ArchiveMember, CompressionMethod;
+    auto archive = new ZipArchive();
+    void add(string path, string name) {
+        if (isDir(path)) {
+            foreach (child; dirEntries(path, SpanMode.shallow)) add(child.name, name ~ "/" ~ baseName(child.name));
+        } else {
+            auto entry = new ArchiveMember();
+            entry.name = name; entry.flags = 0x800;
+            entry.expandedData = cast(ubyte[])read(path);
+            entry.compressionMethod = CompressionMethod.deflate;
+            archive.addMember(entry);
+        }
+    }
+    if (isDir(source)) {
+        foreach (child; dirEntries(source, SpanMode.shallow)) add(child.name, baseName(child.name));
+    } else add(source, baseName(source));
+    return cast(ubyte[])archive.build();
+}
+
+private void z8_zip_extract(ubyte[] bytes, string directory) {
+    import std.file : mkdirRecurse, exists, isSymlink, write;
+    import std.path : buildPath, dirName, isAbsolute;
+    import std.string : replace, split;
+    import std.zip : ZipArchive;
+    auto archive = new ZipArchive(bytes);
+    foreach (name, entry; archive.directory) {
+        auto normalized = name.replace("\\", "/");
+        if (isAbsolute(normalized) || normalized.canFind(':')) throw new Exception("invalid archive path");
+        auto path = directory;
+        auto parts = normalized.split("/");
+        foreach (part; parts) {
+            if (part == "..") throw new Exception("invalid archive path");
+            if (!part.length || part == ".") continue;
+            path = buildPath(path, part);
+            if (exists(path) && isSymlink(path)) throw new Exception("archive path is a symbolic link");
+        }
+        if (normalized.length && normalized[$ - 1] == '/') mkdirRecurse(path);
+        else {
+            auto parent = dirName(path);
+            if (parent.length) mkdirRecurse(parent);
+            archive.expand(entry);
+            write(path, entry.expandedData);
+        }
+    }
+}
+
+Z8File z8_file_zip(Z8File destination, Z8File source) {
+    import std.file : mkdirRecurse, write;
+    import std.path : dirName;
+    auto bytes = z8_zip_path(z8_file_system_path(source));
+    auto path = z8_file_system_path(destination);
+    auto parent = dirName(path);
+    if (parent.length) mkdirRecurse(parent);
+    write(path, bytes);
+    return destination;
+}
+Z8File z8_file_unzip(Z8File archive, Z8File directory) {
+    import std.file : read;
+    z8_zip_extract(cast(ubyte[])read(z8_file_system_path(archive)), z8_file_system_path(directory));
+    return archive;
+}

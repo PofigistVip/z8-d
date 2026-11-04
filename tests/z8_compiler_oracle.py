@@ -46,6 +46,9 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     file_io_path = temp / "file-io-oracle.txt"
     file_io_dir = temp / "file-io-oracle-dir"
     file_io_child = file_io_dir / "nested" / "unicode.txt"
+    file_io_zip = temp / "file-io-archive.zip"
+    file_io_extracted = temp / "file-io-extracted"
+    file_io_extracted_child = file_io_extracted / "nested" / "unicode.txt"
     (project / "src" / "bl" / "demo" / "cases" / "FileIO.bl").write_text('''public class FileIO {
         public static int run() {
             file value = __FILE__;
@@ -64,12 +67,22 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             child.write("Привет 😀");
             if (!folder.isFolder() || folder.isEmpty() || child.read() != "Привет 😀" || child.size != 17) return 6;
             if (folder.listFiles().size() != 1 || child.parent().parent() != folder) return 8;
+            file archive = __ZIP__;
+            file destination = __EXTRACTED__;
+            file extracted = __EXTRACTED_CHILD__;
+            if (archive.zip(folder) != archive || !archive.exists()) return 9;
+            if (archive.unzip(destination) != archive || extracted.read() != "Привет 😀") return 10;
+            archive.delete();
+            destination.delete(true);
             folder.delete(true);
             return folder.exists() ? 7 : 223;
         }
     }'''.replace("__FILE__", json.dumps(file_io_path.as_posix()))
        .replace("__DIR__", json.dumps(file_io_dir.as_posix()))
-       .replace("__CHILD__", json.dumps(file_io_child.as_posix())), encoding="utf-8")
+       .replace("__CHILD__", json.dumps(file_io_child.as_posix()))
+       .replace("__ZIP__", json.dumps(file_io_zip.as_posix()))
+       .replace("__EXTRACTED__", json.dumps(file_io_extracted.as_posix()))
+       .replace("__EXTRACTED_CHILD__", json.dumps(file_io_extracted_child.as_posix())), encoding="utf-8")
     command = ["java", "-cp", str(classes) + os.pathsep + classpath,
                "org.zenframework.z8.compiler.cmd.Main", str(project),
                "-sources:src/bl", "-requires:" + str(lang), "-output:out"]

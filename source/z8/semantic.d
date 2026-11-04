@@ -586,6 +586,9 @@ class Checker {
                 }
                 e.inferredType = receiver;
                 if (receiver == ValueType.fileType) {
+                    if (e.token.text == "zip" || e.token.text == "unzip") {
+                        checkArguments(e, [ValueType.fileType]); e.builtinCall = "z8_file_" ~ e.token.text; return ValueType.fileType;
+                    }
                     if (["write", "append"].canFind(e.token.text)) {
                         if (e.arguments.length != 1) fail("incorrect argument count", e.token);
                         auto contentType = typeOf(e.arguments[0]);
