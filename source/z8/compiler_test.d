@@ -18,8 +18,8 @@ unittest {
         }
     });
     assert(output.canFind("class Z8_Math"));
-    assert(output.canFind("static long m_add(long v_a, long v_b)"));
-    assert(output.canFind("m_add(v_a, (cast(long)(2)))"));
+    assert(output.canFind("static Z8Optional!long m_add(long v_a, long v_b)"));
+    assert(output.canFind("m_add(v_a, z8_optional_wrap((cast(long)(2))))"));
     auto decimalArrays = compile("class A { static void f() { decimal[] values = {1, 2.5}; values.add(3); values.set(0, 4); } }");
     assert(decimalArrays.canFind("Z8Array!Z8Decimal"));
 }
@@ -137,8 +137,8 @@ unittest {
     rejects("class A { int x; static int f() { return x; } }");
     rejects("class A { static A x; }");
     rejects("class A { A value = null; }");
-    rejects("class A { static int f() { int value = null; return value; } }");
-    rejects("class A { static bool f() { return 1 == null; } }");
+    compile("class A { static int f() { int value = null; return value; } }");
+    compile("class A { static bool f() { return 1 == null; } }");
     rejects("class A { static bool f() { int[] x = null; return x < null; } }");
     rejects("class A { static int f() { return 1 ?: 2; } }");
     rejects("class A { static void f() { int[] x; bool[] y; x = x ?: y; } }");

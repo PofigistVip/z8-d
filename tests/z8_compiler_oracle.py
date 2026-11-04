@@ -91,6 +91,7 @@ with tempfile.TemporaryDirectory() as temporary:
         System.out.println("RESULT:" + demo.cases.EnumCases.z8_run().get());
         System.out.println("RESULT:" + demo.cases.NullablePrimitives.z8_run().get());
         System.out.println("RESULT:" + demo.cases.NullableStrings.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.NullableIntegers.z8_run().get());
     }
 }''', encoding="utf-8")
         logging_cache = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "commons-logging" / "commons-logging"
@@ -132,31 +133,32 @@ with tempfile.TemporaryDirectory() as temporary:
         d_runner.write_text(d_source + '''
 import std.stdio : writeln;
 void main() {
-    writeln(Z8p_64656D6F2E4D61696E.m_run());
-    writeln(Z8p_64656D6F2E63617365732E41726974686D65746963.m_run());
-    writeln(Z8p_64656D6F2E63617365732E54657874.m_run());
-    writeln(Z8p_64656D6F2E63617365732E466C6F77.m_run());
-    writeln(Z8p_64656D6F2E63617365732E446563696D616C4172726179.m_run());
-    writeln(Z8p_64656D6F2E63617365732E4F7665726C6F616473.m_run());
-    writeln(Z8p_64656D6F2E63617365732E4F7665726C6F616455736572.m_run());
-    writeln(Z8p_64656D6F2E63617365732E526F756E64696E67.m_run());
-    writeln(Z8p_64656D6F2E63617365732E5072696D69746976655061727365.m_run());
-    writeln(Z8p_64656D6F2E63617365732E41727261794F7065726174696F6E73.m_run());
-    writeln(Z8p_64656D6F2E63617365732E5374617469635374617465.m_run());
-    writeln(Z8p_64656D6F2E63617365732E53746174696355736572.m_run());
-    writeln(Z8p_64656D6F2E63617365732E496E7374616E63654F7665726C6F616473.m_run());
-    writeln(Z8p_64656D6F2E63617365732E496E74656765724D6574686F6473.m_run());
-    writeln(Z8p_64656D6F2E63617365732E4172726179416476616E636564.m_run());
-    writeln(Z8p_64656D6F2E63617365732E4F626A656374417272617973.m_run());
-    writeln(Z8p_64656D6F2E63617365732E496E686572697465644F7665726C6F616473.m_run());
-    writeln(Z8p_64656D6F2E63617365732E537472696E674D6170.m_run());
-    writeln(Z8p_64656D6F2E63617365732E4F626A6563744361737473.m_run());
-    writeln(Z8p_64656D6F2E63617365732E4E756C6C4F626A65637473.m_run());
-    writeln(Z8p_64656D6F2E63617365732E496E7374616E6365436865636B73.m_run());
-    writeln(Z8p_64656D6F2E63617365732E456C7669734F626A65637473.m_run());
-    writeln(Z8p_64656D6F2E63617365732E456E756D4361736573.m_run());
-    writeln(Z8p_64656D6F2E63617365732E4E756C6C61626C655072696D697469766573.m_run());
-    writeln(Z8p_64656D6F2E63617365732E4E756C6C61626C65537472696E6773.m_run());
+    writeln(z8_optional_require(Z8p_64656D6F2E4D61696E.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E41726974686D65746963.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E54657874.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E466C6F77.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E446563696D616C4172726179.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4F7665726C6F616473.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4F7665726C6F616455736572.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E526F756E64696E67.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E5072696D69746976655061727365.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E41727261794F7065726174696F6E73.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E5374617469635374617465.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E53746174696355736572.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E496E7374616E63654F7665726C6F616473.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E496E74656765724D6574686F6473.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4172726179416476616E636564.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4F626A656374417272617973.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E496E686572697465644F7665726C6F616473.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E537472696E674D6170.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4F626A6563744361737473.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4E756C6C4F626A65637473.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E496E7374616E6365436865636B73.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E456C7669734F626A65637473.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E456E756D4361736573.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4E756C6C61626C655072696D697469766573.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4E756C6C61626C65537472696E6773.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4E756C6C61626C65496E746567657273.m_run()));
 }
 ''', encoding="utf-8")
         d_binary = temp / ("compare.exe" if os.name == "nt" else "compare")

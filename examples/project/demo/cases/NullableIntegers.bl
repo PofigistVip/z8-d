@@ -1,0 +1,32 @@
+public class NullableIntegers {
+    private static int field = null;
+    private static int effects;
+    private static int pass(int value) { return value; }
+    private static int missing() { return null; }
+    private static int fallback() { effects += 1; return 7; }
+    private static decimal fallbackDecimal() { effects += 1; return 1.0; }
+    public static int run() {
+        int value = null;
+        if (value != null || field != null || pass(value) != null) return 1;
+        field = int.parse("");
+        if (field != null || missing() != null) return 2;
+        value = missing();
+        int casted = (int)value;
+        if (casted != null) return 11;
+        int another = value ?: missing();
+        if (another != null || 1 == null || null != null) return 9;
+        int selected = true ? value : 3;
+        if (selected != null) return 10;
+        if ((value ?: fallback()) != 7 || effects != 1) return 3;
+        value = 4;
+        if (value == null || pass(value) != 4 || (value ?: fallback()) != 4 || effects != 1) return 4;
+        value += 3;
+        if (value != 7) return 5;
+        int[] empty;
+        value = empty.first();
+        if (value != null) return 6;
+        try { decimal ignored = value + fallbackDecimal(); return 12; } catch (exception expectedMixed) { if (effects != 2) return 13; }
+        try { value += fallback(); return 7; } catch (exception expected) { if (effects != 3) return 8; }
+        return 139;
+    }
+}
