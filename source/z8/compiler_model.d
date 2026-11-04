@@ -31,6 +31,9 @@ class Expression {
     bool makeFile, makeException, convertToDate;
     bool dateBinary, fileBinary;
     bool primaryCast, primaryInstanceOf;
+    bool typedInitializer;
+    ValueType initializerType;
+    string initializerObjectName;
     bool promoteToDecimal;
     bool boxPrimary;
     ValueType convertToString;

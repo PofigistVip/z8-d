@@ -168,7 +168,7 @@ class Checker {
         if (e.arguments.length != method.parameters.length) fail("incorrect argument count", e.token);
         foreach (i, arg; e.arguments) {
             auto p = method.parameters[i];
-            if (arg.kind == ExprKind.arrayLiteral) fail("array initializer requires a known target", arg.token);
+            if (arg.kind == ExprKind.arrayLiteral && !arg.typedInitializer) fail("array initializer requires a known target", arg.token);
             auto objectClass = hasObjectClass(p.type) ? resolveClass(owner, p.objectName, p.name) : null;
             if (!matchesStored(arg, p.type, objectClass)) fail("argument type mismatch", arg.token);
         }
@@ -189,7 +189,7 @@ class Checker {
     private Method selectOverload(Method first, Expression e) {
         ValueType[] actualTypes;
         foreach (arg; e.arguments) {
-            if (arg.kind == ExprKind.arrayLiteral) fail("array initializer requires a known target", arg.token);
+            if (arg.kind == ExprKind.arrayLiteral && !arg.typedInitializer) fail("array initializer requires a known target", arg.token);
             actualTypes ~= typeOf(arg);
         }
         Method best;
@@ -368,6 +368,10 @@ class Checker {
                 return ValueType.dateType;
             case ExprKind.nullLiteral: return ValueType.nullType;
             case ExprKind.arrayLiteral:
+                if (e.typedInitializer) {
+                    expected = resolveDeclaredType(e.initializerType, currentProgram, e.initializerObjectName, e.token);
+                    if (hasObjectClass(expected)) e.objectClass = resolveClass(currentProgram, e.initializerObjectName, e.token);
+                }
                 if (isMap(expected)) {
                     auto valueType = expected == ValueType.stringMap ? ValueType.stringType : ValueType.primaryType;
                     foreach (entry; e.arguments) {

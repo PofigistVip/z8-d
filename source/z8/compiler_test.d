@@ -10,6 +10,20 @@ private void rejects(string source) {
 }
 
 unittest {
+    compile(q{class A {
+        static int choose(int[] x) { return 1; }
+        static int choose(string[] x) { return 2; }
+        static int f() { return choose(int[] {1, 2}); }
+        static string g(string[string] x) { return x["a"]; }
+        static string h() { return g(string[string] {("a", "b")}); }
+        static void clearLiteral() { int[] {1, 2}.clear(); }
+    }});
+    rejects(q{class A { static int f(int[] x) { return 1; } static int g() { return f({1}); } }});
+    rejects(q{class A { static int f(int[] x) { return 1; } static int g() { return f(string[] {"x"}); } }});
+    rejects(q{class A { static int f() { return int[] {"x"}.size(); } }});
+}
+
+unittest {
     compile(q{class A { static void f() {
         string[string] values = {("a", "b"), ("c", "d"),};
         primary[string] mixed = {("number", 42), ("text", "value")};

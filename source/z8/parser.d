@@ -25,18 +25,26 @@ class Parser {
         if (current.kind != TokenKind.identifier) error("expected identifier");
         return take();
     }
-    // A for-each initializer is a declarator, including optional final and array types.
-    private bool isForEachStart() {
-        size_t i = current.text == "final" ? 1 : 0;
-        if (look(i).kind != TokenKind.identifier) return false;
+    // Look past a supported type without consuming it; zero means no type.
+    private size_t afterType(size_t i = 0) {
+        if (look(i).kind != TokenKind.identifier) return 0;
         ++i;
         while (look(i).text == "[") {
             ++i;
             if (look(i).text != "]") ++i;
-            if (look(i).text != "]") return false;
+            if (look(i).text != "]") return 0;
             ++i;
         }
-        return look(i).kind == TokenKind.identifier && look(i + 1).text == ":";
+        return i;
+    }
+    // A for-each initializer is a declarator, including optional final and array types.
+    private bool isForEachStart() {
+        auto i = afterType(current.text == "final" ? 1 : 0);
+        return i != 0 && look(i).kind == TokenKind.identifier && look(i + 1).text == ":";
+    }
+    private bool isTypedInitializerStart() {
+        auto i = afterType();
+        return i != 0 && look(1).text == "[" && look(i).text == "{";
     }
     private void error(string message) { throw new CompileException(message, current.position); }
     private ValueType parseType() {
@@ -246,9 +254,8 @@ class Parser {
     private Statement simpleStatement(bool allowDeclaration) {
         bool declaredFinal = accept("final");
         auto t = current;
-        if ((t.kind == TokenKind.identifier) &&
-            (look(1).kind == TokenKind.identifier || (look(1).text == "[" &&
-             (look(2).text == "]" || (look(3).text == "]" && look(4).kind == TokenKind.identifier))))) {
+        auto typeEnd = afterType();
+        if (typeEnd != 0 && look(typeEnd).kind == TokenKind.identifier) {
             if (!allowDeclaration) error("variable declaration is not allowed here");
             auto s = new Statement(StmtKind.variable, t);
             s.declaredFinal = declaredFinal;
@@ -355,6 +362,15 @@ class Parser {
     }
     private Expression atom() {
         auto t = current;
+        if (isTypedInitializerStart()) {
+            auto declaredType = parseType();
+            auto objectName = parsedObjectName;
+            auto result = initializer();
+            result.typedInitializer = true;
+            result.initializerType = declaredType;
+            result.initializerObjectName = objectName;
+            return result;
+        }
         if (accept("(")) { auto result = expression(); expect(")"); return result; }
         if (accept("this")) return new Expression(ExprKind.selfRef, t);
         if (accept("super")) return new Expression(ExprKind.superRef, t);
