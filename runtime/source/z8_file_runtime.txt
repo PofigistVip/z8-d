@@ -233,18 +233,15 @@ shared static ~this() {
     }
 }
 Z8File z8_file_createTempFile(wstring prefix, wstring extension) {
-    import std.file : mkdirRecurse, tempDir;
+    import std.file : mkdirRecurse;
     import std.path : buildPath;
-    import std.uuid : randomUUID;
     auto start = z8_string_required(prefix).to!string;
     auto suffix = z8_string_required(extension).to!string;
-    if (start.canFind('/') || start.canFind('\\') || start.canFind(':')) throw new Exception("invalid temporary file prefix");
-    if (suffix.canFind('/') || suffix.canFind('\\') || suffix.canFind(':')) throw new Exception("invalid temporary file extension");
     if (suffix.length && suffix[0] != '.') suffix = "." ~ suffix;
-    auto folder = buildPath(tempDir(), "z8-d");
+    auto folder = buildPath(z8_file_working_root, "files", "temp");
     mkdirRecurse(folder);
-    auto stamp = z8_date_toString(z8_date_now(), "yyyy-MM-dd HH-mm-ss"w).to!string;
-    auto path = buildPath(folder, start ~ stamp ~ "-" ~ randomUUID().to!string ~ suffix);
+    auto stamp = z8_date_toString(z8_date_now(), "Y-MM-dd HH-mm-ss"w).to!string;
+    auto path = buildPath(folder, start ~ stamp ~ suffix);
     synchronized (z8_temp_lock) z8_temp_paths ~= path;
     return z8_file_from_disk(path);
 }
@@ -263,14 +260,16 @@ Z8Array!Z8File z8_file_listFiles(Z8File value) {
     return result;
 }
 private Z8File z8_file_write_bytes(Z8File value, const(ubyte)[] contents, bool append) {
-    import std.file : mkdirRecurse, tempDir, getSize;
-    import std.path : dirName, buildPath;
+    import std.file : mkdirRecurse, getSize;
+    import std.path : dirName;
     import std.stdio : File;
-    import std.uuid : randomUUID;
     string path;
     if (!z8_string_required(z8_nonnull(value).path).length) {
-        path = buildPath(tempDir(), "z8-" ~ randomUUID().to!string ~ ".txt");
-        z8_file_assign(value, path.to!wstring);
+        auto temporary = z8_file_createTempFile(""w, "txt"w);
+        value.id = temporary.id; value.name = temporary.name; value.path = temporary.path;
+        value.time = temporary.time; value.size = temporary.size; value.user = temporary.user;
+        value.author = temporary.author; value.details = temporary.details;
+        path = z8_file_system_path(value);
     } else path = z8_file_system_path(value);
     auto parent = dirName(path);
     if (parent.length) mkdirRecurse(parent);

@@ -1,6 +1,7 @@
 """Compare working/storage path resolution against the original Z8 runtime."""
 from pathlib import Path
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -27,6 +28,7 @@ with tempfile.TemporaryDirectory() as tmp, runtime_library() as runtime_lib:
     source = temp / "FileRootsOracle.java"
     source.write_text('''import org.zenframework.z8.server.config.ServerConfig;
 import org.zenframework.z8.server.types.file;
+import org.zenframework.z8.server.types.string;
 class FileRootsOracle {
     public static void main(String[] args) throws Exception {
         ServerConfig.load(args[0]);
@@ -36,6 +38,11 @@ class FileRootsOracle {
             System.out.println("PATH:" + file.getAbsolutePath(path).getPath());
             System.out.println("PARENT:" + new file(path).z8_parent().path.get());
         }
+        file temporary = file.z8_createTempFile(new string("prefix-"), new string("txt"));
+        System.out.println("TEMP:" + temporary.path.get());
+        file implicit = new file();
+        implicit.z8_write(new string("implicit"));
+        System.out.println("IMPLICIT:" + implicit.path.get());
     }
 }
 ''', encoding="utf-8")
@@ -45,6 +52,13 @@ class FileRootsOracle {
         "FileRootsOracle", str(config), str(java_root / "absolute.txt")], cwd=temp, text=True, encoding="utf-8")
     expected = [Path(line[5:]).resolve().relative_to(java_root.resolve()) for line in output.splitlines() if line.startswith("PATH:")]
     expected_parents = [line[7:] for line in output.splitlines() if line.startswith("PARENT:")]
+    temporary = next(line[5:] for line in output.splitlines() if line.startswith("TEMP:"))
+    implicit = next(line[9:] for line in output.splitlines() if line.startswith("IMPLICIT:"))
+    for prefix, value in (("prefix-", temporary), ("", implicit)):
+        path = Path(value)
+        assert path.parent == Path("files") / "temp", path
+        assert re.fullmatch(re.escape(prefix) + r"\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}\.txt", path.name), path
+        assert not (java_root / "working" / path).exists(), "Java temporary file was not removed at exit"
     assert len(expected) == 6, output
     d_source = temp / "file_roots.d"
     d_source.write_text('''import z8.runtime;
