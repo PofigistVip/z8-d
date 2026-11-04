@@ -183,7 +183,7 @@ void main() {
         d_results = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
         if original_results != d_results:
             raise SystemExit(f"Original Z8: {original_results!r}; z8-d: {d_results!r}")
-        print(f"Matched {len(d_results)} program results against the original compiler and prebuilt runtime")
+        print(f"Matched {len(d_results)} program results against the original compiler and runtime (CLASS from current source)")
         native_enums = [path for path in language.rglob("*.bl")
                         if re.search(r"(?m)^\s*public\s+enum\s+\w+", path.read_text(encoding="utf-8"))]
         if not native_enums:
