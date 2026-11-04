@@ -1,5 +1,9 @@
 public class FileValues {
+    public static string pathOf(file value, int unused) { return value.path; }
     public static int run() {
+        if (pathOf("new.txt", 1) != "new.txt") return 14;
+        file explicitValue = (file)"new.txt";
+        if (explicitValue.path != "new.txt") return 15;
         file value = "folder/report.TXT";
         if (value.name != "report.TXT" || value.path != "folder/report.TXT") return 1;
         if (value.baseName() != "report" || value.extension() != "txt" || value.fileName() != "report.TXT") return 2;

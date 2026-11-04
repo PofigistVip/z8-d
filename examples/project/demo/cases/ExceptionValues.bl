@@ -1,5 +1,11 @@
 public class ExceptionValues {
+    public static string message(exception value, int unused) { return value.getMessage(); }
     public static int run() {
+        string text = "converted";
+        exception converted = text;
+        if (converted.getMessage() != text || message(text, 1) != text) return 5;
+        exception explicitValue = (exception)text;
+        if (explicitValue.getMessage() != text) return 6;
         exception[] errors;
         errors.add(null);
         if (errors.first() != null) return 1;
