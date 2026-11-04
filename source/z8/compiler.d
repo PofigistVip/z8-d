@@ -18,7 +18,7 @@ class CompileException : Exception {
 }
 
 enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, decimalArray, boolArray, stringArray, selfArray, stringMap, nullType }
-enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, nullLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, instanceOf, unary, binary, conditional }
+enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, nullLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, instanceOf, unary, binary, conditional, elvis }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
                 whileStmt, doWhileStmt, forStmt, forEachStmt, breakStmt, continueStmt, throwStmt, tryStmt }
 
@@ -347,6 +347,10 @@ class Parser {
         if (minPrecedence == 1 && current.text == "?") {
             auto node = new Expression(ExprKind.conditional, take());
             node.left = left; node.right = expression(); expect(":"); node.third = expression(); left = node;
+        }
+        else if (minPrecedence == 1 && current.text == "?:") {
+            auto node = new Expression(ExprKind.elvis, take());
+            node.left = left; node.right = initializer(); left = node;
         }
         if (minPrecedence == 1 && accept("instanceof")) {
             auto node = new Expression(ExprKind.instanceOf, identifier());
@@ -946,6 +950,13 @@ class Checker {
                     fail("conditional branch type mismatch", e.token);
                 if (hasObjectClass(left)) e.objectClass = e.right.objectClass;
                 return left;
+            case ExprKind.elvis:
+                auto left = typeOf(e.left);
+                if (!isNullableReference(left)) fail("elvis requires a supported reference type", e.token);
+                if (!matches(e.right, left, e.left.objectClass)) fail("elvis branch type mismatch", e.token);
+                e.inferredType = left;
+                e.objectClass = e.left.objectClass;
+                return left;
         }
     }
     private bool checkStatement(Statement s) {
@@ -1170,6 +1181,8 @@ private string emitExprRaw(Expression e) {
             return "(" ~ emitExpr(e.left) ~ " " ~ op ~ " " ~ emitExpr(e.right) ~ ")";
         case ExprKind.conditional:
             return "(" ~ emitExpr(e.left) ~ " ? " ~ emitExpr(e.right) ~ " : " ~ emitExpr(e.third) ~ ")";
+        case ExprKind.elvis:
+            return "z8_elvis!(" ~ dType(e.inferredType, e.objectClass) ~ ")(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
     }
 }
 private string emitStatement(Statement s) {
@@ -1386,6 +1399,7 @@ private T z8_nonnull(T)(T value) {
     if (value is null) throw new Exception("null reference");
     return value;
 }
+private T z8_elvis(T)(T value, lazy T fallback) { return value !is null ? value : fallback; }
 private auto z8_invoke(string name, T, Args...)(T value, Args args) {
     if (value is null) throw new Exception("null reference");
     return __traits(getMember, value, name)(args);

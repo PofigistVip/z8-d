@@ -1,0 +1,31 @@
+import demo.Counter;
+
+public class ElvisObjects {
+    private static int leftCalls;
+    private static int rightCalls;
+    private static Counter left(bool exists) {
+        leftCalls += 1;
+        return exists ? new Counter : null;
+    }
+    private static Counter right() {
+        rightCalls += 1;
+        return new Counter;
+    }
+    public static int run() {
+        Counter first = left(true) ?: right();
+        if (first.value != 3 || leftCalls != 1 || rightCalls != 0) return 1;
+        Counter second = left(false) ?: right();
+        if (second.value != 3 || leftCalls != 2 || rightCalls != 1) return 2;
+        Counter[] empty = null;
+        Counter[] fallback;
+        fallback.add(first);
+        Counter[] result = empty ?: fallback;
+        if (result.size() != 1) return 3;
+        Counter[] literal = empty ?: {first};
+        if (literal.size() != 1 || literal[0].value != 3) return 4;
+        Counter absent = null;
+        Counter stillAbsent = absent ?: null;
+        if (stillAbsent != null) return 5;
+        return 113;
+    }
+}
