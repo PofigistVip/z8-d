@@ -88,19 +88,25 @@ private string emitExpr(Expression e) {
             e.left.emittedOverride = name;
         }
         string[] savedOverrides;
+        ValueType[] savedBinaryConversions;
         foreach (i, argument; e.arguments) {
             savedOverrides ~= argument.emittedOverride;
+            savedBinaryConversions ~= argument.convertToBinary;
             auto required = argument.optionalRequired, promote = argument.promoteToDecimal;
             auto convert = argument.convertToString;
             if (required) { argument.optionalRequired = false; argument.promoteToDecimal = false; argument.convertToString = ValueType.voidType; }
             auto name = "z8_arg_" ~ suffix ~ "_" ~ i.to!string;
             value ~= "auto " ~ name ~ " = " ~ emitExpr(argument) ~ "; ";
             argument.optionalRequired = required; argument.promoteToDecimal = promote; argument.convertToString = convert;
+            argument.convertToBinary = ValueType.voidType;
             argument.emittedOverride = name;
         }
         value ~= "return " ~ emitExprRaw(e) ~ "; })()";
         if (!e.builtinCall.length) e.left.emittedOverride = savedReceiver;
-        foreach (i, argument; e.arguments) argument.emittedOverride = savedOverrides[i];
+        foreach (i, argument; e.arguments) {
+            argument.emittedOverride = savedOverrides[i];
+            argument.convertToBinary = savedBinaryConversions[i];
+        }
     } else value = emitExprRaw(e);
     if (e.nonNullStringResult) value = "z8_string_or_empty(" ~ value ~ ")";
     if (e.optionalRequired) value = "z8_optional_require(" ~ value ~ ")";
@@ -112,6 +118,8 @@ private string emitExpr(Expression e) {
     if (e.optionalWrap) value = "z8_optional_wrap(" ~ value ~ ")";
     if (e.boxPrimary) value = "z8_primary_box(" ~ value ~ ")";
     if (e.makeFile) value = "z8_file_from_path(" ~ value ~ ")";
+    if (e.convertToBinary == ValueType.fileType) return "z8_file_to_binary(" ~ value ~ ")";
+    if (e.convertToBinary == ValueType.stringType || e.convertToBinary == ValueType.nullableString) return "z8_binary_from_string(" ~ value ~ ")";
     if (e.convertToString == ValueType.intType) return "(" ~ value ~ ").to!string.to!wstring";
     if (e.convertToString == ValueType.boolType) return "(" ~ value ~ " ? \"true\"w : \"false\"w)";
     if (e.convertToString == ValueType.decimalType) return "(" ~ value ~ ").z8_string()";

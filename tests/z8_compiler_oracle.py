@@ -66,6 +66,8 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             file child = __CHILD__;
             child.write("Привет 😀");
             if (!folder.isFolder() || folder.isEmpty() || child.read() != "Привет 😀" || child.size != 17) return 6;
+            binary contents = child;
+            if (string.fromBinary(contents) != "Привет 😀") return 11;
             if (folder.listFiles().size() != 1 || child.parent().parent() != folder) return 8;
             file archive = __ZIP__;
             file destination = __EXTRACTED__;

@@ -34,6 +34,7 @@ class Expression {
     bool promoteToDecimal;
     bool boxPrimary;
     ValueType convertToString;
+    ValueType convertToBinary;
     ValueType castType;
     string emittedOperator;
     string builtinCall;

@@ -1,5 +1,13 @@
 public class BinaryValues {
+    public static int sizeWith(binary value, int extra) { return value.length() + extra; }
     public static int run() {
+        string text = "Hello 😀";
+        binary encodedText = text;
+        if (encodedText.length() != 10 || string.fromBinary(encodedText) != text || encodedText.length() != 0) return 20;
+        int extra = 1;
+        if (sizeWith(text, extra) != 11) return 21;
+        binary explicitValue = (binary)text;
+        if (explicitValue.length() != 10) return 22;
         binary empty;
         if (empty.length() != 0 || empty.getName() != "") return 1;
         binary data = '0, 1, 0xFF, 128';

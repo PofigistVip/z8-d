@@ -4,6 +4,10 @@ class Z8Binary {
     wstring name = ""w;
     this(ubyte[] data = null) { this.data = data; }
 }
+Z8Binary z8_binary_from_string(wstring value) {
+    auto bytes = z8_string_required(value).to!string;
+    return new Z8Binary(cast(ubyte[])bytes.dup);
+}
 
 Z8Binary z8_binary_literal(string text) {
     import std.string : split, strip;

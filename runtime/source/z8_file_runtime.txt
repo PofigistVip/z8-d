@@ -164,6 +164,10 @@ wstring z8_file_read(Z8File value) {
     import std.file : readText;
     return readText(z8_file_system_path(value)).to!wstring;
 }
+Z8Binary z8_file_to_binary(Z8File value) {
+    import std.file : read;
+    return new Z8Binary(cast(ubyte[])read(z8_file_system_path(value)));
+}
 Z8Date z8_file_lastModified(Z8File value) {
     import std.file : exists, timeLastModified;
     auto path = z8_file_system_path(value);
