@@ -3,13 +3,17 @@ from pathlib import Path
 import os
 import subprocess
 import tempfile
+from runtime_support import runtime_library, import_args
 
 root = Path(__file__).resolve().parents[1]
 exe = root / ("z8d.exe" if os.name == "nt" else "z8d")
 source = root / "examples" / "math.bl"
 result = subprocess.run([str(exe), "compile", str(source)], capture_output=True, text=True, encoding="utf-8", check=True)
 
-with tempfile.TemporaryDirectory() as directory:
+assert "import z8.runtime;" in result.stdout
+assert "class Z8Object {" not in result.stdout
+
+with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime_lib:
     directory = Path(directory)
     generated = directory / "generated.d"
     generated.write_text(result.stdout + """
@@ -88,7 +92,7 @@ void main() {
 }
 """, encoding="utf-8")
     binary = directory / ("check.exe" if os.name == "nt" else "check")
-    subprocess.run(["dmd", str(generated), "-of=" + str(binary)], cwd=directory, check=True)
+    subprocess.run(["dmd", str(generated), *import_args(), str(runtime_lib), "-of=" + str(binary)], cwd=directory, check=True)
     subprocess.run([str(binary)], cwd=directory, check=True)
     bad = directory / "bad.bl"
     bad.write_text("class Bad { static int f() { return true; } }", encoding="utf-8")
@@ -110,7 +114,7 @@ void main() {
     }''', encoding="utf-8")
     map_source = subprocess.check_output([str(exe), "compile", str(map_file)], text=True, encoding="utf-8")
     generated.write_text(map_source + "\nvoid main() { assert(Z8_MapCheck.m_run()); }\n", encoding="utf-8")
-    subprocess.run(["dmd", str(generated), "-of=" + str(binary)], cwd=directory, check=True)
+    subprocess.run(["dmd", str(generated), *import_args(), str(runtime_lib), "-of=" + str(binary)], cwd=directory, check=True)
     subprocess.run([str(binary)], cwd=directory, check=True)
 
     index_file = directory / "NullableIndex.bl"
@@ -121,7 +125,7 @@ void main() {
     } }""", encoding="utf-8")
     index_source = subprocess.check_output([str(exe), "compile", str(index_file)], text=True, encoding="utf-8")
     generated.write_text(index_source + "\nvoid main() { assert(Z8_NullableIndex.m_run()); }\n", encoding="utf-8")
-    subprocess.run(["dmd", str(generated), "-of=" + str(binary)], cwd=directory, check=True)
+    subprocess.run(["dmd", str(generated), *import_args(), str(runtime_lib), "-of=" + str(binary)], cwd=directory, check=True)
     subprocess.run([str(binary)], cwd=directory, check=True)
 
     project = subprocess.run(
@@ -139,7 +143,7 @@ void main() {
                          ".m_run() == 59); auto worker = new Thread({ " + static_class +
                          ".f_count = 123; }); worker.start(); worker.join(); assert(" + static_class +
                          ".f_count == 123); }\n", encoding="utf-8")
-    subprocess.run(["dmd", str(generated), "-of=" + str(binary)], cwd=directory, check=True)
+    subprocess.run(["dmd", str(generated), *import_args(), str(runtime_lib), "-of=" + str(binary)], cwd=directory, check=True)
     subprocess.run([str(binary)], cwd=directory, check=True)
 
     bad_root = directory / "bad_project"

@@ -1,3 +1,1 @@
-source/z8_core_runtime.txt text eol=lf
-source/z8_map_runtime.txt text eol=lf
-source/z8_array_runtime.txt text eol=lf
+runtime/source/*_runtime.txt text eol=lf

@@ -1,0 +1,10 @@
+{
+  "name": "z8-runtime",
+  "description": "Runtime library for D code generated from Z8",
+  "license": "LGPL-3.0-or-later",
+  "targetType": "staticLibrary",
+  "targetName": "z8-runtime",
+  "targetPath": "lib",
+  "sourcePaths": ["source"],
+  "stringImportPaths": ["source"]
+}

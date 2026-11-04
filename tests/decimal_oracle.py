@@ -4,6 +4,7 @@ import os
 import random
 import subprocess
 import tempfile
+from runtime_support import runtime_library, import_args
 
 root = Path(__file__).resolve().parents[1]
 exe = root / ("z8d.exe" if os.name == "nt" else "z8d")
@@ -119,14 +120,14 @@ for value in ["-9223372036854775809", "-1.1", "-0.0001", "0.000", "0.01", "1.999
 d_main = d_main.replace("// RANDOM_CASES", "\n".join(d_lines))
 java_main = java_main.replace("// RANDOM_CASES", "\n".join(java_lines))
 
-with tempfile.TemporaryDirectory() as temporary:
+with tempfile.TemporaryDirectory() as temporary, runtime_library() as runtime_lib:
     directory = Path(temporary)
     dfile = directory / "decimal_check.d"
     jfile = directory / "DecimalOracle.java"
     binary = directory / ("decimal_check.exe" if os.name == "nt" else "decimal_check")
     dfile.write_text(generated + d_main, encoding="utf-8")
     jfile.write_text(java_main, encoding="utf-8")
-    subprocess.run(["dmd", str(dfile), "-of=" + str(binary)], cwd=directory, check=True)
+    subprocess.run(["dmd", str(dfile), *import_args(), str(runtime_lib), "-of=" + str(binary)], cwd=directory, check=True)
     subprocess.run(["javac", "-source", "8", "-target", "8", str(jfile)], cwd=directory, check=True)
     d_output = subprocess.check_output([str(binary)], cwd=directory, text=True, encoding="utf-8")
     java_output = subprocess.check_output(["java", "-cp", str(directory), "DecimalOracle"], cwd=directory, text=True, encoding="utf-8")

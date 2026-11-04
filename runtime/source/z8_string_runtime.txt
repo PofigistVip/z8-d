@@ -1,20 +1,20 @@
-private long z8_str_compare(wstring a, wstring b) {
+long z8_str_compare(wstring a, wstring b) {
     b = z8_string_required(b);
     auto length = a.length < b.length ? a.length : b.length;
     foreach (i; 0 .. length) if (a[i] != b[i]) return cast(long)a[i] - cast(long)b[i];
     return cast(long)a.length - cast(long)b.length;
 }
-private bool z8_str_startsWith(wstring value, wstring prefix, long offset = 0) {
+bool z8_str_startsWith(wstring value, wstring prefix, long offset = 0) {
     prefix = z8_string_required(prefix);
     auto start = cast(int)offset;
     if (start < 0 || cast(size_t)start > value.length || prefix.length > value.length - cast(size_t)start) return false;
     return value[cast(size_t)start .. cast(size_t)start + prefix.length] == prefix;
 }
-private bool z8_str_endsWith(wstring value, wstring suffix) {
+bool z8_str_endsWith(wstring value, wstring suffix) {
     suffix = z8_string_required(suffix);
     return suffix.length <= value.length && value[value.length - suffix.length .. $] == suffix;
 }
-private long z8_str_indexOf(wstring value, wstring needle, long offset = 0) {
+long z8_str_indexOf(wstring value, wstring needle, long offset = 0) {
     needle = z8_string_required(needle);
     auto raw = cast(int)offset;
     size_t start = raw < 0 ? 0 : cast(size_t)raw;
@@ -25,7 +25,7 @@ private long z8_str_indexOf(wstring value, wstring needle, long offset = 0) {
         if (value[i .. i + needle.length] == needle) return cast(long)i;
     return -1;
 }
-private long z8_str_lastIndexOf(wstring value, wstring needle, long offset = int.max) {
+long z8_str_lastIndexOf(wstring value, wstring needle, long offset = int.max) {
     needle = z8_string_required(needle);
     long start = cast(int)offset;
     if (start < 0 || needle.length > value.length) return -1;
@@ -35,47 +35,47 @@ private long z8_str_lastIndexOf(wstring value, wstring needle, long offset = int
         if (value[cast(size_t)i .. cast(size_t)i + needle.length] == needle) return i;
     return -1;
 }
-private wstring z8_str_substring(wstring value, long start) {
+wstring z8_str_substring(wstring value, long start) {
     auto i = cast(int)start;
     if (i < 0 || cast(size_t)i > value.length) throw new Exception("string index out of bounds");
     return value[cast(size_t)i .. $];
 }
-private wstring z8_str_substring(wstring value, long start, long count) {
+wstring z8_str_substring(wstring value, long start, long count) {
     auto i = cast(int)start;
     auto end = cast(int)(cast(long)i + cast(int)count);
     if (end >= cast(long)value.length) end = cast(int)value.length;
     if (i < 0 || end < i || cast(size_t)end > value.length) throw new Exception("string index out of bounds");
     return value[cast(size_t)i .. cast(size_t)end];
 }
-private wstring z8_str_charAt(wstring value, long index) {
+wstring z8_str_charAt(wstring value, long index) {
     auto i = cast(int)index;
     if (i < 0 || cast(size_t)i >= value.length) throw new Exception("string index out of bounds");
     return value[cast(size_t)i .. cast(size_t)i + 1];
 }
-private wstring z8_str_trimLeft(wstring value) {
+wstring z8_str_trimLeft(wstring value) {
     size_t start;
     while (start < value.length && value[start] <= ' ') ++start;
     return value[start .. $];
 }
-private wstring z8_str_trimRight(wstring value) {
+wstring z8_str_trimRight(wstring value) {
     auto end = value.length;
     while (end > 0 && value[end - 1] <= ' ') --end;
     return value[0 .. end];
 }
-private wstring z8_str_trim(wstring value) { return z8_str_trimRight(z8_str_trimLeft(value)); }
-private wstring z8_str_left(wstring value, long count) { return z8_str_substring(value, 0, count); }
-private wstring z8_str_right(wstring value, long count) {
+wstring z8_str_trim(wstring value) { return z8_str_trimRight(z8_str_trimLeft(value)); }
+wstring z8_str_left(wstring value, long count) { return z8_str_substring(value, 0, count); }
+wstring z8_str_right(wstring value, long count) {
     auto start = cast(int)(cast(long)cast(int)value.length - cast(int)count);
     if (start < 0) start = 0;
     return z8_str_substring(value, start);
 }
-private wstring z8_str_insert(wstring value, long index, wstring what) {
+wstring z8_str_insert(wstring value, long index, wstring what) {
     what = z8_string_required(what);
     auto i = cast(int)index;
     if (i < 0 || cast(size_t)i > value.length) throw new Exception("string index out of bounds");
     return value[0 .. cast(size_t)i] ~ what ~ value[cast(size_t)i .. $];
 }
-private wstring z8_str_replace(wstring value, long index, long count, wstring replacement) {
+wstring z8_str_replace(wstring value, long index, long count, wstring replacement) {
     replacement = z8_string_required(replacement);
     auto i = cast(int)index;
     auto end = cast(int)(cast(long)i + cast(int)count);
@@ -83,7 +83,7 @@ private wstring z8_str_replace(wstring value, long index, long count, wstring re
         throw new Exception("string index out of bounds");
     return value[0 .. cast(size_t)i] ~ replacement ~ value[cast(size_t)end .. $];
 }
-private wstring z8_str_padding(wstring value, long length, wstring padding, bool left) {
+wstring z8_str_padding(wstring value, long length, wstring padding, bool left) {
     padding = z8_string_required(padding);
     auto requested = cast(int)length;
     if (requested <= 0 || cast(size_t)requested <= value.length) return value;
@@ -93,24 +93,24 @@ private wstring z8_str_padding(wstring value, long length, wstring padding, bool
     foreach (i; 0 .. count) fill[i] = padding[i % padding.length];
     return left ? fill.idup ~ value : value ~ fill.idup;
 }
-private wstring z8_str_padLeft(wstring value, long length, wstring padding = " "w) { return z8_str_padding(value, length, padding, true); }
-private wstring z8_str_padRight(wstring value, long length, wstring padding = " "w) { return z8_str_padding(value, length, padding, false); }
-private bool z8_bool_parse(wstring value) {
+wstring z8_str_padLeft(wstring value, long length, wstring padding = " "w) { return z8_str_padding(value, length, padding, true); }
+wstring z8_str_padRight(wstring value, long length, wstring padding = " "w) { return z8_str_padding(value, length, padding, false); }
+bool z8_bool_parse(wstring value) {
     import std.uni : toLower;
     auto text = value.to!string.toLower;
     if (text == "" || text == "0" || text == "false" || text == "no" || text == "n" || text == "bool.false") return false;
     if (text == "1" || text == "true" || text == "yes" || text == "y" || text == "bool.true") return true;
     throw new Exception("invalid bool");
 }
-private long z8_int_abs(long value) { return value == long.min ? value : value < 0 ? -value : value; }
-private long z8_int_signum(long value) { return value < 0 ? -1 : value > 0 ? 1 : 0; }
-private long z8_int_not(long value) { return ~value; }
-private long z8_int_and(long value, long other) { return value & other; }
-private long z8_int_or(long value, long other) { return value | other; }
-private long z8_int_xor(long value, long other) { return value ^ other; }
-private long z8_int_leftShift(long value, long count) { return value << cast(uint)(count & 63); }
-private long z8_int_rightShift(long value, long count) { return value >> cast(uint)(count & 63); }
-private wstring z8_int_format(ulong value, int radix, bool negative = false) {
+long z8_int_abs(long value) { return value == long.min ? value : value < 0 ? -value : value; }
+long z8_int_signum(long value) { return value < 0 ? -1 : value > 0 ? 1 : 0; }
+long z8_int_not(long value) { return ~value; }
+long z8_int_and(long value, long other) { return value & other; }
+long z8_int_or(long value, long other) { return value | other; }
+long z8_int_xor(long value, long other) { return value ^ other; }
+long z8_int_leftShift(long value, long count) { return value << cast(uint)(count & 63); }
+long z8_int_rightShift(long value, long count) { return value >> cast(uint)(count & 63); }
+wstring z8_int_format(ulong value, int radix, bool negative = false) {
     immutable wchar[] digits = "0123456789abcdefghijklmnopqrstuvwxyz"w;
     wchar[] reversed;
     do { reversed ~= digits[cast(size_t)(value % radix)]; value /= radix; } while (value);
@@ -119,15 +119,15 @@ private wstring z8_int_format(ulong value, int radix, bool negative = false) {
     foreach (i; 0 .. reversed.length) result[i] = reversed[$ - 1 - i];
     return result.idup;
 }
-private wstring z8_int_toString(long value, long base = 10) {
+wstring z8_int_toString(long value, long base = 10) {
     auto radix = cast(int)base;
     if (radix < 2 || radix > 36) radix = 10;
     auto magnitude = value < 0 ? 0UL - cast(ulong)value : cast(ulong)value;
     return z8_int_format(magnitude, radix, value < 0);
 }
-private wstring z8_int_toHexString(long value) { return z8_int_format(cast(ulong)value, 16); }
-private wstring z8_int_toBinaryString(long value) { return z8_int_format(cast(ulong)value, 2); }
-private long z8_int_parse(wstring value, long radix = 10) {
+wstring z8_int_toHexString(long value) { return z8_int_format(cast(ulong)value, 16); }
+wstring z8_int_toBinaryString(long value) { return z8_int_format(cast(ulong)value, 2); }
+long z8_int_parse(wstring value, long radix = 10) {
     auto base = cast(int)radix;
     if (base < 2 || base > 36 || value.length == 0) throw new Exception("invalid integer");
     if (value[$-1] == 'L' || value[$-1] == 'l') value = value[0 .. $-1];

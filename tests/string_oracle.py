@@ -3,6 +3,7 @@ from pathlib import Path
 import os
 import subprocess
 import tempfile
+from runtime_support import runtime_library, import_args
 
 root = Path(__file__).resolve().parents[1]
 exe = root / ("z8d.exe" if os.name == "nt" else "z8d")
@@ -100,13 +101,13 @@ public class StringOracle {
     }
 }
 '''
-with tempfile.TemporaryDirectory() as temporary:
+with tempfile.TemporaryDirectory() as temporary, runtime_library() as runtime_lib:
     directory = Path(temporary)
     dfile, jfile = directory / "string_check.d", directory / "StringOracle.java"
     binary = directory / ("string_check.exe" if os.name == "nt" else "string_check")
     dfile.write_text(generated + d_main, encoding="utf-8")
     jfile.write_text(java_main, encoding="utf-8")
-    subprocess.run(["dmd", str(dfile), "-of=" + str(binary)], cwd=directory, check=True)
+    subprocess.run(["dmd", str(dfile), *import_args(), str(runtime_lib), "-of=" + str(binary)], cwd=directory, check=True)
     subprocess.run(["javac", "-source", "8", "-target", "8", str(jfile)], cwd=directory, check=True)
     actual = subprocess.check_output([str(binary)], cwd=directory, text=True, encoding="utf-8")
     expected = subprocess.check_output(["java", "-cp", str(directory), "StringOracle"], cwd=directory, text=True, encoding="utf-8")

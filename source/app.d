@@ -1,10 +1,10 @@
 module app;
 
-import std.file : readText, dirEntries, SpanMode, tempDir, mkdir, exists, remove, rmdir, writeFile = write;
+import std.file : readText, dirEntries, SpanMode, tempDir, mkdir, mkdirRecurse, exists, remove, rmdir, thisExePath, writeFile = write;
 import std.conv : to;
 import std.algorithm : sort;
-import std.path : extension, relativePath, stripExtension, absolutePath, buildPath;
-import std.process : execute;
+import std.path : extension, relativePath, stripExtension, absolutePath, buildPath, dirName;
+import std.process : execute, environment;
 import std.string : replace;
 import std.uuid : randomUUID;
 import std.json : JSONValue;
@@ -26,12 +26,18 @@ private SourceUnit[] readProject(string root) {
     return units;
 }
 
-private void cleanupBuild(string temporary, string generated, string objectWindows, string objectOther) {
+private string runtimeRoot() {
+    auto configured = environment.get("Z8_RUNTIME_ROOT", "");
+    auto root = configured.length ? absolutePath(configured) : buildPath(dirName(thisExePath()), "runtime");
+    if (!exists(buildPath(root, "source", "z8", "runtime.d")))
+        throw new Exception("runtime sources not found; set Z8_RUNTIME_ROOT to the runtime directory");
+    return root;
+}
+
+private void cleanupBuild(string directory, string[] files) {
     try {
-        if (exists(generated)) remove(generated);
-        if (exists(objectWindows)) remove(objectWindows);
-        if (exists(objectOther)) remove(objectOther);
-        rmdir(temporary);
+        foreach (path; files) if (exists(path)) remove(path);
+        rmdir(directory);
     } catch (Exception) { }
 }
 
@@ -41,13 +47,23 @@ private int buildExecutable(string source, string outputPath) {
     auto generated = buildPath(temporary, "program.d");
     auto objectWindows = buildPath(temporary, "program.obj");
     auto objectOther = buildPath(temporary, "program.o");
-    scope (exit) cleanupBuild(temporary, generated, objectWindows, objectOther);
+    auto runtimeDirectory = runtimeRoot();
+    auto libDirectory = buildPath(runtimeDirectory, "lib");
+    mkdirRecurse(libDirectory);
+    auto suffix = randomUUID().to!string;
+    version (Windows) auto library = buildPath(libDirectory, "z8-runtime-" ~ suffix ~ ".lib");
+    else auto library = buildPath(libDirectory, "libz8-runtime-" ~ suffix ~ ".a");
+    scope (exit) cleanupBuild(temporary, [generated, objectWindows, objectOther, library, library ~ ".tmp"]);
+    auto runtime = buildPath(runtimeDirectory, "source");
+    auto runtimeModule = buildPath(runtime, "z8", "runtime.d");
+    auto runtimeSource = buildPath(runtime, "z8", "runtime_source.d");
+    auto builtRuntime = execute(["dmd", "-lib", "-I" ~ runtime, "-J" ~ runtime,
+        runtimeModule, runtimeSource, "-od=" ~ temporary, "-of=" ~ library]);
+    if (builtRuntime.status != 0) { stderr.write(builtRuntime.output); return 1; }
     writeFile(generated, source);
-    auto result = execute(["dmd", generated, "-od=" ~ temporary, "-of=" ~ absolutePath(outputPath)]);
-    if (result.status != 0) {
-        stderr.write(result.output);
-        return 1;
-    }
+    auto result = execute(["dmd", generated, "-I" ~ runtime, "-J" ~ runtime,
+        library, "-od=" ~ temporary, "-of=" ~ absolutePath(outputPath)]);
+    if (result.status != 0) { stderr.write(result.output); return 1; }
     return 0;
 }
 

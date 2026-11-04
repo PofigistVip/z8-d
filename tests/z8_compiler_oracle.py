@@ -11,6 +11,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from contextlib import ExitStack
+from runtime_support import runtime_library, import_args
 
 if len(sys.argv) not in (2, 3):
     raise SystemExit("Usage: python tests/z8_compiler_oracle.py <original-z8-root> [eclipse-cache-dir]")
@@ -23,7 +25,7 @@ jars = [p for p in cache.rglob("*.jar") if "3.4-cert" in p.parts and not p.name.
 if not compiler.is_dir() or not language.is_dir() or len(jars) < 3:
     raise SystemExit("Original compiler, language sources or cached Eclipse dependencies not found")
 
-with tempfile.TemporaryDirectory() as temporary:
+with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     temp = Path(temporary)
     classes = temp / "compiler"
     classes.mkdir()
@@ -54,6 +56,7 @@ with tempfile.TemporaryDirectory() as temporary:
             if file.name in ("Main.java", "Arithmetic.java", "EnumCases.java", "Flavor.java", "NullableObjectField.java", "LifecycleBase.java", "LifecycleChild.java", "LifecycleCases.java", "LifecycleOwner.java", "LifecycleReentrant.java", "LifecycleTrigger.java"):
                 print(file.read_text(encoding="utf-8"))
     if os.environ.get("Z8_ORACLE_RUN"):
+        runtime_lib = stack.enter_context(runtime_library())
         runtime_jars = list((original / "org.zenframework.z8.server" / "target" / "libs").glob("*.jar"))
         lang_classes = original / "org.zenframework.z8.lang" / "target" / "classes" / "main"
         if not runtime_jars or not lang_classes.is_dir():
@@ -179,7 +182,7 @@ void main() {
 }
 ''', encoding="utf-8")
         d_binary = temp / ("compare.exe" if os.name == "nt" else "compare")
-        subprocess.run(["dmd", str(d_runner), "-of=" + str(d_binary)], cwd=temp, check=True)
+        subprocess.run(["dmd", str(d_runner), *import_args(), str(runtime_lib), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_results = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
         if original_results != d_results:
             raise SystemExit(f"Original Z8: {original_results!r}; z8-d: {d_results!r}")
@@ -192,6 +195,6 @@ void main() {
             native_source = subprocess.check_output([str(z8d), "compile", str(enum_file)], cwd=temp, text=True, encoding="utf-8")
             native_file = temp / "native_enum.d"
             native_file.write_text(native_source, encoding="utf-8")
-            subprocess.run(["dmd", "-c", str(native_file), "-of=" + str(temp / "native_enum.obj")], cwd=temp, check=True)
+            subprocess.run(["dmd", "-c", str(native_file), *import_args(), "-of=" + str(temp / "native_enum.obj")], cwd=temp, check=True)
         print(f"Compiled {len(native_enums)} native enum declarations from the original standard library")
     print(f"Original Z8 compiler accepted the project and generated {len(generated)} Java files")

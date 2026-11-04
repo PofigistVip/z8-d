@@ -57,10 +57,10 @@ class Z8StringMap {
         return previous;
     }
 }
-private Z8StringMap z8_map_union(Z8StringMap left, Z8StringMap right) {
+Z8StringMap z8_map_union(Z8StringMap left, Z8StringMap right) {
     auto result = new Z8StringMap();
     result.z8_add(z8_nonnull(left));
     result.z8_add(z8_nonnull(right));
     return result;
 }
-private void z8_map_add_assign(ref Z8StringMap left, Z8StringMap right) { left = z8_map_union(left, right); }
+void z8_map_add_assign(ref Z8StringMap left, Z8StringMap right) { left = z8_map_union(left, right); }

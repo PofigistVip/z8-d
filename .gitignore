@@ -5,3 +5,6 @@ z8d
 *.obj
 *.pdb
 *.ilk
+
+runtime/lib/
+__pycache__/
