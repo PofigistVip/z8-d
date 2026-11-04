@@ -741,6 +741,14 @@ class Checker {
                     if (e.token.text == "hashCode") { e.builtinCall = "z8_primary_hash"; return ValueType.intType; }
                 } else if (receiver == ValueType.stringType) {
                     switch (e.token.text) {
+                        case "matches":
+                            checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_regex_matches"; return ValueType.boolType;
+                        case "replaceFirst": case "replaceAll":
+                            checkArguments(e, [ValueType.stringType, ValueType.stringType]);
+                            e.builtinCall = "z8_regex_" ~ e.token.text; return ValueType.stringType;
+                        case "split":
+                            checkArguments(e, e.arguments.length == 1 ? [ValueType.stringType] : [ValueType.stringType, ValueType.intType]);
+                            e.builtinCall = "z8_regex_split"; return ValueType.stringArray;
                         case "length": case "isEmpty": case "toString": case "trim": case "trimLeft": case "trimRight":
                         case "toLowerCase": case "toUpperCase": case "firstToLowerCase": case "firstToUpperCase":
                             checkArguments(e, []);

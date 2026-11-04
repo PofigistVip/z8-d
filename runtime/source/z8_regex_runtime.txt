@@ -1,0 +1,60 @@
+// String regex operations. Syntax is the subset shared by Java and std.regex.
+bool z8_regex_matches(wstring value, wstring pattern) {
+    import std.regex : regex, matchFirst;
+    auto input = z8_string_required(value);
+    auto match = matchFirst(input, regex("^(?:"w ~ z8_string_required(pattern) ~ ")$"w));
+    return cast(bool)match && match.pre.length == 0 && match.post.length == 0;
+}
+private wstring z8_regex_replace(wstring value, wstring pattern, wstring replacement, bool all) {
+    import std.regex : regex, matchAll;
+    auto input = z8_string_required(value);
+    replacement = z8_string_required(replacement);
+    wstring output;
+    size_t previous;
+    foreach (match; matchAll(input, regex(z8_string_required(pattern)))) {
+        auto start = input.length - match.post.length - match.hit.length;
+        output ~= input[previous .. start];
+        size_t i;
+        while (i < replacement.length) {
+            auto c = replacement[i++];
+            if (c == '\\') {
+                if (i == replacement.length) throw new Exception("invalid regex replacement");
+                output ~= replacement[i++];
+            } else if (c == '$') {
+                if (i == replacement.length || replacement[i] < '0' || replacement[i] > '9') throw new Exception("invalid regex group reference");
+                size_t group = replacement[i++] - '0';
+                if (group >= match.length) throw new Exception("invalid regex group reference");
+                while (i < replacement.length && replacement[i] >= '0' && replacement[i] <= '9') {
+                    auto candidate = group * 10 + replacement[i] - '0';
+                    if (candidate >= match.length) break;
+                    group = candidate; ++i;
+                }
+                output ~= match[group];
+            } else output ~= c;
+        }
+        previous = start + match.hit.length;
+        if (!all) break;
+    }
+    output ~= input[previous .. $];
+    return output.length ? output : ""w;
+}
+wstring z8_regex_replaceFirst(wstring value, wstring pattern, wstring replacement) { return z8_regex_replace(value, pattern, replacement, false); }
+wstring z8_regex_replaceAll(wstring value, wstring pattern, wstring replacement) { return z8_regex_replace(value, pattern, replacement, true); }
+Z8Array!wstring z8_regex_split(wstring value, wstring pattern, long limit = 0) {
+    import std.regex : regex, matchAll;
+    auto input = z8_string_required(value);
+    auto expression = regex(z8_string_required(pattern));
+    auto result = new Z8Array!wstring();
+    size_t previous;
+    bool split;
+    if (cast(int)limit != 1) foreach (match; matchAll(input, expression)) {
+        auto start = input.length - match.post.length - match.hit.length;
+        if (start == 0 && !match.hit.length) continue;
+        if (cast(int)limit > 0 && result.z8_size() >= cast(int)limit - 1) break;
+        result.z8_add(input[previous .. start].length ? input[previous .. start] : ""w);
+        previous = start + match.hit.length; split = true;
+    }
+    result.z8_add(input[previous .. $].length ? input[previous .. $] : ""w);
+    if (cast(int)limit == 0 && split) while (result.z8_size() && !result.z8_last().length) result.z8_removeAt(result.z8_size() - 1);
+    return result;
+}

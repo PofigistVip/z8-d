@@ -18,6 +18,16 @@ public class StringExtras {
         geometry point = geometry.point(1, 2, 0);
         string encoded = point;
         if (encoded != point.toString()) return 10;
+        if (!"ab".matches("a|ab") || "abc".matches("a|ab")) return 11;
+        if ("ab-ab".replaceAll("(a)(b)", "$2$1") != "ba-ba") return 12;
+        if ("ab-ab".replaceFirst("(a)(b)", "<$0>") != "<ab>-ab") return 13;
+        string[] split = "a,,b,,".split(",");
+        if (split.size() != 3 || split[1] != "" || split[2] != "b") return 14;
+        string[] limited = "a,,b,,".split(",", 2);
+        if (limited.size() != 2 || limited.last() != ",b,,") return 15;
+        string[] kept = "a,,".split(",", -1);
+        if (kept.size() != 3 || kept.last() != "") return 16;
+        if ("".split(",").size() != 1 || "abc".split("").size() != 3) return 17;
         return 227;
     }
 }

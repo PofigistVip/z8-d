@@ -177,6 +177,8 @@ private string emitExprRaw(Expression e) {
         case ExprKind.memberCall:
             if (e.builtinCall.length) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                if (e.builtinCall.startsWith("z8_regex_"))
+                    return e.builtinCall ~ "(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
                 if ((e.inferredType == ValueType.binaryType || e.inferredType == ValueType.datespanType || e.inferredType == ValueType.dateType || e.inferredType == ValueType.geometryType || e.inferredType == ValueType.fileType) && e.left !is null)
                     return e.builtinCall ~ "(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
                 if (e.builtinCall == "z8_primary_to_string" || e.builtinCall == "z8_primary_hash" || e.builtinCall == "z8_primary_hash_value" ||
