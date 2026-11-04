@@ -13,6 +13,7 @@ import z8.lexer;
 import z8.compiler : compile, compileSources, SourceUnit, CompileException;
 
 private SourceUnit[] readProject(string root) {
+    root = absolutePath(root);
     string[] paths;
     foreach (entry; dirEntries(root, SpanMode.depth))
         if (entry.isFile && extension(entry.name) == ".bl") paths ~= entry.name;

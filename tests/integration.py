@@ -128,6 +128,11 @@ void main() {
         [str(exe), "project", str(root / "examples" / "project")],
         capture_output=True, text=True, encoding="utf-8", check=True,
     )
+    relative_project = subprocess.run(
+        [str(exe), "project", "examples/project"], cwd=root,
+        capture_output=True, text=True, encoding="utf-8", check=True,
+    )
+    assert relative_project.stdout == project.stdout
     project_class = "Z8p_" + "demo.Main".encode("utf-8").hex().upper()
     static_class = "Z8p_" + "demo.cases.StaticState".encode("utf-8").hex().upper()
     generated.write_text(project.stdout + "\nimport core.thread : Thread;\nvoid main() { assert(" + project_class +
