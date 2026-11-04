@@ -212,7 +212,7 @@ private Z8Date z8_date_parse_impl(wstring input, bool iso) {
     immutable(TimeZone) zone = hasOffset ? new immutable(SimpleTimeZone)(dur!"seconds"(offset)) : z8_date_timezone();
     auto result = new Z8Date(SysTime(DateTime(year, 1, 1), zone));
     result.explicitOffset = hasOffset && !convertToDefault;
-    z8_date_set(result, year, month, day, hour, minute, second, millisecond);
+    z8_date_set_astronomical(result, year, month, day, hour, minute, second, millisecond);
     if (convertToDefault) result.value.timezone = z8_date_timezone();
     return result;
 }
