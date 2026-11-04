@@ -622,6 +622,9 @@ class Checker {
                     fail("unsupported geometry method", e.token);
                 }
                 if (receiver == ValueType.dateType) {
+                    if (e.token.text == "setZoneOffset") {
+                        checkArguments(e, [ValueType.intType]); e.builtinCall = "z8_date_setZoneOffset"; return ValueType.voidType;
+                    }
                     if (["set", "setDate", "setTime"].canFind(e.token.text)) {
                         auto count = e.arguments.length;
                         if ((e.token.text == "set" && count != 6 && count != 7) ||
@@ -635,7 +638,7 @@ class Checker {
                         checkArguments(e, [ValueType.intType]); e.builtinCall = "z8_date_" ~ e.token.text; return ValueType.dateType;
                     }
                     checkArguments(e, []);
-                    if (["ticks", "year", "quarter", "month", "day", "dayOfWeek", "dayOfYear", "daysInMonth", "hours", "minutes", "seconds", "milliseconds"].canFind(e.token.text)) {
+                    if (["ticks", "year", "quarter", "month", "day", "dayOfWeek", "dayOfYear", "daysInMonth", "hours", "minutes", "seconds", "milliseconds", "zoneOffset"].canFind(e.token.text)) {
                         e.builtinCall = "z8_date_" ~ e.token.text; return ValueType.intType;
                     }
                     if (["truncYear", "truncQuarter", "truncMonth", "truncDay", "truncHour", "truncMinute", "truncSecond"].canFind(e.token.text)) {

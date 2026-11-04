@@ -32,6 +32,14 @@ public class DateValues {
         date standardParse = date.parse("2024-02-29T12:30:45-05:30");
         if (standardParse.toString() != "2024-02-29T21:00:45+03:00") return 20;
         if (date.parseIsoString("2024-02-29T12:30:45Z").toIsoString() != "2024-02-29T12:30:45+03:00") return 21;
+        date offset = '29/02/2024 12:30:45';
+        if (offset.zoneOffset() != 10800000) return 22;
+        offset.setZoneOffset(7200000);
+        if (offset.zoneOffset() != 7200000 || offset.ticks() != 1709202645000) return 23;
+        if (offset.hours() != 12 || offset.toIsoString() != "2024-02-29T12:30:45+02:00") return 24;
+        if (offset.addHour(1).hours() != 14 || offset.addHour(1).zoneOffset() != 10800000) return 25;
+        if (offset.addHour(0).zoneOffset() != 7200000 || offset.addHour(0).hours() != 12) return 26;
+        if (offset.addMonth(1).hours() != 12 || offset.addDay(1).hours() != 12 || offset.addYear(1).hours() != 12) return 27;
         return 193;
     }
 }
