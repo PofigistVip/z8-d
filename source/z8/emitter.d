@@ -37,6 +37,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.dateArray: return "Z8Array!Z8Date";
         case ValueType.geometryArray: return "Z8Array!Z8Geometry";
         case ValueType.fileArray: return "Z8Array!Z8File";
+        case ValueType.exceptionArray: return "Z8Array!Throwable";
         case ValueType.nullType: assert(0, "null has no concrete D type");
         case ValueType.nullableString: return "wstring";
         case ValueType.enumType: assert(objectClass !is null); return objectClass.emittedName;
@@ -117,6 +118,7 @@ private string emitExpr(Expression e) {
     if (e.convertToString == ValueType.guidType) return "z8_guid_to_string(" ~ value ~ ")";
     if (e.convertToString == ValueType.datespanType) return "z8_datespan_to_string(" ~ value ~ ")";
     if (e.convertToString == ValueType.fileType) return "z8_file_path(" ~ value ~ ")";
+    if (e.convertToString == ValueType.exceptionType) return "z8_string_or_empty(z8_message(z8_nonnull(" ~ value ~ ")))";
     return value;
 }
 private string emitReceiver(Expression e) {
@@ -191,7 +193,7 @@ private string emitExprRaw(Expression e) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return "z8_invoke!\"z8_" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
             }
-            if (e.inferredType == ValueType.exceptionType) return "z8_message(z8_nonnull(" ~ emitExpr(e.left) ~ "))";
+            if (e.inferredType == ValueType.exceptionType) return (e.token.text == "getStackTrace" ? "z8_stacktrace(" : "z8_message(") ~ "z8_nonnull(" ~ emitExpr(e.left) ~ "))";
             if (e.inferredType == ValueType.decimalType) {
                 auto receiver = "(" ~ emitExpr(e.left) ~ ")";
                 if (e.token.text == "toString") return receiver ~ ".z8_string()";

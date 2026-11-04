@@ -1,0 +1,17 @@
+public class ExceptionValues {
+    public static int run() {
+        exception[] errors;
+        errors.add(null);
+        if (errors.first() != null) return 1;
+        try {
+            throw "problem";
+        } catch (exception error) {
+            string message = error;
+            if (message != "problem" || error.getMessage() != "problem") return 2;
+            if (error.getStackTrace().indexOf("problem") < 0) return 3;
+            errors.add(error);
+            if (errors.size() != 2 || errors.last().getMessage() != "problem") return 4;
+        }
+        return 239;
+    }
+}

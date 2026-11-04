@@ -3,6 +3,7 @@ private import std.conv : to;
 private import std.algorithm : canFind;
 string z8_to_utf8(wstring value) { return value.to!string; }
 wstring z8_message(Throwable value) { return value.msg.to!wstring; }
+wstring z8_stacktrace(Throwable value) { return value.toString().to!wstring; }
 wstring z8_string_required(wstring value) {
     if (value is null) throw new Exception("null string");
     return value;

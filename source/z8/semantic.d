@@ -125,6 +125,7 @@ class Checker {
         if (expected == ValueType.stringType && actual == ValueType.guidType) { e.convertToString = actual; return true; }
         if (expected == ValueType.stringType && actual == ValueType.datespanType) { e.convertToString = actual; return true; }
         if (expected == ValueType.stringType && actual == ValueType.fileType) { e.convertToString = actual; return true; }
+        if (expected == ValueType.stringType && actual == ValueType.exceptionType) { e.convertToString = actual; return true; }
         return actual == expected && (expected == ValueType.selfType ? isAssignable(e.objectClass, expectedClass) :
             (expected != ValueType.selfArray && expected != ValueType.enumType && expected != ValueType.enumArray) || e.objectClass is expectedClass);
     }
@@ -202,6 +203,7 @@ class Checker {
                 else if (p.type == ValueType.stringType && actual == ValueType.guidType) weight += 100;
                 else if (p.type == ValueType.stringType && actual == ValueType.datespanType) weight += 100;
                 else if (p.type == ValueType.stringType && actual == ValueType.fileType) weight += 100;
+                else if (p.type == ValueType.stringType && actual == ValueType.exceptionType) weight += 100;
                 else applicable = false;
                 if (!applicable) break;
             }
@@ -730,7 +732,7 @@ class Checker {
                     if (e.token.text == "toString") return ValueType.stringType;
                 } else if (receiver == ValueType.exceptionType) {
                     if (e.arguments.length != 0) fail("incorrect argument count", e.token);
-                    if (e.token.text == "getMessage") return ValueType.stringType;
+                    if (e.token.text == "getMessage" || e.token.text == "getStackTrace") return ValueType.stringType;
                 } else if (receiver == ValueType.decimalType) {
                     if (e.token.text == "toString") { checkArguments(e, []); return ValueType.stringType; }
                     if (["abs", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "toRadians", "toDegrees", "exp", "ln", "log10", "sqrt", "cbrt"].canFind(e.token.text)) {
