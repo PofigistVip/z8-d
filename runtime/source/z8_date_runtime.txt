@@ -21,14 +21,17 @@ private int z8_date_parse_month(wstring input, ref size_t index) {
     index += longest;
     return month;
 }
-private void z8_date_parse_weekday(wstring input, ref size_t index) {
+private int z8_date_parse_weekday(wstring input, ref size_t index) {
     size_t longest;
-    foreach (forms; [z8_weekday_short, z8_weekday_long]) foreach (candidate; forms)
+    int weekday;
+    foreach (forms; [z8_weekday_short, z8_weekday_long]) foreach (i, candidate; forms)
         if (candidate.length > longest && index + candidate.length <= input.length &&
-            z8_str_toLowerCase(input[index .. index + candidate.length]) == z8_str_toLowerCase(candidate))
-            longest = candidate.length;
+            z8_str_toLowerCase(input[index .. index + candidate.length]) == z8_str_toLowerCase(candidate)) {
+            longest = candidate.length; weekday = (cast(int)i + 6) % 7 + 1;
+        }
     if (!longest) throw new Exception("invalid date weekday");
     index += longest;
+    return weekday;
 }
 
 private immutable(TimeZone) z8_date_timezone() {
@@ -204,8 +207,8 @@ Z8Date z8_date_parse(wstring input, wstring pattern) {
     if (input is null) return null;
     pattern = z8_string_required(pattern);
     if (!input.length) return z8_date_parse(input);
-    int year = 1970, month = 1, day = 1, hour, minute, second, millisecond, dayOfYear;
-    bool useDayOfYear, twoDigitYear, twelveHour, afternoon, explicitDay, hasWeekday;
+    int year = 1970, month = 1, day = 1, hour, minute, second, millisecond, dayOfYear, weekday = 1, week = 1, weekKind;
+    bool useDayOfYear, twoDigitYear, twelveHour, afternoon, explicitDay, hasWeekday, hasWeekYear;
     int offset;
     bool hasOffset, quoted;
     size_t pi, ti;
@@ -232,16 +235,20 @@ Z8Date z8_date_parse(wstring input, wstring pattern) {
         while (pi < pattern.length && pattern[pi] == c) { ++pi; ++width; }
         bool adjacent = pi < pattern.length && ((pattern[pi] >= 'A' && pattern[pi] <= 'Z') || (pattern[pi] >= 'a' && pattern[pi] <= 'z'));
         switch (c) {
-            case 'y':
+            case 'y': case 'Y':
                 auto begin = ti;
                 year = number(width, adjacent);
+                hasWeekYear = c == 'Y';
                 twoDigitYear = width <= 2 && ti - begin == 2 && input[begin] >= '0' && input[begin] <= '9';
                 break;
             case 'M': case 'L': month = width > 2 ? z8_date_parse_month(input, ti) : number(width, adjacent); break;
             case 'd': day = number(width, adjacent); useDayOfYear = false; explicitDay = true; break;
             case 'D': dayOfYear = number(width, adjacent); useDayOfYear = true; explicitDay = true; break;
-            case 'E': z8_date_parse_weekday(input, ti); hasWeekday = true; break;
-            case 'u': number(width, adjacent); hasWeekday = true; break;
+            case 'E': weekday = z8_date_parse_weekday(input, ti); hasWeekday = true; break;
+            case 'u': weekday = number(width, adjacent); hasWeekday = true; break;
+            case 'w': week = number(width, adjacent); weekKind = 1; break;
+            case 'W': week = number(width, adjacent); weekKind = 2; break;
+            case 'F': week = number(width, adjacent); weekKind = 3; break;
             case 'H': hour = number(width, adjacent); twelveHour = false; break;
             case 'k': hour = number(width, adjacent); if (hour == 24) hour = 0; twelveHour = false; break;
             case 'K': hour = number(width, adjacent); twelveHour = true; break;
@@ -274,7 +281,7 @@ Z8Date z8_date_parse(wstring input, wstring pattern) {
         }
     }
     if (quoted) throw new Exception("unterminated date format quote");
-    if (hasWeekday && !explicitDay) throw new Exception("weekday requires an explicit date");
+    if (explicitDay && (weekKind || hasWeekYear)) throw new Exception("mixed week and day date fields are unsupported");
     if (twelveHour && afternoon) hour += 12;
     SysTime centuryStart;
     if (twoDigitYear) {
@@ -286,10 +293,30 @@ Z8Date z8_date_parse(wstring input, wstring pattern) {
     }
     immutable(TimeZone) zone = hasOffset ? new immutable(SimpleTimeZone)(dur!"minutes"(offset)) : z8_date_timezone();
     auto result = new Z8Date(SysTime(DateTime(year, 1, 1), zone));
-    z8_date_set(result, year, useDayOfYear ? 1 : month, useDayOfYear ? dayOfYear : day, hour, minute, second, millisecond);
+    void setFromFields(int targetYear) {
+        auto kind = hasWeekYear ? 1 : weekKind ? weekKind : hasWeekday && !explicitDay ? 3 : 0;
+        if (!kind) {
+            z8_date_set(result, targetYear, useDayOfYear ? 1 : month, useDayOfYear ? dayOfYear : day, hour, minute, second, millisecond);
+            return;
+        }
+        auto targetMonth = kind == 1 ? 1 : month;
+        z8_date_set(result, targetYear, targetMonth, 1, 0, 0, 0);
+        auto first = result.value;
+        auto firstWeekday = (cast(int)first.dayOfWeek + 6) % 7;
+        int resolvedDay;
+        if (kind == 1 || kind == 2) resolvedDay = 1 - firstWeekday + (week - 1) * 7 + weekday - 1;
+        else if (week >= 0) resolvedDay = 1 + (weekday - 1 - firstWeekday + 7) % 7 + (week - 1) * 7;
+        else {
+            auto last = first.daysInMonth;
+            auto lastWeekday = (firstWeekday + last - 1) % 7;
+            resolvedDay = last - (lastWeekday - weekday + 1 + 7) % 7 + (week + 1) * 7;
+        }
+        z8_date_set(result, targetYear, targetMonth, resolvedDay, hour, minute, second, millisecond);
+    }
+    setFromFields(year);
     if (twoDigitYear && year == centuryStart.year && result.value < centuryStart) {
         year += 100;
-        z8_date_set(result, year, useDayOfYear ? 1 : month, useDayOfYear ? dayOfYear : day, hour, minute, second, millisecond);
+        setFromFields(year);
     }
     result.value.timezone = z8_date_timezone();
     return result;

@@ -48,6 +48,9 @@ void main() {
             auto pattern = "d MMMM yyyy hh:mm:ss a"w;
             auto reparsed = z8_date_parse(z8_date_toString(date, pattern), pattern);
             assert(z8_date_ticks(reparsed) == z8_date_ticks(date));
+            auto weekPattern = "YYYY-ww-u"w;
+            auto weekDate = z8_date_parse(z8_date_toString(date, weekPattern), weekPattern);
+            assert(z8_date_year(weekDate) == year && z8_date_month(weekDate) == month && z8_date_day(weekDate) == day);
         }
     }
     writefln("%08X", hash);
