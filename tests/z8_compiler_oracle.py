@@ -74,6 +74,11 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             file extracted = __EXTRACTED_CHILD__;
             if (archive.zip(folder) != archive || !archive.exists()) return 9;
             if (archive.unzip(destination) != archive || extracted.read() != "Привет 😀") return 10;
+            file temporary = file.createTempFile("z8-test-", "txt");
+            if (temporary.exists() || !temporary.fileName().startsWith("z8-test-") || temporary.extension() != "txt") return 12;
+            temporary.write("temp");
+            if (temporary.read() != "temp") return 13;
+            temporary.delete();
             archive.delete();
             destination.delete(true);
             folder.delete(true);

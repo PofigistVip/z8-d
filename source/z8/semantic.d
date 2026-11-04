@@ -485,6 +485,9 @@ class Checker {
                     fail("unsupported static string method", e.token);
                 }
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "file") {
+                    if (e.token.text == "createTempFile") {
+                        checkArguments(e, [ValueType.stringType, ValueType.stringType]); e.builtinCall = "z8_file_createTempFile"; return ValueType.fileType;
+                    }
                     if (e.token.text == "parse") {
                         checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_file_parse"; return ValueType.fileArray;
                     }

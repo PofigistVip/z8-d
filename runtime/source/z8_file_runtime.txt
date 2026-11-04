@@ -189,6 +189,32 @@ private Z8File z8_file_from_disk(string path) {
     result.time = z8_file_lastModified(result);
     return result;
 }
+private __gshared string[] z8_temp_paths;
+private __gshared Object z8_temp_lock;
+shared static this() { z8_temp_lock = new Object(); }
+shared static ~this() {
+    import std.file : exists, isFile, isSymlink, remove;
+    foreach (path; z8_temp_paths) {
+        try { if (exists(path) && isFile(path) && !isSymlink(path)) remove(path); }
+        catch (Exception) { }
+    }
+}
+Z8File z8_file_createTempFile(wstring prefix, wstring extension) {
+    import std.file : mkdirRecurse, tempDir;
+    import std.path : buildPath;
+    import std.uuid : randomUUID;
+    auto start = z8_string_required(prefix).to!string;
+    auto suffix = z8_string_required(extension).to!string;
+    if (start.canFind('/') || start.canFind('\\') || start.canFind(':')) throw new Exception("invalid temporary file prefix");
+    if (suffix.canFind('/') || suffix.canFind('\\') || suffix.canFind(':')) throw new Exception("invalid temporary file extension");
+    if (suffix.length && suffix[0] != '.') suffix = "." ~ suffix;
+    auto folder = buildPath(tempDir(), "z8-d");
+    mkdirRecurse(folder);
+    auto stamp = z8_date_toString(z8_date_now(), "yyyy-MM-dd HH-mm-ss"w).to!string;
+    auto path = buildPath(folder, start ~ stamp ~ "-" ~ randomUUID().to!string ~ suffix);
+    synchronized (z8_temp_lock) z8_temp_paths ~= path;
+    return z8_file_from_disk(path);
+}
 Z8File z8_file_parent(Z8File value) {
     import std.path : absolutePath, dirName;
     auto parent = dirName(absolutePath(z8_file_system_path(value)));
