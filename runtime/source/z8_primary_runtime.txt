@@ -10,6 +10,20 @@ class Z8Primary {
     Z8Guid guidValue;
     Z8Binary binaryValue;
     Z8Datespan datespanValue;
+
+    override bool opEquals(Object other) {
+        auto right = cast(Z8Primary)other;
+        if (right is null || kind != right.kind) return false;
+        final switch (kind) {
+            case Z8PrimaryKind.integer: return integerValue == right.integerValue;
+            case Z8PrimaryKind.boolean: return booleanValue == right.booleanValue;
+            case Z8PrimaryKind.decimal: return decimalValue == right.decimalValue;
+            case Z8PrimaryKind.text: return z8_string_equals(textValue, right.textValue);
+            case Z8PrimaryKind.guid: return z8_guid_compare!"=="(guidValue, right.guidValue);
+            case Z8PrimaryKind.binary: return binaryValue is right.binaryValue;
+            case Z8PrimaryKind.datespan: return z8_datespan_binary!"=="(datespanValue, right.datespanValue);
+        }
+    }
 }
 
 Z8Primary z8_primary_box(T)(T value) {
@@ -100,3 +114,32 @@ long z8_primary_hash(Z8Primary value) {
 }
 
 long z8_primary_hash_value(T)(T value) { return z8_primary_hash(z8_primary_box(value)); }
+
+bool z8_primary_is(T)(Z8Primary value) {
+    if (value is null) return false;
+    static if (is(T == Z8Primary)) return true;
+    else static if (is(T == long)) return value.kind == Z8PrimaryKind.integer;
+    else static if (is(T == bool)) return value.kind == Z8PrimaryKind.boolean;
+    else static if (is(T == Z8Decimal)) return value.kind == Z8PrimaryKind.decimal;
+    else static if (is(T == wstring)) return value.kind == Z8PrimaryKind.text;
+    else static if (is(T == Z8Guid)) return value.kind == Z8PrimaryKind.guid;
+    else static if (is(T == Z8Binary)) return value.kind == Z8PrimaryKind.binary;
+    else static if (is(T == Z8Datespan)) return value.kind == Z8PrimaryKind.datespan;
+    else static assert(0, "unsupported primary instanceof target");
+}
+
+Z8Optional!T z8_primary_cast(T)(Z8Primary value) if (is(T == long) || is(T == bool) || is(T == Z8Decimal)) {
+    if (value is null) return Z8Optional!T.init;
+    if (!z8_primary_is!T(value)) throw new Exception("invalid primary cast");
+    static if (is(T == long)) return z8_optional_wrap(value.integerValue);
+    else static if (is(T == bool)) return z8_optional_wrap(value.booleanValue);
+    else return z8_optional_wrap(value.decimalValue);
+}
+T z8_primary_cast(T)(Z8Primary value) if (is(T == wstring) || is(T == Z8Guid) || is(T == Z8Binary) || is(T == Z8Datespan)) {
+    if (value is null) return null;
+    if (!z8_primary_is!T(value)) throw new Exception("invalid primary cast");
+    static if (is(T == wstring)) return value.textValue;
+    else static if (is(T == Z8Guid)) return value.guidValue;
+    else static if (is(T == Z8Binary)) return value.binaryValue;
+    else return value.datespanValue;
+}

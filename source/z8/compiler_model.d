@@ -12,7 +12,7 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, decimalType, boolType, stringType, guidType, binaryType, datespanType, exceptionType, primaryType, selfType, intArray, decimalArray, boolArray, stringArray, selfArray, stringMap, nullType, nullableString, enumType, enumArray, optionalInt, optionalBool, optionalDecimal }
+enum ValueType { voidType, intType, decimalType, boolType, stringType, guidType, binaryType, datespanType, exceptionType, primaryType, selfType, intArray, decimalArray, boolArray, stringArray, primaryArray, selfArray, stringMap, nullType, nullableString, enumType, enumArray, optionalInt, optionalBool, optionalDecimal }
 enum NullableStringMode { none, required, nullAsEmpty }
 enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, guidLiteral, binaryLiteral, datespanLiteral, nullLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, instanceOf, unary, binary, conditional, elvis }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
@@ -27,6 +27,7 @@ class Expression {
     string targetClass;
     bool isField, instanceCall, fieldInitialization, newHasContainer;
     bool binaryNameField;
+    bool primaryCast, primaryInstanceOf;
     bool promoteToDecimal;
     bool boxPrimary;
     ValueType convertToString;
@@ -93,7 +94,7 @@ struct SourceUnit { string name, path, source; }
 struct GeneratedModule { string moduleName, relativePath, sourceName, source; }
 
 package bool isArray(ValueType type) {
-    return [ValueType.intArray, ValueType.decimalArray, ValueType.boolArray, ValueType.stringArray, ValueType.selfArray, ValueType.enumArray].canFind(type);
+    return [ValueType.intArray, ValueType.decimalArray, ValueType.boolArray, ValueType.stringArray, ValueType.primaryArray, ValueType.selfArray, ValueType.enumArray].canFind(type);
 }
 package bool hasObjectClass(ValueType type) { return type == ValueType.selfType || type == ValueType.selfArray || type == ValueType.enumType || type == ValueType.enumArray; }
 package bool isNullableReference(ValueType type) { return type == ValueType.selfType || type == ValueType.enumType || type == ValueType.exceptionType || type == ValueType.primaryType || type == ValueType.guidType || type == ValueType.binaryType || type == ValueType.datespanType || type == ValueType.stringMap || type == ValueType.nullableString || type == ValueType.stringType || isArray(type); }
@@ -146,6 +147,7 @@ package ValueType elementType(ValueType type) {
         case ValueType.decimalArray: return ValueType.decimalType;
         case ValueType.boolArray: return ValueType.boolType;
         case ValueType.stringArray: return ValueType.stringType;
+        case ValueType.primaryArray: return ValueType.primaryType;
         case ValueType.selfArray: return ValueType.selfType;
         case ValueType.enumArray: return ValueType.enumType;
         default: assert(0, "not an array");

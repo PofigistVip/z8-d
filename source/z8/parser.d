@@ -56,6 +56,7 @@ class Parser {
                 case ValueType.decimalType: return ValueType.decimalArray;
                 case ValueType.boolType: return ValueType.boolArray;
                 case ValueType.stringType: return ValueType.stringArray;
+                case ValueType.primaryType: return ValueType.primaryArray;
                 case ValueType.selfType: return ValueType.selfArray;
                 default: error("this array element type is not supported"); assert(0);
             }

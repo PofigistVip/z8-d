@@ -110,14 +110,15 @@ UTF-16, `line` и `column` отсчитываются с нуля. Пробел�
 `super.constructor()`. Автоматические массивы `auto`, атрибуты и выражение
 `container` пока не поддерживаются.
 Типы: `int` (64-битный знаковый), `decimal`, `bool`,
-`string`, `guid`, `binary`, `datespan`, `exception`, `primary`, одномерные массивы `int`, `decimal`, `bool`, `string`
+`string`, `guid`, `binary`, `datespan`, `exception`, `primary`, одномерные массивы `int`, `decimal`, `bool`, `string`, `primary`
 и пользовательских классов,
 а также `void` (для возвращаемого значения).
 `primary` принимает значения `int`, `bool`, `decimal`, `string`, `guid`, `binary`, `datespan` и `null`,
 поддерживает передачу в методы, возврат и методы `toString()` и `hashCode()`.
 Поля и локальные переменные `primary` требуют явного инициализатора: исходный
 компилятор при его отсутствии создаёт некомпилируемую Java с абстрактным `primary`.
-Массивы и отображения `primary`, а также приведения из `primary` пока не поддерживаются.
+Поддерживаются одномерные массивы `primary`, проверка `instanceof` и приведение
+к перечисленным типам. Отображения `primary` пока не поддерживаются.
 Для `guid` поддерживаются литералы, `Null`, `parse`, варианты `create`, сравнения,
 `major`, `minor`, `components`, `toString`, `hashCode` и передача через `primary`.
 `parse` пока принимает каноническую запись UUID и запись из 32 цифр; массивы

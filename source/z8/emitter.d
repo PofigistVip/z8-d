@@ -26,6 +26,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.decimalArray: return "Z8Array!Z8Decimal";
         case ValueType.boolArray: return "Z8Array!bool";
         case ValueType.stringArray: return "Z8Array!wstring";
+        case ValueType.primaryArray: return "Z8Array!Z8Primary";
         case ValueType.nullType: assert(0, "null has no concrete D type");
         case ValueType.nullableString: return "wstring";
         case ValueType.enumType: assert(objectClass !is null); return objectClass.emittedName;
@@ -201,8 +202,10 @@ private string emitExprRaw(Expression e) {
             if (e.inferredType == ValueType.stringMap) return "z8_invoke!\"z8_get\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             return "z8_array_at(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
         case ExprKind.castExpr:
+            if (e.primaryCast) return "z8_primary_cast!(" ~ dType(e.castType) ~ ")(" ~ emitExpr(e.left) ~ ")";
             return e.castType == ValueType.selfType ? "z8_cast!(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")" : emitExpr(e.left);
         case ExprKind.instanceOf:
+            if (e.primaryInstanceOf) return "z8_primary_is!(" ~ dType(e.castType) ~ ")(" ~ emitExpr(e.left) ~ ")";
             return "(cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ") !is null)";
         case ExprKind.unary:
             if (e.optionalDecimalUnary) return "(" ~ e.token.text ~ "z8_optional_require(" ~ emitExpr(e.left) ~ "))";

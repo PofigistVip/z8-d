@@ -22,6 +22,40 @@ public class PrimaryValues {
         if (value != null || choose(true) != 1) return 7;
         value = identity(-4294967297);
         if (value.hashCode() != 1 || value.toString() != "-4294967297") return 8;
+        if (!(value instanceof int) || (value instanceof string)) return 12;
+        int unboxed = (int)value;
+        if (unboxed != -4294967297) return 13;
+        try {
+            string invalid = (string)value;
+            return 14;
+        } catch (exception expectedCast) {}
+        value = "abc";
+        if (!(value instanceof primary) || !(value instanceof string) || (string)value != "abc") return 16;
+        value = true;
+        if (!(bool)value) return 17;
+        value = decimal.parse("1.20");
+        decimal amount = (decimal)value;
+        if (amount.toString() != "1.20") return 18;
+        guid identifier = guid.create(1);
+        value = identifier;
+        if (!(value instanceof guid) || (guid)value != identifier) return 19;
+        datespan duration = '1 02:03:04';
+        value = duration;
+        datespan restored = (datespan)value;
+        restored.setTotalSeconds(1);
+        if (duration.totalSeconds() != 1) return 20;
+        binary bytes = '1, 2';
+        value = bytes;
+        binary restoredBytes = (binary)value;
+        if (restoredBytes.length() != 2) return 21;
+        primary[] values = {1, true, "abc"};
+        values.add(1);
+        if (values.size() != 4 || !values.contains(1) || values.indexOf("abc") != 2) return 22;
+        if ((int)values.first() != 1 || (int)values.last() != 1) return 23;
+        values.remove(1);
+        if (values.size() != 3 || !(values.first() instanceof bool)) return 24;
+        value = null;
+        if ((value instanceof int) || (int)value != null) return 15;
         try {
             value = null;
             value.toString();

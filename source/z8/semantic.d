@@ -590,7 +590,7 @@ class Checker {
                         default: break;
                     }
                 } else if (isArray(receiver)) {
-                    if (receiver == ValueType.selfArray || receiver == ValueType.enumArray) {
+                    if (receiver == ValueType.selfArray || receiver == ValueType.enumArray || receiver == ValueType.primaryArray) {
                         e.objectClass = e.left.objectClass;
                         if (!["size", "isEmpty", "clear", "first", "last", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
                             fail("this method is not yet supported for object arrays", e.token);
@@ -605,7 +605,7 @@ class Checker {
                         case "first": case "last":
                             checkArguments(e, []);
                             if (receiver == ValueType.stringArray) return ValueType.nullableString;
-                            if (receiver == ValueType.selfArray || receiver == ValueType.enumArray) return elementType(receiver);
+                            if (receiver == ValueType.selfArray || receiver == ValueType.enumArray || receiver == ValueType.primaryArray) return elementType(receiver);
                             return optionalForArray(receiver);
                         case "get":
                             if (e.arguments.length != 1 || !matches(e.arguments[0], ValueType.intType)) fail("get requires an int index", e.token);
@@ -662,6 +662,11 @@ class Checker {
                 e.inferredType = array;
                 return array == ValueType.stringArray ? ValueType.nullableString : storedValueType(elementType(array));
             case ExprKind.castExpr:
+                if (typeOf(e.left) == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType,
+                    ValueType.stringType, ValueType.guidType, ValueType.binaryType, ValueType.datespanType].canFind(e.castType)) {
+                    e.primaryCast = true;
+                    return e.castType == ValueType.stringType ? ValueType.nullableString : storedValueType(e.castType);
+                }
                 if (e.castType == ValueType.selfType) {
                     auto target = resolveClass(currentProgram, e.token.text, e.token);
                     if (target.isEnum) fail("enum casts are not supported", e.token);
@@ -678,6 +683,22 @@ class Checker {
                 if (!matches(e.left, e.castType)) fail("unsupported type cast", e.token);
                 return e.castType;
             case ExprKind.instanceOf:
+                auto primarySource = typeOf(e.left);
+                if (primarySource == ValueType.primaryType) {
+                    switch (e.token.text) {
+                        case "int": e.castType = ValueType.intType; break;
+                        case "bool": e.castType = ValueType.boolType; break;
+                        case "decimal": e.castType = ValueType.decimalType; break;
+                        case "string": e.castType = ValueType.stringType; break;
+                        case "guid": e.castType = ValueType.guidType; break;
+                        case "binary": e.castType = ValueType.binaryType; break;
+                        case "datespan": e.castType = ValueType.datespanType; break;
+                        case "primary": e.castType = ValueType.primaryType; break;
+                        default: fail("unsupported primary instanceof target", e.token);
+                    }
+                    e.primaryInstanceOf = true;
+                    return ValueType.boolType;
+                }
                 auto target = resolveClass(currentProgram, e.token.text, e.token);
                 if (target.isEnum) fail("instanceof for enums is not supported", e.token);
                 auto sourceType = typeOf(e.left);
