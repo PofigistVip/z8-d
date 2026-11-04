@@ -1,0 +1,75 @@
+// The original primary class is the common base for Z8 scalar values.
+enum Z8PrimaryKind { integer, boolean, decimal, text }
+
+class Z8Primary {
+    Z8PrimaryKind kind;
+    long integerValue;
+    bool booleanValue;
+    Z8Decimal decimalValue;
+    wstring textValue;
+}
+
+Z8Primary z8_primary_box(T)(T value) {
+    static if (is(T == Z8Optional!long) || is(T == Z8Optional!bool) || is(T == Z8Optional!Z8Decimal)) {
+        return value.present ? z8_primary_box(value.value) : null;
+    } else static if (is(T == wstring)) {
+        if (value is null) return null;
+        auto boxed = new Z8Primary();
+        boxed.kind = Z8PrimaryKind.text;
+        boxed.textValue = value;
+        return boxed;
+    } else {
+        auto boxed = new Z8Primary();
+        static if (is(T == long)) { boxed.kind = Z8PrimaryKind.integer; boxed.integerValue = value; }
+        else static if (is(T == bool)) { boxed.kind = Z8PrimaryKind.boolean; boxed.booleanValue = value; }
+        else static if (is(T == Z8Decimal)) { boxed.kind = Z8PrimaryKind.decimal; boxed.decimalValue = value; }
+        else static assert(0, "unsupported primary value");
+        return boxed;
+    }
+}
+
+wstring z8_primary_to_string(Z8Primary value) {
+    if (value is null) throw new Exception("null primary");
+    final switch (value.kind) {
+        case Z8PrimaryKind.integer: return value.integerValue.to!string.to!wstring;
+        case Z8PrimaryKind.boolean: return value.booleanValue ? "true"w : "false"w;
+        case Z8PrimaryKind.decimal: return value.decimalValue.z8_string();
+        case Z8PrimaryKind.text: return value.textValue;
+    }
+}
+
+// Java BigInteger.hashCode hashes unsigned 32-bit magnitude words, most significant first.
+private uint z8_bigint_java_hash(BigInt number) {
+    auto negative = number < 0;
+    auto magnitude = negative ? -number : number;
+    auto base = BigInt("4294967296");
+    uint[] words;
+    while (magnitude != 0) {
+        words ~= (magnitude % base).to!string.to!uint;
+        magnitude /= base;
+    }
+    uint hash;
+    for (size_t i = words.length; i > 0; --i) hash = 31u * hash + words[i - 1];
+    return negative ? 0u - hash : hash;
+}
+
+long z8_primary_hash(Z8Primary value) {
+    if (value is null) throw new Exception("null primary");
+    uint hash;
+    final switch (value.kind) {
+        case Z8PrimaryKind.integer:
+            auto bits = cast(ulong)value.integerValue;
+            hash = cast(uint)(bits ^ (bits >> 32));
+            break;
+        case Z8PrimaryKind.boolean: hash = value.booleanValue ? 1231u : 1237u; break;
+        case Z8PrimaryKind.decimal:
+            hash = 31u * z8_bigint_java_hash(value.decimalValue.coefficient) + cast(uint)value.decimalValue.scale;
+            break;
+        case Z8PrimaryKind.text:
+            foreach (wchar c; value.textValue) hash = 31u * hash + c;
+            break;
+    }
+    return cast(long)cast(int)hash;
+}
+
+long z8_primary_hash_value(T)(T value) { return z8_primary_hash(z8_primary_box(value)); }

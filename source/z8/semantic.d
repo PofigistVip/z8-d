@@ -83,6 +83,8 @@ class Checker {
                 fail("static object and enum fields are not supported", field.name);
             if (field.type == ValueType.enumType && field.initializer is null)
                 fail("enum fields require an initializer", field.name);
+            if (field.type == ValueType.primaryType && field.initializer is null)
+                fail("primary fields require an initializer", field.name);
         }
         foreach (method; program.methods) {
             method.returnType = resolveDeclaredType(method.returnType, program, method.returnObjectName, method.name);
@@ -93,6 +95,10 @@ class Checker {
     private bool matches(Expression e, ValueType expected, Program expectedClass = null) {
         if (e.kind == ExprKind.arrayLiteral && (expected == ValueType.selfArray || expected == ValueType.enumArray)) e.objectClass = expectedClass;
         auto actual = typeOf(e, expected);
+        if (expected == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType,
+            ValueType.optionalInt, ValueType.optionalBool, ValueType.optionalDecimal, ValueType.stringType, ValueType.nullableString].canFind(actual)) {
+            e.boxPrimary = true; return true;
+        }
         if (isOptionalPrimitive(actual) && optionalBaseType(actual) == expected) {
             e.optionalRequired = true; return true;
         }
@@ -181,6 +187,7 @@ class Checker {
                     if (actual == ValueType.enumType && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                     if (actual == ValueType.enumArray && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                 } else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
+                else if (p.type == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.nullableString].canFind(actual)) { }
                 else if (p.type == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual)) weight += 100;
                 else applicable = false;
                 if (!applicable) break;
@@ -420,6 +427,9 @@ class Checker {
                     receiver = ValueType.stringType;
                 }
                 e.inferredType = receiver;
+                if ([ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType].canFind(receiver) && e.token.text == "hashCode") {
+                    checkArguments(e, []); e.builtinCall = "z8_primary_hash_value"; return ValueType.intType;
+                }
                 if (receiver == ValueType.selfType) {
                     auto owner = e.left.objectClass;
                     auto target = lookupMethod(owner, e.token.text);
@@ -429,6 +439,10 @@ class Checker {
                     if (!accessible(target.owner, target.isPublic, target.isProtected)) fail("method is not accessible", e.token);
                     e.instanceCall = true;
                     return checkCall(target, target.owner, e);
+                } else if (receiver == ValueType.primaryType) {
+                    checkArguments(e, []);
+                    if (e.token.text == "toString") { e.builtinCall = "z8_primary_to_string"; return ValueType.stringType; }
+                    if (e.token.text == "hashCode") { e.builtinCall = "z8_primary_hash"; return ValueType.intType; }
                 } else if (receiver == ValueType.stringType) {
                     switch (e.token.text) {
                         case "length": case "isEmpty": case "toString": case "trim": case "trimLeft": case "trimRight":
@@ -705,7 +719,7 @@ class Checker {
                     else if (op == ">") e.emittedOperator = ">=";
                     else if (op == ">=") e.emittedOperator = ">";
                 }
-                if (left != right || left == ValueType.voidType || left == ValueType.exceptionType || left == ValueType.selfType || left == ValueType.stringMap || isArray(left)) fail("operand type mismatch", e.token);
+                if (left != right || left == ValueType.voidType || left == ValueType.exceptionType || left == ValueType.primaryType || left == ValueType.selfType || left == ValueType.stringMap || isArray(left)) fail("operand type mismatch", e.token);
                 if (["==", "!="].canFind(op)) return ValueType.boolType;
                 if ((left == ValueType.intType || left == ValueType.decimalType || left == ValueType.stringType) && ["<", ">", "<=", ">="].canFind(op)) return ValueType.boolType;
                 if (left == ValueType.stringType && op == "+") { e.inferredType = ValueType.stringType; return ValueType.stringType; }
@@ -789,6 +803,7 @@ class Checker {
                 if (s.token.text in variables) fail("duplicate or shadowed variable", s.token);
                 s.type = resolveDeclaredType(s.type, currentProgram, s.objectName, s.token);
                 if (s.type == ValueType.enumType && s.expression is null && !allowUninitializedEnum) fail("enum variables require an initializer", s.token);
+                if (s.type == ValueType.primaryType && s.expression is null) fail("primary variables require an initializer", s.token);
                 if (s.type == ValueType.voidType) fail("variable cannot be void", s.token);
                 if (hasObjectClass(s.type)) s.objectClass = resolveClass(currentProgram, s.objectName, s.token);
                 if (s.expression !is null && !matchesStored(s.expression, s.type, s.objectClass)) fail("initializer type mismatch", s.token);

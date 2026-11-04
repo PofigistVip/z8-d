@@ -37,6 +37,7 @@ class Parser {
             case "bool": result = ValueType.boolType; break;
             case "string": result = ValueType.stringType; break;
             case "exception": result = ValueType.exceptionType; break;
+            case "primary": result = ValueType.primaryType; break;
             default:
                 if (token.kind == TokenKind.identifier) { result = ValueType.selfType; parsedObjectName = token.text; }
                 else throw new CompileException("unsupported type", token.position);

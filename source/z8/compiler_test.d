@@ -10,6 +10,9 @@ private void rejects(string source) {
 }
 
 unittest {
+    compile("class A { static primary f() { return 1; } }");
+    rejects("class A { static void f() { primary value; } }");
+    rejects("class A { static int f(primary x) { return 1; } static int f(int x) { return 2; } static int g() { return f(1); } }");
     // The facade continues to expose the parser, checker and model types.
     auto parsed = (new Parser("class PublicApi {} ")).parse();
     auto checker = new Checker;

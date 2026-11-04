@@ -15,6 +15,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.decimalType: return "Z8Decimal";
         case ValueType.voidType: return "void"; case ValueType.stringType: return "wstring";
         case ValueType.exceptionType: return "Throwable";
+        case ValueType.primaryType: return "Z8Primary";
         case ValueType.selfType: assert(objectClass !is null); return objectClass.emittedName;
         case ValueType.selfArray: assert(objectClass !is null); return "Z8Array!(" ~ objectClass.emittedName ~ ")";
         case ValueType.stringMap: return "Z8StringMap";
@@ -94,6 +95,7 @@ private string emitExpr(Expression e) {
         value = "cast(" ~ dType(e.inferredType, e.objectClass) ~ ")(" ~ value ~ ")";
     if (e.promoteToDecimal) value = "z8_decimal_from_int(" ~ value ~ ")";
     if (e.optionalWrap) value = "z8_optional_wrap(" ~ value ~ ")";
+    if (e.boxPrimary) value = "z8_primary_box(" ~ value ~ ")";
     if (e.convertToString == ValueType.intType) return "(" ~ value ~ ").to!string.to!wstring";
     if (e.convertToString == ValueType.boolType) return "(" ~ value ~ " ? \"true\"w : \"false\"w)";
     if (e.convertToString == ValueType.decimalType) return "(" ~ value ~ ").z8_string()";
@@ -129,6 +131,8 @@ private string emitExprRaw(Expression e) {
         case ExprKind.memberCall:
             if (e.builtinCall.length) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                if (e.builtinCall == "z8_primary_to_string" || e.builtinCall == "z8_primary_hash" || e.builtinCall == "z8_primary_hash_value")
+                    return e.builtinCall ~ "(" ~ emitExpr(e.left) ~ ")";
                 return e.builtinCall ~ "(" ~ args.join(", ") ~ ")";
             }
             if (e.optionalDecimalReceiver) {
@@ -302,6 +306,7 @@ private string emitSimple(Statement s) {
 }
 private string defaultValue(ValueType type, Program objectClass = null, bool hasContainer = false) {
     if (type == ValueType.exceptionType) return "new Exception(null)";
+    if (type == ValueType.primaryType) return "null";
     if (type == ValueType.decimalType) return "z8_decimal_from_int(0)";
     if (type == ValueType.selfType) return "z8_new!(" ~ dType(type, objectClass) ~ ")(" ~ (hasContainer ? "this" : "") ~ ")";
     if (type == ValueType.stringMap) return "new Z8StringMap()";

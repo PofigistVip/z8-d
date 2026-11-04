@@ -1,0 +1,32 @@
+public class PrimaryValues {
+    private static primary identity(primary value) { return value; }
+    private static int choose(primary value) { return 1; }
+    private static int choose(int value) { return 2; }
+    public static int run() {
+        primary value = 42;
+        if (value.toString() != "42" || value.hashCode() != 42) return 1;
+        value = true;
+        if (value.toString() != "true" || value.hashCode() != 1231) return 2;
+        value = "abc";
+        if (value.toString() != "abc" || value.hashCode() != 96354) return 3;
+        int direct = 42;
+        if (direct.hashCode() != 42 || "abc".hashCode() != 96354 || true.hashCode() != 1231) return 11;
+        value = decimal.parse("1.20");
+        if (value.toString() != "1.20" || value.hashCode() != 3722) return 4;
+        value = null;
+        if (value != null) return 5;
+        value = int.parse("");
+        if (value != null) return 6;
+        string missing = null;
+        value = identity(missing);
+        if (value != null || choose(true) != 1) return 7;
+        value = identity(-4294967297);
+        if (value.hashCode() != 1 || value.toString() != "-4294967297") return 8;
+        try {
+            value = null;
+            value.toString();
+            return 9;
+        } catch (exception expected) {}
+        return 173;
+    }
+}
