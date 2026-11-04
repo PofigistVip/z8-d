@@ -120,12 +120,22 @@ class Checker {
         }
     }
     private Method findConversion(Program owner, ValueType target, Program targetClass = null) {
+        Method best;
+        size_t bestDistance = size_t.max;
         for (auto current = owner; current !is null; current = current.baseClass)
-            foreach (method; current.methods)
-                if (method.isCastOperator && method.returnType == target &&
-                    (target != ValueType.selfType || (targetClass !is null && method.returnObjectClass is targetClass)) &&
-                    accessible(method.owner, method.isPublic, method.isProtected)) return method;
-        return null;
+            foreach (method; current.methods) {
+                if (!method.isCastOperator || method.returnType != target ||
+                    !accessible(method.owner, method.isPublic, method.isProtected)) continue;
+                if (target != ValueType.selfType) return method;
+                if (targetClass is null) continue;
+                size_t distance;
+                for (auto result = method.returnObjectClass; result !is null; result = result.baseClass, ++distance) {
+                    if (result !is targetClass) continue;
+                    if (distance < bestDistance) { best = method; bestDistance = distance; }
+                    break;
+                }
+            }
+        return best;
     }
     private bool matches(Expression e, ValueType expected, Program expectedClass = null) {
         if (e.kind == ExprKind.arrayLiteral && (expected == ValueType.selfArray || expected == ValueType.enumArray)) e.objectClass = expectedClass;

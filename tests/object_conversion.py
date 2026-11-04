@@ -12,9 +12,9 @@ with tempfile.TemporaryDirectory() as directory:
     temp = Path(directory)
     source = temp / "source"
     source.mkdir()
-    for name in ("ConversionTarget", "ObjectConversion", "ConversionDerived"):
+    for name in ("ConversionTarget", "ObjectConversion", "ConversionDerived", "ConversionMid", "ConversionLeaf", "SubtypeConversion"):
         shutil.copy2(fixtures / (name + ".bl"), source)
-    for name, expected in (("ObjectConversion", 193), ("ConversionDerived", 195)):
+    for name, expected in (("ObjectConversion", 193), ("ConversionDerived", 195), ("SubtypeConversion", 197)):
         executable = temp / (name + (".exe" if os.name == "nt" else ""))
         subprocess.run([str(compiler), "build", str(source), name + ".run", str(executable)], check=True)
         result = subprocess.run([str(executable)])

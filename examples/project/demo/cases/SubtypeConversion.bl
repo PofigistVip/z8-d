@@ -1,0 +1,18 @@
+public class SubtypeConversion {
+    static int effects;
+    public operator ConversionMid() { effects += 1; return new ConversionMid; }
+    public operator ConversionLeaf() { effects += 10; return new ConversionLeaf; }
+    public static int inspect(ConversionTarget value) { return value.number; }
+    public static int run() {
+        effects = 0;
+        SubtypeConversion source = new SubtypeConversion;
+        ConversionTarget first = source;
+        if (effects != 1 || first.number != 17) return 1;
+        ConversionTarget second = (ConversionTarget)source;
+        if (effects != 2 || second.number != 17) return 2;
+        if (inspect(source) != 17 || effects != 3) return 3;
+        ConversionLeaf leaf = source;
+        if (leaf.number != 17 || effects != 13) return 4;
+        return 197;
+    }
+}
