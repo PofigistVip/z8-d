@@ -202,7 +202,7 @@ unittest {
     rejects("class A { static int[] f() { return {1, false}; } }");
     rejects("class A { static int f(int[] x) { return 1; } static int g() { return f({1}); } }");
     rejects("class A { static void f() { int[] x; x.clear(1); } }");
-    rejects("class A { static decimal f() { decimal[] x; return x.first() + 1.0; } }");
+    compile("class A { static decimal f() { decimal[] x; return x.first() + 1.0; } }");
     rejects("class A { static int f() { int[] x; return x.first() ?: true; } }");
     rejects("class A { static void f() { int[] x; x.add(true, 2); } }");
     rejects("class A { static void f() { int[] x; x.contains(true); } }");

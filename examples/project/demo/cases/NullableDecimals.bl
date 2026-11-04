@@ -1,0 +1,27 @@
+public class NullableDecimals {
+    private static decimal field = null;
+    private static int effects;
+    private static decimal pass(decimal value) { return value; }
+    private static decimal missing() { return null; }
+    private static decimal effect() { effects += 1; return 2.0; }
+    private static int effectInt() { effects += 1; return 2; }
+    public static int run() {
+        decimal value = null;
+        if (value != null || field != null || pass(value) != null) return 1;
+        decimal casted = (decimal)value;
+        decimal chosen = true ? value : 3;
+        if (casted != null || chosen != null || (value ?: missing()) != null) return 2;
+        decimal[] empty;
+        value = empty.first();
+        if (value != null || (value ?: 3).toString() != "3") return 3;
+        try { decimal ignored = value + effect(); return 4; } catch (exception expected) { if (effects != 1) return 5; }
+        try { decimal ignored = value + effectInt(); return 6; } catch (exception expectedMixed) { if (effects != 2) return 7; }
+        decimal one = 1.0;
+        if (one == value || !(one != value) || !(one < value) || one > value) return 8;
+        if (1 == value) return 9;
+        value = 4;
+        value += 2;
+        if (value.toString() != "6" || (value ?: 3).toString() != "6") return 10;
+        return 151;
+    }
+}
