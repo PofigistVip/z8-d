@@ -1,0 +1,5 @@
+public class LifecyclePrefix {
+    public LifecycleNode a = bLong;
+    public LifecycleNode b = LifecycleFactory.make(1);
+    public LifecycleNode bLong = LifecycleFactory.make(2);
+}

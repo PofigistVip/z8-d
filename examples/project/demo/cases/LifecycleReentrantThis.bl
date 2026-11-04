@@ -1,0 +1,4 @@
+public class LifecycleReentrantThis {
+    public LifecycleTrigger worker;
+    public LifecycleNode choice = worker.buildThis();
+}

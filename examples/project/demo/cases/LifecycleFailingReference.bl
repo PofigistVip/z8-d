@@ -1,0 +1,4 @@
+public class LifecycleFailingReference {
+    public LifecycleNode broken = LifecycleFactory.explode();
+    public int value = 7;
+}

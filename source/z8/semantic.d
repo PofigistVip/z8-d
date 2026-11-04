@@ -336,6 +336,7 @@ class Checker {
                 e.objectClass = currentProgram.baseClass;
                 return ValueType.selfType;
             case ExprKind.newSelf:
+                e.newHasContainer = !staticContext;
                 e.objectClass = resolveClass(currentProgram, e.token.text, e.token);
                 if (e.objectClass.isEnum) fail("cannot instantiate an enum", e.token);
                 return ValueType.selfType;
@@ -784,6 +785,7 @@ class Checker {
                 foreach (child; s.children) { auto childReturns = checkStatement(child); returns = returns || childReturns; }
                 variables = old; objectVariables = oldObjects; return returns;
             case StmtKind.variable:
+                s.hasContainer = !staticContext;
                 if (s.token.text in variables) fail("duplicate or shadowed variable", s.token);
                 s.type = resolveDeclaredType(s.type, currentProgram, s.objectName, s.token);
                 if (s.type == ValueType.enumType && s.expression is null && !allowUninitializedEnum) fail("enum variables require an initializer", s.token);

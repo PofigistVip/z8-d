@@ -1,0 +1,38 @@
+public class LifecyclePhases {
+    public static int run() {
+        LifecycleEvents.events = 0;
+        LifecycleOwner owner;
+        if (owner.observed != 7 || LifecycleEvents.events != 3) return 1;
+        if (owner.child.read() != 2 || LifecycleEvents.events != 324) return 2;
+        LifecycleReentrant reentrant;
+        try { LifecycleNode ignored = reentrant.choice; return 3; }
+        catch (exception expected) { }
+        if (reentrant.choice != null) return 4;
+        LifecycleReentrantExplicit explicitValue;
+        try { LifecycleNode ignored = explicitValue.choice; return 5; }
+        catch (exception expectedExplicit) { }
+        if (explicitValue.choice != null) return 6;
+        LifecycleReentrantThis selfValue;
+        try { LifecycleNode ignored = selfValue.choice; return 7; }
+        catch (exception expectedThis) { }
+        if (selfValue.choice != null) return 8;
+        LifecycleAliasChild aliases;
+        aliases.a.value = 6;
+        if (aliases.z.value != 6) return 9;
+        LifecycleEvents.events = 0;
+        LifecyclePrefix prefix;
+        LifecycleNode chosen = prefix.a;
+        if (chosen == null || LifecycleEvents.events != 12) return 10;
+        LifecycleEvents.events = 0;
+        LifecycleFailingReference failedReference;
+        try { int ignored = failedReference.value; return 11; } catch (exception expectedFirst) { }
+        if (LifecycleEvents.events != 1) return 12;
+        try { int ignored = failedReference.value; return 13; } catch (exception expectedSecond) { }
+        if (failedReference.broken != null || LifecycleEvents.events != 1) return 14;
+        LifecycleEvents.events = 0;
+        LifecycleFailingConstructor failedConstructor;
+        try { int ignored = failedConstructor.value; return 15; } catch (exception expectedConstructor) { }
+        if (failedConstructor.value != 7 || LifecycleEvents.events != 1) return 16;
+        return 169;
+    }
+}

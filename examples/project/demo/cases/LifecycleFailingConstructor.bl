@@ -1,0 +1,7 @@
+public class LifecycleFailingConstructor {
+    public int value = 7;
+    protected void constructor() {
+        LifecycleEvents.mark(1);
+        throw "constructor failed";
+    }
+}

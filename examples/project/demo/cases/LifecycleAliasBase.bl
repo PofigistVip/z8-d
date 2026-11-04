@@ -1,0 +1,3 @@
+public class LifecycleAliasBase {
+    public LifecycleNode z = new LifecycleNode;
+}

@@ -1,0 +1,10 @@
+public class LifecycleFactory {
+    public static LifecycleNode make(int value) {
+        LifecycleEvents.mark(value);
+        return new LifecycleNode;
+    }
+    public static LifecycleNode explode() {
+        LifecycleEvents.mark(1);
+        throw "reference initialization failed";
+    }
+}

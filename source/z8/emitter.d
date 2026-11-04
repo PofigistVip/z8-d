@@ -4,7 +4,7 @@ import std.algorithm : canFind, sort;
 import std.array : join;
 import std.conv : to;
 import std.format : format;
-import std.string : replace;
+import std.string : replace, startsWith;
 import z8.compiler_model;
 import z8.runtime_source : runtimeSource;
 
@@ -99,7 +99,7 @@ private string emitExpr(Expression e) {
     return value;
 }
 private string emitReceiver(Expression e) {
-    if (e.kind == ExprKind.selfRef || e.kind == ExprKind.superRef) return "(" ~ emitExpr(e) ~ ")";
+    if (e.kind == ExprKind.superRef) return "(" ~ emitExpr(e) ~ ")";
     return "z8_nonnull(" ~ emitExpr(e) ~ (e.fieldInitialization ? ", 0" : "") ~ ")";
 }
 private string emitExprRaw(Expression e) {
@@ -118,7 +118,7 @@ private string emitExprRaw(Expression e) {
         case ExprKind.variable: return e.isField ? (e.targetClass.length ? e.targetClass ~ ".f_" : "this.f_") ~ e.token.text : "v_" ~ e.token.text;
         case ExprKind.selfRef: return "this";
         case ExprKind.superRef: return "super";
-        case ExprKind.newSelf: return "z8_new!(" ~ e.objectClass.emittedName ~ ")()";
+        case ExprKind.newSelf: return "z8_new!(" ~ e.objectClass.emittedName ~ ")(" ~ (e.newHasContainer ? "this" : "") ~ ")";
         case ExprKind.field:
             if (e.enumConstant) return e.targetClass ~ ".e_" ~ e.token.text;
             return (e.targetClass.length ? e.targetClass : emitReceiver(e.left)) ~ ".f_" ~ e.token.text;
@@ -281,7 +281,7 @@ private string emitStatement(Statement s) {
 private string emitSimple(Statement s) {
     if (s.kind == StmtKind.variable)
         return dStorageType(s.type, s.objectClass) ~ " v_" ~ s.token.text ~ " = " ~
-            (s.expression !is null ? emitExpr(s.expression) : s.type == ValueType.intType ? "z8_optional_wrap(0L)" : s.type == ValueType.boolType ? "z8_optional_wrap(false)" : s.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(s.type, s.objectClass));
+            (s.expression !is null ? emitExpr(s.expression) : s.type == ValueType.intType ? "z8_optional_wrap(0L)" : s.type == ValueType.boolType ? "z8_optional_wrap(false)" : s.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(s.type, s.objectClass, s.hasContainer));
     if (s.kind == StmtKind.expressionStmt) return emitExpr(s.expression);
     assert(s.kind == StmtKind.assignment);
     if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.stringMap)
@@ -299,10 +299,10 @@ private string emitSimple(Statement s) {
         return "z8_string_add_assign(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
     return name ~ " " ~ s.assignmentOperator ~ " " ~ emitExpr(s.expression);
 }
-private string defaultValue(ValueType type, Program objectClass = null) {
+private string defaultValue(ValueType type, Program objectClass = null, bool hasContainer = false) {
     if (type == ValueType.exceptionType) return "new Exception(null)";
     if (type == ValueType.decimalType) return "z8_decimal_from_int(0)";
-    if (type == ValueType.selfType) return "z8_new!(" ~ dType(type, objectClass) ~ ")()";
+    if (type == ValueType.selfType) return "z8_new!(" ~ dType(type, objectClass) ~ ")(" ~ (hasContainer ? "this" : "") ~ ")";
     if (type == ValueType.stringMap) return "new Z8StringMap()";
     if (isArray(type)) return "new " ~ dType(type, objectClass) ~ "()";
     if (type == ValueType.intType) return "0";
@@ -311,7 +311,7 @@ private string defaultValue(ValueType type, Program objectClass = null) {
 }
 private bool referencesField(Expression expression, string name) {
     if (expression is null) return false;
-    if ((expression.kind == ExprKind.variable || expression.kind == ExprKind.field) && expression.token.text == name) return true;
+    if ((expression.kind == ExprKind.variable || expression.kind == ExprKind.field) && expression.token.text.startsWith(name)) return true;
     if (referencesField(expression.left, name) || referencesField(expression.right, name) || referencesField(expression.third, name)) return true;
     foreach (argument; expression.arguments) if (referencesField(argument, name)) return true;
     return false;
@@ -367,7 +367,7 @@ package string emitPrograms(Program[] programs) {
         foreach (field; program.fields) if (!field.isStatic && field.initializer is null) {
             auto initial = field.type == ValueType.intType ? "z8_optional_wrap(0L)" :
                 field.type == ValueType.boolType ? "z8_optional_wrap(false)" :
-                field.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(field.type, field.objectClass);
+                field.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(field.type, field.objectClass, true);
             result ~= "this.f_" ~ field.name.text ~ " = " ~ initial ~ ";\n";
         }
         result ~= "}\noverride void z8_init_references() {\n";

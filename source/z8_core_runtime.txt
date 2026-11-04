@@ -33,8 +33,11 @@ private auto z8_nullable_string_call(string name, Args...)(wstring value, Args a
 class Z8Object {
     private int z8_stage = -1;
     private bool z8_allocated;
+    private Z8Object z8_container;
 
     final void z8_ensure(int requested = 1) {
+        if (z8_container !is null && z8_container.z8_stage < requested)
+            z8_container.z8_ensure(requested);
         if (!z8_allocated) {
             z8_allocate_fields();
             z8_allocated = true;
@@ -56,7 +59,11 @@ class Z8Object {
     void z8_init_values() {}
     void z8_call_constructor() {}
 }
-private T z8_new(T)() { return new T(); }
+private T z8_new(T)(Z8Object container = null) {
+    auto value = new T();
+    value.z8_container = container;
+    return value;
+}
 private T z8_nonnull(T)(T value, int requested = 1) {
     if (value is null) throw new Exception("null reference");
     static if (is(T : Z8Object)) value.z8_ensure(requested);

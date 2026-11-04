@@ -25,7 +25,7 @@ class Expression {
     Expression[] arguments;
     ValueType inferredType;
     string targetClass;
-    bool isField, instanceCall, fieldInitialization;
+    bool isField, instanceCall, fieldInitialization, newHasContainer;
     bool promoteToDecimal;
     ValueType convertToString;
     ValueType castType;
@@ -53,7 +53,7 @@ class Statement {
     Statement initial, step;
     string assignmentOperator;
     Token catchName;
-    bool hasCatch, hasFinally;
+    bool hasCatch, hasFinally, hasContainer;
     string objectName;
     Program objectClass;
     this(StmtKind kind, Token token) { this.kind = kind; this.token = token; }

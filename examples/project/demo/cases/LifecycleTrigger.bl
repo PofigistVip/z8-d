@@ -1,0 +1,17 @@
+public class LifecycleTrigger {
+    public int marker;
+    public LifecycleNode build() {
+        LifecycleNode node;
+        node.value = 1;
+        return node;
+    }
+    public LifecycleNode buildExplicit() {
+        LifecycleNode node = new LifecycleNode;
+        node.value = 1;
+        return node;
+    }
+    public LifecycleNode buildThis() {
+        int ignored = this.marker;
+        return new LifecycleNode;
+    }
+}

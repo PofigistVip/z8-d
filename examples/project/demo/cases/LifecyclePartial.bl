@@ -1,0 +1,5 @@
+public class LifecyclePartial {
+    public int value = LifecycleEvents.mark(2);
+    protected void constructor() { LifecycleEvents.mark(4); }
+    public int read() { return value ?: 7; }
+}
