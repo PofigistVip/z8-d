@@ -113,6 +113,17 @@ void main() {
     subprocess.run(["dmd", str(generated), "-of=" + str(binary)], cwd=directory, check=True)
     subprocess.run([str(binary)], cwd=directory, check=True)
 
+    index_file = directory / "NullableIndex.bl"
+    index_file.write_text("""class NullableIndex { static bool run() {
+        int[] values = {null}; values[0] = 3; values[0] += 2;
+        decimal[] decimals = {null}; decimals[0] = 1.5; decimals[0] += 2;
+        return values[0] == 5 && decimals[0].toString() == "3.5";
+    } }""", encoding="utf-8")
+    index_source = subprocess.check_output([str(exe), "compile", str(index_file)], text=True, encoding="utf-8")
+    generated.write_text(index_source + "\nvoid main() { assert(Z8_NullableIndex.m_run()); }\n", encoding="utf-8")
+    subprocess.run(["dmd", str(generated), "-of=" + str(binary)], cwd=directory, check=True)
+    subprocess.run([str(binary)], cwd=directory, check=True)
+
     project = subprocess.run(
         [str(exe), "project", str(root / "examples" / "project")],
         capture_output=True, text=True, encoding="utf-8", check=True,
@@ -140,7 +151,7 @@ void main() {
     )
     assert built.returncode == 0, built.stderr
     assert subprocess.run([str(executable)], cwd=directory).returncode == 59
-    for entry, expected in [("demo.cases.Arithmetic.run", 37), ("demo.cases.Text.run", 41), ("demo.cases.Flow.run", 11), ("demo.cases.DecimalArray.run", 47), ("demo.cases.Overloads.run", 53), ("demo.cases.OverloadUser.run", 53), ("demo.cases.Rounding.run", 61), ("demo.cases.PrimitiveParse.run", 67), ("demo.cases.ArrayOperations.run", 54), ("demo.cases.StaticState.run", 70), ("demo.cases.StaticUser.run", 71), ("demo.cases.InstanceOverloads.run", 81), ("demo.cases.IntegerMethods.run", 89), ("demo.cases.ArrayAdvanced.run", 97), ("demo.cases.ObjectArrays.run", 13), ("demo.cases.InheritedOverloads.run", 99), ("demo.cases.StringMap.run", 103), ("demo.cases.ObjectCasts.run", 14), ("demo.cases.NullObjects.run", 107), ("demo.cases.InstanceChecks.run", 109), ("demo.cases.ElvisObjects.run", 113), ("demo.cases.EnumCases.run", 127), ("demo.cases.NullablePrimitives.run", 131), ("demo.cases.NullableStrings.run", 137), ("demo.cases.NullableIntegers.run", 139), ("demo.cases.NullableBooleans.run", 149), ("demo.cases.NullableDecimals.run", 151)]:
+    for entry, expected in [("demo.cases.Arithmetic.run", 37), ("demo.cases.Text.run", 41), ("demo.cases.Flow.run", 11), ("demo.cases.DecimalArray.run", 47), ("demo.cases.Overloads.run", 53), ("demo.cases.OverloadUser.run", 53), ("demo.cases.Rounding.run", 61), ("demo.cases.PrimitiveParse.run", 67), ("demo.cases.ArrayOperations.run", 54), ("demo.cases.StaticState.run", 70), ("demo.cases.StaticUser.run", 71), ("demo.cases.InstanceOverloads.run", 81), ("demo.cases.IntegerMethods.run", 89), ("demo.cases.ArrayAdvanced.run", 97), ("demo.cases.ObjectArrays.run", 13), ("demo.cases.InheritedOverloads.run", 99), ("demo.cases.StringMap.run", 103), ("demo.cases.ObjectCasts.run", 14), ("demo.cases.NullObjects.run", 107), ("demo.cases.InstanceChecks.run", 109), ("demo.cases.ElvisObjects.run", 113), ("demo.cases.EnumCases.run", 127), ("demo.cases.NullablePrimitives.run", 131), ("demo.cases.NullableStrings.run", 137), ("demo.cases.NullableIntegers.run", 139), ("demo.cases.NullableBooleans.run", 149), ("demo.cases.NullableDecimals.run", 151), ("demo.cases.NullableArrays.run", 157)]:
         built = subprocess.run([str(exe), "build", str(root / "examples" / "project"), entry, str(executable)],
                                capture_output=True, text=True, encoding="utf-8")
         assert built.returncode == 0, built.stderr

@@ -96,7 +96,7 @@ private bool isArray(ValueType type) {
     return [ValueType.intArray, ValueType.decimalArray, ValueType.boolArray, ValueType.stringArray, ValueType.selfArray, ValueType.enumArray].canFind(type);
 }
 private bool hasObjectClass(ValueType type) { return type == ValueType.selfType || type == ValueType.selfArray || type == ValueType.enumType || type == ValueType.enumArray; }
-private bool isNullableReference(ValueType type) { return type == ValueType.selfType || type == ValueType.enumType || type == ValueType.stringMap || type == ValueType.nullableString || type == ValueType.stringType || isArray(type); }
+private bool isNullableReference(ValueType type) { return type == ValueType.selfType || type == ValueType.enumType || type == ValueType.exceptionType || type == ValueType.stringMap || type == ValueType.nullableString || type == ValueType.stringType || isArray(type); }
 private ValueType storedValueType(ValueType type) {
     if (type == ValueType.intType) return ValueType.optionalInt;
     if (type == ValueType.boolType) return ValueType.optionalBool;
@@ -775,7 +775,7 @@ class Checker {
             case ExprKind.arrayLiteral:
                 if (!isArray(expected)) fail("array initializer requires an array type", e.token);
                 foreach (element; e.arguments)
-                    if (!matches(element, elementType(expected), e.objectClass)) fail("array element type mismatch", element.token);
+                    if (!matchesStored(element, elementType(expected), e.objectClass)) fail("array element type mismatch", element.token);
                 e.inferredType = expected; return expected;
             case ExprKind.variable:
                 auto variable = e.token.text in variables;
@@ -981,12 +981,12 @@ class Checker {
                             return optionalForArray(receiver);
                         case "get":
                             if (e.arguments.length != 1 || !matches(e.arguments[0], ValueType.intType)) fail("get requires an int index", e.token);
-                            return receiver == ValueType.stringArray ? ValueType.nullableString : elementType(receiver);
+                            return receiver == ValueType.stringArray ? ValueType.nullableString : storedValueType(elementType(receiver));
                         case "add":
                             if (e.arguments.length == 1) {
-                                if (!matches(e.arguments[0], elementType(receiver), e.left.objectClass)) fail("add requires an element of the array type", e.token);
+                                if (!matchesStored(e.arguments[0], elementType(receiver), e.left.objectClass)) fail("add requires an element of the array type", e.token);
                             } else if (e.arguments.length == 2) {
-                                if (!matches(e.arguments[0], ValueType.intType) || !matches(e.arguments[1], elementType(receiver), e.left.objectClass))
+                                if (!matches(e.arguments[0], ValueType.intType) || !matchesStored(e.arguments[1], elementType(receiver), e.left.objectClass))
                                     fail("add requires an int index and an element of the array type", e.token);
                             } else fail("incorrect argument count", e.token);
                             return receiver;
@@ -1005,17 +1005,17 @@ class Checker {
                             auto argType = typeOf(e.arguments[0]);
                             if (argType == receiver) {
                                 if (!matches(e.arguments[0], receiver, e.left.objectClass)) fail("removeAll requires an array of the same type", e.token);
-                            } else if (!matches(e.arguments[0], elementType(receiver), e.left.objectClass)) fail("removeAll requires an element or array of the same type", e.token);
+                            } else if (!matchesStored(e.arguments[0], elementType(receiver), e.left.objectClass)) fail("removeAll requires an element or array of the same type", e.token);
                             return receiver;
                         case "contains": case "indexOf": case "remove":
-                            if (e.arguments.length != 1 || !matches(e.arguments[0], elementType(receiver), e.left.objectClass)) fail("method requires an element of the array type", e.token);
+                            if (e.arguments.length != 1 || !matchesStored(e.arguments[0], elementType(receiver), e.left.objectClass)) fail("method requires an element of the array type", e.token);
                             return e.token.text == "indexOf" ? ValueType.intType : ValueType.boolType;
                         case "removeAt":
                             if (e.arguments.length != 1 || !matches(e.arguments[0], ValueType.intType)) fail("removeAt requires an int index", e.token);
-                            return receiver == ValueType.stringArray ? ValueType.nullableString : elementType(receiver);
+                            return receiver == ValueType.stringArray ? ValueType.nullableString : storedValueType(elementType(receiver));
                         case "set":
                             if (e.arguments.length != 2 || !matches(e.arguments[0], ValueType.intType) ||
-                                !matches(e.arguments[1], elementType(receiver), e.left.objectClass)) fail("set requires an int index and an element of the array type", e.token);
+                                !matchesStored(e.arguments[1], elementType(receiver), e.left.objectClass)) fail("set requires an int index and an element of the array type", e.token);
                             return ValueType.voidType;
                         default: break;
                     }
@@ -1031,7 +1031,8 @@ class Checker {
                 if (!isArray(array)) fail("indexing requires an array", e.token);
                 if (!matches(e.right, ValueType.intType)) fail("array index must be int", e.token);
                 if (array == ValueType.selfArray || array == ValueType.enumArray) e.objectClass = e.left.objectClass;
-                return array == ValueType.stringArray ? ValueType.nullableString : elementType(array);
+                e.inferredType = array;
+                return array == ValueType.stringArray ? ValueType.nullableString : storedValueType(elementType(array));
             case ExprKind.castExpr:
                 if (e.castType == ValueType.selfType) {
                     auto target = resolveClass(currentProgram, e.token.text, e.token);
@@ -1248,7 +1249,7 @@ class Checker {
                 if (s.target.enumConstant) fail("enum constants cannot be assigned", s.token);
                 if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.stringMap)
                     variableType = ValueType.stringType;
-                if (s.target.kind != ExprKind.index && (s.assignmentOperator == "=" || variableType == ValueType.intType || variableType == ValueType.decimalType) ?
+                if ((s.target.kind != ExprKind.index || [ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(s.target.inferredType)) && (s.assignmentOperator == "=" || variableType == ValueType.intType || variableType == ValueType.decimalType) ?
                     !matchesStored(s.expression, variableType, s.target.objectClass) :
                     !matches(s.expression, variableType, s.target.objectClass)) fail("assignment type mismatch", s.token);
                 if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.stringMap && s.assignmentOperator != "=") fail("compound assignment to a map entry is not supported", s.token);
@@ -1306,6 +1307,7 @@ class Checker {
                 return false;
             case StmtKind.throwStmt:
                 s.type = typeOf(s.expression);
+                if (s.type == ValueType.nullType) { matches(s.expression, ValueType.exceptionType); s.type = ValueType.exceptionType; }
                 if (s.type == ValueType.nullableString) { s.type = ValueType.stringType; s.expression.nullableStringMode = NullableStringMode.required; }
                 if (s.type != ValueType.exceptionType && s.type != ValueType.stringType) fail("throw requires exception or string", s.token);
                 return true;
@@ -1406,7 +1408,7 @@ private string emitExprRaw(Expression e) {
         case ExprKind.arrayLiteral:
             string[] elements; foreach (element; e.arguments)
                 elements ~= (e.inferredType == ValueType.selfArray || e.inferredType == ValueType.enumArray) ? "cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(element) ~ ")" : emitExpr(element);
-            return "new " ~ dType(e.inferredType, e.objectClass) ~ "(" ~ (elements.length ? "[" ~ elements.join(", ") ~ "]" : "") ~ ")";
+            return "new " ~ dType(e.inferredType, e.objectClass) ~ "(" ~ (elements.length ? "[" ~ elements.join(", ") ~ "]" ~ ([ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(e.inferredType) ? ", true" : "") : "") ~ ")";
         case ExprKind.variable: return e.isField ? (e.targetClass.length ? e.targetClass ~ ".f_" : "this.f_") ~ e.token.text : "v_" ~ e.token.text;
         case ExprKind.selfRef: return "this";
         case ExprKind.superRef: return "super";
@@ -1451,7 +1453,7 @@ private string emitExprRaw(Expression e) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return "z8_invoke!\"z8_" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
             }
-            if (e.inferredType == ValueType.exceptionType) return "z8_message(" ~ emitExpr(e.left) ~ ")";
+            if (e.inferredType == ValueType.exceptionType) return "z8_message(z8_nonnull(" ~ emitExpr(e.left) ~ "))";
             if (e.inferredType == ValueType.decimalType) {
                 auto receiver = "(" ~ emitExpr(e.left) ~ ")";
                 if (e.token.text == "toString") return receiver ~ ".z8_string()";
@@ -1557,12 +1559,12 @@ private string emitStatement(Statement s) {
             return "{\nauto " ~ iter ~ " = " ~ emitReceiver(s.expression) ~ ";\nauto " ~ versionName ~ " = " ~ iter ~ ".z8_version;\n" ~
                 "for (long " ~ indexName ~ " = 0; " ~ indexName ~ " != " ~ iter ~ ".z8_size(); ++" ~ indexName ~ ") {\n" ~
                 "if (" ~ versionName ~ " != " ~ iter ~ ".z8_version) throw new Exception(\"array modified during iteration\");\n" ~
-                dStorageType(s.initial.type, s.initial.objectClass) ~ " v_" ~ s.initial.token.text ~ " = " ~ ([ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(s.initial.type) ? "z8_optional_wrap(" : "") ~ iter ~ ".z8_get(" ~ indexName ~ ")" ~ ([ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(s.initial.type) ? ")" : "") ~ ";\n" ~
+                dStorageType(s.initial.type, s.initial.objectClass) ~ " v_" ~ s.initial.token.text ~ " = " ~ iter ~ ".z8_get(" ~ indexName ~ ");\n" ~
                 emitStatement(s.children[0]) ~ "}\n}\n";
         case StmtKind.breakStmt: return "break;\n";
         case StmtKind.continueStmt: return "continue;\n";
         case StmtKind.throwStmt:
-            return "throw " ~ (s.type == ValueType.stringType ? "new Exception(z8_to_utf8(" ~ emitExpr(s.expression) ~ "))" : emitExpr(s.expression)) ~ ";\n";
+            return "throw " ~ (s.type == ValueType.stringType ? "new Exception(z8_to_utf8(" ~ emitExpr(s.expression) ~ "))" : "z8_nonnull(" ~ emitExpr(s.expression) ~ ")") ~ ";\n";
         case StmtKind.tryStmt:
             auto result = "try " ~ emitStatement(s.children[0]);
             if (s.hasCatch) result ~= "catch (Throwable v_" ~ s.catchName.text ~ ") " ~ emitStatement(s.children[1]);
@@ -1583,16 +1585,10 @@ private string emitSimple(Statement s) {
         return "z8_map_add_assign(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (isArray(s.type) && s.assignmentOperator == "+=")
         return "z8_array_add_assign(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
-    if (s.type == ValueType.intType && s.target.kind != ExprKind.index && s.assignmentOperator != "=")
+    if (s.type == ValueType.intType && s.assignmentOperator != "=")
         return "z8_optional_int_assign!\"" ~ s.assignmentOperator[0 .. $-1] ~ "\"(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
-    if (s.type == ValueType.decimalType && s.assignmentOperator != "=" && s.target.kind != ExprKind.index)
+    if (s.type == ValueType.decimalType && s.assignmentOperator != "=")
         return "z8_optional_decimal_assign!\"" ~ s.assignmentOperator[0 .. $-1] ~ "\"(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
-    if (s.type == ValueType.decimalType && s.assignmentOperator != "=") {
-        auto op = s.assignmentOperator == "+=" ? "add" : s.assignmentOperator == "-=" ? "sub" : s.assignmentOperator == "*=" ? "mul" : s.assignmentOperator == "/=" ? "div" : "mod";
-        return "z8_decimal_" ~ op ~ "_assign(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
-    }
-    if (s.assignmentOperator == "/=" || s.assignmentOperator == "%=")
-        return (s.assignmentOperator == "/=" ? "z8_div_assign(" : "z8_mod_assign(") ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.type == ValueType.stringType && s.assignmentOperator == "+=")
         return "z8_string_add_assign(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
     return name ~ " " ~ s.assignmentOperator ~ " " ~ emitExpr(s.expression);
@@ -1900,7 +1896,7 @@ private auto z8_invoke(string name, T, Args...)(T value, Args args) {
     if (value is null) throw new Exception("null reference");
     return __traits(getMember, value, name)(args);
 }
-private ref T z8_array_at(T)(Z8Array!T value, long index) {
+private ref auto z8_array_at(T)(Z8Array!T value, long index) {
     return z8_nonnull(value).z8_at(index);
 }
 private Z8Array!T z8_array_union(T)(Z8Array!T left, Z8Array!T right) {
@@ -1995,10 +1991,16 @@ private Z8StringMap z8_map_union(Z8StringMap left, Z8StringMap right) {
 }
 private void z8_map_add_assign(ref Z8StringMap left, Z8StringMap right) { left = z8_map_union(left, right); }
 class Z8Array(T) {
-    private T[] items;
+    enum isPrimitive = is(T == long) || is(T == bool) || is(T == Z8Decimal);
+    static if (isPrimitive) alias Element = Z8Optional!T;
+    else alias Element = T;
+    private Element[] items;
     size_t z8_version;
     this() {}
-    this(T[] values) { items = values; }
+    static if (isPrimitive) {
+        this(T[] values) { foreach (value; values) items ~= z8_optional_wrap(value); }
+        this(Element[] values, bool boxed) { items = values; }
+    } else this(T[] values) { items = values; }
     long z8_size() { return cast(long)items.length; }
     bool z8_isEmpty() { return items.length == 0; }
     static if (is(T == class)) {
@@ -2008,12 +2010,16 @@ class Z8Array(T) {
         T z8_first() { return !items.length ? null : items[0]; }
         T z8_last() { return !items.length ? null : items[$ - 1]; }
     } else {
-        Z8Optional!T z8_first() { return items.length ? Z8Optional!T(true, items[0]) : Z8Optional!T.init; }
-        Z8Optional!T z8_last() { return items.length ? Z8Optional!T(true, items[$ - 1]) : Z8Optional!T.init; }
+        Element z8_first() { return items.length ? items[0] : Element.init; }
+        Element z8_last() { return items.length ? items[$ - 1] : Element.init; }
     }
     void z8_clear() { ++z8_version; items.length = 0; }
-    Z8Array!T z8_add(T value) { ++z8_version; items ~= value; return this; }
-    Z8Array!T z8_add(long index, T value) {
+    static if (isPrimitive) {
+        Z8Array!T z8_add(T value) { return z8_add(z8_optional_wrap(value)); }
+        Z8Array!T z8_add(long index, T value) { return z8_add(index, z8_optional_wrap(value)); }
+    }
+    Z8Array!T z8_add(Element value) { ++z8_version; items ~= value; return this; }
+    Z8Array!T z8_add(long index, Element value) {
         auto i = cast(int)index;
         if (i < 0 || cast(size_t)i > items.length) throw new Exception("array index out of bounds");
         items = items[0 .. i] ~ [value] ~ items[i .. $];
@@ -2031,13 +2037,18 @@ class Z8Array(T) {
             z8_add(i++, other.z8_get(j));
         }
     }
-    long z8_indexOf(T value) {
+    static if (isPrimitive) long z8_indexOf(T value) { return z8_indexOf(z8_optional_wrap(value)); }
+    long z8_indexOf(Element value) {
         foreach (i, item; items) {
-            static if (is(T == class)) {
+            static if (isPrimitive) {
+                if (!item.present && !value.present) return cast(long)i;
+                if (!item.present) throw new Exception("null array element");
+                if (value.present && item.value == value.value) return cast(long)i;
+            } else static if (is(T == class)) {
                 if (item is value) return cast(long)i;
                 if (item is null) throw new Exception("null array element");
-            }
-            static if (is(T == wstring)) {
+                if (item == value) return cast(long)i;
+            } else static if (is(T == wstring)) {
                 if (item is null && value is null) return cast(long)i;
                 if (item is null) throw new Exception("null array element");
                 if (z8_string_equals(item, value)) return cast(long)i;
@@ -2045,23 +2056,26 @@ class Z8Array(T) {
         }
         return -1;
     }
-    bool z8_contains(T value) { return z8_indexOf(value) >= 0; }
+    static if (isPrimitive) bool z8_contains(T value) { return z8_contains(z8_optional_wrap(value)); }
+    bool z8_contains(Element value) { return z8_indexOf(value) >= 0; }
     bool z8_isSubsetOf(Z8Array!T other) {
         z8_nonnull(other);
         foreach (item; items) if (!other.z8_contains(item)) return false;
         return true;
     }
-    T z8_removeAt(long index) {
+    Element z8_removeAt(long index) {
         auto i = cast(int)index;
         if (i < 0 || cast(size_t)i >= items.length) throw new Exception("array index out of bounds");
         auto value = items[i];
         items = items[0 .. i] ~ items[i + 1 .. $];
         ++z8_version; return value;
     }
-    bool z8_remove(T value) {
-        static if (is(T == class) || is(T == wstring)) {
+    static if (isPrimitive) bool z8_remove(T value) { return z8_remove(z8_optional_wrap(value)); }
+    bool z8_remove(Element value) {
+        static if (isPrimitive || is(T == class) || is(T == wstring)) {
             foreach (i, item; items) {
-                static if (is(T == wstring)) bool equal = z8_string_equals(item, value);
+                static if (isPrimitive) bool equal = item.present == value.present && (!value.present || value.value == item.value);
+                else static if (is(T == wstring)) bool equal = z8_string_equals(item, value);
                 else bool equal = item is value || (value !is null && value == item);
                 if (equal) {
                     z8_removeAt(cast(long)i); return true;
@@ -2074,7 +2088,8 @@ class Z8Array(T) {
             z8_removeAt(index); return true;
         }
     }
-    Z8Array!T z8_removeAll(T value) { z8_remove(value); return this; }
+    static if (isPrimitive) Z8Array!T z8_removeAll(T value) { return z8_removeAll(z8_optional_wrap(value)); }
+    Z8Array!T z8_removeAll(Element value) { z8_remove(value); return this; }
     Z8Array!T z8_removeAll(Z8Array!T values) {
         z8_nonnull(values);
         auto originalLength = items.length;
@@ -2101,6 +2116,7 @@ class Z8Array(T) {
         import std.algorithm.sorting : sort;
         import std.algorithm.mutation : SwapStrategy;
         static if (is(T == wstring)) if (items.length > 1) foreach (item; items) if (item is null) throw new Exception("null array element");
+        static if (isPrimitive) if (items.length > 1) foreach (item; items) if (!item.present) throw new Exception("null array element");
         sort!("a < b", SwapStrategy.stable)(items);
         ++z8_version;
         return this;
@@ -2108,10 +2124,11 @@ class Z8Array(T) {
     Z8Array!T z8_unique() {
         auto result = new Z8Array!T();
         foreach (item; items) {
-            static if (is(T == class) || is(T == wstring)) {
+            static if (isPrimitive || is(T == class) || is(T == wstring)) {
                 bool found;
                 foreach (existing; result.items) {
-                    static if (is(T == wstring)) bool equal = z8_string_equals(item, existing);
+                    static if (isPrimitive) bool equal = item.present == existing.present && (!item.present || item.value == existing.value);
+                    else static if (is(T == wstring)) bool equal = z8_string_equals(item, existing);
                     else bool equal = item is existing || (item !is null && item == existing);
                     if (equal) { found = true; break; }
                 }
@@ -2132,13 +2149,14 @@ class Z8Array(T) {
         }
         return result;
     }
-    ref T z8_at(long index) {
+    ref Element z8_at(long index) {
         auto i = cast(int)index;
         if (i < 0 || cast(size_t)i >= items.length) throw new Exception("array index out of bounds");
         return items[i];
     }
-    T z8_get(long index) { return z8_at(index); }
-    void z8_set(long index, T value) { z8_at(index) = value; }
+    Element z8_get(long index) { return z8_at(index); }
+    static if (isPrimitive) void z8_set(long index, T value) { z8_set(index, z8_optional_wrap(value)); }
+    void z8_set(long index, Element value) { z8_at(index) = value; }
 }
 `;
     result ~= "\n" ~ decimalRuntime ~ "\n" ~ stringRuntime ~ "\n";

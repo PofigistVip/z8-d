@@ -1,0 +1,33 @@
+public class NullableArrays {
+    public static int run() {
+        int[] numbers = {null, 4};
+        if (numbers.first() != null || numbers[0] != null || numbers.last() != 4) return 1;
+        int absent = null;
+        if (!numbers.contains(absent) || numbers.unique().size() != 2) return 2;
+        try { bool ignored = numbers.contains(4); return 3; } catch (exception expected) { }
+        int count;
+        for (int item : numbers) if (item == null) count += 1;
+        if (count != 1 || !numbers.remove(absent) || numbers.first() != 4) return 4;
+        numbers.add(absent);
+        numbers.set(0, absent);
+        if (numbers.first() != null || numbers.last() != null) return 5;
+        numbers.set(0, 5);
+        if (numbers[0] != 5 || numbers.removeAt(1) != null) return 6;
+        bool[] flags = {null, true};
+        bool missingFlag = flags[0];
+        if (missingFlag != null || flags.first() != null || flags.last() != true) return 7;
+        flags.set(0, false);
+        if (flags[0] != false) return 8;
+        decimal[] amounts = {null, 1.5};
+        decimal missingAmount = amounts[0];
+        if (missingAmount != null || amounts.first() != null || amounts.last().toString() != "1.5") return 9;
+        amounts.set(0, 2);
+        if (amounts[0].toString() != "2") return 10;
+        exception problem = null;
+        if (problem != null) return 11;
+        try { throw problem; } catch (exception expectedThrow) { }
+        try { throw null; } catch (exception expectedNullThrow) { }
+        try { string ignored = problem.getMessage(); return 13; } catch (exception expectedMessage) { }
+        return 157;
+    }
+}
