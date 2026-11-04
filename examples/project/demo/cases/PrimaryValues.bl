@@ -48,6 +48,13 @@ public class PrimaryValues {
         value = bytes;
         binary restoredBytes = (binary)value;
         if (restoredBytes.length() != 2) return 21;
+        date calendar = '29/02/2024';
+        value = calendar;
+        if (!(value instanceof date) || ((date)value).day() != 29 || value.toString() != "2024-02-29T00:00:00+03:00") return 32;
+        file document = "document.txt";
+        value = document;
+        if (!(value instanceof file) || ((file)value).name != "document.txt" || value.hashCode() != document.hashCode()) return 33;
+        if (value.toString().indexOf("document.txt") < 0) return 34;
         primary[] values = {1, true, "abc"};
         values.add(1);
         if (values.size() != 4 || !values.contains(1) || values.indexOf("abc") != 2) return 22;

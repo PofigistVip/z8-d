@@ -10,6 +10,14 @@ public class StringExtras {
         if (string.concat(words, "-") != "a--b") return 6;
         binary data = '104, 105';
         if (string.fromBinary(data) != "hi" || data.length() != 0) return 7;
+        guid identifier = guid.create(1);
+        if ("id=" + identifier != "id=00000000-0000-0000-0000-000000000001") return 8;
+        date day = '29/02/2024';
+        string formatted = day;
+        if (formatted != "2024-02-29T00:00:00+03:00" || day + "!" != "2024-02-29T00:00:00+03:00!") return 9;
+        geometry point = geometry.point(1, 2, 0);
+        string encoded = point;
+        if (encoded != point.toString()) return 10;
         return 227;
     }
 }

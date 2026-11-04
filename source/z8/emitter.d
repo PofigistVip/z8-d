@@ -119,6 +119,8 @@ private string emitExpr(Expression e) {
     if (e.convertToString == ValueType.datespanType) return "z8_datespan_to_string(" ~ value ~ ")";
     if (e.convertToString == ValueType.fileType) return "z8_file_path(" ~ value ~ ")";
     if (e.convertToString == ValueType.exceptionType) return "z8_string_or_empty(z8_message(z8_nonnull(" ~ value ~ ")))";
+    if (e.convertToString == ValueType.dateType) return "z8_date_toString(" ~ value ~ ")";
+    if (e.convertToString == ValueType.geometryType) return "z8_geometry_to_string(" ~ value ~ ")";
     return value;
 }
 private string emitReceiver(Expression e) {

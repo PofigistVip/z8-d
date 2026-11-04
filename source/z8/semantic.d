@@ -55,6 +55,11 @@ class Checker {
         for (auto current = actual; current !is null; current = current.baseClass) if (current is expected) return true;
         return false;
     }
+    private static bool hasStringConversion(ValueType type) {
+        return [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.guidType,
+                ValueType.datespanType, ValueType.dateType, ValueType.geometryType, ValueType.fileType,
+                ValueType.exceptionType].canFind(type);
+    }
     private bool accessible(Program owner, bool isPublic, bool isProtected) {
         return owner is currentProgram || isPublic || (isProtected && isAssignable(currentProgram, owner));
     }
@@ -97,7 +102,7 @@ class Checker {
         if (e.kind == ExprKind.arrayLiteral && (expected == ValueType.selfArray || expected == ValueType.enumArray)) e.objectClass = expectedClass;
         auto actual = typeOf(e, expected);
         if (expected == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType,
-            ValueType.optionalInt, ValueType.optionalBool, ValueType.optionalDecimal, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType].canFind(actual)) {
+            ValueType.optionalInt, ValueType.optionalBool, ValueType.optionalDecimal, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType, ValueType.dateType, ValueType.fileType].canFind(actual)) {
             e.boxPrimary = true; return true;
         }
         if (isOptionalPrimitive(actual) && optionalBaseType(actual) == expected) {
@@ -126,6 +131,7 @@ class Checker {
         if (expected == ValueType.stringType && actual == ValueType.datespanType) { e.convertToString = actual; return true; }
         if (expected == ValueType.stringType && actual == ValueType.fileType) { e.convertToString = actual; return true; }
         if (expected == ValueType.stringType && actual == ValueType.exceptionType) { e.convertToString = actual; return true; }
+        if (expected == ValueType.stringType && [ValueType.dateType, ValueType.geometryType].canFind(actual)) { e.convertToString = actual; return true; }
         return actual == expected && (expected == ValueType.selfType ? isAssignable(e.objectClass, expectedClass) :
             (expected != ValueType.selfArray && expected != ValueType.enumType && expected != ValueType.enumArray) || e.objectClass is expectedClass);
     }
@@ -198,12 +204,13 @@ class Checker {
                     if (actual == ValueType.enumType && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                     if (actual == ValueType.enumArray && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                 } else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
-                else if (p.type == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType].canFind(actual)) { }
+                else if (p.type == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType, ValueType.dateType, ValueType.fileType].canFind(actual)) { }
                 else if (p.type == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual)) weight += 100;
                 else if (p.type == ValueType.stringType && actual == ValueType.guidType) weight += 100;
                 else if (p.type == ValueType.stringType && actual == ValueType.datespanType) weight += 100;
                 else if (p.type == ValueType.stringType && actual == ValueType.fileType) weight += 100;
                 else if (p.type == ValueType.stringType && actual == ValueType.exceptionType) weight += 100;
+                else if (p.type == ValueType.stringType && [ValueType.dateType, ValueType.geometryType].canFind(actual)) weight += 100;
                 else applicable = false;
                 if (!applicable) break;
             }
@@ -580,6 +587,7 @@ class Checker {
                     if (e.token.text == "read") { e.builtinCall = "z8_file_read"; return ValueType.stringType; }
                     if (e.token.text == "lastModified") { e.builtinCall = "z8_file_lastModified"; return ValueType.dateType; }
                     if (e.token.text == "hashCode") { e.builtinCall = "z8_file_hashCode"; return ValueType.intType; }
+                    if (e.token.text == "toString") { e.builtinCall = "z8_file_to_string"; return ValueType.stringType; }
                     if (e.token.text == "parent") { e.builtinCall = "z8_file_parent"; return ValueType.fileType; }
                     if (e.token.text == "listFiles") { e.builtinCall = "z8_file_listFiles"; return ValueType.fileArray; }
                     if (["fileName", "baseName", "extension", "folder"].canFind(e.token.text)) {
@@ -838,7 +846,7 @@ class Checker {
                 return array == ValueType.stringArray ? ValueType.nullableString : storedValueType(elementType(array));
             case ExprKind.castExpr:
                 if (typeOf(e.left) == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType,
-                    ValueType.stringType, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType].canFind(e.castType)) {
+                    ValueType.stringType, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType, ValueType.dateType, ValueType.fileType].canFind(e.castType)) {
                     e.primaryCast = true;
                     return e.castType == ValueType.stringType ? ValueType.nullableString : storedValueType(e.castType);
                 }
@@ -869,6 +877,8 @@ class Checker {
                         case "binary": e.castType = ValueType.binaryType; break;
                         case "datespan": e.castType = ValueType.datespanType; break;
                         case "geometry": e.castType = ValueType.geometryType; break;
+                        case "date": e.castType = ValueType.dateType; break;
+                        case "file": e.castType = ValueType.fileType; break;
                         case "primary": e.castType = ValueType.primaryType; break;
                         default: fail("unsupported primary instanceof target", e.token);
                     }
@@ -1005,10 +1015,10 @@ class Checker {
                 }
                 if (left == ValueType.nullableString) { e.nullableStringLeft = true; left = ValueType.stringType; }
                 if (right == ValueType.nullableString) { e.right.nullableStringMode = NullableStringMode.nullAsEmpty; right = ValueType.stringType; }
-                if (op == "+" && left == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(right)) {
+                if (op == "+" && left == ValueType.stringType && hasStringConversion(right)) {
                     e.right.convertToString = right; right = ValueType.stringType;
                 }
-                if (op == "+" && right == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(left)) {
+                if (op == "+" && right == ValueType.stringType && hasStringConversion(left)) {
                     e.left.convertToString = left; left = ValueType.stringType;
                 }
                 if (left == ValueType.decimalType && right == ValueType.intType) { e.right.promoteToDecimal = true; right = ValueType.decimalType; }
@@ -1061,10 +1071,10 @@ class Checker {
                 if (left == ValueType.nullableString && right == ValueType.stringType) right = ValueType.nullableString;
                 if (left == ValueType.decimalType && right == ValueType.intType) { e.third.promoteToDecimal = true; right = ValueType.decimalType; }
                 if (left == ValueType.intType && right == ValueType.decimalType) { e.right.promoteToDecimal = true; left = ValueType.decimalType; }
-                if (left == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(right)) {
+                if (left == ValueType.stringType && hasStringConversion(right)) {
                     e.third.convertToString = right; right = ValueType.stringType;
                 }
-                if (right == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(left)) {
+                if (right == ValueType.stringType && hasStringConversion(left)) {
                     e.right.convertToString = left; left = ValueType.stringType;
                 }
                 if (left == ValueType.stringType && right == ValueType.stringType &&
