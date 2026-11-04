@@ -1,0 +1,12 @@
+public class FileValues {
+    public static int run() {
+        file value = "folder/report.TXT";
+        if (value.name != "report.TXT" || value.path != "folder/report.TXT") return 1;
+        if (value.baseName() != "report" || value.extension() != "txt" || value.fileName() != "report.TXT") return 2;
+        if (file.name("a/b/c.TXT") != "c.TXT" || file.baseName("a/b/c.TXT") != "c" || file.extension("a/b/c.TXT") != "TXT") return 3;
+        file alias = value;
+        value = "other/new.dat";
+        if (alias.path != "other/new.dat" || alias.name != "new.dat") return 4;
+        return 211;
+    }
+}

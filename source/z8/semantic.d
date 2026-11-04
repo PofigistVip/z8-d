@@ -124,6 +124,7 @@ class Checker {
         }
         if (expected == ValueType.stringType && actual == ValueType.guidType) { e.convertToString = actual; return true; }
         if (expected == ValueType.stringType && actual == ValueType.datespanType) { e.convertToString = actual; return true; }
+        if (expected == ValueType.stringType && actual == ValueType.fileType) { e.convertToString = actual; return true; }
         return actual == expected && (expected == ValueType.selfType ? isAssignable(e.objectClass, expectedClass) :
             (expected != ValueType.selfArray && expected != ValueType.enumType && expected != ValueType.enumArray) || e.objectClass is expectedClass);
     }
@@ -136,6 +137,12 @@ class Checker {
         if (actual == expected) { e.optionalWrap = true; return true; }
         if (expected == ValueType.decimalType && matches(e, expected, expectedClass)) { e.optionalWrap = true; return true; }
         return false;
+    }
+    private bool matchesInitializer(Expression e, ValueType expected, Program expectedClass = null) {
+        if (expected == ValueType.fileType && [ValueType.stringType, ValueType.nullableString].canFind(typeOf(e))) {
+            e.makeFile = true; return true;
+        }
+        return matchesStored(e, expected, expectedClass);
     }
     private ValueType checkCall(Method method, Program owner, Expression e) {
         if (e.arguments.length != method.parameters.length) fail("incorrect argument count", e.token);
@@ -194,6 +201,7 @@ class Checker {
                 else if (p.type == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual)) weight += 100;
                 else if (p.type == ValueType.stringType && actual == ValueType.guidType) weight += 100;
                 else if (p.type == ValueType.stringType && actual == ValueType.datespanType) weight += 100;
+                else if (p.type == ValueType.stringType && actual == ValueType.fileType) weight += 100;
                 else applicable = false;
                 if (!applicable) break;
             }
@@ -282,7 +290,7 @@ class Checker {
             fieldInitialization = !field.isStatic;
             if (field.isStatic && field.initializer !is null && !isConstantInitializer(field.initializer))
                 fail("static field initializer must be a constant expression", field.name);
-            if (field.initializer !is null && !matchesStored(field.initializer, field.type, field.objectClass))
+            if (field.initializer !is null && !matchesInitializer(field.initializer, field.type, field.objectClass))
                 fail("field initializer type mismatch", field.name);
         }
         fieldInitialization = false;
@@ -403,6 +411,17 @@ class Checker {
                 if (receiverType == ValueType.binaryType && e.token.text == "name") {
                     e.binaryNameField = true; return ValueType.nullableString;
                 }
+                if (receiverType == ValueType.fileType) {
+                    e.nativeField = e.token.text;
+                    switch (e.token.text) {
+                        case "id": case "user": return ValueType.guidType;
+                        case "name": case "path": case "author": return ValueType.nullableString;
+                        case "time": return ValueType.dateType;
+                        case "size": return ValueType.optionalInt;
+                        case "details": return ValueType.stringMap;
+                        default: fail("unknown file field", e.token);
+                    }
+                }
                 if (receiverType != ValueType.selfType) fail("field access requires an object", e.token);
                 auto field = lookupField(e.left.objectClass, e.token.text);
                 if (field is null) fail("unknown field '" ~ e.token.text ~ "'", e.token);
@@ -419,6 +438,10 @@ class Checker {
                 if (!accessible(selected.owner, selected.isPublic, selected.isProtected)) fail("method is not accessible", e.token);
                 return checkCall(selected, selected.owner, e);
             case ExprKind.memberCall:
+                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "file") {
+                    if (!["name", "baseName", "extension"].canFind(e.token.text)) fail("unsupported static file method", e.token);
+                    checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_file_" ~ e.token.text; return ValueType.stringType;
+                }
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "geometry") {
                     if (e.token.text == "none") {
                         checkArguments(e, [ValueType.intType]); e.builtinCall = "z8_geometry_none"; return ValueType.geometryType;
@@ -511,6 +534,14 @@ class Checker {
                     receiver = ValueType.stringType;
                 }
                 e.inferredType = receiver;
+                if (receiver == ValueType.fileType) {
+                    checkArguments(e, []);
+                    if (["fileName", "baseName", "extension", "folder"].canFind(e.token.text)) {
+                        e.builtinCall = "z8_file_" ~ e.token.text ~ (e.token.text == "baseName" || e.token.text == "extension" ? "_instance" : "");
+                        return ValueType.stringType;
+                    }
+                    fail("unsupported file method", e.token);
+                }
                 if (receiver == ValueType.geometryType) {
                     checkArguments(e, []);
                     if (e.token.text == "shape" || e.token.text == "srs" || e.token.text == "hashCode") {
@@ -930,7 +961,7 @@ class Checker {
                     else if (op == ">") e.emittedOperator = ">=";
                     else if (op == ">=") e.emittedOperator = ">";
                 }
-                if (left != right || left == ValueType.voidType || left == ValueType.exceptionType || left == ValueType.primaryType || left == ValueType.binaryType || left == ValueType.geometryType || left == ValueType.selfType || isMap(left) || isArray(left)) fail("operand type mismatch", e.token);
+                if (left != right || left == ValueType.voidType || left == ValueType.exceptionType || left == ValueType.primaryType || left == ValueType.binaryType || left == ValueType.geometryType || left == ValueType.fileType || left == ValueType.selfType || isMap(left) || isArray(left)) fail("operand type mismatch", e.token);
                 if (["==", "!="].canFind(op)) return ValueType.boolType;
                 if ((left == ValueType.intType || left == ValueType.decimalType || left == ValueType.stringType) && ["<", ">", "<=", ">="].canFind(op)) return ValueType.boolType;
                 if (left == ValueType.stringType && op == "+") { e.inferredType = ValueType.stringType; return ValueType.stringType; }
@@ -1017,7 +1048,7 @@ class Checker {
                 if (s.type == ValueType.primaryType && s.expression is null && !allowUninitializedEnum) fail("primary variables require an initializer", s.token);
                 if (s.type == ValueType.voidType) fail("variable cannot be void", s.token);
                 if (hasObjectClass(s.type)) s.objectClass = resolveClass(currentProgram, s.objectName, s.token);
-                if (s.expression !is null && !matchesStored(s.expression, s.type, s.objectClass)) fail("initializer type mismatch", s.token);
+                if (s.expression !is null && !matchesInitializer(s.expression, s.type, s.objectClass)) fail("initializer type mismatch", s.token);
                 variables[s.token.text] = s.type;
                 if (hasObjectClass(s.type)) objectVariables[s.token.text] = s.objectClass;
                 return false;
@@ -1026,6 +1057,10 @@ class Checker {
                 if (variableType == ValueType.nullableString) variableType = ValueType.stringType;
                 if (isOptionalPrimitive(variableType)) variableType = optionalBaseType(variableType);
                 if (s.target.enumConstant) fail("enum constants cannot be assigned", s.token);
+                if (variableType == ValueType.fileType && s.assignmentOperator == "=" &&
+                    [ValueType.stringType, ValueType.nullableString].canFind(typeOf(s.expression))) {
+                    s.filePathAssignment = true; s.type = variableType; return false;
+                }
                 if (s.target.kind == ExprKind.index && isMap(s.target.inferredType))
                     variableType = s.target.inferredType == ValueType.stringMap ? ValueType.stringType : ValueType.primaryType;
                 if ((s.target.kind != ExprKind.index || [ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(s.target.inferredType)) && (s.assignmentOperator == "=" || variableType == ValueType.intType || variableType == ValueType.decimalType) ?

@@ -41,6 +41,7 @@ class Parser {
             case "datespan": result = ValueType.datespanType; break;
             case "date": result = ValueType.dateType; break;
             case "geometry": result = ValueType.geometryType; break;
+            case "file": result = ValueType.fileType; break;
             case "exception": result = ValueType.exceptionType; break;
             case "primary": result = ValueType.primaryType; break;
             default:

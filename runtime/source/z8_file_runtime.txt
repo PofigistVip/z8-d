@@ -1,0 +1,61 @@
+// File metadata and path helpers. Filesystem operations are implemented separately.
+class Z8File {
+    Z8Guid id, user;
+    wstring name = ""w, path = ""w, author = ""w;
+    Z8Date time;
+    Z8Optional!long size;
+    Z8StringMap details;
+    this() {
+        id = z8_guid_zero(); user = z8_guid_zero();
+        time = z8_date_now(); size = z8_optional_wrap(0L);
+        details = new Z8StringMap();
+    }
+}
+
+wstring z8_file_name(wstring value) {
+    value = z8_string_required(value);
+    auto start = z8_binary_name_start(value);
+    return value[start .. $];
+}
+wstring z8_file_baseName(wstring value) {
+    value = z8_string_required(value);
+    auto start = z8_binary_name_start(value);
+    return value[start .. z8_binary_extension_start(value, start)];
+}
+wstring z8_file_extension(wstring value) {
+    value = z8_string_required(value);
+    auto dot = z8_binary_extension_start(value, z8_binary_name_start(value));
+    return dot == value.length ? ""w : value[dot + 1 .. $];
+}
+void z8_file_assign(Z8File value, wstring path) {
+    import std.path : baseName;
+    z8_nonnull(value).path = z8_string_required(path);
+    value.name = baseName(path.to!string).to!wstring;
+}
+Z8File z8_file_from_path(wstring path) { auto result = new Z8File(); z8_file_assign(result, path); return result; }
+wstring z8_file_path(Z8File value) { return z8_nonnull(value).path; }
+wstring z8_file_fileName(Z8File value) {
+    z8_nonnull(value);
+    auto path = z8_string_required(value.path);
+    return z8_file_name(path.length ? path : value.name);
+}
+wstring z8_file_baseName_instance(Z8File value) {
+    z8_nonnull(value);
+    auto path = z8_string_required(value.path);
+    return z8_file_baseName(path.length ? path : value.name);
+}
+wstring z8_file_extension_instance(Z8File value) {
+    import std.uni : toLower;
+    import std.utf : encode;
+    z8_nonnull(value);
+    auto path = z8_string_required(value.path);
+    auto extension = z8_file_extension(path.length ? path : value.name);
+    wchar[] lower;
+    foreach (dchar c; extension) encode(lower, toLower(c));
+    return lower.length ? lower.idup : ""w;
+}
+wstring z8_file_folder(Z8File value) {
+    import std.string : replace;
+    auto path = z8_string_required(z8_nonnull(value).path).to!string.replace("\\", "/").to!wstring;
+    return path[0 .. z8_binary_name_start(path)];
+}
