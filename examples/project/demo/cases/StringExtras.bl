@@ -46,6 +46,7 @@ public class StringExtras {
         if ("'{0}' ''{0}'' {5}".format(arguments) != "{0} 'world' {5}") return 23;
         primary[] rounded = {decimal.parse("-0.0005"), decimal.parse("0.0005"), decimal.parse("-0.0006")};
         if ("{0};{1};{2}".format(rounded) != "-0;0;-0,001") return 25;
+        if ("{2,number,integer}|{2,number,percent}|{2,number,currency}|{2,number,#,##0.00}".format(arguments) != "1 235|123 457%|1 234,57 руб.|1 234,57") return 40;
         string subject = "aBcDe";
         string alias = subject;
         if (subject.next()) return 26;

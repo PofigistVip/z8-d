@@ -1,20 +1,63 @@
 // Basic MessageFormat placeholders with the Russian locale's number formatting.
-private wstring z8_message_number(wstring value) {
+private wstring z8_message_number(wstring value, size_t minFraction = 0, bool grouping = true, size_t minInteger = 1) {
     auto dot = value.length;
     foreach (i, wchar c; value) if (c == '.') { dot = i; break; }
     auto integer = value[0 .. dot];
     auto start = integer.length && integer[0] == '-' ? 1 : 0;
+    wstring padded = start ? "-"w : ""w;
+    if (integer.length - start < minInteger) foreach (_; 0 .. minInteger - (integer.length - start)) padded ~= '0';
+    padded ~= integer[start .. $];
+    integer = padded;
     wstring result;
     foreach (i, wchar c; integer) {
-        if (i > start && (integer.length - i) % 3 == 0) result ~= cast(wchar)0x00A0;
+        if (grouping && i > start && (integer.length - i) % 3 == 0) result ~= cast(wchar)0x00A0;
         result ~= c;
     }
     if (dot < value.length) {
         auto end = value.length;
-        while (end > dot + 1 && value[end - 1] == '0') --end;
+        while (end > dot + 1 + minFraction && value[end - 1] == '0') --end;
         if (end > dot + 1) result ~= ","w ~ value[dot + 1 .. end];
     }
     return result.length ? result : ""w;
+}
+private wstring z8_message_formatted_number(Z8Primary value, wstring style) {
+    import std.string : strip;
+    z8_nonnull(value);
+    Z8Decimal number;
+    switch (value.kind) {
+        case Z8PrimaryKind.integer: number = z8_decimal_from_int(value.integerValue); break;
+        case Z8PrimaryKind.decimal: number = value.decimalValue; break;
+        case Z8PrimaryKind.datespan: number = z8_decimal_from_int(z8_datespan_milliseconds(value.datespanValue)); break;
+        default: throw new Exception("MessageFormat argument is not numeric");
+    }
+    if (number.nan) return "null"w;
+    style = style.strip();
+    int digits = 3;
+    size_t minFraction, minInteger = 1;
+    bool grouping = true, percent, currency;
+    if (style == "integer"w) digits = 0;
+    else if (style == "percent"w) { digits = 0; percent = true; number = number * z8_decimal_from_int(100); }
+    else if (style == "currency"w) { digits = 2; currency = true; }
+    else if (style.length) {
+        bool fraction, seenDigit;
+        digits = 0; grouping = false; minInteger = 0;
+        foreach (c; style) {
+            if (c == '.') { if (fraction) throw new Exception("unsupported number pattern"); fraction = true; }
+            else if (c == ',' && !fraction) grouping = true;
+            else if (c == '0' || c == '#') {
+                seenDigit = true;
+                if (fraction) { ++digits; if (c == '0') ++minFraction; }
+                else if (c == '0') ++minInteger;
+            } else throw new Exception("unsupported number pattern");
+        }
+        if (!seenDigit || digits > 1000) throw new Exception("unsupported number pattern");
+    }
+    auto rounded = number.z8_round(digits, 6);
+    auto formatted = z8_message_number(rounded.z8_string(), minFraction, grouping, minInteger);
+    if (rounded.coefficient == 0 && number.coefficient < 0) formatted = "-"w ~ formatted;
+    if (percent) formatted ~= "%"w;
+    if (currency) formatted ~= " руб."w;
+    return formatted;
 }
 private wstring z8_message_value(Z8Primary value) {
     z8_nonnull(value);
@@ -53,10 +96,26 @@ wstring z8_string_format(wstring pattern, Z8Array!Z8Primary values) {
                 if (number > 1000000) throw new Exception("invalid MessageFormat index");
                 number = number * 10 + pattern[i++] - '0';
             }
-            if (i == begin || i == pattern.length || pattern[i] != '}') throw new Exception("unsupported MessageFormat pattern");
+            if (i == begin || i == pattern.length) throw new Exception("unsupported MessageFormat pattern");
+            bool numeric;
+            wstring style;
+            if (pattern[i] == ',') {
+                import std.string : strip;
+                auto kindStart = ++i;
+                while (i < pattern.length && pattern[i] != ',' && pattern[i] != '}') ++i;
+                if (i == pattern.length || pattern[kindStart .. i].strip() != "number"w) throw new Exception("unsupported MessageFormat pattern");
+                numeric = true;
+                if (pattern[i] == ',') {
+                    auto styleStart = ++i;
+                    while (i < pattern.length && pattern[i] != '}') ++i;
+                    if (i == pattern.length) throw new Exception("unsupported MessageFormat pattern");
+                    style = pattern[styleStart .. i];
+                }
+            }
+            if (pattern[i] != '}') throw new Exception("unsupported MessageFormat pattern");
             ++i;
             if (number >= cast(size_t)values.z8_size()) result ~= "{"w ~ number.to!wstring ~ "}"w;
-            else result ~= z8_message_value(values.z8_get(cast(long)number));
+            else result ~= numeric ? z8_message_formatted_number(values.z8_get(cast(long)number), style) : z8_message_value(values.z8_get(cast(long)number));
         } else result ~= c;
     }
     return result.length ? result : ""w;
