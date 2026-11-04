@@ -58,6 +58,17 @@ public class IntegerMaps {
         if ((int)joined[1] != 9 || (int)mixed[1] != 42 || joined.values().size() != 4) return 23;
         mixed += more;
         if ((int)mixed[1] != 9 || mixed.remove(null) != null || mixed.containsKey(null)) return 24;
+        int[string] scores = {("one", 1), ("two", 2)};
+        string nullKey = null;
+        scores.add(nullKey, nullInteger);
+        if (scores["one"] != 1 || !scores.containsKey(null) || scores.get(null) != null) return 25;
+        if (!scores.containsValue(null) || scores.add("two", 20) != 2) return 26;
+        int[string] updates = {("one", 8)};
+        int[string] allScores = scores + updates;
+        if (allScores["one"] != 8 || scores["one"] != 1 || allScores.values().size() != 3) return 27;
+        scores += updates;
+        if (scores["one"] != 8 || scores.remove(null) != null || scores.containsKey(null)) return 28;
+        try { scores.add(null, null); return 29; } catch (exception expectedScores) {}
         return 149;
     }
 }

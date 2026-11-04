@@ -27,6 +27,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.selfArray: assert(objectClass !is null); return "Z8Array!(" ~ objectClass.emittedName ~ ")";
         case ValueType.stringMap: return "Z8StringMap";
         case ValueType.primaryStringMap: return "Z8PrimaryMap";
+        case ValueType.intStringMap: return "Z8StringIntMap";
         case ValueType.intIntMap: return "Z8IntMap!long";
         case ValueType.stringIntMap: return "Z8IntMap!wstring";
         case ValueType.primaryIntMap: return "Z8IntMap!Z8Primary";

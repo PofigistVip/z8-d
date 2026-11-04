@@ -20,6 +20,8 @@ unittest {
         labels.add(2, "two");
         primary[int] mixed = {(1, 42), (2, "text")};
         if ((int)mixed[1] != 42) return 1;
+        int[string] scores = {("one", 1)};
+        if (scores["one"] != 1) return 2;
         if (values.containsKey(absent) && labels[1] == "one") return values[3];
         return 0;
     } }});
@@ -316,7 +318,7 @@ unittest {
     compile("class A { static string f() { string[string] x; return x.get(\"a\") ?: x.get(\"b\"); } }");
     rejects("class A { static A[] x; }");
     rejects("class A { static string[string] x; }");
-    rejects("class A { static void f() { int[string] x; } }");
+    rejects("class A { static void f() { bool[string] x; } }");
     rejects("class A { static void f() { string[string] x; x[\"a\"] += \"b\"; } }");
     rejects("class A { static void f() { string[string] x; int[] key; x.add(key, \"b\"); } }");
     rejects("class A { static void f() { string[string] x; int[] key; x.remove(key); } }");

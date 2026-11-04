@@ -12,6 +12,10 @@ public class IntegerMapIndex {
         mixed[5] = 42;
         mixed[null] = null;
         if ((int)mixed[5] != 42 || !mixed.containsKey(null) || mixed[null] != null) return 3;
+        int[string] scores;
+        scores["one"] = 1;
+        scores[null] = null;
+        if (scores["one"] != 1 || !scores.containsKey(null) || scores[null] != null) return 4;
         return 143;
     }
 }

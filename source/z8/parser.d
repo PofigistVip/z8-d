@@ -82,8 +82,8 @@ class Parser {
         }
         if (accept("[")) {
             if (current.text != "]") {
-                if (accept("string") && (result == ValueType.stringType || result == ValueType.primaryType)) {
-                    expect("]"); return result == ValueType.stringType ? ValueType.stringMap : ValueType.primaryStringMap;
+                if (accept("string") && (result == ValueType.stringType || result == ValueType.primaryType || result == ValueType.intType)) {
+                    expect("]"); return result == ValueType.intType ? ValueType.intStringMap : result == ValueType.stringType ? ValueType.stringMap : ValueType.primaryStringMap;
                 }
                 if (accept("int") && (result == ValueType.intType || result == ValueType.stringType || result == ValueType.primaryType)) {
                     expect("]"); return result == ValueType.intType ? ValueType.intIntMap : result == ValueType.primaryType ? ValueType.primaryIntMap : ValueType.stringIntMap;
