@@ -552,6 +552,9 @@ class Checker {
                     }
                     if (e.token.text == "read") { e.builtinCall = "z8_file_read"; return ValueType.stringType; }
                     if (e.token.text == "lastModified") { e.builtinCall = "z8_file_lastModified"; return ValueType.dateType; }
+                    if (e.token.text == "hashCode") { e.builtinCall = "z8_file_hashCode"; return ValueType.intType; }
+                    if (e.token.text == "parent") { e.builtinCall = "z8_file_parent"; return ValueType.fileType; }
+                    if (e.token.text == "listFiles") { e.builtinCall = "z8_file_listFiles"; return ValueType.fileArray; }
                     if (["fileName", "baseName", "extension", "folder"].canFind(e.token.text)) {
                         e.builtinCall = "z8_file_" ~ e.token.text ~ (e.token.text == "baseName" || e.token.text == "extension" ? "_instance" : "");
                         return ValueType.stringType;
@@ -941,6 +944,10 @@ class Checker {
                 if (left == ValueType.guidType && right == ValueType.guidType) {
                     if (!["==", "!="].canFind(op)) fail("invalid guid operands", e.token);
                     e.inferredType = ValueType.guidType; return ValueType.boolType;
+                }
+                if (left == ValueType.fileType && right == ValueType.fileType) {
+                    if (!["==", "!="].canFind(op)) fail("invalid file operands", e.token);
+                    e.fileBinary = true; return ValueType.boolType;
                 }
                 if (left == ValueType.datespanType && right == ValueType.datespanType) {
                     if (!["+", "-", "==", "!=", "<", ">", "<=", ">="].canFind(op)) fail("invalid datespan operands", e.token);

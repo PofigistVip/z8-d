@@ -118,6 +118,7 @@ void main() {
         file child = __CHILD__;
         child.write("Привет 😀");
         if (!folder.isFolder() || folder.isEmpty() || child.read() != "Привет 😀" || child.size != 17) return false;
+        if (folder.listFiles().size() != 1 || child.parent().parent() != folder) return false;
         folder.delete(true);
         return !folder.exists();
     } }'''.replace("__FILE__", json.dumps(file_io_path.as_posix()))

@@ -65,6 +65,7 @@ class Parser {
                 case ValueType.datespanType: return ValueType.datespanArray;
                 case ValueType.dateType: return ValueType.dateArray;
                 case ValueType.geometryType: return ValueType.geometryArray;
+                case ValueType.fileType: return ValueType.fileArray;
                 case ValueType.selfType: return ValueType.selfArray;
                 default: error("this array element type is not supported"); assert(0);
             }

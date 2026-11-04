@@ -10,6 +10,10 @@ class Z8File {
         time = z8_date_now(); size = z8_optional_wrap(0L);
         details = new Z8StringMap();
     }
+    override bool opEquals(Object other) {
+        auto right = cast(Z8File)other;
+        return right !is null && id !is null && id == right.id;
+    }
 }
 
 wstring z8_file_name(wstring value) {
@@ -34,6 +38,16 @@ void z8_file_assign(Z8File value, wstring path) {
 }
 Z8File z8_file_from_path(wstring path) { auto result = new Z8File(); z8_file_assign(result, path); return result; }
 wstring z8_file_path(Z8File value) { return z8_nonnull(value).path; }
+long z8_file_hashCode(Z8File value) { z8_nonnull(value); return value.id is null ? 0 : z8_guid_hash(value.id); }
+bool z8_file_compare(string op)(Z8File left, Z8File right) {
+    import std.path : absolutePath;
+    auto a = absolutePath(z8_file_system_path(left));
+    if (right is null) return op == "!=";
+    auto b = absolutePath(z8_file_system_path(right));
+    static if (op == "==") return a == b;
+    else static if (op == "!=") return a != b;
+    else static assert(0, "unsupported file comparison");
+}
 wstring z8_file_fileName(Z8File value) {
     z8_nonnull(value);
     auto path = z8_string_required(value.path);
@@ -90,6 +104,33 @@ Z8Date z8_file_lastModified(Z8File value) {
     auto t = timeLastModified(path);
     t.timezone = z8_date_timezone();
     return new Z8Date(t);
+}
+private Z8File z8_file_from_disk(string path) {
+    import std.file : exists, isFile, getSize, getcwd;
+    import std.path : absolutePath, relativePath, dirSeparator;
+    auto full = absolutePath(path);
+    auto working = absolutePath(getcwd());
+    auto prefix = working ~ dirSeparator;
+    import std.string : startsWith;
+    auto stored = full.startsWith(prefix) ? relativePath(full, working) : full;
+    auto result = z8_file_from_path(stored.to!wstring);
+    result.size = z8_optional_wrap(exists(full) && isFile(full) ? cast(long)getSize(full) : 0L);
+    result.time = z8_file_lastModified(result);
+    return result;
+}
+Z8File z8_file_parent(Z8File value) {
+    import std.path : absolutePath, dirName;
+    auto parent = dirName(absolutePath(z8_file_system_path(value)));
+    if (!parent.length) throw new Exception("file has no parent");
+    return z8_file_from_disk(parent);
+}
+Z8Array!Z8File z8_file_listFiles(Z8File value) {
+    import std.file : exists, isDir, dirEntries, SpanMode;
+    auto result = new Z8Array!Z8File();
+    auto path = z8_file_system_path(value);
+    if (!exists(path) || !isDir(path)) return result;
+    foreach (entry; dirEntries(path, SpanMode.shallow)) result.z8_add(z8_file_from_disk(entry.name));
+    return result;
 }
 private Z8File z8_file_write_bytes(Z8File value, const(ubyte)[] contents, bool append) {
     import std.file : mkdirRecurse, tempDir, getSize;

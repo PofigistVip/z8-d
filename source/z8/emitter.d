@@ -36,6 +36,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.datespanArray: return "Z8Array!Z8Datespan";
         case ValueType.dateArray: return "Z8Array!Z8Date";
         case ValueType.geometryArray: return "Z8Array!Z8Geometry";
+        case ValueType.fileArray: return "Z8Array!Z8File";
         case ValueType.nullType: assert(0, "null has no concrete D type");
         case ValueType.nullableString: return "wstring";
         case ValueType.enumType: assert(objectClass !is null); return objectClass.emittedName;
@@ -227,6 +228,7 @@ private string emitExprRaw(Expression e) {
             return "(" ~ e.token.text ~ emitExpr(e.left) ~ ")";
         case ExprKind.binary:
             if (e.dateBinary) return "z8_date_binary!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            if (e.fileBinary) return "z8_file_compare!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.optionalNullComparison) {
                 auto value = e.optionalNullOnLeft ? e.right : e.left;
                 return (e.token.text == "==" ? "" : "!") ~ "z8_optional_is_null(" ~ emitExpr(value) ~ ")";

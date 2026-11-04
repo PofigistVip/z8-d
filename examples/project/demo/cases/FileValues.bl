@@ -7,6 +7,12 @@ public class FileValues {
         file alias = value;
         value = "other/new.dat";
         if (alias.path != "other/new.dat" || alias.name != "new.dat") return 4;
+        file another = "other/different.txt";
+        if (value == another || value != alias || value.hashCode() != guid.Null.hashCode()) return 5;
+        file[] files = {value};
+        if (!files.contains(another)) return 6;
+        another.id = guid.create(1);
+        if (files.contains(another)) return 7;
         return 211;
     }
 }
