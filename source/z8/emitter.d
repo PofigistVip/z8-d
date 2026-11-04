@@ -1,0 +1,392 @@
+module z8.emitter;
+
+import std.algorithm : canFind;
+import std.array : join;
+import std.conv : to;
+import std.format : format;
+import std.string : replace;
+import z8.compiler_model;
+
+private enum coreRuntime = import("z8_core_runtime.txt");
+private enum decimalRuntime = import("z8_decimal_runtime.txt");
+private enum stringRuntime = import("z8_string_runtime.txt");
+
+private string dType(ValueType type, Program objectClass = null) {
+    final switch (type) {
+        case ValueType.intType: return "long"; case ValueType.boolType: return "bool";
+        case ValueType.decimalType: return "Z8Decimal";
+        case ValueType.voidType: return "void"; case ValueType.stringType: return "wstring";
+        case ValueType.exceptionType: return "Throwable";
+        case ValueType.selfType: assert(objectClass !is null); return objectClass.emittedName;
+        case ValueType.selfArray: assert(objectClass !is null); return "Z8Array!(" ~ objectClass.emittedName ~ ")";
+        case ValueType.stringMap: return "Z8StringMap";
+        case ValueType.intArray: return "Z8Array!long";
+        case ValueType.decimalArray: return "Z8Array!Z8Decimal";
+        case ValueType.boolArray: return "Z8Array!bool";
+        case ValueType.stringArray: return "Z8Array!wstring";
+        case ValueType.nullType: assert(0, "null has no concrete D type");
+        case ValueType.nullableString: return "wstring";
+        case ValueType.enumType: assert(objectClass !is null); return objectClass.emittedName;
+        case ValueType.enumArray: assert(objectClass !is null); return "Z8Array!(" ~ objectClass.emittedName ~ ")";
+        case ValueType.optionalInt: return "Z8Optional!long";
+        case ValueType.optionalBool: return "Z8Optional!bool";
+        case ValueType.optionalDecimal: return "Z8Optional!Z8Decimal";
+    }
+}
+/// The Java runtime stores strings as UTF-16; preserve its code-unit ordering.
+private string emitStringLiteral(string text) {
+    auto raw = text.to!wstring;
+    wchar[] value;
+    for (size_t i = 1; i + 1 < raw.length; ++i) {
+        wchar c = raw[i];
+        if (c == '\\') {
+            c = raw[++i];
+            switch (c) {
+                case 'b': c = '\b'; break; case 'f': c = '\f'; break;
+                case 'n': c = '\n'; break; case 'r': c = '\r'; break; case 't': c = '\t'; break;
+                default: break; // lexer has validated quotes and backslash
+            }
+            value ~= c;
+        } else if (c >= ' ' || c == '\t' || c == '\r' || c == '\n') value ~= c;
+    }
+    if (value.length == 0) return `""w`;
+    string[] units;
+    foreach (c; value) units ~= format("cast(wchar)0x%04X", cast(uint)c);
+    return "[" ~ units.join(", ") ~ "].idup";
+}
+private string dStorageType(ValueType type, Program objectClass = null) {
+    return type == ValueType.intType ? "Z8Optional!long" : type == ValueType.boolType ? "Z8Optional!bool" : type == ValueType.decimalType ? "Z8Optional!Z8Decimal" : dType(type, objectClass);
+}
+private string emitExpr(Expression e) {
+    string value;
+    bool deferArguments;
+    if (!e.emittedOverride.length && e.kind == ExprKind.memberCall && !e.instanceCall && !e.targetClass.length)
+        foreach (argument; e.arguments) if (argument.optionalRequired) deferArguments = true;
+    if (e.emittedOverride.length) value = e.emittedOverride;
+    else if (deferArguments) {
+        auto suffix = e.token.position.offset.to!string;
+        value = "(() { ";
+        string savedReceiver;
+        if (!e.builtinCall.length) {
+            savedReceiver = e.left.emittedOverride;
+            auto name = "z8_receiver_" ~ suffix;
+            value ~= "auto " ~ name ~ " = " ~ emitExpr(e.left) ~ "; ";
+            e.left.emittedOverride = name;
+        }
+        string[] savedOverrides;
+        foreach (i, argument; e.arguments) {
+            savedOverrides ~= argument.emittedOverride;
+            auto required = argument.optionalRequired, promote = argument.promoteToDecimal;
+            auto convert = argument.convertToString;
+            if (required) { argument.optionalRequired = false; argument.promoteToDecimal = false; argument.convertToString = ValueType.voidType; }
+            auto name = "z8_arg_" ~ suffix ~ "_" ~ i.to!string;
+            value ~= "auto " ~ name ~ " = " ~ emitExpr(argument) ~ "; ";
+            argument.optionalRequired = required; argument.promoteToDecimal = promote; argument.convertToString = convert;
+            argument.emittedOverride = name;
+        }
+        value ~= "return " ~ emitExprRaw(e) ~ "; })()";
+        if (!e.builtinCall.length) e.left.emittedOverride = savedReceiver;
+        foreach (i, argument; e.arguments) argument.emittedOverride = savedOverrides[i];
+    } else value = emitExprRaw(e);
+    if (e.nonNullStringResult) value = "z8_string_or_empty(" ~ value ~ ")";
+    if (e.optionalRequired) value = "z8_optional_require(" ~ value ~ ")";
+    if (e.nullableStringMode == NullableStringMode.required) value = "z8_string_required(" ~ value ~ ")";
+    if (e.nullableStringMode == NullableStringMode.nullAsEmpty) value = "z8_string_or_empty(" ~ value ~ ")";
+    if (e.kind == ExprKind.conditional && isNullableReference(e.inferredType))
+        value = "cast(" ~ dType(e.inferredType, e.objectClass) ~ ")(" ~ value ~ ")";
+    if (e.promoteToDecimal) value = "z8_decimal_from_int(" ~ value ~ ")";
+    if (e.optionalWrap) value = "z8_optional_wrap(" ~ value ~ ")";
+    if (e.convertToString == ValueType.intType) return "(" ~ value ~ ").to!string.to!wstring";
+    if (e.convertToString == ValueType.boolType) return "(" ~ value ~ " ? \"true\"w : \"false\"w)";
+    if (e.convertToString == ValueType.decimalType) return "(" ~ value ~ ").z8_string()";
+    return value;
+}
+private string emitReceiver(Expression e) {
+    if (e.kind == ExprKind.selfRef || e.kind == ExprKind.superRef) return "(" ~ emitExpr(e) ~ ")";
+    return "z8_nonnull(" ~ emitExpr(e) ~ ")";
+}
+private string emitExprRaw(Expression e) {
+    final switch (e.kind) {
+        case ExprKind.integer:
+            return "(cast(long)(" ~ e.token.text.replace(" ", "").replace("\t", "") ~ "))";
+        case ExprKind.decimalLiteral:
+            return "z8_decimal_literal(\"" ~ e.token.text.replace(" ", "").replace("\t", "") ~ "\")";
+        case ExprKind.boolean: return e.token.text;
+        case ExprKind.stringLiteral: return emitStringLiteral(e.token.text);
+        case ExprKind.nullLiteral: return isOptionalPrimitive(e.inferredType) ? dType(e.inferredType) ~ ".init" : e.inferredType == ValueType.voidType ? "null" : "cast(" ~ dType(e.inferredType, e.objectClass) ~ ")null";
+        case ExprKind.arrayLiteral:
+            string[] elements; foreach (element; e.arguments)
+                elements ~= (e.inferredType == ValueType.selfArray || e.inferredType == ValueType.enumArray) ? "cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(element) ~ ")" : emitExpr(element);
+            return "new " ~ dType(e.inferredType, e.objectClass) ~ "(" ~ (elements.length ? "[" ~ elements.join(", ") ~ "]" ~ ([ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(e.inferredType) ? ", true" : "") : "") ~ ")";
+        case ExprKind.variable: return e.isField ? (e.targetClass.length ? e.targetClass ~ ".f_" : "this.f_") ~ e.token.text : "v_" ~ e.token.text;
+        case ExprKind.selfRef: return "this";
+        case ExprKind.superRef: return "super";
+        case ExprKind.newSelf: return "z8_new!(" ~ e.objectClass.emittedName ~ ")()";
+        case ExprKind.field:
+            if (e.enumConstant) return e.targetClass ~ ".e_" ~ e.token.text;
+            return (e.targetClass.length ? e.targetClass : emitReceiver(e.left)) ~ ".f_" ~ e.token.text;
+        case ExprKind.call:
+            string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+            return "m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
+        case ExprKind.memberCall:
+            if (e.builtinCall.length) {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return e.builtinCall ~ "(" ~ args.join(", ") ~ ")";
+            }
+            if (e.optionalDecimalReceiver) {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return "z8_optional_decimal_call!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
+            }
+            if (e.optionalBoolReceiver) return "(z8_optional_require(" ~ emitExpr(e.left) ~ ") ? \"true\"w : \"false\"w)";
+            if (e.optionalIntReceiver) {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return "z8_optional_int_call!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
+            }
+            if (e.nullableStringReceiver) {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return "z8_nullable_string_call!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
+            }
+            if (e.instanceCall) {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return emitReceiver(e.left) ~ ".m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
+            }
+            if (e.targetClass.length) {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return e.targetClass ~ ".m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
+            }
+            if (isArray(e.inferredType)) {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return "z8_invoke!\"z8_" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
+            }
+            if (e.inferredType == ValueType.stringMap) {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return "z8_invoke!\"z8_" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
+            }
+            if (e.inferredType == ValueType.exceptionType) return "z8_message(z8_nonnull(" ~ emitExpr(e.left) ~ "))";
+            if (e.inferredType == ValueType.decimalType) {
+                auto receiver = "(" ~ emitExpr(e.left) ~ ")";
+                if (e.token.text == "toString") return receiver ~ ".z8_string()";
+                if (["signum", "ceil", "floor"].canFind(e.token.text)) return receiver ~ ".z8_" ~ e.token.text ~ "()";
+                if (!e.arguments.length) return receiver ~ ".z8_round_int()";
+                string[] args; foreach (arg; e.arguments) args ~= emitExpr(arg);
+                return receiver ~ ".z8_round(" ~ args.join(", ") ~ ")";
+            }
+            if (e.inferredType == ValueType.intType) {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return "z8_int_" ~ e.token.text ~ "(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
+            }
+            if (e.inferredType == ValueType.boolType) return "(" ~ emitExpr(e.left) ~ " ? \"true\"w : \"false\"w)";
+            if (e.token.text == "toString") return emitExpr(e.left);
+            if (e.token.text != "length" && e.token.text != "isEmpty") {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return "z8_str_" ~ e.token.text ~ "(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
+            }
+            auto value = "(" ~ emitExpr(e.left) ~ ").length";
+            return e.token.text == "length" ? "cast(long)(" ~ value ~ ")" : "(" ~ value ~ " == 0)";
+        case ExprKind.index:
+            if (e.inferredType == ValueType.stringMap) return "z8_invoke!\"z8_get\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            return "z8_array_at(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+        case ExprKind.castExpr:
+            return e.castType == ValueType.selfType ? "z8_cast!(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")" : emitExpr(e.left);
+        case ExprKind.instanceOf:
+            return "(cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ") !is null)";
+        case ExprKind.unary:
+            if (e.optionalDecimalUnary) return "(" ~ e.token.text ~ "z8_optional_require(" ~ emitExpr(e.left) ~ "))";
+            if (e.optionalBoolUnary) return "(!z8_optional_require(" ~ emitExpr(e.left) ~ "))";
+            if (e.optionalIntUnary) return "z8_optional_int_unary!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ")";
+            return "(" ~ e.token.text ~ emitExpr(e.left) ~ ")";
+        case ExprKind.binary:
+            if (e.optionalNullComparison) {
+                auto value = e.optionalNullOnLeft ? e.right : e.left;
+                return (e.token.text == "==" ? "" : "!") ~ "z8_optional_is_null(" ~ emitExpr(value) ~ ")";
+            }
+            if (e.optionalBoolBinary) {
+                auto left = emitExpr(e.left), right = emitExpr(e.right);
+                if (!e.optionalBoolLeft) left = "z8_optional_wrap(" ~ left ~ ")";
+                if (!e.optionalBoolRight) right = "z8_optional_wrap(" ~ right ~ ")";
+                return "z8_optional_bool_binary!\"" ~ e.token.text ~ "\"(" ~ left ~ ", " ~ right ~ ")";
+            }
+            if (e.optionalIntBinary) {
+                auto left = emitExpr(e.left), right = emitExpr(e.right);
+                if (!e.optionalIntLeft) left = "z8_optional_wrap(" ~ left ~ ")";
+                if (!e.optionalIntRight) right = "z8_optional_wrap(" ~ right ~ ")";
+                return "z8_optional_int_binary!\"" ~ e.token.text ~ "\"(" ~ left ~ ", " ~ right ~ ")";
+            }
+            if (e.optionalDecimalBinary) {
+                auto left = emitExpr(e.left), right = emitExpr(e.right);
+                if (!e.optionalDecimalLeft) left = "z8_optional_wrap(" ~ left ~ ")";
+                if (!e.optionalDecimalRight) right = "z8_optional_wrap(" ~ right ~ ")";
+                return "z8_optional_decimal_binary!\"" ~ e.token.text ~ "\"(" ~ left ~ ", " ~ right ~ ")";
+            }
+            if (e.optionalMixedIntDecimal) {
+                auto left = emitExpr(e.left), right = emitExpr(e.right);
+                if (!(e.optionalIntLeft || e.optionalDecimalLeft)) left = "z8_optional_wrap(" ~ left ~ ")";
+                if (!(e.optionalIntRight || e.optionalDecimalRight)) right = "z8_optional_wrap(" ~ right ~ ")";
+                return "z8_optional_mixed!(\"" ~ e.token.text ~ "\", " ~ (e.optionalMixedIntOnLeft ? "true" : "false") ~ ")(" ~ left ~ ", " ~ right ~ ")";
+            }
+            if (e.inferredType == ValueType.nullType)
+                return "(" ~ emitExpr(e.left) ~ (e.token.text == "==" ? " is " : " !is ") ~ emitExpr(e.right) ~ ")";
+            if (e.inferredType == ValueType.stringMap)
+                return "z8_map_union(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            if (isArray(e.inferredType))
+                return "z8_array_union(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            if (e.nullableStringLeft)
+                return "z8_nullable_string_binary!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            if ((e.token.text == "/" || e.token.text == "%") && e.inferredType != ValueType.decimalType)
+                return (e.token.text == "/" ? "z8_div(" : "z8_mod(") ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            auto op = e.emittedOperator.length ? e.emittedOperator : e.token.text == "+" && e.inferredType == ValueType.stringType ? "~" : e.token.text;
+            return "(" ~ emitExpr(e.left) ~ " " ~ op ~ " " ~ emitExpr(e.right) ~ ")";
+        case ExprKind.conditional:
+            return "(" ~ emitExpr(e.left) ~ " ? " ~ emitExpr(e.right) ~ " : " ~ emitExpr(e.third) ~ ")";
+        case ExprKind.elvis:
+            if (isOptionalPrimitive(e.inferredType))
+                return (e.optionalElvis ? "z8_optional_elvis_optional(" : "z8_optional_elvis(") ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            return "z8_elvis!(" ~ dType(e.inferredType, e.objectClass) ~ ")(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+    }
+}
+private string emitStatement(Statement s) {
+    final switch (s.kind) {
+        case StmtKind.block:
+            string result = "{\n"; foreach (child; s.children) result ~= emitStatement(child); return result ~ "}\n";
+        case StmtKind.variable:
+        case StmtKind.assignment:
+        case StmtKind.expressionStmt: return emitSimple(s) ~ ";\n";
+        case StmtKind.returnStmt: return "return" ~ (s.expression is null ? "" : " " ~ emitExpr(s.expression)) ~ ";\n";
+        case StmtKind.ifStmt:
+            auto result = "if (" ~ emitExpr(s.expression) ~ ") {\n" ~ emitStatement(s.children[0]) ~ "}\n";
+            if (s.children.length == 2) result ~= "else {\n" ~ emitStatement(s.children[1]) ~ "}\n";
+            return result;
+        case StmtKind.whileStmt:
+            return "while (" ~ emitExpr(s.expression) ~ ") {\n" ~ emitStatement(s.children[0]) ~ "}\n";
+        case StmtKind.doWhileStmt:
+            return "do {\n" ~ emitStatement(s.children[0]) ~ "} while (" ~ emitExpr(s.expression) ~ ");\n";
+        case StmtKind.forStmt:
+            return "for (" ~ (s.initial is null ? "" : emitSimple(s.initial)) ~ "; " ~ emitExpr(s.expression) ~ "; " ~ emitSimple(s.step) ~ ") {\n" ~ emitStatement(s.children[0]) ~ "}\n";
+        case StmtKind.forEachStmt:
+            auto suffix = s.token.position.offset.to!string;
+            auto iter = "z8_iter_" ~ suffix, versionName = "z8_version_" ~ suffix, indexName = "z8_index_" ~ suffix;
+            return "{\nauto " ~ iter ~ " = " ~ emitReceiver(s.expression) ~ ";\nauto " ~ versionName ~ " = " ~ iter ~ ".z8_version;\n" ~
+                "for (long " ~ indexName ~ " = 0; " ~ indexName ~ " != " ~ iter ~ ".z8_size(); ++" ~ indexName ~ ") {\n" ~
+                "if (" ~ versionName ~ " != " ~ iter ~ ".z8_version) throw new Exception(\"array modified during iteration\");\n" ~
+                dStorageType(s.initial.type, s.initial.objectClass) ~ " v_" ~ s.initial.token.text ~ " = " ~ iter ~ ".z8_get(" ~ indexName ~ ");\n" ~
+                emitStatement(s.children[0]) ~ "}\n}\n";
+        case StmtKind.breakStmt: return "break;\n";
+        case StmtKind.continueStmt: return "continue;\n";
+        case StmtKind.throwStmt:
+            return "throw " ~ (s.type == ValueType.stringType ? "new Exception(z8_to_utf8(" ~ emitExpr(s.expression) ~ "))" : "z8_nonnull(" ~ emitExpr(s.expression) ~ ")") ~ ";\n";
+        case StmtKind.tryStmt:
+            auto result = "try " ~ emitStatement(s.children[0]);
+            if (s.hasCatch) result ~= "catch (Throwable v_" ~ s.catchName.text ~ ") " ~ emitStatement(s.children[1]);
+            if (s.hasFinally) result ~= "finally " ~ emitStatement(s.children[$-1]);
+            return result;
+    }
+}
+private string emitSimple(Statement s) {
+    if (s.kind == StmtKind.variable)
+        return dStorageType(s.type, s.objectClass) ~ " v_" ~ s.token.text ~ " = " ~
+            (s.expression !is null ? emitExpr(s.expression) : s.type == ValueType.intType ? "z8_optional_wrap(0L)" : s.type == ValueType.boolType ? "z8_optional_wrap(false)" : s.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(s.type, s.objectClass));
+    if (s.kind == StmtKind.expressionStmt) return emitExpr(s.expression);
+    assert(s.kind == StmtKind.assignment);
+    if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.stringMap)
+        return "z8_invoke!\"z8_add\"(" ~ emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
+    auto name = emitExpr(s.target);
+    if (s.type == ValueType.stringMap && s.assignmentOperator == "+=")
+        return "z8_map_add_assign(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
+    if (isArray(s.type) && s.assignmentOperator == "+=")
+        return "z8_array_add_assign(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
+    if (s.type == ValueType.intType && s.assignmentOperator != "=")
+        return "z8_optional_int_assign!\"" ~ s.assignmentOperator[0 .. $-1] ~ "\"(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
+    if (s.type == ValueType.decimalType && s.assignmentOperator != "=")
+        return "z8_optional_decimal_assign!\"" ~ s.assignmentOperator[0 .. $-1] ~ "\"(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
+    if (s.type == ValueType.stringType && s.assignmentOperator == "+=")
+        return "z8_string_add_assign(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
+    return name ~ " " ~ s.assignmentOperator ~ " " ~ emitExpr(s.expression);
+}
+private string defaultValue(ValueType type, Program objectClass = null) {
+    if (type == ValueType.exceptionType) return "new Exception(null)";
+    if (type == ValueType.decimalType) return "z8_decimal_from_int(0)";
+    if (type == ValueType.selfType) return "z8_new!(" ~ dType(type, objectClass) ~ ")()";
+    if (type == ValueType.stringMap) return "new Z8StringMap()";
+    if (isArray(type)) return "new " ~ dType(type, objectClass) ~ "()";
+    if (type == ValueType.intType) return "0";
+    if (type == ValueType.stringType) return `""w`;
+    assert(type == ValueType.boolType); return "false";
+}
+package string emitPrograms(Program[] programs) {
+    string result = coreRuntime;
+    result ~= "\n" ~ decimalRuntime ~ "\n" ~ stringRuntime ~ "\n";
+    foreach (program; programs) {
+        if (program.isEnum) {
+            result ~= "class " ~ program.emittedName ~ " {\n";
+            foreach (value; program.enumValues) result ~= "__gshared " ~ program.emittedName ~ " e_" ~ value.text ~ ";\n";
+            if (program.enumValues.length) {
+                result ~= "shared static this() {\n";
+                foreach (value; program.enumValues) result ~= "e_" ~ value.text ~ " = new " ~ program.emittedName ~ "();\n";
+                result ~= "}\n";
+            }
+            result ~= "}\n";
+            continue;
+        }
+        result ~= "class " ~ program.emittedName ~ (program.baseClass is null ? "" : " : " ~ program.baseClass.emittedName) ~ " {\n";
+        result ~= "alias Z8Self = " ~ program.emittedName ~ ";\n";
+        bool invalidObjectField;
+        foreach (field; program.fields)
+            if (!field.isStatic && field.type == ValueType.selfType && field.initializer !is null && field.initializer.kind == ExprKind.nullLiteral) {
+                invalidObjectField = true; break;
+            }
+        if (invalidObjectField) result ~= "enum bool z8_invalid_object_field = true;\n";
+        result ~= (program.baseClass is null ? "" : "override ") ~ "void z8_validate_object() { ";
+        if (program.baseClass !is null) result ~= "super.z8_validate_object(); ";
+        if (invalidObjectField) result ~= "throw new Exception(\"null object field initializer\"); ";
+        result ~= "}\n";
+        bool hasInstanceFields, hasStaticFields;
+        foreach (field; program.fields) {
+            result ~= (field.isStatic ? "__gshared " : "") ~ dStorageType(field.type, field.objectClass) ~ " f_" ~ field.name.text ~ ";\n";
+            if (field.isStatic) hasStaticFields = true; else hasInstanceFields = true;
+        }
+        if (hasInstanceFields) {
+            result ~= "this() {\n";
+            foreach (field; program.fields)
+                if (!field.isStatic && field.initializer is null) result ~= "this.f_" ~ field.name.text ~ " = " ~ (field.type == ValueType.intType ? "z8_optional_wrap(0L)" : field.type == ValueType.boolType ? "z8_optional_wrap(false)" : field.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(field.type, field.objectClass)) ~ ";\n";
+            foreach (field; program.fields)
+                if (!field.isStatic && field.initializer !is null) result ~= "this.f_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
+            result ~= "}\n";
+        }
+        if (hasStaticFields) {
+            result ~= "shared static this() {\n";
+            foreach (field; program.fields) if (field.isStatic)
+                result ~= "f_" ~ field.name.text ~ " = " ~ (field.initializer is null ? field.type == ValueType.intType ? "z8_optional_wrap(0L)" : field.type == ValueType.boolType ? "z8_optional_wrap(false)" : field.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(field.type, field.objectClass) : emitExpr(field.initializer)) ~ ";\n";
+            result ~= "}\n";
+        }
+        foreach (m; program.methods) {
+            if (program.baseClass !is null) {
+                bool hasInheritedName;
+                for (auto base = program.baseClass; base !is null; base = base.baseClass)
+                    foreach (candidate; base.methods) if (candidate.name.text == m.name.text && !candidate.isStatic) {
+                        hasInheritedName = true;
+                    }
+                bool firstName = true;
+                foreach (earlier; program.methods) { if (earlier is m) break; if (earlier.name.text == m.name.text) firstName = false; }
+                if (firstName && hasInheritedName)
+                    result ~= "alias m_" ~ m.name.text ~ " = " ~ program.baseClass.emittedName ~ ".m_" ~ m.name.text ~ ";\n";
+            }
+            string[] params;
+            foreach (p; m.parameters) params ~= dStorageType(p.type, p.objectClass) ~ " v_" ~ p.name.text;
+            bool hasIntParameter;
+            foreach (p; m.parameters) if (p.type == ValueType.intType || p.type == ValueType.boolType || p.type == ValueType.decimalType) hasIntParameter = true;
+            if (hasIntParameter && !m.overrides) {
+                string[] nativeParams, nativeArgs;
+                foreach (p; m.parameters) {
+                    nativeParams ~= dType(p.type, p.objectClass) ~ " v_" ~ p.name.text;
+                    nativeArgs ~= (p.type == ValueType.intType || p.type == ValueType.boolType || p.type == ValueType.decimalType) ? "z8_optional_wrap(v_" ~ p.name.text ~ ")" : "v_" ~ p.name.text;
+                }
+                result ~= (m.isStatic ? "static " : "final ") ~ dStorageType(m.returnType, m.returnObjectClass) ~ " m_" ~ m.name.text ~ "(" ~ nativeParams.join(", ") ~ ") { " ~
+                    (m.returnType == ValueType.voidType ? "" : "return ") ~ "m_" ~ m.name.text ~ "(" ~ nativeArgs.join(", ") ~ "); }\n";
+            }
+            auto modifiers = m.isStatic ? "static " : m.overrides ? "override " : m.isVirtual ? "" : "final ";
+            result ~= modifiers ~ dStorageType(m.returnType, m.returnObjectClass) ~ " m_" ~ m.name.text ~ "(" ~ params.join(", ") ~ ")\n" ~ emitStatement(m.body);
+        }
+        result ~= "}\n";
+    }
+    return result;
+}
