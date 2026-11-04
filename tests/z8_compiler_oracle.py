@@ -49,7 +49,8 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     file_io_zip = temp / "file-io-archive.zip"
     file_io_extracted = temp / "file-io-extracted"
     file_io_extracted_child = file_io_extracted / "nested" / "unicode.txt"
-    (project / "src" / "bl" / "demo" / "cases" / "FileIO.bl").write_text('''public class FileIO {
+    (project / "src" / "bl" / "demo" / "cases" / "FileIO.bl").write_text('''import org.zenframework.z8.lang.encoding;
+    public class FileIO {
         public static int run() {
             file value = __FILE__;
             if (value.exists() || !value.isEmpty()) return 1;
@@ -69,6 +70,14 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             binary contents = child;
             if (string.fromBinary(contents) != "Привет 😀") return 11;
             if (folder.listFiles().size() != 1 || child.parent().parent() != folder) return 8;
+            encoding charset = encoding.Windows1251;
+            if (charset != encoding.Windows1251 || charset == encoding.UTF8) return 14;
+            child.write("Привет", charset);
+            child.append("!", charset);
+            if (child.size != 7 || child.read(charset) != "Привет!") return 15;
+            binary cyrillic = '207, 240, 232, 226, 229, 242';
+            if (string.fromBinary(cyrillic, charset) != "Привет") return 16;
+            child.write("Привет 😀");
             file archive = __ZIP__;
             file destination = __EXTRACTED__;
             file extracted = __EXTRACTED_CHILD__;

@@ -15,6 +15,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.decimalType: return "Z8Decimal";
         case ValueType.voidType: return "void"; case ValueType.stringType: return "wstring";
         case ValueType.exceptionType: return "Throwable";
+        case ValueType.encodingType: return "Z8Encoding";
         case ValueType.guidType: return "Z8Guid";
         case ValueType.binaryType: return "Z8Binary";
         case ValueType.datespanType: return "Z8Datespan";
@@ -371,6 +372,7 @@ private string emitSimple(Statement s) {
 }
 private string defaultValue(ValueType type, Program objectClass = null, bool hasContainer = false) {
     if (type == ValueType.exceptionType) return "new Exception(null)";
+    if (type == ValueType.encodingType) return "null";
     if (type == ValueType.primaryType) return "null";
     if (type == ValueType.guidType) return "z8_guid_zero()";
     if (type == ValueType.binaryType) return "new Z8Binary()";

@@ -54,11 +54,7 @@ wstring z8_string_concat(Z8Array!wstring values, wstring delimiter) {
     return result;
 }
 wstring z8_string_fromBinary(Z8Binary value) {
-    z8_nonnull(value);
-    auto result = cast(string)value.data[value.position .. $];
-    value.position = value.data.length;
-    auto converted = result.to!wstring;
-    return converted.length ? converted : ""w;
+    return z8_string_fromBinary(value, z8_encoding_by_id(4));
 }
 bool z8_str_startsWith(wstring value, wstring prefix, long offset = 0) {
     prefix = z8_string_required(prefix);

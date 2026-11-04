@@ -43,6 +43,7 @@ class Parser {
             case "geometry": result = ValueType.geometryType; break;
             case "file": result = ValueType.fileType; break;
             case "exception": result = ValueType.exceptionType; break;
+            case "encoding": result = ValueType.encodingType; break;
             case "primary": result = ValueType.primaryType; break;
             default:
                 if (token.kind == TokenKind.identifier) { result = ValueType.selfType; parsedObjectName = token.text; }

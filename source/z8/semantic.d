@@ -252,6 +252,7 @@ class Checker {
         }
         Program[string] imported;
         foreach (item; program.imports) {
+            if (item.name == "org.zenframework.z8.lang.encoding") continue;
             auto found = item.name in allPrograms;
             if (found is null) fail("unresolved import '" ~ item.name ~ "'", item.token);
             auto simpleName = (*found).name.text;
@@ -409,6 +410,13 @@ class Checker {
                         e.emittedOverride = e.token.text == "Min" ? "z8_date_min" : "z8_date_max";
                         return ValueType.dateType;
                     }
+                    if (e.left.token.text == "encoding") {
+                        auto names = ["Default", "Cp866", "KOI8R", "USASCII", "UTF8", "UTF16", "UTF16BE", "UTF16LE", "Windows1250", "Windows1251", "Windows1252", "Windows1253", "Windows1254", "Windows1257"];
+                        foreach (i, name; names) if (e.token.text == name) {
+                            e.emittedOverride = "z8_encoding_by_id(" ~ i.to!string ~ ")"; e.enumConstant = true; return ValueType.encodingType;
+                        }
+                        fail("unknown encoding", e.token);
+                    }
                     if (e.left.token.text == "geometry") {
                         auto names = ["None", "Ring", "Point", "Line", "Polygon", "MultiPoint", "MultiLine", "MultiPolygon", "Collection", "DefaultSRS"];
                         foreach (i, name; names) if (e.token.text == name) {
@@ -480,7 +488,7 @@ class Checker {
                         checkArguments(e, [ValueType.stringArray, ValueType.stringType]); e.builtinCall = "z8_string_concat"; return ValueType.stringType;
                     }
                     if (e.token.text == "fromBinary") {
-                        checkArguments(e, [ValueType.binaryType]); e.builtinCall = "z8_string_fromBinary"; return ValueType.stringType;
+                        checkArguments(e, e.arguments.length == 1 ? [ValueType.binaryType] : [ValueType.binaryType, ValueType.encodingType]); e.builtinCall = "z8_string_fromBinary"; return ValueType.stringType;
                     }
                     fail("unsupported static string method", e.token);
                 }
@@ -609,14 +617,20 @@ class Checker {
                 e.inferredType = receiver;
                 if (receiver == ValueType.fileType) {
                     if (e.token.text == "zip" || e.token.text == "unzip") {
-                        checkArguments(e, [ValueType.fileType]); e.builtinCall = "z8_file_" ~ e.token.text; return ValueType.fileType;
+                        checkArguments(e, e.token.text == "unzip" && e.arguments.length == 2 ?
+                            [ValueType.fileType, ValueType.encodingType] : [ValueType.fileType]);
+                        e.builtinCall = "z8_file_" ~ e.token.text; return ValueType.fileType;
                     }
                     if (["write", "append"].canFind(e.token.text)) {
-                        if (e.arguments.length != 1) fail("incorrect argument count", e.token);
+                        if (e.arguments.length != 1 && e.arguments.length != 2) fail("incorrect argument count", e.token);
                         auto contentType = typeOf(e.arguments[0]);
                         auto expectedContent = contentType == ValueType.binaryType ? ValueType.binaryType : ValueType.stringType;
                         if (!matches(e.arguments[0], expectedContent)) fail("argument type mismatch", e.token);
+                        if (e.arguments.length == 2 && (expectedContent != ValueType.stringType || !matches(e.arguments[1], ValueType.encodingType))) fail("argument type mismatch", e.token);
                         e.builtinCall = "z8_file_" ~ e.token.text; return ValueType.fileType;
+                    }
+                    if (e.token.text == "read" && e.arguments.length == 1) {
+                        checkArguments(e, [ValueType.encodingType]); e.builtinCall = "z8_file_read"; return ValueType.stringType;
                     }
                     if (e.token.text == "delete") {
                         checkArguments(e, e.arguments.length == 0 ? [] : [ValueType.boolType]);
@@ -707,7 +721,8 @@ class Checker {
                 }
                 if (receiver == ValueType.binaryType) {
                     if (e.token.text == "unzip") {
-                        checkArguments(e, [ValueType.fileType]); e.builtinCall = "z8_binary_unzip"; return ValueType.voidType;
+                        checkArguments(e, e.arguments.length == 2 ? [ValueType.fileType, ValueType.encodingType] : [ValueType.fileType]);
+                        e.builtinCall = "z8_binary_unzip"; return ValueType.voidType;
                     }
                     if (e.token.text == "setName") {
                         checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_binary_set_name"; return ValueType.binaryType;
@@ -1029,6 +1044,10 @@ class Checker {
                         fail("invalid enum operands", e.token);
                     e.emittedOperator = op == "==" ? "is" : "!is";
                     return ValueType.boolType;
+                }
+                if (left == ValueType.encodingType && right == ValueType.encodingType) {
+                    if (!["==", "!="].canFind(op)) fail("invalid enum operands", e.token);
+                    e.emittedOperator = op == "==" ? "is" : "!is"; return ValueType.boolType;
                 }
                 if (isMap(left) && left == right && op == "+") {
                     e.inferredType = left;

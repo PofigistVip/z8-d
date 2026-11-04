@@ -5,8 +5,7 @@ class Z8Binary {
     this(ubyte[] data = null) { this.data = data; }
 }
 Z8Binary z8_binary_from_string(wstring value) {
-    auto bytes = z8_string_required(value).to!string;
-    return new Z8Binary(cast(ubyte[])bytes.dup);
+    return new Z8Binary(z8_encoding_encode(value, z8_encoding_by_id(0)));
 }
 
 Z8Binary z8_binary_literal(string text) {

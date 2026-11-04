@@ -161,8 +161,11 @@ bool z8_file_isEmpty(Z8File value) {
     return isDir(path) ? dirEntries(path, SpanMode.shallow).empty : getSize(path) == 0;
 }
 wstring z8_file_read(Z8File value) {
-    import std.file : readText;
-    return readText(z8_file_system_path(value)).to!wstring;
+    return z8_file_read(value, z8_encoding_by_id(0));
+}
+wstring z8_file_read(Z8File value, Z8Encoding encoding) {
+    import std.file : read;
+    return z8_encoding_decode(cast(ubyte[])read(z8_file_system_path(value)), encoding);
 }
 Z8Binary z8_file_to_binary(Z8File value) {
     import std.file : read;
@@ -248,12 +251,16 @@ private Z8File z8_file_write_bytes(Z8File value, const(ubyte)[] contents, bool a
     return value;
 }
 Z8File z8_file_write(Z8File value, wstring contents) {
-    auto bytes = z8_string_required(contents).to!string;
-    return z8_file_write_bytes(value, cast(const(ubyte)[])bytes, false);
+    return z8_file_write(value, contents, z8_encoding_by_id(0));
 }
 Z8File z8_file_append(Z8File value, wstring contents) {
-    auto bytes = z8_string_required(contents).to!string;
-    return z8_file_write_bytes(value, cast(const(ubyte)[])bytes, true);
+    return z8_file_append(value, contents, z8_encoding_by_id(0));
+}
+Z8File z8_file_write(Z8File value, wstring contents, Z8Encoding encoding) {
+    return z8_file_write_bytes(value, z8_encoding_encode(contents, encoding), false);
+}
+Z8File z8_file_append(Z8File value, wstring contents, Z8Encoding encoding) {
+    return z8_file_write_bytes(value, z8_encoding_encode(contents, encoding), true);
 }
 Z8File z8_file_write(Z8File value, Z8Binary contents) {
     z8_nonnull(contents);

@@ -1,3 +1,4 @@
+import org.zenframework.z8.lang.encoding;
 public class StringExtras {
     public static int run() {
         string text = "AbC";
@@ -28,6 +29,14 @@ public class StringExtras {
         string[] kept = "a,,".split(",", -1);
         if (kept.size() != 3 || kept.last() != "") return 16;
         if ("".split(",").size() != 1 || "abc".split("").size() != 3) return 17;
+        binary utf16 = '254, 255, 0, 65, 0, 66';
+        if (string.fromBinary(utf16, encoding.UTF16) != "AB") return 18;
+        binary cp866 = '143, 224, 168, 162, 165, 226';
+        if (string.fromBinary(cp866, encoding.Cp866) != "Привет") return 19;
+        binary malformed = '192, 128';
+        if (string.fromBinary(malformed) != "��") return 20;
+        binary loneSurrogate = "😀".charAt(0);
+        if (string.fromBinary(loneSurrogate) != "?") return 21;
         return 227;
     }
 }

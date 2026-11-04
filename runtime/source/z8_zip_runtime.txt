@@ -21,14 +21,16 @@ private ubyte[] z8_zip_path(string source) {
     return cast(ubyte[])archive.build();
 }
 
-private void z8_zip_extract(ubyte[] bytes, string directory) {
+private void z8_zip_extract(ubyte[] bytes, string directory, Z8Encoding encoding) {
     import std.file : mkdirRecurse, exists, isSymlink, write;
     import std.path : buildPath, dirName, isAbsolute;
     import std.string : replace, split;
     import std.zip : ZipArchive;
+    z8_nonnull(encoding);
     auto archive = new ZipArchive(bytes);
     foreach (name, entry; archive.directory) {
-        auto normalized = name.replace("\\", "/");
+        auto entryEncoding = (entry.flags & 0x800) ? z8_encoding_by_id(4) : z8_nonnull(encoding);
+        auto normalized = z8_encoding_decode(cast(const(ubyte)[])name, entryEncoding).to!string.replace("\\", "/");
         if (isAbsolute(normalized) || normalized.canFind(':')) throw new Exception("invalid archive path");
         auto path = directory;
         auto parts = normalized.split("/");
@@ -59,8 +61,11 @@ Z8File z8_file_zip(Z8File destination, Z8File source) {
     return destination;
 }
 Z8File z8_file_unzip(Z8File archive, Z8File directory) {
+    return z8_file_unzip(archive, directory, z8_encoding_by_id(4));
+}
+Z8File z8_file_unzip(Z8File archive, Z8File directory, Z8Encoding encoding) {
     import std.file : read;
-    z8_zip_extract(cast(ubyte[])read(z8_file_system_path(archive)), z8_file_system_path(directory));
+    z8_zip_extract(cast(ubyte[])read(z8_file_system_path(archive)), z8_file_system_path(directory), encoding);
     return archive;
 }
 
@@ -83,7 +88,10 @@ Z8Binary z8_binary_zip(Z8Array!Z8Binary values) {
     return new Z8Binary(cast(ubyte[])archive.build());
 }
 void z8_binary_unzip(Z8Binary archive, Z8File directory) {
+    z8_binary_unzip(archive, directory, z8_encoding_by_id(4));
+}
+void z8_binary_unzip(Z8Binary archive, Z8File directory, Z8Encoding encoding) {
     z8_nonnull(archive);
-    z8_zip_extract(archive.data[archive.position .. $], z8_file_system_path(directory));
+    z8_zip_extract(archive.data[archive.position .. $], z8_file_system_path(directory), encoding);
     archive.position = archive.data.length;
 }

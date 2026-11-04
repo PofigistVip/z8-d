@@ -1,0 +1,120 @@
+class Z8Encoding {
+    int id;
+    this(int id) { this.id = id; }
+}
+private __gshared Z8Encoding[14] z8_encodings;
+shared static this() { foreach (i; 0 .. z8_encodings.length) z8_encodings[i] = new Z8Encoding(cast(int)i); }
+Z8Encoding z8_encoding_by_id(int id) { return z8_encodings[id]; }
+
+wstring z8_encoding_decode(const(ubyte)[] bytes, Z8Encoding encoding) {
+    auto id = z8_nonnull(encoding).id;
+    wchar[] output;
+    if (id == 0 || id == 4) {
+        size_t i;
+        while (i < bytes.length) {
+            auto lead = bytes[i++];
+            if (lead < 0x80) { output ~= cast(wchar)lead; continue; }
+            int length = lead >= 0xC2 && lead <= 0xDF ? 2 : lead >= 0xE0 && lead <= 0xEF ? 3 : lead >= 0xF0 && lead <= 0xF4 ? 4 : 0;
+            if (!length) { output ~= cast(wchar)0xFFFD; continue; }
+            uint codepoint = lead & (0x7Fu >> length);
+            int matched = 1;
+            while (matched < length && i < bytes.length) {
+                auto next = bytes[i];
+                if ((next & 0xC0) != 0x80 || (matched == 1 && ((lead == 0xE0 && next < 0xA0) ||
+                    (lead == 0xF0 && next < 0x90) || (lead == 0xF4 && next > 0x8F)))) break;
+                codepoint = (codepoint << 6) | (next & 0x3F); ++matched; ++i;
+            }
+            if (matched != length || (codepoint >= 0xD800 && codepoint <= 0xDFFF)) output ~= cast(wchar)0xFFFD;
+            else if (codepoint <= 0xFFFF) output ~= cast(wchar)codepoint;
+            else {
+                codepoint -= 0x10000;
+                output ~= cast(wchar)(0xD800 + (codepoint >> 10));
+                output ~= cast(wchar)(0xDC00 + (codepoint & 0x3FF));
+            }
+        }
+    } else if (id >= 5 && id <= 7) {
+        bool little = id == 7;
+        size_t i;
+        if (id == 5 && bytes.length >= 2) {
+            if (bytes[0] == 0xFE && bytes[1] == 0xFF) i = 2;
+            else if (bytes[0] == 0xFF && bytes[1] == 0xFE) { i = 2; little = true; }
+        }
+        wchar unit(size_t p) { return cast(wchar)(little ? (bytes[p] | (cast(uint)bytes[p + 1] << 8)) : ((cast(uint)bytes[p] << 8) | bytes[p + 1])); }
+        while (i + 1 < bytes.length) {
+            auto c = unit(i); i += 2;
+            if (c >= 0xD800 && c <= 0xDBFF) {
+                if (i + 1 < bytes.length && unit(i) >= 0xDC00 && unit(i) <= 0xDFFF) { output ~= c; output ~= unit(i); i += 2; }
+                else { if (i + 1 < bytes.length) i += 2; output ~= cast(wchar)0xFFFD; }
+            } else if ((c >= 0xDC00 && c <= 0xDFFF) || c == 0xFFFE) output ~= cast(wchar)0xFFFD;
+            else output ~= c;
+        }
+        if (i < bytes.length) output ~= cast(wchar)0xFFFD;
+    } else if (id == 3) {
+        foreach (b; bytes) output ~= b < 128 ? cast(wchar)b : cast(wchar)0xFFFD;
+    } else {
+        auto table = z8_encoding_table(id);
+        foreach (b; bytes) output ~= table[b];
+    }
+    return output.length ? output.idup : ""w;
+}
+ubyte[] z8_encoding_encode(wstring text, Z8Encoding encoding) {
+    text = z8_string_required(text);
+    auto id = z8_nonnull(encoding).id;
+    ubyte[] output;
+    if (id == 0 || id == 4) {
+        size_t i;
+        while (i < text.length) {
+            uint c = text[i++];
+            if (c >= 0xD800 && c <= 0xDBFF) {
+                if (i < text.length && text[i] >= 0xDC00 && text[i] <= 0xDFFF)
+                    c = 0x10000 + ((c - 0xD800) << 10) + (text[i++] - 0xDC00);
+                else { output ~= cast(ubyte)'?'; continue; }
+            } else if (c >= 0xDC00 && c <= 0xDFFF) { output ~= cast(ubyte)'?'; continue; }
+            if (c < 0x80) output ~= cast(ubyte)c;
+            else if (c < 0x800) { output ~= cast(ubyte)(0xC0 | (c >> 6)); output ~= cast(ubyte)(0x80 | (c & 0x3F)); }
+            else if (c < 0x10000) {
+                output ~= cast(ubyte)(0xE0 | (c >> 12)); output ~= cast(ubyte)(0x80 | ((c >> 6) & 0x3F)); output ~= cast(ubyte)(0x80 | (c & 0x3F));
+            } else {
+                output ~= cast(ubyte)(0xF0 | (c >> 18)); output ~= cast(ubyte)(0x80 | ((c >> 12) & 0x3F));
+                output ~= cast(ubyte)(0x80 | ((c >> 6) & 0x3F)); output ~= cast(ubyte)(0x80 | (c & 0x3F));
+            }
+        }
+    } else if (id >= 5 && id <= 7) {
+        bool little = id == 7;
+        void unit(wchar c) {
+            if (little) { output ~= cast(ubyte)c; output ~= cast(ubyte)(c >> 8); }
+            else { output ~= cast(ubyte)(c >> 8); output ~= cast(ubyte)c; }
+        }
+        if (id == 5 && text.length) output ~= [cast(ubyte)0xFE, cast(ubyte)0xFF];
+        size_t i;
+        while (i < text.length) {
+            auto c = text[i++];
+            if (c >= 0xD800 && c <= 0xDBFF) {
+                if (i < text.length && text[i] >= 0xDC00 && text[i] <= 0xDFFF) { unit(c); unit(text[i++]); }
+                else unit(cast(wchar)0xFFFD);
+            } else if (c >= 0xDC00 && c <= 0xDFFF) unit(cast(wchar)0xFFFD);
+            else unit(c);
+        }
+    } else {
+        auto table = id == 3 ? null : z8_encoding_table(id);
+        size_t i;
+        while (i < text.length) {
+            uint c = text[i++];
+            if (c >= 0xD800 && c <= 0xDBFF && i < text.length && text[i] >= 0xDC00 && text[i] <= 0xDFFF)
+                c = 0x10000 + ((c - 0xD800) << 10) + (text[i++] - 0xDC00);
+            if (id == 3) output ~= c < 128 ? cast(ubyte)c : cast(ubyte)'?';
+            else {
+                int found = -1;
+                if (c <= 0xFFFF && c != 0xFFFD) foreach (index, wchar candidate; table) if (candidate == c) { found = cast(int)index; break; }
+                output ~= found < 0 ? cast(ubyte)'?' : cast(ubyte)found;
+            }
+        }
+    }
+    return output;
+}
+wstring z8_string_fromBinary(Z8Binary value, Z8Encoding encoding) {
+    z8_nonnull(value);
+    auto bytes = value.data[value.position .. $];
+    value.position = value.data.length;
+    return z8_encoding_decode(bytes, encoding);
+}
