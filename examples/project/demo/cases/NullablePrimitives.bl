@@ -11,6 +11,27 @@ public class NullablePrimitives {
         int first = numbers.first();
         int last = numbers.last() ?: fallback();
         if (first != 0 || last != 5 || fallbackCalls != 1) return 4;
+        if (numbers.first() + 3 != 3 || numbers.last() != 5) return 11;
+        if (int.parse("") != null || (int.parse("") ?: 9) != 9) return 12;
+        string[string] missingStrings;
+        if (int.parse(missingStrings.get("missing")) != null) return 21;
+        if (bool.parse(missingStrings.get("missing"))) return 22;
+        if ((int.parse("0") ?: 9) != 0 || int.parse("42") + 1 != 43) return 13;
+        if (-int.parse("5") != -5 || ~int.parse("0") != -1) return 17;
+        if (int.parse("255").toHexString() != "ff" || int.parse("-9").abs() != 9) return 18;
+        if (0 == int.parse("") || 0 != int.parse("")) return 14;
+        try {
+            int ignored = int.parse("") + fallback();
+            return 15;
+        } catch (exception expected) {
+            if (fallbackCalls != 2) return 16;
+        }
+        try {
+            string ignored = int.parse("").toString(fallback());
+            return 19;
+        } catch (exception expectedMethod) {
+            if (fallbackCalls != 3) return 20;
+        }
         decimal promoted = numbers.last();
         string text = numbers.last();
         if (promoted.toString() != "5" || text != "5") return 10;

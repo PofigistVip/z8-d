@@ -41,6 +41,8 @@ class Expression {
     bool nullableStringReceiver, nullableStringLeft;
     bool enumConstant;
     bool optionalRequired, optionalNullComparison, optionalNullOnLeft;
+    bool optionalIntBinary, optionalIntLeft, optionalIntRight;
+    bool optionalIntReceiver, optionalIntUnary;
     this(ExprKind kind, Token token) { this.kind = kind; this.token = token; }
 }
 class Statement {
@@ -818,13 +820,16 @@ class Checker {
                     (e.left.token.text == "int" || e.left.token.text == "decimal" || e.left.token.text == "bool")) {
                     if (e.token.text != "parse") fail("unsupported static type method", e.token);
                     if (e.left.token.text == "bool") {
-                        checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_bool_parse"; return ValueType.boolType;
+                        checkArguments(e, [ValueType.stringType]);
+                        if (typeOf(e.arguments[0]) == ValueType.nullableString) e.arguments[0].nullableStringMode = NullableStringMode.none;
+                        e.builtinCall = "z8_bool_parse"; return ValueType.boolType;
                     }
                     if (e.left.token.text == "decimal") {
                         checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_decimal_parse"; return ValueType.decimalType;
                     }
                     checkArguments(e, e.arguments.length == 1 ? [ValueType.stringType] : [ValueType.stringType, ValueType.intType]);
-                    e.builtinCall = "z8_int_parse"; return ValueType.intType;
+                    if (typeOf(e.arguments[0]) == ValueType.nullableString) e.arguments[0].nullableStringMode = NullableStringMode.none;
+                    e.builtinCall = "z8_int_parse_optional"; return ValueType.optionalInt;
                 }
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields)) {
                     auto owner = e.left.token.text in visibleClasses;
@@ -838,6 +843,10 @@ class Checker {
                     return checkCall(target, target.owner, e);
                 }
                 auto receiver = typeOf(e.left);
+                if (receiver == ValueType.optionalInt) {
+                    e.optionalIntReceiver = true;
+                    receiver = ValueType.intType;
+                }
                 if (receiver == ValueType.nullableString) {
                     e.nullableStringReceiver = true;
                     receiver = ValueType.stringType;
@@ -1015,6 +1024,10 @@ class Checker {
                 return ValueType.boolType;
             case ExprKind.unary:
                 auto operand = typeOf(e.left);
+                if (operand == ValueType.optionalInt && ["+", "-", "~"].canFind(e.token.text)) {
+                    e.optionalIntUnary = true;
+                    return ValueType.intType;
+                }
                 if (e.token.text == "!" && operand == ValueType.boolType) return operand;
                 if (["+", "-", "~"].canFind(e.token.text) && operand == ValueType.intType) return operand;
                 if (["+", "-"].canFind(e.token.text) && operand == ValueType.decimalType) return operand;
@@ -1027,6 +1040,16 @@ class Checker {
                     e.optionalNullComparison = true;
                     e.optionalNullOnLeft = left == ValueType.nullType;
                     return ValueType.boolType;
+                }
+                if ((left == ValueType.optionalInt || left == ValueType.intType) &&
+                    (right == ValueType.optionalInt || right == ValueType.intType) &&
+                    (left == ValueType.optionalInt || right == ValueType.optionalInt) &&
+                    ["==", "!=", "<", ">", "<=", ">=", "+", "-", "*", "/", "%", "&", "|", "^"].canFind(op)) {
+                    e.optionalIntBinary = true;
+                    e.optionalIntLeft = left == ValueType.optionalInt;
+                    e.optionalIntRight = right == ValueType.optionalInt;
+                    if (["==", "!=", "<", ">", "<=", ">="].canFind(op)) return ValueType.boolType;
+                    return ValueType.intType;
                 }
                 if (isOptionalPrimitive(left) || isOptionalPrimitive(right))
                     fail("nullable primitive requires a null check or ?: first", e.token);
@@ -1303,6 +1326,10 @@ private string emitExprRaw(Expression e) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return e.builtinCall ~ "(" ~ args.join(", ") ~ ")";
             }
+            if (e.optionalIntReceiver) {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return "z8_optional_int_call!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
+            }
             if (e.nullableStringReceiver) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return "z8_nullable_string_call!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
@@ -1351,11 +1378,19 @@ private string emitExprRaw(Expression e) {
             return e.castType == ValueType.selfType ? "z8_cast!(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")" : emitExpr(e.left);
         case ExprKind.instanceOf:
             return "(cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ") !is null)";
-        case ExprKind.unary: return "(" ~ e.token.text ~ emitExpr(e.left) ~ ")";
+        case ExprKind.unary:
+            if (e.optionalIntUnary) return "z8_optional_int_unary!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ")";
+            return "(" ~ e.token.text ~ emitExpr(e.left) ~ ")";
         case ExprKind.binary:
             if (e.optionalNullComparison) {
                 auto value = e.optionalNullOnLeft ? e.right : e.left;
                 return (e.token.text == "==" ? "" : "!") ~ "z8_optional_is_null(" ~ emitExpr(value) ~ ")";
+            }
+            if (e.optionalIntBinary) {
+                auto left = emitExpr(e.left), right = emitExpr(e.right);
+                if (!e.optionalIntLeft) left = "z8_optional_wrap(" ~ left ~ ")";
+                if (!e.optionalIntRight) right = "z8_optional_wrap(" ~ right ~ ")";
+                return "z8_optional_int_binary!\"" ~ e.token.text ~ "\"(" ~ left ~ ", " ~ right ~ ")";
             }
             if (e.inferredType == ValueType.nullType)
                 return "(" ~ emitExpr(e.left) ~ (e.token.text == "==" ? " is " : " !is ") ~ emitExpr(e.right) ~ ")";
@@ -1625,12 +1660,50 @@ private T z8_nonnull(T)(T value) {
 }
 private T z8_elvis(T)(T value, lazy T fallback) { return value !is null ? value : fallback; }
 struct Z8Optional(T) { bool present; T value; }
+private Z8Optional!T z8_optional_wrap(T)(T value) { return Z8Optional!T(true, value); }
 private bool z8_optional_is_null(T)(Z8Optional!T value) { return !value.present; }
 private T z8_optional_require(T)(Z8Optional!T value) {
     if (!value.present) throw new Exception("null primitive");
     return value.value;
 }
 private T z8_optional_elvis(T)(Z8Optional!T value, lazy T fallback) { return value.present ? value.value : fallback; }
+private auto z8_optional_int_binary(string op)(Z8Optional!long left, Z8Optional!long right) {
+    auto a = z8_optional_require(left);
+    static if (op == "==" || op == "!=" || op == "<" || op == ">" || op == "<=" || op == ">=") {
+        if (!right.present) return false;
+        static if (op == "==") return a == right.value;
+        else static if (op == "!=") return a != right.value;
+        else static if (op == "<") return a < right.value;
+        else static if (op == ">") return a > right.value;
+        else static if (op == "<=") return a <= right.value;
+        else return a >= right.value;
+    } else {
+        auto b = z8_optional_require(right);
+        static if (op == "+") return a + b;
+        else static if (op == "-") return a - b;
+        else static if (op == "*") return a * b;
+        else static if (op == "/") return z8_div(a, b);
+        else static if (op == "%") return z8_mod(a, b);
+        else static if (op == "&") return a & b;
+        else static if (op == "|") return a | b;
+        else static if (op == "^") return a ^ b;
+        else static assert(0, "unsupported optional integer operation");
+    }
+}
+private long z8_optional_int_unary(string op)(Z8Optional!long value) {
+    auto number = z8_optional_require(value);
+    static if (op == "+") return number;
+    else static if (op == "-") return -number;
+    else static if (op == "~") return ~number;
+    else static assert(0, "unsupported optional integer unary operation");
+}
+private auto z8_optional_int_call(string name, Args...)(Z8Optional!long value, Args args) {
+    auto number = z8_optional_require(value);
+    return mixin("z8_int_" ~ name ~ "(number, args)");
+}
+private Z8Optional!long z8_int_parse_optional(wstring value, long radix = 10) {
+    return value.length ? z8_optional_wrap(z8_int_parse(value, radix)) : Z8Optional!long.init;
+}
 private auto z8_invoke(string name, T, Args...)(T value, Args args) {
     if (value is null) throw new Exception("null reference");
     return __traits(getMember, value, name)(args);
