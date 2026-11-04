@@ -39,6 +39,7 @@ class Parser {
             case "guid": result = ValueType.guidType; break;
             case "binary": result = ValueType.binaryType; break;
             case "datespan": result = ValueType.datespanType; break;
+            case "date": result = ValueType.dateType; break;
             case "exception": result = ValueType.exceptionType; break;
             case "primary": result = ValueType.primaryType; break;
             default:
@@ -318,6 +319,7 @@ class Parser {
         if (t.kind == TokenKind.guidLiteral) { take(); return new Expression(ExprKind.guidLiteral, t); }
         if (t.kind == TokenKind.binaryLiteral) { take(); return new Expression(ExprKind.binaryLiteral, t); }
         if (t.kind == TokenKind.datespanLiteral) { take(); return new Expression(ExprKind.datespanLiteral, t); }
+        if (t.kind == TokenKind.dateLiteral) { take(); return new Expression(ExprKind.dateLiteral, t); }
         if (t.kind == TokenKind.identifier) {
             take();
             if (accept("(")) {

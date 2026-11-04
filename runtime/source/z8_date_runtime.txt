@@ -1,0 +1,112 @@
+private import std.datetime : SysTime, DateTime, Clock, TimeZone, UTC, dur, AllowDayOverflow;
+version (Windows) private import std.datetime : WindowsTimeZone;
+else version (Posix) private import std.datetime : PosixTimeZone;
+
+private immutable(TimeZone) z8_date_timezone() {
+    version (Windows) return WindowsTimeZone.getTimeZone("Russian Standard Time");
+    else version (Posix) return PosixTimeZone.getTimeZone("Europe/Moscow");
+    else static assert(0, "Moscow timezone is unavailable on this platform");
+}
+class Z8Date {
+    SysTime value;
+    this(SysTime value) { this.value = value; }
+}
+Z8Date z8_date_now() { return new Z8Date(Clock.currTime(z8_date_timezone())); }
+Z8Date z8_date_from_ticks(long ticks) {
+    return new Z8Date(SysTime.fromUnixTime(0, z8_date_timezone()) + dur!"msecs"(ticks));
+}
+Z8Date z8_date_literal(string text) {
+    import std.string : strip, split;
+    auto parts = text.strip().split();
+    if (parts.length < 1 || parts.length > 2) throw new Exception("invalid date literal");
+    auto dateParts = parts[0].split("/");
+    if (dateParts.length != 3) throw new Exception("invalid date literal");
+    int hours, minutes, seconds;
+    if (parts.length == 2) {
+        auto timeParts = parts[1].split(":");
+        if (timeParts.length != 3) throw new Exception("invalid date literal");
+        hours = timeParts[0].to!int; minutes = timeParts[1].to!int; seconds = timeParts[2].to!int;
+    }
+    return new Z8Date(SysTime(DateTime(dateParts[2].to!int, dateParts[1].to!int, dateParts[0].to!int,
+        hours, minutes, seconds), z8_date_timezone()));
+}
+long z8_date_ticks(Z8Date x) { return (z8_nonnull(x).value - SysTime.fromUnixTime(0, UTC())).total!"msecs"; }
+long z8_date_year(Z8Date x) { return z8_nonnull(x).value.year; }
+long z8_date_quarter(Z8Date x) { return (z8_date_month(x) - 1) / 3 + 1; }
+long z8_date_month(Z8Date x) { return cast(int)z8_nonnull(x).value.month; }
+long z8_date_day(Z8Date x) { return z8_nonnull(x).value.day; }
+long z8_date_dayOfWeek(Z8Date x) { return cast(int)z8_nonnull(x).value.dayOfWeek + 1; }
+long z8_date_dayOfYear(Z8Date x) { return z8_nonnull(x).value.dayOfYear; }
+long z8_date_daysInMonth(Z8Date x) { return z8_nonnull(x).value.daysInMonth; }
+long z8_date_hours(Z8Date x) { return z8_nonnull(x).value.hour; }
+long z8_date_minutes(Z8Date x) { return z8_nonnull(x).value.minute; }
+long z8_date_seconds(Z8Date x) { return z8_nonnull(x).value.second; }
+long z8_date_milliseconds(Z8Date x) { return z8_nonnull(x).value.fracSecs.total!"msecs"; }
+
+Z8Date z8_date_addYear(Z8Date x, long n) { auto t = z8_nonnull(x).value; t.add!"years"(cast(int)n, AllowDayOverflow.no); return new Z8Date(t); }
+Z8Date z8_date_addQuarter(Z8Date x, long n) { return z8_date_addMonth(x, cast(int)(cast(int)n * 3)); }
+Z8Date z8_date_addMonth(Z8Date x, long n) { auto t = z8_nonnull(x).value; t.add!"months"(cast(int)n, AllowDayOverflow.no); return new Z8Date(t); }
+Z8Date z8_date_addDay(Z8Date x, long n) { return new Z8Date(z8_nonnull(x).value + dur!"days"(cast(int)n)); }
+Z8Date z8_date_addHour(Z8Date x, long n) { return new Z8Date(z8_nonnull(x).value + dur!"hours"(cast(int)n)); }
+Z8Date z8_date_addMinute(Z8Date x, long n) { return new Z8Date(z8_nonnull(x).value + dur!"minutes"(cast(int)n)); }
+Z8Date z8_date_addSecond(Z8Date x, long n) { return new Z8Date(z8_nonnull(x).value + dur!"seconds"(cast(int)n)); }
+Z8Date z8_date_addMillisecond(Z8Date x, long n) { return new Z8Date(z8_nonnull(x).value + dur!"msecs"(cast(int)n)); }
+
+private Z8Date z8_date_truncate(Z8Date x, int unit) {
+    auto t = z8_nonnull(x).value;
+    int month = unit <= 0 ? 1 : unit == 1 ? ((cast(int)t.month - 1) / 3 * 3 + 1) : cast(int)t.month;
+    int day = unit <= 2 ? 1 : t.day;
+    int hour = unit <= 3 ? 0 : t.hour;
+    int minute = unit <= 4 ? 0 : t.minute;
+    return new Z8Date(SysTime(DateTime(t.year, month, day, hour, minute, 0), z8_date_timezone()));
+}
+Z8Date z8_date_truncYear(Z8Date x) { return z8_date_truncate(x, 0); }
+Z8Date z8_date_truncQuarter(Z8Date x) { return z8_date_truncate(x, 1); }
+Z8Date z8_date_truncMonth(Z8Date x) { return z8_date_truncate(x, 2); }
+Z8Date z8_date_truncDay(Z8Date x) { return z8_date_truncate(x, 3); }
+Z8Date z8_date_truncHour(Z8Date x) { return z8_date_truncate(x, 4); }
+Z8Date z8_date_truncMinute(Z8Date x) { return z8_date_truncate(x, 5); }
+// The original z8_truncSecond delegates to truncMinute.
+Z8Date z8_date_truncSecond(Z8Date x) { return z8_date_truncMinute(x); }
+Z8Date z8_date_today() { return z8_date_now(); }
+Z8Date z8_date_tomorrow() { return z8_date_addDay(z8_date_today(), 1); }
+Z8Date z8_date_yesterday() { return z8_date_addDay(z8_date_today(), -1); }
+bool z8_date_isEqualDate(Z8Date a, Z8Date b) {
+    return z8_date_year(a) == z8_date_year(b) && z8_date_month(a) == z8_date_month(b) && z8_date_day(a) == z8_date_day(b);
+}
+private wstring z8_date_format(Z8Date x, bool milliseconds) {
+    auto t = z8_nonnull(x).value;
+    auto offset = t.utcOffset.total!"minutes";
+    auto absoluteOffset = offset < 0 ? -offset : offset;
+    auto result = format("%04d-%02d-%02dT%02d:%02d:%02d", t.year, cast(int)t.month, t.day, t.hour, t.minute, t.second);
+    auto fraction = t.fracSecs.total!"msecs";
+    if (milliseconds && fraction != 0) result ~= format(".%03d", fraction);
+    result ~= format("%s%02d:%02d", offset < 0 ? "-" : "+", absoluteOffset / 60, absoluteOffset % 60);
+    return result.to!wstring;
+}
+wstring z8_date_toString(Z8Date x) { return z8_date_format(x, false); }
+wstring z8_date_toIsoString(Z8Date x) { return z8_date_format(x, true); }
+
+auto z8_date_binary(string op)(Z8Date left, Z8Date right) {
+    auto a = z8_date_ticks(left);
+    static if (op == "-") return new Z8Datespan(a - z8_date_ticks(right));
+    else {
+        if (right is null) return false;
+        auto b = z8_date_ticks(right);
+        static if (op == "==") return a == b;
+        else static if (op == "!=") return a != b;
+        else static if (op == "<") return a < b;
+        else static if (op == ">") return a > b;
+        else static if (op == "<=") return a <= b;
+        else static if (op == ">=") return a >= b;
+        else static assert(0, "unsupported date operation");
+    }
+}
+Z8Date z8_date_binary(string op)(Z8Date left, Z8Datespan right) if (op == "+" || op == "-") {
+    auto ticks = z8_date_ticks(left), span = z8_datespan_milliseconds(right);
+    static if (op == "+") return z8_date_from_ticks(ticks + span);
+    else return z8_date_from_ticks(ticks - span);
+}
+Z8Date z8_date_binary(string op)(Z8Datespan left, Z8Date right) if (op == "+") {
+    return z8_date_from_ticks(z8_datespan_milliseconds(left) + z8_date_ticks(right));
+}

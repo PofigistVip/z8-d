@@ -1,0 +1,20 @@
+public class DateValues {
+    public static int run() {
+        date value = '29/02/2024 12:30:45';
+        if (value.year() != 2024 || value.month() != 2 || value.day() != 29 || value.quarter() != 1) return 1;
+        if (value.hours() != 12 || value.minutes() != 30 || value.seconds() != 45 || value.milliseconds() != 0) return 2;
+        if (value.dayOfWeek() != 5 || value.dayOfYear() != 60 || value.daysInMonth() != 29) return 3;
+        if (value.ticks() != 1709199045000 || value.toString() != "2024-02-29T12:30:45+03:00") return 4;
+        if (value.toIsoString() != "2024-02-29T12:30:45+03:00") return 5;
+        date next = value.addYear(1);
+        if (next.toString() != "2025-02-28T12:30:45+03:00" || value.year() != 2024) return 6;
+        if (value.addMonth(1).toString() != "2024-03-29T12:30:45+03:00") return 7;
+        datespan duration = '1 00:00:00';
+        if ((value + duration).toString() != "2024-03-01T12:30:45+03:00") return 8;
+        if (((duration + value) - value).totalHours() != 24) return 9;
+        if (value.truncMonth().toString() != "2024-02-01T00:00:00+03:00") return 10;
+        if (value.truncSecond().toString() != "2024-02-29T12:30:00+03:00") return 11;
+        if (!date.isEqualDate(value, value.addHour(1)) || value >= next) return 12;
+        return 193;
+    }
+}

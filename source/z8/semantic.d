@@ -1,7 +1,7 @@
 module z8.semantic;
 
 import std.algorithm : canFind;
-import std.string : lastIndexOf;
+import std.string : lastIndexOf, indexOf;
 import z8.compiler_model;
 import z8.lexer : Token;
 
@@ -22,7 +22,7 @@ class Checker {
     private void fail(string message, Token t) { throw new CompileException(message, t.position); }
     private static bool isConstantInitializer(Expression expression) {
         switch (expression.kind) {
-            case ExprKind.integer: case ExprKind.decimalLiteral: case ExprKind.boolean: case ExprKind.stringLiteral: case ExprKind.guidLiteral: case ExprKind.binaryLiteral: case ExprKind.datespanLiteral: case ExprKind.nullLiteral: return true;
+            case ExprKind.integer: case ExprKind.decimalLiteral: case ExprKind.boolean: case ExprKind.stringLiteral: case ExprKind.guidLiteral: case ExprKind.binaryLiteral: case ExprKind.datespanLiteral: case ExprKind.dateLiteral: case ExprKind.nullLiteral: return true;
             case ExprKind.arrayLiteral:
                 foreach (item; expression.arguments) if (!isConstantInitializer(item)) return false;
                 return true;
@@ -320,6 +320,9 @@ class Checker {
             case ExprKind.guidLiteral: return ValueType.guidType;
             case ExprKind.binaryLiteral: return ValueType.binaryType;
             case ExprKind.datespanLiteral: return ValueType.datespanType;
+            case ExprKind.dateLiteral:
+                if (e.token.text.indexOf('/') < 0) fail("time-only date literals are not yet supported", e.token);
+                return ValueType.dateType;
             case ExprKind.nullLiteral: return ValueType.nullType;
             case ExprKind.arrayLiteral:
                 if (!isArray(expected)) fail("array initializer requires an array type", e.token);
@@ -359,6 +362,10 @@ class Checker {
                     if (e.left.token.text == "guid" && e.token.text == "Null") {
                         e.emittedOverride = "z8_guid_zero()"; return ValueType.guidType;
                     }
+                    if (e.left.token.text == "date" && ["Min", "Max"].canFind(e.token.text)) {
+                        e.emittedOverride = e.token.text == "Min" ? "z8_date_from_ticks(-62135769600000L)" : "z8_date_from_ticks(95617584000000L)";
+                        return ValueType.dateType;
+                    }
                     auto owner = e.left.token.text in visibleClasses;
                     if (owner is null) fail("unknown class or variable '" ~ e.left.token.text ~ "'", e.left.token);
                     if ((*owner).isEnum) {
@@ -397,6 +404,15 @@ class Checker {
                 if (!accessible(selected.owner, selected.isPublic, selected.isProtected)) fail("method is not accessible", e.token);
                 return checkCall(selected, selected.owner, e);
             case ExprKind.memberCall:
+                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "date") {
+                    if (["now", "today", "tomorrow", "yesterday"].canFind(e.token.text)) {
+                        checkArguments(e, []); e.builtinCall = "z8_date_" ~ e.token.text; return ValueType.dateType;
+                    }
+                    if (e.token.text == "isEqualDate") {
+                        checkArguments(e, [ValueType.dateType, ValueType.dateType]); e.builtinCall = "z8_date_isEqualDate"; return ValueType.boolType;
+                    }
+                    fail("unsupported static date method", e.token);
+                }
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "datespan") {
                     if (e.token.text != "parse") fail("unsupported static datespan method", e.token);
                     checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_datespan_parse"; return ValueType.datespanType;
@@ -461,6 +477,22 @@ class Checker {
                     receiver = ValueType.stringType;
                 }
                 e.inferredType = receiver;
+                if (receiver == ValueType.dateType) {
+                    if (["addYear", "addQuarter", "addMonth", "addDay", "addHour", "addMinute", "addSecond", "addMillisecond"].canFind(e.token.text)) {
+                        checkArguments(e, [ValueType.intType]); e.builtinCall = "z8_date_" ~ e.token.text; return ValueType.dateType;
+                    }
+                    checkArguments(e, []);
+                    if (["ticks", "year", "quarter", "month", "day", "dayOfWeek", "dayOfYear", "daysInMonth", "hours", "minutes", "seconds", "milliseconds"].canFind(e.token.text)) {
+                        e.builtinCall = "z8_date_" ~ e.token.text; return ValueType.intType;
+                    }
+                    if (["truncYear", "truncQuarter", "truncMonth", "truncDay", "truncHour", "truncMinute", "truncSecond"].canFind(e.token.text)) {
+                        e.builtinCall = "z8_date_" ~ e.token.text; return ValueType.dateType;
+                    }
+                    if (e.token.text == "toString" || e.token.text == "toIsoString") {
+                        e.builtinCall = "z8_date_" ~ e.token.text; return ValueType.stringType;
+                    }
+                    fail("unsupported date method", e.token);
+                }
                 if (receiver == ValueType.datespanType) {
                     if (e.token.text == "set") {
                         if (![1, 4, 5].canFind(e.arguments.length)) fail("incorrect argument count", e.token);
@@ -810,6 +842,19 @@ class Checker {
                     if (!["+", "-", "==", "!=", "<", ">", "<=", ">="].canFind(op)) fail("invalid datespan operands", e.token);
                     e.inferredType = ValueType.datespanType;
                     return op == "+" || op == "-" ? ValueType.datespanType : ValueType.boolType;
+                }
+                if ((left == ValueType.dateType && (right == ValueType.dateType || right == ValueType.datespanType)) ||
+                    (left == ValueType.datespanType && right == ValueType.dateType)) {
+                    if (left == ValueType.dateType && right == ValueType.dateType && ["==", "!=", "<", ">", "<=", ">="].canFind(op)) {
+                        e.dateBinary = true; return ValueType.boolType;
+                    }
+                    if ((left == ValueType.dateType && right == ValueType.dateType && op == "-") ||
+                        (left == ValueType.dateType && right == ValueType.datespanType && ["+", "-"].canFind(op)) ||
+                        (left == ValueType.datespanType && right == ValueType.dateType && op == "+")) {
+                        e.dateBinary = true;
+                        return left == ValueType.dateType && right == ValueType.dateType ? ValueType.datespanType : ValueType.dateType;
+                    }
+                    fail("invalid date operands", e.token);
                 }
                 if (left == ValueType.nullableString) { e.nullableStringLeft = true; left = ValueType.stringType; }
                 if (right == ValueType.nullableString) { e.right.nullableStringMode = NullableStringMode.nullAsEmpty; right = ValueType.stringType; }

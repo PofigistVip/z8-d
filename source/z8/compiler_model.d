@@ -12,9 +12,9 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, decimalType, boolType, stringType, guidType, binaryType, datespanType, exceptionType, primaryType, selfType, intArray, decimalArray, boolArray, stringArray, primaryArray, selfArray, stringMap, primaryStringMap, nullType, nullableString, enumType, enumArray, optionalInt, optionalBool, optionalDecimal }
+enum ValueType { voidType, intType, decimalType, boolType, stringType, guidType, binaryType, datespanType, dateType, exceptionType, primaryType, selfType, intArray, decimalArray, boolArray, stringArray, primaryArray, selfArray, stringMap, primaryStringMap, nullType, nullableString, enumType, enumArray, optionalInt, optionalBool, optionalDecimal }
 enum NullableStringMode { none, required, nullAsEmpty }
-enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, guidLiteral, binaryLiteral, datespanLiteral, nullLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, instanceOf, unary, binary, conditional, elvis }
+enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, guidLiteral, binaryLiteral, datespanLiteral, dateLiteral, nullLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, instanceOf, unary, binary, conditional, elvis }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
                 whileStmt, doWhileStmt, forStmt, forEachStmt, breakStmt, continueStmt, throwStmt, tryStmt }
 
@@ -27,6 +27,7 @@ class Expression {
     string targetClass;
     bool isField, instanceCall, fieldInitialization, newHasContainer;
     bool binaryNameField;
+    bool dateBinary;
     bool primaryCast, primaryInstanceOf;
     bool promoteToDecimal;
     bool boxPrimary;
@@ -98,7 +99,7 @@ package bool isArray(ValueType type) {
 }
 package bool isMap(ValueType type) { return type == ValueType.stringMap || type == ValueType.primaryStringMap; }
 package bool hasObjectClass(ValueType type) { return type == ValueType.selfType || type == ValueType.selfArray || type == ValueType.enumType || type == ValueType.enumArray; }
-package bool isNullableReference(ValueType type) { return type == ValueType.selfType || type == ValueType.enumType || type == ValueType.exceptionType || type == ValueType.primaryType || type == ValueType.guidType || type == ValueType.binaryType || type == ValueType.datespanType || isMap(type) || type == ValueType.nullableString || type == ValueType.stringType || isArray(type); }
+package bool isNullableReference(ValueType type) { return type == ValueType.selfType || type == ValueType.enumType || type == ValueType.exceptionType || type == ValueType.primaryType || type == ValueType.guidType || type == ValueType.binaryType || type == ValueType.datespanType || type == ValueType.dateType || isMap(type) || type == ValueType.nullableString || type == ValueType.stringType || isArray(type); }
 package ValueType storedValueType(ValueType type) {
     if (type == ValueType.intType) return ValueType.optionalInt;
     if (type == ValueType.boolType) return ValueType.optionalBool;

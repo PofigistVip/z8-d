@@ -105,6 +105,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         System.out.println("RESULT:" + demo.cases.GuidValues.z8_run().get());
         System.out.println("RESULT:" + demo.cases.BinaryValues.z8_run().get());
         System.out.println("RESULT:" + demo.cases.DatespanValues.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.DateValues.z8_run().get());
     }
 }''', encoding="utf-8")
         logging_cache = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "commons-logging" / "commons-logging"
@@ -222,14 +223,15 @@ void main() {
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4775696456616C756573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E42696E61727956616C756573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E446174657370616E56616C756573.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4461746556616C756573.m_run()));
 }
 ''', encoding="utf-8")
         d_binary = temp / ("compare.exe" if os.name == "nt" else "compare")
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_results = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        if original_results[-4:] != ["173", "179", "181", "191"]:
-            raise SystemExit(f"Primary/guid/binary/datespan fixture failed in original Z8: {original_results[-4:]}")
+        if original_results[-5:] != ["173", "179", "181", "191", "193"]:
+            raise SystemExit(f"Basic types fixture failed in original Z8: {original_results[-5:]}")
         if original_results != d_results:
             raise SystemExit(f"Original Z8: {original_results!r}; z8-d: {d_results!r}")
         print(f"Matched {len(d_results)} program results against the original compiler and runtime (CLASS from current source)")
