@@ -1,0 +1,12 @@
+public class OperatorDistance {
+    public int operator + (OperatorRoot value) { return 1; }
+    public int operator + (OperatorMiddle value) { return 2; }
+    public int operator * (primary value) { return 3; }
+    public int operator * (int value) { return 4; }
+    public static int run() {
+        OperatorDistance left = new OperatorDistance;
+        OperatorLeaf right = new OperatorLeaf;
+        if (left + right != 2 || left * 5 != 4) return 1;
+        return 199;
+    }
+}

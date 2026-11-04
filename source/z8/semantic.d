@@ -63,6 +63,12 @@ class Checker {
         for (auto current = actual; current !is null; current = current.baseClass) if (current is expected) return true;
         return false;
     }
+    private static int inheritanceDistance(Program actual, Program expected) {
+        int distance;
+        for (auto current = actual; current !is null; current = current.baseClass, ++distance)
+            if (current is expected) return distance;
+        return int.max;
+    }
     private static bool hasStringConversion(ValueType type) {
         return [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.guidType,
                 ValueType.datespanType, ValueType.dateType, ValueType.geometryType, ValueType.fileType,
@@ -234,14 +240,14 @@ class Checker {
         return true;
     }
     // Z8 ranks direct casts ahead of conversions defined by an operator.
-    private Method selectOverload(Method first, Expression e, bool allowNoMatch = false) {
+    private Method selectOverload(Method first, Expression e, bool allowNoMatch = false, bool binaryOperator = false) {
         ValueType[] actualTypes;
         foreach (arg; e.arguments) {
             if (arg.kind == ExprKind.arrayLiteral && !arg.typedInitializer) fail("array initializer requires a known target", arg.token);
             actualTypes ~= typeOf(arg);
         }
         Method best;
-        int bestWeight = int.max;
+        int bestWeight = int.max, bestDistance = int.max;
         bool ambiguous;
         Method[] seen;
         for (auto owner = first.owner; owner !is null; owner = owner.baseClass) foreach (candidate; owner.methods) {
@@ -252,7 +258,7 @@ class Checker {
             seen ~= candidate;
             if (candidate.parameters.length != e.arguments.length) continue;
             if (!accessible(candidate.owner, candidate.isPublic, candidate.isProtected)) continue;
-            int weight; bool applicable = true;
+            int weight, distance; bool applicable = true;
             foreach (i, p; candidate.parameters) {
                 auto actual = actualTypes[i];
                 if (isOptionalPrimitive(actual)) actual = optionalBaseType(actual);
@@ -260,9 +266,19 @@ class Checker {
                     (actual == ValueType.nullableString && p.type == ValueType.stringType)) {
                     // Null is equally applicable to each supported reference type.
                 } else if (actual == p.type) {
-                    if (actual == ValueType.selfType && !isAssignable(e.arguments[i].objectClass, resolveClass(candidate.owner, p.objectName, p.name))) {
-                        if (findConversion(e.arguments[i].objectClass, p.type, resolveClass(candidate.owner, p.objectName, p.name)) !is null) weight += 100;
-                        else applicable = false;
+                    if (actual == ValueType.selfType) {
+                        auto parameterClass = resolveClass(candidate.owner, p.objectName, p.name);
+                        auto actualClass = e.arguments[i].objectClass;
+                        if (isAssignable(actualClass, parameterClass)) {
+                            if (binaryOperator) distance += inheritanceDistance(actualClass, parameterClass);
+                        } else {
+                            auto conversion = findConversion(actualClass, p.type, parameterClass);
+                            if (conversion is null) applicable = false;
+                            else {
+                                weight += 100;
+                                if (binaryOperator) distance += inheritanceDistance(conversion.returnObjectClass, parameterClass);
+                            }
+                        }
                     }
                     if (actual == ValueType.selfArray && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                     if (actual == ValueType.enumType && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
@@ -272,7 +288,7 @@ class Checker {
                 else if (actual == ValueType.intType && p.type == ValueType.dateType) weight += 100;
                 else if (p.type == ValueType.binaryType && [ValueType.stringType, ValueType.nullableString, ValueType.fileType].canFind(actual)) weight += 100;
                 else if ([ValueType.fileType, ValueType.exceptionType].canFind(p.type) && [ValueType.stringType, ValueType.nullableString].canFind(actual)) weight += 100;
-                else if (p.type == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType, ValueType.dateType, ValueType.fileType].canFind(actual)) { }
+                else if (p.type == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType, ValueType.dateType, ValueType.fileType].canFind(actual)) { if (binaryOperator) ++distance; }
                 else if (p.type == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual)) weight += 100;
                 else if (p.type == ValueType.stringType && actual == ValueType.guidType) weight += 100;
                 else if (p.type == ValueType.stringType && actual == ValueType.datespanType) weight += 100;
@@ -283,8 +299,9 @@ class Checker {
                 if (!applicable) break;
             }
             if (!applicable) continue;
-            if (weight < bestWeight) { best = candidate; bestWeight = weight; ambiguous = false; }
-            else if (weight == bestWeight) ambiguous = true;
+            if (weight < bestWeight || (binaryOperator && weight == bestWeight && distance < bestDistance)) {
+                best = candidate; bestWeight = weight; bestDistance = distance; ambiguous = false;
+            } else if (weight == bestWeight && (!binaryOperator || distance == bestDistance)) ambiguous = true;
         }
         if (best is null) {
             if (allowNoMatch) return null;
@@ -1209,7 +1226,7 @@ class Checker {
                     Method selected;
                     if (method !is null) {
                         e.arguments = [e.right];
-                        selected = selectOverload(method, e, true);
+                        selected = selectOverload(method, e, true, true);
                     }
                     if (selected !is null) {
                         e.userBinaryOperator = true;
