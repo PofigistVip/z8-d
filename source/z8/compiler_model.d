@@ -107,6 +107,26 @@ package bool isArray(ValueType type) {
 }
 package bool isReferenceArray(ValueType type) { return [ValueType.selfArray, ValueType.enumArray, ValueType.primaryArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.decimalMatrix].canFind(type); }
 package bool isMap(ValueType type) { return type == ValueType.stringMap || type == ValueType.primaryStringMap; }
+package ValueType mapKeyType(ValueType type) {
+    assert(isMap(type));
+    return ValueType.stringType;
+}
+package ValueType mapValueType(ValueType type) {
+    assert(isMap(type));
+    return type == ValueType.stringMap ? ValueType.stringType : ValueType.primaryType;
+}
+package ValueType mapKeyArrayType(ValueType type) {
+    assert(isMap(type));
+    return ValueType.stringArray;
+}
+package ValueType mapValueArrayType(ValueType type) {
+    assert(isMap(type));
+    return type == ValueType.stringMap ? ValueType.stringArray : ValueType.primaryArray;
+}
+package ValueType mapValueReadType(ValueType type) {
+    auto value = mapValueType(type);
+    return value == ValueType.stringType ? ValueType.nullableString : storedValueType(value);
+}
 package bool hasObjectClass(ValueType type) { return type == ValueType.selfType || type == ValueType.selfArray || type == ValueType.enumType || type == ValueType.enumArray; }
 package bool isNullableReference(ValueType type) { return type == ValueType.selfType || type == ValueType.enumType || type == ValueType.exceptionType || type == ValueType.encodingType || type == ValueType.primaryType || type == ValueType.guidType || type == ValueType.binaryType || type == ValueType.datespanType || type == ValueType.dateType || type == ValueType.geometryType || type == ValueType.fileType || isMap(type) || type == ValueType.nullableString || type == ValueType.stringType || isArray(type); }
 package ValueType storedValueType(ValueType type) {

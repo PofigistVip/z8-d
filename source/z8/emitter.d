@@ -222,8 +222,8 @@ private string emitExprRaw(Expression e) {
             if (isMap(e.inferredType)) {
                 string body = "(() {\n";
                 foreach (i, entry; e.arguments)
-                    body ~= "wstring z8_key_" ~ i.to!string ~ " = " ~ emitExpr(entry.left) ~ ";\n";
-                auto valueType = e.inferredType == ValueType.stringMap ? "wstring" : "Z8Primary";
+                    body ~= dStorageType(mapKeyType(e.inferredType)) ~ " z8_key_" ~ i.to!string ~ " = " ~ emitExpr(entry.left) ~ ";\n";
+                auto valueType = dStorageType(mapValueType(e.inferredType));
                 foreach (i, entry; e.arguments)
                     body ~= valueType ~ " z8_value_" ~ i.to!string ~ " = " ~ emitExpr(entry.right) ~ ";\n";
                 body ~= "auto z8_result = new " ~ dType(e.inferredType) ~ "();\n";

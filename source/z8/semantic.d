@@ -422,7 +422,7 @@ class Checker {
                     if (hasObjectClass(expected)) e.objectClass = resolveClass(currentProgram, e.initializerObjectName, e.token);
                 }
                 if (isMap(expected)) {
-                    auto valueType = expected == ValueType.stringMap ? ValueType.stringType : ValueType.primaryType;
+                    auto valueType = mapValueType(expected);
                     foreach (entry; e.arguments) {
                         if (entry.kind != ExprKind.mapEntry) fail("map initializer requires key-value pairs", entry.token);
                         if (entry.left.kind == ExprKind.nullLiteral || entry.right.kind == ExprKind.nullLiteral)
@@ -947,22 +947,22 @@ class Checker {
                         return ValueType.decimalType;
                     }
                 } else if (isMap(receiver)) {
-                    auto mapValue = receiver == ValueType.stringMap ? ValueType.stringType : ValueType.primaryType;
+                    auto mapValue = mapValueType(receiver);
                     switch (e.token.text) {
                         case "size": case "isEmpty": case "clear":
                             checkArguments(e, []);
                             return e.token.text == "size" ? ValueType.intType : e.token.text == "isEmpty" ? ValueType.boolType : ValueType.voidType;
-                        case "containsKey": checkArguments(e, [ValueType.stringType]); return ValueType.boolType;
+                        case "containsKey": checkArguments(e, [mapKeyType(receiver)]); return ValueType.boolType;
                         case "containsValue": checkArguments(e, [mapValue]); return ValueType.boolType;
                         case "get":
-                            checkArguments(e, [ValueType.stringType]); return receiver == ValueType.stringMap ? ValueType.nullableString : ValueType.primaryType;
+                            checkArguments(e, [mapKeyType(receiver)]); return mapValueReadType(receiver);
                         case "remove":
-                            checkArguments(e, [ValueType.stringType]); return receiver == ValueType.stringMap ? ValueType.nullableString : ValueType.primaryType;
+                            checkArguments(e, [mapKeyType(receiver)]); return mapValueReadType(receiver);
                         case "add":
                             if (e.arguments.length == 1) { checkArguments(e, [receiver]); return ValueType.voidType; }
-                            checkArguments(e, [ValueType.stringType, mapValue]); return receiver == ValueType.stringMap ? ValueType.nullableString : ValueType.primaryType;
-                        case "keys": checkArguments(e, []); return ValueType.stringArray;
-                        case "values": checkArguments(e, []); return receiver == ValueType.stringMap ? ValueType.stringArray : ValueType.primaryArray;
+                            checkArguments(e, [mapKeyType(receiver), mapValue]); return mapValueReadType(receiver);
+                        case "keys": checkArguments(e, []); return mapKeyArrayType(receiver);
+                        case "values": checkArguments(e, []); return mapValueArrayType(receiver);
                         default: break;
                     }
                 } else if (isArray(receiver)) {
@@ -1028,9 +1028,9 @@ class Checker {
             case ExprKind.index:
                 auto array = typeOf(e.left);
                 if (isMap(array)) {
-                    if (!matches(e.right, ValueType.stringType)) fail("map key must be string", e.token);
+                    if (!matches(e.right, mapKeyType(array))) fail("map key type mismatch", e.token);
                     e.inferredType = array;
-                    return array == ValueType.stringMap ? ValueType.nullableString : ValueType.primaryType;
+                    return mapValueReadType(array);
                 }
                 if (!isArray(array)) fail("indexing requires an array", e.token);
                 if (!matches(e.right, ValueType.intType)) fail("array index must be int", e.token);
@@ -1333,7 +1333,7 @@ class Checker {
                     s.dateTickAssignment = true; s.type = variableType; return false;
                 }
                 if (s.target.kind == ExprKind.index && isMap(s.target.inferredType))
-                    variableType = s.target.inferredType == ValueType.stringMap ? ValueType.stringType : ValueType.primaryType;
+                    variableType = mapValueType(s.target.inferredType);
                 if ((s.target.kind != ExprKind.index || [ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(s.target.inferredType)) && (s.assignmentOperator == "=" || variableType == ValueType.intType || variableType == ValueType.decimalType) ?
                     !matchesStored(s.expression, variableType, s.target.objectClass) :
                     !matches(s.expression, variableType, s.target.objectClass)) fail("assignment type mismatch", s.token);
