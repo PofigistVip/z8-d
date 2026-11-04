@@ -1,0 +1,28 @@
+public class CastOperators {
+    static int effects;
+    public operator int() { effects += 1; return 7; }
+    public operator string() { return "converted"; }
+    public operator bool() { return true; }
+    public operator decimal() { return null; }
+    public static int accept(int value) { return value; }
+    public static int choose(int value) { return 1; }
+    public static int choose(CastOperators value) { return 2; }
+    public static int converted(CastOperators value) { return value; }
+    public static int run() {
+        effects = 0;
+        CastOperators value = new CastOperators;
+        int number = value;
+        string text = value;
+        if (number != 7 || text != "converted" || !value) return 1;
+        if ((int)value != 7 || (string)value != "converted") return 2;
+        if (accept(value) != 7 || converted(value) != 7) return 3;
+        int[] items;
+        items.add(0);
+        int index = 0;
+        items.set(index, value);
+        if (items[0] != 7 || effects != 5) return 4;
+        decimal missing = value;
+        if (missing != null || choose(value) != 2) return 5;
+        return 179;
+    }
+}

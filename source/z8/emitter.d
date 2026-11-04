@@ -23,6 +23,7 @@ private string operatorDName(string symbol) {
     }
 }
 private string methodDName(Method method) {
+    if (method.isCastOperator) return "z8cast_" ~ method.name.text[13 .. $];
     return method.operatorSymbol.length ? operatorDName(method.operatorSymbol) : "m_" ~ method.name.text;
 }
 
@@ -163,8 +164,10 @@ private string emitExpr(Expression e) {
         ValueType[] savedStringConversions;
         bool[] savedPromotions;
         bool[] savedFileConversions, savedExceptionConversions, savedDateConversions;
+        Method[] savedUserConversions;
         foreach (i, argument; e.arguments) {
             savedOverrides ~= argument.emittedOverride;
+            savedUserConversions ~= argument.userConversion;
             savedBinaryConversions ~= argument.convertToBinary;
             savedFileConversions ~= argument.makeFile;
             savedExceptionConversions ~= argument.makeException;
@@ -181,11 +184,13 @@ private string emitExpr(Expression e) {
             argument.makeFile = false; argument.makeException = false;
             argument.convertToDate = required ? savedDateConversions[$ - 1] : false;
             argument.emittedOverride = name;
+            argument.userConversion = null;
         }
         value ~= "return " ~ emitExprRaw(e) ~ "; })()";
         if (!e.builtinCall.length) e.left.emittedOverride = savedReceiver;
         foreach (i, argument; e.arguments) {
             argument.emittedOverride = savedOverrides[i];
+            argument.userConversion = savedUserConversions[i];
             argument.promoteToDecimal = savedPromotions[i]; argument.convertToString = savedStringConversions[i];
             argument.convertToBinary = savedBinaryConversions[i];
             argument.makeFile = savedFileConversions[i]; argument.makeException = savedExceptionConversions[i];
@@ -202,6 +207,7 @@ private string emitExpr(Expression e) {
           "z8_guid_to_string", "z8_primary_to_string", "z8_geometry_to_string", "z8_geometry_toGeoJson",
           "z8_date_toString", "z8_date_toIsoString", "z8_datespan_to_string"].canFind(e.builtinCall)))
         value = "z8_string_new(" ~ value ~ ")";
+    if (e.userConversion !is null) value = "z8_nonnull(" ~ value ~ ")." ~ methodDName(e.userConversion) ~ "()";
     if (e.nonNullStringResult) value = "z8_string_or_empty(" ~ value ~ ")";
     if (e.optionalRequired) value = "z8_optional_require(" ~ value ~ ")";
     if (e.nullableStringMode == NullableStringMode.required) value = "z8_string_required(" ~ value ~ ")";

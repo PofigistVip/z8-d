@@ -183,16 +183,24 @@ class Parser {
             }
             if (accept("records")) { parseRecords(result); continue; }
             auto declaredFinal = accept("final");
+            bool isCastOperator = current.text == "operator";
+            Token name;
+            if (isCastOperator) name = take();
+            auto typeToken = current;
             auto declaredType = parseType(); auto declaredObjectName = parsedObjectName;
-            Token name; string operatorSymbol;
-            if (current.text == "operator") {
+            string operatorSymbol;
+            if (isCastOperator) {
+                if (![ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.dateType, ValueType.geometryType, ValueType.fileType].canFind(declaredType))
+                    error("unsupported conversion operator target");
+                name.text = "operatorCast:" ~ typeToken.text;
+            } else if (current.text == "operator") {
                 name = take();
                 if (!["!", "~", "+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">=", "&", "|", "^", "&&", "||"].canFind(current.text)) error("unsupported operator declaration");
                 operatorSymbol = take().text;
                 name.text = "operator" ~ operatorSymbol;
             } else name = identifier();
             if (current.text != "(") {
-                if (operatorSymbol.length) error("operator requires parameters");
+                if (operatorSymbol.length || isCastOperator) error("operator requires parameters");
                 if (isVirtual || declaredType == ValueType.voidType) error("this field type or modifier is not supported");
                 if (isStatic && (declaredType == ValueType.selfArray || declaredType == ValueType.exceptionType || isMap(declaredType)))
                     error("static object fields are not supported");
@@ -205,13 +213,15 @@ class Parser {
             auto method = new Method;
             if (isVirtual && isStatic) error("a static method cannot be virtual");
             method.isPublic = isPublic; method.isProtected = isProtected; method.isStatic = isStatic; method.isVirtual = isVirtual; method.owner = result;
-            method.returnType = declaredType; method.returnObjectName = declaredObjectName; method.name = name; method.operatorSymbol = operatorSymbol; expect("(");
+            method.returnType = declaredType; method.returnObjectName = declaredObjectName; method.name = name; method.operatorSymbol = operatorSymbol; method.isCastOperator = isCastOperator; expect("(");
             if (current.text != ")") {
                 do {
                     Parameter p; p.declaredFinal = accept("final"); p.type = parseType(); p.objectName = parsedObjectName; p.name = identifier(); method.parameters ~= p;
                 } while (accept(","));
             }
             expect(")");
+            if (isCastOperator && (method.parameters.length || method.isStatic))
+                error("only instance conversion operators without parameters are supported");
             if (method.operatorSymbol.length && (method.parameters.length > 1 || method.isStatic))
                 error("only instance operators with at most one parameter are supported");
             if (method.name.text == "constructor") {

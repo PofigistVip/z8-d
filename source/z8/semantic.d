@@ -48,6 +48,12 @@ class Checker {
             foreach (candidate; current.methods) if (candidate.name.text == name) return candidate;
         return null;
     }
+    private static Method lookupUnaryOperator(Program owner, string name) {
+        for (auto current = owner; current !is null; current = current.baseClass)
+            foreach (method; current.methods)
+                if (method.name.text == name && !method.parameters.length) return method;
+        return null;
+    }
     private static Field lookupField(Program owner, string name) {
         for (auto current = owner; current !is null; current = current.baseClass)
             foreach (candidate; current.fields) if (candidate.name.text == name) return candidate;
@@ -107,9 +113,24 @@ class Checker {
                 parameter.type = resolveDeclaredType(parameter.type, program, parameter.objectName, parameter.name);
         }
     }
+    private Method findConversion(Program owner, ValueType target) {
+        for (auto current = owner; current !is null; current = current.baseClass)
+            foreach (method; current.methods)
+                if (method.isCastOperator && method.returnType == target &&
+                    accessible(method.owner, method.isPublic, method.isProtected)) return method;
+        return null;
+    }
     private bool matches(Expression e, ValueType expected, Program expectedClass = null) {
         if (e.kind == ExprKind.arrayLiteral && (expected == ValueType.selfArray || expected == ValueType.enumArray)) e.objectClass = expectedClass;
         auto actual = typeOf(e, expected);
+        if (actual == ValueType.selfType) {
+            auto conversion = findConversion(e.objectClass, expected);
+            if (conversion !is null) {
+                e.userConversion = conversion;
+                if ([ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(expected)) e.optionalRequired = true;
+                return true;
+            }
+        }
         if (expected == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType,
             ValueType.optionalInt, ValueType.optionalBool, ValueType.optionalDecimal, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType, ValueType.dateType, ValueType.fileType].canFind(actual)) {
             e.boxPrimary = true; return true;
@@ -157,6 +178,10 @@ class Checker {
         if (expected != ValueType.intType && expected != ValueType.boolType && expected != ValueType.decimalType) return matches(e, expected, expectedClass);
         auto optional = storedValueType(expected);
         auto actual = typeOf(e, expected);
+        if (actual == ValueType.selfType) {
+            auto conversion = findConversion(e.objectClass, expected);
+            if (conversion !is null) { e.userConversion = conversion; return true; }
+        }
         if (actual == ValueType.nullType) { e.inferredType = optional; return true; }
         if (actual == optional) return true;
         if (actual == expected) { e.optionalWrap = true; return true; }
@@ -221,7 +246,8 @@ class Checker {
                     if (actual == ValueType.selfArray && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                     if (actual == ValueType.enumType && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                     if (actual == ValueType.enumArray && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
-                } else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
+                } else if (actual == ValueType.selfType && findConversion(e.arguments[i].objectClass, p.type) !is null) weight += 100;
+                else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
                 else if (actual == ValueType.intType && p.type == ValueType.dateType) weight += 100;
                 else if (p.type == ValueType.binaryType && [ValueType.stringType, ValueType.nullableString, ValueType.fileType].canFind(actual)) weight += 100;
                 else if ([ValueType.fileType, ValueType.exceptionType].canFind(p.type) && [ValueType.stringType, ValueType.nullableString].canFind(actual)) weight += 100;
@@ -1104,8 +1130,18 @@ class Checker {
             case ExprKind.unary:
                 auto operand = typeOf(e.left);
                 if (operand == ValueType.selfType && ["!", "~", "-"].canFind(e.token.text)) {
-                    auto method = lookupMethod(e.left.objectClass, "operator" ~ e.token.text);
-                    if (method is null) fail("undefined unary operator", e.token);
+                    auto method = lookupUnaryOperator(e.left.objectClass, "operator" ~ e.token.text);
+                    if (method is null) {
+                        if (e.token.text == "!") {
+                            auto conversion = findConversion(e.left.objectClass, ValueType.boolType);
+                            if (conversion !is null) {
+                                e.left.userConversion = conversion;
+                                e.left.optionalRequired = true;
+                                return ValueType.boolType;
+                            }
+                        }
+                        fail("undefined unary operator", e.token);
+                    }
                     auto selected = selectOverload(method, e);
                     e.userUnaryOperator = true;
                     return checkCall(selected, selected.owner, e);
