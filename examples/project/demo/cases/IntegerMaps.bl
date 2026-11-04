@@ -1,0 +1,54 @@
+public class IntegerMaps {
+    static int effects;
+    static int mark(int digit) { effects = effects * 10 + digit; return digit; }
+
+    public static int run() {
+        effects = 0;
+        int[int] values = {(mark(1), mark(2)), (mark(3), mark(4))};
+        if (effects != 1324 || values[1] != 2 || values[3] != 4) return 1;
+        if (values.get(99) != null || values.add(1, 12) != 2) return 2;
+        int key = null;
+        if (values.add(key, 20) != null || !values.containsKey(null)) return 3;
+        int nullInteger = null;
+        int[int] nullable = {(key, nullInteger)};
+        if (!nullable.containsKey(null) || nullable.get(null) != null) return 20;
+        if (values.get(null) != 20 || values[null] != 20 || values.add(3, null) != 4) return 4;
+        if (!values.containsValue(null) || values[3] != null) return 5;
+        int[] keys = values.keys();
+        int[] contents = values.values();
+        if (keys.size() != 3 || contents.size() != 3) return 6;
+        int nullKeys = 0;
+        for (int item : keys) if (item == null) nullKeys += 1;
+        int nullValues = 0;
+        for (int item : contents) if (item == null) nullValues += 1;
+        if (nullKeys != 1 || nullValues != 1) return 7;
+        int[int] other = {(1, 99)};
+        int[int] merged = values + other;
+        if (values[1] != 12 || merged[1] != 99 || merged.get(null) != 20) return 8;
+        values += other;
+        if (values[1] != 99 || values.remove(null) != 20 || values.containsKey(null)) return 9;
+        string[int] labels = {(1, "one"), (2, "two")};
+        if (labels[1] != "one" || labels.add(2, "second") != "two") return 10;
+        string nullValue = null;
+        labels.add(key, nullValue);
+        if (!labels.containsKey(null) || labels.get(null) != null || !labels.containsValue(null)) return 11;
+        string[int] copy = labels + string[int] {(3, "three")};
+        if (copy[3] != "three" || labels.get(3) != null) return 12;
+        copy.clear();
+        if (!copy.isEmpty() || labels.size() != 3) return 13;
+        try { labels.add(null, null); return 14; } catch (exception expectedLabels) {}
+        try { values.add(null, null); return 15; } catch (exception expectedValues) {}
+        string[string] stringKeys;
+        try { stringKeys.add(null, null); return 16; } catch (exception expectedStrings) {}
+        primary[string] primaryValues;
+        try { primaryValues.add(null, null); return 17; } catch (exception expectedPrimary) {}
+        labels.add(4294967296, "large");
+        labels.add(-1, "negative");
+        if (labels.get(4294967296) != "large" || labels[-1] != "negative") return 18;
+        int[int] empty = {};
+        empty.add(values);
+        empty.add(empty);
+        if (empty[1] != 99 || empty.size() != values.size()) return 19;
+        return 149;
+    }
+}

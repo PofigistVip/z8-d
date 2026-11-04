@@ -43,6 +43,7 @@ dub run -- build examples/project demo.Main.run example-app
 python tests/integration.py
 python tests/compound_assignment.py
 python tests/map_initializers.py
+python tests/integer_maps.py
 python tests/qualified_names.py
 python tests/records.py
 python tests/decimal_oracle.py
@@ -299,7 +300,8 @@ Unicode D и может отличаться от Java при специфичн
 `isEmpty`, `clear`, `get`, `add`, `addAll`, `set`, `removeAt`, `contains`,
 `indexOf`, `remove`, `removeAll`, `isSubsetOf`, `reverse`, `unique` и передача в методы.
 Типы массивов объектов должны совпадать; элементы могут принадлежать классам-наследникам.
-Для отображений поддерживаются `string[string]` и `primary[string]`: создание, передача по ссылке,
+Для отображений поддерживаются `string[string]`, `primary[string]`, `int[int]` и
+`string[int]`: создание, передача по ссылке,
 чтение и присваивание по ключу, `add` (значения или другого отображения), `get`,
 `remove`, `keys`, `values`, `size`, `isEmpty`, `containsKey`, операторы `+` и `+=`,
 `containsValue` и `clear`. Результат отсутствующего ключа можно сравнить с `null`
@@ -308,7 +310,9 @@ Unicode D и может отличаться от Java при специфичн
 `{("ключ", значение), ...}` в объявлении, присваивании и `return`; сначала
 вычисляются все ключи, затем все значения. Непосредственный `null` в паре и
 неподходящие типы пары отвергаются, как исходным компилятором. Ключи и значения,
-добавленные другими способами, могут быть `null`.
+добавленные другими способами, могут быть `null`. Вызов `add(null, null)` с двумя
+непосредственными литералами вызывает исключение: Java backend исходного Z8 выбирает
+перегрузку для массивов; типизированные переменные со значением `null` добавляются.
 Возвращаемые `add` и `remove` значения поддерживают те же проверки. Составные
 присваивания элементу пока не поддерживаются. Присваивание по индексу не подтверждено сравнением исполнения:
 оригинальный компилятор принимает его, но генерирует некомпилируемую Java.

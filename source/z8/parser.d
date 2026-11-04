@@ -82,8 +82,13 @@ class Parser {
         }
         if (accept("[")) {
             if (current.text != "]") {
-                if ((result != ValueType.stringType && result != ValueType.primaryType) || !accept("string")) error("only string[string] and primary[string] maps are supported");
-                expect("]"); return result == ValueType.stringType ? ValueType.stringMap : ValueType.primaryStringMap;
+                if (accept("string") && (result == ValueType.stringType || result == ValueType.primaryType)) {
+                    expect("]"); return result == ValueType.stringType ? ValueType.stringMap : ValueType.primaryStringMap;
+                }
+                if (accept("int") && (result == ValueType.intType || result == ValueType.stringType)) {
+                    expect("]"); return result == ValueType.intType ? ValueType.intIntMap : ValueType.stringIntMap;
+                }
+                error("unsupported map key or value type");
             }
             expect("]");
             switch (result) {

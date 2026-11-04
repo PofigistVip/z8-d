@@ -27,6 +27,8 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.selfArray: assert(objectClass !is null); return "Z8Array!(" ~ objectClass.emittedName ~ ")";
         case ValueType.stringMap: return "Z8StringMap";
         case ValueType.primaryStringMap: return "Z8PrimaryMap";
+        case ValueType.intIntMap: return "Z8IntMap!long";
+        case ValueType.stringIntMap: return "Z8IntMap!wstring";
         case ValueType.intArray: return "Z8Array!long";
         case ValueType.decimalArray: return "Z8Array!Z8Decimal";
         case ValueType.decimalMatrix: return "Z8Array!(Z8Array!Z8Decimal)";
@@ -285,6 +287,9 @@ private string emitExprRaw(Expression e) {
                 return "z8_invoke!\"z8_" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
             }
             if (isMap(e.inferredType)) {
+                if (e.token.text == "add" && e.arguments.length == 2 &&
+                    e.arguments[0].kind == ExprKind.nullLiteral && e.arguments[1].kind == ExprKind.nullLiteral)
+                    return "z8_map_add_null_pair!(" ~ dStorageType(mapValueType(e.inferredType)) ~ ")(" ~ emitExpr(e.left) ~ ")";
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return "z8_invoke!\"z8_" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
             }
@@ -460,8 +465,7 @@ private string defaultValue(ValueType type, Program objectClass = null, bool has
     if (type == ValueType.fileType) return "new Z8File()";
     if (type == ValueType.decimalType) return "z8_decimal_from_int(0)";
     if (type == ValueType.selfType) return "z8_new!(" ~ dType(type, objectClass) ~ ")(" ~ (hasContainer ? "this" : "") ~ ")";
-    if (type == ValueType.stringMap) return "new Z8StringMap()";
-    if (type == ValueType.primaryStringMap) return "new Z8PrimaryMap()";
+    if (isMap(type)) return "new " ~ dType(type) ~ "()";
     if (isArray(type)) return "new " ~ dType(type, objectClass) ~ "()";
     if (type == ValueType.intType) return "0";
     if (type == ValueType.stringType) return `z8_string_new(""w)`;

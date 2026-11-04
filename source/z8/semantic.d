@@ -247,6 +247,10 @@ class Checker {
         if (e.arguments.length != types.length) fail("incorrect argument count", e.token);
         foreach (i, arg; e.arguments) if (!matches(arg, types[i])) fail("argument type mismatch", arg.token);
     }
+    private void checkStoredArguments(Expression e, ValueType[] types) {
+        if (e.arguments.length != types.length) fail("incorrect argument count", e.token);
+        foreach (i, arg; e.arguments) if (!matchesStored(arg, types[i])) fail("argument type mismatch", arg.token);
+    }
     void check(Program program, Program[string] allPrograms = null) {
         currentProgram = program;
         allClasses = allPrograms;
@@ -422,13 +426,16 @@ class Checker {
                     if (hasObjectClass(expected)) e.objectClass = resolveClass(currentProgram, e.initializerObjectName, e.token);
                 }
                 if (isMap(expected)) {
+                    auto keyType = mapKeyType(expected);
                     auto valueType = mapValueType(expected);
                     foreach (entry; e.arguments) {
                         if (entry.kind != ExprKind.mapEntry) fail("map initializer requires key-value pairs", entry.token);
                         if (entry.left.kind == ExprKind.nullLiteral || entry.right.kind == ExprKind.nullLiteral)
                             fail("null literal is not supported in a map initializer pair", entry.token);
-                        if (![ValueType.stringType, ValueType.nullableString].canFind(typeOf(entry.left)))
-                            fail("map key type mismatch", entry.left.token);
+                        if (keyType == ValueType.stringType) {
+                            if (![ValueType.stringType, ValueType.nullableString].canFind(typeOf(entry.left)))
+                                fail("map key type mismatch", entry.left.token);
+                        } else if (!matchesStored(entry.left, keyType)) fail("map key type mismatch", entry.left.token);
                         if (valueType == ValueType.stringType) {
                             if (![ValueType.stringType, ValueType.nullableString].canFind(typeOf(entry.right)))
                                 fail("map value type mismatch", entry.right.token);
@@ -952,15 +959,15 @@ class Checker {
                         case "size": case "isEmpty": case "clear":
                             checkArguments(e, []);
                             return e.token.text == "size" ? ValueType.intType : e.token.text == "isEmpty" ? ValueType.boolType : ValueType.voidType;
-                        case "containsKey": checkArguments(e, [mapKeyType(receiver)]); return ValueType.boolType;
-                        case "containsValue": checkArguments(e, [mapValue]); return ValueType.boolType;
+                        case "containsKey": checkStoredArguments(e, [mapKeyType(receiver)]); return ValueType.boolType;
+                        case "containsValue": checkStoredArguments(e, [mapValue]); return ValueType.boolType;
                         case "get":
-                            checkArguments(e, [mapKeyType(receiver)]); return mapValueReadType(receiver);
+                            checkStoredArguments(e, [mapKeyType(receiver)]); return mapValueReadType(receiver);
                         case "remove":
-                            checkArguments(e, [mapKeyType(receiver)]); return mapValueReadType(receiver);
+                            checkStoredArguments(e, [mapKeyType(receiver)]); return mapValueReadType(receiver);
                         case "add":
                             if (e.arguments.length == 1) { checkArguments(e, [receiver]); return ValueType.voidType; }
-                            checkArguments(e, [mapKeyType(receiver), mapValue]); return mapValueReadType(receiver);
+                            checkStoredArguments(e, [mapKeyType(receiver), mapValue]); return mapValueReadType(receiver);
                         case "keys": checkArguments(e, []); return mapKeyArrayType(receiver);
                         case "values": checkArguments(e, []); return mapValueArrayType(receiver);
                         default: break;
@@ -1028,7 +1035,7 @@ class Checker {
             case ExprKind.index:
                 auto array = typeOf(e.left);
                 if (isMap(array)) {
-                    if (!matches(e.right, mapKeyType(array))) fail("map key type mismatch", e.token);
+                    if (!matchesStored(e.right, mapKeyType(array))) fail("map key type mismatch", e.token);
                     e.inferredType = array;
                     return mapValueReadType(array);
                 }
@@ -1334,7 +1341,7 @@ class Checker {
                 }
                 if (s.target.kind == ExprKind.index && isMap(s.target.inferredType))
                     variableType = mapValueType(s.target.inferredType);
-                if ((s.target.kind != ExprKind.index || [ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(s.target.inferredType)) && (s.assignmentOperator == "=" || variableType == ValueType.intType || variableType == ValueType.decimalType) ?
+                if ((s.target.kind != ExprKind.index || isMap(s.target.inferredType) || [ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(s.target.inferredType)) && (s.assignmentOperator == "=" || variableType == ValueType.intType || variableType == ValueType.decimalType) ?
                     !matchesStored(s.expression, variableType, s.target.objectClass) :
                     !matches(s.expression, variableType, s.target.objectClass)) fail("assignment type mismatch", s.token);
                 if (s.target.kind == ExprKind.index && isMap(s.target.inferredType) && s.assignmentOperator != "=") fail("compound assignment to a map entry is not supported", s.token);

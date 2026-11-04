@@ -219,6 +219,12 @@ auto z8_invoke(string name, T, Args...)(T value, Args args) {
     if (value is null) throw new Exception("null reference");
     return __traits(getMember, value, name)(args);
 }
+// Java selects the overload accepting key/value arrays when both arguments
+// are literal null; that overload throws while trying to iterate the keys.
+R z8_map_add_null_pair(R, T)(T value) {
+    z8_nonnull(value);
+    throw new Exception("null map initializer arrays");
+}
 ref auto z8_array_at(T)(Z8Array!T value, long index) {
     return z8_nonnull(value).z8_at(index);
 }

@@ -1,0 +1,13 @@
+public class IntegerMapIndex {
+    public static int run() {
+        int[int] numbers;
+        numbers[1] = 10;
+        numbers[null] = null;
+        if (numbers[1] != 10 || !numbers.containsKey(null) || numbers[null] != null) return 1;
+        string[int] words;
+        words[-1] = "value";
+        words[null] = null;
+        if (words[-1] != "value" || !words.containsKey(null) || words[null] != null) return 2;
+        return 143;
+    }
+}

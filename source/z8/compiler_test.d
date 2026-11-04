@@ -11,6 +11,21 @@ private void rejects(string source) {
 }
 
 unittest {
+    compile(q{class A { static int f() {
+        int[int] values = {(1, 2), (3, 4)};
+        int missing = values.get(0);
+        int absent = null;
+        values.add(absent, 5);
+        string[int] labels = {(1, "one")};
+        labels.add(2, "two");
+        if (values.containsKey(absent) && labels[1] == "one") return values[3];
+        return 0;
+    } }});
+    rejects(q{class A { static void f() { int[int] x = {("a", 1)}; } }});
+    rejects(q{class A { static void f() { string[int] x; x.add("a", "b"); } }});
+}
+
+unittest {
     auto repeated = compile("enum E { First,, Second,,, }");
     assert(repeated.canFind("e_First") && repeated.canFind("e_Second"));
     rejects("enum E { , First }");
