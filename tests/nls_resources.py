@@ -62,4 +62,17 @@ void main(string[] args) {
         command.append(str(Path(sys.argv[1]).resolve()))
     actual = subprocess.check_output(command, cwd=temp, text=True, encoding="utf-8").splitlines()
     assert actual == expected, (expected, actual)
+    override = temp / "override.nls"
+    override.write_text('<properties><entry key="hello">override</entry></properties>', encoding="utf-8")
+    autoload = temp / "autoload.d"
+    autoload.write_text('''import z8.runtime;
+void main() {
+    assert(z8_string_new("$hello$"w) == "override"w);
+    assert(z8_bool_parse("ДА"w));
+}
+''', encoding="utf-8")
+    auto_exe = temp / ("autoload.exe" if os.name == "nt" else "autoload")
+    subprocess.run(["dmd", str(autoload), *import_args(), str(runtime_lib), "-of=" + str(auto_exe)], cwd=temp, check=True)
+    environment = dict(os.environ, Z8_NLS_FILES=os.pathsep.join((str(nls), str(override))))
+    subprocess.run([str(auto_exe)], cwd=temp, env=environment, check=True)
 print("NLS resources match Java XML properties")

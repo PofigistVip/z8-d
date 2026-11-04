@@ -150,3 +150,11 @@ size_t z8_string_load_nls(string path) {
                                      falseValue is null ? z8_bool_false_resource : *falseValue);
     return entries.length;
 }
+
+shared static this() {
+    import std.path : pathSeparator;
+    import std.process : environment;
+    import std.string : split;
+    auto files = environment.get("Z8_NLS_FILES", "");
+    foreach (path; files.split(pathSeparator)) if (path.length) z8_string_load_nls(path);
+}
