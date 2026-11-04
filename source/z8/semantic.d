@@ -482,6 +482,12 @@ class Checker {
                     if (!["name", "baseName", "extension"].canFind(e.token.text)) fail("unsupported static file method", e.token);
                     checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_file_" ~ e.token.text; return ValueType.stringType;
                 }
+                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "binary") {
+                    if (e.token.text != "zip" || e.arguments.length != 1) fail("unsupported static binary method", e.token);
+                    auto source = typeOf(e.arguments[0]);
+                    auto expectedSource = source == ValueType.fileType ? ValueType.fileType : ValueType.binaryArray;
+                    checkArguments(e, [expectedSource]); e.builtinCall = "z8_binary_zip"; return ValueType.binaryType;
+                }
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "geometry") {
                     if (e.token.text == "fromHexString") {
                         checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_geometry_fromHexString"; return ValueType.geometryType;
@@ -681,6 +687,9 @@ class Checker {
                     fail("unsupported datespan method", e.token);
                 }
                 if (receiver == ValueType.binaryType) {
+                    if (e.token.text == "unzip") {
+                        checkArguments(e, [ValueType.fileType]); e.builtinCall = "z8_binary_unzip"; return ValueType.voidType;
+                    }
                     if (e.token.text == "setName") {
                         checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_binary_set_name"; return ValueType.binaryType;
                     }

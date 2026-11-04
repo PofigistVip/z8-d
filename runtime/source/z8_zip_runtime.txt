@@ -63,3 +63,27 @@ Z8File z8_file_unzip(Z8File archive, Z8File directory) {
     z8_zip_extract(cast(ubyte[])read(z8_file_system_path(archive)), z8_file_system_path(directory));
     return archive;
 }
+
+Z8Binary z8_binary_zip(Z8File source) { return new Z8Binary(z8_zip_path(z8_file_system_path(source))); }
+Z8Binary z8_binary_zip(Z8Array!Z8Binary values) {
+    import std.zip : ZipArchive, ArchiveMember, CompressionMethod;
+    z8_nonnull(values);
+    auto archive = new ZipArchive();
+    foreach (i; 0 .. values.z8_size()) {
+        auto value = z8_nonnull(values.z8_get(i));
+        auto entry = new ArchiveMember();
+        entry.name = z8_string_required(value.name).to!string;
+        if (entry.name in archive.directory) throw new Exception("duplicate archive entry");
+        entry.flags = 0x800;
+        entry.expandedData = value.data[value.position .. $].dup;
+        value.position = value.data.length;
+        entry.compressionMethod = CompressionMethod.deflate;
+        archive.addMember(entry);
+    }
+    return new Z8Binary(cast(ubyte[])archive.build());
+}
+void z8_binary_unzip(Z8Binary archive, Z8File directory) {
+    z8_nonnull(archive);
+    z8_zip_extract(archive.data[archive.position .. $], z8_file_system_path(directory));
+    archive.position = archive.data.length;
+}
