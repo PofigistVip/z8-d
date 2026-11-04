@@ -37,6 +37,7 @@ private bool z8_calendar_is_julian(int year, int month, long day) {
     return year < 1582 || (year == 1582 && (month < 10 || (month == 10 && day < 15)));
 }
 private long z8_calendar_year_start(int year) { return z8_calendar_day_number(year, 1, 1, year <= 1582); }
+private int z8_calendar_year_of_era(int year) { return year <= 0 ? 1 - year : year; }
 private int z8_calendar_monday_index(long dayNumber) {
     auto result = cast(int)(dayNumber % 7);
     return result < 0 ? result + 7 : result;

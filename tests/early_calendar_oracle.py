@@ -63,6 +63,27 @@ public class EarlyCalendarOracle {
                     System.out.println(f.format(parsed) + " " + parsed.getTime());
                 } catch (Exception e) { throw new RuntimeException(e); }
             }
+        SimpleDateFormat era = new SimpleDateFormat("G y-MM-dd D EEEE YYYY-ww W F u");
+        for (int n : new int[]{-1, -365, -366, -731}) {
+            Calendar c = new GregorianCalendar(1,0,1,12,0,0); c.add(Calendar.DAY_OF_MONTH, n);
+            String formatted = era.format(c.getTime());
+            c.setFirstDayOfWeek(Calendar.MONDAY); c.setMinimalDaysInFirstWeek(7);
+            System.out.println(c.get(Calendar.YEAR) + " " + formatted + " " + c.getTimeInMillis() + " " + c.get(Calendar.WEEK_OF_YEAR));
+        }
+        for (int mode=0; mode<4; mode++) {
+            Calendar c = new GregorianCalendar(1,0,1,12,0,0); c.add(Calendar.DAY_OF_MONTH, -1);
+            if (mode==0) c.add(Calendar.YEAR, -1);
+            else if (mode==1) c.set(2, 1, 3, 4, 5, 6);
+            else if (mode==2) { c.set(Calendar.HOUR_OF_DAY, 4); c.set(Calendar.MINUTE, 5); c.set(Calendar.SECOND, 6); }
+            else c = new GregorianCalendar(c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH));
+            System.out.println(era.format(c.getTime()) + " " + c.getTimeInMillis());
+        }
+        for (String input : new String[]{"до н.э. 1-12-31", "до н.э. 2-02-03", "н.э. 1-01-01"}) {
+            try {
+                Date value = new SimpleDateFormat("G y-MM-dd").parse(input);
+                System.out.println(era.format(value) + " " + value.getTime());
+            } catch (Exception e) { throw new RuntimeException(e); }
+        }
     }
 }
 ''', encoding="utf-8")
@@ -117,11 +138,27 @@ void main() {
             auto parsed = z8_date_parse(z8_date_toString(date,pattern),pattern);
             writeln(z8_date_toString(parsed,"yyyy-MM-dd HH:mm:ss EEEE D"w).to!string," ",z8_date_ticks(parsed));
         }
+    foreach (n; [-1, -365, -366, -731]) {
+        auto date = z8_date_addDay(z8_date_literal("01/01/0001 12:00:00"), n);
+        writeln(z8_date_year(date), " ", z8_date_toString(date,"G y-MM-dd D EEEE YYYY-ww W F u"w).to!string, " ", z8_date_ticks(date), " ", z8_date_weekOfYear(date));
+    }
+    foreach (mode; 0 .. 4) {
+        auto date = z8_date_addDay(z8_date_literal("01/01/0001 12:00:00"), -1);
+        if (mode == 0) date = z8_date_addYear(date, -1);
+        else if (mode == 1) z8_date_set(date, 2, 2, 3, 4, 5, 6);
+        else if (mode == 2) z8_date_setTime(date, 4, 5, 6);
+        else date = z8_date_truncDay(date);
+        writeln(z8_date_toString(date,"G y-MM-dd D EEEE YYYY-ww W F u"w).to!string, " ", z8_date_ticks(date));
+    }
+    foreach (input; ["до н.э. 1-12-31"w, "до н.э. 2-02-03"w, "н.э. 1-01-01"w]) {
+        auto value = z8_date_parse(input,"G y-MM-dd"w);
+        writeln(z8_date_toString(value,"G y-MM-dd D EEEE YYYY-ww W F u"w).to!string, " ", z8_date_ticks(value));
+    }
 }
 ''', encoding="utf-8")
     executable = temp / ("early_calendar.exe" if os.name == "nt" else "early_calendar")
     subprocess.run(["dmd", str(source), *import_args(), str(runtime_lib), "-of=" + str(executable)], cwd=temp, check=True)
     actual = subprocess.check_output([str(executable)], cwd=temp, text=True, encoding="utf-8").splitlines()
     differences = [(i, j, d) for i, (j, d) in enumerate(zip(expected, actual)) if j != d]
-    assert len(expected) == len(actual) and not differences, differences
+    assert len(expected) == len(actual) and not differences, [(i, j.encode("unicode_escape"), d.encode("unicode_escape")) for i, j, d in differences]
 print("Early calendar fields match Java GregorianCalendar")

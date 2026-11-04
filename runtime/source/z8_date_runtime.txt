@@ -77,7 +77,7 @@ Z8Date z8_date_literal(string text) {
     return value;
 }
 long z8_date_ticks(Z8Date x) { return (z8_nonnull(x).value - SysTime.fromUnixTime(0, UTC())).total!"msecs"; }
-long z8_date_year(Z8Date x) { return z8_calendar_fields(z8_nonnull(x).value).year; }
+long z8_date_year(Z8Date x) { return z8_calendar_year_of_era(z8_calendar_fields(z8_nonnull(x).value).year); }
 long z8_date_quarter(Z8Date x) { return (z8_date_month(x) - 1) / 3 + 1; }
 long z8_date_month(Z8Date x) { return z8_calendar_fields(z8_nonnull(x).value).month; }
 long z8_date_day(Z8Date x) { return z8_calendar_fields(z8_nonnull(x).value).day; }
@@ -127,7 +127,7 @@ void z8_date_setZoneOffset(Z8Date x, long offset) {
     target.explicitOffset = true;
 }
 
-void z8_date_set(Z8Date x, long year, long month, long day, long hour, long minute, long second, long millisecond = 0) {
+private void z8_date_set_astronomical(Z8Date x, long year, long month, long day, long hour, long minute, long second, long millisecond = 0) {
     auto target = z8_nonnull(x);
     // Normalize calendar fields before applying the zone; adding elapsed days in
     // the target zone would shift local time across a daylight-saving boundary.
@@ -139,6 +139,10 @@ void z8_date_set(Z8Date x, long year, long month, long day, long hour, long minu
     t += dur!"days"(cast(int)day - 1) + dur!"hours"(cast(int)hour) + dur!"minutes"(cast(int)minute) +
         dur!"seconds"(cast(int)second) + dur!"msecs"(cast(int)millisecond);
     target.value = SysTime(DateTime(t.year, cast(int)t.month, t.day, t.hour, t.minute, t.second), target.value.timezone) + t.fracSecs;
+}
+void z8_date_set(Z8Date x, long year, long month, long day, long hour, long minute, long second, long millisecond = 0) {
+    if (z8_calendar_fields(z8_nonnull(x).value).year <= 0) year = 1 - year;
+    z8_date_set_astronomical(x, year, month, day, hour, minute, second, millisecond);
 }
 void z8_date_setDate(Z8Date x, long year, long month, long day) {
     z8_date_set(x, year, month, day, z8_date_hours(x), z8_date_minutes(x), z8_date_seconds(x));
@@ -219,7 +223,7 @@ Z8Date z8_date_parse(wstring input, wstring pattern) {
     pattern = z8_string_required(pattern);
     if (!input.length) return z8_date_parse(input);
     int year = 1970, month = 1, day = 1, hour, minute, second, millisecond, dayOfYear, weekday = 1, week = 1, weekKind;
-    bool useDayOfYear, twoDigitYear, twelveHour, afternoon, explicitDay, hasWeekday, hasWeekYear;
+    bool useDayOfYear, twoDigitYear, twelveHour, afternoon, explicitDay, hasWeekday, hasWeekYear, beforeCommonEra;
     int offset;
     bool hasOffset, quoted;
     size_t pi, ti;
@@ -271,9 +275,11 @@ Z8Date z8_date_parse(wstring input, wstring pattern) {
                 afternoon = ampm == "pm"w; ti += 2;
                 break;
             case 'G':
-                if (ti + 4 > input.length || z8_str_toLowerCase(input[ti .. ti + 4]) != "н.э."w)
-                    throw new Exception("unsupported date era");
-                ti += 4;
+                if (ti + 7 <= input.length && z8_str_toLowerCase(input[ti .. ti + 7]) == "до н.э."w) {
+                    beforeCommonEra = true; ti += 7;
+                } else if (ti + 4 <= input.length && z8_str_toLowerCase(input[ti .. ti + 4]) == "н.э."w) {
+                    beforeCommonEra = false; ti += 4;
+                } else throw new Exception("unsupported date era");
                 break;
             case 'z':
                 hasOffset = true;
@@ -330,16 +336,17 @@ Z8Date z8_date_parse(wstring input, wstring pattern) {
         year += (startYear / 100) * 100;
         if (year < startYear) year += 100;
     }
+    if (beforeCommonEra) year = 1 - year;
     immutable(TimeZone) zone = hasOffset ? new immutable(SimpleTimeZone)(dur!"minutes"(offset)) : z8_date_timezone();
     auto result = new Z8Date(SysTime(DateTime(year, 1, 1), zone));
     void setFromFields(int targetYear) {
         auto kind = hasWeekYear ? 1 : weekKind ? weekKind : hasWeekday && !explicitDay ? 3 : 0;
         if (!kind) {
-            z8_date_set(result, targetYear, useDayOfYear ? 1 : month, useDayOfYear ? dayOfYear : day, hour, minute, second, millisecond);
+            z8_date_set_astronomical(result, targetYear, useDayOfYear ? 1 : month, useDayOfYear ? dayOfYear : day, hour, minute, second, millisecond);
             return;
         }
         auto targetMonth = kind == 1 ? 1 : month;
-        z8_date_set(result, targetYear, targetMonth, 1, 0, 0, 0);
+        z8_date_set_astronomical(result, targetYear, targetMonth, 1, 0, 0, 0);
         auto first = result.value;
         auto firstWeekday = (cast(int)first.dayOfWeek + 6) % 7;
         int resolvedDay;
@@ -350,7 +357,7 @@ Z8Date z8_date_parse(wstring input, wstring pattern) {
             auto lastWeekday = (firstWeekday + last - 1) % 7;
             resolvedDay = last - (lastWeekday - weekday + 1 + 7) % 7 + (week + 1) * 7;
         }
-        z8_date_set(result, targetYear, targetMonth, resolvedDay, hour, minute, second, millisecond);
+        z8_date_set_astronomical(result, targetYear, targetMonth, resolvedDay, hour, minute, second, millisecond);
     }
     setFromFields(year);
     if (twoDigitYear && year == centuryStart.year && result.value < centuryStart) {
@@ -377,7 +384,7 @@ private Z8Date z8_date_add_calendar(Z8Date x, int year, int month, long amount) 
     auto fields = z8_calendar_fields(time);
     auto day = fields.day < z8_calendar_month_days(year, month) ? fields.day : z8_calendar_month_days(year, month);
     auto result = new Z8Date(time);
-    z8_date_set(result, year, month, day, time.hour, time.minute, time.second, time.fracSecs.total!"msecs");
+    z8_date_set_astronomical(result, year, month, day, time.hour, time.minute, time.second, time.fracSecs.total!"msecs");
     return z8_date_added(x, result.value, amount, true);
 }
 Z8Date z8_date_addYear(Z8Date x, long n) {
@@ -425,7 +432,7 @@ private Z8Date z8_date_truncate(Z8Date x, int unit) {
     int hour = unit <= 3 ? 0 : t.hour;
     int minute = unit <= 4 ? 0 : t.minute;
     auto result = new Z8Date(SysTime(DateTime(1970, 1, 1), z8_date_timezone()));
-    z8_date_set(result, calendar.year, month, day, hour, minute, 0);
+    z8_date_set(result, z8_calendar_year_of_era(calendar.year), month, day, hour, minute, 0);
     return result;
 }
 Z8Date z8_date_truncYear(Z8Date x) { return z8_date_truncate(x, 0); }
@@ -448,7 +455,7 @@ private wstring z8_date_format(Z8Date x, bool milliseconds) {
     auto calendar = z8_calendar_fields(t);
     auto offset = milliseconds ? z8_date_zoneOffset(x) / 60_000 : t.utcOffset.total!"minutes";
     auto absoluteOffset = offset < 0 ? -offset : offset;
-    auto result = format("%04d-%02d-%02dT%02d:%02d:%02d", calendar.year, calendar.month, calendar.day, t.hour, t.minute, t.second);
+    auto result = format("%04d-%02d-%02dT%02d:%02d:%02d", z8_calendar_year_of_era(calendar.year), calendar.month, calendar.day, t.hour, t.minute, t.second);
     auto fraction = t.fracSecs.total!"msecs";
     if (milliseconds && fraction != 0) result ~= format(".%03d", fraction);
     result ~= format("%s%02d:%02d", offset < 0 ? "-" : "+", absoluteOffset / 60, absoluteOffset % 60);
@@ -487,7 +494,10 @@ wstring z8_date_toString(Z8Date value, wstring pattern) {
         long number;
         bool numeric = true;
         switch (c) {
-            case 'y': number = count == 2 ? calendar.year % 100 : calendar.year; break;
+            case 'y':
+                number = z8_calendar_year_of_era(calendar.year);
+                if (count == 2) number %= 100;
+                break;
             case 'Y':
                 number = calendar.year + (calendar.month == 12 && z8_date_format_week(t) == 1 ? 1 : 0);
                 if (count == 2) number %= 100;
@@ -522,7 +532,7 @@ wstring z8_date_toString(Z8Date value, wstring pattern) {
             case 'h': number = t.hour % 12 == 0 ? 12 : t.hour % 12; break;
             case 'E': numeric = false; result ~= count < 4 ? z8_weekday_short[cast(int)t.dayOfWeek] : z8_weekday_long[cast(int)t.dayOfWeek]; break;
             case 'a': numeric = false; result ~= t.hour < 12 ? "AM"w : "PM"w; break;
-            case 'G': numeric = false; result ~= "н.э."w; break;
+            case 'G': numeric = false; result ~= calendar.year <= 0 ? "до н.э."w : "н.э."w; break;
             case 'z':
                 numeric = false;
                 result ~= t.dstInEffect ? (count < 4 ? "MSD"w : "Moscow Daylight Time"w) :
@@ -543,7 +553,7 @@ wstring z8_date_toString(Z8Date value, wstring pattern) {
                 break;
             default: throw new Exception("unsupported date format");
         }
-        if (numeric) result ~= format("%0*d", cast(int)count, number).to!wstring;
+        if (numeric) result ~= (number < 0 ? format("-%0*d", cast(int)count, -number) : format("%0*d", cast(int)count, number)).to!wstring;
     }
     if (quoted) throw new Exception("unterminated date format quote");
     return result.length ? result : ""w;
