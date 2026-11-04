@@ -175,7 +175,8 @@ Z8Date z8_date_parse(wstring input, wstring pattern) {
     if (input is null) return null;
     pattern = z8_string_required(pattern);
     if (!input.length) return z8_date_parse(input);
-    int year = 1970, month = 1, day = 1, hour, minute, second, millisecond;
+    int year = 1970, month = 1, day = 1, hour, minute, second, millisecond, dayOfYear;
+    bool useDayOfYear, twoDigitYear;
     int offset;
     bool hasOffset, quoted;
     size_t pi, ti;
@@ -202,9 +203,14 @@ Z8Date z8_date_parse(wstring input, wstring pattern) {
         while (pi < pattern.length && pattern[pi] == c) { ++pi; ++width; }
         bool adjacent = pi < pattern.length && ((pattern[pi] >= 'A' && pattern[pi] <= 'Z') || (pattern[pi] >= 'a' && pattern[pi] <= 'z'));
         switch (c) {
-            case 'y': if (width <= 2) throw new Exception("unsupported date format"); year = number(width, adjacent); break;
+            case 'y':
+                auto begin = ti;
+                year = number(width, adjacent);
+                twoDigitYear = width <= 2 && ti - begin == 2 && input[begin] >= '0' && input[begin] <= '9';
+                break;
             case 'M': if (width > 2) throw new Exception("unsupported date format"); month = number(width, adjacent); break;
-            case 'd': day = number(width, adjacent); break;
+            case 'd': day = number(width, adjacent); useDayOfYear = false; break;
+            case 'D': dayOfYear = number(width, adjacent); useDayOfYear = true; break;
             case 'H': hour = number(width, adjacent); break;
             case 'm': minute = number(width, adjacent); break;
             case 's': second = number(width, adjacent); break;
@@ -228,9 +234,21 @@ Z8Date z8_date_parse(wstring input, wstring pattern) {
         }
     }
     if (quoted) throw new Exception("unterminated date format quote");
+    SysTime centuryStart;
+    if (twoDigitYear) {
+        centuryStart = Clock.currTime(z8_date_timezone());
+        centuryStart.add!"years"(-80, AllowDayOverflow.no);
+        auto startYear = centuryStart.year;
+        year += (startYear / 100) * 100;
+        if (year < startYear) year += 100;
+    }
     immutable(TimeZone) zone = hasOffset ? new immutable(SimpleTimeZone)(dur!"minutes"(offset)) : z8_date_timezone();
     auto result = new Z8Date(SysTime(DateTime(year, 1, 1), zone));
-    z8_date_set(result, year, month, day, hour, minute, second, millisecond);
+    z8_date_set(result, year, useDayOfYear ? 1 : month, useDayOfYear ? dayOfYear : day, hour, minute, second, millisecond);
+    if (twoDigitYear && year == centuryStart.year && result.value < centuryStart) {
+        year += 100;
+        z8_date_set(result, year, useDayOfYear ? 1 : month, useDayOfYear ? dayOfYear : day, hour, minute, second, millisecond);
+    }
     result.value.timezone = z8_date_timezone();
     return result;
 }
@@ -313,6 +331,7 @@ wstring z8_date_toString(Z8Date value, wstring pattern) {
             case 'y': number = count == 2 ? t.year % 100 : t.year; break;
             case 'M': if (count > 2) throw new Exception("unsupported date format"); number = cast(int)t.month; break;
             case 'd': number = t.day; break;
+            case 'D': number = t.dayOfYear; break;
             case 'H': number = t.hour; break;
             case 'm': number = t.minute; break;
             case 's': number = t.second; break;

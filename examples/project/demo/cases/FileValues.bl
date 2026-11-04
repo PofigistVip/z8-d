@@ -26,6 +26,8 @@ public class FileValues {
         if (file.parse("").size() != 0 || file.parse("{\"path\":\"single\",\"size\":0}").first().path != "single") return 16;
         file[] permissive = file.parse("{path:'demo/a',size:7,details:{kind:'text',},}");
         if (permissive.first().path != "demo/a" || permissive.first().size != 7 || permissive.first().details.get("kind") != "text") return 17;
+        file[] oldDate = file.parse("{path:'single',size:0,time:'24/12/2010 01:10:20'}");
+        if (oldDate.first().time.toString() != "2010-01-24T01:10:20+03:00") return 18;
         try { file.parse("[{}]"); return 12; } catch (exception ignored) {}
         file[] alternate = file.parse("[{\"file\":\"other.txt\",\"path\":\"ignored.txt\",\"size\":0}]");
         if (alternate.first().path != "other.txt") return 13;

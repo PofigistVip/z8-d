@@ -92,7 +92,7 @@ Z8Array!Z8File z8_file_parse(wstring input) {
         value.user = z8_guid_parse(field(values, "user"));
         value.author = field(values, "author");
         auto time = field(values, "time");
-        value.time = z8_date_parse(time);
+        value.time = time.canFind('/') ? z8_date_parse(time, "D/M/y H:m:s"w) : z8_date_parse(time);
         if (auto details = "details" in values) {
             foreach (key, unused; details.object) value.details.z8_add(key.to!wstring, field(details.object, key));
         }
