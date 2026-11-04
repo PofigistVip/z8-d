@@ -17,7 +17,8 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, decimalArray, boolArray, stringArray, selfArray, stringMap, nullType }
+enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, decimalArray, boolArray, stringArray, selfArray, stringMap, nullType, nullableString }
+enum NullableStringMode { none, required, nullAsEmpty }
 enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, nullLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, instanceOf, unary, binary, conditional, elvis }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
                 whileStmt, doWhileStmt, forStmt, forEachStmt, breakStmt, continueStmt, throwStmt, tryStmt }
@@ -36,6 +37,8 @@ class Expression {
     string emittedOperator;
     string builtinCall;
     Program objectClass;
+    NullableStringMode nullableStringMode;
+    bool nullableStringReceiver, nullableStringLeft;
     this(ExprKind kind, Token token) { this.kind = kind; this.token = token; }
 }
 class Statement {
@@ -85,7 +88,7 @@ private bool isArray(ValueType type) {
     return [ValueType.intArray, ValueType.decimalArray, ValueType.boolArray, ValueType.stringArray, ValueType.selfArray].canFind(type);
 }
 private bool hasObjectClass(ValueType type) { return type == ValueType.selfType || type == ValueType.selfArray; }
-private bool isNullableReference(ValueType type) { return type == ValueType.selfType || type == ValueType.stringMap || isArray(type); }
+private bool isNullableReference(ValueType type) { return type == ValueType.selfType || type == ValueType.stringMap || type == ValueType.nullableString || isArray(type); }
 // Until Java's legacy Double.toString conversion is fully reproduced, reject
 // literal values for which a shorter D rendering may differ from the Java backend.
 private bool safeDecimalLiteral(string text) {
@@ -477,6 +480,9 @@ class Checker {
     private bool matches(Expression e, ValueType expected, Program expectedClass = null) {
         if (e.kind == ExprKind.arrayLiteral && expected == ValueType.selfArray) e.objectClass = expectedClass;
         auto actual = typeOf(e, expected);
+        if (actual == ValueType.nullableString && expected == ValueType.stringType) {
+            e.nullableStringMode = NullableStringMode.required; return true;
+        }
         if (actual == ValueType.nullType && isNullableReference(expected)) {
             e.inferredType = expected; e.objectClass = expectedClass; return true;
         }
@@ -529,7 +535,8 @@ class Checker {
             int weight; bool applicable = true;
             foreach (i, p; candidate.parameters) {
                 auto actual = actualTypes[i];
-                if (actual == ValueType.nullType && isNullableReference(p.type)) {
+                if ((actual == ValueType.nullType && isNullableReference(p.type)) ||
+                    (actual == ValueType.nullableString && p.type == ValueType.stringType)) {
                     // Null is equally applicable to each supported reference type.
                 } else if (actual == p.type) {
                     if (actual == ValueType.selfType && !isAssignable(e.arguments[i].objectClass, resolveClass(candidate.owner, p.objectName, p.name))) applicable = false;
@@ -736,6 +743,10 @@ class Checker {
                     return checkCall(target, target.owner, e);
                 }
                 auto receiver = typeOf(e.left);
+                if (receiver == ValueType.nullableString) {
+                    e.nullableStringReceiver = true;
+                    receiver = ValueType.stringType;
+                }
                 e.inferredType = receiver;
                 if (receiver == ValueType.selfType) {
                     auto owner = e.left.objectClass;
@@ -804,7 +815,7 @@ class Checker {
                         case "containsKey": case "containsValue":
                             checkArguments(e, [ValueType.stringType]); return ValueType.boolType;
                         case "get":
-                            checkArguments(e, [ValueType.stringType]); return ValueType.stringType;
+                            checkArguments(e, [ValueType.stringType]); return ValueType.nullableString;
                         case "add":
                             checkArguments(e, [ValueType.stringType, ValueType.stringType]); return ValueType.voidType;
                         default: break;
@@ -866,7 +877,7 @@ class Checker {
                 if (array == ValueType.stringMap) {
                     if (!matches(e.right, ValueType.stringType)) fail("map key must be string", e.token);
                     e.inferredType = ValueType.stringMap;
-                    return ValueType.stringType;
+                    return ValueType.nullableString;
                 }
                 if (!isArray(array)) fail("indexing requires an array", e.token);
                 if (typeOf(e.right) != ValueType.intType) fail("array index must be int", e.token);
@@ -906,6 +917,8 @@ class Checker {
                     e.inferredType = ValueType.nullType;
                     return ValueType.boolType;
                 }
+                if (left == ValueType.nullableString) { e.nullableStringLeft = true; left = ValueType.stringType; }
+                if (right == ValueType.nullableString) { e.right.nullableStringMode = NullableStringMode.nullAsEmpty; right = ValueType.stringType; }
                 if (op == "+" && left == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(right)) {
                     e.right.convertToString = right; right = ValueType.stringType;
                 }
@@ -953,10 +966,13 @@ class Checker {
             case ExprKind.elvis:
                 auto left = typeOf(e.left);
                 if (!isNullableReference(left)) fail("elvis requires a supported reference type", e.token);
-                if (!matches(e.right, left, e.left.objectClass)) fail("elvis branch type mismatch", e.token);
+                if (left == ValueType.nullableString && typeOf(e.right) == ValueType.nullableString)
+                    fail("nullable string fallback is not supported", e.token);
+                auto expectedRight = left == ValueType.nullableString ? ValueType.stringType : left;
+                if (!matches(e.right, expectedRight, e.left.objectClass)) fail("elvis branch type mismatch", e.token);
                 e.inferredType = left;
                 e.objectClass = e.left.objectClass;
-                return left;
+                return left == ValueType.nullableString ? ValueType.stringType : left;
         }
     }
     private bool checkStatement(Statement s) {
@@ -975,6 +991,8 @@ class Checker {
                 return false;
             case StmtKind.assignment:
                 auto variableType = typeOf(s.target);
+                if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.stringMap)
+                    variableType = ValueType.stringType;
                 if (!matches(s.expression, variableType, s.target.objectClass)) fail("assignment type mismatch", s.token);
                 if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.stringMap && s.assignmentOperator != "=") fail("compound assignment to a map entry is not supported", s.token);
                 s.type = variableType;
@@ -1064,6 +1082,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.boolArray: return "Z8Array!bool";
         case ValueType.stringArray: return "Z8Array!wstring";
         case ValueType.nullType: assert(0, "null has no concrete D type");
+        case ValueType.nullableString: return "wstring";
     }
 }
 /// The Java runtime stores strings as UTF-16; preserve its code-unit ordering.
@@ -1089,6 +1108,8 @@ private string emitStringLiteral(string text) {
 }
 private string emitExpr(Expression e) {
     auto value = emitExprRaw(e);
+    if (e.nullableStringMode == NullableStringMode.required) value = "z8_string_required(" ~ value ~ ")";
+    if (e.nullableStringMode == NullableStringMode.nullAsEmpty) value = "z8_string_or_empty(" ~ value ~ ")";
     if (e.kind == ExprKind.conditional && isNullableReference(e.inferredType))
         value = "cast(" ~ dType(e.inferredType, e.objectClass) ~ ")(" ~ value ~ ")";
     if (e.promoteToDecimal) value = "z8_decimal_from_int(" ~ value ~ ")";
@@ -1126,6 +1147,10 @@ private string emitExprRaw(Expression e) {
             if (e.builtinCall.length) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return e.builtinCall ~ "(" ~ args.join(", ") ~ ")";
+            }
+            if (e.nullableStringReceiver) {
+                string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                return "z8_nullable_string_call!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
             }
             if (e.instanceCall) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
@@ -1175,6 +1200,8 @@ private string emitExprRaw(Expression e) {
         case ExprKind.binary:
             if (e.inferredType == ValueType.nullType)
                 return "(" ~ emitExpr(e.left) ~ (e.token.text == "==" ? " is " : " !is ") ~ emitExpr(e.right) ~ ")";
+            if (e.nullableStringLeft)
+                return "z8_nullable_string_binary!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if ((e.token.text == "/" || e.token.text == "%") && e.inferredType != ValueType.decimalType)
                 return (e.token.text == "/" ? "z8_div(" : "z8_mod(") ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             auto op = e.emittedOperator.length ? e.emittedOperator : e.token.text == "+" && e.inferredType == ValueType.stringType ? "~" : e.token.text;
@@ -1390,6 +1417,29 @@ private string emitPrograms(Program[] programs) {
 private import std.conv : to;
 private string z8_to_utf8(wstring value) { return value.to!string; }
 private wstring z8_message(Throwable value) { return value.msg.to!wstring; }
+private wstring z8_string_required(wstring value) {
+    if (value is null) throw new Exception("null string");
+    return value;
+}
+private wstring z8_string_or_empty(wstring value) { return value is null ? ""w : value; }
+private auto z8_nullable_string_binary(string op)(wstring value, wstring other) {
+    value = z8_string_required(value);
+    static if (op == "+") { auto result = value ~ other; return result.length ? result : ""w; }
+    else static if (op == "==") return value == other;
+    else static if (op == "!=") return value != other;
+    else static if (op == "<") return z8_str_compare(value, other) < 0;
+    else static if (op == ">") return z8_str_compare(value, other) > 0;
+    else static if (op == "<=") return z8_str_compare(value, other) <= 0;
+    else static if (op == ">=") return z8_str_compare(value, other) >= 0;
+    else static assert(0, "unsupported nullable string operation");
+}
+private auto z8_nullable_string_call(string name, Args...)(wstring value, Args args) {
+    value = z8_string_required(value);
+    static if (name == "length") return cast(long)value.length;
+    else static if (name == "isEmpty") return value.length == 0;
+    else static if (name == "toString") return value;
+    else return mixin("z8_str_" ~ name ~ "(value, args)");
+}
 private T z8_new(T)() {
     auto value = new T();
     static if (__traits(hasMember, T, "m_constructor")) value.m_constructor();
@@ -1434,10 +1484,10 @@ class Z8StringMap {
         foreach (item; entries) if (item == value) return true;
         return false;
     }
-    void z8_add(wstring key, wstring value) { entries[key] = value; }
+    void z8_add(wstring key, wstring value) { entries[key] = value.length ? value : ""w; }
     wstring z8_get(wstring key) {
         auto found = key in entries;
-        if (found is null) throw new Exception("map key is absent");
+        if (found is null) return null;
         return *found;
     }
 }

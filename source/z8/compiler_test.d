@@ -120,6 +120,7 @@ unittest {
     rejects("class A { static bool f() { int[] x = null; return x < null; } }");
     rejects("class A { static int f() { return 1 ?: 2; } }");
     rejects("class A { static void f() { int[] x; bool[] y; x = x ?: y; } }");
+    rejects("class A { static string f() { string[string] x; return x.get(\"a\") ?: x.get(\"b\"); } }");
     rejects("class A { static A[] x; }");
     rejects("class A { static string[string] x; }");
     rejects("class A { static void f() { int[string] x; } }");

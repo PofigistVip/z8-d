@@ -1,4 +1,8 @@
 public class StringMap {
+    private static int effects;
+    private static string markString() { effects += 1; return "x"; }
+    private static int markIndex() { effects += 1; return 0; }
+    private static int length(string value) { return value.length(); }
     public static int run() {
         string[string] values;
         values.add("a", "one");
@@ -6,6 +10,34 @@ public class StringMap {
         if (!values.containsKey("a") || !values.containsValue("two")) return 1;
         if (values["a"] != "one" || values.get("b") != "two") return 2;
         if (values.size() != 2) return 3;
+        if (values.get("missing") != null || null != values["missing"]) return 5;
+        string fallback = values.get("missing") ?: "fallback";
+        if (fallback != "fallback") return 6;
+        values.add("empty", "");
+        if (values.get("empty") == null || values.get("empty") != "") return 7;
+        if ((values.get("empty") ?: "fallback") != "") return 8;
+        if (length(values.get("b")) != 3 || values.get("empty").length() != 0) return 9;
+        if ("" != values.get("missing")) return 10;
+        try {
+            bool comparison = values.get("missing") == "";
+            return 11;
+        } catch (exception expected) {
+            string[] noWords;
+            values.add("computedEmpty", noWords.join());
+            if (values.get("computedEmpty") == null) return 12;
+        }
+        try {
+            bool ignored = values.get("missing") == markString();
+            return 13;
+        } catch (exception expectedComparison) {
+            if (effects != 1) return 14;
+        }
+        try {
+            string ignored = values.get("missing").substring(markIndex());
+            return 15;
+        } catch (exception expectedMethod) {
+            if (effects != 2) return 16;
+        }
         values.clear();
         return values.isEmpty() ? 103 : 4;
     }
