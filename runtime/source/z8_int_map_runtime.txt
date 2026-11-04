@@ -2,7 +2,7 @@
 class Z8IntMap(V) {
     static if (is(V == long) || is(V == bool) || is(V == Z8Decimal)) alias Element = Z8Optional!V;
     else static if (is(V == wstring)) alias Element = wstring;
-    else static if (is(V == Z8Primary)) alias Element = Z8Primary;
+    else static if (is(V == Z8Primary) || is(V == Z8Guid)) alias Element = V;
     else static assert(0, "unsupported integer-key map value");
 
     private Element[long] entries;

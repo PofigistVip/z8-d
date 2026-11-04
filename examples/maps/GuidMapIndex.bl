@@ -17,6 +17,15 @@ public class GuidMapIndex {
         primary[guid] mixed;
         mixed[key] = "value";
         if ((string)mixed[guid.create(7)] != "value") return 5;
+        guid[guid] mirrors;
+        mirrors[key] = guid.create(8);
+        if (mirrors[guid.create(7)] != guid.create(8)) return 6;
+        guid[int] numbered;
+        numbered[1] = key;
+        if (numbered[1] != guid.create(7)) return 7;
+        guid[string] named;
+        named["key"] = key;
+        if (named["key"] != guid.create(7)) return 8;
         return 145;
     }
 }

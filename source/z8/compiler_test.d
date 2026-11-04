@@ -27,6 +27,8 @@ unittest {
         if (flags[1] && prices["a"] != null) return 3;
         string[guid] names = {(guid.create(1), "one")};
         if (names[guid.create(1)] != "one") return 4;
+        guid[string] identifiers = {("a", guid.create(1))};
+        if (identifiers["a"] != guid.create(1)) return 5;
         if (values.containsKey(absent) && labels[1] == "one") return values[3];
         return 0;
     } }});

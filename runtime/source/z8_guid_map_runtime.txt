@@ -3,7 +3,7 @@ private struct Z8GuidMapKey { ulong major, minor; }
 
 class Z8GuidMap(V) {
     static if (is(V == long) || is(V == bool) || is(V == Z8Decimal)) alias Element = Z8Optional!V;
-    else static if (is(V == wstring) || is(V == Z8Primary)) alias Element = V;
+    else static if (is(V == wstring) || is(V == Z8Primary) || is(V == Z8Guid)) alias Element = V;
     else static assert(0, "unsupported GUID-key map value");
     private struct Entry { Z8Guid key; Element value; }
     private Entry[Z8GuidMapKey] entries;

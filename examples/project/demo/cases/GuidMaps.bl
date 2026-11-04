@@ -36,6 +36,20 @@ public class GuidMaps {
         primary[guid] mixed = {(first, "text"), (second, 12)};
         if ((string)mixed[equal] != "text" || (int)mixed[second] != 12) return 10;
         try { labels.add(null, null); return 11; } catch (exception expected) {}
+        guid[guid] mirrors = {(first, second)};
+        mirrors.add(absent, absent);
+        if (mirrors[equal] != second || !mirrors.containsValue(guid.create(2))) return 12;
+        if (!mirrors.containsKey(null) || mirrors.get(null) != null || !mirrors.containsValue(null) || mirrors.values().size() != 2) return 13;
+        guid[int] numbered = {(1, first)};
+        numbered.add(2, absent);
+        if (numbered[1] != equal || !numbered.containsValue(guid.create(1)) || !numbered.containsValue(null)) return 14;
+        guid[string] named = {("first", first)};
+        named.add("second", second);
+        named.add("empty", absent);
+        if (named["first"] != equal || named["second"] != second || !named.containsValue(null)) return 15;
+        try { mirrors.add(null, null); return 16; } catch (exception expectedMirrors) {}
+        try { numbered.add(null, null); return 17; } catch (exception expectedNumbered) {}
+        try { named.add(null, null); return 18; } catch (exception expectedNamed) {}
         return 153;
     }
 }
