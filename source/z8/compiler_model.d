@@ -28,7 +28,7 @@ class Expression {
     bool isField, instanceCall, fieldInitialization, newHasContainer;
     bool binaryNameField;
     string nativeField;
-    bool makeFile, makeException;
+    bool makeFile, makeException, convertToDate;
     bool dateBinary, fileBinary;
     bool primaryCast, primaryInstanceOf;
     bool promoteToDecimal;

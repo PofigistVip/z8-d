@@ -48,7 +48,7 @@ wstring z8_file_to_string(Z8File value) {
     if (value.time is null) fields["time"] = JSONValue.init;
     else {
         auto ticks = z8_date_ticks(value.time);
-        fields["time"] = jsonString(ticks == -62135769600000L || ticks == 95617584000000L ? ""w : z8_date_toString(value.time));
+        fields["time"] = jsonString(ticks == z8_date_ticks(z8_date_min) || ticks == z8_date_ticks(z8_date_max) ? ""w : z8_date_toString(value.time));
     }
     fields["size"] = value.size.present ? JSONValue(value.size.value) : JSONValue.init;
     fields["path"] = jsonString(value.path);

@@ -1,5 +1,11 @@
 public class DateValues {
+    public static int dayOf(date value, int unused) { return value.day(); }
     public static int run() {
+        int ticksValue = 1709199045000;
+        date converted = ticksValue;
+        if (converted.day() != 29 || dayOf(ticksValue, 1) != 29) return 31;
+        date explicitDate = (date)ticksValue;
+        if (explicitDate.ticks() != ticksValue) return 32;
         date value = '29/02/2024 12:30:45';
         if (value.year() != 2024 || value.month() != 2 || value.day() != 29 || value.quarter() != 1) return 1;
         if (value.hours() != 12 || value.minutes() != 30 || value.seconds() != 45 || value.milliseconds() != 0) return 2;
