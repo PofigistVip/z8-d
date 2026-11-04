@@ -87,6 +87,8 @@ class Program {
     Token[] enumValues;
 }
 struct SourceUnit { string name, path, source; }
+/// One generated D module and its path relative to the output directory.
+struct GeneratedModule { string moduleName, relativePath, sourceName, source; }
 
 package bool isArray(ValueType type) {
     return [ValueType.intArray, ValueType.decimalArray, ValueType.boolArray, ValueType.stringArray, ValueType.selfArray, ValueType.enumArray].canFind(type);

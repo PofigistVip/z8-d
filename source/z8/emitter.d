@@ -4,7 +4,8 @@ import std.algorithm : canFind, sort;
 import std.array : join;
 import std.conv : to;
 import std.format : format;
-import std.string : replace, startsWith;
+import std.string : replace, startsWith, split;
+import std.regex : matchAll, regex;
 import z8.compiler_model;
 
 private string dType(ValueType type, Program objectClass = null) {
@@ -421,4 +422,48 @@ package string emitPrograms(Program[] programs) {
         result ~= "}\n";
     }
     return result;
+}
+
+/// Escape path segments without colliding with D keywords or escaped names.
+package string moduleNameFor(string qualifiedName) {
+    string[] parts = ["z8gen"];
+    foreach (part; qualifiedName.split(".")) {
+        string encoded = "p_";
+        foreach (ubyte c; part) {
+            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))
+                encoded ~= cast(char)c;
+            else encoded ~= format("_%02X", c);
+        }
+        parts ~= encoded;
+    }
+    return parts.join(".");
+}
+
+/// Produce one module per Z8 type, importing only referenced generated types.
+package GeneratedModule[] emitProjectModules(Program[] programs) {
+    string[string] moduleByClass;
+    foreach (program; programs) moduleByClass[program.emittedName] = moduleNameFor(program.qualifiedName);
+    auto symbolPattern = regex(`Z8p_[0-9A-F]+`);
+    GeneratedModule[] modules;
+    foreach (program; programs) {
+        auto body = emitPrograms([program]);
+        string[] dependencies;
+        bool[string] seen;
+        foreach (match; matchAll(body, symbolPattern)) {
+            auto symbol = match.hit;
+            auto dependency = symbol in moduleByClass;
+            if (dependency !is null && symbol != program.emittedName && !(*dependency in seen)) {
+                seen[*dependency] = true;
+                dependencies ~= *dependency;
+            }
+        }
+        sort(dependencies);
+        auto name = moduleByClass[program.emittedName];
+        string source = "module " ~ name ~ ";\n\n";
+        foreach (dependency; dependencies) source ~= "import " ~ dependency ~ ";\n";
+        if (dependencies.length) source ~= "\n";
+        source ~= body;
+        modules ~= GeneratedModule(name, name.replace(".", "/") ~ ".d", program.sourceName, source);
+    }
+    return modules;
 }

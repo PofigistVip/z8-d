@@ -128,28 +128,59 @@ void main() {
     subprocess.run(["dmd", str(generated), *import_args(), str(runtime_lib), "-of=" + str(binary)], cwd=directory, check=True)
     subprocess.run([str(binary)], cwd=directory, check=True)
 
+    generated_root = directory / "generated project"
     project = subprocess.run(
-        [str(exe), "project", str(root / "examples" / "project")],
+        [str(exe), "project", str(root / "examples" / "project"), str(generated_root)],
         capture_output=True, text=True, encoding="utf-8", check=True,
     )
-    relative_project = subprocess.run(
-        [str(exe), "project", "examples/project"], cwd=root,
+    modules = sorted(generated_root.rglob("*.d"))
+    assert len(modules) == len(list((root / "examples" / "project").rglob("*.bl")))
+    main_source = (generated_root / "z8gen" / "p_demo" / "p_Main.d").read_text(encoding="utf-8")
+    assert "module z8gen.p_demo.p_Main;" in main_source
+    assert "import z8.runtime;" in main_source and "class Z8Object {" not in main_source
+    assert "import z8gen.p_demo.p_Counter;" in main_source
+    relative_root = directory / "relative project"
+    subprocess.run(
+        [str(exe), "project", "examples/project", str(relative_root)], cwd=root,
         capture_output=True, text=True, encoding="utf-8", check=True,
     )
-    assert relative_project.stdout == project.stdout
+    assert {p.relative_to(generated_root): p.read_bytes() for p in modules} == {
+        p.relative_to(relative_root): p.read_bytes() for p in relative_root.rglob("*.d")}
     project_class = "Z8p_" + "demo.Main".encode("utf-8").hex().upper()
     static_class = "Z8p_" + "demo.cases.StaticState".encode("utf-8").hex().upper()
-    generated.write_text(project.stdout + "\nimport core.thread : Thread;\nvoid main() { assert(" + project_class +
-                         ".m_run() == 59); auto worker = new Thread({ " + static_class +
-                         ".f_count = 123; }); worker.start(); worker.join(); assert(" + static_class +
-                         ".f_count == 123); }\n", encoding="utf-8")
-    subprocess.run(["dmd", str(generated), *import_args(), str(runtime_lib), "-of=" + str(binary)], cwd=directory, check=True)
+    runner = directory / "project_runner.d"
+    runner.write_text("module project_runner;\nimport z8gen.p_demo.p_Main;\n" +
+                      "import z8gen.p_demo.p_cases.p_StaticState;\nimport core.thread : Thread;\n" +
+                      "void main() { assert(" + project_class +
+                      ".m_run() == 59); auto worker = new Thread({ " + static_class +
+                      ".f_count = 123; }); worker.start(); worker.join(); assert(" + static_class +
+                      ".f_count == 123); }\n", encoding="utf-8")
+    subprocess.run(["dmd", str(runner), *map(str, modules), "-I" + str(generated_root),
+                    *import_args(), str(runtime_lib), "-oq", "-od=" + str(directory),
+                    "-of=" + str(binary)], cwd=directory, check=True)
     subprocess.run([str(binary)], cwd=directory, check=True)
+
+    # Exercise cyclic imports and modules with the same filename in different packages.
+    cycle_root = directory / "cycle project"
+    (cycle_root / "pkg").mkdir(parents=True)
+    (cycle_root / "pkg" / "A.bl").write_text(
+        "public class A { public B next; public int value; public static int run() { A a; a.next.next.value = 4; return a.next.next.value; } }", encoding="utf-8")
+    (cycle_root / "pkg" / "B.bl").write_text(
+        "public class B { public A next; }", encoding="utf-8")
+    (cycle_root / "pkg" / "Node.bl").write_text("public class Node {}", encoding="utf-8")
+    (cycle_root / "other").mkdir()
+    (cycle_root / "other" / "Node.bl").write_text("public class Node {}", encoding="utf-8")
+    cycle_exe = directory / ("cycle.exe" if os.name == "nt" else "cycle")
+    with_prebuilt_runtime = dict(os.environ, Z8_RUNTIME_LIB=str(runtime_lib))
+    subprocess.run([str(exe), "build", str(cycle_root), "pkg.A.run", str(cycle_exe)],
+                   env=with_prebuilt_runtime, check=True)
+    assert runtime_lib.exists()
+    assert subprocess.run([str(cycle_exe)], cwd=directory).returncode == 4
 
     bad_root = directory / "bad_project"
     bad_root.mkdir()
     (bad_root / "Broken.bl").write_text("import missing.Type; class Broken {}", encoding="utf-8")
-    rejected = subprocess.run([str(exe), "project", str(bad_root)], capture_output=True, text=True, encoding="utf-8")
+    rejected = subprocess.run([str(exe), "project", str(bad_root), str(directory / "bad-output")], capture_output=True, text=True, encoding="utf-8")
     assert rejected.returncode == 1 and "Broken.bl:1:1" in rejected.stderr and "unresolved import" in rejected.stderr
     assert not rejected.stdout
 

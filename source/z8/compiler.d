@@ -3,7 +3,7 @@ module z8.compiler;
 import std.format : format;
 import std.string : lastIndexOf;
 import z8.lexer : LexException, Position;
-import z8.emitter : emitPrograms;
+import z8.emitter : emitPrograms, emitProjectModules, moduleNameFor;
 public import z8.compiler_model;
 public import z8.parser : Parser;
 public import z8.semantic : Checker;
@@ -41,7 +41,7 @@ private void prepareInheritance(Program[] ordered, Program[string] programs) {
 }
 
 /// Each unit name is the dotted path of the .bl file relative to the source root.
-string compileSources(SourceUnit[] units, string entry = "") {
+GeneratedModule[] compileSources(SourceUnit[] units, string entry = "") {
     if (!units.length) throw new CompileException("no .bl source files found", Position.init);
     Program[] ordered;
     Program[string] programs;
@@ -82,7 +82,7 @@ string compileSources(SourceUnit[] units, string entry = "") {
         checked[program.qualifiedName] = true;
     }
     foreach (program; ordered) checkInOrder(program);
-    auto output = emitPrograms(ordered);
+    auto output = emitProjectModules(ordered);
     if (entry.length) {
         auto dot = entry.lastIndexOf('.');
         if (dot <= 0 || dot + 1 == entry.length)
@@ -108,8 +108,10 @@ string compileSources(SourceUnit[] units, string entry = "") {
             error.sourceName = (*owner).sourceName; throw error;
         }
         auto call = (*owner).emittedName ~ ".m_" ~ target.name.text ~ "()";
-        output ~= target.returnType == ValueType.voidType ? "\nvoid main() { " ~ call ~ "; }\n" :
-            "\nint main() { return cast(int)(" ~ call ~ "); }\n";
+        auto entrySource = "module z8gen.entry;\n\nimport " ~ moduleNameFor(ownerName) ~ ";\n\n";
+        entrySource ~= target.returnType == ValueType.voidType ? "void main() { " ~ call ~ "; }\n" :
+            "int main() { return cast(int)(" ~ call ~ "); }\n";
+        output ~= GeneratedModule("z8gen.entry", "z8gen/entry.d", "", entrySource);
     }
     return output;
 }

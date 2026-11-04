@@ -142,9 +142,17 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         output = subprocess.check_output(["java", "-cp", str(generated_classes) + os.pathsep + run_classpath, "ProjectRunner", str(config)], cwd=temp, text=True, encoding="utf-8")
         original_results = [line[7:] for line in output.splitlines() if line.startswith("RESULT:")]
         z8d = root / ("z8d.exe" if os.name == "nt" else "z8d")
-        d_source = subprocess.check_output([str(z8d), "project", str(project / "src" / "bl")], cwd=temp, text=True, encoding="utf-8")
+        d_root = temp / "generated-d"
+        subprocess.run([str(z8d), "project", str(project / "src" / "bl"), str(d_root)], cwd=temp, check=True)
+        d_modules = sorted(d_root.rglob("*.d"))
+        imports = []
+        for module_file in d_modules:
+            match = re.match(r"module ([A-Za-z0-9_.]+);", module_file.read_text(encoding="utf-8"))
+            if not match:
+                raise SystemExit(f"Missing module declaration: {module_file}")
+            imports.append("import " + match.group(1) + ";\n")
         d_runner = temp / "compare.d"
-        d_runner.write_text(d_source + '''
+        d_runner.write_text("module compare;\nimport z8.runtime;\n" + "".join(imports) + '''
 import std.stdio : writeln;
 void main() {
     writeln(z8_optional_require(Z8p_64656D6F2E4D61696E.m_run()));
@@ -182,7 +190,8 @@ void main() {
 }
 ''', encoding="utf-8")
         d_binary = temp / ("compare.exe" if os.name == "nt" else "compare")
-        subprocess.run(["dmd", str(d_runner), *import_args(), str(runtime_lib), "-of=" + str(d_binary)], cwd=temp, check=True)
+        subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
+                        str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_results = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
         if original_results != d_results:
             raise SystemExit(f"Original Z8: {original_results!r}; z8-d: {d_results!r}")
