@@ -11,6 +11,13 @@ private void rejects(string source) {
 }
 
 unittest {
+    auto repeated = compile("enum E { First,, Second,,, }");
+    assert(repeated.canFind("e_First") && repeated.canFind("e_Second"));
+    rejects("enum E { , First }");
+    rejects("enum E { First,, First }");
+}
+
+unittest {
     compile(`class A { records {
         public First = '00000000-0000-0000-0000-000000000001';
         private Second = '00000000-0000-0000-0000-000000000002';

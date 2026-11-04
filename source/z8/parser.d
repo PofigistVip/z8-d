@@ -158,6 +158,8 @@ class Parser {
                     foreach (old; result.enumValues) if (old.text == value.text) throw new CompileException("duplicate enum value", value.position);
                     result.enumValues ~= value;
                     if (!accept(",")) break;
+                    // The original grammar accepts repeated separators after an enum value.
+                    while (accept(",")) {}
                 } while (current.text != "}");
             }
             expect("}");

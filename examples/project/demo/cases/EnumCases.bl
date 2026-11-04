@@ -29,6 +29,8 @@ public class EnumCases {
         Flavor[] other = {Flavor.Green};
         Flavor[] combined = unique + other;
         if (combined.size() != 4 || combined[3] != Flavor.Green) return 10;
+        EnumCommas commaValue = EnumCommas.First;
+        if (commaValue == EnumCommas.Second) return 13;
         return 127;
     }
 }

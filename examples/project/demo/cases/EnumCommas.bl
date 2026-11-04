@@ -1,0 +1,4 @@
+public enum EnumCommas {
+    First,,
+    Second,,,
+}
