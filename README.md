@@ -117,6 +117,7 @@ Z8; также поддерживается `for (тип элемент : мас
 индексация, методы `size`, `isEmpty`, `get`, `set`, `add`, `addAll`, `contains`,
 `indexOf`, `remove`, `removeAt`, `removeAll`, `reverse`, `sort`, `unique`,
 `isSubsetOf`, `join`, `clear` и операторы `+` и `+=`. Массивы передаются по ссылке;
+`first` и `last` доступны для строк и ссылочных элементов, но пока не для чисел и `bool`.
 для массивов объектов поддерживаются литералы, индексация, `foreach`, `size`,
 `isEmpty`, `clear`, `get`, `add`, `addAll`, `set`, `removeAt`, `contains`,
 `indexOf`, `remove`, `removeAll`, `isSubsetOf`, `reverse`, `unique` и передача в методы.

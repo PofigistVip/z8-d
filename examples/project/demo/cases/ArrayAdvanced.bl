@@ -27,6 +27,10 @@ public class ArrayAdvanced {
         flags.sort();
         if (flags.join(",") != "false,true") return 9;
         string[] words = {"b", "a"};
+        string[] noWords;
+        if (noWords.first() != null || noWords.last() != null) return 13;
+        string[] emptyWord = {""};
+        if (emptyWord.first() == null || emptyWord.last() != "") return 14;
         words.sort();
         if (words.join("/") != "a/b") return 10;
         return 97;

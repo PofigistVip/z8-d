@@ -20,6 +20,9 @@ public class EnumCases {
         if (values.size() != 4 || !values.contains(Flavor.Blue)) return 7;
         Flavor[] unique = values.unique();
         if (unique.size() != 3 || unique[2] != null) return 8;
+        if (unique.first() != Flavor.Blue || unique.last() != null) return 11;
+        Flavor[] emptyValues;
+        if (emptyValues.first() != null || emptyValues.last() != null) return 12;
         int count = 0;
         for (Flavor valueInArray : values) if (valueInArray == Flavor.Blue) count += 1;
         if (count != 2) return 9;

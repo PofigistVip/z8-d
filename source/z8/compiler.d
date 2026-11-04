@@ -892,7 +892,7 @@ class Checker {
                 } else if (isArray(receiver)) {
                     if (receiver == ValueType.selfArray || receiver == ValueType.enumArray) {
                         e.objectClass = e.left.objectClass;
-                        if (!["size", "isEmpty", "clear", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
+                        if (!["size", "isEmpty", "clear", "first", "last", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
                             fail("this method is not yet supported for object arrays", e.token);
                     }
                     switch (e.token.text) {
@@ -902,6 +902,11 @@ class Checker {
                         case "join":
                             checkArguments(e, e.arguments.length ? [ValueType.stringType] : []);
                             return ValueType.stringType;
+                        case "first": case "last":
+                            checkArguments(e, []);
+                            if (receiver == ValueType.stringArray) return ValueType.nullableString;
+                            if (receiver == ValueType.selfArray || receiver == ValueType.enumArray) return elementType(receiver);
+                            fail("first and last require a nullable element type", e.token); assert(0);
                         case "get":
                             if (e.arguments.length != 1 || typeOf(e.arguments[0]) != ValueType.intType) fail("get requires an int index", e.token);
                             return elementType(receiver);
@@ -1653,6 +1658,16 @@ class Z8Array(T) {
     this(T[] values) { items = values; }
     long z8_size() { return cast(long)items.length; }
     bool z8_isEmpty() { return items.length == 0; }
+    T z8_first() {
+        static if (is(T == class)) return items.length ? items[0] : null;
+        else static if (is(T == wstring)) return !items.length ? null : items[0].length ? items[0] : ""w;
+        else throw new Exception("first is not supported for this element type");
+    }
+    T z8_last() {
+        static if (is(T == class)) return items.length ? items[$ - 1] : null;
+        else static if (is(T == wstring)) return !items.length ? null : items[$ - 1].length ? items[$ - 1] : ""w;
+        else throw new Exception("last is not supported for this element type");
+    }
     void z8_clear() { ++z8_version; items.length = 0; }
     Z8Array!T z8_add(T value) { ++z8_version; items ~= value; return this; }
     Z8Array!T z8_add(long index, T value) {

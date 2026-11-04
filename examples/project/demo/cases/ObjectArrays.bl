@@ -43,6 +43,9 @@ public class ObjectArrays {
         if (!repeated.contains(values[0]) || repeated.indexOf(values[1]) != 2) return 8;
         Counter[] distinct = repeated.unique();
         if (distinct.size() != 2 || !distinct.isSubsetOf(repeated)) return 9;
+        if (distinct.first().value != 6 || distinct.last().value != 7) return 18;
+        Counter[] empty;
+        if (empty.first() != null || empty.last() != null) return 19;
         if (!repeated.remove(values[0]) || repeated.size() != 2) return 10;
         Counter[] removal = {values[1]};
         repeated.removeAll(removal);
