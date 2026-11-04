@@ -183,6 +183,8 @@ unittest {
     rejects("class A { static void f() { int[] x; x.add(true, 2); } }");
     rejects("class A { static void f() { int[] x; x.contains(true); } }");
     rejects("class A { static void f() { int[] x; bool[] y; x.addAll(y); } }");
+    rejects("class A { static void f() { int[] x; bool[] y; x = x + y; } }");
+    rejects("class A { static void f() { int[] x; x -= x; } }");
     rejects("class A { static void f() { int[] x; x.addAll(true, x); } }");
     rejects("class A { static void f() { int[] x; x.isSubsetOf(true); } }");
     rejects("class A { static void f() { int[] x; x.removeAll(false); } }");

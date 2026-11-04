@@ -8,6 +8,11 @@ public class ArrayAdvanced {
         values.removeAll(1);
         if (values.join() != "123") return 3;
         int[] more = {7, 8};
+        int[] combined = values + more;
+        int[] alias = combined;
+        combined += more;
+        if (combined.join(",") != "1,2,3,7,8,7,8") return 11;
+        if (alias.size() != 5 || values.size() != 3) return 12;
         values.addAll(1, more);
         if (values.join(",") != "1,7,8,2,3") return 4;
         if (!more.isSubsetOf(values) || values.isSubsetOf(more)) return 5;

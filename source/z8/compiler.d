@@ -920,6 +920,13 @@ class Checker {
                     e.inferredType = ValueType.stringMap;
                     return ValueType.stringMap;
                 }
+                if (isArray(left) && left == right && op == "+") {
+                    if (left == ValueType.selfArray && e.left.objectClass !is e.right.objectClass)
+                        fail("array element type mismatch", e.token);
+                    e.inferredType = left;
+                    e.objectClass = e.left.objectClass;
+                    return left;
+                }
                 if ((left == ValueType.nullType && (isNullableReference(right) || right == ValueType.nullType)) ||
                     (right == ValueType.nullType && isNullableReference(left))) {
                     if (!["==", "!="].canFind(op)) fail("null supports only equality comparisons", e.token);
@@ -1008,6 +1015,7 @@ class Checker {
                 if (s.assignmentOperator != "=" && variableType != ValueType.intType &&
                     !(variableType == ValueType.stringType && s.assignmentOperator == "+=") &&
                     !(variableType == ValueType.stringMap && s.assignmentOperator == "+=") &&
+                    !(isArray(variableType) && s.assignmentOperator == "+=") &&
                     !(variableType == ValueType.decimalType && ["+=", "-=", "*=", "/=", "%="].canFind(s.assignmentOperator)))
                     fail("invalid compound assignment operands", s.token);
                 return false;
@@ -1212,6 +1220,8 @@ private string emitExprRaw(Expression e) {
                 return "(" ~ emitExpr(e.left) ~ (e.token.text == "==" ? " is " : " !is ") ~ emitExpr(e.right) ~ ")";
             if (e.inferredType == ValueType.stringMap)
                 return "z8_map_union(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            if (isArray(e.inferredType))
+                return "z8_array_union(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.nullableStringLeft)
                 return "z8_nullable_string_binary!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if ((e.token.text == "/" || e.token.text == "%") && e.inferredType != ValueType.decimalType)
@@ -1272,6 +1282,8 @@ private string emitSimple(Statement s) {
     auto name = emitExpr(s.target);
     if (s.type == ValueType.stringMap && s.assignmentOperator == "+=")
         return "z8_map_add_assign(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
+    if (isArray(s.type) && s.assignmentOperator == "+=")
+        return "z8_array_add_assign(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.type == ValueType.decimalType && s.assignmentOperator != "=") {
         auto op = s.assignmentOperator == "+=" ? "add" : s.assignmentOperator == "-=" ? "sub" : s.assignmentOperator == "*=" ? "mul" : s.assignmentOperator == "/=" ? "div" : "mod";
         return "z8_decimal_" ~ op ~ "_assign(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
@@ -1471,6 +1483,13 @@ private auto z8_invoke(string name, T, Args...)(T value, Args args) {
 private ref T z8_array_at(T)(Z8Array!T value, long index) {
     return z8_nonnull(value).z8_at(index);
 }
+private Z8Array!T z8_array_union(T)(Z8Array!T left, Z8Array!T right) {
+    auto result = new Z8Array!T();
+    result.z8_addAll(z8_nonnull(left));
+    result.z8_addAll(z8_nonnull(right));
+    return result;
+}
+private void z8_array_add_assign(T)(ref Z8Array!T left, Z8Array!T right) { left = z8_array_union(left, right); }
 private T z8_cast(T, U)(U value) {
     auto result = cast(T)value;
     if (value !is null && result is null) throw new Exception("invalid object cast");
