@@ -1,0 +1,21 @@
+public class EnumCases {
+    public Flavor color = Flavor.Green;
+    private static bool isGreen(Flavor value) { return value == Flavor.Green; }
+    public static Flavor pick(bool first) {
+        return first ? Flavor.Red : Flavor.Blue;
+    }
+    public static int run() {
+        Flavor value = pick(true);
+        if (value != Flavor.Red || value == Flavor.Blue) return 1;
+        value = pick(false);
+        if (value != Flavor.Blue) return 2;
+        Flavor empty = null;
+        if (empty != null) return 3;
+        EnumCases object = new EnumCases;
+        if (!isGreen(object.color)) return 4;
+        if (isGreen(null)) return 5;
+        Flavor alternative = empty ?: Flavor.Green;
+        if (alternative != object.color) return 6;
+        return 127;
+    }
+}

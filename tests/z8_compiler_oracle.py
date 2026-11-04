@@ -6,6 +6,7 @@ Neither the original sources nor their build outputs are modified.
 """
 from pathlib import Path
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -50,7 +51,7 @@ with tempfile.TemporaryDirectory() as temporary:
         raise SystemExit("Original compiler did not produce Java files")
     if os.environ.get("Z8_ORACLE_INSPECT"):
         for file in generated:
-            if file.name in ("Main.java", "Arithmetic.java"):
+            if file.name in ("Main.java", "Arithmetic.java", "EnumCases.java", "Flavor.java"):
                 print(file.read_text(encoding="utf-8"))
     if os.environ.get("Z8_ORACLE_RUN"):
         runtime_jars = list((original / "org.zenframework.z8.server" / "target" / "libs").glob("*.jar"))
@@ -87,6 +88,7 @@ with tempfile.TemporaryDirectory() as temporary:
         System.out.println("RESULT:" + demo.cases.NullObjects.z8_run().get());
         System.out.println("RESULT:" + demo.cases.InstanceChecks.z8_run().get());
         System.out.println("RESULT:" + demo.cases.ElvisObjects.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.EnumCases.z8_run().get());
     }
 }''', encoding="utf-8")
         logging_cache = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "commons-logging" / "commons-logging"
@@ -150,6 +152,7 @@ void main() {
     writeln(Z8p_64656D6F2E63617365732E4E756C6C4F626A65637473.m_run());
     writeln(Z8p_64656D6F2E63617365732E496E7374616E6365436865636B73.m_run());
     writeln(Z8p_64656D6F2E63617365732E456C7669734F626A65637473.m_run());
+    writeln(Z8p_64656D6F2E63617365732E456E756D4361736573.m_run());
 }
 ''', encoding="utf-8")
         d_binary = temp / ("compare.exe" if os.name == "nt" else "compare")
@@ -158,4 +161,14 @@ void main() {
         if original_results != d_results:
             raise SystemExit(f"Original Z8: {original_results!r}; z8-d: {d_results!r}")
         print(f"Matched {len(d_results)} program results against the original compiler and prebuilt runtime")
+        native_enums = [path for path in language.rglob("*.bl")
+                        if re.search(r"(?m)^\s*public\s+enum\s+\w+", path.read_text(encoding="utf-8"))]
+        if not native_enums:
+            raise SystemExit("No enum declarations found in the original standard library")
+        for enum_file in native_enums:
+            native_source = subprocess.check_output([str(z8d), "compile", str(enum_file)], cwd=temp, text=True, encoding="utf-8")
+            native_file = temp / "native_enum.d"
+            native_file.write_text(native_source, encoding="utf-8")
+            subprocess.run(["dmd", "-c", str(native_file), "-of=" + str(temp / "native_enum.obj")], cwd=temp, check=True)
+        print(f"Compiled {len(native_enums)} native enum declarations from the original standard library")
     print(f"Original Z8 compiler accepted the project and generated {len(generated)} Java files")

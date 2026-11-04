@@ -17,7 +17,7 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, decimalArray, boolArray, stringArray, selfArray, stringMap, nullType, nullableString }
+enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, decimalArray, boolArray, stringArray, selfArray, stringMap, nullType, nullableString, enumType }
 enum NullableStringMode { none, required, nullAsEmpty }
 enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, nullLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, instanceOf, unary, binary, conditional, elvis }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
@@ -39,6 +39,7 @@ class Expression {
     Program objectClass;
     NullableStringMode nullableStringMode;
     bool nullableStringReceiver, nullableStringLeft;
+    bool enumConstant;
     this(ExprKind kind, Token token) { this.kind = kind; this.token = token; }
 }
 class Statement {
@@ -81,14 +82,16 @@ class Program {
     Token baseToken;
     Program baseClass;
     bool isFinal;
+    bool isEnum;
+    Token[] enumValues;
 }
 struct SourceUnit { string name, path, source; }
 
 private bool isArray(ValueType type) {
     return [ValueType.intArray, ValueType.decimalArray, ValueType.boolArray, ValueType.stringArray, ValueType.selfArray].canFind(type);
 }
-private bool hasObjectClass(ValueType type) { return type == ValueType.selfType || type == ValueType.selfArray; }
-private bool isNullableReference(ValueType type) { return type == ValueType.selfType || type == ValueType.stringMap || type == ValueType.nullableString || isArray(type); }
+private bool hasObjectClass(ValueType type) { return type == ValueType.selfType || type == ValueType.selfArray || type == ValueType.enumType; }
+private bool isNullableReference(ValueType type) { return type == ValueType.selfType || type == ValueType.enumType || type == ValueType.stringMap || type == ValueType.nullableString || isArray(type); }
 // Until Java's legacy Double.toString conversion is fully reproduced, reject
 // literal values for which a shorter D rendering may differ from the Java backend.
 private bool safeDecimalLiteral(string text) {
@@ -182,7 +185,32 @@ class Parser {
             while (accept(".")) name ~= "." ~ identifier().text;
             expect(";"); result.imports ~= Import(name, start);
         }
-        accept("public"); result.isFinal = accept("final"); expect("class"); result.name = identifier(); className = result.name.text;
+        bool nativeAttribute;
+        if (accept("[")) {
+            if (current.text != "native") error("only native enum attributes are supported");
+            take();
+            if (current.kind != TokenKind.stringLiteral) error("native attribute requires a string");
+            take(); expect("]"); nativeAttribute = true;
+        }
+        accept("public"); result.isFinal = accept("final");
+        result.isEnum = accept("enum");
+        if (!result.isEnum) expect("class");
+        if (nativeAttribute && !result.isEnum) error("native classes are not supported");
+        result.name = identifier(); className = result.name.text;
+        if (result.isEnum) {
+            expect("{");
+            if (current.text != "}") {
+                do {
+                    auto value = identifier();
+                    foreach (old; result.enumValues) if (old.text == value.text) throw new CompileException("duplicate enum value", value.position);
+                    result.enumValues ~= value;
+                    if (!accept(",")) break;
+                } while (current.text != "}");
+            }
+            expect("}");
+            if (current.kind != TokenKind.endOfFile) error("only one type per file is supported");
+            return result;
+        }
         if (accept("extends")) { result.baseToken = identifier(); result.baseName = result.baseToken.text; }
         expect("{");
         while (current.text != "}") {
@@ -198,7 +226,7 @@ class Parser {
             auto declaredType = parseType(); auto declaredObjectName = parsedObjectName; auto name = identifier();
             if (current.text != "(") {
                 if (isVirtual || declaredType == ValueType.voidType) error("this field type or modifier is not supported");
-                if (isStatic && (hasObjectClass(declaredType) || declaredType == ValueType.exceptionType || declaredType == ValueType.stringMap))
+                if (isStatic && (declaredType == ValueType.selfArray || declaredType == ValueType.exceptionType || declaredType == ValueType.stringMap))
                     error("static object fields are not supported");
                 auto field = new Field; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.isProtected = isProtected; field.isStatic = isStatic; field.objectName = declaredObjectName; field.owner = result;
                 if (accept("=")) field.initializer = initializer();
@@ -445,6 +473,7 @@ class Checker {
         currentProgram = program; allClasses = programs;
         if (program.baseName.length) {
             program.baseClass = resolveClass(program, program.baseName, program.baseToken);
+            if (program.baseClass.isEnum) fail("cannot extend an enum", program.baseToken);
             if (program.baseClass.isFinal) fail("cannot extend a final class", program.baseToken);
         }
     }
@@ -477,6 +506,28 @@ class Checker {
         if (found is null) fail("unknown class '" ~ name ~ "'", site);
         return *found;
     }
+    private ValueType resolveDeclaredType(ValueType type, Program owner, string objectName, Token site) {
+        if (type != ValueType.selfType && type != ValueType.selfArray) return type;
+        auto target = resolveClass(owner, objectName, site);
+        if (!target.isEnum) return type;
+        if (type == ValueType.selfArray) fail("enum arrays are not supported", site);
+        return ValueType.enumType;
+    }
+    void prepareDeclarations(Program program, Program[string] programs) {
+        currentProgram = program; allClasses = programs;
+        foreach (field; program.fields) {
+            field.type = resolveDeclaredType(field.type, program, field.objectName, field.name);
+            if (field.isStatic && (field.type == ValueType.selfType || field.type == ValueType.enumType))
+                fail("static object and enum fields are not supported", field.name);
+            if (field.type == ValueType.enumType && field.initializer is null)
+                fail("enum fields require an initializer", field.name);
+        }
+        foreach (method; program.methods) {
+            method.returnType = resolveDeclaredType(method.returnType, program, method.returnObjectName, method.name);
+            foreach (ref parameter; method.parameters)
+                parameter.type = resolveDeclaredType(parameter.type, program, parameter.objectName, parameter.name);
+        }
+    }
     private bool matches(Expression e, ValueType expected, Program expectedClass = null) {
         if (e.kind == ExprKind.arrayLiteral && expected == ValueType.selfArray) e.objectClass = expectedClass;
         auto actual = typeOf(e, expected);
@@ -490,7 +541,8 @@ class Checker {
         if (expected == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual)) {
             e.convertToString = actual; return true;
         }
-        return actual == expected && (expected == ValueType.selfType ? isAssignable(e.objectClass, expectedClass) : expected != ValueType.selfArray || e.objectClass is expectedClass);
+        return actual == expected && (expected == ValueType.selfType ? isAssignable(e.objectClass, expectedClass) :
+            (expected != ValueType.selfArray && expected != ValueType.enumType) || e.objectClass is expectedClass);
     }
     private ValueType checkCall(Method method, Program owner, Expression e) {
         if (e.arguments.length != method.parameters.length) fail("incorrect argument count", e.token);
@@ -541,6 +593,7 @@ class Checker {
                 } else if (actual == p.type) {
                     if (actual == ValueType.selfType && !isAssignable(e.arguments[i].objectClass, resolveClass(candidate.owner, p.objectName, p.name))) applicable = false;
                     if (actual == ValueType.selfArray && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
+                    if (actual == ValueType.enumType && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                 } else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
                 else if (p.type == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual)) weight += 100;
                 else applicable = false;
@@ -691,11 +744,21 @@ class Checker {
                 return ValueType.selfType;
             case ExprKind.newSelf:
                 e.objectClass = resolveClass(currentProgram, e.token.text, e.token);
+                if (e.objectClass.isEnum) fail("cannot instantiate an enum", e.token);
                 return ValueType.selfType;
             case ExprKind.field:
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields)) {
                     auto owner = e.left.token.text in visibleClasses;
                     if (owner is null) fail("unknown class or variable '" ~ e.left.token.text ~ "'", e.left.token);
+                    if ((*owner).isEnum) {
+                        foreach (value; (*owner).enumValues) if (value.text == e.token.text) {
+                            e.targetClass = (*owner).emittedName;
+                            e.objectClass = *owner;
+                            e.enumConstant = true;
+                            return ValueType.enumType;
+                        }
+                        fail("unknown enum value '" ~ e.token.text ~ "'", e.token);
+                    }
                     auto staticField = lookupField(*owner, e.token.text);
                     if (staticField is null) fail("unknown field '" ~ e.token.text ~ "'", e.token);
                     if (!staticField.isStatic) fail("instance field cannot be accessed on a class", e.token);
@@ -894,6 +957,7 @@ class Checker {
             case ExprKind.castExpr:
                 if (e.castType == ValueType.selfType) {
                     auto target = resolveClass(currentProgram, e.token.text, e.token);
+                    if (target.isEnum) fail("enum casts are not supported", e.token);
                     if (typeOf(e.left) != ValueType.selfType ||
                         (!isAssignable(e.left.objectClass, target) && !isAssignable(target, e.left.objectClass)))
                         fail("unsupported object cast", e.token);
@@ -904,6 +968,7 @@ class Checker {
                 return e.castType;
             case ExprKind.instanceOf:
                 auto target = resolveClass(currentProgram, e.token.text, e.token);
+                if (target.isEnum) fail("instanceof for enums is not supported", e.token);
                 auto sourceType = typeOf(e.left);
                 if (sourceType != ValueType.selfType && sourceType != ValueType.nullType)
                     fail("instanceof requires an object reference", e.token);
@@ -919,6 +984,12 @@ class Checker {
                 fail("invalid unary operand", e.token); assert(0);
             case ExprKind.binary:
                 auto left = typeOf(e.left), right = typeOf(e.right), op = e.token.text;
+                if (left == ValueType.enumType && right == ValueType.enumType) {
+                    if (e.left.objectClass !is e.right.objectClass || !["==", "!="].canFind(op))
+                        fail("invalid enum operands", e.token);
+                    e.emittedOperator = op == "==" ? "is" : "!is";
+                    return ValueType.boolType;
+                }
                 if (left == ValueType.stringMap && right == ValueType.stringMap && op == "+") {
                     e.inferredType = ValueType.stringMap;
                     return ValueType.stringMap;
@@ -1002,6 +1073,8 @@ class Checker {
                 variables = old; objectVariables = oldObjects; return returns;
             case StmtKind.variable:
                 if (s.token.text in variables) fail("duplicate or shadowed variable", s.token);
+                s.type = resolveDeclaredType(s.type, currentProgram, s.objectName, s.token);
+                if (s.type == ValueType.enumType && s.expression is null) fail("enum variables require an initializer", s.token);
                 if (s.type == ValueType.voidType) fail("variable cannot be void", s.token);
                 if (hasObjectClass(s.type)) s.objectClass = resolveClass(currentProgram, s.objectName, s.token);
                 if (s.expression !is null && !matches(s.expression, s.type, s.objectClass)) fail("initializer type mismatch", s.token);
@@ -1010,6 +1083,7 @@ class Checker {
                 return false;
             case StmtKind.assignment:
                 auto variableType = typeOf(s.target);
+                if (s.target.enumConstant) fail("enum constants cannot be assigned", s.token);
                 if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.stringMap)
                     variableType = ValueType.stringType;
                 if (!matches(s.expression, variableType, s.target.objectClass)) fail("assignment type mismatch", s.token);
@@ -1104,6 +1178,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.stringArray: return "Z8Array!wstring";
         case ValueType.nullType: assert(0, "null has no concrete D type");
         case ValueType.nullableString: return "wstring";
+        case ValueType.enumType: assert(objectClass !is null); return objectClass.emittedName;
     }
 }
 /// The Java runtime stores strings as UTF-16; preserve its code-unit ordering.
@@ -1160,7 +1235,9 @@ private string emitExprRaw(Expression e) {
         case ExprKind.selfRef: return "this";
         case ExprKind.superRef: return "super";
         case ExprKind.newSelf: return "z8_new!(" ~ e.objectClass.emittedName ~ ")()";
-        case ExprKind.field: return (e.targetClass.length ? e.targetClass : emitReceiver(e.left)) ~ ".f_" ~ e.token.text;
+        case ExprKind.field:
+            if (e.enumConstant) return e.targetClass ~ ".e_" ~ e.token.text;
+            return (e.targetClass.length ? e.targetClass : emitReceiver(e.left)) ~ ".f_" ~ e.token.text;
         case ExprKind.call:
             string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
             return "m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
@@ -1313,6 +1390,7 @@ string compile(string source) {
     Program[string] programs;
     programs[program.qualifiedName] = program;
     prepareInheritance([program], programs);
+    (new Checker).prepareDeclarations(program, programs);
     (new Checker).check(program, programs);
     checkDefaultConstruction([program]);
     return emitPrograms([program]);
@@ -1399,6 +1477,10 @@ string compileSources(SourceUnit[] units, string entry = "") {
         ordered ~= program;
     }
     prepareInheritance(ordered, programs);
+    foreach (program; ordered) {
+        try { (new Checker).prepareDeclarations(program, programs); }
+        catch (CompileException e) { e.sourceName = program.sourceName; throw e; }
+    }
     bool[string] checked;
     void checkInOrder(Program program) {
         if (program.qualifiedName in checked) return;
@@ -1689,6 +1771,17 @@ class Z8Array(T) {
 `;
     result ~= "\n" ~ decimalRuntime ~ "\n" ~ stringRuntime ~ "\n";
     foreach (program; programs) {
+        if (program.isEnum) {
+            result ~= "class " ~ program.emittedName ~ " {\n";
+            foreach (value; program.enumValues) result ~= "__gshared " ~ program.emittedName ~ " e_" ~ value.text ~ ";\n";
+            if (program.enumValues.length) {
+                result ~= "shared static this() {\n";
+                foreach (value; program.enumValues) result ~= "e_" ~ value.text ~ " = new " ~ program.emittedName ~ "();\n";
+                result ~= "}\n";
+            }
+            result ~= "}\n";
+            continue;
+        }
         result ~= "class " ~ program.emittedName ~ (program.baseClass is null ? "" : " : " ~ program.baseClass.emittedName) ~ " {\n";
         result ~= "alias Z8Self = " ~ program.emittedName ~ ";\n";
         bool hasInstanceFields, hasStaticFields;

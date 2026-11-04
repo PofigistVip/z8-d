@@ -1,0 +1,5 @@
+public enum Flavor {
+    Red,
+    Blue,
+    Green
+}
