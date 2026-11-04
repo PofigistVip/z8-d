@@ -121,7 +121,7 @@ Z8Array!Z8Geometry z8_geometry_points(Z8Geometry value) {
 }
 long z8_geometry_shape(Z8Geometry value) { z8_geometry_ensure(value); return value.shape; }
 long z8_geometry_srs(Z8Geometry value) { z8_geometry_ensure(value); return value.srs; }
-private Z8Decimal z8_geometry_decimal(double value) { return z8_decimal_literal(format("%.17g", value)); }
+private Z8Decimal z8_geometry_decimal(double value) { return z8_math_result(value); }
 Z8Decimal z8_geometry_x(Z8Geometry value) { z8_geometry_ensure(value); return z8_geometry_decimal(value.x); }
 Z8Decimal z8_geometry_y(Z8Geometry value) { z8_geometry_ensure(value); return z8_geometry_decimal(value.y); }
 private double[4] z8_geometry_bounds(Z8Geometry value) {
@@ -186,8 +186,10 @@ wstring z8_geometry_to_string(Z8Geometry value) {
     void putByte(ubyte b) { result ~= format("%02X", cast(uint)b); }
     void putInt(uint n) { foreach (i; 0 .. 4) putByte(cast(ubyte)(n >> (i * 8))); }
     void putDouble(double n) {
+        import std.math : isNaN;
         union Bits { double number; ulong bits; }
         Bits valueBits; valueBits.number = n;
+        if (isNaN(n)) valueBits.bits = 0x7FF8000000000000UL;
         foreach (i; 0 .. 8) putByte(cast(ubyte)(valueBits.bits >> (i * 8)));
     }
     void putPoint(Z8Geometry point) { z8_geometry_ensure(point); putDouble(point.x); putDouble(point.y); }

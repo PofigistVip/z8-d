@@ -1,0 +1,94 @@
+Z8Geometry z8_geometry_fromGeoJson(wstring input, long srsValue) {
+    import std.json : JSONValue, JSONType, parseJSON;
+    auto text = z8_string_required(input);
+    auto srs = cast(int)srsValue;
+    if (!text.length) return z8_geometry_none(srs);
+
+    double number(JSONValue value) {
+        switch (value.type) {
+            case JSONType.integer: return cast(double)value.integer;
+            case JSONType.uinteger: return cast(double)value.uinteger;
+            case JSONType.float_: return value.floating;
+            case JSONType.string: return value.str.to!double;
+            default: throw new Exception("invalid geometry coordinate");
+        }
+    }
+    Z8Geometry readCoordinates(JSONValue coordinates, int shape) {
+        auto values = coordinates.array;
+        auto result = new Z8Geometry();
+        result.shape = shape; result.srs = srs;
+        if (shape == 1) {
+            if (values.length < 2) throw new Exception("point requires two coordinates");
+            result.x = number(values[0]); result.y = number(values[1]);
+            return result;
+        }
+        result.hasChildren = true;
+        foreach (child; values) {
+            auto childShape = shape == 2 || shape == 0 || shape == 4 ? 1 :
+                              shape == 3 ? 0 : shape == 5 ? 2 : 3;
+            result.children ~= readCoordinates(child, childShape);
+        }
+        return result;
+    }
+    Z8Geometry readObject(JSONValue object) {
+        auto kind = object["type"].str;
+        if (kind == "Feature") return readObject(object["geometry"]);
+        if (kind == "FeatureCollection" || kind == "GeometryCollection") {
+            auto result = new Z8Geometry();
+            result.shape = 7; result.srs = srs; result.hasChildren = true;
+            auto elements = object[kind == "FeatureCollection" ? "features" : "geometries"].array;
+            foreach (child; elements) result.children ~= readObject(child);
+            return result;
+        }
+        auto shape = kind == "Point" ? 1 : kind == "LineString" ? 2 : kind == "Polygon" ? 3 :
+                     kind == "MultiPoint" ? 4 : kind == "MultiLineString" ? 5 : kind == "MultiPolygon" ? 6 : -1;
+        auto coordinates = object["coordinates"];
+        if (shape < 0) return z8_geometry_none(srs);
+        return readCoordinates(coordinates, shape);
+    }
+    return readObject(parseJSON(text.to!string));
+}
+
+wstring z8_geometry_toGeoJson(Z8Geometry value) {
+    string point(Z8Geometry item) {
+        z8_geometry_ensure(item);
+        return "[" ~ z8_java_double_string(item.x) ~ "," ~ z8_java_double_string(item.y) ~ "]";
+    }
+    string coordinates(Z8Geometry item) {
+        z8_geometry_ensure(item);
+        if (item.shape == 1) return point(item);
+        if (!item.hasChildren) throw new Exception("geometry has no components");
+        string result = "[";
+        foreach (i, child; item.children) {
+            if (i) result ~= ",";
+            result ~= coordinates(child);
+        }
+        return result ~ "]";
+    }
+    string geometryJSON(Z8Geometry item) {
+        z8_geometry_ensure(item);
+        string type;
+        switch (item.shape) {
+            case 1: type = "Point"; break;
+            case 2: type = "LineString"; break;
+            case 3: type = "Polygon"; break;
+            case 4: type = "MultiPoint"; break;
+            case 5: type = "MultiLineString"; break;
+            case 6: type = "MultiPolygon"; break;
+            case 7: type = "GeometryCollection"; break;
+            default: throw new Exception("unsupported GeoJSON geometry type");
+        }
+        auto result = "{\"type\":\"" ~ type ~ "\",";
+        if (item.shape == 7) {
+            if (!item.hasChildren) throw new Exception("geometry has no components");
+            result ~= "\"geometries\":[";
+            foreach (i, child; item.children) {
+                if (i) result ~= ",";
+                result ~= geometryJSON(child);
+            }
+            return result ~ "]}";
+        }
+        return result ~ "\"coordinates\":" ~ coordinates(item) ~ "}";
+    }
+    return geometryJSON(value).to!wstring;
+}

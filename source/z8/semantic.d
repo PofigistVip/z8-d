@@ -480,6 +480,9 @@ class Checker {
                     if (e.token.text == "fromHexString") {
                         checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_geometry_fromHexString"; return ValueType.geometryType;
                     }
+                    if (e.token.text == "fromGeoJson") {
+                        checkArguments(e, [ValueType.stringType, ValueType.intType]); e.builtinCall = "z8_geometry_fromGeoJson"; return ValueType.geometryType;
+                    }
                     if (e.token.text == "none") {
                         checkArguments(e, [ValueType.intType]); e.builtinCall = "z8_geometry_none"; return ValueType.geometryType;
                     }
@@ -610,6 +613,7 @@ class Checker {
                     if (e.token.text == "center") { e.builtinCall = "z8_geometry_center"; return ValueType.geometryType; }
                     if (e.token.text == "points") { e.builtinCall = "z8_geometry_points"; return ValueType.geometryArray; }
                     if (e.token.text == "toString") { e.builtinCall = "z8_geometry_to_string"; return ValueType.stringType; }
+                    if (e.token.text == "toGeoJson") { e.builtinCall = "z8_geometry_toGeoJson"; return ValueType.stringType; }
                     fail("unsupported geometry method", e.token);
                 }
                 if (receiver == ValueType.dateType) {

@@ -7,6 +7,9 @@ public class GeometryValues {
         if (point.x() != 1.5 || point.y() != -2.25 || point.x1() != 1.5 || point.y2() != -2.25) return 3;
         if (point.width() != 0.0 || point.height() != 0.0 || point.length() != 0.0) return 4;
         if (point.center().x() != 1.5) return 5;
+        if (point.toGeoJson() != "{\"type\":\"Point\",\"coordinates\":[1.5,-2.25]}") return 23;
+        geometry jsonPoint = geometry.fromGeoJson("{\"type\":\"Point\",\"coordinates\":[1.5,-2.25]}", 4326);
+        if (jsonPoint.toString() != point.toString()) return 24;
         string encoded = point.toString();
         if (encoded != "0101000020E6100000000000000000F83F00000000000002C0") return 6;
         geometry decoded = geometry.fromHexString(encoded.toLowerCase());
@@ -38,6 +41,17 @@ public class GeometryValues {
         if (decodedPolygon.points().first().points().size() != 2 || decodedPolygon.width() != 3.0) return 21;
         geometry decodedGroup = geometry.fromHexString(group.toString());
         if (decodedGroup.shape() != geometry.Collection || decodedGroup.length() != 5.0) return 22;
+        geometry parsedLine = geometry.fromGeoJson("{\"type\":\"LineString\",\"coordinates\":[[0,0],[3,4]]}", 4326);
+        if (parsedLine.toString() != line.toString() || parsedLine.length() != 5.0) return 25;
+        geometry parsedFeatures = geometry.fromGeoJson("{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[3,4]}}]}", 4326);
+        if (parsedFeatures.shape() != geometry.Collection || parsedFeatures.points().first().x() != 3.0) return 26;
+        if (parsedFeatures.toGeoJson() != "{\"type\":\"GeometryCollection\",\"geometries\":[{\"type\":\"Point\",\"coordinates\":[3.0,4.0]}]}") return 27;
+        geometry multi = geometry.fromGeoJson("{\"type\":\"MultiPoint\",\"coordinates\":[[1,2],[3,4]]}", 4326);
+        if (multi.shape() != geometry.MultiPoint || multi.width() != 2.0) return 28;
+        if (multi.toGeoJson() != "{\"type\":\"MultiPoint\",\"coordinates\":[[1.0,2.0],[3.0,4.0]]}") return 29;
+        geometry multipolygon = geometry.fromGeoJson("{\"type\":\"MultiPolygon\",\"coordinates\":[[[[0,0],[3,4]]]]}", 4326);
+        if (multipolygon.shape() != geometry.MultiPolygon || multipolygon.height() != 4.0) return 30;
+        if (geometry.fromHexString(multipolygon.toString()).shape() != geometry.MultiPolygon) return 31;
         return 199;
     }
 }
