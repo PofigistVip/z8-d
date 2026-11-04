@@ -259,6 +259,32 @@ Z8Date z8_date_parse(wstring input, wstring pattern) {
                 if (ampm != "am"w && ampm != "pm"w) throw new Exception("invalid date AM/PM");
                 afternoon = ampm == "pm"w; ti += 2;
                 break;
+            case 'G':
+                if (ti + 4 > input.length || z8_str_toLowerCase(input[ti .. ti + 4]) != "н.э."w)
+                    throw new Exception("unsupported date era");
+                ti += 4;
+                break;
+            case 'z':
+                hasOffset = true;
+                auto remaining = z8_str_toLowerCase(input[ti .. $]);
+                import std.string : startsWith;
+                if (remaining.startsWith("moscow standard time"w)) { offset = 180; ti += 20; }
+                else if (remaining.startsWith("msk"w)) { offset = 180; ti += 3; }
+                else {
+                    bool gmt = remaining.startsWith("gmt"w);
+                    if (gmt || remaining.startsWith("utc"w)) ti += 3;
+                    else if (ti >= input.length || (input[ti] != '+' && input[ti] != '-')) throw new Exception("unsupported date timezone");
+                    offset = 0;
+                    if (ti < input.length && (input[ti] == '+' || input[ti] == '-')) {
+                        auto sign = input[ti++] == '-' ? -1 : 1;
+                        auto zoneHours = number(2, true);
+                        if (gmt && ti < input.length && input[ti] == ':') ++ti;
+                        auto zoneMinutes = number(2, true);
+                        if (zoneHours > 23 || zoneMinutes > 59) throw new Exception("invalid date offset");
+                        offset = sign * (zoneHours * 60 + zoneMinutes);
+                    }
+                }
+                break;
             case 'm': minute = number(width, adjacent); break;
             case 's': second = number(width, adjacent); break;
             case 'S': millisecond = number(width, adjacent); break;
@@ -435,6 +461,8 @@ wstring z8_date_toString(Z8Date value, wstring pattern) {
             case 'h': number = t.hour % 12 == 0 ? 12 : t.hour % 12; break;
             case 'E': numeric = false; result ~= count < 4 ? z8_weekday_short[cast(int)t.dayOfWeek] : z8_weekday_long[cast(int)t.dayOfWeek]; break;
             case 'a': numeric = false; result ~= t.hour < 12 ? "AM"w : "PM"w; break;
+            case 'G': numeric = false; result ~= "н.э."w; break;
+            case 'z': numeric = false; result ~= count < 4 ? "MSK"w : "Moscow Standard Time"w; break;
             case 'm': number = t.minute; break;
             case 's': number = t.second; break;
             case 'S': number = t.fracSecs.total!"msecs"; break;

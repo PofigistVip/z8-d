@@ -30,6 +30,9 @@ public class DateValues {
         if (date.parse("2025-01-1", "YYYY-ww-u").toString() != "2024-12-30T00:00:00+03:00") return 53;
         if (date.parse("2024-02-2-Пн", "yyyy-MM-W-E").day() != 5 || date.parse("2024-02-2-Пн", "yyyy-MM-F-E").day() != 12) return 54;
         if (date.parse("2024-02-Пн", "yyyy-MM-E").day() != 5) return 55;
+        if (value.toString("z|zzzz|G") != "MSK|Moscow Standard Time|н.э.") return 56;
+        if (date.parse("2024-02-29 12:30 UTC", "yyyy-MM-dd HH:mm z").ticks() != 1709209800000) return 57;
+        if (date.parse("2024-02-29 12:30 GMT+02:30", "yyyy-MM-dd HH:mm z").ticks() != 1709200800000) return 58;
         if (date.parse("2024-02-29 12:30:45.067 +02:00", "yyyy-MM-dd HH:mm:ss.SSS XXX").ticks() != 1709202645067) return 38;
         if (date.parse("2024-02-31 04:05:06 trailing", "yyyy-MM-dd HH:mm:ss").toString() != "2024-03-02T04:05:06+03:00") return 39;
         if (date.parse("20240229", "yyyyMMdd").day() != 29) return 40;
