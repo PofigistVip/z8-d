@@ -7,6 +7,7 @@ import std.format : format;
 import std.string : replace, startsWith, split;
 import std.regex : matchAll, regex;
 import z8.compiler_model;
+import z8.d_writer : formatDSource;
 
 private string dType(ValueType type, Program objectClass = null) {
     final switch (type) {
@@ -421,7 +422,7 @@ package string emitPrograms(Program[] programs) {
         }
         result ~= "}\n";
     }
-    return result;
+    return formatDSource(result);
 }
 
 /// Escape path segments without colliding with D keywords or escaped names.

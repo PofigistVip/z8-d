@@ -4,6 +4,7 @@ import std.format : format;
 import std.string : lastIndexOf;
 import z8.lexer : LexException, Position;
 import z8.emitter : emitPrograms, emitProjectModules, moduleNameFor;
+import z8.d_writer : formatDSource;
 public import z8.compiler_model;
 public import z8.parser : Parser;
 public import z8.semantic : Checker;
@@ -109,9 +110,9 @@ GeneratedModule[] compileSources(SourceUnit[] units, string entry = "") {
         }
         auto call = (*owner).emittedName ~ ".m_" ~ target.name.text ~ "()";
         auto entrySource = "module z8gen.entry;\n\nimport " ~ moduleNameFor(ownerName) ~ ";\n\n";
-        entrySource ~= target.returnType == ValueType.voidType ? "void main() { " ~ call ~ "; }\n" :
-            "int main() { return cast(int)(" ~ call ~ "); }\n";
-        output ~= GeneratedModule("z8gen.entry", "z8gen/entry.d", "", entrySource);
+        entrySource ~= target.returnType == ValueType.voidType ? "void main() {\n" ~ call ~ ";\n}\n" :
+            "int main() {\nreturn cast(int)(" ~ call ~ ");\n}\n";
+        output ~= GeneratedModule("z8gen.entry", "z8gen/entry.d", "", formatDSource(entrySource));
     }
     return output;
 }

@@ -17,6 +17,7 @@
 - [parser.d](source/z8/parser.d) — построение модели по исходному коду;
 - [semantic.d](source/z8/semantic.d) — проверка имён, типов и семантики;
 - [emitter.d](source/z8/emitter.d) — генерация D-кода;
+- [d_writer.d](source/z8/d_writer.d) — форматирование сгенерированного D-кода;
 - [compiler.d](source/z8/compiler.d) — публичный интерфейс и компиляция проекта.
 
 Содержимое runtime разделено на фрагменты базовых операций, массивов, отображений,

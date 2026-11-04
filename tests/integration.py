@@ -12,6 +12,8 @@ result = subprocess.run([str(exe), "compile", str(source)], capture_output=True,
 
 assert "import z8.runtime;" in result.stdout
 assert "class Z8Object {" not in result.stdout
+assert "\n    override void z8_allocate_fields() {\n        super.z8_allocate_fields();\n    }" in result.stdout
+assert "\n        if (" in result.stdout and "\n            v_result =" in result.stdout
 
 with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime_lib:
     directory = Path(directory)
@@ -139,6 +141,7 @@ void main() {
     assert "module z8gen.p_demo.p_Main;" in main_source
     assert "import z8.runtime;" in main_source and "class Z8Object {" not in main_source
     assert "import z8gen.p_demo.p_Counter;" in main_source
+    assert "\n    override void z8_allocate_fields() {\n        super.z8_allocate_fields();" in main_source
     relative_root = directory / "relative project"
     subprocess.run(
         [str(exe), "project", "examples/project", str(relative_root)], cwd=root,
