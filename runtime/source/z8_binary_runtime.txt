@@ -1,8 +1,59 @@
+private import std.stdio : File;
 class Z8Binary {
     ubyte[] data;
     size_t position;
+    private Z8BinaryFileInput fileInput;
     wstring name = ""w;
     this(ubyte[] data = null) { this.data = data; }
+}
+private class Z8BinaryFileInput {
+    import std.stdio : File;
+    File stream;
+    bool closed;
+    this(string path) { stream = File(path, "rb"); }
+    void close() { if (!closed) { closed = true; stream.close(); } }
+}
+Z8Binary z8_binary_from_file(string path) {
+    auto result = new Z8Binary();
+    result.fileInput = new Z8BinaryFileInput(path);
+    return result;
+}
+private ubyte[] z8_binary_read_chunk(Z8Binary value, ubyte[] buffer) {
+    z8_nonnull(value);
+    if (value.fileInput !is null) {
+        if (value.fileInput.closed) throw new Exception("binary stream is closed");
+        return value.fileInput.stream.rawRead(buffer);
+    }
+    auto remaining = value.data.length - value.position;
+    auto count = remaining < buffer.length ? remaining : buffer.length;
+    buffer[0 .. count] = value.data[value.position .. value.position + count];
+    value.position += count;
+    return buffer[0 .. count];
+}
+private void z8_binary_finish_read(Z8Binary value) {
+    if (value.fileInput !is null) value.fileInput.close();
+}
+private ubyte[] z8_binary_read_all(Z8Binary value) {
+    z8_nonnull(value);
+    scope(exit) z8_binary_finish_read(value);
+    ubyte[] result;
+    ubyte[16384] buffer;
+    for (;;) {
+        auto chunk = z8_binary_read_chunk(value, buffer[]);
+        if (!chunk.length) break;
+        result ~= chunk;
+    }
+    return result;
+}
+private void z8_binary_copy_to(Z8Binary value, ref File output) {
+    z8_nonnull(value);
+    scope(exit) z8_binary_finish_read(value);
+    ubyte[16384] buffer;
+    for (;;) {
+        auto chunk = z8_binary_read_chunk(value, buffer[]);
+        if (!chunk.length) break;
+        output.rawWrite(chunk);
+    }
 }
 Z8Binary z8_binary_from_string(wstring value) {
     return new Z8Binary(z8_encoding_encode(value, z8_encoding_by_id(0)));
@@ -24,7 +75,16 @@ Z8Binary z8_binary_literal(string text) {
 Z8Binary z8_binary_set_name(Z8Binary value, wstring name) { z8_nonnull(value).name = name; return value; }
 wstring z8_binary_get_name(Z8Binary value) { return z8_nonnull(value).name; }
 wstring z8_binary_to_string(Z8Binary value) { return z8_string_required(z8_binary_get_name(value)); }
-long z8_binary_length(Z8Binary value) { z8_nonnull(value); return cast(long)(value.data.length - value.position); }
+long z8_binary_length(Z8Binary value) {
+    z8_nonnull(value);
+    if (value.fileInput !is null) {
+        if (value.fileInput.closed) throw new Exception("binary stream is closed");
+        auto size = value.fileInput.stream.size, position = value.fileInput.stream.tell;
+        auto remaining = size > position ? size - position : 0;
+        return remaining > int.max ? int.max : cast(long)remaining;
+    }
+    return cast(long)(value.data.length - value.position);
+}
 long z8_binary_hash(Z8Binary value) { return cast(long)cast(int)cast(uint)z8_nonnull(value).toHash(); }
 
 private size_t z8_binary_name_start(wstring name) {

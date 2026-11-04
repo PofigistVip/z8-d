@@ -69,7 +69,12 @@ Z8File z8_file_unzip(Z8File archive, Z8File directory, Z8Encoding encoding) {
     return archive;
 }
 
-Z8Binary z8_binary_zip(Z8File source) { return new Z8Binary(z8_zip_path(z8_file_system_path(source))); }
+private Z8Binary z8_binary_zip_result(ubyte[] data) {
+    auto temporary = z8_file_createTempFile(""w, ""w);
+    z8_file_write_bytes(temporary, data, false);
+    return z8_file_to_binary(temporary);
+}
+Z8Binary z8_binary_zip(Z8File source) { return z8_binary_zip_result(z8_zip_path(z8_file_system_path(source))); }
 Z8Binary z8_binary_zip(Z8Array!Z8Binary values) {
     import std.zip : ZipArchive, ArchiveMember, CompressionMethod;
     z8_nonnull(values);
@@ -80,18 +85,16 @@ Z8Binary z8_binary_zip(Z8Array!Z8Binary values) {
         entry.name = z8_string_required(value.name).to!string;
         if (entry.name in archive.directory) throw new Exception("duplicate archive entry");
         entry.flags = 0x800;
-        entry.expandedData = value.data[value.position .. $].dup;
-        value.position = value.data.length;
+        entry.expandedData = z8_binary_read_all(value);
         entry.compressionMethod = CompressionMethod.deflate;
         archive.addMember(entry);
     }
-    return new Z8Binary(cast(ubyte[])archive.build());
+    return z8_binary_zip_result(cast(ubyte[])archive.build());
 }
 void z8_binary_unzip(Z8Binary archive, Z8File directory) {
     z8_binary_unzip(archive, directory, z8_encoding_by_id(4));
 }
 void z8_binary_unzip(Z8Binary archive, Z8File directory, Z8Encoding encoding) {
     z8_nonnull(archive);
-    z8_zip_extract(archive.data[archive.position .. $], z8_file_system_path(directory), encoding);
-    archive.position = archive.data.length;
+    z8_zip_extract(z8_binary_read_all(archive), z8_file_system_path(directory), encoding);
 }

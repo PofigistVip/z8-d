@@ -21,10 +21,12 @@ public class BinaryZip {
         if (value.length() != 0) return 1;
         file target = archivePath;
         target.write(packed);
+        try { int remaining = packed.length(); return 21; } catch (exception expected) {}
         file input = inputPath;
         binary folder = binary.zip(input);
         file output = outputPath;
         folder.unzip(output);
+        try { int remaining = folder.length(); return 22; } catch (exception expected) {}
         file foreign = foreignPath;
         file destination = foreignOutput;
         foreign.unzip(destination);

@@ -113,8 +113,6 @@ ubyte[] z8_encoding_encode(wstring text, Z8Encoding encoding) {
     return output;
 }
 wstring z8_string_fromBinary(Z8Binary value, Z8Encoding encoding) {
-    z8_nonnull(value);
-    auto bytes = value.data[value.position .. $];
-    value.position = value.data.length;
+    auto bytes = z8_binary_read_all(value);
     return z8_encoding_decode(bytes, encoding);
 }

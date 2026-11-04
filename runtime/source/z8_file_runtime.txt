@@ -198,8 +198,7 @@ wstring z8_file_read(Z8File value, Z8Encoding encoding) {
     return z8_encoding_decode(cast(ubyte[])read(z8_file_system_path(value)), encoding);
 }
 Z8Binary z8_file_to_binary(Z8File value) {
-    import std.file : read;
-    return new Z8Binary(cast(ubyte[])read(z8_file_system_path(value)));
+    return z8_binary_from_file(z8_file_system_path(value));
 }
 Z8Date z8_file_lastModified(Z8File value) {
     import std.file : exists, timeLastModified;
@@ -259,11 +258,9 @@ Z8Array!Z8File z8_file_listFiles(Z8File value) {
     foreach (entry; dirEntries(path, SpanMode.shallow)) result.z8_add(z8_file_from_disk(entry.name));
     return result;
 }
-private Z8File z8_file_write_bytes(Z8File value, const(ubyte)[] contents, bool append) {
-    import std.file : mkdirRecurse, getSize;
+private File z8_file_open_output(Z8File value, bool append, out string path) {
+    import std.file : mkdirRecurse;
     import std.path : dirName;
-    import std.stdio : File;
-    string path;
     if (!z8_string_required(z8_nonnull(value).path).length) {
         auto temporary = z8_file_createTempFile(""w, "txt"w);
         value.id = temporary.id; value.name = temporary.name; value.path = temporary.path;
@@ -273,7 +270,12 @@ private Z8File z8_file_write_bytes(Z8File value, const(ubyte)[] contents, bool a
     } else path = z8_file_system_path(value);
     auto parent = dirName(path);
     if (parent.length) mkdirRecurse(parent);
-    auto output = File(path, append ? "ab" : "wb");
+    return File(path, append ? "ab" : "wb");
+}
+private Z8File z8_file_write_bytes(Z8File value, const(ubyte)[] contents, bool append) {
+    import std.file : getSize;
+    string path;
+    auto output = z8_file_open_output(value, append, path);
     output.rawWrite(contents);
     output.close();
     value.size = z8_optional_wrap(cast(long)getSize(path));
@@ -292,16 +294,20 @@ Z8File z8_file_append(Z8File value, wstring contents, Z8Encoding encoding) {
     return z8_file_write_bytes(value, z8_encoding_encode(contents, encoding), true);
 }
 Z8File z8_file_write(Z8File value, Z8Binary contents) {
-    z8_nonnull(contents);
-    auto result = z8_file_write_bytes(value, contents.data[contents.position .. $], false);
-    contents.position = contents.data.length;
-    return result;
+    return z8_file_write_binary(value, contents, false);
 }
 Z8File z8_file_append(Z8File value, Z8Binary contents) {
+    return z8_file_write_binary(value, contents, true);
+}
+private Z8File z8_file_write_binary(Z8File value, Z8Binary contents, bool append) {
+    import std.file : getSize;
     z8_nonnull(contents);
-    auto result = z8_file_write_bytes(value, contents.data[contents.position .. $], true);
-    contents.position = contents.data.length;
-    return result;
+    string path;
+    auto output = z8_file_open_output(value, append, path);
+    z8_binary_copy_to(contents, output);
+    output.close();
+    value.size = z8_optional_wrap(cast(long)getSize(path));
+    return value;
 }
 void z8_file_delete(Z8File value, bool recursively = false) {
     import std.file : exists, isDir, remove, rmdir, rmdirRecurse;

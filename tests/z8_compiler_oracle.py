@@ -70,7 +70,9 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             child.write("Привет 😀");
             if (!folder.isFolder() || folder.isEmpty() || child.read() != "Привет 😀" || child.size != 17) return 6;
             binary contents = child;
-            if (string.fromBinary(contents) != "Привет 😀") return 11;
+            child.append("!");
+            if (contents.length() != 18 || string.fromBinary(contents) != "Привет 😀!") return 11;
+            try { int remaining = contents.length(); return 19; } catch (exception expectedClosed) {}
             if (folder.listFiles().size() != 1 || child.parent().parent() != folder) return 8;
             encoding charset = encoding.Windows1251;
             if (charset != encoding.Windows1251 || charset == encoding.UTF8) return 14;
