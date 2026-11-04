@@ -106,70 +106,80 @@ package bool isArray(ValueType type) {
     return [ValueType.intArray, ValueType.decimalArray, ValueType.decimalMatrix, ValueType.boolArray, ValueType.stringArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.primaryArray, ValueType.selfArray, ValueType.enumArray].canFind(type);
 }
 package bool isReferenceArray(ValueType type) { return [ValueType.selfArray, ValueType.enumArray, ValueType.primaryArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.decimalMatrix].canFind(type); }
-package bool isMap(ValueType type) { return [ValueType.stringMap, ValueType.primaryStringMap, ValueType.intStringMap, ValueType.boolStringMap, ValueType.decimalStringMap, ValueType.guidStringMap, ValueType.intIntMap, ValueType.stringIntMap, ValueType.primaryIntMap, ValueType.boolIntMap, ValueType.decimalIntMap, ValueType.guidIntMap, ValueType.stringGuidMap, ValueType.primaryGuidMap, ValueType.intGuidMap, ValueType.boolGuidMap, ValueType.decimalGuidMap, ValueType.guidGuidMap, ValueType.stringBoolMap, ValueType.primaryBoolMap, ValueType.intBoolMap, ValueType.boolBoolMap, ValueType.decimalBoolMap, ValueType.guidBoolMap, ValueType.stringDecimalMap, ValueType.primaryDecimalMap, ValueType.intDecimalMap, ValueType.boolDecimalMap, ValueType.decimalDecimalMap, ValueType.guidDecimalMap].canFind(type); }
+// Each supported map has a single description of its value and key types.
+// VariableType in the original compiler likewise stores the value type and keys.
+private struct MapDescriptor { ValueType type, value, key; }
+private enum MapDescriptor[] mapDescriptors = [
+    MapDescriptor(ValueType.stringMap, ValueType.stringType, ValueType.stringType),
+    MapDescriptor(ValueType.primaryStringMap, ValueType.primaryType, ValueType.stringType),
+    MapDescriptor(ValueType.intStringMap, ValueType.intType, ValueType.stringType),
+    MapDescriptor(ValueType.boolStringMap, ValueType.boolType, ValueType.stringType),
+    MapDescriptor(ValueType.decimalStringMap, ValueType.decimalType, ValueType.stringType),
+    MapDescriptor(ValueType.guidStringMap, ValueType.guidType, ValueType.stringType),
+    MapDescriptor(ValueType.intIntMap, ValueType.intType, ValueType.intType),
+    MapDescriptor(ValueType.stringIntMap, ValueType.stringType, ValueType.intType),
+    MapDescriptor(ValueType.primaryIntMap, ValueType.primaryType, ValueType.intType),
+    MapDescriptor(ValueType.boolIntMap, ValueType.boolType, ValueType.intType),
+    MapDescriptor(ValueType.decimalIntMap, ValueType.decimalType, ValueType.intType),
+    MapDescriptor(ValueType.guidIntMap, ValueType.guidType, ValueType.intType),
+    MapDescriptor(ValueType.stringGuidMap, ValueType.stringType, ValueType.guidType),
+    MapDescriptor(ValueType.primaryGuidMap, ValueType.primaryType, ValueType.guidType),
+    MapDescriptor(ValueType.intGuidMap, ValueType.intType, ValueType.guidType),
+    MapDescriptor(ValueType.boolGuidMap, ValueType.boolType, ValueType.guidType),
+    MapDescriptor(ValueType.decimalGuidMap, ValueType.decimalType, ValueType.guidType),
+    MapDescriptor(ValueType.guidGuidMap, ValueType.guidType, ValueType.guidType),
+    MapDescriptor(ValueType.stringBoolMap, ValueType.stringType, ValueType.boolType),
+    MapDescriptor(ValueType.primaryBoolMap, ValueType.primaryType, ValueType.boolType),
+    MapDescriptor(ValueType.intBoolMap, ValueType.intType, ValueType.boolType),
+    MapDescriptor(ValueType.boolBoolMap, ValueType.boolType, ValueType.boolType),
+    MapDescriptor(ValueType.decimalBoolMap, ValueType.decimalType, ValueType.boolType),
+    MapDescriptor(ValueType.guidBoolMap, ValueType.guidType, ValueType.boolType),
+    MapDescriptor(ValueType.stringDecimalMap, ValueType.stringType, ValueType.decimalType),
+    MapDescriptor(ValueType.primaryDecimalMap, ValueType.primaryType, ValueType.decimalType),
+    MapDescriptor(ValueType.intDecimalMap, ValueType.intType, ValueType.decimalType),
+    MapDescriptor(ValueType.boolDecimalMap, ValueType.boolType, ValueType.decimalType),
+    MapDescriptor(ValueType.decimalDecimalMap, ValueType.decimalType, ValueType.decimalType),
+    MapDescriptor(ValueType.guidDecimalMap, ValueType.guidType, ValueType.decimalType),
+];
+package bool isMap(ValueType type) {
+    foreach (descriptor; mapDescriptors) if (descriptor.type == type) return true;
+    return false;
+}
 package ValueType mapKeyType(ValueType type) {
-    assert(isMap(type));
-    if ([ValueType.intIntMap, ValueType.stringIntMap, ValueType.primaryIntMap, ValueType.boolIntMap, ValueType.decimalIntMap, ValueType.guidIntMap].canFind(type)) return ValueType.intType;
-    if ([ValueType.stringBoolMap, ValueType.primaryBoolMap, ValueType.intBoolMap, ValueType.boolBoolMap, ValueType.decimalBoolMap, ValueType.guidBoolMap].canFind(type)) return ValueType.boolType;
-    if ([ValueType.stringDecimalMap, ValueType.primaryDecimalMap, ValueType.intDecimalMap, ValueType.boolDecimalMap, ValueType.decimalDecimalMap, ValueType.guidDecimalMap].canFind(type)) return ValueType.decimalType;
-    return [ValueType.stringGuidMap, ValueType.primaryGuidMap, ValueType.intGuidMap, ValueType.boolGuidMap, ValueType.decimalGuidMap, ValueType.guidGuidMap].canFind(type) ? ValueType.guidType : ValueType.stringType;
+    foreach (descriptor; mapDescriptors) if (descriptor.type == type) return descriptor.key;
+    assert(0, "not a map");
 }
 package ValueType mapValueType(ValueType type) {
-    assert(isMap(type));
-    if ([ValueType.intIntMap, ValueType.intStringMap, ValueType.intGuidMap, ValueType.intBoolMap, ValueType.intDecimalMap].canFind(type)) return ValueType.intType;
-    if ([ValueType.boolIntMap, ValueType.boolStringMap, ValueType.boolGuidMap, ValueType.boolBoolMap, ValueType.boolDecimalMap].canFind(type)) return ValueType.boolType;
-    if ([ValueType.decimalIntMap, ValueType.decimalStringMap, ValueType.decimalGuidMap, ValueType.decimalBoolMap, ValueType.decimalDecimalMap].canFind(type)) return ValueType.decimalType;
-    if ([ValueType.guidStringMap, ValueType.guidIntMap, ValueType.guidGuidMap, ValueType.guidBoolMap, ValueType.guidDecimalMap].canFind(type)) return ValueType.guidType;
-    return [ValueType.primaryStringMap, ValueType.primaryIntMap, ValueType.primaryGuidMap, ValueType.primaryBoolMap, ValueType.primaryDecimalMap].canFind(type) ? ValueType.primaryType : ValueType.stringType;
+    foreach (descriptor; mapDescriptors) if (descriptor.type == type) return descriptor.value;
+    assert(0, "not a map");
 }
 package ValueType mapKeyArrayType(ValueType type) {
-    assert(isMap(type));
     auto key = mapKeyType(type);
     return key == ValueType.decimalType ? ValueType.decimalArray : key == ValueType.boolType ? ValueType.boolArray : key == ValueType.intType ? ValueType.intArray : key == ValueType.guidType ? ValueType.guidArray : ValueType.stringArray;
 }
 package ValueType mapValueArrayType(ValueType type) {
-    assert(isMap(type));
     auto value = mapValueType(type);
     return value == ValueType.intType ? ValueType.intArray : value == ValueType.boolType ? ValueType.boolArray : value == ValueType.decimalType ? ValueType.decimalArray : value == ValueType.guidType ? ValueType.guidArray : value == ValueType.primaryType ? ValueType.primaryArray : ValueType.stringArray;
 }
 package ValueType mapType(ValueType value, ValueType key) {
-    if (key == ValueType.stringType) {
-        if (value == ValueType.stringType) return ValueType.stringMap;
-        if (value == ValueType.primaryType) return ValueType.primaryStringMap;
-        if (value == ValueType.intType) return ValueType.intStringMap;
-        if (value == ValueType.boolType) return ValueType.boolStringMap;
-        if (value == ValueType.decimalType) return ValueType.decimalStringMap;
-        if (value == ValueType.guidType) return ValueType.guidStringMap;
-    } else if (key == ValueType.intType) {
-        if (value == ValueType.intType) return ValueType.intIntMap;
-        if (value == ValueType.stringType) return ValueType.stringIntMap;
-        if (value == ValueType.primaryType) return ValueType.primaryIntMap;
-        if (value == ValueType.boolType) return ValueType.boolIntMap;
-        if (value == ValueType.decimalType) return ValueType.decimalIntMap;
-        if (value == ValueType.guidType) return ValueType.guidIntMap;
-    } else if (key == ValueType.guidType) {
-        if (value == ValueType.stringType) return ValueType.stringGuidMap;
-        if (value == ValueType.primaryType) return ValueType.primaryGuidMap;
-        if (value == ValueType.intType) return ValueType.intGuidMap;
-        if (value == ValueType.boolType) return ValueType.boolGuidMap;
-        if (value == ValueType.decimalType) return ValueType.decimalGuidMap;
-        if (value == ValueType.guidType) return ValueType.guidGuidMap;
-    } else if (key == ValueType.boolType) {
-        if (value == ValueType.stringType) return ValueType.stringBoolMap;
-        if (value == ValueType.primaryType) return ValueType.primaryBoolMap;
-        if (value == ValueType.intType) return ValueType.intBoolMap;
-        if (value == ValueType.boolType) return ValueType.boolBoolMap;
-        if (value == ValueType.decimalType) return ValueType.decimalBoolMap;
-        if (value == ValueType.guidType) return ValueType.guidBoolMap;
-    } else if (key == ValueType.decimalType) {
-        if (value == ValueType.stringType) return ValueType.stringDecimalMap;
-        if (value == ValueType.primaryType) return ValueType.primaryDecimalMap;
-        if (value == ValueType.intType) return ValueType.intDecimalMap;
-        if (value == ValueType.boolType) return ValueType.boolDecimalMap;
-        if (value == ValueType.decimalType) return ValueType.decimalDecimalMap;
-        if (value == ValueType.guidType) return ValueType.guidDecimalMap;
-    }
+    foreach (descriptor; mapDescriptors)
+        if (descriptor.value == value && descriptor.key == key) return descriptor.type;
     return ValueType.voidType;
+}
+
+unittest {
+    foreach (index, descriptor; mapDescriptors) {
+        assert(isMap(descriptor.type));
+        assert(mapType(descriptor.value, descriptor.key) == descriptor.type);
+        assert(mapValueType(descriptor.type) == descriptor.value);
+        assert(mapKeyType(descriptor.type) == descriptor.key);
+        foreach (other; mapDescriptors[index + 1 .. $]) {
+            assert(descriptor.type != other.type);
+            assert(descriptor.value != other.value || descriptor.key != other.key);
+        }
+    }
+    assert(!isMap(ValueType.intType));
+    assert(mapType(ValueType.intType, ValueType.fileType) == ValueType.voidType);
 }
 package ValueType mapValueReadType(ValueType type) {
     auto value = mapValueType(type);

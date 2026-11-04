@@ -10,7 +10,17 @@ import z8.compiler_model;
 import z8.d_writer : formatDSource;
 
 private string dType(ValueType type, Program objectClass = null) {
-    final switch (type) {
+    if (isMap(type)) {
+        auto key = mapKeyType(type), value = mapValueType(type);
+        if (type == ValueType.stringMap) return "Z8StringMap";
+        if (type == ValueType.primaryStringMap) return "Z8PrimaryMap";
+        if (type == ValueType.intStringMap) return "Z8StringIntMap";
+        auto templateName = key == ValueType.stringType ? "Z8StringValueMap" :
+            key == ValueType.intType ? "Z8IntMap" : key == ValueType.boolType ? "Z8BoolMap" :
+            key == ValueType.decimalType ? "Z8DecimalMap" : "Z8GuidMap";
+        return templateName ~ "!" ~ dType(value);
+    }
+    switch (type) {
         case ValueType.intType: return "long"; case ValueType.boolType: return "bool";
         case ValueType.decimalType: return "Z8Decimal";
         case ValueType.voidType: return "void"; case ValueType.stringType: return "wstring";
@@ -25,36 +35,6 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.primaryType: return "Z8Primary";
         case ValueType.selfType: assert(objectClass !is null); return objectClass.emittedName;
         case ValueType.selfArray: assert(objectClass !is null); return "Z8Array!(" ~ objectClass.emittedName ~ ")";
-        case ValueType.stringMap: return "Z8StringMap";
-        case ValueType.primaryStringMap: return "Z8PrimaryMap";
-        case ValueType.intStringMap: return "Z8StringIntMap";
-        case ValueType.boolStringMap: return "Z8StringValueMap!bool";
-        case ValueType.decimalStringMap: return "Z8StringValueMap!Z8Decimal";
-        case ValueType.guidStringMap: return "Z8StringValueMap!Z8Guid";
-        case ValueType.intIntMap: return "Z8IntMap!long";
-        case ValueType.stringIntMap: return "Z8IntMap!wstring";
-        case ValueType.primaryIntMap: return "Z8IntMap!Z8Primary";
-        case ValueType.boolIntMap: return "Z8IntMap!bool";
-        case ValueType.decimalIntMap: return "Z8IntMap!Z8Decimal";
-        case ValueType.guidIntMap: return "Z8IntMap!Z8Guid";
-        case ValueType.stringGuidMap: return "Z8GuidMap!wstring";
-        case ValueType.primaryGuidMap: return "Z8GuidMap!Z8Primary";
-        case ValueType.intGuidMap: return "Z8GuidMap!long";
-        case ValueType.boolGuidMap: return "Z8GuidMap!bool";
-        case ValueType.decimalGuidMap: return "Z8GuidMap!Z8Decimal";
-        case ValueType.guidGuidMap: return "Z8GuidMap!Z8Guid";
-        case ValueType.stringBoolMap: return "Z8BoolMap!wstring";
-        case ValueType.primaryBoolMap: return "Z8BoolMap!Z8Primary";
-        case ValueType.intBoolMap: return "Z8BoolMap!long";
-        case ValueType.boolBoolMap: return "Z8BoolMap!bool";
-        case ValueType.decimalBoolMap: return "Z8BoolMap!Z8Decimal";
-        case ValueType.guidBoolMap: return "Z8BoolMap!Z8Guid";
-        case ValueType.stringDecimalMap: return "Z8DecimalMap!wstring";
-        case ValueType.primaryDecimalMap: return "Z8DecimalMap!Z8Primary";
-        case ValueType.intDecimalMap: return "Z8DecimalMap!long";
-        case ValueType.boolDecimalMap: return "Z8DecimalMap!bool";
-        case ValueType.decimalDecimalMap: return "Z8DecimalMap!Z8Decimal";
-        case ValueType.guidDecimalMap: return "Z8DecimalMap!Z8Guid";
         case ValueType.intArray: return "Z8Array!long";
         case ValueType.decimalArray: return "Z8Array!Z8Decimal";
         case ValueType.decimalMatrix: return "Z8Array!(Z8Array!Z8Decimal)";
@@ -75,6 +55,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.optionalInt: return "Z8Optional!long";
         case ValueType.optionalBool: return "Z8Optional!bool";
         case ValueType.optionalDecimal: return "Z8Optional!Z8Decimal";
+        default: assert(0, "unsupported D type");
     }
 }
 /// The Java runtime stores strings as UTF-16; preserve its code-unit ordering.
