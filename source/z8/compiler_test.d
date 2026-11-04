@@ -97,6 +97,10 @@ unittest {
     rejectsSources([wrongForeach, arrayItem], "A.bl");
     auto invalidCast = SourceUnit("pkg.A", "A.bl", "class A { static B f() { A a; return (B)a; } }");
     rejectsSources([invalidCast, arrayItem], "A.bl");
+    auto badInstanceOf = SourceUnit("pkg.A", "A.bl", "class A { static bool f() { A a; return a instanceof B; } }");
+    rejectsSources([badInstanceOf, arrayItem], "A.bl");
+    rejects("class A { static bool f() { return 1 instanceof A; } }");
+    rejects("class A { static bool f(A x) { return x instanceof A == true; } }");
     auto badCastValue = SourceUnit("pkg.A", "A.bl", "class A { static B f() { return (B)1; } }");
     rejectsSources([badCastValue, arrayItem], "A.bl");
     compile("class A { static int f(int x) { return (x) + 2; } }");

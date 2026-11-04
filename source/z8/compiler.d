@@ -18,7 +18,7 @@ class CompileException : Exception {
 }
 
 enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, decimalArray, boolArray, stringArray, selfArray, stringMap, nullType }
-enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, nullLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, unary, binary, conditional }
+enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, nullLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, instanceOf, unary, binary, conditional }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
                 whileStmt, doWhileStmt, forStmt, forEachStmt, breakStmt, continueStmt, throwStmt, tryStmt }
 
@@ -347,6 +347,10 @@ class Parser {
         if (minPrecedence == 1 && current.text == "?") {
             auto node = new Expression(ExprKind.conditional, take());
             node.left = left; node.right = expression(); expect(":"); node.third = expression(); left = node;
+        }
+        if (minPrecedence == 1 && accept("instanceof")) {
+            auto node = new Expression(ExprKind.instanceOf, identifier());
+            node.left = left; left = node;
         }
         return left;
     }
@@ -875,6 +879,15 @@ class Checker {
                 }
                 if (!matches(e.left, e.castType)) fail("unsupported type cast", e.token);
                 return e.castType;
+            case ExprKind.instanceOf:
+                auto target = resolveClass(currentProgram, e.token.text, e.token);
+                auto sourceType = typeOf(e.left);
+                if (sourceType != ValueType.selfType && sourceType != ValueType.nullType)
+                    fail("instanceof requires an object reference", e.token);
+                if (sourceType == ValueType.selfType && !isAssignable(e.left.objectClass, target) && !isAssignable(target, e.left.objectClass))
+                    fail("unrelated classes in instanceof", e.token);
+                e.objectClass = target;
+                return ValueType.boolType;
             case ExprKind.unary:
                 auto operand = typeOf(e.left);
                 if (e.token.text == "!" && operand == ValueType.boolType) return operand;
@@ -1145,6 +1158,8 @@ private string emitExprRaw(Expression e) {
             return "z8_array_at(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
         case ExprKind.castExpr:
             return e.castType == ValueType.selfType ? "z8_cast!(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")" : emitExpr(e.left);
+        case ExprKind.instanceOf:
+            return "(cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ") !is null)";
         case ExprKind.unary: return "(" ~ e.token.text ~ emitExpr(e.left) ~ ")";
         case ExprKind.binary:
             if (e.inferredType == ValueType.nullType)

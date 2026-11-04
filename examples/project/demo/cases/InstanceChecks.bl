@@ -1,0 +1,18 @@
+import demo.Base;
+import demo.Derived;
+
+public class InstanceChecks {
+    private static int calls;
+    private static Base make() { calls += 1; return new Derived; }
+    public static int run() {
+        Base value = new Derived;
+        if (!(value instanceof Derived) || !(value instanceof Base)) return 1;
+        if (!(make() instanceof Derived) || calls != 1) return 5;
+        if (null instanceof Base) return 6;
+        value = new Base;
+        if (value instanceof Derived) return 2;
+        value = null;
+        if (value instanceof Base) return 3;
+        return 109;
+    }
+}
