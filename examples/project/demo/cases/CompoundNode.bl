@@ -1,0 +1,7 @@
+public class CompoundNode {
+    public int number = 10;
+    public decimal amount = 10.0;
+    public string text = "x";
+    public int[] numbers = {1};
+    public string[string] labels;
+}

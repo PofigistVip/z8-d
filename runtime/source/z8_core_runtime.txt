@@ -29,6 +29,12 @@ wstring z8_string_new(wstring value) {
 void z8_string_add_assign(ref wstring left, wstring right) {
     left = z8_nullable_string_binary!"+"(left, z8_string_or_empty(right));
 }
+// Resolve the assignment target first, then read the old value and the RHS.
+void z8_string_add_assign(ref wstring left, lazy wstring previous, lazy wstring right) {
+    auto oldValue = previous;
+    auto newValue = right;
+    left = z8_nullable_string_binary!"+"(oldValue, z8_string_or_empty(newValue));
+}
 auto z8_nullable_string_binary(string op)(wstring value, wstring other) {
     value = z8_string_required(value);
     static if (op == "+") return z8_string_new(value ~ other);
@@ -171,6 +177,11 @@ auto z8_optional_mixed(string op, bool intOnLeft, A, B)(A left, B right) {
 void z8_optional_decimal_assign(string op)(ref Z8Optional!Z8Decimal left, Z8Optional!Z8Decimal right) {
     left = z8_optional_wrap(z8_optional_decimal_binary!op(left, right));
 }
+void z8_optional_decimal_assign(string op)(ref Z8Optional!Z8Decimal left, lazy Z8Optional!Z8Decimal previous, lazy Z8Optional!Z8Decimal right) {
+    auto oldValue = previous;
+    auto newValue = right;
+    left = z8_optional_wrap(z8_optional_decimal_binary!op(oldValue, newValue));
+}
 auto z8_optional_decimal_call(string name, Args...)(Z8Optional!Z8Decimal value, Args args) {
     auto number = z8_optional_require(value);
     static if (name == "toString") return number.z8_string();
@@ -184,6 +195,11 @@ auto z8_optional_decimal_call(string name, Args...)(Z8Optional!Z8Decimal value, 
 }
 void z8_optional_int_assign(string op)(ref Z8Optional!long left, Z8Optional!long right) {
     left = z8_optional_wrap(z8_optional_int_binary!op(left, right));
+}
+void z8_optional_int_assign(string op)(ref Z8Optional!long left, lazy Z8Optional!long previous, lazy Z8Optional!long right) {
+    auto oldValue = previous;
+    auto newValue = right;
+    left = z8_optional_wrap(z8_optional_int_binary!op(oldValue, newValue));
 }
 long z8_optional_int_unary(string op)(Z8Optional!long value) {
     auto number = z8_optional_require(value);
@@ -213,6 +229,11 @@ Z8Array!T z8_array_union(T)(Z8Array!T left, Z8Array!T right) {
     return result;
 }
 void z8_array_add_assign(T)(ref Z8Array!T left, Z8Array!T right) { left = z8_array_union(left, right); }
+void z8_array_add_assign(T)(ref Z8Array!T left, lazy Z8Array!T previous, lazy Z8Array!T right) {
+    auto oldValue = previous;
+    auto newValue = right;
+    left = z8_array_union(oldValue, newValue);
+}
 T z8_cast(T, U)(U value) {
     auto result = cast(T)value;
     if (value !is null && result is null) throw new Exception("invalid object cast");

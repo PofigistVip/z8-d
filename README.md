@@ -41,6 +41,7 @@ dub run -- compile examples/math.bl
 dub run -- project examples/project generated
 dub run -- build examples/project demo.Main.run example-app
 python tests/integration.py
+python tests/compound_assignment.py
 python tests/decimal_oracle.py
 python tests/string_oracle.py
 python tests/lexer_oracle.py path/to/original-z8 --corpus
@@ -89,6 +90,11 @@ UTF-16, `line` и `column` отсчитываются с нуля. Пробел�
 переменных, переменных циклов и параметра `catch`. Как и в проверенном оригинальном
 компиляторе, он не запрещает последующее присваивание; для классов `final`
 по-прежнему запрещает наследование.
+
+Составное присваивание переменной или полю вычисляет левую часть повторно для
+чтения старого значения до вычисления правой части, как генератор исходного Z8.
+При присваивании элементу массива z8-d сохраняет прежнее поведение с однократным
+вычислением индекса; соответствующий сгенерированный Java-код оригинала не компилируется.
 
 Классы поддерживаются с реализованными статическими
 и экземплярными методами. Методы можно перегружать, в том числе добавляя

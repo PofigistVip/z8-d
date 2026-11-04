@@ -64,3 +64,8 @@ Z8StringMap z8_map_union(Z8StringMap left, Z8StringMap right) {
     return result;
 }
 void z8_map_add_assign(ref Z8StringMap left, Z8StringMap right) { left = z8_map_union(left, right); }
+void z8_map_add_assign(ref Z8StringMap left, lazy Z8StringMap previous, lazy Z8StringMap right) {
+    auto oldValue = previous;
+    auto newValue = right;
+    left = z8_map_union(oldValue, newValue);
+}

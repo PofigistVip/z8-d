@@ -1,0 +1,56 @@
+public class CompoundCases {
+    CompoundNode first;
+    CompoundNode second;
+    int calls = 0;
+
+    CompoundNode select() {
+        calls += 1;
+        if (calls % 2 == 1) return first;
+        return second;
+    }
+    int changeNumber() { second.number = 100; return 2; }
+    int changeFirst() { first.number = 100; return 2; }
+    int mark() { calls += 1; return 1; }
+    decimal changeAmount() { second.amount = 100.0; return 2.0; }
+    string changeText() { second.text = "changed"; return "!"; }
+    int[] changeNumbers() {
+        second.numbers.set(0, 8);
+        int[] extra = {9};
+        return extra;
+    }
+    string[string] changeLabels() {
+        second.labels.add("late", "seen");
+        string[string] extra;
+        extra.add("new", "value");
+        return extra;
+    }
+
+    public int exercise() {
+        select().number += changeNumber();
+        if (calls != 2 || first.number != 12 || second.number != 100) return 1;
+        calls = 0;
+        select().amount += changeAmount();
+        if (calls != 2 || first.amount != 12.0 || second.amount != 100.0) return 2;
+        calls = 0;
+        select().text += changeText();
+        if (calls != 2 || first.text != "x!" || second.text != "changed") return 3;
+        first.number = 10;
+        first.number += changeFirst();
+        if (first.number != 12) return 4;
+        calls = 0;
+        select().numbers += changeNumbers();
+        if (calls != 2 || first.numbers.size() != 2 || first.numbers[0] != 8 || first.numbers[1] != 9) return 5;
+        calls = 0;
+        select().labels += changeLabels();
+        if (calls != 2 || first.labels["late"] != "seen" || first.labels["new"] != "value") return 6;
+        calls = 0;
+        second.number = null;
+        try { second.number += mark(); return 7; } catch (exception expected) {}
+        if (calls != 1) return 8;
+        return 251;
+    }
+    public static int run() {
+        CompoundCases sample;
+        return sample.exercise();
+    }
+}

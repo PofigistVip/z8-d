@@ -33,7 +33,7 @@ class Z8_Arithmetic : Z8Object {
             return z8_optional_wrap((cast(long)(3)));
         }
         Z8Optional!long v_result = z8_optional_wrap((cast(long)(5)));
-        z8_optional_int_assign!"+"(v_result, z8_optional_wrap((cast(long)(7))));
+        z8_optional_int_assign!"+"(v_result, v_result, z8_optional_wrap((cast(long)(7))));
         return z8_optional_wrap((z8_optional_int_binary!"*"(v_result, z8_optional_wrap((cast(long)(3)))) + (cast(long)(1))));
     }
 }

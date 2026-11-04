@@ -419,16 +419,20 @@ private string emitSimple(Statement s) {
     if (s.target.kind == ExprKind.index && isMap(s.target.inferredType))
         return "z8_invoke!\"z8_add\"(" ~ emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
     auto name = emitExpr(s.target);
+    // The original BL backend evaluates a compound target again to read its
+    // old value before evaluating the right operand. Indexed assignment is a
+    // z8-d extension: the original Java backend cannot compile that form.
+    auto oldValue = s.target.kind == ExprKind.index ? "" : name ~ ", ";
     if (isMap(s.type) && s.assignmentOperator == "+=")
-        return "z8_map_add_assign(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
+        return "z8_map_add_assign(" ~ name ~ ", " ~ oldValue ~ emitExpr(s.expression) ~ ")";
     if (isArray(s.type) && s.assignmentOperator == "+=")
-        return "z8_array_add_assign(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
+        return "z8_array_add_assign(" ~ name ~ ", " ~ oldValue ~ emitExpr(s.expression) ~ ")";
     if (s.type == ValueType.intType && s.assignmentOperator != "=")
-        return "z8_optional_int_assign!\"" ~ s.assignmentOperator[0 .. $-1] ~ "\"(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
+        return "z8_optional_int_assign!\"" ~ s.assignmentOperator[0 .. $-1] ~ "\"(" ~ name ~ ", " ~ oldValue ~ emitExpr(s.expression) ~ ")";
     if (s.type == ValueType.decimalType && s.assignmentOperator != "=")
-        return "z8_optional_decimal_assign!\"" ~ s.assignmentOperator[0 .. $-1] ~ "\"(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
+        return "z8_optional_decimal_assign!\"" ~ s.assignmentOperator[0 .. $-1] ~ "\"(" ~ name ~ ", " ~ oldValue ~ emitExpr(s.expression) ~ ")";
     if (s.type == ValueType.stringType && s.assignmentOperator == "+=")
-        return "z8_string_add_assign(" ~ name ~ ", " ~ emitExpr(s.expression) ~ ")";
+        return "z8_string_add_assign(" ~ name ~ ", " ~ oldValue ~ emitExpr(s.expression) ~ ")";
     return name ~ " " ~ s.assignmentOperator ~ " " ~ emitExpr(s.expression);
 }
 private string defaultValue(ValueType type, Program objectClass = null, bool hasContainer = false) {
