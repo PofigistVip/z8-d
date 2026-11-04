@@ -1,0 +1,8 @@
+public class UnaryComplement {
+    public string operator ~ () { return "complement"; }
+    public static int run() {
+        UnaryComplement value = new UnaryComplement;
+        if (~value != "complement") return 1;
+        return 169;
+    }
+}

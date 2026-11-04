@@ -1103,6 +1103,13 @@ class Checker {
                 return ValueType.boolType;
             case ExprKind.unary:
                 auto operand = typeOf(e.left);
+                if (operand == ValueType.selfType && ["!", "~", "-"].canFind(e.token.text)) {
+                    auto method = lookupMethod(e.left.objectClass, "operator" ~ e.token.text);
+                    if (method is null) fail("undefined unary operator", e.token);
+                    auto selected = selectOverload(method, e);
+                    e.userUnaryOperator = true;
+                    return checkCall(selected, selected.owner, e);
+                }
                 if (operand == ValueType.optionalInt && ["+", "-", "~"].canFind(e.token.text)) {
                     e.optionalIntUnary = true;
                     return ValueType.intType;

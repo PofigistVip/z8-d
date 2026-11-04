@@ -40,6 +40,7 @@ class Expression {
     ValueType convertToBinary;
     ValueType castType;
     string emittedOperator;
+    bool userUnaryOperator;
     string builtinCall;
     string emittedOverride;
     Program objectClass;
@@ -82,6 +83,7 @@ class Method {
     Program returnObjectClass;
     Program owner;
     bool isVirtual, overrides;
+    string operatorSymbol;
 }
 class Field { ValueType type; Token name; Expression initializer; bool isPublic, isProtected, isStatic, isAuto, isRecord, declaredFinal; string objectName; Program objectClass; Program owner; }
 struct Import { string name; Token token; }

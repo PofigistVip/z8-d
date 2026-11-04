@@ -1,0 +1,9 @@
+public class UnaryChild extends UnaryBase {
+    public int operator - () { return 20; }
+    public static int run() {
+        UnaryChild child = new UnaryChild;
+        UnaryBase parent = child;
+        if (-child != 20 || -parent != 20) return 1;
+        return 171;
+    }
+}

@@ -9,6 +9,13 @@ import std.regex : matchAll, regex;
 import z8.compiler_model;
 import z8.d_writer : formatDSource;
 
+private string operatorDName(string symbol) {
+    return symbol == "!" ? "z8op_not" : symbol == "~" ? "z8op_complement" : "z8op_negate";
+}
+private string methodDName(Method method) {
+    return method.operatorSymbol.length ? operatorDName(method.operatorSymbol) : "m_" ~ method.name.text;
+}
+
 private string dType(ValueType type, Program objectClass = null) {
     if (isMap(type)) {
         auto key = mapKeyType(type), value = mapValueType(type);
@@ -341,6 +348,7 @@ private string emitExprRaw(Expression e) {
             if (e.primaryInstanceOf) return "z8_primary_is!(" ~ dType(e.castType) ~ ")(" ~ emitExpr(e.left) ~ ")";
             return "(cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ") !is null)";
         case ExprKind.unary:
+            if (e.userUnaryOperator) return emitReceiver(e.left) ~ "." ~ operatorDName(e.token.text) ~ "()";
             if (e.optionalDecimalUnary) return "(" ~ e.token.text ~ "z8_optional_require(" ~ emitExpr(e.left) ~ "))";
             if (e.optionalBoolUnary) return "(!z8_optional_require(" ~ emitExpr(e.left) ~ "))";
             if (e.optionalIntUnary) return "z8_optional_int_unary!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ")";
@@ -592,7 +600,7 @@ package string emitPrograms(Program[] programs) {
                 bool firstName = true;
                 foreach (earlier; program.methods) { if (earlier is m) break; if (earlier.name.text == m.name.text) firstName = false; }
                 if (firstName && hasInheritedName)
-                    result ~= "alias m_" ~ m.name.text ~ " = " ~ program.baseClass.emittedName ~ ".m_" ~ m.name.text ~ ";\n";
+                    result ~= "alias " ~ methodDName(m) ~ " = " ~ program.baseClass.emittedName ~ "." ~ methodDName(m) ~ ";\n";
             }
             string[] params;
             foreach (p; m.parameters) params ~= dStorageType(p.type, p.objectClass) ~ " v_" ~ p.name.text;
@@ -604,11 +612,11 @@ package string emitPrograms(Program[] programs) {
                     nativeParams ~= dType(p.type, p.objectClass) ~ " v_" ~ p.name.text;
                     nativeArgs ~= (p.type == ValueType.intType || p.type == ValueType.boolType || p.type == ValueType.decimalType) ? "z8_optional_wrap(v_" ~ p.name.text ~ ")" : "v_" ~ p.name.text;
                 }
-                result ~= (m.isStatic ? "static " : "final ") ~ dStorageType(m.returnType, m.returnObjectClass) ~ " m_" ~ m.name.text ~ "(" ~ nativeParams.join(", ") ~ ") { " ~
-                    (m.returnType == ValueType.voidType ? "" : "return ") ~ "m_" ~ m.name.text ~ "(" ~ nativeArgs.join(", ") ~ "); }\n";
+                result ~= (m.isStatic ? "static " : "final ") ~ dStorageType(m.returnType, m.returnObjectClass) ~ " " ~ methodDName(m) ~ "(" ~ nativeParams.join(", ") ~ ") { " ~
+                    (m.returnType == ValueType.voidType ? "" : "return ") ~ methodDName(m) ~ "(" ~ nativeArgs.join(", ") ~ "); }\n";
             }
             auto modifiers = m.isStatic ? "static " : m.overrides ? "override " : m.isVirtual ? "" : "final ";
-            result ~= modifiers ~ dStorageType(m.returnType, m.returnObjectClass) ~ " m_" ~ m.name.text ~ "(" ~ params.join(", ") ~ ")\n" ~ emitStatement(m.body);
+            result ~= modifiers ~ dStorageType(m.returnType, m.returnObjectClass) ~ " " ~ methodDName(m) ~ "(" ~ params.join(", ") ~ ")\n" ~ emitStatement(m.body);
         }
         result ~= "}\n";
     }

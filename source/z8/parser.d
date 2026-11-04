@@ -183,8 +183,16 @@ class Parser {
             }
             if (accept("records")) { parseRecords(result); continue; }
             auto declaredFinal = accept("final");
-            auto declaredType = parseType(); auto declaredObjectName = parsedObjectName; auto name = identifier();
+            auto declaredType = parseType(); auto declaredObjectName = parsedObjectName;
+            Token name; string operatorSymbol;
+            if (current.text == "operator") {
+                name = take();
+                if (!["!", "~", "-"].canFind(current.text)) error("only unary !, ~ and - operators are supported");
+                operatorSymbol = take().text;
+                name.text = "operator" ~ operatorSymbol;
+            } else name = identifier();
             if (current.text != "(") {
+                if (operatorSymbol.length) error("operator requires parameters");
                 if (isVirtual || declaredType == ValueType.voidType) error("this field type or modifier is not supported");
                 if (isStatic && (declaredType == ValueType.selfArray || declaredType == ValueType.exceptionType || isMap(declaredType)))
                     error("static object fields are not supported");
@@ -197,13 +205,15 @@ class Parser {
             auto method = new Method;
             if (isVirtual && isStatic) error("a static method cannot be virtual");
             method.isPublic = isPublic; method.isProtected = isProtected; method.isStatic = isStatic; method.isVirtual = isVirtual; method.owner = result;
-            method.returnType = declaredType; method.returnObjectName = declaredObjectName; method.name = name; expect("(");
+            method.returnType = declaredType; method.returnObjectName = declaredObjectName; method.name = name; method.operatorSymbol = operatorSymbol; expect("(");
             if (current.text != ")") {
                 do {
                     Parameter p; p.declaredFinal = accept("final"); p.type = parseType(); p.objectName = parsedObjectName; p.name = identifier(); method.parameters ~= p;
                 } while (accept(","));
             }
             expect(")");
+            if (method.operatorSymbol.length && (method.parameters.length || method.isStatic))
+                error("only instance unary operators without parameters are supported");
             if (method.name.text == "constructor") {
                 if (method.isStatic || method.returnType != ValueType.voidType || method.parameters.length)
                     throw new CompileException("constructor must be an instance void method without parameters", method.name.position);

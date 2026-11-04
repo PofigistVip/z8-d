@@ -1,0 +1,13 @@
+public class UnaryOperators {
+    int count;
+    public bool operator ! () { count += 1; return true; }
+    public int operator - () { count += 100; return 42; }
+    public static int run() {
+        UnaryOperators value = new UnaryOperators;
+        if (!value != true) return 1;
+        if (-value != 42 || value.count != 101) return 3;
+        UnaryOperators missing = null;
+        try { bool ignored = !missing; return 4; } catch (exception expected) {}
+        return 167;
+    }
+}

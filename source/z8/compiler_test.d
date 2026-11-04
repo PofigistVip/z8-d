@@ -11,6 +11,10 @@ private void rejects(string source) {
 }
 
 unittest {
+    compile(q{class A { bool operator !() { return true; } static bool f() { A a; return !a; } }});
+    rejects(q{class A { static bool operator !() { return true; } }});
+    rejects(q{class A { bool operator !(int x) { return true; } }});
+    rejects(q{class A { static bool f() { A a; return !a; } }});
     compile(q{class A { static int f() {
         int[int] values = {(1, 2), (3, 4)};
         int missing = values.get(0);
