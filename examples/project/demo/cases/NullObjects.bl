@@ -1,0 +1,58 @@
+import demo.Counter;
+
+public class NullObjects {
+    private static int effects;
+    private static int effect() { effects += 1; return 1; }
+    public static Counter empty() { return null; }
+    public static bool absent(Counter item) { return item == null; }
+    public static int run() {
+        Counter item = null;
+        if (!(null == null)) return 13;
+        if (item != null || null != item || !absent(null)) return 1;
+        Counter[] values = null;
+        if (values != null) return 2;
+        Counter[] entries = {null};
+        if (entries[0] != null) return 17;
+        string[string] map = null;
+        if (map != null) return 3;
+        if (empty() != null) return 4;
+        item = true ? new Counter : null;
+        if (item == null || item.value != 3) return 5;
+        try {
+            item = null;
+            item.add(effect());
+            return 6;
+        } catch (exception expected) {
+            if (effects != 0) return 9;
+            try {
+                values.size();
+                return 7;
+            } catch (exception expectedArray) {
+                try {
+                    map.containsKey("a");
+                    return 8;
+                } catch (exception expectedMap) {
+                    int[] missing = null;
+                    int[] present;
+                    try {
+                        present.addAll(missing);
+                        return 10;
+                    } catch (exception expectedArgument) {
+                        try {
+                            missing.add(effect());
+                            return 11;
+                        } catch (exception expectedReceiver) {
+                            if (effects != 1) return 12;
+                            try {
+                                int ignored = missing[effect()];
+                                return 14;
+                            } catch (exception expectedIndex) {
+                                return effects == 2 ? 107 : 15;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

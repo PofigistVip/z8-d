@@ -110,6 +110,10 @@ unittest {
     rejects("class A { static int f() { return f(1); } }");
     rejects("class A { int x; static int f() { return x; } }");
     rejects("class A { static A x; }");
+    rejects("class A { A value = null; }");
+    rejects("class A { static int f() { int value = null; return value; } }");
+    rejects("class A { static bool f() { return 1 == null; } }");
+    rejects("class A { static bool f() { int[] x = null; return x < null; } }");
     rejects("class A { static A[] x; }");
     rejects("class A { static string[string] x; }");
     rejects("class A { static void f() { int[string] x; } }");

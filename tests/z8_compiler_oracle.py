@@ -84,6 +84,7 @@ with tempfile.TemporaryDirectory() as temporary:
         System.out.println("RESULT:" + demo.cases.InheritedOverloads.z8_run().get());
         System.out.println("RESULT:" + demo.cases.StringMap.z8_run().get());
         System.out.println("RESULT:" + demo.cases.ObjectCasts.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.NullObjects.z8_run().get());
     }
 }''', encoding="utf-8")
         logging_cache = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "commons-logging" / "commons-logging"
@@ -144,6 +145,7 @@ void main() {
     writeln(Z8p_64656D6F2E63617365732E496E686572697465644F7665726C6F616473.m_run());
     writeln(Z8p_64656D6F2E63617365732E537472696E674D6170.m_run());
     writeln(Z8p_64656D6F2E63617365732E4F626A6563744361737473.m_run());
+    writeln(Z8p_64656D6F2E63617365732E4E756C6C4F626A65637473.m_run());
 }
 ''', encoding="utf-8")
         d_binary = temp / ("compare.exe" if os.name == "nt" else "compare")

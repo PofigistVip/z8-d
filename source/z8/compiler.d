@@ -17,8 +17,8 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, decimalArray, boolArray, stringArray, selfArray, stringMap }
-enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, unary, binary, conditional }
+enum ValueType { voidType, intType, decimalType, boolType, stringType, exceptionType, selfType, intArray, decimalArray, boolArray, stringArray, selfArray, stringMap, nullType }
+enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, nullLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, unary, binary, conditional }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
                 whileStmt, doWhileStmt, forStmt, forEachStmt, breakStmt, continueStmt, throwStmt, tryStmt }
 
@@ -85,6 +85,7 @@ private bool isArray(ValueType type) {
     return [ValueType.intArray, ValueType.decimalArray, ValueType.boolArray, ValueType.stringArray, ValueType.selfArray].canFind(type);
 }
 private bool hasObjectClass(ValueType type) { return type == ValueType.selfType || type == ValueType.selfArray; }
+private bool isNullableReference(ValueType type) { return type == ValueType.selfType || type == ValueType.stringMap || isArray(type); }
 // Until Java's legacy Double.toString conversion is fully reproduced, reject
 // literal values for which a shorter D rendering may differ from the Java backend.
 private bool safeDecimalLiteral(string text) {
@@ -383,6 +384,7 @@ class Parser {
         if (accept("(")) { auto result = expression(); expect(")"); return result; }
         if (accept("this")) return new Expression(ExprKind.selfRef, t);
         if (accept("super")) return new Expression(ExprKind.superRef, t);
+        if (accept("null")) return new Expression(ExprKind.nullLiteral, t);
         if (accept("new")) return new Expression(ExprKind.newSelf, identifier());
         if (t.kind == TokenKind.integerLiteral) { take(); return new Expression(ExprKind.integer, t); }
         if (t.kind == TokenKind.decimalLiteral) { take(); return new Expression(ExprKind.decimalLiteral, t); }
@@ -418,7 +420,7 @@ class Checker {
     private void fail(string message, Token t) { throw new CompileException(message, t.position); }
     private static bool isConstantInitializer(Expression expression) {
         switch (expression.kind) {
-            case ExprKind.integer: case ExprKind.decimalLiteral: case ExprKind.boolean: case ExprKind.stringLiteral: return true;
+            case ExprKind.integer: case ExprKind.decimalLiteral: case ExprKind.boolean: case ExprKind.stringLiteral: case ExprKind.nullLiteral: return true;
             case ExprKind.arrayLiteral:
                 foreach (item; expression.arguments) if (!isConstantInitializer(item)) return false;
                 return true;
@@ -467,6 +469,9 @@ class Checker {
     private bool matches(Expression e, ValueType expected, Program expectedClass = null) {
         if (e.kind == ExprKind.arrayLiteral && expected == ValueType.selfArray) e.objectClass = expectedClass;
         auto actual = typeOf(e, expected);
+        if (actual == ValueType.nullType && isNullableReference(expected)) {
+            e.inferredType = expected; e.objectClass = expectedClass; return true;
+        }
         if (actual == ValueType.intType && expected == ValueType.decimalType) { e.promoteToDecimal = true; return true; }
         if (expected == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual)) {
             e.convertToString = actual; return true;
@@ -516,7 +521,9 @@ class Checker {
             int weight; bool applicable = true;
             foreach (i, p; candidate.parameters) {
                 auto actual = actualTypes[i];
-                if (actual == p.type) {
+                if (actual == ValueType.nullType && isNullableReference(p.type)) {
+                    // Null is equally applicable to each supported reference type.
+                } else if (actual == p.type) {
                     if (actual == ValueType.selfType && !isAssignable(e.arguments[i].objectClass, resolveClass(candidate.owner, p.objectName, p.name))) applicable = false;
                     if (actual == ValueType.selfArray && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                 } else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
@@ -606,6 +613,8 @@ class Checker {
             if (hasObjectClass(field.type)) field.objectClass = resolveClass(program, field.objectName, field.name);
         foreach (field; program.fields) {
             staticContext = field.isStatic;
+            if (field.type == ValueType.selfType && field.initializer !is null && field.initializer.kind == ExprKind.nullLiteral)
+                fail("null object field initializer is not supported", field.name);
             if (field.isStatic && field.initializer !is null && !isConstantInitializer(field.initializer))
                 fail("static field initializer must be a constant expression", field.name);
             if (field.initializer !is null && !matches(field.initializer, field.type, field.objectClass))
@@ -636,6 +645,7 @@ class Checker {
                 return ValueType.decimalType;
             case ExprKind.boolean: return ValueType.boolType;
             case ExprKind.stringLiteral: return ValueType.stringType;
+            case ExprKind.nullLiteral: return ValueType.nullType;
             case ExprKind.arrayLiteral:
                 if (!isArray(expected)) fail("array initializer requires an array type", e.token);
                 foreach (element; e.arguments)
@@ -873,6 +883,12 @@ class Checker {
                 fail("invalid unary operand", e.token); assert(0);
             case ExprKind.binary:
                 auto left = typeOf(e.left), right = typeOf(e.right), op = e.token.text;
+                if ((left == ValueType.nullType && (isNullableReference(right) || right == ValueType.nullType)) ||
+                    (right == ValueType.nullType && isNullableReference(left))) {
+                    if (!["==", "!="].canFind(op)) fail("null supports only equality comparisons", e.token);
+                    e.inferredType = ValueType.nullType;
+                    return ValueType.boolType;
+                }
                 if (op == "+" && left == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(right)) {
                     e.right.convertToString = right; right = ValueType.stringType;
                 }
@@ -899,6 +915,12 @@ class Checker {
             case ExprKind.conditional:
                 if (typeOf(e.left) != ValueType.boolType) fail("conditional expression requires a bool condition", e.token);
                 auto left = typeOf(e.right), right = typeOf(e.third);
+                if (left == ValueType.nullType && isNullableReference(right)) {
+                    matches(e.right, right, e.third.objectClass); left = right;
+                }
+                if (right == ValueType.nullType && isNullableReference(left)) {
+                    matches(e.third, left, e.right.objectClass); right = left;
+                }
                 if (left == ValueType.decimalType && right == ValueType.intType) { e.third.promoteToDecimal = true; right = ValueType.decimalType; }
                 if (left == ValueType.intType && right == ValueType.decimalType) { e.right.promoteToDecimal = true; left = ValueType.decimalType; }
                 if (left == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(right)) {
@@ -1017,6 +1039,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.decimalArray: return "Z8Array!Z8Decimal";
         case ValueType.boolArray: return "Z8Array!bool";
         case ValueType.stringArray: return "Z8Array!wstring";
+        case ValueType.nullType: assert(0, "null has no concrete D type");
     }
 }
 /// The Java runtime stores strings as UTF-16; preserve its code-unit ordering.
@@ -1042,11 +1065,17 @@ private string emitStringLiteral(string text) {
 }
 private string emitExpr(Expression e) {
     auto value = emitExprRaw(e);
+    if (e.kind == ExprKind.conditional && isNullableReference(e.inferredType))
+        value = "cast(" ~ dType(e.inferredType, e.objectClass) ~ ")(" ~ value ~ ")";
     if (e.promoteToDecimal) value = "z8_decimal_from_int(" ~ value ~ ")";
     if (e.convertToString == ValueType.intType) return "(" ~ value ~ ").to!string.to!wstring";
     if (e.convertToString == ValueType.boolType) return "(" ~ value ~ " ? \"true\"w : \"false\"w)";
     if (e.convertToString == ValueType.decimalType) return "(" ~ value ~ ").z8_string()";
     return value;
+}
+private string emitReceiver(Expression e) {
+    if (e.kind == ExprKind.selfRef || e.kind == ExprKind.superRef) return "(" ~ emitExpr(e) ~ ")";
+    return "z8_nonnull(" ~ emitExpr(e) ~ ")";
 }
 private string emitExprRaw(Expression e) {
     final switch (e.kind) {
@@ -1056,6 +1085,7 @@ private string emitExprRaw(Expression e) {
             return "z8_decimal_literal(\"" ~ e.token.text.replace(" ", "").replace("\t", "") ~ "\")";
         case ExprKind.boolean: return e.token.text;
         case ExprKind.stringLiteral: return emitStringLiteral(e.token.text);
+        case ExprKind.nullLiteral: return e.inferredType == ValueType.voidType ? "null" : "cast(" ~ dType(e.inferredType, e.objectClass) ~ ")null";
         case ExprKind.arrayLiteral:
             string[] elements; foreach (element; e.arguments)
                 elements ~= e.inferredType == ValueType.selfArray ? "cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(element) ~ ")" : emitExpr(element);
@@ -1064,7 +1094,7 @@ private string emitExprRaw(Expression e) {
         case ExprKind.selfRef: return "this";
         case ExprKind.superRef: return "super";
         case ExprKind.newSelf: return "z8_new!(" ~ e.objectClass.emittedName ~ ")()";
-        case ExprKind.field: return (e.targetClass.length ? e.targetClass : "(" ~ emitExpr(e.left) ~ ")") ~ ".f_" ~ e.token.text;
+        case ExprKind.field: return (e.targetClass.length ? e.targetClass : emitReceiver(e.left)) ~ ".f_" ~ e.token.text;
         case ExprKind.call:
             string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
             return "m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
@@ -1075,7 +1105,7 @@ private string emitExprRaw(Expression e) {
             }
             if (e.instanceCall) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
-                return "(" ~ emitExpr(e.left) ~ ").m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
+                return emitReceiver(e.left) ~ ".m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
             }
             if (e.targetClass.length) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
@@ -1083,11 +1113,11 @@ private string emitExprRaw(Expression e) {
             }
             if (isArray(e.inferredType)) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
-                return "(" ~ emitExpr(e.left) ~ ").z8_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
+                return "z8_invoke!\"z8_" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
             }
             if (e.inferredType == ValueType.stringMap) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
-                return "(" ~ emitExpr(e.left) ~ ").z8_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
+                return "z8_invoke!\"z8_" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
             }
             if (e.inferredType == ValueType.exceptionType) return "z8_message(" ~ emitExpr(e.left) ~ ")";
             if (e.inferredType == ValueType.decimalType) {
@@ -1111,12 +1141,14 @@ private string emitExprRaw(Expression e) {
             auto value = "(" ~ emitExpr(e.left) ~ ").length";
             return e.token.text == "length" ? "cast(long)(" ~ value ~ ")" : "(" ~ value ~ " == 0)";
         case ExprKind.index:
-            if (e.inferredType == ValueType.stringMap) return "(" ~ emitExpr(e.left) ~ ").z8_get(" ~ emitExpr(e.right) ~ ")";
-            return "(" ~ emitExpr(e.left) ~ ").z8_at(" ~ emitExpr(e.right) ~ ")";
+            if (e.inferredType == ValueType.stringMap) return "z8_invoke!\"z8_get\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            return "z8_array_at(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
         case ExprKind.castExpr:
             return e.castType == ValueType.selfType ? "z8_cast!(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")" : emitExpr(e.left);
         case ExprKind.unary: return "(" ~ e.token.text ~ emitExpr(e.left) ~ ")";
         case ExprKind.binary:
+            if (e.inferredType == ValueType.nullType)
+                return "(" ~ emitExpr(e.left) ~ (e.token.text == "==" ? " is " : " !is ") ~ emitExpr(e.right) ~ ")";
             if ((e.token.text == "/" || e.token.text == "%") && e.inferredType != ValueType.decimalType)
                 return (e.token.text == "/" ? "z8_div(" : "z8_mod(") ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             auto op = e.emittedOperator.length ? e.emittedOperator : e.token.text == "+" && e.inferredType == ValueType.stringType ? "~" : e.token.text;
@@ -1146,7 +1178,7 @@ private string emitStatement(Statement s) {
         case StmtKind.forEachStmt:
             auto suffix = s.token.position.offset.to!string;
             auto iter = "z8_iter_" ~ suffix, versionName = "z8_version_" ~ suffix, indexName = "z8_index_" ~ suffix;
-            return "{\nauto " ~ iter ~ " = " ~ emitExpr(s.expression) ~ ";\nauto " ~ versionName ~ " = " ~ iter ~ ".z8_version;\n" ~
+            return "{\nauto " ~ iter ~ " = " ~ emitReceiver(s.expression) ~ ";\nauto " ~ versionName ~ " = " ~ iter ~ ".z8_version;\n" ~
                 "for (long " ~ indexName ~ " = 0; " ~ indexName ~ " != " ~ iter ~ ".z8_size(); ++" ~ indexName ~ ") {\n" ~
                 "if (" ~ versionName ~ " != " ~ iter ~ ".z8_version) throw new Exception(\"array modified during iteration\");\n" ~
                 dType(s.initial.type, s.initial.objectClass) ~ " v_" ~ s.initial.token.text ~ " = " ~ iter ~ ".z8_get(" ~ indexName ~ ");\n" ~
@@ -1169,7 +1201,7 @@ private string emitSimple(Statement s) {
     if (s.kind == StmtKind.expressionStmt) return emitExpr(s.expression);
     assert(s.kind == StmtKind.assignment);
     if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.stringMap)
-        return "(" ~ emitExpr(s.target.left) ~ ").z8_add(" ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
+        return "z8_invoke!\"z8_add\"(" ~ emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
     auto name = emitExpr(s.target);
     if (s.type == ValueType.decimalType && s.assignmentOperator != "=") {
         auto op = s.assignmentOperator == "+=" ? "add" : s.assignmentOperator == "-=" ? "sub" : s.assignmentOperator == "*=" ? "mul" : s.assignmentOperator == "/=" ? "div" : "mod";
@@ -1335,6 +1367,17 @@ private T z8_new(T)() {
     static if (__traits(hasMember, T, "m_constructor")) value.m_constructor();
     return value;
 }
+private T z8_nonnull(T)(T value) {
+    if (value is null) throw new Exception("null reference");
+    return value;
+}
+private auto z8_invoke(string name, T, Args...)(T value, Args args) {
+    if (value is null) throw new Exception("null reference");
+    return __traits(getMember, value, name)(args);
+}
+private ref T z8_array_at(T)(Z8Array!T value, long index) {
+    return z8_nonnull(value).z8_at(index);
+}
 private T z8_cast(T, U)(U value) {
     auto result = cast(T)value;
     if (value !is null && result is null) throw new Exception("invalid object cast");
@@ -1388,6 +1431,7 @@ class Z8Array(T) {
         z8_addAll(cast(long)items.length, other);
     }
     void z8_addAll(long index, Z8Array!T other) {
+        z8_nonnull(other);
         auto i = cast(int)index;
         auto expectedVersion = other.z8_version;
         for (long j = 0; j != other.z8_size(); ++j) {
@@ -1401,6 +1445,7 @@ class Z8Array(T) {
     }
     bool z8_contains(T value) { return z8_indexOf(value) >= 0; }
     bool z8_isSubsetOf(Z8Array!T other) {
+        z8_nonnull(other);
         foreach (item; items) if (!other.z8_contains(item)) return false;
         return true;
     }
@@ -1418,6 +1463,7 @@ class Z8Array(T) {
     }
     Z8Array!T z8_removeAll(T value) { z8_remove(value); return this; }
     Z8Array!T z8_removeAll(Z8Array!T values) {
+        z8_nonnull(values);
         size_t i;
         while (i < items.length) {
             if (values.z8_contains(items[i])) z8_removeAt(cast(long)i);
