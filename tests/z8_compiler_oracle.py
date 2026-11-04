@@ -150,6 +150,22 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     if record_result.returncode == 0 or "id conflicts" not in record_result.stdout:
         raise SystemExit("Original Z8 did not reject a duplicate inherited record GUID:\n" + record_result.stdout)
     print("Original Z8 verified GUID records, visibility, and inherited duplicate checks")
+    # Binary operators on reference types pass BL but the Java backend emits
+    # calls on CLASS wrappers rather than their objects, which javac rejects.
+    operator_project = temp / "binary-operator-project"
+    operator_source = operator_project / "src" / "bl"
+    operator_source.mkdir(parents=True)
+    shutil.copy2(root / "examples" / "operators" / "BinaryOperators.bl", operator_source)
+    operator_command = ["java", "-cp", str(classes) + os.pathsep + classpath,
+                        "org.zenframework.z8.compiler.cmd.Main", str(operator_project),
+                        "-sources:src/bl", "-requires:" + str(lang), "-output:out"]
+    operator_result = subprocess.run(operator_command, cwd=temp, capture_output=True, text=True, encoding="utf-8")
+    if operator_result.returncode:
+        raise SystemExit("Original Z8 rejected binary operator fixture:\n" + operator_result.stdout + operator_result.stderr)
+    operator_java = (operator_project / "out" / "BinaryOperators.java").read_text(encoding="utf-8")
+    if "value.operatorAdd(" not in operator_java:
+        raise SystemExit("Original Java backend no longer exhibits the expected reference operator call")
+    print("Original Z8 accepted the binary operator fixture; execution is checked in D")
     if os.environ.get("Z8_ORACLE_INSPECT"):
         for file in generated:
             if file.name in ("Main.java", "Arithmetic.java", "EnumCases.java", "Flavor.java", "NullableObjectField.java", "LifecycleBase.java", "LifecycleChild.java", "LifecycleCases.java", "LifecycleOwner.java", "LifecycleReentrant.java", "LifecycleTrigger.java", "FileValues.java"):

@@ -1,0 +1,27 @@
+public class BinaryOperators {
+    static int effects;
+    public int operator + (int value) { return value + 10; }
+    public int operator + (string value) { return value.length() + 20; }
+    public int operator + (decimal value) { return 30; }
+    public int operator - () { return 70; }
+    public int operator - (int value) { return value + 80; }
+    public bool operator == (BinaryOperators other) { return true; }
+    public bool operator && (BinaryOperators other) { return false; }
+    public BinaryOperators operator * (int ignored) { return this; }
+    public static BinaryOperators right() { effects += 1; return new BinaryOperators; }
+    public static int run() {
+        BinaryOperators value = new BinaryOperators;
+        int number = 2;
+        if (value + number != 12 || value + "abc" != 23 || value + 1.5 != 30) return 1;
+        if (-value != 70 || value - 3 != 83) return 7;
+        if (!(value == value) || value == null || null != null) return 2;
+        BinaryOperators product = value * 2;
+        if (product == null) return 3;
+        effects = 0;
+        if (value && right()) return 4;
+        if (effects != 1) return 5;
+        BinaryOperators missing = null;
+        try { int ignored = missing + 1; return 6; } catch (exception expected) {}
+        return 175;
+    }
+}

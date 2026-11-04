@@ -1122,6 +1122,14 @@ class Checker {
                 fail("invalid unary operand", e.token); assert(0);
             case ExprKind.binary:
                 auto left = typeOf(e.left), right = typeOf(e.right), op = e.token.text;
+                if (left == ValueType.selfType && right != ValueType.nullType) {
+                    auto method = lookupMethod(e.left.objectClass, "operator" ~ op);
+                    if (method is null) fail("undefined binary operator", e.token);
+                    e.arguments = [e.right];
+                    auto selected = selectOverload(method, e);
+                    e.userBinaryOperator = true;
+                    return checkCall(selected, selected.owner, e);
+                }
                 if (((left == ValueType.intType || left == ValueType.boolType || left == ValueType.decimalType) && right == ValueType.nullType) ||
                     ((right == ValueType.intType || right == ValueType.boolType || right == ValueType.decimalType) && left == ValueType.nullType)) {
                     if (right == ValueType.nullType) { e.left.optionalWrap = true; left = storedValueType(left); }

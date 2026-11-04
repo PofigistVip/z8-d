@@ -40,7 +40,7 @@ class Expression {
     ValueType convertToBinary;
     ValueType castType;
     string emittedOperator;
-    bool userUnaryOperator;
+    bool userUnaryOperator, userBinaryOperator;
     string builtinCall;
     string emittedOverride;
     Program objectClass;

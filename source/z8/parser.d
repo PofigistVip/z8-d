@@ -187,7 +187,7 @@ class Parser {
             Token name; string operatorSymbol;
             if (current.text == "operator") {
                 name = take();
-                if (!["!", "~", "-"].canFind(current.text)) error("only unary !, ~ and - operators are supported");
+                if (!["!", "~", "+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">=", "&", "|", "^", "&&", "||"].canFind(current.text)) error("unsupported operator declaration");
                 operatorSymbol = take().text;
                 name.text = "operator" ~ operatorSymbol;
             } else name = identifier();
@@ -212,8 +212,8 @@ class Parser {
                 } while (accept(","));
             }
             expect(")");
-            if (method.operatorSymbol.length && (method.parameters.length || method.isStatic))
-                error("only instance unary operators without parameters are supported");
+            if (method.operatorSymbol.length && (method.parameters.length > 1 || method.isStatic))
+                error("only instance operators with at most one parameter are supported");
             if (method.name.text == "constructor") {
                 if (method.isStatic || method.returnType != ValueType.voidType || method.parameters.length)
                     throw new CompileException("constructor must be an instance void method without parameters", method.name.position);

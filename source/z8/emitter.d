@@ -10,7 +10,17 @@ import z8.compiler_model;
 import z8.d_writer : formatDSource;
 
 private string operatorDName(string symbol) {
-    return symbol == "!" ? "z8op_not" : symbol == "~" ? "z8op_complement" : "z8op_negate";
+    switch (symbol) {
+        case "!": return "z8op_not"; case "~": return "z8op_complement";
+        case "+": return "z8op_add"; case "-": return "z8op_negate";
+        case "*": return "z8op_multiply"; case "/": return "z8op_divide"; case "%": return "z8op_modulo";
+        case "==": return "z8op_equal"; case "!=": return "z8op_not_equal";
+        case "<": return "z8op_less"; case ">": return "z8op_greater";
+        case "<=": return "z8op_less_equal"; case ">=": return "z8op_greater_equal";
+        case "&": return "z8op_bit_and"; case "|": return "z8op_bit_or"; case "^": return "z8op_bit_xor";
+        case "&&": return "z8op_and"; case "||": return "z8op_or";
+        default: assert(0, "unsupported operator");
+    }
 }
 private string methodDName(Method method) {
     return method.operatorSymbol.length ? operatorDName(method.operatorSymbol) : "m_" ~ method.name.text;
@@ -354,6 +364,7 @@ private string emitExprRaw(Expression e) {
             if (e.optionalIntUnary) return "z8_optional_int_unary!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ")";
             return "(" ~ e.token.text ~ emitExpr(e.left) ~ ")";
         case ExprKind.binary:
+            if (e.userBinaryOperator) return emitReceiver(e.left) ~ "." ~ operatorDName(e.token.text) ~ "(" ~ emitExpr(e.right) ~ ")";
             if (e.dateBinary) return "z8_date_binary!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.fileBinary) return "z8_file_compare!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.optionalNullComparison) {
