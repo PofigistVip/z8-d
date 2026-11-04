@@ -1132,15 +1132,20 @@ class Checker {
                 if (operand == ValueType.selfType && ["!", "~", "-"].canFind(e.token.text)) {
                     auto method = lookupUnaryOperator(e.left.objectClass, "operator" ~ e.token.text);
                     if (method is null) {
-                        if (e.token.text == "!") {
-                            auto conversion = findConversion(e.left.objectClass, ValueType.boolType);
-                            if (conversion !is null) {
-                                e.left.userConversion = conversion;
-                                e.left.optionalRequired = true;
-                                return ValueType.boolType;
-                            }
+                        ValueType[] targets = e.token.text == "!" ? [ValueType.boolType] :
+                            e.token.text == "~" ? [ValueType.intType] : [ValueType.intType, ValueType.decimalType];
+                        Method conversion;
+                        ValueType convertedType;
+                        foreach (target; targets) {
+                            auto candidate = findConversion(e.left.objectClass, target);
+                            if (candidate is null) continue;
+                            if (conversion !is null) fail("ambiguous unary operator", e.token);
+                            conversion = candidate; convertedType = target;
                         }
-                        fail("undefined unary operator", e.token);
+                        if (conversion is null) fail("undefined unary operator", e.token);
+                        e.left.userConversion = conversion;
+                        e.left.optionalRequired = true;
+                        return convertedType;
                     }
                     auto selected = selectOverload(method, e);
                     e.userUnaryOperator = true;

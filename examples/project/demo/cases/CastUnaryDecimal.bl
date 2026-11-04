@@ -1,0 +1,8 @@
+public class CastUnaryDecimal {
+    public operator decimal() { return 1.5; }
+    public static int run() {
+        CastUnaryDecimal value = new CastUnaryDecimal;
+        if (-value != -1.5) return 1;
+        return 183;
+    }
+}

@@ -1,0 +1,10 @@
+public class CastUnaryInt {
+    static int effects;
+    public operator int() { effects += 1; return 7; }
+    public static int run() {
+        effects = 0;
+        CastUnaryInt value = new CastUnaryInt;
+        if (-value != -7 || ~value != -8 || effects != 2) return 1;
+        return 181;
+    }
+}

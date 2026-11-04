@@ -9,6 +9,8 @@ root = Path(__file__).resolve().parents[1]
 compiler = root / ("z8d.exe" if os.name == "nt" else "z8d")
 fixtures = [
     (root / "examples" / "project" / "demo" / "cases" / "CastOperators.bl", 179),
+    (root / "examples" / "project" / "demo" / "cases" / "CastUnaryInt.bl", 181),
+    (root / "examples" / "project" / "demo" / "cases" / "CastUnaryDecimal.bl", 183),
 ]
 
 with tempfile.TemporaryDirectory() as directory:
