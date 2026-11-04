@@ -770,6 +770,12 @@ class Checker {
                     if (e.token.text == "hashCode") { e.builtinCall = "z8_primary_hash"; return ValueType.intType; }
                 } else if (receiver == ValueType.stringType) {
                     switch (e.token.text) {
+                        case "setupMatcher":
+                            checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_regex_setupMatcher"; return ValueType.voidType;
+                        case "next":
+                            checkArguments(e, []); e.builtinCall = "z8_regex_next"; return ValueType.boolType;
+                        case "getGroup":
+                            checkArguments(e, [ValueType.intType]); e.builtinCall = "z8_regex_getGroup"; return ValueType.nullableString;
                         case "matches":
                             checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_regex_matches"; return ValueType.boolType;
                         case "replaceFirst": case "replaceAll":
@@ -1239,7 +1245,7 @@ class Checker {
                 return false;
             case StmtKind.expressionStmt:
                 typeOf(s.expression);
-                if (s.expression.kind == ExprKind.memberCall && s.expression.inferredType == ValueType.stringType)
+                if (s.expression.kind == ExprKind.memberCall && s.expression.inferredType == ValueType.stringType && s.expression.builtinCall != "z8_regex_setupMatcher")
                     fail("string query cannot be used as a statement", s.token);
                 return false;
             case StmtKind.returnStmt:

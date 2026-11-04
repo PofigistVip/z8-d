@@ -9,6 +9,12 @@ wstring z8_string_required(wstring value) {
     return value;
 }
 wstring z8_string_or_empty(wstring value) { return value is null ? ""w : value; }
+wstring z8_string_new(wstring value) {
+    if (value is null) return null;
+    auto buffer = new wchar[value.length + 1];
+    buffer[0 .. value.length] = value[];
+    return cast(wstring)buffer[0 .. value.length];
+}
 void z8_string_add_assign(ref wstring left, wstring right) {
     left = z8_nullable_string_binary!"+"(left, z8_string_or_empty(right));
 }

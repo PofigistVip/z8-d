@@ -65,7 +65,7 @@ private string emitStringLiteral(string text) {
             value ~= c;
         } else if (c >= ' ' || c == '\t' || c == '\r' || c == '\n') value ~= c;
     }
-    if (value.length == 0) return `""w`;
+    if (value.length == 0) return `z8_string_new(""w)`;
     string[] units;
     foreach (c; value) units ~= format("cast(wchar)0x%04X", cast(uint)c);
     return "[" ~ units.join(", ") ~ "].idup";
@@ -118,6 +118,11 @@ private string emitExpr(Expression e) {
             argument.convertToDate = savedDateConversions[i];
         }
     } else value = emitExprRaw(e);
+    if (!e.emittedOverride.length && e.kind == ExprKind.memberCall &&
+        ((e.inferredType == ValueType.stringType && ["toString", "substring", "left", "right", "charAt", "trim", "trimLeft", "trimRight",
+            "padLeft", "padRight", "insert", "replace", "toLowerCase", "toUpperCase", "replaceFirst", "replaceAll", "format", "getGroup"].canFind(e.token.text)) ||
+         ["z8_string_replicate", "z8_string_concat", "z8_string_fromBinary"].canFind(e.builtinCall)))
+        value = "z8_string_new(" ~ value ~ ")";
     if (e.nonNullStringResult) value = "z8_string_or_empty(" ~ value ~ ")";
     if (e.optionalRequired) value = "z8_optional_require(" ~ value ~ ")";
     if (e.nullableStringMode == NullableStringMode.required) value = "z8_string_required(" ~ value ~ ")";
@@ -387,7 +392,7 @@ private string defaultValue(ValueType type, Program objectClass = null, bool has
     if (type == ValueType.primaryStringMap) return "new Z8PrimaryMap()";
     if (isArray(type)) return "new " ~ dType(type, objectClass) ~ "()";
     if (type == ValueType.intType) return "0";
-    if (type == ValueType.stringType) return `""w`;
+    if (type == ValueType.stringType) return `z8_string_new(""w)`;
     assert(type == ValueType.boolType); return "false";
 }
 private bool referencesField(Expression expression, string name) {

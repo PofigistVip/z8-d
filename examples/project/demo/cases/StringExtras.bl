@@ -42,6 +42,28 @@ public class StringExtras {
         if ("'{0}' ''{0}'' {5}".format(arguments) != "{0} 'world' {5}") return 23;
         primary[] rounded = {decimal.parse("-0.0005"), decimal.parse("0.0005"), decimal.parse("-0.0006")};
         if ("{0};{1};{2}".format(rounded) != "-0;0;-0,001") return 25;
+        string subject = "aBcDe";
+        string alias = subject;
+        if (subject.next()) return 26;
+        subject.setupMatcher("([a-z])([A-Z])");
+        string distinct = "aBcDe";
+        if (distinct.next()) return 31;
+        if (!alias.next() || subject.getGroup(0) != "aB" || alias.getGroup(1) != "a" || alias.getGroup(2) != "B") return 27;
+        if (!subject.next() || subject.getGroup(0) != "cD" || alias.next()) return 28;
+        try { string invalid = subject.getGroup(0); return 29; } catch (exception expected) {}
+        subject.setupMatcher(null);
+        if (subject.next()) return 30;
+        string empty = "";
+        empty.setupMatcher("(a)?()");
+        if (!empty.next() || empty.getGroup(1) != null || empty.getGroup(2) == null || empty.getGroup(2) != "") return 32;
+        string otherEmpty = "";
+        if (otherEmpty.next()) return 33;
+        string original = "abc";
+        original.setupMatcher("a");
+        string independent = original.substring(0);
+        if (independent.next() || !original.next()) return 34;
+        string rendered = original.toString();
+        if (rendered.next()) return 35;
         primary[] missing = {null};
         try { string unused = "unused".format(missing); return 24; } catch (exception expected) {}
         return 227;

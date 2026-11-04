@@ -1,4 +1,52 @@
 // String regex operations. Syntax is the subset shared by Java and std.regex.
+private struct Z8MatcherKey { const(wchar)* pointer; size_t length; }
+private class Z8MatcherState {
+    import std.regex : Captures, RegexMatch;
+    wstring subject;
+    RegexMatch!wstring matches;
+    Captures!wstring current;
+    bool hasCurrent;
+}
+private __gshared Z8MatcherState[Z8MatcherKey] z8_matchers;
+private __gshared Object z8_matchers_lock;
+shared static this() { z8_matchers_lock = new Object(); }
+private Z8MatcherKey z8_matcher_key(wstring value) {
+    value = z8_string_required(value);
+    return Z8MatcherKey(value.ptr, value.length);
+}
+void z8_regex_setupMatcher(wstring value, wstring pattern) {
+    import std.regex : regex, matchAll;
+    auto key = z8_matcher_key(value);
+    if (pattern is null) { synchronized (z8_matchers_lock) z8_matchers.remove(key); return; }
+    auto state = new Z8MatcherState();
+    state.subject = value;
+    state.matches = matchAll(value, regex(pattern));
+    synchronized (z8_matchers_lock) z8_matchers[key] = state;
+}
+bool z8_regex_next(wstring value) {
+    auto key = z8_matcher_key(value);
+    synchronized (z8_matchers_lock) {
+        auto found = key in z8_matchers;
+        if (found is null) return false;
+        auto state = *found;
+        if (state.matches.empty) { z8_matchers.remove(key); return false; }
+        state.current = state.matches.front;
+        state.matches.popFront();
+        state.hasCurrent = true;
+        return true;
+    }
+}
+wstring z8_regex_getGroup(wstring value, long groupNumber) {
+    auto key = z8_matcher_key(value);
+    synchronized (z8_matchers_lock) {
+        auto found = key in z8_matchers;
+        if (found is null || !(*found).hasCurrent) throw new Exception("matcher has no current match");
+        auto state = *found;
+        auto group = cast(int)groupNumber;
+        if (group < 0 || cast(size_t)group >= state.current.length) throw new Exception("invalid regex group");
+        return state.current[group];
+    }
+}
 bool z8_regex_matches(wstring value, wstring pattern) {
     import std.regex : regex, matchFirst;
     auto input = z8_string_required(value);
@@ -51,10 +99,10 @@ Z8Array!wstring z8_regex_split(wstring value, wstring pattern, long limit = 0) {
         auto start = input.length - match.post.length - match.hit.length;
         if (start == 0 && !match.hit.length) continue;
         if (cast(int)limit > 0 && result.z8_size() >= cast(int)limit - 1) break;
-        result.z8_add(input[previous .. start].length ? input[previous .. start] : ""w);
+        result.z8_add(z8_string_new(input[previous .. start]));
         previous = start + match.hit.length; split = true;
     }
-    result.z8_add(input[previous .. $].length ? input[previous .. $] : ""w);
+    result.z8_add(z8_string_new(input[previous .. $]));
     if (cast(int)limit == 0 && split) while (result.z8_size() && !result.z8_last().length) result.z8_removeAt(result.z8_size() - 1);
     return result;
 }
