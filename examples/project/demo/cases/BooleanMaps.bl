@@ -1,0 +1,35 @@
+public class BooleanMaps {
+    public static int run() {
+        int[bool] numbers = {(true, 1), (false, 2)};
+        bool nullKey = null;
+        int nullValue = null;
+        numbers.add(nullKey, nullValue);
+        if (numbers[true] != 1 || numbers[false] != 2 || !numbers.containsKey(null)) return 1;
+        if (numbers.get(null) != null || !numbers.containsValue(null)) return 2;
+        bool[] keys = numbers.keys();
+        if (keys.size() != 3 || numbers.values().size() != 3) return 3;
+        int nulls = 0;
+        for (bool key : keys) if (key == null) nulls += 1;
+        if (nulls != 1) return 4;
+        int[bool] extra = {(true, 10)};
+        int[bool] merged = numbers + extra;
+        if (merged[true] != 10 || numbers[true] != 1 || merged[false] != 2) return 5;
+        numbers += extra;
+        if (numbers.remove(true) != 10 || numbers.containsKey(true)) return 6;
+        string[bool] labels = {(true, "yes"), (false, "no")};
+        if (labels[false] != "no" || labels.add(true, "sure") != "yes") return 7;
+        bool[bool] flags = {(true, false), (false, true)};
+        if (flags[true] || !flags[false]) return 8;
+        decimal[bool] amounts = {(true, 1.00), (false, 2.0)};
+        if (amounts[true] != 1.0) return 9;
+        if (!amounts.containsValue(2.0)) return 13;
+        if (amounts.containsValue(decimal.parse("2.00"))) return 14;
+        guid id = '00000000-0000-0000-0000-000000000001';
+        guid[bool] ids = {(true, id)};
+        if (ids[true] != id || !ids.containsValue(id)) return 10;
+        primary[bool] mixed = {(true, 4), (false, "text")};
+        if ((int)mixed[true] != 4 || (string)mixed[false] != "text") return 11;
+        try { labels.add(null, null); return 12; } catch (exception expected) {}
+        return 155;
+    }
+}

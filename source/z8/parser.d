@@ -82,7 +82,7 @@ class Parser {
         }
         if (accept("[")) {
             if (current.text != "]") {
-                auto key = accept("string") ? ValueType.stringType : accept("int") ? ValueType.intType : accept("guid") ? ValueType.guidType : ValueType.voidType;
+                auto key = accept("string") ? ValueType.stringType : accept("int") ? ValueType.intType : accept("guid") ? ValueType.guidType : accept("bool") ? ValueType.boolType : ValueType.voidType;
                 auto map = mapType(result, key);
                 if (map == ValueType.voidType) error("unsupported map key or value type");
                 expect("]"); return map;
