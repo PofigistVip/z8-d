@@ -22,6 +22,8 @@ public class StringExtras {
         if (!"ab".matches("a|ab") || "abc".matches("a|ab")) return 11;
         if ("ab-ab".replaceAll("(a)(b)", "$2$1") != "ba-ba") return 12;
         if ("ab-ab".replaceFirst("(a)(b)", "<$0>") != "<ab>-ab") return 13;
+        if ("HELLO-A".replaceAll("(?<word>[A-Z]+)", "<${word}>") != "<HELLO>-<A>") return 36;
+        if (!"AB".matches("(?<first>A)B")) return 37;
         string[] split = "a,,b,,".split(",");
         if (split.size() != 3 || split[1] != "" || split[2] != "b") return 14;
         string[] limited = "a,,b,,".split(",", 2);

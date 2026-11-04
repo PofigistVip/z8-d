@@ -14,13 +14,32 @@ private Z8MatcherKey z8_matcher_key(wstring value) {
     value = z8_string_required(value);
     return Z8MatcherKey(value.ptr, value.length);
 }
+private wstring z8_regex_pattern(wstring pattern) {
+    pattern = z8_string_required(pattern);
+    wstring result;
+    bool inClass;
+    size_t i;
+    while (i < pattern.length) {
+        auto c = pattern[i++];
+        if (c == '\\') {
+            result ~= c;
+            if (i < pattern.length) result ~= pattern[i++];
+        } else if (c == '[') { inClass = true; result ~= c; }
+        else if (c == ']' && inClass) { inClass = false; result ~= c; }
+        else if (!inClass && c == '(' && i + 2 < pattern.length && pattern[i] == '?' && pattern[i + 1] == '<' &&
+                 pattern[i + 2] != '=' && pattern[i + 2] != '!') {
+            result ~= "(?P<"w; i += 2;
+        } else result ~= c;
+    }
+    return result.length ? result : ""w;
+}
 void z8_regex_setupMatcher(wstring value, wstring pattern) {
     import std.regex : regex, matchAll;
     auto key = z8_matcher_key(value);
     if (pattern is null) { synchronized (z8_matchers_lock) z8_matchers.remove(key); return; }
     auto state = new Z8MatcherState();
     state.subject = value;
-    state.matches = matchAll(value, regex(pattern));
+    state.matches = matchAll(value, regex(z8_regex_pattern(pattern)));
     synchronized (z8_matchers_lock) z8_matchers[key] = state;
 }
 bool z8_regex_next(wstring value) {
@@ -50,7 +69,7 @@ wstring z8_regex_getGroup(wstring value, long groupNumber) {
 bool z8_regex_matches(wstring value, wstring pattern) {
     import std.regex : regex, matchFirst;
     auto input = z8_string_required(value);
-    auto match = matchFirst(input, regex("^(?:"w ~ z8_string_required(pattern) ~ ")$"w));
+    auto match = matchFirst(input, regex("^(?:"w ~ z8_regex_pattern(pattern) ~ ")$"w));
     return cast(bool)match && match.pre.length == 0 && match.post.length == 0;
 }
 private wstring z8_regex_replace(wstring value, wstring pattern, wstring replacement, bool all) {
@@ -59,7 +78,7 @@ private wstring z8_regex_replace(wstring value, wstring pattern, wstring replace
     replacement = z8_string_required(replacement);
     wstring output;
     size_t previous;
-    foreach (match; matchAll(input, regex(z8_string_required(pattern)))) {
+    foreach (match; matchAll(input, regex(z8_regex_pattern(pattern)))) {
         auto start = input.length - match.post.length - match.hit.length;
         output ~= input[previous .. start];
         size_t i;
@@ -69,6 +88,19 @@ private wstring z8_regex_replace(wstring value, wstring pattern, wstring replace
                 if (i == replacement.length) throw new Exception("invalid regex replacement");
                 output ~= replacement[i++];
             } else if (c == '$') {
+                if (i < replacement.length && replacement[i] == '{') {
+                    auto begin = ++i;
+                    while (i < replacement.length && replacement[i] != '}') ++i;
+                    if (i == begin || i == replacement.length) throw new Exception("invalid regex group reference");
+                    if (!((replacement[begin] >= 'A' && replacement[begin] <= 'Z') || (replacement[begin] >= 'a' && replacement[begin] <= 'z')))
+                        throw new Exception("invalid regex group reference");
+                    foreach (nameChar; replacement[begin + 1 .. i])
+                        if (!((nameChar >= 'A' && nameChar <= 'Z') || (nameChar >= 'a' && nameChar <= 'z') || (nameChar >= '0' && nameChar <= '9')))
+                            throw new Exception("invalid regex group reference");
+                    output ~= match[replacement[begin .. i]];
+                    ++i;
+                    continue;
+                }
                 if (i == replacement.length || replacement[i] < '0' || replacement[i] > '9') throw new Exception("invalid regex group reference");
                 size_t group = replacement[i++] - '0';
                 if (group >= match.length) throw new Exception("invalid regex group reference");
@@ -91,7 +123,7 @@ wstring z8_regex_replaceAll(wstring value, wstring pattern, wstring replacement)
 Z8Array!wstring z8_regex_split(wstring value, wstring pattern, long limit = 0) {
     import std.regex : regex, matchAll;
     auto input = z8_string_required(value);
-    auto expression = regex(z8_string_required(pattern));
+    auto expression = regex(z8_regex_pattern(pattern));
     auto result = new Z8Array!wstring();
     size_t previous;
     bool split;
