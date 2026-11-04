@@ -1,0 +1,11 @@
+public class CastBinaryInt {
+    static int effects;
+    public operator int() { effects += 1; return 7; }
+    public static int run() {
+        effects = 0;
+        CastBinaryInt value = new CastBinaryInt;
+        if (value + 2 != 9 || value * 3 != 21 || !(value > 6)) return 1;
+        if (effects != 3) return 2;
+        return 185;
+    }
+}

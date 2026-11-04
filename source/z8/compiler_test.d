@@ -16,6 +16,7 @@ unittest {
     compile(q{class A { operator int() { return 3; } static int f() { A a; return a; } }});
     rejects(q{class A { operator int(int value) { return value; } }});
     rejects(q{class A { operator int() { return 1; } operator decimal() { return 1.0; } static int f() { A a; return -a; } }});
+    rejects(q{class A { operator int() { return 1; } operator decimal() { return 1.0; } static int f() { A a; return a + 1; } }});
     rejects(q{class A { operator int() { return 1; } operator string() { return "x"; } static int f(int x) { return 1; } static int f(string x) { return 2; } static int g() { A a; return f(a); } }});
     rejects(q{class A { static bool operator !() { return true; } }});
     compile(q{class A { int operator +(int x) { return x; } static int f() { A a; return a + 1; } }});

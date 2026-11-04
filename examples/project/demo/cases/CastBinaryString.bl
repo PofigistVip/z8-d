@@ -1,0 +1,8 @@
+public class CastBinaryString {
+    public operator string() { return "7"; }
+    public static int run() {
+        CastBinaryString value = new CastBinaryString;
+        if (value + 1 != "71" || !(value == 7) || value != "7") return 1;
+        return 189;
+    }
+}

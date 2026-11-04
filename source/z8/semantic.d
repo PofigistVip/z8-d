@@ -216,7 +216,7 @@ class Checker {
         return true;
     }
     // Z8 ranks direct casts ahead of conversions defined by an operator.
-    private Method selectOverload(Method first, Expression e) {
+    private Method selectOverload(Method first, Expression e, bool allowNoMatch = false) {
         ValueType[] actualTypes;
         foreach (arg; e.arguments) {
             if (arg.kind == ExprKind.arrayLiteral && !arg.typedInitializer) fail("array initializer requires a known target", arg.token);
@@ -265,9 +265,26 @@ class Checker {
             if (weight < bestWeight) { best = candidate; bestWeight = weight; ambiguous = false; }
             else if (weight == bestWeight) ambiguous = true;
         }
-        if (best is null) fail("no matching method overload", e.token);
+        if (best is null) {
+            if (allowNoMatch) return null;
+            fail("no matching method overload", e.token);
+        }
         if (ambiguous) fail("ambiguous method overload", e.token);
         return best;
+    }
+    private bool supportsConvertedBinary(ValueType left, ValueType right, string op) {
+        if (isOptionalPrimitive(right)) right = optionalBaseType(right);
+        if (right == ValueType.nullableString) right = ValueType.stringType;
+        if (left == ValueType.boolType)
+            return right == ValueType.boolType && ["==", "!=", "&&", "||"].canFind(op);
+        if (left == ValueType.intType)
+            return (right == ValueType.intType && ["+", "-", "*", "/", "%", "&", "|", "^", "==", "!=", "<", ">", "<=", ">="].canFind(op)) ||
+                   (right == ValueType.decimalType && ["+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">="].canFind(op));
+        if (left == ValueType.decimalType)
+            return [ValueType.intType, ValueType.decimalType].canFind(right) && ["+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">="].canFind(op);
+        if (left == ValueType.stringType)
+            return (right == ValueType.stringType || hasStringConversion(right)) && ["+", "==", "!=", "<", ">", "<=", ">="].canFind(op);
+        return false;
     }
     private void checkArguments(Expression e, ValueType[] types) {
         if (e.arguments.length != types.length) fail("incorrect argument count", e.token);
@@ -1165,11 +1182,26 @@ class Checker {
                 auto left = typeOf(e.left), right = typeOf(e.right), op = e.token.text;
                 if (left == ValueType.selfType && right != ValueType.nullType) {
                     auto method = lookupMethod(e.left.objectClass, "operator" ~ op);
-                    if (method is null) fail("undefined binary operator", e.token);
-                    e.arguments = [e.right];
-                    auto selected = selectOverload(method, e);
-                    e.userBinaryOperator = true;
-                    return checkCall(selected, selected.owner, e);
+                    Method selected;
+                    if (method !is null) {
+                        e.arguments = [e.right];
+                        selected = selectOverload(method, e, true);
+                    }
+                    if (selected !is null) {
+                        e.userBinaryOperator = true;
+                        return checkCall(selected, selected.owner, e);
+                    }
+                    Method conversion;
+                    foreach (target; [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType]) {
+                        if (!supportsConvertedBinary(target, right, op)) continue;
+                        auto candidate = findConversion(e.left.objectClass, target);
+                        if (candidate is null) continue;
+                        if (conversion !is null) fail("ambiguous binary operator", e.token);
+                        conversion = candidate;
+                    }
+                    if (conversion is null) fail("undefined binary operator", e.token);
+                    e.left.userConversion = conversion;
+                    left = conversion.returnType == ValueType.stringType ? ValueType.nullableString : storedValueType(conversion.returnType);
                 }
                 if (((left == ValueType.intType || left == ValueType.boolType || left == ValueType.decimalType) && right == ValueType.nullType) ||
                     ((right == ValueType.intType || right == ValueType.boolType || right == ValueType.decimalType) && left == ValueType.nullType)) {
@@ -1282,7 +1314,7 @@ class Checker {
                 }
                 if (left == ValueType.nullableString) { e.nullableStringLeft = true; left = ValueType.stringType; }
                 if (right == ValueType.nullableString) { e.right.nullableStringMode = NullableStringMode.nullAsEmpty; right = ValueType.stringType; }
-                if (op == "+" && left == ValueType.stringType && hasStringConversion(right)) {
+                if (["+", "==", "!=", "<", ">", "<=", ">="].canFind(op) && left == ValueType.stringType && hasStringConversion(right)) {
                     e.right.convertToString = right; right = ValueType.stringType;
                 }
                 if (op == "+" && right == ValueType.stringType && hasStringConversion(left)) {

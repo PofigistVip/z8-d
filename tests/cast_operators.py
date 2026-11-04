@@ -11,6 +11,11 @@ fixtures = [
     (root / "examples" / "project" / "demo" / "cases" / "CastOperators.bl", 179),
     (root / "examples" / "project" / "demo" / "cases" / "CastUnaryInt.bl", 181),
     (root / "examples" / "project" / "demo" / "cases" / "CastUnaryDecimal.bl", 183),
+    (root / "examples" / "project" / "demo" / "cases" / "CastBinaryInt.bl", 185),
+    (root / "examples" / "project" / "demo" / "cases" / "CastBinaryBool.bl", 187),
+    (root / "examples" / "project" / "demo" / "cases" / "CastBinaryString.bl", 189),
+    # Direct reference operators are accepted by BL but the Java output does not compile.
+    (root / "examples" / "operators" / "BinaryConversionFallback.bl", 191),
 ]
 
 with tempfile.TemporaryDirectory() as directory:

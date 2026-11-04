@@ -1,0 +1,9 @@
+public class BinaryConversionFallback {
+    public operator int() { return 5; }
+    public int operator + (bool value) { return 100; }
+    public static int run() {
+        BinaryConversionFallback value = new BinaryConversionFallback;
+        if (value + 2 != 7 || value + true != 100) return 1;
+        return 191;
+    }
+}

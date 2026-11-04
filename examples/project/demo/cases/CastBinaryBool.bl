@@ -1,0 +1,12 @@
+public class CastBinaryBool {
+    static int effects;
+    public operator bool() { return false; }
+    public static bool mark() { effects += 1; return true; }
+    public static int run() {
+        effects = 0;
+        CastBinaryBool value = new CastBinaryBool;
+        if (value && mark()) return 1;
+        if (effects != 0 || !(value || mark()) || effects != 1) return 2;
+        return 187;
+    }
+}

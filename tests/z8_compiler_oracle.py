@@ -156,6 +156,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     operator_source = operator_project / "src" / "bl"
     operator_source.mkdir(parents=True)
     shutil.copy2(root / "examples" / "operators" / "BinaryOperators.bl", operator_source)
+    shutil.copy2(root / "examples" / "operators" / "BinaryConversionFallback.bl", operator_source)
     operator_command = ["java", "-cp", str(classes) + os.pathsep + classpath,
                         "org.zenframework.z8.compiler.cmd.Main", str(operator_project),
                         "-sources:src/bl", "-requires:" + str(lang), "-output:out"]
@@ -165,7 +166,16 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     operator_java = (operator_project / "out" / "BinaryOperators.java").read_text(encoding="utf-8")
     if "value.operatorAdd(" not in operator_java:
         raise SystemExit("Original Java backend no longer exhibits the expected reference operator call")
-    print("Original Z8 accepted the binary operator fixture; execution is checked in D")
+    ambiguous_operator = operator_source / "AmbiguousConversion.bl"
+    ambiguous_operator.write_text('''public class AmbiguousConversion {
+        public operator int() { return 1; }
+        public operator decimal() { return 1.0; }
+        public static int run() { AmbiguousConversion value; return value + 1; }
+    }''', encoding="utf-8")
+    ambiguous_result = subprocess.run(operator_command, cwd=temp, capture_output=True, text=True, encoding="utf-8")
+    if ambiguous_result.returncode == 0 or "ambiguous" not in ambiguous_result.stdout:
+        raise SystemExit("Original Z8 did not reject ambiguous binary conversions:\n" + ambiguous_result.stdout)
+    print("Original Z8 accepted binary operators and rejected ambiguous conversions; direct execution is checked in D")
     if os.environ.get("Z8_ORACLE_INSPECT"):
         for file in generated:
             if file.name in ("Main.java", "Arithmetic.java", "EnumCases.java", "Flavor.java", "NullableObjectField.java", "LifecycleBase.java", "LifecycleChild.java", "LifecycleCases.java", "LifecycleOwner.java", "LifecycleReentrant.java", "LifecycleTrigger.java", "FileValues.java"):
@@ -216,6 +226,9 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         System.out.println("RESULT:" + demo.cases.NullableObjectField.z8_run().get());
         System.out.println("RESULT:" + demo.cases.LifecycleCases.z8_run().get());
         System.out.println("RESULT:" + demo.cases.LifecyclePhases.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.CastBinaryInt.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.CastBinaryBool.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.CastBinaryString.z8_run().get());
         System.out.println("RESULT:" + demo.cases.CastUnaryInt.z8_run().get());
         System.out.println("RESULT:" + demo.cases.CastUnaryDecimal.z8_run().get());
         System.out.println("RESULT:" + demo.cases.CastOperators.z8_run().get());
@@ -363,6 +376,9 @@ void main() {
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4E756C6C61626C654F626A6563744669656C64.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4C6966656379636C654361736573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4C6966656379636C65506861736573.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4361737442696E617279496E74.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4361737442696E617279426F6F6C.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4361737442696E617279537472696E67.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E43617374556E617279496E74.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E43617374556E617279446563696D616C.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E436173744F70657261746F7273.m_run()));
@@ -401,8 +417,8 @@ void main() {
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_results = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        if original_results[-32:-13] != ["181", "183", "179", "177", "171", "169", "167", "165", "163", "159", "155", "153", "151", "149", "167", "171", "251", "28", "241"]:
-            raise SystemExit(f"Language fixtures failed in original Z8: {original_results[-32:-13]}")
+        if original_results[-35:-13] != ["185", "187", "189", "181", "183", "179", "177", "171", "169", "167", "165", "163", "159", "155", "153", "151", "149", "167", "171", "251", "28", "241"]:
+            raise SystemExit(f"Language fixtures failed in original Z8: {original_results[-35:-13]}")
         if original_results[-13:] != ["173", "179", "181", "191", "193", "197", "199", "211", "223", "227", "229", "233", "239"]:
             raise SystemExit(f"Basic types fixture failed in original Z8: {original_results[-13:]}")
         if original_results != d_results:
