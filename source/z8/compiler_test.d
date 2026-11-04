@@ -10,6 +10,10 @@ private void rejects(string source) {
 }
 
 unittest {
+    // The facade continues to expose the parser, checker and model types.
+    auto parsed = (new Parser("class PublicApi {} ")).parse();
+    auto checker = new Checker;
+    assert(parsed.name.text == "PublicApi" && checker !is null);
     auto output = compile(q{
         public class Math {
             public static int add(int a, int b) { return a + b; }
