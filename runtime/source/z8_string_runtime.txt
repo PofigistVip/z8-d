@@ -147,11 +147,18 @@ wstring z8_str_padding(wstring value, long length, wstring padding, bool left) {
 }
 wstring z8_str_padLeft(wstring value, long length, wstring padding = " "w) { return z8_str_padding(value, length, padding, true); }
 wstring z8_str_padRight(wstring value, long length, wstring padding = " "w) { return z8_str_padding(value, length, padding, false); }
+// Server resource bundles supply these values in the original runtime.
+private __gshared wstring z8_bool_true_resource = "bool.true"w;
+private __gshared wstring z8_bool_false_resource = "bool.false"w;
+void z8_bool_set_resource_strings(wstring trueValue, wstring falseValue) {
+    z8_bool_true_resource = trueValue.idup;
+    z8_bool_false_resource = falseValue.idup;
+}
 bool z8_bool_parse(wstring value) {
     import std.uni : toLower;
     auto text = value.to!string.toLower;
-    if (text == "" || text == "0" || text == "false" || text == "no" || text == "n" || text == "bool.false") return false;
-    if (text == "1" || text == "true" || text == "yes" || text == "y" || text == "bool.true") return true;
+    if (text == "" || text == "0" || text == "false" || text == "no" || text == "n" || text == z8_bool_false_resource.to!string.toLower) return false;
+    if (text == "1" || text == "true" || text == "yes" || text == "y" || text == z8_bool_true_resource.to!string.toLower) return true;
     throw new Exception("invalid bool");
 }
 long z8_int_abs(long value) { return value == long.min ? value : value < 0 ? -value : value; }
