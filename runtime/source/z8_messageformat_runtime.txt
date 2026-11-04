@@ -77,6 +77,55 @@ private wstring z8_message_value(Z8Primary value) {
         case Z8PrimaryKind.binary: case Z8PrimaryKind.date: throw new Exception("unsupported MessageFormat value");
     }
 }
+private wstring z8_message_choice(wstring style, Z8Primary value, Z8Array!Z8Primary values) {
+    import std.string : strip;
+    z8_nonnull(value);
+    double number;
+    switch (value.kind) {
+        case Z8PrimaryKind.integer: number = cast(double)value.integerValue; break;
+        case Z8PrimaryKind.decimal:
+            if (value.decimalValue.nan) return "null"w;
+            number = value.decimalValue.z8_as_double(); break;
+        case Z8PrimaryKind.datespan: number = cast(double)z8_datespan_milliseconds(value.datespanValue); break;
+        default: throw new Exception("MessageFormat choice argument is not numeric");
+    }
+    wstring selected;
+    bool first = true;
+    size_t start;
+    while (start <= style.length) {
+        size_t separator = start;
+        while (separator < style.length && style[separator] != '#' && style[separator] != '<' && style[separator] != '≤') ++separator;
+        if (separator == style.length) throw new Exception("invalid MessageFormat choice");
+        auto limitText = style[start .. separator].strip();
+        double limit = limitText == "∞"w ? double.infinity : limitText == "-∞"w ? -double.infinity : limitText.to!double;
+        auto end = separator + 1;
+        size_t depth;
+        bool quoted;
+        while (end < style.length) {
+            auto c = style[end];
+            if (c == '\'') {
+                if (end + 1 < style.length && style[end + 1] == '\'') { end += 2; continue; }
+                quoted = !quoted;
+            } else if (!quoted && c == '{') ++depth;
+            else if (!quoted && c == '}' && depth) --depth;
+            else if (!quoted && c == '|' && !depth) break;
+            ++end;
+        }
+        if (first || (style[separator] == '<' ? number > limit : number >= limit)) selected = style[separator + 1 .. end];
+        first = false;
+        if (end == style.length) break;
+        start = end + 1;
+    }
+    wstring unquoted;
+    size_t i;
+    while (i < selected.length) {
+        auto c = selected[i++];
+        if (c == '\'') {
+            if (i < selected.length && selected[i] == '\'') { unquoted ~= '\''; ++i; }
+        } else unquoted ~= c;
+    }
+    return unquoted.canFind('{') ? z8_string_format(unquoted, values) : unquoted;
+}
 wstring z8_string_format(wstring pattern, Z8Array!Z8Primary values) {
     pattern = z8_string_required(pattern);
     z8_nonnull(values);
@@ -97,25 +146,38 @@ wstring z8_string_format(wstring pattern, Z8Array!Z8Primary values) {
                 number = number * 10 + pattern[i++] - '0';
             }
             if (i == begin || i == pattern.length) throw new Exception("unsupported MessageFormat pattern");
-            bool numeric;
+            bool numeric, choice;
             wstring style;
             if (pattern[i] == ',') {
                 import std.string : strip;
                 auto kindStart = ++i;
                 while (i < pattern.length && pattern[i] != ',' && pattern[i] != '}') ++i;
-                if (i == pattern.length || pattern[kindStart .. i].strip() != "number"w) throw new Exception("unsupported MessageFormat pattern");
-                numeric = true;
+                if (i == pattern.length) throw new Exception("unsupported MessageFormat pattern");
+                auto kind = pattern[kindStart .. i].strip();
+                numeric = kind == "number"w; choice = kind == "choice"w;
+                if (!numeric && !choice) throw new Exception("unsupported MessageFormat pattern");
                 if (pattern[i] == ',') {
                     auto styleStart = ++i;
-                    while (i < pattern.length && pattern[i] != '}') ++i;
+                    size_t depth;
+                    bool styleQuoted;
+                    while (i < pattern.length) {
+                        auto current = pattern[i];
+                        if (current == '\'') {
+                            if (i + 1 < pattern.length && pattern[i + 1] == '\'') { i += 2; continue; }
+                            styleQuoted = !styleQuoted;
+                        } else if (!styleQuoted && current == '{') ++depth;
+                        else if (!styleQuoted && current == '}') { if (!depth) break; --depth; }
+                        ++i;
+                    }
                     if (i == pattern.length) throw new Exception("unsupported MessageFormat pattern");
                     style = pattern[styleStart .. i];
-                }
+                } else if (choice) throw new Exception("missing MessageFormat choice pattern");
             }
             if (pattern[i] != '}') throw new Exception("unsupported MessageFormat pattern");
             ++i;
             if (number >= cast(size_t)values.z8_size()) result ~= "{"w ~ number.to!wstring ~ "}"w;
-            else result ~= numeric ? z8_message_formatted_number(values.z8_get(cast(long)number), style) : z8_message_value(values.z8_get(cast(long)number));
+            else result ~= numeric ? z8_message_formatted_number(values.z8_get(cast(long)number), style) :
+                choice ? z8_message_choice(style, values.z8_get(cast(long)number), values) : z8_message_value(values.z8_get(cast(long)number));
         } else result ~= c;
     }
     return result.length ? result : ""w;
