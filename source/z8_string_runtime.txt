@@ -1,17 +1,21 @@
 private long z8_str_compare(wstring a, wstring b) {
+    b = z8_string_required(b);
     auto length = a.length < b.length ? a.length : b.length;
     foreach (i; 0 .. length) if (a[i] != b[i]) return cast(long)a[i] - cast(long)b[i];
     return cast(long)a.length - cast(long)b.length;
 }
 private bool z8_str_startsWith(wstring value, wstring prefix, long offset = 0) {
+    prefix = z8_string_required(prefix);
     auto start = cast(int)offset;
     if (start < 0 || cast(size_t)start > value.length || prefix.length > value.length - cast(size_t)start) return false;
     return value[cast(size_t)start .. cast(size_t)start + prefix.length] == prefix;
 }
 private bool z8_str_endsWith(wstring value, wstring suffix) {
+    suffix = z8_string_required(suffix);
     return suffix.length <= value.length && value[value.length - suffix.length .. $] == suffix;
 }
 private long z8_str_indexOf(wstring value, wstring needle, long offset = 0) {
+    needle = z8_string_required(needle);
     auto raw = cast(int)offset;
     size_t start = raw < 0 ? 0 : cast(size_t)raw;
     if (start > value.length) start = value.length;
@@ -22,6 +26,7 @@ private long z8_str_indexOf(wstring value, wstring needle, long offset = 0) {
     return -1;
 }
 private long z8_str_lastIndexOf(wstring value, wstring needle, long offset = int.max) {
+    needle = z8_string_required(needle);
     long start = cast(int)offset;
     if (start < 0 || needle.length > value.length) return -1;
     auto last = cast(long)(value.length - needle.length);
@@ -65,11 +70,13 @@ private wstring z8_str_right(wstring value, long count) {
     return z8_str_substring(value, start);
 }
 private wstring z8_str_insert(wstring value, long index, wstring what) {
+    what = z8_string_required(what);
     auto i = cast(int)index;
     if (i < 0 || cast(size_t)i > value.length) throw new Exception("string index out of bounds");
     return value[0 .. cast(size_t)i] ~ what ~ value[cast(size_t)i .. $];
 }
 private wstring z8_str_replace(wstring value, long index, long count, wstring replacement) {
+    replacement = z8_string_required(replacement);
     auto i = cast(int)index;
     auto end = cast(int)(cast(long)i + cast(int)count);
     if (i < 0 || end < 0 || cast(size_t)i > value.length || cast(size_t)end > value.length)
@@ -77,6 +84,7 @@ private wstring z8_str_replace(wstring value, long index, long count, wstring re
     return value[0 .. cast(size_t)i] ~ replacement ~ value[cast(size_t)end .. $];
 }
 private wstring z8_str_padding(wstring value, long length, wstring padding, bool left) {
+    padding = z8_string_required(padding);
     auto requested = cast(int)length;
     if (requested <= 0 || cast(size_t)requested <= value.length) return value;
     if (!padding.length) padding = " "w;

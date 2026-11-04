@@ -1,0 +1,41 @@
+public class NullableStrings {
+    private static string field = null;
+    private static int effects;
+    private static string pass(string value) { return value; }
+    private static string fallback() { effects += 1; return "fallback"; }
+    public static int run() {
+        string value = null;
+        if (value != null || field != null || pass(value) != null) return 1;
+        field = pass(value);
+        if (field != null) return 2;
+        if ((value ?: fallback()) != "fallback" || effects != 1) return 3;
+        string[string] map;
+        string absent = map.get("missing");
+        string other = pass(absent ?: map.get("alsoMissing"));
+        if (other != null) return 4;
+        string[] words;
+        words.add(value);
+        if (words.first() != null || words[0] != null) return 5;
+        map.add("nullValue", value);
+        if (!map.containsKey("nullValue") || map.get("nullValue") != null) return 6;
+        string empty = "".substring(0);
+        if (empty == null || (empty ?: fallback()) != "" || effects != 1) return 7;
+        if (!words.contains(null)) return 9;
+        try { bool ignored = words.contains(""); return 14; } catch (exception expectedContains) { }
+        words.add(value);
+        words.add("");
+        string[] uniqueWords = words.unique();
+        if (uniqueWords.size() != 2 || uniqueWords.first() != null) return 15;
+        if (!words.remove(value) || !words.remove(value) || words.first() == null) return 10;
+        map.add(null, "nullKey");
+        map.add("", "emptyKey");
+        if (map.get(null) != "nullKey" || map.get("") != "emptyKey") return 11;
+        if (!map.containsValue(null) || map.containsValue("missing")) return 12;
+        string conditional = true ? value : "present";
+        if (conditional != null) return 13;
+        try { bool ignored = "test".startsWith(value); return 16; } catch (exception expectedArgument) { }
+        try { int ignored = value.length(); return 8; } catch (exception expected) { }
+        return 137;
+    }
+}
+

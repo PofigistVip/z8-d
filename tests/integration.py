@@ -104,8 +104,8 @@ void main() {
             value["key"] = "first";
             alias["key"] = "second";
             if (value["key"] != "second" || value.size() != 1) return false;
-            try { string absent = value["missing"]; } catch (exception e) { return true; }
-            return false;
+            string absent = value["missing"];
+            return absent == null;
         }
     }''', encoding="utf-8")
     map_source = subprocess.check_output([str(exe), "compile", str(map_file)], text=True, encoding="utf-8")
@@ -140,7 +140,7 @@ void main() {
     )
     assert built.returncode == 0, built.stderr
     assert subprocess.run([str(executable)], cwd=directory).returncode == 59
-    for entry, expected in [("demo.cases.Arithmetic.run", 37), ("demo.cases.Text.run", 41), ("demo.cases.Flow.run", 11), ("demo.cases.DecimalArray.run", 47), ("demo.cases.Overloads.run", 53), ("demo.cases.OverloadUser.run", 53), ("demo.cases.Rounding.run", 61), ("demo.cases.PrimitiveParse.run", 67), ("demo.cases.ArrayOperations.run", 54), ("demo.cases.StaticState.run", 70), ("demo.cases.StaticUser.run", 71), ("demo.cases.InstanceOverloads.run", 81), ("demo.cases.IntegerMethods.run", 89), ("demo.cases.ArrayAdvanced.run", 97), ("demo.cases.ObjectArrays.run", 13), ("demo.cases.InheritedOverloads.run", 99), ("demo.cases.StringMap.run", 103), ("demo.cases.ObjectCasts.run", 14), ("demo.cases.NullObjects.run", 107), ("demo.cases.InstanceChecks.run", 109), ("demo.cases.ElvisObjects.run", 113), ("demo.cases.EnumCases.run", 127), ("demo.cases.NullablePrimitives.run", 131)]:
+    for entry, expected in [("demo.cases.Arithmetic.run", 37), ("demo.cases.Text.run", 41), ("demo.cases.Flow.run", 11), ("demo.cases.DecimalArray.run", 47), ("demo.cases.Overloads.run", 53), ("demo.cases.OverloadUser.run", 53), ("demo.cases.Rounding.run", 61), ("demo.cases.PrimitiveParse.run", 67), ("demo.cases.ArrayOperations.run", 54), ("demo.cases.StaticState.run", 70), ("demo.cases.StaticUser.run", 71), ("demo.cases.InstanceOverloads.run", 81), ("demo.cases.IntegerMethods.run", 89), ("demo.cases.ArrayAdvanced.run", 97), ("demo.cases.ObjectArrays.run", 13), ("demo.cases.InheritedOverloads.run", 99), ("demo.cases.StringMap.run", 103), ("demo.cases.ObjectCasts.run", 14), ("demo.cases.NullObjects.run", 107), ("demo.cases.InstanceChecks.run", 109), ("demo.cases.ElvisObjects.run", 113), ("demo.cases.EnumCases.run", 127), ("demo.cases.NullablePrimitives.run", 131), ("demo.cases.NullableStrings.run", 137)]:
         built = subprocess.run([str(exe), "build", str(root / "examples" / "project"), entry, str(executable)],
                                capture_output=True, text=True, encoding="utf-8")
         assert built.returncode == 0, built.stderr
