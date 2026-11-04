@@ -168,6 +168,54 @@ private double z8_geometry_length_value(Z8Geometry value) {
     return result;
 }
 Z8Decimal z8_geometry_length(Z8Geometry value) { return z8_geometry_decimal(z8_geometry_length_value(value)); }
+private Z8Geometry z8_geometry_at_line(Z8Geometry line, double distance, double length, bool perpendicular) {
+    import std.math : sqrt;
+    z8_geometry_ensure(line);
+    if (line.shape == 5) {
+        if (!line.hasChildren) throw new Exception("geometry has no point list");
+        foreach (child; line.children) {
+            auto point = z8_geometry_at_line(child, distance, length, perpendicular);
+            // The original checks for a point even for perpendicularToLine.
+            if (point.shape == 1) return point;
+            distance -= z8_geometry_length_value(child);
+        }
+    } else if (line.shape == 2) {
+        if (!line.hasChildren) throw new Exception("geometry has no point list");
+        double travelled = 0;
+        foreach (i; 0 .. line.children.length) if (i + 1 < line.children.length) {
+            auto a = z8_nonnull(line.children[i]), b = z8_nonnull(line.children[i + 1]);
+            z8_geometry_ensure(a); z8_geometry_ensure(b);
+            if (a.shape != 1 || b.shape != 1) throw new Exception("line contains non-point geometry");
+            double dx = b.x - a.x, dy = b.y - a.y;
+            double segment = sqrt(dx * dx + dy * dy);
+            if ((!perpendicular || segment > 0) && distance >= travelled && distance <= travelled + segment) {
+                double k = (distance - travelled) / segment;
+                auto center = new Z8Geometry();
+                center.shape = 1; center.srs = line.srs;
+                center.x = dx * k + a.x; center.y = dy * k + a.y;
+                if (!perpendicular) return center;
+                if (distance - travelled <= travelled + segment - distance)
+                    k = length / 2.0 / (travelled + segment - distance);
+                else { b = a; k = length / 2.0 / (distance - travelled); }
+                auto p1 = new Z8Geometry(), p2 = new Z8Geometry();
+                p1.shape = p2.shape = 1; p1.srs = p2.srs = line.srs;
+                p1.x = center.x - (b.y - center.y) * k; p1.y = center.y + (b.x - center.x) * k;
+                p2.x = center.x + (b.y - center.y) * k; p2.y = center.y - (b.x - center.x) * k;
+                auto result = new Z8Geometry();
+                result.shape = 2; result.srs = line.srs; result.hasChildren = true; result.children = [p1, p2];
+                return result;
+            }
+            travelled += segment;
+        }
+    }
+    return z8_geometry_none(line.srs);
+}
+Z8Geometry z8_geometry_pointOnLine(Z8Geometry line, Z8Decimal distance) {
+    return z8_geometry_at_line(line, distance.z8_as_double(), 0, false);
+}
+Z8Geometry z8_geometry_perpendicularToLine(Z8Geometry line, Z8Decimal distance, Z8Decimal length) {
+    return z8_geometry_at_line(line, distance.z8_as_double(), length.z8_as_double(), true);
+}
 Z8Geometry z8_geometry_center(Z8Geometry value) {
     z8_geometry_ensure(value);
     if (value.shape == -1 || value.shape == 1) return value;

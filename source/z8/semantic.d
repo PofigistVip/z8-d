@@ -490,6 +490,11 @@ class Checker {
                         checkArguments(e, [ValueType.decimalType, ValueType.decimalType, ValueType.intType]);
                         e.builtinCall = "z8_geometry_point"; return ValueType.geometryType;
                     }
+                    if (e.token.text == "pointOnLine" || e.token.text == "perpendicularToLine") {
+                        if (e.token.text == "pointOnLine") checkArguments(e, [ValueType.geometryType, ValueType.decimalType]);
+                        else checkArguments(e, [ValueType.geometryType, ValueType.decimalType, ValueType.decimalType]);
+                        e.builtinCall = "z8_geometry_" ~ e.token.text; return ValueType.geometryType;
+                    }
                     if (["line", "multiLine", "ring", "polygon", "collection"].canFind(e.token.text)) {
                         checkArguments(e, [ValueType.geometryArray]);
                         e.builtinCall = "z8_geometry_" ~ e.token.text; return ValueType.geometryType;

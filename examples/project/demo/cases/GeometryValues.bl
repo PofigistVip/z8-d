@@ -23,6 +23,16 @@ public class GeometryValues {
         if (geometry.none(0).srs() != 0 || geometry.StrPoint != "POINT") return 9;
         geometry[] points = {geometry.point(0, 0, 4326), geometry.point(3, 4, 4326)};
         geometry line = geometry.line(points);
+        geometry middle = geometry.pointOnLine(line, 2.5);
+        if (middle.shape() != geometry.Point || middle.x() != 1.5 || middle.y() != 2.0 || middle.srs() != 4326) return 32;
+        if (geometry.pointOnLine(line, -1).shape() != geometry.None || geometry.pointOnLine(line, 6).shape() != geometry.None) return 33;
+        geometry perpendicular = geometry.perpendicularToLine(line, 2.5, 10);
+        if (perpendicular.shape() != geometry.Line || perpendicular.points().first().x() != -2.5 || perpendicular.points().first().y() != 5.0) return 34;
+        if (perpendicular.points().last().x() != 5.5 || perpendicular.points().last().y() != -1.0) return 35;
+        geometry[] lines = {line, line};
+        geometry multiline = geometry.multiLine(lines);
+        if (geometry.pointOnLine(multiline, 7.5).x() != 1.5) return 36;
+        if (geometry.perpendicularToLine(multiline, 2.5, 10).shape() != geometry.None) return 37;
         if (line.shape() != geometry.Line || line.srs() != 4326 || line.points().size() != 2) return 10;
         if (line.length() != 5.0 || line.width() != 3.0 || line.height() != 4.0) return 11;
         if (line.center().x() != 1.5 || line.center().y() != 2.0) return 12;
