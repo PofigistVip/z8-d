@@ -340,8 +340,46 @@ class Checker {
                     objectVariables[p.name.text] = p.objectClass;
                 }
             }
-            auto returns = checkStatement(m.body);
+            checkStatement(m.body);
+            auto returns = analyzeControlFlow(m.body);
             if (returnType != ValueType.voidType && !returns) fail("method may finish without returning a value", m.name);
+        }
+    }
+    // Follow the original compiler's return and reachability traversal. In
+    // particular, a nested block containing break does not break its parent.
+    private bool analyzeControlFlow(Statement s) {
+        final switch (s.kind) {
+            case StmtKind.block:
+                foreach (i, child; s.children) {
+                    auto returns = analyzeControlFlow(child);
+                    auto breaks = child.kind == StmtKind.breakStmt || child.kind == StmtKind.continueStmt;
+                    if (returns || breaks) {
+                        if (i + 1 < s.children.length) fail("unreachable code", s.children[i + 1].token);
+                        return returns;
+                    }
+                }
+                return false;
+            case StmtKind.returnStmt:
+            case StmtKind.throwStmt: return true;
+            case StmtKind.ifStmt:
+                auto first = analyzeControlFlow(s.children[0]);
+                return s.children.length == 2 && first && analyzeControlFlow(s.children[1]);
+            case StmtKind.whileStmt:
+            case StmtKind.doWhileStmt:
+            case StmtKind.forStmt:
+            case StmtKind.forEachStmt:
+                analyzeControlFlow(s.children[0]);
+                return false;
+            case StmtKind.tryStmt:
+                bool catchesReturn = true, finallyReturns;
+                if (s.hasCatch) catchesReturn = analyzeControlFlow(s.children[1]);
+                if (s.hasFinally) finallyReturns = analyzeControlFlow(s.children[$-1]);
+                return (analyzeControlFlow(s.children[0]) && catchesReturn) || finallyReturns;
+            case StmtKind.variable:
+            case StmtKind.assignment:
+            case StmtKind.expressionStmt:
+            case StmtKind.breakStmt:
+            case StmtKind.continueStmt: return false;
         }
     }
     private ValueType typeOf(Expression e, ValueType expected = ValueType.voidType) {

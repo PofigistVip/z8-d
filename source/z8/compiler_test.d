@@ -1,12 +1,31 @@
 module z8.compiler_test;
 
 import std.algorithm : canFind;
+import std.string : indexOf;
 import z8.compiler;
 
 private void rejects(string source) {
     bool failed;
     try { compile(source); } catch (CompileException) { failed = true; }
     assert(failed, source);
+}
+
+unittest {
+    auto source = "class A { static void f() { return; int x = 1; } }";
+    bool reported;
+    try { compile(source); } catch (CompileException e) {
+        reported = true;
+        assert(e.msg == "unreachable code");
+        assert(e.position.offset == source.indexOf("x = 1"));
+    }
+    assert(reported);
+    rejects(q{class A { static void f() { return; int x = 1; } }});
+    rejects(q{class A { static void f() { throw "x"; int x = 1; } }});
+    rejects(q{class A { static void f() { while (true) { break; int x = 1; } } }});
+    rejects(q{class A { static void f() { while (true) { continue; int x = 1; } } }});
+    rejects(q{class A { static int f(bool c) { if (c) return 1; else return 2; int x = 1; } }});
+    compile(q{class A { static void f() { while (true) { { break; } int x = 1; } } }});
+    compile(q{class A { static int f(bool c) { if (c) {} else { return 1; int x = 0; } return 2; } }});
 }
 
 unittest {
