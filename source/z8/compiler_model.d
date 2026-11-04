@@ -12,7 +12,7 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, decimalType, boolType, stringType, guidType, binaryType, datespanType, dateType, geometryType, fileType, exceptionType, encodingType, primaryType, selfType, intArray, decimalArray, boolArray, stringArray, guidArray, binaryArray, datespanArray, dateArray, geometryArray, fileArray, exceptionArray, primaryArray, selfArray, stringMap, primaryStringMap, nullType, nullableString, enumType, enumArray, optionalInt, optionalBool, optionalDecimal }
+enum ValueType { voidType, intType, decimalType, boolType, stringType, guidType, binaryType, datespanType, dateType, geometryType, fileType, exceptionType, encodingType, primaryType, selfType, intArray, decimalArray, decimalMatrix, boolArray, stringArray, guidArray, binaryArray, datespanArray, dateArray, geometryArray, fileArray, exceptionArray, primaryArray, selfArray, stringMap, primaryStringMap, nullType, nullableString, enumType, enumArray, optionalInt, optionalBool, optionalDecimal }
 enum NullableStringMode { none, required, nullAsEmpty }
 enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, guidLiteral, binaryLiteral, datespanLiteral, dateLiteral, nullLiteral, arrayLiteral, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, instanceOf, unary, binary, conditional, elvis }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
@@ -99,9 +99,9 @@ struct SourceUnit { string name, path, source; }
 struct GeneratedModule { string moduleName, relativePath, sourceName, source; }
 
 package bool isArray(ValueType type) {
-    return [ValueType.intArray, ValueType.decimalArray, ValueType.boolArray, ValueType.stringArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.primaryArray, ValueType.selfArray, ValueType.enumArray].canFind(type);
+    return [ValueType.intArray, ValueType.decimalArray, ValueType.decimalMatrix, ValueType.boolArray, ValueType.stringArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.primaryArray, ValueType.selfArray, ValueType.enumArray].canFind(type);
 }
-package bool isReferenceArray(ValueType type) { return [ValueType.selfArray, ValueType.enumArray, ValueType.primaryArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray].canFind(type); }
+package bool isReferenceArray(ValueType type) { return [ValueType.selfArray, ValueType.enumArray, ValueType.primaryArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.decimalMatrix].canFind(type); }
 package bool isMap(ValueType type) { return type == ValueType.stringMap || type == ValueType.primaryStringMap; }
 package bool hasObjectClass(ValueType type) { return type == ValueType.selfType || type == ValueType.selfArray || type == ValueType.enumType || type == ValueType.enumArray; }
 package bool isNullableReference(ValueType type) { return type == ValueType.selfType || type == ValueType.enumType || type == ValueType.exceptionType || type == ValueType.encodingType || type == ValueType.primaryType || type == ValueType.guidType || type == ValueType.binaryType || type == ValueType.datespanType || type == ValueType.dateType || type == ValueType.geometryType || type == ValueType.fileType || isMap(type) || type == ValueType.nullableString || type == ValueType.stringType || isArray(type); }
@@ -152,6 +152,7 @@ package ValueType elementType(ValueType type) {
     switch (type) {
         case ValueType.intArray: return ValueType.intType;
         case ValueType.decimalArray: return ValueType.decimalType;
+        case ValueType.decimalMatrix: return ValueType.decimalArray;
         case ValueType.boolArray: return ValueType.boolType;
         case ValueType.stringArray: return ValueType.stringType;
         case ValueType.primaryArray: return ValueType.primaryType;

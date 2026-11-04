@@ -35,6 +35,7 @@ public class GeometryValues {
         if (geometry.perpendicularToLine(multiline, 2.5, 10).shape() != geometry.None) return 37;
         if (line.shape() != geometry.Line || line.srs() != 4326 || line.points().size() != 2) return 10;
         if (line.length() != 5.0 || line.width() != 3.0 || line.height() != 4.0) return 11;
+        if (line.extent().size() != 2) return 38;
         if (line.center().x() != 1.5 || line.center().y() != 2.0) return 12;
         if (line.toString() != "0102000020E6100000020000000000000000000000000000000000000000000000000008400000000000001040") return 15;
         geometry decodedLine = geometry.fromHexString(line.toString());

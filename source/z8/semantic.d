@@ -667,6 +667,7 @@ class Checker {
                         e.builtinCall = "z8_geometry_" ~ e.token.text; return ValueType.decimalType;
                     }
                     if (e.token.text == "center") { e.builtinCall = "z8_geometry_center"; return ValueType.geometryType; }
+                    if (e.token.text == "extent") { e.builtinCall = "z8_geometry_extent"; return ValueType.decimalMatrix; }
                     if (e.token.text == "points") { e.builtinCall = "z8_geometry_points"; return ValueType.geometryArray; }
                     if (e.token.text == "toString") { e.builtinCall = "z8_geometry_to_string"; return ValueType.stringType; }
                     if (e.token.text == "toGeoJson") { e.builtinCall = "z8_geometry_toGeoJson"; return ValueType.stringType; }

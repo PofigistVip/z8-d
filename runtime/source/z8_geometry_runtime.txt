@@ -146,6 +146,12 @@ Z8Decimal z8_geometry_x1(Z8Geometry value) { return z8_geometry_decimal(z8_geome
 Z8Decimal z8_geometry_y1(Z8Geometry value) { return z8_geometry_decimal(z8_geometry_bounds(value)[1]); }
 Z8Decimal z8_geometry_x2(Z8Geometry value) { return z8_geometry_decimal(z8_geometry_bounds(value)[2]); }
 Z8Decimal z8_geometry_y2(Z8Geometry value) { return z8_geometry_decimal(z8_geometry_bounds(value)[3]); }
+Z8Array!(Z8Array!Z8Decimal) z8_geometry_extent(Z8Geometry value) {
+    auto bounds = z8_geometry_bounds(value);
+    auto low = new Z8Array!Z8Decimal([z8_geometry_decimal(bounds[0]), z8_geometry_decimal(bounds[1])]);
+    auto high = new Z8Array!Z8Decimal([z8_geometry_decimal(bounds[2]), z8_geometry_decimal(bounds[3])]);
+    return new Z8Array!(Z8Array!Z8Decimal)([low, high]);
+}
 Z8Decimal z8_geometry_width(Z8Geometry value) { auto b = z8_geometry_bounds(value); return z8_geometry_decimal(b[2] - b[0]); }
 Z8Decimal z8_geometry_height(Z8Geometry value) { auto b = z8_geometry_bounds(value); return z8_geometry_decimal(b[3] - b[1]); }
 private double z8_geometry_length_value(Z8Geometry value) {
