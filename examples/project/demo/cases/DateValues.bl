@@ -49,6 +49,8 @@ public class DateValues {
         if (date.parse(null) != null || date.parseIsoString(null) != null) return 18;
         date negativeZone = date.parseIsoString("2024-02-29T12:30:45-05:30");
         if (negativeZone.toIsoString() != "2024-02-29T12:30:45-04:30") return 19;
+        date secondsZone = date.parseIsoString("2024-02-29T12:30:45-05:30:45");
+        if (secondsZone.zoneOffset() != -16155000 || secondsZone.ticks() != 1709226000000 || secondsZone.toIsoString() != "2024-02-29T12:30:45-04:29") return 45;
         date standardParse = date.parse("2024-02-29T12:30:45-05:30");
         if (standardParse.toString() != "2024-02-29T21:00:45+03:00") return 20;
         if (date.parseIsoString("2024-02-29T12:30:45Z").toIsoString() != "2024-02-29T12:30:45+03:00") return 21;

@@ -145,21 +145,24 @@ private Z8Date z8_date_parse_impl(wstring input, bool iso) {
         if (text[index] == 'Z' && index + 1 == text.length) {
             ++index;
         } else {
-            if ((text[index] != '+' && text[index] != '-') || index + 6 != text.length || text[index+3] != ':')
+            if ((text[index] != '+' && text[index] != '-') ||
+                (index + 6 != text.length && index + 9 != text.length) || text[index+3] != ':' ||
+                (index + 9 == text.length && text[index+6] != ':'))
                 throw new Exception("invalid date offset");
             auto sign = text[index] == '-' ? -1 : 1;
             auto offsetHours = text[index+1..index+3].to!int;
             auto offsetMinutes = text[index+4..index+6].to!int;
+            auto offsetSeconds = index + 9 == text.length ? text[index+7..index+9].to!int : 0;
             // date.parse uses SimpleDateFormat for this exact ISO spelling;
             // parseIsoString follows the original's separate offset calculation.
             convertToDefault = !iso && index == 19 && text.length == 25;
-            offset = sign * offsetHours * 60 + (convertToDefault ? sign : 1) * offsetMinutes;
+            offset = sign * offsetHours * 3600 + (convertToDefault ? sign : 1) * offsetMinutes * 60 + offsetSeconds;
             hasOffset = true;
-            index += 6;
+            index = text.length;
         }
     }
     if (index != text.length) throw new Exception("invalid date");
-    immutable(TimeZone) zone = hasOffset ? new immutable(SimpleTimeZone)(dur!"minutes"(offset)) : z8_date_timezone();
+    immutable(TimeZone) zone = hasOffset ? new immutable(SimpleTimeZone)(dur!"seconds"(offset)) : z8_date_timezone();
     auto result = new Z8Date(SysTime(DateTime(year, 1, 1), zone));
     result.explicitOffset = hasOffset && !convertToDefault;
     z8_date_set(result, year, month, day, hour, minute, second, millisecond);
