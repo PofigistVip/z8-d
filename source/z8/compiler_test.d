@@ -127,6 +127,8 @@ unittest {
     rejects("class A { static void f() { string[string] x; x[\"a\"] += \"b\"; } }");
     rejects("class A { static void f() { string[string] x; int[] key; x.add(key, \"b\"); } }");
     rejects("class A { static void f() { string[string] x; int[] key; x.remove(key); } }");
+    rejects("class A { static void f() { string[string] x; int[] value; x.add(value); } }");
+    rejects("class A { static void f() { string[string] x; x.keys(1); } }");
     rejects("class A { static void f() { A[] x = {true}; } }");
     rejects("class A { static int f() { return 1; } static int x = f(); }");
     rejects("class A { int x; static int f() { return A.x; } }");

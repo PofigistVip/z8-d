@@ -43,6 +43,18 @@ public class StringMap {
         if (values.remove("extra") == null) return 19;
         if (values.remove("extra") != null) return 20;
         if ((values.remove("missing") ?: "none") != "none") return 21;
+        string[string] additional;
+        additional.add("a", "merged");
+        additional.add("other", "new");
+        values.add(additional);
+        values.add(values);
+        if (values["a"] != "merged" || values["other"] != "new") return 22;
+        string[] keys = values.keys();
+        string[] allValues = values.values();
+        if (keys.size() != values.size() || !keys.contains("other")) return 23;
+        if (allValues.size() != values.size() || !allValues.contains("new")) return 24;
+        keys.clear();
+        if (!values.containsKey("other")) return 25;
         values.clear();
         return values.isEmpty() ? 103 : 4;
     }

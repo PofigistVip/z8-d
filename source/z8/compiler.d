@@ -819,7 +819,10 @@ class Checker {
                         case "remove":
                             checkArguments(e, [ValueType.stringType]); return ValueType.nullableString;
                         case "add":
+                            if (e.arguments.length == 1) { checkArguments(e, [ValueType.stringMap]); return ValueType.voidType; }
                             checkArguments(e, [ValueType.stringType, ValueType.stringType]); return ValueType.nullableString;
+                        case "keys": case "values":
+                            checkArguments(e, []); return ValueType.stringArray;
                         default: break;
                     }
                 } else if (isArray(receiver)) {
@@ -1491,6 +1494,21 @@ class Z8StringMap {
         wstring previous = found is null ? null : *found;
         entries[key] = value.length ? value : ""w;
         return previous;
+    }
+    void z8_add(Z8StringMap other) {
+        z8_nonnull(other);
+        if (other is this) return;
+        foreach (key, value; other.entries) z8_add(key, value);
+    }
+    Z8Array!wstring z8_keys() {
+        auto result = new Z8Array!wstring();
+        foreach (key, value; entries) result.z8_add(key);
+        return result;
+    }
+    Z8Array!wstring z8_values() {
+        auto result = new Z8Array!wstring();
+        foreach (value; entries) result.z8_add(value);
+        return result;
     }
     wstring z8_get(wstring key) {
         auto found = key in entries;
