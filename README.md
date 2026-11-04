@@ -42,6 +42,7 @@ dub run -- project examples/project generated
 dub run -- build examples/project demo.Main.run example-app
 python tests/integration.py
 python tests/compound_assignment.py
+python tests/map_initializers.py
 python tests/decimal_oracle.py
 python tests/string_oracle.py
 python tests/lexer_oracle.py path/to/original-z8 --corpus
@@ -273,6 +274,7 @@ Unicode D и может отличаться от Java при специфичн
 `file` и `exception`, в том числе при конкатенации.
 Строка также преобразуется в `exception` при присваивании и передаче в методы.
 Для массивов поддерживаются инициализаторы `{...}`,
+в том числе вложенные инициализаторы для `decimal[][]`,
 индексация, методы `size`, `isEmpty`, `get`, `set`, `add`, `addAll`, `contains`,
 `indexOf`, `remove`, `removeAt`, `removeAll`, `reverse`, `sort`, `unique`,
 `isSubsetOf`, `join`, `clear` и операторы `+` и `+=`. Массивы передаются по ссылке;
@@ -289,7 +291,11 @@ Unicode D и может отличаться от Java при специфичн
 `remove`, `keys`, `values`, `size`, `isEmpty`, `containsKey`, операторы `+` и `+=`,
 `containsValue` и `clear`. Результат отсутствующего ключа можно сравнить с `null`
 или использовать слева от `?:`, сохранять в переменную соответствующего типа,
-передавать в метод и возвращать из метода. Ключи и значения также могут быть `null`.
+передавать в метод и возвращать из метода. Поддерживаются инициализаторы вида
+`{("ключ", значение), ...}` в объявлении, присваивании и `return`; сначала
+вычисляются все ключи, затем все значения. Непосредственный `null` в паре и
+неподходящие типы пары отвергаются, как исходным компилятором. Ключи и значения,
+добавленные другими способами, могут быть `null`.
 Возвращаемые `add` и `remove` значения поддерживают те же проверки. Составные
 присваивания элементу пока не поддерживаются. Присваивание по индексу не подтверждено сравнением исполнения:
 оригинальный компилятор принимает его, но генерирует некомпилируемую Java.

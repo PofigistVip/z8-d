@@ -28,6 +28,7 @@ class Checker {
             case ExprKind.arrayLiteral:
                 foreach (item; expression.arguments) if (!isConstantInitializer(item)) return false;
                 return true;
+            case ExprKind.mapEntry: return isConstantInitializer(expression.left) && isConstantInitializer(expression.right);
             case ExprKind.castExpr: case ExprKind.unary: return isConstantInitializer(expression.left);
             case ExprKind.binary: return isConstantInitializer(expression.left) && isConstantInitializer(expression.right);
             case ExprKind.conditional: return isConstantInitializer(expression.left) && isConstantInitializer(expression.right) && isConstantInitializer(expression.third);
@@ -367,10 +368,26 @@ class Checker {
                 return ValueType.dateType;
             case ExprKind.nullLiteral: return ValueType.nullType;
             case ExprKind.arrayLiteral:
+                if (isMap(expected)) {
+                    auto valueType = expected == ValueType.stringMap ? ValueType.stringType : ValueType.primaryType;
+                    foreach (entry; e.arguments) {
+                        if (entry.kind != ExprKind.mapEntry) fail("map initializer requires key-value pairs", entry.token);
+                        if (entry.left.kind == ExprKind.nullLiteral || entry.right.kind == ExprKind.nullLiteral)
+                            fail("null literal is not supported in a map initializer pair", entry.token);
+                        if (![ValueType.stringType, ValueType.nullableString].canFind(typeOf(entry.left)))
+                            fail("map key type mismatch", entry.left.token);
+                        if (valueType == ValueType.stringType) {
+                            if (![ValueType.stringType, ValueType.nullableString].canFind(typeOf(entry.right)))
+                                fail("map value type mismatch", entry.right.token);
+                        } else if (!matchesStored(entry.right, valueType)) fail("map value type mismatch", entry.right.token);
+                    }
+                    e.inferredType = expected; return expected;
+                }
                 if (!isArray(expected)) fail("array initializer requires an array type", e.token);
                 foreach (element; e.arguments)
                     if (!matchesStored(element, elementType(expected), e.objectClass)) fail("array element type mismatch", element.token);
                 e.inferredType = expected; return expected;
+            case ExprKind.mapEntry: fail("key-value pair requires a map initializer", e.token); assert(0);
             case ExprKind.variable:
                 auto variable = e.token.text in variables;
                 if (variable is null) {

@@ -273,12 +273,26 @@ class Parser {
         auto init = new Expression(ExprKind.arrayLiteral, take());
         if (current.text != "}") {
             do {
-                init.arguments ~= expression();
+                init.arguments ~= initializerElement();
                 if (current.text != ",") break;
                 take();
             } while (current.text != "}");
         }
         expect("}"); return init;
+    }
+    private Expression initializerElement() {
+        if (current.text == "(") {
+            auto start = index;
+            auto token = take();
+            auto key = expression();
+            if (accept(",")) {
+                auto pair = new Expression(ExprKind.mapEntry, token);
+                pair.left = key; pair.right = initializer();
+                expect(")"); return pair;
+            }
+            index = start;
+        }
+        return initializer();
     }
     private static int precedence(string op) {
         switch (op) {

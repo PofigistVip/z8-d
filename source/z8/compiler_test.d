@@ -10,6 +10,22 @@ private void rejects(string source) {
 }
 
 unittest {
+    compile(q{class A { static void f() {
+        string[string] values = {("a", "b"), ("c", "d"),};
+        primary[string] mixed = {("number", 42), ("text", "value")};
+        decimal[][] matrix = {{1.0}, {2.0, 3.0}};
+        int[] ordinary = {(1 + 2), (3)};
+    } }});
+    rejects(q{class A { static void f() { int[] values = {(1, 2)}; } }});
+    rejects(q{class A { static void f() { string[string] values = {"a"}; } }});
+    rejects(q{class A { static void f() { string[string] values = {(null, "x")}; } }});
+    rejects(q{class A { static void f() { primary[string] values = {("x", null)}; } }});
+    rejects(q{class A { static void f() { string[string] values = {(1, "x")}; } }});
+    rejects(q{class A { static void f() { string[string] values = {("x", 1)}; } }});
+    rejects(q{class A { static void f() { int[] key; string[string] values = {(key, "x")}; } }});
+}
+
+unittest {
     rejects("class A { auto int[] items; }");
     rejects("class A { auto A item; }");
     rejects("class A { auto static A[] items; }");

@@ -1,0 +1,33 @@
+public class MapInitializers {
+    static int effects;
+    static string mark(int digit) {
+        effects = effects * 10 + digit;
+        return digit.toString();
+    }
+    static string[string] make() {
+        return {("same", "first"), ("same", "last"),};
+    }
+    public static int run() {
+        effects = 0;
+        string[string] values = {((mark(1)), mark(2)), (mark(3), mark(4)),};
+        if (effects != 1324 || values["1"] != "2" || values["3"] != "4") return 1;
+        string[string] duplicate = make();
+        if (duplicate.size() != 1 || duplicate["same"] != "last") return 2;
+        duplicate.add(null, "null-key");
+        if (!duplicate.containsKey(null) || duplicate.get(null) != "null-key") return 3;
+        string[string] empty = {};
+        if (!empty.isEmpty()) return 4;
+        string absent = null;
+        string[string] nullable = {(absent, "null-key"), ("null-value", absent)};
+        if (!nullable.containsKey(null) || nullable.get(null) != "null-key") return 9;
+        if (!nullable.containsKey("null-value") || nullable.get("null-value") != null) return 10;
+        primary[string] mixed = {("number", 42), ("text", "hello")};
+        mixed.add("empty", null);
+        if ((int)mixed["number"] != 42 || (string)mixed["text"] != "hello") return 5;
+        if (!mixed.containsKey("empty") || mixed["empty"] != null) return 6;
+        decimal[][] matrix = {{1.0, 2.0}, {}, {3.0,},};
+        if (matrix.size() != 3 || matrix[0].size() != 2 || !matrix[1].isEmpty()) return 7;
+        if (matrix[0][1] != 2.0 || matrix[2][0] != 3.0) return 8;
+        return 171;
+    }
+}

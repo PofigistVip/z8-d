@@ -219,9 +219,22 @@ private string emitExprRaw(Expression e) {
         case ExprKind.dateLiteral: return "z8_date_literal(\"" ~ e.token.text[1 .. $ - 1] ~ "\")";
         case ExprKind.nullLiteral: return isOptionalPrimitive(e.inferredType) ? dType(e.inferredType) ~ ".init" : e.inferredType == ValueType.voidType ? "null" : "cast(" ~ dType(e.inferredType, e.objectClass) ~ ")null";
         case ExprKind.arrayLiteral:
+            if (isMap(e.inferredType)) {
+                string body = "(() {\n";
+                foreach (i, entry; e.arguments)
+                    body ~= "wstring z8_key_" ~ i.to!string ~ " = " ~ emitExpr(entry.left) ~ ";\n";
+                auto valueType = e.inferredType == ValueType.stringMap ? "wstring" : "Z8Primary";
+                foreach (i, entry; e.arguments)
+                    body ~= valueType ~ " z8_value_" ~ i.to!string ~ " = " ~ emitExpr(entry.right) ~ ";\n";
+                body ~= "auto z8_result = new " ~ dType(e.inferredType) ~ "();\n";
+                foreach (i, entry; e.arguments)
+                    body ~= "z8_result.z8_add(z8_key_" ~ i.to!string ~ ", z8_value_" ~ i.to!string ~ ");\n";
+                return body ~ "return z8_result;\n})()";
+            }
             string[] elements; foreach (element; e.arguments)
                 elements ~= (e.inferredType == ValueType.selfArray || e.inferredType == ValueType.enumArray) ? "cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(element) ~ ")" : emitExpr(element);
             return "new " ~ dType(e.inferredType, e.objectClass) ~ "(" ~ (elements.length ? "[" ~ elements.join(", ") ~ "]" ~ ([ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(e.inferredType) ? ", true" : "") : "") ~ ")";
+        case ExprKind.mapEntry: assert(0, "map entries are emitted by their initializer");
         case ExprKind.variable: return e.isField ? (e.targetClass.length ? e.targetClass ~ ".f_" : "this.f_") ~ e.token.text : "v_" ~ e.token.text;
         case ExprKind.selfRef: return "this";
         case ExprKind.superRef: return "super";
