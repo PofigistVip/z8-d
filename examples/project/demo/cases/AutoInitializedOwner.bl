@@ -1,0 +1,4 @@
+public class AutoInitializedOwner {
+    auto public AutoNode[] nodes = {};
+    public AutoNode member;
+}

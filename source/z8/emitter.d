@@ -514,7 +514,23 @@ package string emitPrograms(Program[] programs) {
         result ~= "}\noverride void z8_init_references() {\n";
         foreach (field; orderedReferenceFields(program))
             result ~= "this.f_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
-        result ~= "}\noverride void z8_init_values() {\nsuper.z8_init_values();\n";
+        result ~= "}\n";
+        string autoInitializers;
+        foreach (field; program.fields) if (!field.isStatic && field.type == ValueType.selfType) {
+            for (auto owner = program; owner !is null; owner = owner.baseClass) {
+                foreach (array; owner.fields) if (array.isAuto) {
+                    for (auto fieldClass = field.objectClass; fieldClass !is null; fieldClass = fieldClass.baseClass) {
+                        if (fieldClass is array.objectClass) {
+                            autoInitializers ~= "z8_nonnull(this.f_" ~ array.name.text ~ ").z8_add(this.f_" ~ field.name.text ~ ");\n";
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if (autoInitializers.length)
+            result ~= "override void z8_init_members() {\nsuper.z8_init_members();\n" ~ autoInitializers ~ "}\n";
+        result ~= "override void z8_init_values() {\nsuper.z8_init_values();\n";
         foreach (field; program.fields) if (!field.isStatic) {
             if (field.type == ValueType.selfType)
                 result ~= "if (this.f_" ~ field.name.text ~ " is null) throw new Exception(\"null object field initializer\");\n";

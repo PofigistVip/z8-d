@@ -127,10 +127,11 @@ class Parser {
         expect("{");
         while (current.text != "}") {
             if (current.kind == TokenKind.endOfFile) error("expected '}'");
-            bool isStatic;
+            bool isStatic, isAuto;
             bool isPublic = true, isProtected, hasAccess, isVirtual;
-            while (["public", "private", "protected", "static", "virtual"].canFind(current.text)) {
+            while (["public", "private", "protected", "static", "virtual", "auto"].canFind(current.text)) {
                 if (current.text == "static") { if (isStatic) error("duplicate static modifier"); isStatic = true; }
+                else if (current.text == "auto") { if (isAuto) error("duplicate auto modifier"); isAuto = true; }
                 else if (current.text == "virtual") { if (isVirtual) error("duplicate virtual modifier"); isVirtual = true; }
                 else { if (hasAccess) error("duplicate access modifier"); hasAccess = true; isPublic = current.text == "public"; isProtected = current.text == "protected"; }
                 take();
@@ -141,10 +142,11 @@ class Parser {
                 if (isVirtual || declaredType == ValueType.voidType) error("this field type or modifier is not supported");
                 if (isStatic && (declaredType == ValueType.selfArray || declaredType == ValueType.exceptionType || isMap(declaredType)))
                     error("static object fields are not supported");
-                auto field = new Field; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.isProtected = isProtected; field.isStatic = isStatic; field.declaredFinal = declaredFinal; field.objectName = declaredObjectName; field.owner = result;
+                auto field = new Field; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.isProtected = isProtected; field.isStatic = isStatic; field.isAuto = isAuto; field.declaredFinal = declaredFinal; field.objectName = declaredObjectName; field.owner = result;
                 if (accept("=")) field.initializer = initializer();
                 expect(";"); result.fields ~= field; continue;
             }
+            if (isAuto) error("auto cannot be applied to a method");
             if (declaredFinal) error("final methods are not supported by BL");
             auto method = new Method;
             if (isVirtual && isStatic) error("a static method cannot be virtual");

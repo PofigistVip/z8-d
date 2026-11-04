@@ -1,0 +1,3 @@
+public class AutoChild extends AutoNode {
+    public int extra = 3;
+}

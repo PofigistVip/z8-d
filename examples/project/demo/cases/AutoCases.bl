@@ -1,0 +1,24 @@
+public class AutoCases {
+    public static int run() {
+        AutoOwnerChild owner;
+        if (owner.nodes.size() != 4 || owner.children.size() != 2) return 1;
+        if (owner.localNodes.size() != 2) return 2;
+        owner.first.value = 11;
+        owner.second.value = 22;
+        owner.third.value = 33;
+        owner.fourth.value = 44;
+        if (owner.nodes[0].value != 11 || owner.nodes[1].value != 22) return 3;
+        if (owner.nodes[2].value != 33 || owner.nodes[3].value != 44) return 4;
+        if (owner.children[0].value != 22 || owner.children[1].value != 44) return 5;
+        if (owner.localNodes[0].value != 33 || owner.localNodes[1].value != 44) return 6;
+        if (owner.observed != 4 || owner.childObserved != 2) return 7;
+        owner.third.value = 12;
+        if (owner.nodes[2].value != 12) return 8;
+        AutoInitializedOwner initialized;
+        try { int size = initialized.nodes.size(); return 9; } catch (exception expected) {}
+        if (initialized.nodes.size() != 0) return 10;
+        AutoInitializedEmpty empty;
+        if (empty.nodes.size() != 0) return 11;
+        return 241;
+    }
+}

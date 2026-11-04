@@ -10,6 +10,17 @@ private void rejects(string source) {
 }
 
 unittest {
+    rejects("class A { auto int[] items; }");
+    rejects("class A { auto A item; }");
+    rejects("class A { auto static A[] items; }");
+    rejects("class A { auto auto A[] items; }");
+    rejects("class A { auto void f() {} }");
+    auto automatic = (new Parser("class A { auto A[] items; A item; }")).parse();
+    assert(automatic.fields[0].isAuto && !automatic.fields[1].isAuto);
+    compile("class A { auto A[] items; A item; }");
+}
+
+unittest {
     auto parsed = (new Parser(q{
         class FinalDeclarations {
             final int field;

@@ -1,0 +1,6 @@
+public class AutoOwnerChild extends AutoOwnerBase {
+    auto public AutoNode[] localNodes;
+    public AutoNode third;
+    public AutoChild fourth;
+    public int childObserved = localNodes.size();
+}

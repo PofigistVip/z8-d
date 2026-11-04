@@ -1,0 +1,7 @@
+public class AutoOwnerBase {
+    auto public AutoNode[] nodes;
+    auto public AutoChild[] children;
+    public AutoNode first;
+    public AutoChild second;
+    public int observed = nodes.size();
+}
