@@ -197,7 +197,7 @@ class Parser {
                 name.text = "operatorCast:" ~ typeToken.text;
             } else if (current.text == "operator") {
                 name = take();
-                if (!["!", "~", "+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">=", "&", "|", "^", "&&", "||"].canFind(current.text)) error("unsupported operator declaration");
+                if (!["!", "~", "+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">=", "&", "|", "^", "&&", "||", "="].canFind(current.text)) error("unsupported operator declaration");
                 operatorSymbol = take().text;
                 name.text = "operator" ~ operatorSymbol;
             } else name = identifier();

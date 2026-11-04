@@ -1,0 +1,23 @@
+public class AssignmentValue {
+    int amount;
+    static int effects;
+    public void operator = (int value) { amount = value; }
+    public void operator = (string value) { amount = value.length(); }
+    public static AssignmentHolder receiver(AssignmentHolder value) { effects = effects * 10 + 1; return value; }
+    public static AssignmentValue empty() { return null; }
+    public static int mark() { effects = effects * 10 + 2; return 9; }
+    public static int run() {
+        AssignmentValue value = new AssignmentValue;
+        value = 42;
+        if (value.amount != 42) return 1;
+        value = "abc";
+        if (value.amount != 3) return 2;
+        AssignmentHolder holder = new AssignmentHolder;
+        effects = 0;
+        receiver(holder).value = mark();
+        if (holder.value.amount != 9 || effects != 12) return 3;
+        AssignmentValue missing = empty();
+        try { missing = 1; return 4; } catch (exception expected) {}
+        return 201;
+    }
+}

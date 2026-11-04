@@ -19,6 +19,7 @@ private string operatorDName(string symbol) {
         case "<=": return "z8op_less_equal"; case ">=": return "z8op_greater_equal";
         case "&": return "z8op_bit_and"; case "|": return "z8op_bit_or"; case "^": return "z8op_bit_xor";
         case "&&": return "z8op_and"; case "||": return "z8op_or";
+        case "=": return "z8op_assign";
         default: assert(0, "unsupported operator");
     }
 }
@@ -471,6 +472,8 @@ private string emitSimple(Statement s) {
             (s.expression !is null ? emitExpr(s.expression) : s.type == ValueType.intType ? "z8_optional_wrap(0L)" : s.type == ValueType.boolType ? "z8_optional_wrap(false)" : s.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(s.type, s.objectClass, s.hasContainer));
     if (s.kind == StmtKind.expressionStmt) return emitExpr(s.expression);
     assert(s.kind == StmtKind.assignment);
+    if (s.userOperatorAssignment)
+        return emitReceiver(s.target) ~ ".z8op_assign(" ~ emitExpr(s.expression) ~ ")";
     if (s.filePathAssignment) return "z8_file_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.dateTickAssignment) return "z8_date_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.target.kind == ExprKind.index && isMap(s.target.inferredType))

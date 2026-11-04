@@ -1466,6 +1466,22 @@ class Checker {
                 if (variableType == ValueType.nullableString) variableType = ValueType.stringType;
                 if (isOptionalPrimitive(variableType)) variableType = optionalBaseType(variableType);
                 if (s.target.enumConstant) fail("enum constants cannot be assigned", s.token);
+                if (variableType == ValueType.selfType && s.assignmentOperator == "=") {
+                    auto method = lookupMethod(s.target.objectClass, "operator=");
+                    if (method !is null) {
+                        auto call = new Expression(ExprKind.call, s.token);
+                        call.arguments = [s.expression];
+                        auto selected = selectOverload(method, call, true, true);
+                        if (selected !is null) {
+                            if (matchesStored(s.expression, variableType, s.target.objectClass))
+                                fail("assignment with both direct and operator conversions is not supported yet", s.token);
+                            checkCall(selected, selected.owner, call);
+                            s.userOperatorAssignment = true;
+                            s.type = variableType;
+                            return false;
+                        }
+                    }
+                }
                 if (variableType == ValueType.fileType && s.assignmentOperator == "=" &&
                     [ValueType.stringType, ValueType.nullableString].canFind(typeOf(s.expression))) {
                     s.filePathAssignment = true; s.type = variableType; return false;
