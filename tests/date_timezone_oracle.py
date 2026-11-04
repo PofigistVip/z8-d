@@ -14,9 +14,11 @@ public class DateZoneOracle {
     public static void main(String[] args) {
         TimeZone.setDefault(TimeZone.getTimeZone("Europe/Moscow"));
         SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm Z z zzzz");
-        for (int year : new int[]{2000, 2010, 2012, 2014, 2024})
-            for (int month : new int[]{0, 6})
-                System.out.println(format.format(new GregorianCalendar(year, month, 15, 12, 0).getTime()));
+        for (int year : new int[]{1583, 1700, 1800, 1890, 1900, 1918, 1919, 1920, 1930, 1940, 1950, 1960, 1969, 2000, 2010, 2012, 2014, 2024})
+            for (int month : new int[]{0, 6}) {
+                Calendar c = new GregorianCalendar(year, month, 15, 12, 0);
+                System.out.println(format.format(c.getTime()) + " " + c.getTimeInMillis() + " " + c.get(Calendar.ZONE_OFFSET));
+            }
         int[][] edge = {{2010,3,28,2,30}, {2010,10,31,2,30}, {2011,3,27,2,30},
                         {2014,10,26,1,30}, {1991,9,29,2,30}};
         for (int[] c : edge) {
@@ -39,7 +41,7 @@ public class DateZoneOracle {
         }
         int hash = 0;
         Calendar calendar = new GregorianCalendar();
-        for (long tick = 0; tick < 1609459200000L; tick += 604800000L) {
+        for (long tick = -2208988800000L; tick < 1609459200000L; tick += 604800000L) {
             calendar.setTimeInMillis(tick);
             String value = format.format(calendar.getTime()) + "|" + calendar.get(Calendar.ZONE_OFFSET);
             for (char ch : value.toCharArray()) hash = 31 * hash + ch;
@@ -57,9 +59,9 @@ import std.format : format;
 import std.stdio : writeln;
 import std.conv : to;
 void main() {
-    foreach (year; [2000, 2010, 2012, 2014, 2024]) foreach (month; [1, 7]) {
+    foreach (year; [1583, 1700, 1800, 1890, 1900, 1918, 1919, 1920, 1930, 1940, 1950, 1960, 1969, 2000, 2010, 2012, 2014, 2024]) foreach (month; [1, 7]) {
         auto date = z8_date_literal(format("15/%02d/%04d 12:00:00", month, year));
-        writeln(z8_date_toString(date, "yyyy-MM-dd HH:mm Z z zzzz"w).to!string);
+        writeln(z8_date_toString(date, "yyyy-MM-dd HH:mm Z z zzzz"w).to!string, " ", z8_date_ticks(date), " ", z8_date_zoneOffset(date));
     }
     int[][] edge = [[2010,3,28,2,30], [2010,10,31,2,30], [2011,3,27,2,30],
                     [2014,10,26,1,30], [1991,9,29,2,30]];
@@ -82,7 +84,7 @@ void main() {
         writeln(z8_date_toString(added, "yyyy-MM-dd HH:mm Z z zzzz"w).to!string, " ", z8_date_ticks(added));
     }
     uint hash;
-    for (long tick = 0; tick < 1609459200000L; tick += 604800000L) {
+    for (long tick = -2208988800000L; tick < 1609459200000L; tick += 604800000L) {
         auto date = z8_date_from_ticks(tick);
         auto value = z8_date_toString(date, "yyyy-MM-dd HH:mm Z z zzzz"w) ~ "|"w ~ z8_date_zoneOffset(date).to!wstring;
         foreach (wchar c; value) hash = 31u * hash + c;
@@ -95,5 +97,5 @@ void main() {
     subprocess.run(["dmd", str(source), *import_args(), str(runtime_lib), "-of=" + str(executable)], cwd=temp, check=True)
     actual = subprocess.check_output([str(executable)], cwd=temp, text=True, encoding="utf-8").splitlines()
     differences = [(i, j, d) for i, (j, d) in enumerate(zip(expected, actual)) if j != d]
-    assert len(expected) == len(actual) and not differences, differences
+    assert len(expected) == len(actual) and not differences, differences[:20]
 print("Moscow time-zone names and offsets match Java")

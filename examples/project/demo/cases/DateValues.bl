@@ -28,6 +28,8 @@ public class DateValues {
         if (afterSummer.hours() != 12 || afterSummer.ticks() - beforeSummer.ticks() != 82800000) return 47;
         if ('27/03/2010 02:30:00'.addDay(1).hours() != 1) return 48;
         if (date.parse("2010-07-15 12:00 MSD", "yyyy-MM-dd HH:mm z").ticks() != summer2010.ticks()) return 49;
+        date summer1918 = '15/07/1918 12:00:00';
+        if (summer1918.zoneOffset() != 9079000 || summer1918.toString("Z") != "+0431" || summer1918.toIsoString() != "1918-07-15T12:00:00+02:31") return 50;
         if (value.toString("yyyy-MM-dd HH:mm:ss.SSS XXX") != "2024-02-29 12:30:45.000 +03:00") return 35;
         if (value.toString("yy/M/d H:m:s Z") != "24/2/29 12:30:45 +0300") return 36;
         if (value.toString("yyyy 'at' HH:mm") != "2024 at 12:30") return 37;

@@ -1,6 +1,4 @@
 private import std.datetime : SysTime, DateTime, Clock, TimeZone, SimpleTimeZone, UTC, dur, AllowDayOverflow;
-version (Windows) private import std.datetime : WindowsTimeZone;
-else version (Posix) private import std.datetime : PosixTimeZone;
 
 private enum wstring[] z8_month_short = ["янв"w,"фев"w,"мар"w,"апр"w,"мая"w,"июн"w,"июл"w,"авг"w,"сен"w,"окт"w,"ноя"w,"дек"w];
 private enum wstring[] z8_month_long = ["января"w,"февраля"w,"марта"w,"апреля"w,"мая"w,"июня"w,"июля"w,"августа"w,"сентября"w,"октября"w,"ноября"w,"декабря"w];
@@ -35,9 +33,7 @@ private int z8_date_parse_weekday(wstring input, ref size_t index) {
 }
 
 private immutable(TimeZone) z8_date_timezone() {
-    version (Windows) return z8_moscow_zone;
-    else version (Posix) return PosixTimeZone.getTimeZone("Europe/Moscow");
-    else static assert(0, "Moscow timezone is unavailable on this platform");
+    return z8_moscow_zone;
 }
 class Z8Date {
     SysTime value;
@@ -115,7 +111,13 @@ long z8_date_seconds(Z8Date x) { return z8_nonnull(x).value.second; }
 long z8_date_milliseconds(Z8Date x) { return z8_nonnull(x).value.fracSecs.total!"msecs"; }
 long z8_date_zoneOffset(Z8Date x) {
     auto time = z8_nonnull(x).value;
-    return time.utcOffset.total!"msecs" - (time.dstInEffect ? 3_600_000L : 0);
+    long daylight;
+    auto zone = cast(immutable(Z8MoscowTimeZone))time.timezone;
+    if (zone !is null && time.stdTime >= Z8MoscowTimeZone.begin) {
+        auto current = zone.state(time.stdTime);
+        if (current.daylight) daylight = (current.daylightSeconds ? current.daylightSeconds : 3600) * 1000L;
+    } else if (time.dstInEffect) daylight = 3_600_000L;
+    return time.utcOffset.total!"msecs" - daylight;
 }
 
 void z8_date_setZoneOffset(Z8Date x, long offset) {

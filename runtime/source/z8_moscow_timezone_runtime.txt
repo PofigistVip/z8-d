@@ -1,11 +1,21 @@
-// IANA tzdata 2025b, Europe/Moscow transitions since 1970 (public domain).
-// The standard Windows time-zone API exposed by Phobos does not retain these rules.
+// IANA tzdata 2025b, Europe/Moscow offsets since 1900 (public domain).
+// The 1921 daylight decomposition follows Java 8 ZoneInfo.
+// Java 8 uses the current +03:00 raw offset before its first 1900 transition.
 private struct Z8ZoneTransition {
     long unixSeconds;
     int offsetSeconds;
     bool daylight;
+    int daylightSeconds;
 }
 private enum Z8ZoneTransition[] z8_moscow_transitions = [
+    Z8ZoneTransition(-2208988800L,9017,false), Z8ZoneTransition(-1688265017L,9079,false),
+    Z8ZoneTransition(-1656819079L,12679,true), Z8ZoneTransition(-1641353479L,9079,false),
+    Z8ZoneTransition(-1627965079L,16279,true,7200), Z8ZoneTransition(-1618716679L,12679,true),
+    Z8ZoneTransition(-1596429079L,16279,true,7200), Z8ZoneTransition(-1593820800L,14400,true),
+    Z8ZoneTransition(-1589860800L,10800,false), Z8ZoneTransition(-1542427200L,14400,true),
+    Z8ZoneTransition(-1539493200L,18000,true,7200), Z8ZoneTransition(-1525323600L,14400,true),
+    Z8ZoneTransition(-1522728000L,10800,false), Z8ZoneTransition(-1491188400L,7200,false),
+    Z8ZoneTransition(-1247536800L,10800,false),
     Z8ZoneTransition(354920400,14400,true), Z8ZoneTransition(370728000,10800,false),
     Z8ZoneTransition(386456400,14400,true), Z8ZoneTransition(402264000,10800,false),
     Z8ZoneTransition(417992400,14400,true), Z8ZoneTransition(433800000,10800,false),
@@ -42,6 +52,7 @@ private enum Z8ZoneTransition[] z8_moscow_transitions = [
 
 private final class Z8MoscowTimeZone : TimeZone {
     private enum long epoch = 621355968000000000L, perSecond = 10_000_000L;
+    private enum long begin = epoch - 2208988800L * perSecond;
     private immutable(TimeZone) earlier;
     this(immutable(TimeZone) earlier) immutable {
         super("Europe/Moscow", "MSK", "MSD");
@@ -49,8 +60,10 @@ private final class Z8MoscowTimeZone : TimeZone {
     }
     @property override bool hasDST() @safe const nothrow { return true; }
     private Z8ZoneTransition state(long stdTime) @safe const nothrow {
-        auto seconds = (stdTime - epoch) / perSecond;
-        Z8ZoneTransition result = Z8ZoneTransition(0, 10800, false);
+        auto difference = stdTime - epoch;
+        auto seconds = difference / perSecond;
+        if (difference < 0 && difference % perSecond) --seconds;
+        Z8ZoneTransition result = Z8ZoneTransition(0, 9017, false);
         foreach (transition; z8_moscow_transitions) {
             if (transition.unixSeconds > seconds) break;
             result = transition;
@@ -58,19 +71,19 @@ private final class Z8MoscowTimeZone : TimeZone {
         return result;
     }
     override bool dstInEffect(long stdTime) @safe const scope nothrow {
-        return stdTime < epoch ? earlier.dstInEffect(stdTime) : state(stdTime).daylight;
+        return stdTime < begin ? earlier.dstInEffect(stdTime) : state(stdTime).daylight;
     }
     override long utcToTZ(long stdTime) @safe const scope nothrow {
-        return stdTime < epoch ? earlier.utcToTZ(stdTime) : stdTime + cast(long)state(stdTime).offsetSeconds * perSecond;
+        return stdTime < begin ? earlier.utcToTZ(stdTime) : stdTime + cast(long)state(stdTime).offsetSeconds * perSecond;
     }
     override long tzToUTC(long local) @safe const scope nothrow {
-        if (local < epoch + 10800L * perSecond) return earlier.tzToUTC(local);
+        if (local < begin + 9017L * perSecond) return earlier.tzToUTC(local);
         // Java chooses the later instant for ambiguous local times.
-        foreach (offset; [7200, 10800, 14400]) {
+        foreach (offset; [7200, 9017, 9079, 10800, 12679, 14400, 16279, 18000]) {
             auto utc = local - cast(long)offset * perSecond;
-            if (utc >= epoch && state(utc).offsetSeconds == offset) return utc;
+            if (utc >= begin && state(utc).offsetSeconds == offset) return utc;
         }
-        int previous = 10800;
+        int previous = 9017;
         foreach (transition; z8_moscow_transitions) {
             auto utc = epoch + transition.unixSeconds * perSecond;
             if (transition.offsetSeconds > previous && local >= utc + cast(long)previous * perSecond &&
@@ -82,9 +95,7 @@ private final class Z8MoscowTimeZone : TimeZone {
     }
 }
 
-version (Windows) {
-    private __gshared immutable(TimeZone) z8_moscow_zone;
-    shared static this() {
-        z8_moscow_zone = new immutable Z8MoscowTimeZone(WindowsTimeZone.getTimeZone("Russian Standard Time"));
-    }
+private __gshared immutable(TimeZone) z8_moscow_zone;
+shared static this() {
+    z8_moscow_zone = new immutable Z8MoscowTimeZone(new immutable(SimpleTimeZone)(dur!"hours"(3)));
 }
