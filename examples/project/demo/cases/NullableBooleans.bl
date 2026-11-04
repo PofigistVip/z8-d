@@ -5,6 +5,8 @@ public class NullableBooleans {
     private static bool missing() { return null; }
     private static bool effect() { effects += 1; return true; }
     public static int run() {
+        bool literalBranch = false ? true : null;
+        if (literalBranch != null || !(true ? true : null)) return 13;
         bool value = null;
         if (value != null || field != null || pass(value) != null) return 1;
         bool casted = (bool)value;

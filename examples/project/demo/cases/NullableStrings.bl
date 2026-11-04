@@ -32,6 +32,9 @@ public class NullableStrings {
         map.add("", "emptyKey");
         if (map.get(null) != "nullKey" || map.get("") != "emptyKey") return 11;
         if (!map.containsValue(null) || map.containsValue("missing")) return 12;
+        try { int ignored = (false ? "present" : null).length(); return 22; } catch (exception expectedConditional) { }
+        string numericBranch = false ? value : 42;
+        if (numericBranch != "42") return 23;
         string conditional = true ? value : "present";
         if (conditional != null) return 13;
         try { bool ignored = "test".startsWith(value); return 16; } catch (exception expectedArgument) { }

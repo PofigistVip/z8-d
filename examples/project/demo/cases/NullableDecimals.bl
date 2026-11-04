@@ -6,6 +6,8 @@ public class NullableDecimals {
     private static decimal effect() { effects += 1; return 2.0; }
     private static int effectInt() { effects += 1; return 2; }
     public static int run() {
+        decimal literalBranch = false ? 1.5 : null;
+        if (literalBranch != null || (true ? 1.5 : null).toString() != "1.5") return 16;
         decimal value = null;
         if (value != null || field != null || pass(value) != null) return 1;
         decimal casted = (decimal)value;

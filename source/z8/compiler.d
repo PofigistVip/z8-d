@@ -1185,12 +1185,26 @@ class Checker {
                 if (right == ValueType.nullType && isNullableReference(left)) {
                     matches(e.third, left, e.right.objectClass); right = left;
                 }
+                if (right == ValueType.nullType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(left)) {
+                    e.right.optionalWrap = true; left = storedValueType(left); e.third.inferredType = left; right = left;
+                }
+                if (left == ValueType.nullType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(right)) {
+                    e.third.optionalWrap = true; right = storedValueType(right); e.right.inferredType = right; left = right;
+                }
                 if (isOptionalPrimitive(left) && right == ValueType.nullType) { e.third.inferredType = left; right = left; }
                 if (isOptionalPrimitive(right) && left == ValueType.nullType) { e.right.inferredType = right; left = right; }
                 if (isOptionalPrimitive(left) && right == optionalBaseType(left)) { e.third.optionalWrap = true; right = left; }
                 if (isOptionalPrimitive(right) && left == optionalBaseType(right)) { e.right.optionalWrap = true; left = right; }
                 if (left == ValueType.optionalDecimal && (right == ValueType.intType || right == ValueType.optionalInt)) { if (!matchesStored(e.third, ValueType.decimalType)) fail("conditional branch type mismatch", e.token); right = left; }
                 if (right == ValueType.optionalDecimal && (left == ValueType.intType || left == ValueType.optionalInt)) { if (!matchesStored(e.right, ValueType.decimalType)) fail("conditional branch type mismatch", e.token); left = right; }
+                if (left == ValueType.nullableString && (isOptionalPrimitive(right) || [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(right))) {
+                    if (!matches(e.third, ValueType.stringType)) fail("conditional branch type mismatch", e.token);
+                    right = left;
+                }
+                if (right == ValueType.nullableString && (isOptionalPrimitive(left) || [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(left))) {
+                    if (!matches(e.right, ValueType.stringType)) fail("conditional branch type mismatch", e.token);
+                    left = right;
+                }
                 if (left == ValueType.stringType && right == ValueType.nullableString) left = ValueType.nullableString;
                 if (left == ValueType.nullableString && right == ValueType.stringType) right = ValueType.nullableString;
                 if (left == ValueType.decimalType && right == ValueType.intType) { e.third.promoteToDecimal = true; right = ValueType.decimalType; }
@@ -1201,6 +1215,8 @@ class Checker {
                 if (right == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(left)) {
                     e.right.convertToString = left; left = ValueType.stringType;
                 }
+                if (left == ValueType.stringType && right == ValueType.stringType &&
+                    (e.right.kind == ExprKind.nullLiteral || e.third.kind == ExprKind.nullLiteral)) left = right = ValueType.nullableString;
                 if (left == ValueType.voidType || left != right || (hasObjectClass(left) && e.right.objectClass !is e.third.objectClass))
                     fail("conditional branch type mismatch", e.token);
                 if (hasObjectClass(left)) e.objectClass = e.right.objectClass;
