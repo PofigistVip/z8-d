@@ -119,6 +119,11 @@ with tempfile.TemporaryDirectory() as temporary:
         collection_java = decimal_java.parent.parent / "runtime" / "RCollection.java"
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
                         "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), str(collection_java)], cwd=temp, check=True)
+        # Override the cached CLASS implementation so lifecycle comparisons use
+        # the checked-out source. Other runtime classes still come from the JAR.
+        class_java = collection_java.with_name("CLASS.java")
+        subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
+                        "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), str(class_java)], cwd=temp, check=True)
         map_java = collection_java.with_name("RLinkedHashMap.java")
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
                         "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), str(map_java)], cwd=temp, check=True)
