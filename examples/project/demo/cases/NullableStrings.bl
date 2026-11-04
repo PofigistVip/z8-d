@@ -3,6 +3,7 @@ public class NullableStrings {
     private static int effects;
     private static string pass(string value) { return value; }
     private static string fallback() { effects += 1; return "fallback"; }
+    private static int effectIndex() { effects += 1; return 1; }
     public static int run() {
         string value = null;
         if (value != null || field != null || pass(value) != null) return 1;
@@ -34,6 +35,12 @@ public class NullableStrings {
         string conditional = true ? value : "present";
         if (conditional != null) return 13;
         try { bool ignored = "test".startsWith(value); return 16; } catch (exception expectedArgument) { }
+        int noIndex = null;
+        try { string ignored = "test".substring(noIndex, effectIndex()); return 17; }
+        catch (exception expectedIndex) { if (effects != 2) return 18; }
+        int[] numbers;
+        try { numbers.set(noIndex, effectIndex()); return 19; }
+        catch (exception expectedSet) { if (effects != 3) return 20; }
         try { int ignored = value.length(); return 8; } catch (exception expected) { }
         return 137;
     }

@@ -36,6 +36,7 @@ class Expression {
     ValueType castType;
     string emittedOperator;
     string builtinCall;
+    string emittedOverride;
     Program objectClass;
     NullableStringMode nullableStringMode;
     bool nullableStringReceiver, nullableStringLeft, nonNullStringResult;
@@ -1376,7 +1377,36 @@ private string dStorageType(ValueType type, Program objectClass = null) {
     return type == ValueType.intType ? "Z8Optional!long" : type == ValueType.boolType ? "Z8Optional!bool" : type == ValueType.decimalType ? "Z8Optional!Z8Decimal" : dType(type, objectClass);
 }
 private string emitExpr(Expression e) {
-    auto value = emitExprRaw(e);
+    string value;
+    bool deferArguments;
+    if (!e.emittedOverride.length && e.kind == ExprKind.memberCall && !e.instanceCall && !e.targetClass.length)
+        foreach (argument; e.arguments) if (argument.optionalRequired) deferArguments = true;
+    if (e.emittedOverride.length) value = e.emittedOverride;
+    else if (deferArguments) {
+        auto suffix = e.token.position.offset.to!string;
+        value = "(() { ";
+        string savedReceiver;
+        if (!e.builtinCall.length) {
+            savedReceiver = e.left.emittedOverride;
+            auto name = "z8_receiver_" ~ suffix;
+            value ~= "auto " ~ name ~ " = " ~ emitExpr(e.left) ~ "; ";
+            e.left.emittedOverride = name;
+        }
+        string[] savedOverrides;
+        foreach (i, argument; e.arguments) {
+            savedOverrides ~= argument.emittedOverride;
+            auto required = argument.optionalRequired, promote = argument.promoteToDecimal;
+            auto convert = argument.convertToString;
+            if (required) { argument.optionalRequired = false; argument.promoteToDecimal = false; argument.convertToString = ValueType.voidType; }
+            auto name = "z8_arg_" ~ suffix ~ "_" ~ i.to!string;
+            value ~= "auto " ~ name ~ " = " ~ emitExpr(argument) ~ "; ";
+            argument.optionalRequired = required; argument.promoteToDecimal = promote; argument.convertToString = convert;
+            argument.emittedOverride = name;
+        }
+        value ~= "return " ~ emitExprRaw(e) ~ "; })()";
+        if (!e.builtinCall.length) e.left.emittedOverride = savedReceiver;
+        foreach (i, argument; e.arguments) argument.emittedOverride = savedOverrides[i];
+    } else value = emitExprRaw(e);
     if (e.nonNullStringResult) value = "z8_string_or_empty(" ~ value ~ ")";
     if (e.optionalRequired) value = "z8_optional_require(" ~ value ~ ")";
     if (e.nullableStringMode == NullableStringMode.required) value = "z8_string_required(" ~ value ~ ")";
