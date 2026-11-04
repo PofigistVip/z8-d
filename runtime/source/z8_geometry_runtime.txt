@@ -114,6 +114,20 @@ Z8Geometry z8_geometry_multiLine(Z8Array!Z8Geometry values) { return z8_geometry
 Z8Geometry z8_geometry_ring(Z8Array!Z8Geometry values) { return z8_geometry_compound(values, 0); }
 Z8Geometry z8_geometry_polygon(Z8Array!Z8Geometry values) { return z8_geometry_compound(values, 3); }
 Z8Geometry z8_geometry_collection(Z8Array!Z8Geometry values) { return z8_geometry_compound(values, 7); }
+Z8Geometry z8_geometry_fromArray(Z8Array!Z8Geometry values) {
+    z8_nonnull(values);
+    auto result = new Z8Geometry();
+    result.shape = 7; result.srs = 3857; result.hasChildren = true;
+    foreach (i; 0 .. values.z8_size()) {
+        auto item = z8_nonnull(values.z8_get(i));
+        z8_geometry_ensure(item);
+        if (item.shape == 7) {
+            if (!item.hasChildren) throw new Exception("geometry has no point list");
+            result.children ~= item.children;
+        } else if (item.shape != -1) result.children ~= item;
+    }
+    return result;
+}
 Z8Array!Z8Geometry z8_geometry_points(Z8Geometry value) {
     z8_geometry_ensure(value);
     if (!value.hasChildren) throw new Exception("geometry has no point list");

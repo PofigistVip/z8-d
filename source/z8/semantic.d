@@ -536,7 +536,7 @@ class Checker {
                         else checkArguments(e, [ValueType.geometryType, ValueType.decimalType, ValueType.decimalType]);
                         e.builtinCall = "z8_geometry_" ~ e.token.text; return ValueType.geometryType;
                     }
-                    if (["line", "multiLine", "ring", "polygon", "collection"].canFind(e.token.text)) {
+                    if (["line", "multiLine", "ring", "polygon", "collection", "fromArray"].canFind(e.token.text)) {
                         checkArguments(e, [ValueType.geometryArray]);
                         e.builtinCall = "z8_geometry_" ~ e.token.text; return ValueType.geometryType;
                     }

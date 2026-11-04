@@ -20,7 +20,11 @@ with tempfile.TemporaryDirectory() as tmp, runtime_library() as runtime_lib:
         if (bounds[1][0] != 5.0) return 4;
         if (bounds[1][1] != 9.0) return 5;
         bounds[0][0] = 8;
-        return bounds[0][0] == 8 ? 0 : 3;
+        if (bounds[0][0] != 8) return 6;
+        geometry[] children = {geometry.collection(points), geometry.none(4326), points[0]};
+        geometry flattened = geometry.fromArray(children);
+        if (flattened.shape() != geometry.Collection || flattened.srs() != geometry.DefaultSRS || flattened.points().size() != 3) return 7;
+        return 0;
     }
 }''', encoding="utf-8")
     generated = temp / "generated.d"
