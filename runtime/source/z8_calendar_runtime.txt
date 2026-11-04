@@ -8,6 +8,11 @@ private struct Z8CalendarFields {
     int year, month, day, dayOfYear, daysInMonth;
     long dayNumber;
 }
+private int z8_calendar_month_days(int year, int month) {
+    bool leap = year % 4 == 0 && (year <= 1582 || year % 100 != 0 || year % 400 == 0);
+    int[12] days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    return days[month - 1];
+}
 private Z8CalendarFields z8_calendar_fields(SysTime value) {
     auto dayNumber = z8_calendar_day_number(value.year, cast(int)value.month, value.day, false);
     Z8CalendarFields result;
@@ -25,11 +30,14 @@ private Z8CalendarFields z8_calendar_fields(SysTime value) {
     }
     auto yearStart = z8_calendar_day_number(result.year, 1, 1, result.year <= 1582);
     result.dayOfYear = cast(int)(dayNumber - yearStart + 1);
-    bool leap = result.year % 4 == 0 && (result.year <= 1582 || result.year % 100 != 0 || result.year % 400 == 0);
-    int[12] days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    result.daysInMonth = days[result.month - 1];
+    result.daysInMonth = z8_calendar_month_days(result.year, result.month);
     return result;
 }
 private bool z8_calendar_is_julian(int year, int month, long day) {
     return year < 1582 || (year == 1582 && (month < 10 || (month == 10 && day < 15)));
+}
+private long z8_calendar_year_start(int year) { return z8_calendar_day_number(year, 1, 1, year <= 1582); }
+private int z8_calendar_monday_index(long dayNumber) {
+    auto result = cast(int)(dayNumber % 7);
+    return result < 0 ? result + 7 : result;
 }
