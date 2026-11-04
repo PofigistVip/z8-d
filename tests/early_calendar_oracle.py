@@ -84,6 +84,10 @@ public class EarlyCalendarOracle {
                 System.out.println(era.format(value) + " " + value.getTime());
             } catch (Exception e) { throw new RuntimeException(e); }
         }
+        try {
+            Date value = new SimpleDateFormat("G yy-MM-dd").parse("до н.э. 01-12-31");
+            System.out.println(era.format(value) + " " + value.getTime());
+        } catch (Exception e) { throw new RuntimeException(e); }
     }
 }
 ''', encoding="utf-8")
@@ -154,6 +158,8 @@ void main() {
         auto value = z8_date_parse(input,"G y-MM-dd"w);
         writeln(z8_date_toString(value,"G y-MM-dd D EEEE YYYY-ww W F u"w).to!string, " ", z8_date_ticks(value));
     }
+    auto twoDigitEra = z8_date_parse("до н.э. 01-12-31"w, "G yy-MM-dd"w);
+    writeln(z8_date_toString(twoDigitEra,"G y-MM-dd D EEEE YYYY-ww W F u"w).to!string, " ", z8_date_ticks(twoDigitEra));
 }
 ''', encoding="utf-8")
     executable = temp / ("early_calendar.exe" if os.name == "nt" else "early_calendar")
