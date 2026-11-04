@@ -10,6 +10,33 @@ private void rejects(string source) {
 }
 
 unittest {
+    auto parsed = (new Parser(q{
+        class FinalDeclarations {
+            final int field;
+            int f(final int value, int[] values) {
+                final int local = 1;
+                for (final int item : values) {}
+                try {} catch (final exception error) {}
+                return value;
+            }
+        }
+    })).parse();
+    assert(parsed.fields[0].declaredFinal);
+    assert(parsed.methods[0].parameters[0].declaredFinal);
+    assert(parsed.methods[0].body.children[0].declaredFinal);
+    assert(parsed.methods[0].body.children[1].initial.declaredFinal);
+    assert(parsed.methods[0].body.children[2].catchDeclaredFinal);
+    rejects("class A { final int f() { return 1; } }");
+    rejects("class A { void f() { final x = 1; } }");
+    rejects("class A { void f() { final final int x = 1; } }");
+    compile(q{class A { static int f() {
+        decimal[][] matrix;
+        for (final decimal[] row : matrix) { if (row.size() == 0) return 1; }
+        return 0;
+    } }});
+}
+
+unittest {
     compile("class A { static primary f() { return 1; } }");
     rejects("class A { static void f() { primary value; } }");
     rejects("class A { static int f(primary x) { return 1; } static int f(int x) { return 2; } static int g() { return f(1); } }");

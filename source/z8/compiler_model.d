@@ -61,12 +61,13 @@ class Statement {
     string assignmentOperator;
     Token catchName;
     bool hasCatch, hasFinally, hasContainer;
+    bool declaredFinal, catchDeclaredFinal;
     bool filePathAssignment, dateTickAssignment;
     string objectName;
     Program objectClass;
     this(StmtKind kind, Token token) { this.kind = kind; this.token = token; }
 }
-struct Parameter { ValueType type; Token name; string objectName; Program objectClass; }
+struct Parameter { ValueType type; Token name; string objectName; Program objectClass; bool declaredFinal; }
 class Method {
     ValueType returnType;
     Token name;
@@ -79,7 +80,7 @@ class Method {
     Program owner;
     bool isVirtual, overrides;
 }
-class Field { ValueType type; Token name; Expression initializer; bool isPublic, isProtected, isStatic; string objectName; Program objectClass; Program owner; }
+class Field { ValueType type; Token name; Expression initializer; bool isPublic, isProtected, isStatic, declaredFinal; string objectName; Program objectClass; Program owner; }
 struct Import { string name; Token token; }
 class Program {
     Token name;

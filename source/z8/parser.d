@@ -25,6 +25,19 @@ class Parser {
         if (current.kind != TokenKind.identifier) error("expected identifier");
         return take();
     }
+    // A for-each initializer is a declarator, including optional final and array types.
+    private bool isForEachStart() {
+        size_t i = current.text == "final" ? 1 : 0;
+        if (look(i).kind != TokenKind.identifier) return false;
+        ++i;
+        while (look(i).text == "[") {
+            ++i;
+            if (look(i).text != "]") ++i;
+            if (look(i).text != "]") return false;
+            ++i;
+        }
+        return look(i).kind == TokenKind.identifier && look(i + 1).text == ":";
+    }
     private void error(string message) { throw new CompileException(message, current.position); }
     private ValueType parseType() {
         ValueType result;
@@ -122,22 +135,24 @@ class Parser {
                 else { if (hasAccess) error("duplicate access modifier"); hasAccess = true; isPublic = current.text == "public"; isProtected = current.text == "protected"; }
                 take();
             }
+            auto declaredFinal = accept("final");
             auto declaredType = parseType(); auto declaredObjectName = parsedObjectName; auto name = identifier();
             if (current.text != "(") {
                 if (isVirtual || declaredType == ValueType.voidType) error("this field type or modifier is not supported");
                 if (isStatic && (declaredType == ValueType.selfArray || declaredType == ValueType.exceptionType || isMap(declaredType)))
                     error("static object fields are not supported");
-                auto field = new Field; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.isProtected = isProtected; field.isStatic = isStatic; field.objectName = declaredObjectName; field.owner = result;
+                auto field = new Field; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.isProtected = isProtected; field.isStatic = isStatic; field.declaredFinal = declaredFinal; field.objectName = declaredObjectName; field.owner = result;
                 if (accept("=")) field.initializer = initializer();
                 expect(";"); result.fields ~= field; continue;
             }
+            if (declaredFinal) error("final methods are not supported by BL");
             auto method = new Method;
             if (isVirtual && isStatic) error("a static method cannot be virtual");
             method.isPublic = isPublic; method.isProtected = isProtected; method.isStatic = isStatic; method.isVirtual = isVirtual; method.owner = result;
             method.returnType = declaredType; method.returnObjectName = declaredObjectName; method.name = name; expect("(");
             if (current.text != ")") {
                 do {
-                    Parameter p; p.type = parseType(); p.objectName = parsedObjectName; p.name = identifier(); method.parameters ~= p;
+                    Parameter p; p.declaredFinal = accept("final"); p.type = parseType(); p.objectName = parsedObjectName; p.name = identifier(); method.parameters ~= p;
                 } while (accept(","));
             }
             expect(")");
@@ -178,6 +193,7 @@ class Parser {
             s.children ~= statement();
             if (accept("catch")) {
                 s.hasCatch = true; expect("(");
+                s.catchDeclaredFinal = accept("final");
                 if (parseType() != ValueType.exceptionType) error("only exception catch is supported");
                 s.catchName = identifier(); expect(")");
                 if (current.text != "{") error("catch requires a block");
@@ -210,9 +226,10 @@ class Parser {
         if (accept("for")) {
             auto s = new Statement(StmtKind.forStmt, t);
             expect("(");
-            if (current.kind == TokenKind.identifier && look(1).kind == TokenKind.identifier && look(2).text == ":") {
+            if (isForEachStart()) {
                 s.kind = StmtKind.forEachStmt;
                 auto item = new Statement(StmtKind.variable, current);
+                item.declaredFinal = accept("final");
                 item.type = parseType(); item.objectName = parsedObjectName; item.token = identifier(); s.initial = item;
                 expect(":"); s.expression = expression(); expect(")"); s.children ~= statement(); return s;
             }
@@ -225,16 +242,19 @@ class Parser {
         auto s = simpleStatement(true); expect(";"); return s;
     }
     private Statement simpleStatement(bool allowDeclaration) {
+        bool declaredFinal = accept("final");
         auto t = current;
         if ((t.kind == TokenKind.identifier) &&
             (look(1).kind == TokenKind.identifier || (look(1).text == "[" &&
              (look(2).text == "]" || (look(3).text == "]" && look(4).kind == TokenKind.identifier))))) {
             if (!allowDeclaration) error("variable declaration is not allowed here");
             auto s = new Statement(StmtKind.variable, t);
+            s.declaredFinal = declaredFinal;
             s.type = parseType(); s.objectName = parsedObjectName; s.token = identifier();
             if (accept("=")) s.expression = initializer();
             return s;
         }
+        if (declaredFinal) error("final must precede a variable declaration");
         auto e = expression();
         if (["=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^="].canFind(current.text)) {
             if (e.kind != ExprKind.variable && e.kind != ExprKind.index && e.kind != ExprKind.field)
