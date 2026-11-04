@@ -15,6 +15,8 @@ void main() {
     assert(z8_bool_parse("BOOL.TRUE"w));
     assert(!z8_bool_parse("bool.false"w));
     assert(!z8_bool_parse(null));
+    assert(z8_bool_parse("yeſ"w));
+    assert(!z8_bool_parse("falſe"w));
     z8_bool_set_resource_strings("да"w, "нет"w);
     assert(z8_bool_parse("ДА"w));
     assert(!z8_bool_parse("Нет"w));

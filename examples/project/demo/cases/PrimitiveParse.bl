@@ -3,6 +3,7 @@ public class PrimitiveParse {
         if (int.parse("١٢٣") != 123 || int.parse("ＦＦ", 16) != 255 || int.parse("१२", 8) != 10) return 30;
         if (decimal.parse("１２.٣٤").toString() != "12.34" || decimal.parse("١e٣").toString() != "1000") return 31;
         if (!bool.parse("YeS") || !bool.parse("1") || bool.parse("NO") || bool.parse("")) return 1;
+        if (!bool.parse("yeſ") || bool.parse("falſe")) return 25;
         string value = " \tHello \n";
         if (value.trim() != "Hello" || value.trimLeft() != "Hello \n" || value.trimRight() != " \tHello") return 2;
         if ("abc".left(2) != "ab" || "abc".right(2) != "bc") return 3;
