@@ -816,8 +816,10 @@ class Checker {
                             checkArguments(e, [ValueType.stringType]); return ValueType.boolType;
                         case "get":
                             checkArguments(e, [ValueType.stringType]); return ValueType.nullableString;
+                        case "remove":
+                            checkArguments(e, [ValueType.stringType]); return ValueType.nullableString;
                         case "add":
-                            checkArguments(e, [ValueType.stringType, ValueType.stringType]); return ValueType.voidType;
+                            checkArguments(e, [ValueType.stringType, ValueType.stringType]); return ValueType.nullableString;
                         default: break;
                     }
                 } else if (isArray(receiver)) {
@@ -1484,11 +1486,23 @@ class Z8StringMap {
         foreach (item; entries) if (item == value) return true;
         return false;
     }
-    void z8_add(wstring key, wstring value) { entries[key] = value.length ? value : ""w; }
+    wstring z8_add(wstring key, wstring value) {
+        auto found = key in entries;
+        wstring previous = found is null ? null : *found;
+        entries[key] = value.length ? value : ""w;
+        return previous;
+    }
     wstring z8_get(wstring key) {
         auto found = key in entries;
         if (found is null) return null;
         return *found;
+    }
+    wstring z8_remove(wstring key) {
+        auto found = key in entries;
+        if (found is null) return null;
+        auto previous = *found;
+        entries.remove(key);
+        return previous;
     }
 }
 class Z8Array(T) {

@@ -38,6 +38,11 @@ public class StringMap {
         } catch (exception expectedMethod) {
             if (effects != 2) return 16;
         }
+        if (values.add("a", "changed") != "one" || values["a"] != "changed") return 17;
+        if (values.add("extra", "") != null) return 18;
+        if (values.remove("extra") == null) return 19;
+        if (values.remove("extra") != null) return 20;
+        if ((values.remove("missing") ?: "none") != "none") return 21;
         values.clear();
         return values.isEmpty() ? 103 : 4;
     }
