@@ -124,6 +124,11 @@ unittest {
     compileSources([user, child, base]);
     auto bad = SourceUnit("other.Bad", "Bad.bl", "class Bad { missing.Base value; }");
     rejectsSources([bad, base], "Bad.bl");
+    auto staticType = SourceUnit("pkg.Static", "Static.bl", "class Static { public static int value; public static int f(int x) { return x; } }");
+    auto staticField = SourceUnit("other.User", "User.bl", "class User { static int run() { return pkg.Static.value; } }");
+    auto staticCall = SourceUnit("other.User", "User.bl", "class User { static int run() { return pkg.Static.f(3); } }");
+    rejectsSources([staticField, staticType], "User.bl");
+    rejectsSources([staticCall, staticType], "User.bl");
 }
 
 unittest {
