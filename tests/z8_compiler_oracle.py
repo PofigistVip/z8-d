@@ -226,6 +226,8 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         System.out.println("RESULT:" + demo.cases.NullableObjectField.z8_run().get());
         System.out.println("RESULT:" + demo.cases.LifecycleCases.z8_run().get());
         System.out.println("RESULT:" + demo.cases.LifecyclePhases.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.ConversionDerived.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.ObjectConversion.z8_run().get());
         System.out.println("RESULT:" + demo.cases.CastBinaryInt.z8_run().get());
         System.out.println("RESULT:" + demo.cases.CastBinaryBool.z8_run().get());
         System.out.println("RESULT:" + demo.cases.CastBinaryString.z8_run().get());
@@ -376,6 +378,8 @@ void main() {
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4E756C6C61626C654F626A6563744669656C64.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4C6966656379636C654361736573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4C6966656379636C65506861736573.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E436F6E76657273696F6E44657269766564.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4F626A656374436F6E76657273696F6E.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4361737442696E617279496E74.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4361737442696E617279426F6F6C.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4361737442696E617279537472696E67.m_run()));
@@ -417,8 +421,8 @@ void main() {
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_results = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        if original_results[-35:-13] != ["185", "187", "189", "181", "183", "179", "177", "171", "169", "167", "165", "163", "159", "155", "153", "151", "149", "167", "171", "251", "28", "241"]:
-            raise SystemExit(f"Language fixtures failed in original Z8: {original_results[-35:-13]}")
+        if original_results[-37:-13] != ["195", "193", "185", "187", "189", "181", "183", "179", "177", "171", "169", "167", "165", "163", "159", "155", "153", "151", "149", "167", "171", "251", "28", "241"]:
+            raise SystemExit(f"Language fixtures failed in original Z8: {original_results[-37:-13]}")
         if original_results[-13:] != ["173", "179", "181", "191", "193", "197", "199", "211", "223", "227", "229", "233", "239"]:
             raise SystemExit(f"Basic types fixture failed in original Z8: {original_results[-13:]}")
         if original_results != d_results:

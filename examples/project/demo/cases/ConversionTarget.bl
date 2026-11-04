@@ -1,0 +1,3 @@
+public class ConversionTarget {
+    public int number = 17;
+}

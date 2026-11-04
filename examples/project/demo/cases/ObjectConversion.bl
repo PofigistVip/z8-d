@@ -1,0 +1,20 @@
+public class ObjectConversion {
+    static int effects;
+    public operator ConversionTarget() { effects += 1; return new ConversionTarget; }
+    public static int inspect(ConversionTarget value) { return value.number; }
+    public static int choose(ConversionTarget value) { return 1; }
+    public static int choose(ObjectConversion value) { return 2; }
+    public static ConversionTarget convert(ObjectConversion value) { return value; }
+    public static int run() {
+        effects = 0;
+        ObjectConversion source = new ObjectConversion;
+        ConversionTarget first = source;
+        ConversionTarget second = (ConversionTarget)source;
+        if (first.number != 17 || second.number != 17 || effects != 2) return 1;
+        if (inspect(source) != 17 || convert(source).number != 17 || effects != 4) return 2;
+        if (choose(source) != 2 || effects != 4) return 3;
+        ObjectConversion missing = null;
+        try { ConversionTarget ignored = missing; return 4; } catch (exception expected) {}
+        return 193;
+    }
+}

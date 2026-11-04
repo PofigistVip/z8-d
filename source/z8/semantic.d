@@ -109,14 +109,21 @@ class Checker {
         }
         foreach (method; program.methods) {
             method.returnType = resolveDeclaredType(method.returnType, program, method.returnObjectName, method.name);
+            if (method.isCastOperator && method.returnType == ValueType.enumType)
+                fail("conversion operators to enums are not supported", method.name);
+            if (method.isCastOperator && method.returnType == ValueType.selfType) {
+                method.returnObjectClass = resolveClass(program, method.returnObjectName, method.name);
+                method.name.text = "operatorCast:" ~ method.returnObjectClass.qualifiedName;
+            }
             foreach (ref parameter; method.parameters)
                 parameter.type = resolveDeclaredType(parameter.type, program, parameter.objectName, parameter.name);
         }
     }
-    private Method findConversion(Program owner, ValueType target) {
+    private Method findConversion(Program owner, ValueType target, Program targetClass = null) {
         for (auto current = owner; current !is null; current = current.baseClass)
             foreach (method; current.methods)
                 if (method.isCastOperator && method.returnType == target &&
+                    (target != ValueType.selfType || (targetClass !is null && method.returnObjectClass is targetClass)) &&
                     accessible(method.owner, method.isPublic, method.isProtected)) return method;
         return null;
     }
@@ -124,7 +131,8 @@ class Checker {
         if (e.kind == ExprKind.arrayLiteral && (expected == ValueType.selfArray || expected == ValueType.enumArray)) e.objectClass = expectedClass;
         auto actual = typeOf(e, expected);
         if (actual == ValueType.selfType) {
-            auto conversion = findConversion(e.objectClass, expected);
+            if (expected == ValueType.selfType && isAssignable(e.objectClass, expectedClass)) return true;
+            auto conversion = findConversion(e.objectClass, expected, expectedClass);
             if (conversion !is null) {
                 e.userConversion = conversion;
                 if ([ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(expected)) e.optionalRequired = true;
@@ -242,7 +250,10 @@ class Checker {
                     (actual == ValueType.nullableString && p.type == ValueType.stringType)) {
                     // Null is equally applicable to each supported reference type.
                 } else if (actual == p.type) {
-                    if (actual == ValueType.selfType && !isAssignable(e.arguments[i].objectClass, resolveClass(candidate.owner, p.objectName, p.name))) applicable = false;
+                    if (actual == ValueType.selfType && !isAssignable(e.arguments[i].objectClass, resolveClass(candidate.owner, p.objectName, p.name))) {
+                        if (findConversion(e.arguments[i].objectClass, p.type, resolveClass(candidate.owner, p.objectName, p.name)) !is null) weight += 100;
+                        else applicable = false;
+                    }
                     if (actual == ValueType.selfArray && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                     if (actual == ValueType.enumType && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                     if (actual == ValueType.enumArray && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
@@ -1103,9 +1114,12 @@ class Checker {
                 if (e.castType == ValueType.selfType) {
                     auto target = resolveClass(currentProgram, e.token.text, e.token);
                     if (target.isEnum) fail("enum casts are not supported", e.token);
-                    if (typeOf(e.left) != ValueType.selfType ||
-                        (!isAssignable(e.left.objectClass, target) && !isAssignable(target, e.left.objectClass)))
-                        fail("unsupported object cast", e.token);
+                    if (typeOf(e.left) != ValueType.selfType) fail("unsupported object cast", e.token);
+                    if (!isAssignable(e.left.objectClass, target)) {
+                        auto conversion = findConversion(e.left.objectClass, ValueType.selfType, target);
+                        if (conversion !is null) e.left.userConversion = conversion;
+                        else if (!isAssignable(target, e.left.objectClass)) fail("unsupported object cast", e.token);
+                    }
                     e.objectClass = target;
                     return ValueType.selfType;
                 }

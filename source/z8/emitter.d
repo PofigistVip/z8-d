@@ -23,7 +23,8 @@ private string operatorDName(string symbol) {
     }
 }
 private string methodDName(Method method) {
-    if (method.isCastOperator) return "z8cast_" ~ method.name.text[13 .. $];
+    if (method.isCastOperator)
+        return "z8cast_" ~ (method.returnType == ValueType.selfType ? method.returnObjectClass.emittedName : method.name.text[13 .. $]);
     return method.operatorSymbol.length ? operatorDName(method.operatorSymbol) : "m_" ~ method.name.text;
 }
 

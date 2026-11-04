@@ -1,0 +1,12 @@
+public class ConversionDerived extends ConversionTarget {
+    static int effects;
+    public operator ConversionTarget() { effects += 1; return new ConversionTarget; }
+    public static int run() {
+        effects = 0;
+        ConversionDerived source = new ConversionDerived;
+        ConversionTarget implicit = source;
+        ConversionTarget explicitValue = (ConversionTarget)source;
+        if (effects != 0 || implicit == null || explicitValue == null) return 1;
+        return 195;
+    }
+}

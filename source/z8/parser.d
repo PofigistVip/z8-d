@@ -190,8 +190,10 @@ class Parser {
             auto declaredType = parseType(); auto declaredObjectName = parsedObjectName;
             string operatorSymbol;
             if (isCastOperator) {
-                if (![ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.dateType, ValueType.geometryType, ValueType.fileType].canFind(declaredType))
+                if (![ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.dateType, ValueType.geometryType, ValueType.fileType, ValueType.selfType].canFind(declaredType))
                     error("unsupported conversion operator target");
+                if (declaredType == ValueType.selfType && declaredObjectName != typeToken.text)
+                    error("conversion operator target must be a simple name");
                 name.text = "operatorCast:" ~ typeToken.text;
             } else if (current.text == "operator") {
                 name = take();
