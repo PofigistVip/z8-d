@@ -43,6 +43,7 @@ class Expression {
     bool optionalRequired, optionalNullComparison, optionalNullOnLeft, optionalWrap;
     bool optionalIntBinary, optionalIntLeft, optionalIntRight;
     bool optionalIntReceiver, optionalIntUnary, optionalElvis, optionalMixedIntDecimal, optionalMixedIntOnLeft;
+    bool optionalBoolBinary, optionalBoolLeft, optionalBoolRight, optionalBoolUnary, optionalBoolReceiver;
     this(ExprKind kind, Token token) { this.kind = kind; this.token = token; }
 }
 class Statement {
@@ -95,6 +96,11 @@ private bool isArray(ValueType type) {
 }
 private bool hasObjectClass(ValueType type) { return type == ValueType.selfType || type == ValueType.selfArray || type == ValueType.enumType || type == ValueType.enumArray; }
 private bool isNullableReference(ValueType type) { return type == ValueType.selfType || type == ValueType.enumType || type == ValueType.stringMap || type == ValueType.nullableString || type == ValueType.stringType || isArray(type); }
+private ValueType storedValueType(ValueType type) {
+    if (type == ValueType.intType) return ValueType.optionalInt;
+    if (type == ValueType.boolType) return ValueType.optionalBool;
+    return type;
+}
 private bool isOptionalPrimitive(ValueType type) { return [ValueType.optionalInt, ValueType.optionalBool, ValueType.optionalDecimal].canFind(type); }
 private ValueType optionalBaseType(ValueType type) {
     switch (type) {
@@ -577,11 +583,12 @@ class Checker {
             (expected != ValueType.selfArray && expected != ValueType.enumType && expected != ValueType.enumArray) || e.objectClass is expectedClass);
     }
     private bool matchesStored(Expression e, ValueType expected, Program expectedClass = null) {
-        if (expected != ValueType.intType) return matches(e, expected, expectedClass);
+        if (expected != ValueType.intType && expected != ValueType.boolType) return matches(e, expected, expectedClass);
+        auto optional = storedValueType(expected);
         auto actual = typeOf(e, expected);
-        if (actual == ValueType.nullType) { e.inferredType = ValueType.optionalInt; return true; }
-        if (actual == ValueType.optionalInt) return true;
-        if (actual == ValueType.intType) { e.optionalWrap = true; return true; }
+        if (actual == ValueType.nullType) { e.inferredType = optional; return true; }
+        if (actual == optional) return true;
+        if (actual == expected) { e.optionalWrap = true; return true; }
         return false;
     }
     private ValueType checkCall(Method method, Program owner, Expression e) {
@@ -594,7 +601,7 @@ class Checker {
         }
         if (hasObjectClass(method.returnType))
             e.objectClass = resolveClass(owner, method.returnObjectName, method.name);
-        return method.returnType == ValueType.stringType ? ValueType.nullableString : method.returnType == ValueType.intType ? ValueType.optionalInt : method.returnType;
+        return method.returnType == ValueType.stringType ? ValueType.nullableString : storedValueType(method.returnType);
     }
     private bool sameParameters(Method left, Method right) {
         if (left.parameters.length != right.parameters.length) return false;
@@ -628,7 +635,7 @@ class Checker {
             foreach (i, p; candidate.parameters) {
                 auto actual = actualTypes[i];
                 if (isOptionalPrimitive(actual)) actual = optionalBaseType(actual);
-                if ((actual == ValueType.nullType && (isNullableReference(p.type) || p.type == ValueType.intType)) ||
+                if ((actual == ValueType.nullType && (isNullableReference(p.type) || p.type == ValueType.intType || p.type == ValueType.boolType)) ||
                     (actual == ValueType.nullableString && p.type == ValueType.stringType)) {
                     // Null is equally applicable to each supported reference type.
                 } else if (actual == p.type) {
@@ -777,10 +784,10 @@ class Checker {
                     e.isField = true;
                     if ((*field).isStatic) e.targetClass = (*field).owner.emittedName;
                     if (hasObjectClass((*field).type)) e.objectClass = (*field).objectClass;
-                    return (*field).type == ValueType.stringType ? ValueType.nullableString : (*field).type == ValueType.intType ? ValueType.optionalInt : (*field).type;
+                    return (*field).type == ValueType.stringType ? ValueType.nullableString : storedValueType((*field).type);
                 }
                 if (hasObjectClass(*variable)) e.objectClass = objectVariables[e.token.text];
-                return *variable == ValueType.stringType ? ValueType.nullableString : *variable == ValueType.intType ? ValueType.optionalInt : *variable;
+                return *variable == ValueType.stringType ? ValueType.nullableString : storedValueType(*variable);
             case ExprKind.selfRef:
                 if (staticContext) fail("this in static context", e.token);
                 e.objectClass = currentProgram;
@@ -812,7 +819,7 @@ class Checker {
                     if (!staticField.isStatic) fail("instance field cannot be accessed on a class", e.token);
                     if (!accessible(staticField.owner, staticField.isPublic, staticField.isProtected)) fail("field is not accessible", e.token);
                     e.targetClass = staticField.owner.emittedName;
-                    return staticField.type == ValueType.stringType ? ValueType.nullableString : staticField.type == ValueType.intType ? ValueType.optionalInt : staticField.type;
+                    return staticField.type == ValueType.stringType ? ValueType.nullableString : storedValueType(staticField.type);
                 }
                 if (typeOf(e.left) != ValueType.selfType) fail("field access requires an object", e.token);
                 auto field = lookupField(e.left.objectClass, e.token.text);
@@ -821,7 +828,7 @@ class Checker {
                 if (!accessible(field.owner, field.isPublic, field.isProtected)) fail("field is not accessible", e.token);
                 if (hasObjectClass(field.type))
                     e.objectClass = field.objectClass !is null ? field.objectClass : resolveClass(field.owner, field.objectName, field.name);
-                return field.type == ValueType.stringType ? ValueType.nullableString : field.type == ValueType.intType ? ValueType.optionalInt : field.type;
+                return field.type == ValueType.stringType ? ValueType.nullableString : storedValueType(field.type);
             case ExprKind.call:
                 auto method = e.token.text in methods;
                 if (method is null) fail("unknown method '" ~ e.token.text ~ "'", e.token);
@@ -860,6 +867,10 @@ class Checker {
                 if (receiver == ValueType.optionalInt) {
                     e.optionalIntReceiver = true;
                     receiver = ValueType.intType;
+                }
+                if (receiver == ValueType.optionalBool) {
+                    e.optionalBoolReceiver = true;
+                    receiver = ValueType.boolType;
                 }
                 if (receiver == ValueType.nullableString) {
                     e.nullableStringReceiver = true;
@@ -1024,9 +1035,9 @@ class Checker {
                     e.objectClass = target;
                     return ValueType.selfType;
                 }
-                if (e.castType == ValueType.intType) {
+                if (e.castType == ValueType.intType || e.castType == ValueType.boolType) {
                     if (!matchesStored(e.left, e.castType)) fail("unsupported type cast", e.token);
-                    return ValueType.optionalInt;
+                    return storedValueType(e.castType);
                 }
                 if (!matches(e.left, e.castType)) fail("unsupported type cast", e.token);
                 return e.castType;
@@ -1046,21 +1057,30 @@ class Checker {
                     e.optionalIntUnary = true;
                     return ValueType.intType;
                 }
+                if (e.token.text == "!" && operand == ValueType.optionalBool) { e.optionalBoolUnary = true; return ValueType.boolType; }
                 if (e.token.text == "!" && operand == ValueType.boolType) return operand;
                 if (["+", "-", "~"].canFind(e.token.text) && operand == ValueType.intType) return operand;
                 if (["+", "-"].canFind(e.token.text) && operand == ValueType.decimalType) return operand;
                 fail("invalid unary operand", e.token); assert(0);
             case ExprKind.binary:
                 auto left = typeOf(e.left), right = typeOf(e.right), op = e.token.text;
-                if ((left == ValueType.intType && right == ValueType.nullType) || (right == ValueType.intType && left == ValueType.nullType)) {
-                    if (left == ValueType.intType) { e.left.optionalWrap = true; left = ValueType.optionalInt; }
-                    else { e.right.optionalWrap = true; right = ValueType.optionalInt; }
+                if (((left == ValueType.intType || left == ValueType.boolType) && right == ValueType.nullType) ||
+                    ((right == ValueType.intType || right == ValueType.boolType) && left == ValueType.nullType)) {
+                    if (right == ValueType.nullType) { e.left.optionalWrap = true; left = storedValueType(left); }
+                    else { e.right.optionalWrap = true; right = storedValueType(right); }
                 }
                 if ((isOptionalPrimitive(left) && right == ValueType.nullType) ||
                     (isOptionalPrimitive(right) && left == ValueType.nullType)) {
                     if (!["==", "!="].canFind(op)) fail("null supports only equality comparisons", e.token);
                     e.optionalNullComparison = true;
                     e.optionalNullOnLeft = left == ValueType.nullType;
+                    return ValueType.boolType;
+                }
+                if ((left == ValueType.optionalBool || left == ValueType.boolType) &&
+                    (right == ValueType.optionalBool || right == ValueType.boolType) &&
+                    (left == ValueType.optionalBool || right == ValueType.optionalBool) &&
+                    ["==", "!=", "&&", "||"].canFind(op)) {
+                    e.optionalBoolBinary = true; e.optionalBoolLeft = left == ValueType.optionalBool; e.optionalBoolRight = right == ValueType.optionalBool;
                     return ValueType.boolType;
                 }
                 if ((left == ValueType.optionalInt || left == ValueType.intType) &&
@@ -1079,6 +1099,8 @@ class Checker {
                     e.optionalMixedIntDecimal = true; e.optionalMixedIntOnLeft = left == ValueType.optionalInt;
                     return ["==", "!=", "<", ">", "<=", ">="].canFind(op) ? ValueType.boolType : ValueType.decimalType;
                 }
+                if (left == ValueType.optionalBool && [ValueType.stringType, ValueType.nullableString].canFind(right)) { e.left.optionalRequired = true; left = ValueType.boolType; }
+                if (right == ValueType.optionalBool && [ValueType.stringType, ValueType.nullableString].canFind(left)) { e.right.optionalRequired = true; right = ValueType.boolType; }
                 if (left == ValueType.optionalInt && [ValueType.stringType, ValueType.nullableString].canFind(right)) {
                     e.left.optionalRequired = true; left = ValueType.intType;
                 }
@@ -1136,7 +1158,7 @@ class Checker {
                 if (left == ValueType.boolType && ["&&", "||"].canFind(op)) return ValueType.boolType;
                 fail("invalid binary operands", e.token); assert(0);
             case ExprKind.conditional:
-                if (typeOf(e.left) != ValueType.boolType) fail("conditional expression requires a bool condition", e.token);
+                if (!matches(e.left, ValueType.boolType)) fail("conditional expression requires a bool condition", e.token);
                 auto left = typeOf(e.right), right = typeOf(e.third);
                 if (left == ValueType.nullType && isNullableReference(right)) {
                     matches(e.right, right, e.third.objectClass); left = right;
@@ -1144,10 +1166,10 @@ class Checker {
                 if (right == ValueType.nullType && isNullableReference(left)) {
                     matches(e.third, left, e.right.objectClass); right = left;
                 }
-                if (left == ValueType.optionalInt && right == ValueType.nullType) { e.third.inferredType = ValueType.optionalInt; right = left; }
-                if (right == ValueType.optionalInt && left == ValueType.nullType) { e.right.inferredType = ValueType.optionalInt; left = right; }
-                if (left == ValueType.optionalInt && right == ValueType.intType) { e.third.optionalWrap = true; right = left; }
-                if (right == ValueType.optionalInt && left == ValueType.intType) { e.right.optionalWrap = true; left = right; }
+                if (isOptionalPrimitive(left) && right == ValueType.nullType) { e.third.inferredType = left; right = left; }
+                if (isOptionalPrimitive(right) && left == ValueType.nullType) { e.right.inferredType = right; left = right; }
+                if (isOptionalPrimitive(left) && right == optionalBaseType(left)) { e.third.optionalWrap = true; right = left; }
+                if (isOptionalPrimitive(right) && left == optionalBaseType(right)) { e.right.optionalWrap = true; left = right; }
                 if (left == ValueType.stringType && right == ValueType.nullableString) left = ValueType.nullableString;
                 if (left == ValueType.nullableString && right == ValueType.stringType) right = ValueType.nullableString;
                 if (left == ValueType.decimalType && right == ValueType.intType) { e.third.promoteToDecimal = true; right = ValueType.decimalType; }
@@ -1201,7 +1223,7 @@ class Checker {
             case StmtKind.assignment:
                 auto variableType = typeOf(s.target);
                 if (variableType == ValueType.nullableString) variableType = ValueType.stringType;
-                if (variableType == ValueType.optionalInt) variableType = ValueType.intType;
+                if (isOptionalPrimitive(variableType)) variableType = optionalBaseType(variableType);
                 if (s.target.enumConstant) fail("enum constants cannot be assigned", s.token);
                 if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.stringMap)
                     variableType = ValueType.stringType;
@@ -1228,7 +1250,7 @@ class Checker {
                 else if (returnType == ValueType.voidType || !matchesStored(s.expression, returnType, returnObjectClass)) fail("return type mismatch", s.token);
                 return true;
             case StmtKind.ifStmt:
-                if (typeOf(s.expression) != ValueType.boolType) fail("if condition must be bool", s.token);
+                if (!matches(s.expression, ValueType.boolType)) fail("if condition must be bool", s.token);
                 auto old = variables.dup; auto oldObjects = objectVariables.dup;
                 auto first = checkStatement(s.children[0]); variables = old.dup; objectVariables = oldObjects.dup;
                 bool second;
@@ -1236,14 +1258,14 @@ class Checker {
                 variables = old; objectVariables = oldObjects; return first && second;
             case StmtKind.whileStmt:
             case StmtKind.doWhileStmt:
-                if (typeOf(s.expression) != ValueType.boolType) fail("loop condition must be bool", s.token);
+                if (!matches(s.expression, ValueType.boolType)) fail("loop condition must be bool", s.token);
                 auto old = variables.dup; auto oldObjects = objectVariables.dup;
                 ++loopDepth; checkStatement(s.children[0]); --loopDepth;
                 variables = old; objectVariables = oldObjects; return false;
             case StmtKind.forStmt:
                 auto old = variables.dup; auto oldObjects = objectVariables.dup;
                 if (s.initial !is null) checkStatement(s.initial);
-                if (typeOf(s.expression) != ValueType.boolType) fail("loop condition must be bool", s.token);
+                if (!matches(s.expression, ValueType.boolType)) fail("loop condition must be bool", s.token);
                 checkStatement(s.step);
                 ++loopDepth; checkStatement(s.children[0]); --loopDepth;
                 variables = old; objectVariables = oldObjects; return false;
@@ -1330,7 +1352,7 @@ private string emitStringLiteral(string text) {
     return "[" ~ units.join(", ") ~ "].idup";
 }
 private string dStorageType(ValueType type, Program objectClass = null) {
-    return type == ValueType.intType ? "Z8Optional!long" : dType(type, objectClass);
+    return type == ValueType.intType ? "Z8Optional!long" : type == ValueType.boolType ? "Z8Optional!bool" : dType(type, objectClass);
 }
 private string emitExpr(Expression e) {
     auto value = emitExprRaw(e);
@@ -1379,6 +1401,7 @@ private string emitExprRaw(Expression e) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return e.builtinCall ~ "(" ~ args.join(", ") ~ ")";
             }
+            if (e.optionalBoolReceiver) return "(z8_optional_require(" ~ emitExpr(e.left) ~ ") ? \"true\"w : \"false\"w)";
             if (e.optionalIntReceiver) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return "z8_optional_int_call!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
@@ -1432,12 +1455,19 @@ private string emitExprRaw(Expression e) {
         case ExprKind.instanceOf:
             return "(cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ") !is null)";
         case ExprKind.unary:
+            if (e.optionalBoolUnary) return "(!z8_optional_require(" ~ emitExpr(e.left) ~ "))";
             if (e.optionalIntUnary) return "z8_optional_int_unary!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ")";
             return "(" ~ e.token.text ~ emitExpr(e.left) ~ ")";
         case ExprKind.binary:
             if (e.optionalNullComparison) {
                 auto value = e.optionalNullOnLeft ? e.right : e.left;
                 return (e.token.text == "==" ? "" : "!") ~ "z8_optional_is_null(" ~ emitExpr(value) ~ ")";
+            }
+            if (e.optionalBoolBinary) {
+                auto left = emitExpr(e.left), right = emitExpr(e.right);
+                if (!e.optionalBoolLeft) left = "z8_optional_wrap(" ~ left ~ ")";
+                if (!e.optionalBoolRight) right = "z8_optional_wrap(" ~ right ~ ")";
+                return "z8_optional_bool_binary!\"" ~ e.token.text ~ "\"(" ~ left ~ ", " ~ right ~ ")";
             }
             if (e.optionalIntBinary) {
                 auto left = emitExpr(e.left), right = emitExpr(e.right);
@@ -1507,7 +1537,7 @@ private string emitStatement(Statement s) {
 private string emitSimple(Statement s) {
     if (s.kind == StmtKind.variable)
         return dStorageType(s.type, s.objectClass) ~ " v_" ~ s.token.text ~ " = " ~
-            (s.expression !is null ? emitExpr(s.expression) : s.type == ValueType.intType ? "z8_optional_wrap(0L)" : defaultValue(s.type, s.objectClass));
+            (s.expression !is null ? emitExpr(s.expression) : s.type == ValueType.intType ? "z8_optional_wrap(0L)" : s.type == ValueType.boolType ? "z8_optional_wrap(false)" : defaultValue(s.type, s.objectClass));
     if (s.kind == StmtKind.expressionStmt) return emitExpr(s.expression);
     assert(s.kind == StmtKind.assignment);
     if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.stringMap)
@@ -1734,6 +1764,17 @@ private T z8_optional_require(T)(Z8Optional!T value) {
 }
 private T z8_optional_elvis(T)(Z8Optional!T value, lazy T fallback) { return value.present ? value.value : fallback; }
 private Z8Optional!T z8_optional_elvis_optional(T)(Z8Optional!T value, lazy Z8Optional!T fallback) { return value.present ? value : fallback; }
+private bool z8_optional_bool_binary(string op)(Z8Optional!bool left, lazy Z8Optional!bool right) {
+    static if (op == "&&") return z8_optional_require(left) && z8_optional_require(right);
+    else static if (op == "||") return z8_optional_require(left) || z8_optional_require(right);
+    else {
+        auto other = right;
+        auto value = z8_optional_require(left);
+        if (!other.present) return false;
+        static if (op == "==") return value == other.value;
+        else return value != other.value;
+    }
+}
 private auto z8_optional_int_binary(string op)(Z8Optional!long left, Z8Optional!long right) {
     auto a = z8_optional_require(left);
     static if (op == "==" || op == "!=" || op == "<" || op == ">" || op == "<=" || op == ">=") {
@@ -2057,7 +2098,7 @@ class Z8Array(T) {
         if (hasInstanceFields) {
             result ~= "this() {\n";
             foreach (field; program.fields)
-                if (!field.isStatic && field.initializer is null) result ~= "this.f_" ~ field.name.text ~ " = " ~ (field.type == ValueType.intType ? "z8_optional_wrap(0L)" : defaultValue(field.type, field.objectClass)) ~ ";\n";
+                if (!field.isStatic && field.initializer is null) result ~= "this.f_" ~ field.name.text ~ " = " ~ (field.type == ValueType.intType ? "z8_optional_wrap(0L)" : field.type == ValueType.boolType ? "z8_optional_wrap(false)" : defaultValue(field.type, field.objectClass)) ~ ";\n";
             foreach (field; program.fields)
                 if (!field.isStatic && field.initializer !is null) result ~= "this.f_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
             result ~= "}\n";
@@ -2065,7 +2106,7 @@ class Z8Array(T) {
         if (hasStaticFields) {
             result ~= "shared static this() {\n";
             foreach (field; program.fields) if (field.isStatic)
-                result ~= "f_" ~ field.name.text ~ " = " ~ (field.initializer is null ? field.type == ValueType.intType ? "z8_optional_wrap(0L)" : defaultValue(field.type, field.objectClass) : emitExpr(field.initializer)) ~ ";\n";
+                result ~= "f_" ~ field.name.text ~ " = " ~ (field.initializer is null ? field.type == ValueType.intType ? "z8_optional_wrap(0L)" : field.type == ValueType.boolType ? "z8_optional_wrap(false)" : defaultValue(field.type, field.objectClass) : emitExpr(field.initializer)) ~ ";\n";
             result ~= "}\n";
         }
         foreach (m; program.methods) {
@@ -2083,12 +2124,12 @@ class Z8Array(T) {
             string[] params;
             foreach (p; m.parameters) params ~= dStorageType(p.type, p.objectClass) ~ " v_" ~ p.name.text;
             bool hasIntParameter;
-            foreach (p; m.parameters) if (p.type == ValueType.intType) hasIntParameter = true;
+            foreach (p; m.parameters) if (p.type == ValueType.intType || p.type == ValueType.boolType) hasIntParameter = true;
             if (hasIntParameter && !m.overrides) {
                 string[] nativeParams, nativeArgs;
                 foreach (p; m.parameters) {
                     nativeParams ~= dType(p.type, p.objectClass) ~ " v_" ~ p.name.text;
-                    nativeArgs ~= p.type == ValueType.intType ? "z8_optional_wrap(v_" ~ p.name.text ~ ")" : "v_" ~ p.name.text;
+                    nativeArgs ~= (p.type == ValueType.intType || p.type == ValueType.boolType) ? "z8_optional_wrap(v_" ~ p.name.text ~ ")" : "v_" ~ p.name.text;
                 }
                 result ~= (m.isStatic ? "static " : "final ") ~ dStorageType(m.returnType, m.returnObjectClass) ~ " m_" ~ m.name.text ~ "(" ~ nativeParams.join(", ") ~ ") { " ~
                     (m.returnType == ValueType.voidType ? "" : "return ") ~ "m_" ~ m.name.text ~ "(" ~ nativeArgs.join(", ") ~ "); }\n";
