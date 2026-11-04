@@ -52,6 +52,8 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     (project / "src" / "bl" / "demo" / "cases" / "FileIO.bl").write_text('''import org.zenframework.z8.lang.encoding;
     public class FileIO {
         public static int run() {
+            date timeOnly = '23:59:59';
+            if (timeOnly.ticks() < 1600000000000 || date.now().ticks() - timeOnly.ticks() > 600000) return 17;
             file value = __FILE__;
             if (value.exists() || !value.isEmpty()) return 1;
             value.write("hello");

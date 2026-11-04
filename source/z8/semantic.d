@@ -352,7 +352,13 @@ class Checker {
             case ExprKind.binaryLiteral: return ValueType.binaryType;
             case ExprKind.datespanLiteral: return ValueType.datespanType;
             case ExprKind.dateLiteral:
-                if (e.token.text.indexOf('/') < 0) fail("time-only date literals are not yet supported", e.token);
+                if (e.token.text.indexOf('/') < 0 && !e.emittedOverride.length) {
+                    import std.datetime : Clock, SysTime, UTC;
+                    auto now = Clock.currTime(UTC());
+                    auto ticks = (now - SysTime.fromUnixTime(0, UTC())).total!"msecs";
+                    // The original lexer ignores the written time and captures its current instant.
+                    e.emittedOverride = "z8_date_from_ticks(" ~ ticks.to!string ~ "L)";
+                }
                 return ValueType.dateType;
             case ExprKind.nullLiteral: return ValueType.nullType;
             case ExprKind.arrayLiteral:
