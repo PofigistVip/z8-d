@@ -1,0 +1,28 @@
+public class DatespanValues {
+    public static int run() {
+        datespan value = '2 03:04:05';
+        if (value.days() != 2 || value.hours() != 3 || value.minutes() != 4 || value.seconds() != 5) return 1;
+        if (value.milliseconds() != 183845000 || value.totalHours() != 51 || value.totalSeconds() != 183845) return 2;
+        if (value.toString() != "2 03:04:05" || value.toString("unused") != "2 03:04:05") return 3;
+        datespan part = datespan.parse("01:02:03");
+        if ((value - part).toString() != "2 02:02:02" || (part + part).totalSeconds() != 7446) return 4;
+        if (part >= value || part == value || value <= part) return 5;
+        datespan alias = value;
+        value.set(1, 2, 3, 4, 5);
+        if (alias.milliseconds() != 93784005) return 6;
+        value.truncMinute();
+        if (value.toString() != "1 02:03:00") return 7;
+        value.truncHour();
+        if (value.toString() != "1 02:00:00") return 8;
+        value.truncDay();
+        if (value.totalHours() != 24) return 9;
+        value.setTotalMinutes(5);
+        if (value.totalSeconds() != 300 || value.hashCode() != 300000) return 10;
+        value.set(-1000);
+        if (value.seconds() != -1 || value.toString() != "0 00:00:0-1") return 11;
+        primary boxed = value;
+        string converted = value;
+        if (boxed.toString() != converted || boxed.hashCode() != value.hashCode()) return 12;
+        return 191;
+    }
+}

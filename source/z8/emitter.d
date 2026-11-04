@@ -17,6 +17,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.exceptionType: return "Throwable";
         case ValueType.guidType: return "Z8Guid";
         case ValueType.binaryType: return "Z8Binary";
+        case ValueType.datespanType: return "Z8Datespan";
         case ValueType.primaryType: return "Z8Primary";
         case ValueType.selfType: assert(objectClass !is null); return objectClass.emittedName;
         case ValueType.selfArray: assert(objectClass !is null); return "Z8Array!(" ~ objectClass.emittedName ~ ")";
@@ -102,6 +103,7 @@ private string emitExpr(Expression e) {
     if (e.convertToString == ValueType.boolType) return "(" ~ value ~ " ? \"true\"w : \"false\"w)";
     if (e.convertToString == ValueType.decimalType) return "(" ~ value ~ ").z8_string()";
     if (e.convertToString == ValueType.guidType) return "z8_guid_to_string(" ~ value ~ ")";
+    if (e.convertToString == ValueType.datespanType) return "z8_datespan_to_string(" ~ value ~ ")";
     return value;
 }
 private string emitReceiver(Expression e) {
@@ -118,6 +120,7 @@ private string emitExprRaw(Expression e) {
         case ExprKind.stringLiteral: return emitStringLiteral(e.token.text);
         case ExprKind.guidLiteral: return "z8_guid_literal(\"" ~ e.token.text[1 .. $ - 1] ~ "\")";
         case ExprKind.binaryLiteral: return "z8_binary_literal(\"" ~ e.token.text[1 .. $ - 1] ~ "\")";
+        case ExprKind.datespanLiteral: return "z8_datespan_literal(\"" ~ e.token.text[1 .. $ - 1] ~ "\")";
         case ExprKind.nullLiteral: return isOptionalPrimitive(e.inferredType) ? dType(e.inferredType) ~ ".init" : e.inferredType == ValueType.voidType ? "null" : "cast(" ~ dType(e.inferredType, e.objectClass) ~ ")null";
         case ExprKind.arrayLiteral:
             string[] elements; foreach (element; e.arguments)
@@ -137,7 +140,7 @@ private string emitExprRaw(Expression e) {
         case ExprKind.memberCall:
             if (e.builtinCall.length) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
-                if (e.inferredType == ValueType.binaryType && e.left !is null)
+                if ((e.inferredType == ValueType.binaryType || e.inferredType == ValueType.datespanType) && e.left !is null)
                     return e.builtinCall ~ "(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
                 if (e.builtinCall == "z8_primary_to_string" || e.builtinCall == "z8_primary_hash" || e.builtinCall == "z8_primary_hash_value" ||
                     ["z8_guid_to_string", "z8_guid_hash", "z8_guid_major", "z8_guid_minor", "z8_guid_components"].canFind(e.builtinCall))
@@ -239,6 +242,8 @@ private string emitExprRaw(Expression e) {
                 return "(" ~ emitExpr(e.left) ~ (e.token.text == "==" ? " is " : " !is ") ~ emitExpr(e.right) ~ ")";
             if (e.inferredType == ValueType.guidType)
                 return "z8_guid_compare!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            if (e.inferredType == ValueType.datespanType)
+                return "z8_datespan_binary!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.inferredType == ValueType.stringMap)
                 return "z8_map_union(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (isArray(e.inferredType))
@@ -320,6 +325,7 @@ private string defaultValue(ValueType type, Program objectClass = null, bool has
     if (type == ValueType.primaryType) return "null";
     if (type == ValueType.guidType) return "z8_guid_zero()";
     if (type == ValueType.binaryType) return "new Z8Binary()";
+    if (type == ValueType.datespanType) return "new Z8Datespan()";
     if (type == ValueType.decimalType) return "z8_decimal_from_int(0)";
     if (type == ValueType.selfType) return "z8_new!(" ~ dType(type, objectClass) ~ ")(" ~ (hasContainer ? "this" : "") ~ ")";
     if (type == ValueType.stringMap) return "new Z8StringMap()";

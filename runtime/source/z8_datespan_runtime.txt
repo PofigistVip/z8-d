@@ -1,0 +1,80 @@
+class Z8Datespan {
+    long ticks;
+    this(long ticks = 0) { this.ticks = ticks; }
+}
+
+enum long z8_second = 1000, z8_minute = 60 * z8_second, z8_hour = 60 * z8_minute, z8_day = 24 * z8_hour;
+
+Z8Datespan z8_datespan_literal(string text) {
+    import std.string : split, strip;
+    auto parts = text.strip().split();
+    if (parts.length != 2) throw new Exception("invalid datespan literal");
+    auto clock = parts[1].split(":");
+    if (clock.length != 3) throw new Exception("invalid datespan literal");
+    auto days = parts[0].to!int;
+    return new Z8Datespan(cast(long)days * z8_day + clock[0].to!int * z8_hour +
+        clock[1].to!int * z8_minute + clock[2].to!int * z8_second);
+}
+Z8Datespan z8_datespan_parse(wstring input) {
+    auto text = z8_string_required(input).to!string;
+    long days, hours, minutes, seconds;
+    if (text.length < 3) seconds = text.to!int;
+    else if (text.length < 6) { minutes = text[0..2].to!int; seconds = text[3..5].to!int; }
+    else if (text.length < 9) { hours = text[0..2].to!int; minutes = text[3..5].to!int; seconds = text[6..8].to!int; }
+    else {
+        import std.string : indexOf;
+        auto space = text.indexOf(' ');
+        if (space < 0 || cast(size_t)space + 9 > text.length) throw new Exception("invalid datespan");
+        auto i = cast(size_t)space;
+        days = text[0..i].to!int; hours = text[i+1..i+3].to!int;
+        minutes = text[i+4..i+6].to!int; seconds = text[i+7..i+9].to!int;
+    }
+    return new Z8Datespan(days * z8_day + hours * z8_hour + minutes * z8_minute + seconds * z8_second);
+}
+long z8_datespan_days(Z8Datespan x) { return z8_nonnull(x).ticks / z8_day; }
+long z8_datespan_hours(Z8Datespan x) { return z8_nonnull(x).ticks / z8_hour % 24; }
+long z8_datespan_minutes(Z8Datespan x) { return z8_nonnull(x).ticks / z8_minute % 60; }
+long z8_datespan_seconds(Z8Datespan x) { return z8_nonnull(x).ticks / z8_second % 60; }
+long z8_datespan_milliseconds(Z8Datespan x) { return z8_nonnull(x).ticks; }
+long z8_datespan_totalHours(Z8Datespan x) { return z8_nonnull(x).ticks / z8_hour; }
+long z8_datespan_totalMinutes(Z8Datespan x) { return z8_nonnull(x).ticks / z8_minute; }
+long z8_datespan_totalSeconds(Z8Datespan x) { return z8_nonnull(x).ticks / z8_second; }
+void z8_datespan_setTotalHours(Z8Datespan x, long value) { z8_nonnull(x).ticks = value * z8_hour; }
+void z8_datespan_setTotalMinutes(Z8Datespan x, long value) { z8_nonnull(x).ticks = value * z8_minute; }
+void z8_datespan_setTotalSeconds(Z8Datespan x, long value) { z8_nonnull(x).ticks = value * z8_second; }
+void z8_datespan_set(Z8Datespan x, long ticks) { z8_nonnull(x).ticks = ticks; }
+void z8_datespan_set(Z8Datespan x, long days, long hours, long minutes, long seconds, long milliseconds = 0) {
+    z8_nonnull(x).ticks = cast(long)cast(int)days * z8_day + cast(long)cast(int)hours * z8_hour +
+        cast(long)cast(int)minutes * z8_minute + cast(long)cast(int)seconds * z8_second + milliseconds;
+}
+void z8_datespan_truncDay(Z8Datespan x) { z8_datespan_set(x, cast(int)z8_datespan_days(x), 0, 0, 0); }
+void z8_datespan_truncHour(Z8Datespan x) { z8_datespan_set(x, cast(int)z8_datespan_days(x), cast(int)z8_datespan_hours(x), 0, 0); }
+void z8_datespan_truncMinute(Z8Datespan x) { z8_datespan_set(x, cast(int)z8_datespan_days(x), cast(int)z8_datespan_hours(x), cast(int)z8_datespan_minutes(x), 0); }
+
+wstring z8_datespan_to_string(Z8Datespan x, wstring formatString = null) {
+    string pad(long n) { return (n < 10 ? "0" : "") ~ n.to!string; }
+    return (z8_datespan_days(x).to!string ~ " " ~ pad(z8_datespan_hours(x)) ~ ":" ~
+        pad(z8_datespan_minutes(x)) ~ ":" ~ pad(z8_datespan_seconds(x))).to!wstring;
+}
+long z8_datespan_hashCode(Z8Datespan x) {
+    auto bits = cast(ulong)z8_nonnull(x).ticks;
+    return cast(long)cast(int)(bits ^ (bits >> 32));
+}
+auto z8_datespan_binary(string op)(Z8Datespan left, Z8Datespan right) {
+    auto a = z8_nonnull(left).ticks;
+    static if (op == "+" || op == "-") {
+        auto b = z8_nonnull(right).ticks;
+        static if (op == "+") return new Z8Datespan(a + b);
+        else return new Z8Datespan(a - b);
+    } else {
+        if (right is null) return false;
+        auto b = right.ticks;
+        static if (op == "==") return a == b;
+        else static if (op == "!=") return a != b;
+        else static if (op == "<") return a < b;
+        else static if (op == ">") return a > b;
+        else static if (op == "<=") return a <= b;
+        else static if (op == ">=") return a >= b;
+        else static assert(0, "unsupported datespan operation");
+    }
+}

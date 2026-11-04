@@ -22,7 +22,7 @@ class Checker {
     private void fail(string message, Token t) { throw new CompileException(message, t.position); }
     private static bool isConstantInitializer(Expression expression) {
         switch (expression.kind) {
-            case ExprKind.integer: case ExprKind.decimalLiteral: case ExprKind.boolean: case ExprKind.stringLiteral: case ExprKind.guidLiteral: case ExprKind.binaryLiteral: case ExprKind.nullLiteral: return true;
+            case ExprKind.integer: case ExprKind.decimalLiteral: case ExprKind.boolean: case ExprKind.stringLiteral: case ExprKind.guidLiteral: case ExprKind.binaryLiteral: case ExprKind.datespanLiteral: case ExprKind.nullLiteral: return true;
             case ExprKind.arrayLiteral:
                 foreach (item; expression.arguments) if (!isConstantInitializer(item)) return false;
                 return true;
@@ -96,7 +96,7 @@ class Checker {
         if (e.kind == ExprKind.arrayLiteral && (expected == ValueType.selfArray || expected == ValueType.enumArray)) e.objectClass = expectedClass;
         auto actual = typeOf(e, expected);
         if (expected == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType,
-            ValueType.optionalInt, ValueType.optionalBool, ValueType.optionalDecimal, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType].canFind(actual)) {
+            ValueType.optionalInt, ValueType.optionalBool, ValueType.optionalDecimal, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType, ValueType.datespanType].canFind(actual)) {
             e.boxPrimary = true; return true;
         }
         if (isOptionalPrimitive(actual) && optionalBaseType(actual) == expected) {
@@ -122,6 +122,7 @@ class Checker {
             e.convertToString = actual; return true;
         }
         if (expected == ValueType.stringType && actual == ValueType.guidType) { e.convertToString = actual; return true; }
+        if (expected == ValueType.stringType && actual == ValueType.datespanType) { e.convertToString = actual; return true; }
         return actual == expected && (expected == ValueType.selfType ? isAssignable(e.objectClass, expectedClass) :
             (expected != ValueType.selfArray && expected != ValueType.enumType && expected != ValueType.enumArray) || e.objectClass is expectedClass);
     }
@@ -188,9 +189,10 @@ class Checker {
                     if (actual == ValueType.enumType && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                     if (actual == ValueType.enumArray && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                 } else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
-                else if (p.type == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType].canFind(actual)) { }
+                else if (p.type == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType, ValueType.datespanType].canFind(actual)) { }
                 else if (p.type == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual)) weight += 100;
                 else if (p.type == ValueType.stringType && actual == ValueType.guidType) weight += 100;
+                else if (p.type == ValueType.stringType && actual == ValueType.datespanType) weight += 100;
                 else applicable = false;
                 if (!applicable) break;
             }
@@ -317,6 +319,7 @@ class Checker {
             case ExprKind.stringLiteral: return ValueType.stringType;
             case ExprKind.guidLiteral: return ValueType.guidType;
             case ExprKind.binaryLiteral: return ValueType.binaryType;
+            case ExprKind.datespanLiteral: return ValueType.datespanType;
             case ExprKind.nullLiteral: return ValueType.nullType;
             case ExprKind.arrayLiteral:
                 if (!isArray(expected)) fail("array initializer requires an array type", e.token);
@@ -394,6 +397,10 @@ class Checker {
                 if (!accessible(selected.owner, selected.isPublic, selected.isProtected)) fail("method is not accessible", e.token);
                 return checkCall(selected, selected.owner, e);
             case ExprKind.memberCall:
+                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "datespan") {
+                    if (e.token.text != "parse") fail("unsupported static datespan method", e.token);
+                    checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_datespan_parse"; return ValueType.datespanType;
+                }
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "guid") {
                     if (e.token.text == "parse") {
                         checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_guid_parse"; return ValueType.guidType;
@@ -454,6 +461,28 @@ class Checker {
                     receiver = ValueType.stringType;
                 }
                 e.inferredType = receiver;
+                if (receiver == ValueType.datespanType) {
+                    if (e.token.text == "set") {
+                        if (![1, 4, 5].canFind(e.arguments.length)) fail("incorrect argument count", e.token);
+                        foreach (argument; e.arguments) if (!matches(argument, ValueType.intType)) fail("argument type mismatch", argument.token);
+                        e.builtinCall = "z8_datespan_set"; return ValueType.voidType;
+                    }
+                    if (["setTotalHours", "setTotalMinutes", "setTotalSeconds"].canFind(e.token.text)) {
+                        checkArguments(e, [ValueType.intType]); e.builtinCall = "z8_datespan_" ~ e.token.text; return ValueType.voidType;
+                    }
+                    if (e.token.text == "toString") {
+                        checkArguments(e, e.arguments.length == 0 ? [] : [ValueType.stringType]);
+                        e.builtinCall = "z8_datespan_to_string"; return ValueType.stringType;
+                    }
+                    checkArguments(e, []);
+                    if (["days", "hours", "minutes", "seconds", "milliseconds", "totalHours", "totalMinutes", "totalSeconds", "hashCode"].canFind(e.token.text)) {
+                        e.builtinCall = "z8_datespan_" ~ e.token.text; return ValueType.intType;
+                    }
+                    if (["truncDay", "truncHour", "truncMinute"].canFind(e.token.text)) {
+                        e.builtinCall = "z8_datespan_" ~ e.token.text; return ValueType.voidType;
+                    }
+                    fail("unsupported datespan method", e.token);
+                }
                 if (receiver == ValueType.binaryType) {
                     if (e.token.text == "setName") {
                         checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_binary_set_name"; return ValueType.binaryType;
@@ -754,6 +783,11 @@ class Checker {
                 if (left == ValueType.guidType && right == ValueType.guidType) {
                     if (!["==", "!="].canFind(op)) fail("invalid guid operands", e.token);
                     e.inferredType = ValueType.guidType; return ValueType.boolType;
+                }
+                if (left == ValueType.datespanType && right == ValueType.datespanType) {
+                    if (!["+", "-", "==", "!=", "<", ">", "<=", ">="].canFind(op)) fail("invalid datespan operands", e.token);
+                    e.inferredType = ValueType.datespanType;
+                    return op == "+" || op == "-" ? ValueType.datespanType : ValueType.boolType;
                 }
                 if (left == ValueType.nullableString) { e.nullableStringLeft = true; left = ValueType.stringType; }
                 if (right == ValueType.nullableString) { e.right.nullableStringMode = NullableStringMode.nullAsEmpty; right = ValueType.stringType; }
