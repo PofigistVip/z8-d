@@ -65,6 +65,14 @@ public class GeometryValues {
         geometry multipolygon = geometry.fromGeoJson("{\"type\":\"MultiPolygon\",\"coordinates\":[[[[0,0],[3,4]]]]}", 4326);
         if (multipolygon.shape() != geometry.MultiPolygon || multipolygon.height() != 4.0) return 30;
         if (geometry.fromHexString(multipolygon.toString()).shape() != geometry.MultiPolygon) return 31;
+        geometry[] mutablePoints = {geometry.point(0, 0, 4326), geometry.point(3, 4, 4326)};
+        geometry liveLine = geometry.line(mutablePoints);
+        mutablePoints.add(geometry.point(6, 8, 4326));
+        if (liveLine.points().size() != 3 || liveLine.length() != 10.0 || liveLine.width() != 6.0) return 40;
+        string cachedHex = liveLine.toString();
+        mutablePoints.add(geometry.point(9, 12, 4326));
+        if (liveLine.points().size() != 4 || liveLine.length() != 10.0 || liveLine.width() != 6.0 || liveLine.toString() != cachedHex) return 41;
+        if (geometry.line(mutablePoints).length() != 15.0) return 42;
         return 199;
     }
 }
