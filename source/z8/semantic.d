@@ -778,6 +778,8 @@ class Checker {
                         case "split":
                             checkArguments(e, e.arguments.length == 1 ? [ValueType.stringType] : [ValueType.stringType, ValueType.intType]);
                             e.builtinCall = "z8_regex_split"; return ValueType.stringArray;
+                        case "format":
+                            checkArguments(e, [ValueType.primaryArray]); e.builtinCall = "z8_string_format"; return ValueType.stringType;
                         case "length": case "isEmpty": case "toString": case "trim": case "trimLeft": case "trimRight":
                         case "toLowerCase": case "toUpperCase": case "firstToLowerCase": case "firstToUpperCase":
                             checkArguments(e, []);

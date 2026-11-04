@@ -1,0 +1,63 @@
+// Basic MessageFormat placeholders with the Russian locale's number formatting.
+private wstring z8_message_number(wstring value) {
+    auto dot = value.length;
+    foreach (i, wchar c; value) if (c == '.') { dot = i; break; }
+    auto integer = value[0 .. dot];
+    auto start = integer.length && integer[0] == '-' ? 1 : 0;
+    wstring result;
+    foreach (i, wchar c; integer) {
+        if (i > start && (integer.length - i) % 3 == 0) result ~= cast(wchar)0x00A0;
+        result ~= c;
+    }
+    if (dot < value.length) {
+        auto end = value.length;
+        while (end > dot + 1 && value[end - 1] == '0') --end;
+        if (end > dot + 1) result ~= ","w ~ value[dot + 1 .. end];
+    }
+    return result.length ? result : ""w;
+}
+private wstring z8_message_value(Z8Primary value) {
+    z8_nonnull(value);
+    final switch (value.kind) {
+        case Z8PrimaryKind.integer: return z8_message_number(value.integerValue.to!wstring);
+        case Z8PrimaryKind.decimal:
+            if (value.decimalValue.nan) return "null"w;
+            auto rounded = value.decimalValue.z8_round(3, 6);
+            auto formatted = z8_message_number(rounded.z8_string());
+            return rounded.coefficient == 0 && value.decimalValue.coefficient < 0 ? "-"w ~ formatted : formatted;
+        case Z8PrimaryKind.datespan: return z8_message_number(z8_datespan_milliseconds(value.datespanValue).to!wstring);
+        case Z8PrimaryKind.text: return z8_string_or_empty(value.textValue);
+        case Z8PrimaryKind.boolean: return value.booleanValue ? "true"w : "false"w;
+        case Z8PrimaryKind.guid: return z8_guid_to_string(value.guidValue);
+        case Z8PrimaryKind.geometry: return z8_geometry_to_string(value.geometryValue);
+        case Z8PrimaryKind.file: return "null"w;
+        case Z8PrimaryKind.binary: case Z8PrimaryKind.date: throw new Exception("unsupported MessageFormat value");
+    }
+}
+wstring z8_string_format(wstring pattern, Z8Array!Z8Primary values) {
+    pattern = z8_string_required(pattern);
+    z8_nonnull(values);
+    foreach (i; 0 .. values.z8_size()) z8_nonnull(values.z8_get(i));
+    wstring result;
+    bool quoted;
+    size_t i;
+    while (i < pattern.length) {
+        auto c = pattern[i++];
+        if (c == '\'') {
+            if (i < pattern.length && pattern[i] == '\'') { result ~= '\''; ++i; }
+            else quoted = !quoted;
+        } else if (!quoted && c == '{') {
+            size_t number;
+            auto begin = i;
+            while (i < pattern.length && pattern[i] >= '0' && pattern[i] <= '9') {
+                if (number > 1000000) throw new Exception("invalid MessageFormat index");
+                number = number * 10 + pattern[i++] - '0';
+            }
+            if (i == begin || i == pattern.length || pattern[i] != '}') throw new Exception("unsupported MessageFormat pattern");
+            ++i;
+            if (number >= cast(size_t)values.z8_size()) result ~= "{"w ~ number.to!wstring ~ "}"w;
+            else result ~= z8_message_value(values.z8_get(cast(long)number));
+        } else result ~= c;
+    }
+    return result.length ? result : ""w;
+}

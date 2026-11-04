@@ -37,6 +37,13 @@ public class StringExtras {
         if (string.fromBinary(malformed) != "��") return 20;
         binary loneSurrogate = "😀".charAt(0);
         if (string.fromBinary(loneSurrogate) != "?") return 21;
+        primary[] arguments = {"world", 1234567, decimal.parse("1234.56789"), true};
+        if ("Hello {0}: {1} {2} {3}".format(arguments) != "Hello world: 1 234 567 1 234,568 true") return 22;
+        if ("'{0}' ''{0}'' {5}".format(arguments) != "{0} 'world' {5}") return 23;
+        primary[] rounded = {decimal.parse("-0.0005"), decimal.parse("0.0005"), decimal.parse("-0.0006")};
+        if ("{0};{1};{2}".format(rounded) != "-0;0;-0,001") return 25;
+        primary[] missing = {null};
+        try { string unused = "unused".format(missing); return 24; } catch (exception expected) {}
         return 227;
     }
 }
