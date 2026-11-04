@@ -26,6 +26,7 @@ public class StringExtras {
         if (!"AB".matches("(?<first>A)B")) return 37;
         if (!"Ab".matches("(?i)ab") || !"5".matches("\\d") || "١".matches("\\d") || "é".matches("\\w")) return 38;
         if (" ".matches("\\s") || !"5".matches("[\\d]")) return 39;
+        if (!"١".matches("[\\D]") || !"5".matches("[^\\D]") || "5".matches("[0\\D]")) return 41;
         string[] split = "a,,b,,".split(",");
         if (split.size() != 3 || split[1] != "" || split[2] != "b") return 14;
         string[] limited = "a,,b,,".split(",", 2);

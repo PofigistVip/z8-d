@@ -17,7 +17,7 @@ private Z8MatcherKey z8_matcher_key(wstring value) {
 private wstring z8_regex_pattern(wstring pattern) {
     pattern = z8_string_required(pattern);
     wstring result;
-    bool inClass;
+    size_t classDepth;
     size_t i;
     while (i < pattern.length) {
         auto c = pattern[i++];
@@ -28,13 +28,13 @@ private wstring z8_regex_pattern(wstring pattern) {
             if (escape == 'd' || escape == 'D') chars = "0-9"w;
             else if (escape == 'w' || escape == 'W') chars = "A-Za-z0-9_"w;
             else if (escape == 's' || escape == 'S') chars = " \\t\\n\\x0B\\f\\r"w;
-            if (chars.length && (!inClass || (escape >= 'a' && escape <= 'z'))) {
-                if (inClass) result ~= chars;
+            if (chars.length) {
+                if (classDepth && escape >= 'a' && escape <= 'z') result ~= chars;
                 else result ~= "["w ~ ((escape >= 'A' && escape <= 'Z') ? "^"w : ""w) ~ chars ~ "]"w;
             } else { result ~= c; result ~= escape; }
-        } else if (c == '[') { inClass = true; result ~= c; }
-        else if (c == ']' && inClass) { inClass = false; result ~= c; }
-        else if (!inClass && c == '(' && i + 2 < pattern.length && pattern[i] == '?' && pattern[i + 1] == '<' &&
+        } else if (c == '[') { ++classDepth; result ~= c; }
+        else if (c == ']' && classDepth) { --classDepth; result ~= c; }
+        else if (!classDepth && c == '(' && i + 2 < pattern.length && pattern[i] == '?' && pattern[i + 1] == '<' &&
                  pattern[i + 2] != '=' && pattern[i + 2] != '!') {
             result ~= "(?P<"w; i += 2;
         } else result ~= c;
