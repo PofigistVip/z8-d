@@ -1,4 +1,4 @@
-// File metadata and path helpers. Filesystem operations are implemented separately.
+// File metadata, path helpers and filesystem operations.
 class Z8File {
     Z8Guid id, user;
     wstring name = ""w, path = ""w, author = ""w;
@@ -58,4 +58,83 @@ wstring z8_file_folder(Z8File value) {
     import std.string : replace;
     auto path = z8_string_required(z8_nonnull(value).path).to!string.replace("\\", "/").to!wstring;
     return path[0 .. z8_binary_name_start(path)];
+}
+
+private string z8_file_system_path(Z8File value) {
+    return z8_string_required(z8_nonnull(value).path).to!string;
+}
+bool z8_file_exists(Z8File value) {
+    import std.file : exists;
+    return exists(z8_file_system_path(value));
+}
+bool z8_file_isFolder(Z8File value) {
+    import std.file : exists, isDir;
+    auto path = z8_file_system_path(value);
+    return exists(path) && isDir(path);
+}
+bool z8_file_isEmpty(Z8File value) {
+    import std.file : exists, isDir, getSize, dirEntries, SpanMode;
+    import std.range : empty;
+    auto path = z8_file_system_path(value);
+    if (!exists(path)) return true;
+    return isDir(path) ? dirEntries(path, SpanMode.shallow).empty : getSize(path) == 0;
+}
+wstring z8_file_read(Z8File value) {
+    import std.file : readText;
+    return readText(z8_file_system_path(value)).to!wstring;
+}
+Z8Date z8_file_lastModified(Z8File value) {
+    import std.file : exists, timeLastModified;
+    auto path = z8_file_system_path(value);
+    if (!exists(path)) return z8_date_from_ticks(0);
+    auto t = timeLastModified(path);
+    t.timezone = z8_date_timezone();
+    return new Z8Date(t);
+}
+private Z8File z8_file_write_bytes(Z8File value, const(ubyte)[] contents, bool append) {
+    import std.file : mkdirRecurse, tempDir, getSize;
+    import std.path : dirName, buildPath;
+    import std.stdio : File;
+    import std.uuid : randomUUID;
+    auto path = z8_file_system_path(value);
+    if (!path.length) {
+        path = buildPath(tempDir(), "z8-" ~ randomUUID().to!string ~ ".txt");
+        z8_file_assign(value, path.to!wstring);
+    }
+    auto parent = dirName(path);
+    if (parent.length) mkdirRecurse(parent);
+    auto output = File(path, append ? "ab" : "wb");
+    output.rawWrite(contents);
+    output.close();
+    value.size = z8_optional_wrap(cast(long)getSize(path));
+    return value;
+}
+Z8File z8_file_write(Z8File value, wstring contents) {
+    auto bytes = z8_string_required(contents).to!string;
+    return z8_file_write_bytes(value, cast(const(ubyte)[])bytes, false);
+}
+Z8File z8_file_append(Z8File value, wstring contents) {
+    auto bytes = z8_string_required(contents).to!string;
+    return z8_file_write_bytes(value, cast(const(ubyte)[])bytes, true);
+}
+Z8File z8_file_write(Z8File value, Z8Binary contents) {
+    z8_nonnull(contents);
+    auto result = z8_file_write_bytes(value, contents.data[contents.position .. $], false);
+    contents.position = contents.data.length;
+    return result;
+}
+Z8File z8_file_append(Z8File value, Z8Binary contents) {
+    z8_nonnull(contents);
+    auto result = z8_file_write_bytes(value, contents.data[contents.position .. $], true);
+    contents.position = contents.data.length;
+    return result;
+}
+void z8_file_delete(Z8File value, bool recursively = false) {
+    import std.file : exists, isDir, remove, rmdir, rmdirRecurse;
+    auto path = z8_file_system_path(value);
+    if (!exists(path)) return;
+    if (isDir(path)) {
+        if (recursively) rmdirRecurse(path);
+        else rmdir(path);
+    } else remove(path);
 }

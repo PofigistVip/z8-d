@@ -1,5 +1,6 @@
 class Z8Binary {
     ubyte[] data;
+    size_t position;
     wstring name = ""w;
     this(ubyte[] data = null) { this.data = data; }
 }
@@ -20,7 +21,7 @@ Z8Binary z8_binary_literal(string text) {
 Z8Binary z8_binary_set_name(Z8Binary value, wstring name) { z8_nonnull(value).name = name; return value; }
 wstring z8_binary_get_name(Z8Binary value) { return z8_nonnull(value).name; }
 wstring z8_binary_to_string(Z8Binary value) { return z8_string_required(z8_binary_get_name(value)); }
-long z8_binary_length(Z8Binary value) { return cast(long)z8_nonnull(value).data.length; }
+long z8_binary_length(Z8Binary value) { z8_nonnull(value); return cast(long)(value.data.length - value.position); }
 long z8_binary_hash(Z8Binary value) { return cast(long)cast(int)cast(uint)z8_nonnull(value).toHash(); }
 
 private size_t z8_binary_name_start(wstring name) {

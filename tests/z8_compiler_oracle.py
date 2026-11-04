@@ -5,6 +5,7 @@ Requires JDK and the original project's cached 3.4-cert Eclipse dependencies.
 Neither the original sources nor their build outputs are modified.
 """
 from pathlib import Path
+import json
 import os
 import re
 import shutil
@@ -42,6 +43,32 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     (project / "src").mkdir(parents=True)
     shutil.copytree(root / "examples" / "project", project / "src" / "bl")
     shutil.copy2(root / "examples" / "math.bl", project / "src" / "bl" / "Math.bl")
+    file_io_path = temp / "file-io-oracle.txt"
+    file_io_dir = temp / "file-io-oracle-dir"
+    file_io_child = file_io_dir / "nested" / "unicode.txt"
+    (project / "src" / "bl" / "demo" / "cases" / "FileIO.bl").write_text('''public class FileIO {
+        public static int run() {
+            file value = __FILE__;
+            if (value.exists() || !value.isEmpty()) return 1;
+            value.write("hello");
+            value.append(" world");
+            if (!value.exists() || value.isFolder() || value.isEmpty()) return 2;
+            if (value.read() != "hello world" || value.size != 11 || value.lastModified().ticks() <= 0) return 3;
+            binary bytes = '65, 66';
+            value.write(bytes);
+            if (value.read() != "AB" || value.size != 2 || bytes.length() != 0) return 4;
+            value.delete();
+            if (value.exists()) return 5;
+            file folder = __DIR__;
+            file child = __CHILD__;
+            child.write("Привет 😀");
+            if (!folder.isFolder() || folder.isEmpty() || child.read() != "Привет 😀" || child.size != 17) return 6;
+            folder.delete(true);
+            return folder.exists() ? 7 : 223;
+        }
+    }'''.replace("__FILE__", json.dumps(file_io_path.as_posix()))
+       .replace("__DIR__", json.dumps(file_io_dir.as_posix()))
+       .replace("__CHILD__", json.dumps(file_io_child.as_posix())), encoding="utf-8")
     command = ["java", "-cp", str(classes) + os.pathsep + classpath,
                "org.zenframework.z8.compiler.cmd.Main", str(project),
                "-sources:src/bl", "-requires:" + str(lang), "-output:out"]
@@ -109,6 +136,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         System.out.println("RESULT:" + demo.cases.BasicArrays.z8_run().get());
         System.out.println("RESULT:" + demo.cases.GeometryValues.z8_run().get());
         System.out.println("RESULT:" + demo.cases.FileValues.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.FileIO.z8_run().get());
     }
 }''', encoding="utf-8")
         logging_cache = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "commons-logging" / "commons-logging"
@@ -232,14 +260,15 @@ void main() {
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4261736963417272617973.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E47656F6D6574727956616C756573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E46696C6556616C756573.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E46696C65494F.m_run()));
 }
 ''', encoding="utf-8")
         d_binary = temp / ("compare.exe" if os.name == "nt" else "compare")
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_results = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        if original_results[-8:] != ["173", "179", "181", "191", "193", "197", "199", "211"]:
-            raise SystemExit(f"Basic types fixture failed in original Z8: {original_results[-8:]}")
+        if original_results[-9:] != ["173", "179", "181", "191", "193", "197", "199", "211", "223"]:
+            raise SystemExit(f"Basic types fixture failed in original Z8: {original_results[-9:]}")
         if original_results != d_results:
             raise SystemExit(f"Original Z8: {original_results!r}; z8-d: {d_results!r}")
         print(f"Matched {len(d_results)} program results against the original compiler and runtime (CLASS from current source)")

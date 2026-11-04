@@ -535,7 +535,23 @@ class Checker {
                 }
                 e.inferredType = receiver;
                 if (receiver == ValueType.fileType) {
+                    if (["write", "append"].canFind(e.token.text)) {
+                        if (e.arguments.length != 1) fail("incorrect argument count", e.token);
+                        auto contentType = typeOf(e.arguments[0]);
+                        auto expectedContent = contentType == ValueType.binaryType ? ValueType.binaryType : ValueType.stringType;
+                        if (!matches(e.arguments[0], expectedContent)) fail("argument type mismatch", e.token);
+                        e.builtinCall = "z8_file_" ~ e.token.text; return ValueType.fileType;
+                    }
+                    if (e.token.text == "delete") {
+                        checkArguments(e, e.arguments.length == 0 ? [] : [ValueType.boolType]);
+                        e.builtinCall = "z8_file_delete"; return ValueType.voidType;
+                    }
                     checkArguments(e, []);
+                    if (["exists", "isEmpty", "isFolder"].canFind(e.token.text)) {
+                        e.builtinCall = "z8_file_" ~ e.token.text; return ValueType.boolType;
+                    }
+                    if (e.token.text == "read") { e.builtinCall = "z8_file_read"; return ValueType.stringType; }
+                    if (e.token.text == "lastModified") { e.builtinCall = "z8_file_lastModified"; return ValueType.dateType; }
                     if (["fileName", "baseName", "extension", "folder"].canFind(e.token.text)) {
                         e.builtinCall = "z8_file_" ~ e.token.text ~ (e.token.text == "baseName" || e.token.text == "extension" ? "_instance" : "");
                         return ValueType.stringType;

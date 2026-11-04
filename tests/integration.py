@@ -1,5 +1,6 @@
 """Build a generated D program and check its observable results and diagnostics."""
 from pathlib import Path
+import json
 import os
 import subprocess
 import tempfile
@@ -96,6 +97,37 @@ void main() {
     binary = directory / ("check.exe" if os.name == "nt" else "check")
     subprocess.run(["dmd", str(generated), *import_args(), str(runtime_lib), "-of=" + str(binary)], cwd=directory, check=True)
     subprocess.run([str(binary)], cwd=directory, check=True)
+
+    file_io_path = directory / "file-io-check.txt"
+    file_io_dir = directory / "file-io-check-dir"
+    file_io_child = file_io_dir / "nested" / "unicode.txt"
+    file_io_bl = directory / "FileIOCheck.bl"
+    file_io_bl.write_text('''class FileIOCheck { static bool run() {
+        file value = __FILE__;
+        if (value.exists() || !value.isEmpty()) return false;
+        value.write("hello");
+        value.append(" world");
+        if (!value.exists() || value.isFolder() || value.isEmpty()) return false;
+        if (value.read() != "hello world" || value.size != 11 || value.lastModified().ticks() <= 0) return false;
+        binary bytes = '65, 66';
+        value.write(bytes);
+        if (value.read() != "AB" || value.size != 2 || bytes.length() != 0) return false;
+        value.delete();
+        if (value.exists()) return false;
+        file folder = __DIR__;
+        file child = __CHILD__;
+        child.write("Привет 😀");
+        if (!folder.isFolder() || folder.isEmpty() || child.read() != "Привет 😀" || child.size != 17) return false;
+        folder.delete(true);
+        return !folder.exists();
+    } }'''.replace("__FILE__", json.dumps(file_io_path.as_posix()))
+         .replace("__DIR__", json.dumps(file_io_dir.as_posix()))
+         .replace("__CHILD__", json.dumps(file_io_child.as_posix())), encoding="utf-8")
+    file_io_source = subprocess.check_output([str(exe), "compile", str(file_io_bl)], text=True, encoding="utf-8")
+    generated.write_text(file_io_source + "\nvoid main() { assert(Z8_FileIOCheck.m_run()); }\n", encoding="utf-8")
+    subprocess.run(["dmd", str(generated), *import_args(), str(runtime_lib), "-of=" + str(binary)], cwd=directory, check=True)
+    subprocess.run([str(binary)], cwd=directory, check=True)
+    assert not file_io_path.exists() and not file_io_dir.exists()
 
     primary_map_file = directory / "PrimaryMapCheck.bl"
     primary_map_file.write_text('''class PrimaryMapCheck { static bool run() {
