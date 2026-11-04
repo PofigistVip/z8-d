@@ -36,6 +36,7 @@ class Parser {
             case "decimal": result = ValueType.decimalType; break;
             case "bool": result = ValueType.boolType; break;
             case "string": result = ValueType.stringType; break;
+            case "guid": result = ValueType.guidType; break;
             case "exception": result = ValueType.exceptionType; break;
             case "primary": result = ValueType.primaryType; break;
             default:
@@ -311,6 +312,7 @@ class Parser {
         if (t.kind == TokenKind.decimalLiteral) { take(); return new Expression(ExprKind.decimalLiteral, t); }
         if (t.kind == TokenKind.booleanLiteral) { take(); return new Expression(ExprKind.boolean, t); }
         if (t.kind == TokenKind.stringLiteral) { take(); return new Expression(ExprKind.stringLiteral, t); }
+        if (t.kind == TokenKind.guidLiteral) { take(); return new Expression(ExprKind.guidLiteral, t); }
         if (t.kind == TokenKind.identifier) {
             take();
             if (accept("(")) {

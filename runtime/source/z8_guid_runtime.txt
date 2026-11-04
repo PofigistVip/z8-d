@@ -1,0 +1,69 @@
+class Z8Guid {
+    ulong majorBits, minorBits;
+    this(ulong majorBits = 0, ulong minorBits = 0) { this.majorBits = majorBits; this.minorBits = minorBits; }
+}
+
+Z8Guid z8_guid_zero() { return new Z8Guid(); }
+Z8Guid z8_guid_create(long minor) { return new Z8Guid(0, cast(ulong)minor); }
+Z8Guid z8_guid_create(long major, long minor) { return new Z8Guid(cast(ulong)major, cast(ulong)minor); }
+
+Z8Guid z8_guid_literal(string text) {
+    import std.string : strip;
+    if (!text.length || text.strip() == "" || text.strip() == "0") return z8_guid_zero();
+    if (text.length == 32) text = text[0..8] ~ "-" ~ text[8..12] ~ "-" ~ text[12..16] ~ "-" ~ text[16..20] ~ "-" ~ text[20..32];
+    if (text.length != 36 || text[8] != '-' || text[13] != '-' || text[18] != '-' || text[23] != '-')
+        throw new Exception("invalid guid");
+    ulong major, minor;
+    size_t count;
+    foreach (char c; text) {
+        if (c == '-') continue;
+        uint digit;
+        if (c >= '0' && c <= '9') digit = c - '0';
+        else if (c >= 'a' && c <= 'f') digit = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F') digit = c - 'A' + 10;
+        else throw new Exception("invalid guid");
+        if (count++ < 16) major = (major << 4) | digit;
+        else minor = (minor << 4) | digit;
+    }
+    if (count != 32) throw new Exception("invalid guid");
+    return new Z8Guid(major, minor);
+}
+Z8Guid z8_guid_parse(wstring text) { return text is null ? null : z8_guid_literal(text.to!string); }
+Z8Guid z8_guid_create_random() {
+    import std.uuid : randomUUID;
+    return z8_guid_literal(randomUUID().toString());
+}
+Z8Guid z8_guid_create_name(wstring text) {
+    import std.digest.md : md5Of;
+    auto bytes = md5Of(z8_string_required(text).to!string);
+    bytes[6] = cast(ubyte)((bytes[6] & 0x0f) | 0x30);
+    bytes[8] = cast(ubyte)((bytes[8] & 0x3f) | 0x80);
+    ulong major, minor;
+    foreach (i, b; bytes) {
+        if (i < 8) major = (major << 8) | b;
+        else minor = (minor << 8) | b;
+    }
+    return new Z8Guid(major, minor);
+}
+wstring z8_guid_to_string(Z8Guid value) {
+    z8_nonnull(value);
+    return format("%08X-%04X-%04X-%04X-%012X", value.majorBits >> 32,
+        (value.majorBits >> 16) & 0xffff, value.majorBits & 0xffff,
+        value.minorBits >> 48, value.minorBits & 0xffffffffffffUL).to!wstring;
+}
+long z8_guid_major(Z8Guid value) { return cast(long)z8_nonnull(value).majorBits; }
+long z8_guid_minor(Z8Guid value) { return cast(long)z8_nonnull(value).minorBits; }
+Z8Array!long z8_guid_components(Z8Guid value) { return new Z8Array!long([z8_guid_major(value), z8_guid_minor(value)]); }
+long z8_guid_hash(Z8Guid value) {
+    z8_nonnull(value);
+    auto both = value.majorBits ^ value.minorBits;
+    return cast(long)cast(int)(both ^ (both >> 32));
+}
+bool z8_guid_compare(string op)(Z8Guid left, Z8Guid right) {
+    z8_nonnull(left);
+    if (right is null) return false;
+    auto equal = left.majorBits == right.majorBits && left.minorBits == right.minorBits;
+    static if (op == "==") return equal;
+    else static if (op == "!=") return !equal;
+    else static assert(0, "unsupported guid comparison");
+}

@@ -1,0 +1,28 @@
+public class GuidValues {
+    public static int run() {
+        guid zero;
+        if (zero != guid.Null || zero.toString() != "00000000-0000-0000-0000-000000000000") return 1;
+        guid value = '00112233-4455-6677-8899-AABBCCDDEEFF';
+        if (value.toString() != "00112233-4455-6677-8899-AABBCCDDEEFF") return 2;
+        if (value != guid.parse("00112233445566778899aabbccddeeff")) return 3;
+        if (guid.parse("") != guid.Null) return 41;
+        if (guid.parse(null) != null) return 42;
+        guid numbers = guid.create(123, 456);
+        if (numbers.major() != 123 || numbers.minor() != 456) return 5;
+        if (numbers.hashCode() != 435) return 10;
+        int[] parts = numbers.components();
+        if (parts.size() != 2 || parts[0] != 123 || parts[1] != 456) return 6;
+        if (guid.create(456) != guid.create(0, 456)) return 7;
+        if (guid.create("hello").toString() != "5D41402A-BC4B-3A76-B971-9D911017C592") return 8;
+        primary boxed = numbers;
+        string text = numbers;
+        if (boxed.hashCode() != numbers.hashCode() || boxed.toString() != text) return 9;
+        guid missing = null;
+        if (numbers == missing || numbers != missing) return 11;
+        try {
+            bool ignored = missing == numbers;
+            return 12;
+        } catch (exception expected) {}
+        return 179;
+    }
+}

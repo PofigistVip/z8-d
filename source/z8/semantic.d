@@ -22,7 +22,7 @@ class Checker {
     private void fail(string message, Token t) { throw new CompileException(message, t.position); }
     private static bool isConstantInitializer(Expression expression) {
         switch (expression.kind) {
-            case ExprKind.integer: case ExprKind.decimalLiteral: case ExprKind.boolean: case ExprKind.stringLiteral: case ExprKind.nullLiteral: return true;
+            case ExprKind.integer: case ExprKind.decimalLiteral: case ExprKind.boolean: case ExprKind.stringLiteral: case ExprKind.guidLiteral: case ExprKind.nullLiteral: return true;
             case ExprKind.arrayLiteral:
                 foreach (item; expression.arguments) if (!isConstantInitializer(item)) return false;
                 return true;
@@ -96,7 +96,7 @@ class Checker {
         if (e.kind == ExprKind.arrayLiteral && (expected == ValueType.selfArray || expected == ValueType.enumArray)) e.objectClass = expectedClass;
         auto actual = typeOf(e, expected);
         if (expected == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType,
-            ValueType.optionalInt, ValueType.optionalBool, ValueType.optionalDecimal, ValueType.stringType, ValueType.nullableString].canFind(actual)) {
+            ValueType.optionalInt, ValueType.optionalBool, ValueType.optionalDecimal, ValueType.stringType, ValueType.nullableString, ValueType.guidType].canFind(actual)) {
             e.boxPrimary = true; return true;
         }
         if (isOptionalPrimitive(actual) && optionalBaseType(actual) == expected) {
@@ -121,6 +121,7 @@ class Checker {
         if (expected == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual)) {
             e.convertToString = actual; return true;
         }
+        if (expected == ValueType.stringType && actual == ValueType.guidType) { e.convertToString = actual; return true; }
         return actual == expected && (expected == ValueType.selfType ? isAssignable(e.objectClass, expectedClass) :
             (expected != ValueType.selfArray && expected != ValueType.enumType && expected != ValueType.enumArray) || e.objectClass is expectedClass);
     }
@@ -187,8 +188,9 @@ class Checker {
                     if (actual == ValueType.enumType && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                     if (actual == ValueType.enumArray && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                 } else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
-                else if (p.type == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.nullableString].canFind(actual)) { }
+                else if (p.type == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.nullableString, ValueType.guidType].canFind(actual)) { }
                 else if (p.type == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual)) weight += 100;
+                else if (p.type == ValueType.stringType && actual == ValueType.guidType) weight += 100;
                 else applicable = false;
                 if (!applicable) break;
             }
@@ -313,6 +315,7 @@ class Checker {
                 return ValueType.decimalType;
             case ExprKind.boolean: return ValueType.boolType;
             case ExprKind.stringLiteral: return ValueType.stringType;
+            case ExprKind.guidLiteral: return ValueType.guidType;
             case ExprKind.nullLiteral: return ValueType.nullType;
             case ExprKind.arrayLiteral:
                 if (!isArray(expected)) fail("array initializer requires an array type", e.token);
@@ -349,6 +352,9 @@ class Checker {
                 return ValueType.selfType;
             case ExprKind.field:
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields)) {
+                    if (e.left.token.text == "guid" && e.token.text == "Null") {
+                        e.emittedOverride = "z8_guid_zero()"; return ValueType.guidType;
+                    }
                     auto owner = e.left.token.text in visibleClasses;
                     if (owner is null) fail("unknown class or variable '" ~ e.left.token.text ~ "'", e.left.token);
                     if ((*owner).isEnum) {
@@ -383,6 +389,22 @@ class Checker {
                 if (!accessible(selected.owner, selected.isPublic, selected.isProtected)) fail("method is not accessible", e.token);
                 return checkCall(selected, selected.owner, e);
             case ExprKind.memberCall:
+                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "guid") {
+                    if (e.token.text == "parse") {
+                        checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_guid_parse"; return ValueType.guidType;
+                    }
+                    if (e.token.text == "create") {
+                        if (!e.arguments.length) e.builtinCall = "z8_guid_create_random";
+                        else if (e.arguments.length == 1 && [ValueType.stringType, ValueType.nullableString].canFind(typeOf(e.arguments[0]))) {
+                            checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_guid_create_name";
+                        } else {
+                            checkArguments(e, e.arguments.length == 1 ? [ValueType.intType] : [ValueType.intType, ValueType.intType]);
+                            e.builtinCall = "z8_guid_create";
+                        }
+                        return ValueType.guidType;
+                    }
+                    fail("unsupported static guid method", e.token);
+                }
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) &&
                     (e.left.token.text == "int" || e.left.token.text == "decimal" || e.left.token.text == "bool")) {
                     if (e.token.text != "parse") fail("unsupported static type method", e.token);
@@ -427,6 +449,14 @@ class Checker {
                     receiver = ValueType.stringType;
                 }
                 e.inferredType = receiver;
+                if (receiver == ValueType.guidType) {
+                    checkArguments(e, []);
+                    if (e.token.text == "toString") { e.builtinCall = "z8_guid_to_string"; return ValueType.stringType; }
+                    if (e.token.text == "hashCode") { e.builtinCall = "z8_guid_hash"; return ValueType.intType; }
+                    if (e.token.text == "major" || e.token.text == "minor") { e.builtinCall = "z8_guid_" ~ e.token.text; return ValueType.intType; }
+                    if (e.token.text == "components") { e.builtinCall = "z8_guid_components"; return ValueType.intArray; }
+                    fail("unsupported guid method", e.token);
+                }
                 if ([ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType].canFind(receiver) && e.token.text == "hashCode") {
                     checkArguments(e, []); e.builtinCall = "z8_primary_hash_value"; return ValueType.intType;
                 }
@@ -701,6 +731,10 @@ class Checker {
                     if (!["==", "!="].canFind(op)) fail("null supports only equality comparisons", e.token);
                     e.inferredType = ValueType.nullType;
                     return ValueType.boolType;
+                }
+                if (left == ValueType.guidType && right == ValueType.guidType) {
+                    if (!["==", "!="].canFind(op)) fail("invalid guid operands", e.token);
+                    e.inferredType = ValueType.guidType; return ValueType.boolType;
                 }
                 if (left == ValueType.nullableString) { e.nullableStringLeft = true; left = ValueType.stringType; }
                 if (right == ValueType.nullableString) { e.right.nullableStringMode = NullableStringMode.nullAsEmpty; right = ValueType.stringType; }
