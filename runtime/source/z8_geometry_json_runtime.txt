@@ -46,7 +46,7 @@ Z8Geometry z8_geometry_fromGeoJson(wstring input, long srsValue) {
         if (shape < 0) return z8_geometry_none(srs);
         return readCoordinates(coordinates, shape);
     }
-    return readObject(parseJSON(text.to!string));
+    return readObject(z8_json_parse(text.to!string));
 }
 
 wstring z8_geometry_toGeoJson(Z8Geometry value) {

@@ -10,6 +10,8 @@ public class GeometryValues {
         if (point.toGeoJson() != "{\"type\":\"Point\",\"coordinates\":[1.5,-2.25]}") return 23;
         geometry jsonPoint = geometry.fromGeoJson("{\"type\":\"Point\",\"coordinates\":[1.5,-2.25]}", 4326);
         if (jsonPoint.toString() != point.toString()) return 24;
+        geometry permissive = geometry.fromGeoJson("{type:'Point';coordinates:[1.5,-2.25,]}", 4326);
+        if (permissive.toString() != point.toString()) return 39;
         string encoded = point.toString();
         if (encoded != "0101000020E6100000000000000000F83F00000000000002C0") return 6;
         geometry decoded = geometry.fromHexString(encoded.toLowerCase());

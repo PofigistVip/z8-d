@@ -65,7 +65,10 @@ wstring z8_file_to_string(Z8File value) {
 }
 Z8Array!Z8File z8_file_parse(wstring input) {
     import std.json : JSONValue, JSONType, parseJSON;
-    auto json = parseJSON(z8_string_required(input).to!string);
+    auto text = z8_string_required(input).to!string;
+    if (!text.length) text = "[]";
+    else if (text[0] != '[') text = "[" ~ text ~ "]";
+    auto json = z8_json_parse(text);
     wstring field(JSONValue[string] values, string key, wstring fallback = ""w) {
         auto p = key in values;
         if (p is null || p.type == JSONType.null_) return fallback;

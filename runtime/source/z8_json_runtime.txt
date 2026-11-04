@@ -1,0 +1,92 @@
+// Z8's JSON tokenizer accepts single quotes, unquoted keys and legacy separators.
+private import std.json : JSONValue, JSONType, parseJSON;
+private class Z8JsonReader {
+    string source;
+    size_t position;
+    this(string source) { this.source = source; }
+    char peek() {
+        while (position < source.length && source[position] <= ' ') ++position;
+        return position < source.length ? source[position] : '\0';
+    }
+    string quoted() {
+        auto quote = source[position++];
+        string result = "\"";
+        while (position < source.length) {
+            auto c = source[position++];
+            if (c == quote) return parseJSON(result ~ "\"").str;
+            if (c == '\r' || c == '\n' || c == '\0') throw new Exception("unterminated JSON string");
+            if (c == '\\') {
+                if (position == source.length) throw new Exception("unterminated JSON escape");
+                auto escape = source[position++];
+                if (escape == '\'') result ~= '\'';
+                else if (`"\/bfnrt`.canFind(escape)) { result ~= '\\'; result ~= escape; }
+                else if (escape == 'u') {
+                    if (position + 4 > source.length) throw new Exception("invalid JSON unicode escape");
+                    result ~= "\\u" ~ source[position .. position + 4]; position += 4;
+                } else throw new Exception("invalid JSON escape");
+            } else if (c == '"') result ~= "\\\"";
+            else result ~= c;
+        }
+        throw new Exception("unterminated JSON string");
+    }
+    JSONValue value() {
+        import std.string : strip, toLower;
+        auto c = peek();
+        if (c == '"' || c == '\'') return JSONValue(quoted());
+        if (c == '{') return object();
+        if (c == '[') return array();
+        auto begin = position;
+        while (position < source.length && source[position] >= ' ' && !`,:]}/\"[{;=#`.canFind(source[position])) ++position;
+        auto token = source[begin .. position].strip();
+        if (!token.length) throw new Exception("missing JSON value");
+        auto lower = token.toLower();
+        if (lower == "null") return JSONValue.init;
+        if (lower == "true") return JSONValue(true);
+        if (lower == "false") return JSONValue(false);
+        if ((token[0] >= '0' && token[0] <= '9') || ".-+".canFind(token[0])) {
+            try {
+                if (token.length > 2 && token[0] == '0' && (token[1] == 'x' || token[1] == 'X')) return JSONValue(token[2 .. $].to!int(16));
+                if (token.canFind('.') || token.canFind('e') || token.canFind('E')) return JSONValue(token.to!double);
+                return JSONValue(token.to!long);
+            } catch (Exception) { }
+        }
+        return JSONValue(token);
+    }
+    JSONValue object() {
+        ++position;
+        JSONValue[string] fields;
+        while (true) {
+            auto c = peek();
+            if (c == '}') { ++position; return JSONValue(fields); }
+            if (!c) throw new Exception("unterminated JSON object");
+            auto keyValue = value();
+            if (keyValue.type == JSONType.null_) throw new Exception("null JSON key");
+            auto key = keyValue.type == JSONType.string ? keyValue.str : keyValue.toString();
+            c = peek();
+            if (c == '=') { ++position; if (position < source.length && source[position] == '>') ++position; }
+            else if (c == ':') ++position;
+            else throw new Exception("missing JSON key separator");
+            fields[key] = value();
+            c = peek();
+            if (c == '}') { ++position; return JSONValue(fields); }
+            if (c != ',' && c != ';') throw new Exception("missing JSON object separator");
+            ++position;
+        }
+    }
+    JSONValue array() {
+        ++position;
+        JSONValue[] values;
+        while (true) {
+            auto c = peek();
+            if (c == ']') { ++position; return JSONValue(values); }
+            if (!c) throw new Exception("unterminated JSON array");
+            if (c == ',') values ~= JSONValue.init;
+            else values ~= value();
+            c = peek();
+            if (c == ']') { ++position; return JSONValue(values); }
+            if (c != ',' && c != ';') throw new Exception("missing JSON array separator");
+            ++position;
+        }
+    }
+}
+private JSONValue z8_json_parse(string input) { return (new Z8JsonReader(input)).value(); }
