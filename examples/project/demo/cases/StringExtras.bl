@@ -53,6 +53,8 @@ public class StringExtras {
         primary[] rounded = {decimal.parse("-0.0005"), decimal.parse("0.0005"), decimal.parse("-0.0006")};
         if ("{0};{1};{2}".format(rounded) != "-0;0;-0,001") return 25;
         if ("{2,number,integer}|{2,number,percent}|{2,number,currency}|{2,number,#,##0.00}".format(arguments) != "1 235|123 457%|1 234,57 руб.|1 234,57") return 40;
+        primary[] customNumbers = {decimal.parse("-12.34"), decimal.parse("0.125")};
+        if ("{0,number,'USD '0.00;('USD '0.00)} {1,number,0.0%}".format(customNumbers) != "(USD 12,34) 12,5%") return 50;
         primary[] choiceArgs = {2};
         if ("{0,choice,0#none|1#one|1<{0} items}".format(choiceArgs) != "2 items") return 45;
         primary[] one = {1};

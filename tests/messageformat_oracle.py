@@ -13,7 +13,12 @@ import java.text.MessageFormat;
 class MessageFormatOracle {
     public static void main(String[] args) {
         String[] patterns = {"{0}", "{0,number}", "{0,number,integer}", "{0,number,percent}",
-                             "{0,number,currency}", "{0,number,#,##0.00}", "{0,number,0.###}"};
+                             "{0,number,currency}", "{0,number,#,##0.00}", "{0,number,0.###}",
+                             "{0,number,00000.00}", "{0,number,#,##0.00%;(#,##0.00%)}",
+                             "{0,number,'USD '0.00;('USD '0.00)}", "{0,number,#,##0‰}",
+                             "{0,number,¤ #,##0.00}", "{0,number,#,##,##0}",
+                             "{0,number,.##}", "{0,number,0.}", "{0,number,0.00;[0.00]}",
+                             "{0,number,#.##}", "{0,number,#.00}"};
         String[] numbers = {"0", "1.2", "-0.0005", "999999.9999", "1.2345", "0.00049", "-1234567.25"};
         for (String pattern : patterns)
             for (String number : numbers)
@@ -29,7 +34,12 @@ import std.stdio : writeln;
 import std.conv : to;
 void main() {
     wstring[] patterns = ["{0}"w, "{0,number}"w, "{0,number,integer}"w, "{0,number,percent}"w,
-                           "{0,number,currency}"w, "{0,number,#,##0.00}"w, "{0,number,0.###}"w];
+                           "{0,number,currency}"w, "{0,number,#,##0.00}"w, "{0,number,0.###}"w,
+                           "{0,number,00000.00}"w, "{0,number,#,##0.00%;(#,##0.00%)}"w,
+                           "{0,number,'USD '0.00;('USD '0.00)}"w, "{0,number,#,##0‰}"w,
+                           "{0,number,¤ #,##0.00}"w, "{0,number,#,##,##0}"w,
+                           "{0,number,.##}"w, "{0,number,0.}"w, "{0,number,0.00;[0.00]}"w,
+                           "{0,number,#.##}"w, "{0,number,#.00}"w];
     string[] numbers = ["0", "1.2", "-0.0005", "999999.9999", "1.2345", "0.00049", "-1234567.25"];
     foreach (pattern; patterns) foreach (number; numbers) {
         auto values = new Z8Array!Z8Primary([z8_primary_box(z8_decimal(number))]);

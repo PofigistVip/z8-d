@@ -1,5 +1,5 @@
 // Basic MessageFormat placeholders with the Russian locale's number formatting.
-private wstring z8_message_number(wstring value, size_t minFraction = 0, bool grouping = true, size_t minInteger = 1) {
+private wstring z8_message_number(wstring value, size_t minFraction = 0, bool grouping = true, size_t minInteger = 1, size_t groupSize = 3) {
     auto dot = value.length;
     foreach (i, wchar c; value) if (c == '.') { dot = i; break; }
     auto integer = value[0 .. dot];
@@ -10,7 +10,7 @@ private wstring z8_message_number(wstring value, size_t minFraction = 0, bool gr
     integer = padded;
     wstring result;
     foreach (i, wchar c; integer) {
-        if (grouping && i > start && (integer.length - i) % 3 == 0) result ~= cast(wchar)0x00A0;
+        if (grouping && i > start && (integer.length - i) % groupSize == 0) result ~= cast(wchar)0x00A0;
         result ~= c;
     }
     if (dot < value.length) {
@@ -18,7 +18,70 @@ private wstring z8_message_number(wstring value, size_t minFraction = 0, bool gr
         while (end > dot + 1 + minFraction && value[end - 1] == '0') --end;
         if (end > dot + 1) result ~= ","w ~ value[dot + 1 .. end];
     }
+    if (minInteger == 0 && result.length >= 2 && result[0 .. 2] == "0,"w) result = result[1 .. $];
+    else if (minInteger == 0 && result.length >= 3 && result[0 .. 3] == "-0,"w) result = "-"w ~ result[2 .. $];
     return result.length ? result : ""w;
+}
+private struct Z8NumberPattern {
+    wstring prefix, suffix;
+    int digits;
+    size_t minFraction, minInteger, groupSize;
+    bool grouping, decimalAlways;
+    int multiplier = 1;
+}
+private Z8NumberPattern z8_message_number_pattern(wstring pattern) {
+    Z8NumberPattern result;
+    size_t first = pattern.length, last;
+    bool quoted;
+    for (size_t i; i < pattern.length; ++i) {
+        auto c = pattern[i];
+        if (c == '\'') {
+            if (i + 1 < pattern.length && pattern[i + 1] == '\'') { ++i; continue; }
+            quoted = !quoted;
+        } else if (!quoted && (c == '#' || c == '0')) {
+            if (first == pattern.length) first = i;
+            last = i + 1;
+        }
+    }
+    if (first == pattern.length || quoted) throw new Exception("unsupported number pattern");
+    if (first && pattern[first - 1] == '.') --first;
+    if (last < pattern.length && pattern[last] == '.') { result.decimalAlways = true; ++last; }
+    bool fraction;
+    size_t groupDigits;
+    foreach (c; pattern[first .. last]) {
+        if (c == '.') { if (fraction) throw new Exception("unsupported number pattern"); fraction = true; }
+        else if (c == ',' && !fraction) { result.grouping = true; groupDigits = 0; }
+        else if (c == '0' || c == '#') {
+            if (fraction) { ++result.digits; if (c == '0') ++result.minFraction; }
+            else { ++groupDigits; if (c == '0') ++result.minInteger; }
+        } else throw new Exception("unsupported number pattern");
+    }
+    if (result.digits > 1000 || (result.grouping && !groupDigits)) throw new Exception("unsupported number pattern");
+    if (pattern[first] == '.' && !result.minFraction) result.minFraction = 1;
+    result.groupSize = result.grouping ? groupDigits : 3;
+    wstring affix(wstring part) {
+        wstring output;
+        bool inQuote;
+        for (size_t i; i < part.length; ++i) {
+            auto c = part[i];
+            if (c == '\'') {
+                if (i + 1 < part.length && part[i + 1] == '\'') { output ~= '\''; ++i; }
+                else inQuote = !inQuote;
+            } else if (!inQuote && (c == '%' || c == '‰')) {
+                if (result.multiplier != 1) throw new Exception("invalid number pattern multiplier");
+                result.multiplier = c == '%' ? 100 : 1000;
+                output ~= c;
+            } else if (!inQuote && c == '¤') {
+                if (i + 1 < part.length && part[i + 1] == '¤') { output ~= "RUB"w; ++i; }
+                else output ~= "руб."w;
+            } else output ~= c;
+        }
+        if (inQuote) throw new Exception("invalid number pattern quote");
+        return output;
+    }
+    result.prefix = affix(pattern[0 .. first]);
+    result.suffix = affix(pattern[last .. $]);
+    return result;
 }
 private wstring z8_message_formatted_number(Z8Primary value, wstring style) {
     import std.string : strip;
@@ -34,30 +97,40 @@ private wstring z8_message_formatted_number(Z8Primary value, wstring style) {
     style = style.strip();
     int digits = 3;
     size_t minFraction, minInteger = 1;
-    bool grouping = true, percent, currency;
+    bool grouping = true, percent, currency, decimalAlways;
+    size_t groupSize = 3;
+    wstring prefix, suffix;
+    bool negative = number.coefficient < 0;
     if (style == "integer"w) digits = 0;
     else if (style == "percent"w) { digits = 0; percent = true; number = number * z8_decimal_from_int(100); }
     else if (style == "currency"w) { digits = 2; currency = true; }
     else if (style.length) {
-        bool fraction, seenDigit;
-        digits = 0; grouping = false; minInteger = 0;
-        foreach (c; style) {
-            if (c == '.') { if (fraction) throw new Exception("unsupported number pattern"); fraction = true; }
-            else if (c == ',' && !fraction) grouping = true;
-            else if (c == '0' || c == '#') {
-                seenDigit = true;
-                if (fraction) { ++digits; if (c == '0') ++minFraction; }
-                else if (c == '0') ++minInteger;
-            } else throw new Exception("unsupported number pattern");
+        size_t separator = style.length;
+        bool quoted;
+        for (size_t i; i < style.length; ++i) {
+            if (style[i] == '\'') {
+                if (i + 1 < style.length && style[i + 1] == '\'') { ++i; continue; }
+                quoted = !quoted;
+            } else if (style[i] == ';' && !quoted) { separator = i; break; }
         }
-        if (!seenDigit || digits > 1000) throw new Exception("unsupported number pattern");
+        auto positivePattern = z8_message_number_pattern(style[0 .. separator]);
+        digits = positivePattern.digits; minFraction = positivePattern.minFraction;
+        minInteger = positivePattern.minInteger; grouping = positivePattern.grouping; groupSize = positivePattern.groupSize;
+        decimalAlways = positivePattern.decimalAlways;
+        auto selected = positivePattern;
+        if (negative && separator < style.length) selected = z8_message_number_pattern(style[separator + 1 .. $]);
+        prefix = (negative && separator == style.length ? "-"w : ""w) ~ selected.prefix;
+        suffix = selected.suffix;
+        if (positivePattern.multiplier != 1) number = number * z8_decimal_from_int(positivePattern.multiplier);
+        if (negative) number = -number;
     }
     auto rounded = number.z8_round(digits, 6);
-    auto formatted = z8_message_number(rounded.z8_string(), minFraction, grouping, minInteger);
+    auto formatted = z8_message_number(rounded.z8_string(), minFraction, grouping, minInteger, groupSize);
+    if (decimalAlways && !formatted.canFind(',')) formatted ~= ',';
     if (rounded.coefficient == 0 && number.coefficient < 0) formatted = "-"w ~ formatted;
     if (percent) formatted ~= "%"w;
     if (currency) formatted ~= " руб."w;
-    return formatted;
+    return prefix ~ formatted ~ suffix;
 }
 private wstring z8_message_value(Z8Primary value) {
     z8_nonnull(value);
