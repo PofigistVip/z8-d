@@ -35,7 +35,7 @@ private int z8_date_parse_weekday(wstring input, ref size_t index) {
 }
 
 private immutable(TimeZone) z8_date_timezone() {
-    version (Windows) return WindowsTimeZone.getTimeZone("Russian Standard Time");
+    version (Windows) return z8_moscow_zone;
     else version (Posix) return PosixTimeZone.getTimeZone("Europe/Moscow");
     else static assert(0, "Moscow timezone is unavailable on this platform");
 }
@@ -113,7 +113,10 @@ long z8_date_hours(Z8Date x) { return z8_nonnull(x).value.hour; }
 long z8_date_minutes(Z8Date x) { return z8_nonnull(x).value.minute; }
 long z8_date_seconds(Z8Date x) { return z8_nonnull(x).value.second; }
 long z8_date_milliseconds(Z8Date x) { return z8_nonnull(x).value.fracSecs.total!"msecs"; }
-long z8_date_zoneOffset(Z8Date x) { return z8_nonnull(x).value.utcOffset.total!"msecs"; }
+long z8_date_zoneOffset(Z8Date x) {
+    auto time = z8_nonnull(x).value;
+    return time.utcOffset.total!"msecs" - (time.dstInEffect ? 3_600_000L : 0);
+}
 
 void z8_date_setZoneOffset(Z8Date x, long offset) {
     auto target = z8_nonnull(x);
@@ -271,7 +274,9 @@ Z8Date z8_date_parse(wstring input, wstring pattern) {
                 auto remaining = z8_str_toLowerCase(input[ti .. $]);
                 import std.string : startsWith;
                 if (remaining.startsWith("moscow standard time"w)) { offset = 180; ti += 20; }
+                else if (remaining.startsWith("moscow daylight time"w)) { offset = 240; ti += 20; }
                 else if (remaining.startsWith("msk"w)) { offset = 180; ti += 3; }
+                else if (remaining.startsWith("msd"w)) { offset = 240; ti += 3; }
                 else {
                     bool gmt = remaining.startsWith("gmt"w);
                     if (gmt || remaining.startsWith("utc"w)) ti += 3;
@@ -364,7 +369,19 @@ private Z8Date z8_date_added(Z8Date original, SysTime time, long amount, bool ca
 Z8Date z8_date_addYear(Z8Date x, long n) { auto t = z8_nonnull(x).value; t.add!"years"(cast(int)n, AllowDayOverflow.no); return z8_date_added(x, t, n, true); }
 Z8Date z8_date_addQuarter(Z8Date x, long n) { return z8_date_addMonth(x, cast(int)(cast(int)n * 3)); }
 Z8Date z8_date_addMonth(Z8Date x, long n) { auto t = z8_nonnull(x).value; t.add!"months"(cast(int)n, AllowDayOverflow.no); return z8_date_added(x, t, n, true); }
-Z8Date z8_date_addDay(Z8Date x, long n) { return z8_date_added(x, z8_nonnull(x).value + dur!"days"(cast(int)n), n, true); }
+Z8Date z8_date_addDay(Z8Date x, long n) {
+    auto time = z8_nonnull(x).value;
+    auto days = cast(int)n;
+    auto advanced = time + dur!"days"(days);
+    auto adjustment = time.utcOffset - advanced.utcOffset;
+    if (adjustment != dur!"seconds"(0)) {
+        auto corrected = advanced + adjustment;
+        auto expected = DateTime(time.year, cast(int)time.month, time.day, time.hour, time.minute, time.second) + dur!"days"(days);
+        if (corrected.year == expected.year && corrected.month == expected.month && corrected.day == expected.day)
+            advanced = corrected;
+    }
+    return z8_date_added(x, advanced, n, true);
+}
 Z8Date z8_date_addHour(Z8Date x, long n) { return z8_date_added(x, z8_nonnull(x).value + dur!"hours"(cast(int)n), n); }
 Z8Date z8_date_addMinute(Z8Date x, long n) { return z8_date_added(x, z8_nonnull(x).value + dur!"minutes"(cast(int)n), n); }
 Z8Date z8_date_addSecond(Z8Date x, long n) { return z8_date_added(x, z8_nonnull(x).value + dur!"seconds"(cast(int)n), n); }
@@ -395,7 +412,7 @@ bool z8_date_isEqualDate(Z8Date a, Z8Date b) {
 private wstring z8_date_format(Z8Date x, bool milliseconds) {
     auto t = z8_nonnull(x).value;
     if (!milliseconds) t.timezone = z8_date_timezone();
-    auto offset = t.utcOffset.total!"minutes";
+    auto offset = milliseconds ? z8_date_zoneOffset(x) / 60_000 : t.utcOffset.total!"minutes";
     auto absoluteOffset = offset < 0 ? -offset : offset;
     auto result = format("%04d-%02d-%02dT%02d:%02d:%02d", t.year, cast(int)t.month, t.day, t.hour, t.minute, t.second);
     auto fraction = t.fracSecs.total!"msecs";
@@ -464,7 +481,11 @@ wstring z8_date_toString(Z8Date value, wstring pattern) {
             case 'E': numeric = false; result ~= count < 4 ? z8_weekday_short[cast(int)t.dayOfWeek] : z8_weekday_long[cast(int)t.dayOfWeek]; break;
             case 'a': numeric = false; result ~= t.hour < 12 ? "AM"w : "PM"w; break;
             case 'G': numeric = false; result ~= "н.э."w; break;
-            case 'z': numeric = false; result ~= count < 4 ? "MSK"w : "Moscow Standard Time"w; break;
+            case 'z':
+                numeric = false;
+                result ~= t.dstInEffect ? (count < 4 ? "MSD"w : "Moscow Daylight Time"w) :
+                    (count < 4 ? "MSK"w : "Moscow Standard Time"w);
+                break;
             case 'm': number = t.minute; break;
             case 's': number = t.second; break;
             case 'S': number = t.fracSecs.total!"msecs"; break;

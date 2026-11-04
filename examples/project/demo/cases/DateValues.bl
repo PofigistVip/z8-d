@@ -19,6 +19,15 @@ public class DateValues {
         if (value.dayOfWeek() != 5 || value.dayOfYear() != 60 || value.daysInMonth() != 29) return 3;
         if (value.ticks() != 1709199045000 || value.toString() != "2024-02-29T12:30:45+03:00") return 4;
         if (value.toIsoString() != "2024-02-29T12:30:45+03:00") return 5;
+        date summer2010 = '15/07/2010 12:00:00';
+        date winter2012 = '15/01/2012 12:00:00';
+        if (summer2010.zoneOffset() != 10800000 || summer2010.toString("z") != "MSD" || summer2010.toIsoString() != "2010-07-15T12:00:00+03:00") return 45;
+        if (winter2012.zoneOffset() != 14400000 || winter2012.toString("z") != "MSK") return 46;
+        date beforeSummer = '27/03/2010 12:30:00';
+        date afterSummer = beforeSummer.addDay(1);
+        if (afterSummer.hours() != 12 || afterSummer.ticks() - beforeSummer.ticks() != 82800000) return 47;
+        if ('27/03/2010 02:30:00'.addDay(1).hours() != 1) return 48;
+        if (date.parse("2010-07-15 12:00 MSD", "yyyy-MM-dd HH:mm z").ticks() != summer2010.ticks()) return 49;
         if (value.toString("yyyy-MM-dd HH:mm:ss.SSS XXX") != "2024-02-29 12:30:45.000 +03:00") return 35;
         if (value.toString("yy/M/d H:m:s Z") != "24/2/29 12:30:45 +0300") return 36;
         if (value.toString("yyyy 'at' HH:mm") != "2024 at 12:30") return 37;
