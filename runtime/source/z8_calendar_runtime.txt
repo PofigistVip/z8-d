@@ -1,0 +1,35 @@
+// GregorianCalendar's default cutover uses Julian dates through 1582-10-04.
+private enum long z8_gregorian_cutover = 2299161, z8_unix_julian_day = 2440588;
+private long z8_calendar_day_number(int year, int month, int day, bool julian) {
+    long a = (14 - month) / 12, y = cast(long)year + 4800 - a, m = month + 12 * a - 3;
+    return day + (153 * m + 2) / 5 + 365 * y + y / 4 - (julian ? 32083 : y / 100 - y / 400 + 32045);
+}
+private struct Z8CalendarFields {
+    int year, month, day, dayOfYear, daysInMonth;
+    long dayNumber;
+}
+private Z8CalendarFields z8_calendar_fields(SysTime value) {
+    auto dayNumber = z8_calendar_day_number(value.year, cast(int)value.month, value.day, false);
+    Z8CalendarFields result;
+    result.dayNumber = dayNumber;
+    if (dayNumber < z8_gregorian_cutover) {
+        auto c = dayNumber + 32082;
+        auto d = (4 * c + 3) / 1461;
+        auto e = c - 1461 * d / 4;
+        auto m = (5 * e + 2) / 153;
+        result.day = cast(int)(e - (153 * m + 2) / 5 + 1);
+        result.month = cast(int)(m + 3 - 12 * (m / 10));
+        result.year = cast(int)(d - 4800 + m / 10);
+    } else {
+        result.year = value.year; result.month = cast(int)value.month; result.day = value.day;
+    }
+    auto yearStart = z8_calendar_day_number(result.year, 1, 1, result.year <= 1582);
+    result.dayOfYear = cast(int)(dayNumber - yearStart + 1);
+    bool leap = result.year % 4 == 0 && (result.year <= 1582 || result.year % 100 != 0 || result.year % 400 == 0);
+    int[12] days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    result.daysInMonth = days[result.month - 1];
+    return result;
+}
+private bool z8_calendar_is_julian(int year, int month, long day) {
+    return year < 1582 || (year == 1582 && (month < 10 || (month == 10 && day < 15)));
+}

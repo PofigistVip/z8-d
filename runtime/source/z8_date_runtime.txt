@@ -72,16 +72,17 @@ Z8Date z8_date_literal(string text) {
         if (timeParts.length != 3) throw new Exception("invalid date literal");
         hours = timeParts[0].to!int; minutes = timeParts[1].to!int; seconds = timeParts[2].to!int;
     }
-    return new Z8Date(SysTime(DateTime(dateParts[2].to!int, dateParts[1].to!int, dateParts[0].to!int,
-        hours, minutes, seconds), z8_date_timezone()));
+    auto value = new Z8Date(SysTime(DateTime(1970, 1, 1), z8_date_timezone()));
+    z8_date_set(value, dateParts[2].to!int, dateParts[1].to!int, dateParts[0].to!int, hours, minutes, seconds);
+    return value;
 }
 long z8_date_ticks(Z8Date x) { return (z8_nonnull(x).value - SysTime.fromUnixTime(0, UTC())).total!"msecs"; }
-long z8_date_year(Z8Date x) { return z8_nonnull(x).value.year; }
+long z8_date_year(Z8Date x) { return z8_calendar_fields(z8_nonnull(x).value).year; }
 long z8_date_quarter(Z8Date x) { return (z8_date_month(x) - 1) / 3 + 1; }
-long z8_date_month(Z8Date x) { return cast(int)z8_nonnull(x).value.month; }
-long z8_date_day(Z8Date x) { return z8_nonnull(x).value.day; }
+long z8_date_month(Z8Date x) { return z8_calendar_fields(z8_nonnull(x).value).month; }
+long z8_date_day(Z8Date x) { return z8_calendar_fields(z8_nonnull(x).value).day; }
 long z8_date_dayOfWeek(Z8Date x) { return cast(int)z8_nonnull(x).value.dayOfWeek + 1; }
-long z8_date_dayOfYear(Z8Date x) { return z8_nonnull(x).value.dayOfYear; }
+long z8_date_dayOfYear(Z8Date x) { return z8_calendar_fields(z8_nonnull(x).value).dayOfYear; }
 long z8_date_weekOfYear(Z8Date x) {
     auto target = z8_nonnull(x);
     target.fullFirstWeek = true;
@@ -104,7 +105,7 @@ long z8_date_hashCode(Z8Date x) {
     auto hash = cast(uint)ticks ^ cast(uint)(ticks >> 32) ^ settings ^ 577736u;
     return cast(long)cast(int)hash;
 }
-long z8_date_daysInMonth(Z8Date x) { return z8_nonnull(x).value.daysInMonth; }
+long z8_date_daysInMonth(Z8Date x) { return z8_calendar_fields(z8_nonnull(x).value).daysInMonth; }
 long z8_date_hours(Z8Date x) { return z8_nonnull(x).value.hour; }
 long z8_date_minutes(Z8Date x) { return z8_nonnull(x).value.minute; }
 long z8_date_seconds(Z8Date x) { return z8_nonnull(x).value.second; }
@@ -132,8 +133,11 @@ void z8_date_set(Z8Date x, long year, long month, long day, long hour, long minu
     auto target = z8_nonnull(x);
     // Normalize calendar fields before applying the zone; adding elapsed days in
     // the target zone would shift local time across a daylight-saving boundary.
-    auto t = SysTime(DateTime(cast(int)year, 1, 1), UTC());
-    t.add!"months"(cast(int)month - 1, AllowDayOverflow.no);
+    auto normalized = SysTime(DateTime(cast(int)year, 1, 1), UTC());
+    normalized.add!"months"(cast(int)month - 1, AllowDayOverflow.no);
+    auto y = normalized.year, m = cast(int)normalized.month;
+    auto first = z8_calendar_day_number(y, m, 1, z8_calendar_is_julian(y, m, day));
+    auto t = SysTime(DateTime(1970, 1, 1), UTC()) + dur!"days"(first - z8_unix_julian_day);
     t += dur!"days"(cast(int)day - 1) + dur!"hours"(cast(int)hour) + dur!"minutes"(cast(int)minute) +
         dur!"seconds"(cast(int)second) + dur!"msecs"(cast(int)millisecond);
     target.value = SysTime(DateTime(t.year, cast(int)t.month, t.day, t.hour, t.minute, t.second), target.value.timezone) + t.fracSecs;
@@ -416,9 +420,10 @@ bool z8_date_isEqualDate(Z8Date a, Z8Date b) {
 private wstring z8_date_format(Z8Date x, bool milliseconds) {
     auto t = z8_nonnull(x).value;
     if (!milliseconds) t.timezone = z8_date_timezone();
+    auto calendar = z8_calendar_fields(t);
     auto offset = milliseconds ? z8_date_zoneOffset(x) / 60_000 : t.utcOffset.total!"minutes";
     auto absoluteOffset = offset < 0 ? -offset : offset;
-    auto result = format("%04d-%02d-%02dT%02d:%02d:%02d", t.year, cast(int)t.month, t.day, t.hour, t.minute, t.second);
+    auto result = format("%04d-%02d-%02dT%02d:%02d:%02d", calendar.year, calendar.month, calendar.day, t.hour, t.minute, t.second);
     auto fraction = t.fracSecs.total!"msecs";
     if (milliseconds && fraction != 0) result ~= format(".%03d", fraction);
     result ~= format("%s%02d:%02d", offset < 0 ? "-" : "+", absoluteOffset / 60, absoluteOffset % 60);
@@ -437,6 +442,7 @@ private int z8_date_format_week(SysTime t) {
 wstring z8_date_toString(Z8Date value, wstring pattern) {
     auto t = z8_nonnull(value).value;
     t.timezone = z8_date_timezone();
+    auto calendar = z8_calendar_fields(t);
     pattern = z8_string_required(pattern);
     wstring result;
     bool quoted;
@@ -454,30 +460,30 @@ wstring z8_date_toString(Z8Date value, wstring pattern) {
         long number;
         bool numeric = true;
         switch (c) {
-            case 'y': number = count == 2 ? t.year % 100 : t.year; break;
+            case 'y': number = count == 2 ? calendar.year % 100 : calendar.year; break;
             case 'Y':
                 number = t.year + (cast(int)t.month == 12 && z8_date_format_week(t) == 1 ? 1 : 0);
                 if (count == 2) number %= 100;
                 break;
             case 'M': case 'L':
-                if (count <= 2) number = cast(int)t.month;
+                if (count <= 2) number = calendar.month;
                 else {
                     numeric = false;
-                    auto index = cast(size_t)t.month - 1;
+                    auto index = cast(size_t)calendar.month - 1;
                     bool standalone = c == 'L' || pattern.length == count;
                     result ~= standalone ? (count == 3 ? z8_month_standalone_short[index] : z8_month_standalone_long[index]) :
                         (count == 3 ? z8_month_short[index] : z8_month_long[index]);
                 }
                 break;
-            case 'd': number = t.day; break;
-            case 'D': number = t.dayOfYear; break;
+            case 'd': number = calendar.day; break;
+            case 'D': number = calendar.dayOfYear; break;
             case 'u': number = (cast(int)t.dayOfWeek + 6) % 7 + 1; break;
             case 'w': number = z8_date_format_week(t); break;
             case 'W':
                 auto first = SysTime(DateTime(t.year, cast(int)t.month, 1), t.timezone);
                 number = 1 + (t.day - 1 + (cast(int)first.dayOfWeek + 6) % 7) / 7;
                 break;
-            case 'F': number = 1 + (t.day - 1) / 7; break;
+            case 'F': number = 1 + (calendar.day - 1) / 7; break;
             case 'H': number = t.hour; break;
             case 'k': number = t.hour == 0 ? 24 : t.hour; break;
             case 'K': number = t.hour % 12; break;

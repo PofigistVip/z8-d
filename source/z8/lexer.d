@@ -133,7 +133,7 @@ class Lexer {
         if (!date.empty) {
             auto day = date[1].to!int, month = date[2].to!int, year = date[3].to!int;
             int[] days = [0,31,28,31,30,31,30,31,31,30,31,30,31];
-            if (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) days[2] = 29;
+            if (year % 4 == 0 && (year <= 1582 || year % 100 != 0 || year % 400 == 0)) days[2] = 29;
             if (year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= days[month] &&
                 (date[4].length == 0 || (date[4].to!int < 24 && date[5].to!int < 60 && date[6].to!int < 60)))
                 return finish(TokenKind.dateLiteral, start);
