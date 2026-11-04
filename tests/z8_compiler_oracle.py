@@ -103,6 +103,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         System.out.println("RESULT:" + demo.cases.LifecyclePhases.z8_run().get());
         System.out.println("RESULT:" + demo.cases.PrimaryValues.z8_run().get());
         System.out.println("RESULT:" + demo.cases.GuidValues.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.BinaryValues.z8_run().get());
     }
 }''', encoding="utf-8")
         logging_cache = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "commons-logging" / "commons-logging"
@@ -112,6 +113,11 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                    (p.name.startswith("commons-lang-2.6-") or p.name.startswith("commons-fileupload-"))]
         if len(commons) < 2:
             raise SystemExit("Cached Commons Lang and FileUpload dependencies are required to compile the original string runtime")
+        io_cache = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "commons-io" / "commons-io" / "2.7"
+        io_jars = [p for p in io_cache.rglob("*.jar") if not p.name.endswith("-sources.jar")]
+        if not io_jars:
+            raise SystemExit("Cached Commons IO 2.7 is required to compile the original binary runtime")
+        commons += io_jars
         run_classpath = os.pathsep.join([str(runtime_jars[0]), str(lang_classes), classpath] + [str(p) for p in logging + commons])
         # The cached runtime JAR can predate the checked-out sources. Override its
         # decimal class with the current source before evaluating decimal results.
@@ -140,6 +146,24 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                         "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), str(integer_java), str(decimal_java.with_name("date.java"))], cwd=temp, check=True)
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
                         "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), str(decimal_java.with_name("guid.java"))], cwd=temp, check=True)
+        # The cached file class predates current file.java. Its filename helpers
+        # delegate to FilenameUtils in current source, while zip is not exercised
+        # by this oracle. Adapt only these dependencies in a temporary copy.
+        binary_source = decimal_java.with_name("binary.java").read_text(encoding="utf-8")
+        binary_shims = {
+            "file.getBaseName(name.get())": "org.apache.commons.io.FilenameUtils.getBaseName(name.get())",
+            "file.getExtension(name.get())": "org.apache.commons.io.FilenameUtils.getExtension(name.get()).toLowerCase()",
+            "return file.createTempFile().zip(fileOrDirectory).binary();": "throw new UnsupportedOperationException();",
+            "return file.createTempFile().zip(binaries).binary();": "throw new UnsupportedOperationException();",
+        }
+        for old, replacement in binary_shims.items():
+            if binary_source.count(old) != 1:
+                raise SystemExit("Unexpected binary.java source; cannot apply oracle compatibility shim")
+            binary_source = binary_source.replace(old, replacement)
+        binary_java = temp / "binary.java"
+        binary_java.write_text(binary_source, encoding="utf-8")
+        subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
+                        "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), str(binary_java)], cwd=temp, check=True)
         generated_sources = [str(p) for p in (project / "out" / "demo").rglob("*.java")]
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
                         "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes)] + generated_sources + [str(runner)], cwd=temp, check=True)
@@ -193,14 +217,15 @@ void main() {
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4C6966656379636C65506861736573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E5072696D61727956616C756573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4775696456616C756573.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E42696E61727956616C756573.m_run()));
 }
 ''', encoding="utf-8")
         d_binary = temp / ("compare.exe" if os.name == "nt" else "compare")
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_results = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        if original_results[-2:] != ["173", "179"]:
-            raise SystemExit(f"Primary/guid fixture failed in original Z8: {original_results[-2:]}")
+        if original_results[-3:] != ["173", "179", "181"]:
+            raise SystemExit(f"Primary/guid/binary fixture failed in original Z8: {original_results[-3:]}")
         if original_results != d_results:
             raise SystemExit(f"Original Z8: {original_results!r}; z8-d: {d_results!r}")
         print(f"Matched {len(d_results)} program results against the original compiler and runtime (CLASS from current source)")

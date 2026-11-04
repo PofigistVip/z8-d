@@ -1,0 +1,51 @@
+class Z8Binary {
+    ubyte[] data;
+    wstring name = ""w;
+    this(ubyte[] data = null) { this.data = data; }
+}
+
+Z8Binary z8_binary_literal(string text) {
+    import std.string : split, strip;
+    ubyte[] bytes;
+    foreach (part; text.split(",")) {
+        auto value = part.strip();
+        auto number = value.length > 2 && (value[0..2] == "0x" || value[0..2] == "0X") ?
+            value[2..$].to!uint(16) : value.to!uint;
+        if (number > 255) throw new Exception("invalid binary literal");
+        bytes ~= cast(ubyte)number;
+    }
+    return new Z8Binary(bytes);
+}
+
+Z8Binary z8_binary_set_name(Z8Binary value, wstring name) { z8_nonnull(value).name = name; return value; }
+wstring z8_binary_get_name(Z8Binary value) { return z8_nonnull(value).name; }
+wstring z8_binary_to_string(Z8Binary value) { return z8_string_required(z8_binary_get_name(value)); }
+long z8_binary_length(Z8Binary value) { return cast(long)z8_nonnull(value).data.length; }
+long z8_binary_hash(Z8Binary value) { return cast(long)cast(int)cast(uint)z8_nonnull(value).toHash(); }
+
+private size_t z8_binary_name_start(wstring name) {
+    size_t start;
+    foreach (i, wchar c; name) if (c == '/' || c == '\\') start = i + 1;
+    return start;
+}
+private size_t z8_binary_extension_start(wstring name, size_t start) {
+    auto dot = name.length;
+    foreach (i, wchar c; name) if (i >= start && c == '.') dot = i;
+    return dot;
+}
+wstring z8_binary_base_name(Z8Binary value) {
+    auto name = z8_binary_to_string(value);
+    auto start = z8_binary_name_start(name);
+    auto dot = z8_binary_extension_start(name, start);
+    return name[start .. dot];
+}
+wstring z8_binary_extension(Z8Binary value) {
+    import std.uni : toLower;
+    import std.utf : encode;
+    auto name = z8_binary_to_string(value);
+    auto dot = z8_binary_extension_start(name, z8_binary_name_start(name));
+    if (dot == name.length) return ""w;
+    wchar[] lower;
+    foreach (dchar c; name[dot + 1 .. $]) encode(lower, toLower(c));
+    return lower.length ? lower.idup : ""w;
+}

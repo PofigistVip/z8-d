@@ -1,5 +1,5 @@
 // The original primary class is the common base for Z8 scalar values.
-enum Z8PrimaryKind { integer, boolean, decimal, text, guid }
+enum Z8PrimaryKind { integer, boolean, decimal, text, guid, binary }
 
 class Z8Primary {
     Z8PrimaryKind kind;
@@ -8,6 +8,7 @@ class Z8Primary {
     Z8Decimal decimalValue;
     wstring textValue;
     Z8Guid guidValue;
+    Z8Binary binaryValue;
 }
 
 Z8Primary z8_primary_box(T)(T value) {
@@ -24,6 +25,12 @@ Z8Primary z8_primary_box(T)(T value) {
         auto boxed = new Z8Primary();
         boxed.kind = Z8PrimaryKind.guid;
         boxed.guidValue = value;
+        return boxed;
+    } else static if (is(T == Z8Binary)) {
+        if (value is null) return null;
+        auto boxed = new Z8Primary();
+        boxed.kind = Z8PrimaryKind.binary;
+        boxed.binaryValue = value;
         return boxed;
     } else {
         auto boxed = new Z8Primary();
@@ -43,6 +50,7 @@ wstring z8_primary_to_string(Z8Primary value) {
         case Z8PrimaryKind.decimal: return value.decimalValue.z8_string();
         case Z8PrimaryKind.text: return value.textValue;
         case Z8PrimaryKind.guid: return z8_guid_to_string(value.guidValue);
+        case Z8PrimaryKind.binary: return z8_binary_to_string(value.binaryValue);
     }
 }
 
@@ -77,6 +85,7 @@ long z8_primary_hash(Z8Primary value) {
             foreach (wchar c; value.textValue) hash = 31u * hash + c;
             break;
         case Z8PrimaryKind.guid: return z8_guid_hash(value.guidValue);
+        case Z8PrimaryKind.binary: return z8_binary_hash(value.binaryValue);
     }
     return cast(long)cast(int)hash;
 }

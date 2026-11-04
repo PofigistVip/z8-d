@@ -22,7 +22,7 @@ class Checker {
     private void fail(string message, Token t) { throw new CompileException(message, t.position); }
     private static bool isConstantInitializer(Expression expression) {
         switch (expression.kind) {
-            case ExprKind.integer: case ExprKind.decimalLiteral: case ExprKind.boolean: case ExprKind.stringLiteral: case ExprKind.guidLiteral: case ExprKind.nullLiteral: return true;
+            case ExprKind.integer: case ExprKind.decimalLiteral: case ExprKind.boolean: case ExprKind.stringLiteral: case ExprKind.guidLiteral: case ExprKind.binaryLiteral: case ExprKind.nullLiteral: return true;
             case ExprKind.arrayLiteral:
                 foreach (item; expression.arguments) if (!isConstantInitializer(item)) return false;
                 return true;
@@ -96,7 +96,7 @@ class Checker {
         if (e.kind == ExprKind.arrayLiteral && (expected == ValueType.selfArray || expected == ValueType.enumArray)) e.objectClass = expectedClass;
         auto actual = typeOf(e, expected);
         if (expected == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType,
-            ValueType.optionalInt, ValueType.optionalBool, ValueType.optionalDecimal, ValueType.stringType, ValueType.nullableString, ValueType.guidType].canFind(actual)) {
+            ValueType.optionalInt, ValueType.optionalBool, ValueType.optionalDecimal, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType].canFind(actual)) {
             e.boxPrimary = true; return true;
         }
         if (isOptionalPrimitive(actual) && optionalBaseType(actual) == expected) {
@@ -188,7 +188,7 @@ class Checker {
                     if (actual == ValueType.enumType && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                     if (actual == ValueType.enumArray && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                 } else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
-                else if (p.type == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.nullableString, ValueType.guidType].canFind(actual)) { }
+                else if (p.type == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType].canFind(actual)) { }
                 else if (p.type == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual)) weight += 100;
                 else if (p.type == ValueType.stringType && actual == ValueType.guidType) weight += 100;
                 else applicable = false;
@@ -316,6 +316,7 @@ class Checker {
             case ExprKind.boolean: return ValueType.boolType;
             case ExprKind.stringLiteral: return ValueType.stringType;
             case ExprKind.guidLiteral: return ValueType.guidType;
+            case ExprKind.binaryLiteral: return ValueType.binaryType;
             case ExprKind.nullLiteral: return ValueType.nullType;
             case ExprKind.arrayLiteral:
                 if (!isArray(expected)) fail("array initializer requires an array type", e.token);
@@ -373,7 +374,11 @@ class Checker {
                     e.targetClass = staticField.owner.emittedName;
                     return staticField.type == ValueType.stringType ? ValueType.nullableString : storedValueType(staticField.type);
                 }
-                if (typeOf(e.left) != ValueType.selfType) fail("field access requires an object", e.token);
+                auto receiverType = typeOf(e.left);
+                if (receiverType == ValueType.binaryType && e.token.text == "name") {
+                    e.binaryNameField = true; return ValueType.nullableString;
+                }
+                if (receiverType != ValueType.selfType) fail("field access requires an object", e.token);
                 auto field = lookupField(e.left.objectClass, e.token.text);
                 if (field is null) fail("unknown field '" ~ e.token.text ~ "'", e.token);
                 if (field.isStatic) fail("static field access through an instance is not supported", e.token);
@@ -449,6 +454,20 @@ class Checker {
                     receiver = ValueType.stringType;
                 }
                 e.inferredType = receiver;
+                if (receiver == ValueType.binaryType) {
+                    if (e.token.text == "setName") {
+                        checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_binary_set_name"; return ValueType.binaryType;
+                    }
+                    checkArguments(e, []);
+                    if (e.token.text == "getName") { e.builtinCall = "z8_binary_get_name"; return ValueType.nullableString; }
+                    if (e.token.text == "getBaseName" || e.token.text == "getExtension" || e.token.text == "toString") {
+                        e.builtinCall = e.token.text == "getBaseName" ? "z8_binary_base_name" : e.token.text == "getExtension" ? "z8_binary_extension" : "z8_binary_to_string";
+                        return ValueType.stringType;
+                    }
+                    if (e.token.text == "length") { e.builtinCall = "z8_binary_length"; return ValueType.intType; }
+                    if (e.token.text == "hashCode") { e.builtinCall = "z8_binary_hash"; return ValueType.intType; }
+                    fail("unsupported binary method", e.token);
+                }
                 if (receiver == ValueType.guidType) {
                     checkArguments(e, []);
                     if (e.token.text == "toString") { e.builtinCall = "z8_guid_to_string"; return ValueType.stringType; }
@@ -753,7 +772,7 @@ class Checker {
                     else if (op == ">") e.emittedOperator = ">=";
                     else if (op == ">=") e.emittedOperator = ">";
                 }
-                if (left != right || left == ValueType.voidType || left == ValueType.exceptionType || left == ValueType.primaryType || left == ValueType.selfType || left == ValueType.stringMap || isArray(left)) fail("operand type mismatch", e.token);
+                if (left != right || left == ValueType.voidType || left == ValueType.exceptionType || left == ValueType.primaryType || left == ValueType.binaryType || left == ValueType.selfType || left == ValueType.stringMap || isArray(left)) fail("operand type mismatch", e.token);
                 if (["==", "!="].canFind(op)) return ValueType.boolType;
                 if ((left == ValueType.intType || left == ValueType.decimalType || left == ValueType.stringType) && ["<", ">", "<=", ">="].canFind(op)) return ValueType.boolType;
                 if (left == ValueType.stringType && op == "+") { e.inferredType = ValueType.stringType; return ValueType.stringType; }

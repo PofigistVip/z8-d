@@ -1,0 +1,20 @@
+public class BinaryValues {
+    public static int run() {
+        binary empty;
+        if (empty.length() != 0 || empty.getName() != "") return 1;
+        binary data = '0, 1, 0xFF, 128';
+        if (data.length() != 4) return 2;
+        data.setName("dir/report.TXT");
+        if (data.getName() != "dir/report.TXT" || data.getBaseName() != "report" || data.getExtension() != "txt") return 3;
+        data.name = "sub/archive.tar.GZ";
+        if (data.getBaseName() != "archive.tar" || data.getExtension() != "gz") return 4;
+        primary boxed = data;
+        if (boxed.toString() != "sub/archive.tar.GZ" || boxed.hashCode() != data.hashCode()) return 5;
+        data.setName(null);
+        if (data.getName() != null) return 6;
+        binary missing = null;
+        boxed = missing;
+        if (boxed != null) return 7;
+        return 181;
+    }
+}
