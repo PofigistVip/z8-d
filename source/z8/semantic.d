@@ -294,7 +294,6 @@ class Checker {
         }
         Method[][string] ownOverloads;
         foreach (m; program.methods) {
-            auto inherited = m.name.text in methods;
             auto previousOverloads = m.name.text in ownOverloads;
             if (previousOverloads !is null) foreach (previous; *previousOverloads) {
                 if (m.isStatic != previous.isStatic) fail("mixing static and instance overloads is not supported", m.name);
@@ -304,10 +303,9 @@ class Checker {
             for (auto base = program.baseClass; base !is null && baseMethod is null; base = base.baseClass)
                 foreach (candidate; base.methods)
                     if (candidate.name.text == m.name.text && sameParameters(candidate, m)) { baseMethod = candidate; break; }
-            if (inherited !is null && (*inherited).owner !is program && (m.isStatic || (*inherited).isStatic))
-                fail("inherited static method overloads are not supported", m.name);
             if (baseMethod !is null) {
-                if (m.isStatic || baseMethod.isStatic || !baseMethod.isVirtual) fail("only virtual instance methods may be overridden", m.name);
+                if (m.isStatic != baseMethod.isStatic || (!m.isStatic && !baseMethod.isVirtual))
+                    fail("only virtual instance methods may be overridden", m.name);
                 if (m.returnType != baseMethod.returnType || m.parameters.length != baseMethod.parameters.length)
                     fail("override signature mismatch", m.name);
                 if (hasObjectClass(m.returnType) && resolveClass(program, m.returnObjectName, m.name) !is resolveClass(baseMethod.owner, baseMethod.returnObjectName, baseMethod.name))
@@ -320,7 +318,7 @@ class Checker {
                 }
                 if (baseMethod.isPublic && !m.isPublic) fail("override cannot reduce public access", m.name);
                 if (baseMethod.isProtected && !m.isPublic && !m.isProtected) fail("override cannot reduce protected access", m.name);
-                m.isVirtual = true; m.overrides = true;
+                if (!m.isStatic) { m.isVirtual = true; m.overrides = true; }
             }
             methods[m.name.text] = m;
             ownOverloads[m.name.text] ~= m;
@@ -574,9 +572,10 @@ class Checker {
             case ExprKind.call:
                 auto method = e.token.text in methods;
                 if (method is null) fail("unknown method '" ~ e.token.text ~ "'", e.token);
-                if (staticContext && !(*method).isStatic) fail("instance method in static context", e.token);
                 auto selected = selectOverload(*method, e);
+                if (staticContext && !selected.isStatic) fail("instance method in static context", e.token);
                 if (!accessible(selected.owner, selected.isPublic, selected.isProtected)) fail("method is not accessible", e.token);
+                if (selected.isStatic) e.targetClass = selected.owner.emittedName;
                 return checkCall(selected, selected.owner, e);
             case ExprKind.memberCall:
                 if (e.left.kind == ExprKind.variable && e.left.token.text == "Math" && importedMath &&
@@ -717,7 +716,7 @@ class Checker {
                     if (!target.isStatic) fail("instance method cannot be called on a class", e.token);
                     target = selectOverload(target, e);
                     if (!accessible(target.owner, target.isPublic, target.isProtected)) fail("method is not accessible", e.token);
-                    e.targetClass = (*owner).emittedName;
+                    e.targetClass = target.owner.emittedName;
                     return checkCall(target, target.owner, e);
                 }
                 auto receiver = typeOf(e.left);

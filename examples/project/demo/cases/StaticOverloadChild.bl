@@ -1,0 +1,10 @@
+public class StaticOverloadChild extends StaticOverloadBase {
+    public static int select(string value) { return value.length() + 30; }
+    public static int same(int value) { return value + 40; }
+    public static int run() {
+        if (select(2) != 12 || select("abc") != 33 || same(2) != 42) return 1;
+        if (StaticOverloadChild.select(3) != 13 || StaticOverloadChild.select("x") != 31) return 2;
+        if (StaticOverloadBase.same(2) != 22 || StaticOverloadChild.same(2) != 42) return 3;
+        return 163;
+    }
+}

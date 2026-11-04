@@ -255,7 +255,7 @@ private string emitExprRaw(Expression e) {
             return (e.targetClass.length ? e.targetClass : emitReceiver(e.left)) ~ ".f_" ~ e.token.text;
         case ExprKind.call:
             string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
-            return "m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
+            return (e.targetClass.length ? e.targetClass ~ "." : "") ~ "m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
         case ExprKind.memberCall:
             if (e.builtinCall.length) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
