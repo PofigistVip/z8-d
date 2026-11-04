@@ -13,6 +13,9 @@ result = subprocess.run([str(exe), "compile", str(source)], capture_output=True,
 
 assert "import z8.runtime;" in result.stdout
 assert "class Z8Object {" not in result.stdout
+assert 'z8_string_new("Ж😀"w)' in result.stdout
+assert r'''z8_string_new("A\t\"\\'Z"w)''' in result.stdout
+assert "cast(wchar)0x" not in result.stdout
 assert "\n    override void z8_allocate_fields() {\n        super.z8_allocate_fields();\n    }" in result.stdout
 assert "\n        if (" in result.stdout and "\n            v_result =" in result.stdout
 

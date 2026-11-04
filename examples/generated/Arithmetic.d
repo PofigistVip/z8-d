@@ -17,11 +17,11 @@ class Z8_Arithmetic : Z8Object {
         if ((z8_decimal_literal("1.0") != z8_decimal_literal("1.00"))) {
             return z8_optional_wrap((cast(long)(4)));
         }
-        if ((z8_string_or_empty((z8_decimal_literal("0.10")).z8_string()) != z8_string_new([cast(wchar)0x0030, cast(wchar)0x002E, cast(wchar)0x0031].idup))) {
+        if ((z8_string_or_empty((z8_decimal_literal("0.10")).z8_string()) != z8_string_new("0.1"w))) {
             return z8_optional_wrap((cast(long)(5)));
         }
         Z8Optional!Z8Decimal v_first = z8_optional_wrap(z8_decimal_literal("1.0"));
-        Z8Optional!Z8Decimal v_second = z8_optional_wrap(z8_decimal_parse(z8_string_new([cast(wchar)0x0031, cast(wchar)0x002E, cast(wchar)0x0030, cast(wchar)0x0030].idup)));
+        Z8Optional!Z8Decimal v_second = z8_optional_wrap(z8_decimal_parse(z8_string_new("1.00"w)));
         if (z8_optional_decimal_binary!"=="(v_first, v_second)) {
             return z8_optional_wrap((cast(long)(1)));
         }
@@ -29,7 +29,7 @@ class Z8_Arithmetic : Z8Object {
             return z8_optional_wrap((cast(long)(2)));
         }
         Z8Optional!Z8Decimal v_fraction = z8_optional_wrap(z8_optional_mixed!("/", false)(z8_optional_wrap(z8_decimal_literal("1.0")), z8_optional_wrap((cast(long)(3)))));
-        if ((z8_string_or_empty(z8_optional_decimal_call!"toString"(v_fraction)) != z8_string_new([cast(wchar)0x0030, cast(wchar)0x002E, cast(wchar)0x0033, cast(wchar)0x0033, cast(wchar)0x0033, cast(wchar)0x0033, cast(wchar)0x0033, cast(wchar)0x0033].idup))) {
+        if ((z8_string_or_empty(z8_optional_decimal_call!"toString"(v_fraction)) != z8_string_new("0.333333"w))) {
             return z8_optional_wrap((cast(long)(3)));
         }
         Z8Optional!long v_result = z8_optional_wrap((cast(long)(5)));

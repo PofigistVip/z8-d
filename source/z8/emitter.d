@@ -65,10 +65,53 @@ private string emitStringLiteral(string text) {
             value ~= c;
         } else if (c >= ' ' || c == '\t' || c == '\r' || c == '\n') value ~= c;
     }
-    if (value.length == 0) return `z8_string_new(""w)`;
+    return emitWStringLiteral(value);
+}
+
+/// Emit readable UTF-16 literals, falling back to code units for lone surrogates.
+private string emitWStringLiteral(const(wchar)[] value) {
+    string literal = `"`;
+    for (size_t i = 0; i < value.length; ++i) {
+        auto c = value[i];
+        switch (c) {
+            case '"': literal ~= `\"`; break;
+            case '\\': literal ~= `\\`; break;
+            case '\b': literal ~= `\b`; break;
+            case '\f': literal ~= `\f`; break;
+            case '\n': literal ~= `\n`; break;
+            case '\r': literal ~= `\r`; break;
+            case '\t': literal ~= `\t`; break;
+            default:
+                if (c >= 0xD800 && c <= 0xDBFF) {
+                    if (i + 1 == value.length || value[i + 1] < 0xDC00 || value[i + 1] > 0xDFFF)
+                        return emitWStringCodeUnits(value);
+                    literal ~= value[i .. i + 2].to!string;
+                    ++i;
+                } else if (c >= 0xDC00 && c <= 0xDFFF) {
+                    return emitWStringCodeUnits(value);
+                } else if (c < 0x20 || c == 0x7F || c == 0x85 || c == 0x2028 || c == 0x2029) {
+                    // formatDSource treats the Unicode separators as line breaks.
+                    literal ~= format("\\u%04X", cast(uint)c);
+                } else {
+                    literal ~= value[i .. i + 1].to!string;
+                }
+                break;
+        }
+    }
+    return `z8_string_new(` ~ literal ~ `"w)`;
+}
+
+private string emitWStringCodeUnits(const(wchar)[] value) {
     string[] units;
     foreach (c; value) units ~= format("cast(wchar)0x%04X", cast(uint)c);
     return "z8_string_new([" ~ units.join(", ") ~ "].idup)";
+}
+
+unittest {
+    assert(emitWStringLiteral([cast(wchar) 0xD800]) ==
+        "z8_string_new([cast(wchar)0xD800].idup)");
+    assert(emitWStringLiteral([cast(wchar) 0xDC00]) ==
+        "z8_string_new([cast(wchar)0xDC00].idup)");
 }
 private string dStorageType(ValueType type, Program objectClass = null) {
     return type == ValueType.intType ? "Z8Optional!long" : type == ValueType.boolType ? "Z8Optional!bool" : type == ValueType.decimalType ? "Z8Optional!Z8Decimal" : dType(type, objectClass);
