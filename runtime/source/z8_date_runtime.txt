@@ -308,6 +308,14 @@ private wstring z8_date_format(Z8Date x, bool milliseconds) {
 }
 wstring z8_date_toString(Z8Date x) { return z8_date_format(x, false); }
 wstring z8_date_toIsoString(Z8Date x) { return z8_date_format(x, true); }
+private int z8_date_format_week(SysTime t) {
+    auto jan = SysTime(DateTime(t.year, 1, 1), t.timezone);
+    auto weekday = (cast(int)jan.dayOfWeek + 6) % 7;
+    auto next = SysTime(DateTime(t.year + 1, 1, 1), t.timezone);
+    auto nextWeekday = (cast(int)next.dayOfWeek + 6) % 7;
+    if (nextWeekday && t.dayOfYear >= 1 + (next - jan).total!"days" - nextWeekday) return 1;
+    return 1 + (t.dayOfYear - 1 + weekday) / 7;
+}
 wstring z8_date_toString(Z8Date value, wstring pattern) {
     auto t = z8_nonnull(value).value;
     t.timezone = z8_date_timezone();
@@ -329,10 +337,24 @@ wstring z8_date_toString(Z8Date value, wstring pattern) {
         bool numeric = true;
         switch (c) {
             case 'y': number = count == 2 ? t.year % 100 : t.year; break;
+            case 'Y':
+                number = t.year + (cast(int)t.month == 12 && z8_date_format_week(t) == 1 ? 1 : 0);
+                if (count == 2) number %= 100;
+                break;
             case 'M': if (count > 2) throw new Exception("unsupported date format"); number = cast(int)t.month; break;
             case 'd': number = t.day; break;
             case 'D': number = t.dayOfYear; break;
+            case 'u': number = (cast(int)t.dayOfWeek + 6) % 7 + 1; break;
+            case 'w': number = z8_date_format_week(t); break;
+            case 'W':
+                auto first = SysTime(DateTime(t.year, cast(int)t.month, 1), t.timezone);
+                number = 1 + (t.day - 1 + (cast(int)first.dayOfWeek + 6) % 7) / 7;
+                break;
+            case 'F': number = 1 + (t.day - 1) / 7; break;
             case 'H': number = t.hour; break;
+            case 'k': number = t.hour == 0 ? 24 : t.hour; break;
+            case 'K': number = t.hour % 12; break;
+            case 'h': number = t.hour % 12 == 0 ? 12 : t.hour % 12; break;
             case 'm': number = t.minute; break;
             case 's': number = t.second; break;
             case 'S': number = t.fracSecs.total!"msecs"; break;

@@ -22,6 +22,8 @@ public class DateValues {
         if (value.toString("yyyy-MM-dd HH:mm:ss.SSS XXX") != "2024-02-29 12:30:45.000 +03:00") return 35;
         if (value.toString("yy/M/d H:m:s Z") != "24/2/29 12:30:45 +0300") return 36;
         if (value.toString("yyyy 'at' HH:mm") != "2024 at 12:30") return 37;
+        if (value.toString("D u w W F K h k") != "60 4 9 5 5 0 12 12") return 48;
+        if ('30/12/2024'.toString("YYYY-ww") != "2025-01") return 49;
         if (date.parse("2024-02-29 12:30:45.067 +02:00", "yyyy-MM-dd HH:mm:ss.SSS XXX").ticks() != 1709202645067) return 38;
         if (date.parse("2024-02-31 04:05:06 trailing", "yyyy-MM-dd HH:mm:ss").toString() != "2024-03-02T04:05:06+03:00") return 39;
         if (date.parse("20240229", "yyyyMMdd").day() != 29) return 40;
