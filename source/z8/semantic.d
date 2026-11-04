@@ -533,7 +533,8 @@ class Checker {
                         checkArguments(e, [ValueType.dateType, ValueType.dateType]); e.builtinCall = "z8_date_isEqualDate"; return ValueType.boolType;
                     }
                     if (e.token.text == "parse" || e.token.text == "parseIsoString") {
-                        checkArguments(e, [ValueType.stringType]);
+                        checkArguments(e, e.token.text == "parse" && e.arguments.length == 2 ?
+                            [ValueType.stringType, ValueType.stringType] : [ValueType.stringType]);
                         e.builtinCall = e.token.text == "parse" ? "z8_date_parse" : "z8_date_parseIsoString";
                         return ValueType.dateType;
                     }

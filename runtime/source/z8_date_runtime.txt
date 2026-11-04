@@ -156,6 +156,69 @@ private Z8Date z8_date_parse_impl(wstring input, bool iso) {
 }
 Z8Date z8_date_parse(wstring value) { return z8_date_parse_impl(value, false); }
 Z8Date z8_date_parseIsoString(wstring value) { return z8_date_parse_impl(value, true); }
+Z8Date z8_date_parse(wstring input, wstring pattern) {
+    if (input is null) return null;
+    pattern = z8_string_required(pattern);
+    if (!input.length) return z8_date_parse(input);
+    int year = 1970, month = 1, day = 1, hour, minute, second, millisecond;
+    int offset;
+    bool hasOffset, quoted;
+    size_t pi, ti;
+    int number(size_t width, bool fixed) {
+        auto begin = ti;
+        if (ti < input.length && (input[ti] == '-' || input[ti] == '+')) ++ti;
+        auto digits = ti;
+        while (ti < input.length && input[ti] >= '0' && input[ti] <= '9' && (!fixed || ti - digits < width)) ++ti;
+        if (ti == digits || (fixed && ti - digits != width)) throw new Exception("invalid date");
+        return input[begin .. ti].to!int;
+    }
+    void literal(wchar c) {
+        if (ti == input.length || input[ti++] != c) throw new Exception("invalid date");
+    }
+    while (pi < pattern.length) {
+        auto c = pattern[pi++];
+        if (c == '\'') {
+            if (pi < pattern.length && pattern[pi] == '\'') { ++pi; literal('\''); }
+            else quoted = !quoted;
+            continue;
+        }
+        if (quoted || !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))) { literal(c); continue; }
+        size_t width = 1;
+        while (pi < pattern.length && pattern[pi] == c) { ++pi; ++width; }
+        bool adjacent = pi < pattern.length && ((pattern[pi] >= 'A' && pattern[pi] <= 'Z') || (pattern[pi] >= 'a' && pattern[pi] <= 'z'));
+        switch (c) {
+            case 'y': if (width <= 2) throw new Exception("unsupported date format"); year = number(width, adjacent); break;
+            case 'M': if (width > 2) throw new Exception("unsupported date format"); month = number(width, adjacent); break;
+            case 'd': day = number(width, adjacent); break;
+            case 'H': hour = number(width, adjacent); break;
+            case 'm': minute = number(width, adjacent); break;
+            case 's': second = number(width, adjacent); break;
+            case 'S': millisecond = number(width, adjacent); break;
+            case 'X': case 'Z':
+                if (c == 'X' && width > 3) throw new Exception("invalid date format");
+                hasOffset = true;
+                if (c == 'X' && ti < input.length && input[ti] == 'Z') { ++ti; offset = 0; break; }
+                if (ti >= input.length || (input[ti] != '+' && input[ti] != '-')) throw new Exception("invalid date offset");
+                auto sign = input[ti++] == '-' ? -1 : 1;
+                auto hours = number(2, true);
+                int minutes;
+                if (c == 'Z' || width >= 2) {
+                    if (c == 'X' && width == 3) literal(':');
+                    minutes = number(2, true);
+                }
+                if (hours > 23 || minutes > 59) throw new Exception("invalid date offset");
+                offset = sign * (hours * 60 + minutes);
+                break;
+            default: throw new Exception("unsupported date format");
+        }
+    }
+    if (quoted) throw new Exception("unterminated date format quote");
+    immutable(TimeZone) zone = hasOffset ? new immutable(SimpleTimeZone)(dur!"minutes"(offset)) : z8_date_timezone();
+    auto result = new Z8Date(SysTime(DateTime(year, 1, 1), zone));
+    z8_date_set(result, year, month, day, hour, minute, second, millisecond);
+    result.value.timezone = z8_date_timezone();
+    return result;
+}
 
 private Z8Date z8_date_added(Z8Date original, SysTime time, long amount, bool calendarField = false) {
     if (original.explicitOffset && amount != 0) {
