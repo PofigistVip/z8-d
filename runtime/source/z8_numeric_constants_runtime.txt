@@ -1,0 +1,18 @@
+// These Z8 fields are shared between threads, as their Java counterparts are static.
+__gshared Z8Optional!long z8_int_Min = Z8Optional!long(true, -9223372036854775807L);
+__gshared Z8Optional!long z8_int_Max = Z8Optional!long(true, 9223372036854775807L);
+__gshared Z8Optional!long z8_decimal_RoundUp = Z8Optional!long(true, 0);
+__gshared Z8Optional!long z8_decimal_RoundDown = Z8Optional!long(true, 1);
+__gshared Z8Optional!long z8_decimal_RoundCeiling = Z8Optional!long(true, 2);
+__gshared Z8Optional!long z8_decimal_RoundFloor = Z8Optional!long(true, 3);
+__gshared Z8Optional!long z8_decimal_RoundHalfUp = Z8Optional!long(true, 4);
+__gshared Z8Optional!long z8_decimal_RoundHalfDown = Z8Optional!long(true, 5);
+__gshared Z8Optional!long z8_decimal_RoundHalfEven = Z8Optional!long(true, 6);
+__gshared Z8Optional!long z8_decimal_RoundUnnecessary = Z8Optional!long(true, 7);
+__gshared Z8Optional!Z8Decimal z8_decimal_Min;
+__gshared Z8Optional!Z8Decimal z8_decimal_Max;
+
+shared static this() {
+    z8_decimal_Min = z8_optional_wrap(z8_decimal_from_int(-9223372036854775807L));
+    z8_decimal_Max = z8_optional_wrap(z8_decimal_from_int(9223372036854775807L));
+}

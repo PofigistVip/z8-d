@@ -105,7 +105,8 @@ struct Z8Decimal {
         auto right = other.coefficient * z8_pow10(cast(uint)(cast(long)common - other.scale));
         return left < right ? -1 : left > right ? 1 : 0;
     }
-    Z8Decimal z8_round(long digits, long roundingMode = 4) const {
+    Z8Decimal z8_round(long digits) const { return z8_round(digits, z8_optional_require(z8_decimal_RoundHalfUp)); }
+    Z8Decimal z8_round(long digits, long roundingMode) const {
         if (nan) return z8_decimal_nan();
         auto target = cast(int)digits;
         auto mode = cast(int)roundingMode;

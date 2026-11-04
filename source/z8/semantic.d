@@ -368,6 +368,19 @@ class Checker {
                 return ValueType.selfType;
             case ExprKind.field:
                 if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields)) {
+                    if (e.left.token.text == "int" && ["Min", "Max"].canFind(e.token.text)) {
+                        e.emittedOverride = "z8_int_" ~ e.token.text; return ValueType.optionalInt;
+                    }
+                    if (e.left.token.text == "decimal") {
+                        if (["Min", "Max"].canFind(e.token.text)) {
+                            e.emittedOverride = "z8_decimal_" ~ e.token.text;
+                            e.enumConstant = true; return ValueType.optionalDecimal;
+                        }
+                        if (["RoundUp", "RoundDown", "RoundCeiling", "RoundFloor", "RoundHalfUp", "RoundHalfDown", "RoundHalfEven", "RoundUnnecessary"].canFind(e.token.text)) {
+                            e.emittedOverride = "z8_decimal_" ~ e.token.text; return ValueType.optionalInt;
+                        }
+                        fail("unknown decimal constant", e.token);
+                    }
                     if (e.left.token.text == "guid" && e.token.text == "Null") {
                         e.emittedOverride = "z8_guid_zero()"; return ValueType.guidType;
                     }

@@ -1,0 +1,17 @@
+public class NumericConstants {
+    public static int run() {
+        if (int.Min != -9223372036854775807 || int.Max != 9223372036854775807) return 1;
+        if (decimal.Min.toString() != "-9223372036854775807" || decimal.Max.toString() != "9223372036854775807") return 2;
+        int savedMin = int.Min;
+        int.Min = 7;
+        if (int.Min != 7) return 3;
+        int.Min = savedMin;
+        int savedMode = decimal.RoundHalfUp;
+        decimal.RoundHalfUp = decimal.RoundDown;
+        if (decimal.parse("1.9").round(0).toString() != "1") return 4;
+        decimal.RoundHalfUp = savedMode;
+        if (decimal.parse("1.9").round(0).toString() != "2") return 5;
+        if (decimal.RoundUp != 0 || decimal.RoundUnnecessary != 7) return 6;
+        return 233;
+    }
+}

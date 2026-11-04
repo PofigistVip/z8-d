@@ -5,6 +5,7 @@ package enum string runtimeSource = import("z8_core_runtime.txt") ~
     import("z8_map_runtime.txt") ~ import("z8_array_runtime.txt") ~ "\n" ~
     import("z8_decimal_runtime.txt") ~ "\n" ~ import("z8_string_runtime.txt") ~ "\n" ~
     import("z8_math_runtime.txt") ~ "\n" ~
+    import("z8_numeric_constants_runtime.txt") ~ "\n" ~
     import("z8_guid_runtime.txt") ~ "\n" ~
     import("z8_binary_runtime.txt") ~ "\n" ~
     import("z8_datespan_runtime.txt") ~ "\n" ~
