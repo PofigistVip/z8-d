@@ -32,7 +32,7 @@ void main() {
     writeln((z8_decimal("5.00") % z8_decimal("2.0")).z8_string());
     writeln(z8_decimal("1.0") == z8_decimal("1.00"));
     writeln(z8_decimal("1.0") <= z8_decimal("1.00"));
-    writeln(Z8_Math.m_mixedDecimalComparison());
+    writeln(z8_optional_require(Z8_Math.m_mixedDecimalComparison()));
     // RANDOM_CASES
 }
 '''

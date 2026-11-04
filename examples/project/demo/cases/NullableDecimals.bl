@@ -16,6 +16,9 @@ public class NullableDecimals {
         if (value != null || (value ?: 3).toString() != "3") return 3;
         try { decimal ignored = value + effect(); return 4; } catch (exception expected) { if (effects != 1) return 5; }
         try { decimal ignored = value + effectInt(); return 6; } catch (exception expectedMixed) { if (effects != 2) return 7; }
+        string noText = null;
+        try { decimal ignored = decimal.parse(noText); return 14; } catch (exception expectedParse) { }
+        if (decimal.parse("").toString() != "0") return 15;
         decimal one = 1.0;
         if (one == value || !(one != value) || !(one < value) || one > value) return 8;
         if (1 == value) return 9;

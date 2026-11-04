@@ -195,6 +195,7 @@ private Z8Decimal z8_decimal(string input) {
     return Z8Decimal.make(BigInt(input), z8_scale(cast(long)scale - exponent));
 }
 private Z8Decimal z8_decimal_parse(wstring value) {
+    value = z8_string_required(value);
     return value.length ? z8_decimal(z8_to_utf8(value)) : z8_decimal_from_int(0);
 }
 
