@@ -1,0 +1,36 @@
+public class DecimalMaps {
+    public static int run() {
+        decimal one = decimal.parse("1.0");
+        decimal oneHundredths = decimal.parse("1.00");
+        decimal nullKey = null;
+        int nullValue = null;
+        int[decimal] values = {(one, 1), (oneHundredths, 2)};
+        values.add(nullKey, nullValue);
+        if (values.size() != 3 || values[one] != 1 || values[oneHundredths] != 2) return 1;
+        if (!values.containsKey(null) || values.get(null) != null || !values.containsValue(null)) return 2;
+        if (values.get(decimal.parse("1")) != null || values.add(decimal.parse("1.0"), 9) != 1) return 3;
+        decimal[] keys = values.keys();
+        if (keys.size() != 3 || values.values().size() != 3) return 4;
+        int nulls = 0;
+        for (decimal key : keys) if (key == null) nulls += 1;
+        if (nulls != 1) return 5;
+        int[decimal] updates = {(one, 10)};
+        int[decimal] merged = values + updates;
+        if (merged[one] != 10 || values[one] != 9 || merged[oneHundredths] != 2) return 6;
+        values += updates;
+        if (values.remove(one) != 10 || values.containsKey(one)) return 7;
+        string[decimal] labels = {(one, "yes")};
+        if (labels[one] != "yes" || labels.add(one, "updated") != "yes") return 8;
+        bool[decimal] flags = {(one, true)};
+        if (!flags[one]) return 9;
+        decimal[decimal] amounts = {(one, decimal.parse("2.00"))};
+        if (!amounts.containsValue(decimal.parse("2.00")) || amounts.containsValue(decimal.parse("2.0"))) return 10;
+        guid id = '00000000-0000-0000-0000-000000000001';
+        guid[decimal] ids = {(one, id)};
+        if (ids[one] != id || !ids.containsValue(id)) return 11;
+        primary[decimal] mixed = {(one, 4)};
+        if ((int)mixed[one] != 4) return 12;
+        try { labels.add(null, null); return 13; } catch (exception expected) {}
+        return 159;
+    }
+}

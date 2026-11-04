@@ -49,6 +49,12 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.boolBoolMap: return "Z8BoolMap!bool";
         case ValueType.decimalBoolMap: return "Z8BoolMap!Z8Decimal";
         case ValueType.guidBoolMap: return "Z8BoolMap!Z8Guid";
+        case ValueType.stringDecimalMap: return "Z8DecimalMap!wstring";
+        case ValueType.primaryDecimalMap: return "Z8DecimalMap!Z8Primary";
+        case ValueType.intDecimalMap: return "Z8DecimalMap!long";
+        case ValueType.boolDecimalMap: return "Z8DecimalMap!bool";
+        case ValueType.decimalDecimalMap: return "Z8DecimalMap!Z8Decimal";
+        case ValueType.guidDecimalMap: return "Z8DecimalMap!Z8Guid";
         case ValueType.intArray: return "Z8Array!long";
         case ValueType.decimalArray: return "Z8Array!Z8Decimal";
         case ValueType.decimalMatrix: return "Z8Array!(Z8Array!Z8Decimal)";

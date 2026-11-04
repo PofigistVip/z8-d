@@ -12,7 +12,7 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, decimalType, boolType, stringType, guidType, binaryType, datespanType, dateType, geometryType, fileType, exceptionType, encodingType, primaryType, selfType, intArray, decimalArray, decimalMatrix, boolArray, stringArray, guidArray, binaryArray, datespanArray, dateArray, geometryArray, fileArray, exceptionArray, primaryArray, selfArray, stringMap, primaryStringMap, intStringMap, boolStringMap, decimalStringMap, guidStringMap, intIntMap, stringIntMap, primaryIntMap, boolIntMap, decimalIntMap, guidIntMap, stringGuidMap, primaryGuidMap, intGuidMap, boolGuidMap, decimalGuidMap, guidGuidMap, stringBoolMap, primaryBoolMap, intBoolMap, boolBoolMap, decimalBoolMap, guidBoolMap, nullType, nullableString, enumType, enumArray, optionalInt, optionalBool, optionalDecimal }
+enum ValueType { voidType, intType, decimalType, boolType, stringType, guidType, binaryType, datespanType, dateType, geometryType, fileType, exceptionType, encodingType, primaryType, selfType, intArray, decimalArray, decimalMatrix, boolArray, stringArray, guidArray, binaryArray, datespanArray, dateArray, geometryArray, fileArray, exceptionArray, primaryArray, selfArray, stringMap, primaryStringMap, intStringMap, boolStringMap, decimalStringMap, guidStringMap, intIntMap, stringIntMap, primaryIntMap, boolIntMap, decimalIntMap, guidIntMap, stringGuidMap, primaryGuidMap, intGuidMap, boolGuidMap, decimalGuidMap, guidGuidMap, stringBoolMap, primaryBoolMap, intBoolMap, boolBoolMap, decimalBoolMap, guidBoolMap, stringDecimalMap, primaryDecimalMap, intDecimalMap, boolDecimalMap, decimalDecimalMap, guidDecimalMap, nullType, nullableString, enumType, enumArray, optionalInt, optionalBool, optionalDecimal }
 enum NullableStringMode { none, required, nullAsEmpty }
 enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, guidLiteral, binaryLiteral, datespanLiteral, dateLiteral, nullLiteral, arrayLiteral, mapEntry, variable, selfRef, superRef, newSelf, field, call, memberCall, index, castExpr, instanceOf, unary, binary, conditional, elvis }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
@@ -106,25 +106,26 @@ package bool isArray(ValueType type) {
     return [ValueType.intArray, ValueType.decimalArray, ValueType.decimalMatrix, ValueType.boolArray, ValueType.stringArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.primaryArray, ValueType.selfArray, ValueType.enumArray].canFind(type);
 }
 package bool isReferenceArray(ValueType type) { return [ValueType.selfArray, ValueType.enumArray, ValueType.primaryArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.decimalMatrix].canFind(type); }
-package bool isMap(ValueType type) { return [ValueType.stringMap, ValueType.primaryStringMap, ValueType.intStringMap, ValueType.boolStringMap, ValueType.decimalStringMap, ValueType.guidStringMap, ValueType.intIntMap, ValueType.stringIntMap, ValueType.primaryIntMap, ValueType.boolIntMap, ValueType.decimalIntMap, ValueType.guidIntMap, ValueType.stringGuidMap, ValueType.primaryGuidMap, ValueType.intGuidMap, ValueType.boolGuidMap, ValueType.decimalGuidMap, ValueType.guidGuidMap, ValueType.stringBoolMap, ValueType.primaryBoolMap, ValueType.intBoolMap, ValueType.boolBoolMap, ValueType.decimalBoolMap, ValueType.guidBoolMap].canFind(type); }
+package bool isMap(ValueType type) { return [ValueType.stringMap, ValueType.primaryStringMap, ValueType.intStringMap, ValueType.boolStringMap, ValueType.decimalStringMap, ValueType.guidStringMap, ValueType.intIntMap, ValueType.stringIntMap, ValueType.primaryIntMap, ValueType.boolIntMap, ValueType.decimalIntMap, ValueType.guidIntMap, ValueType.stringGuidMap, ValueType.primaryGuidMap, ValueType.intGuidMap, ValueType.boolGuidMap, ValueType.decimalGuidMap, ValueType.guidGuidMap, ValueType.stringBoolMap, ValueType.primaryBoolMap, ValueType.intBoolMap, ValueType.boolBoolMap, ValueType.decimalBoolMap, ValueType.guidBoolMap, ValueType.stringDecimalMap, ValueType.primaryDecimalMap, ValueType.intDecimalMap, ValueType.boolDecimalMap, ValueType.decimalDecimalMap, ValueType.guidDecimalMap].canFind(type); }
 package ValueType mapKeyType(ValueType type) {
     assert(isMap(type));
     if ([ValueType.intIntMap, ValueType.stringIntMap, ValueType.primaryIntMap, ValueType.boolIntMap, ValueType.decimalIntMap, ValueType.guidIntMap].canFind(type)) return ValueType.intType;
     if ([ValueType.stringBoolMap, ValueType.primaryBoolMap, ValueType.intBoolMap, ValueType.boolBoolMap, ValueType.decimalBoolMap, ValueType.guidBoolMap].canFind(type)) return ValueType.boolType;
+    if ([ValueType.stringDecimalMap, ValueType.primaryDecimalMap, ValueType.intDecimalMap, ValueType.boolDecimalMap, ValueType.decimalDecimalMap, ValueType.guidDecimalMap].canFind(type)) return ValueType.decimalType;
     return [ValueType.stringGuidMap, ValueType.primaryGuidMap, ValueType.intGuidMap, ValueType.boolGuidMap, ValueType.decimalGuidMap, ValueType.guidGuidMap].canFind(type) ? ValueType.guidType : ValueType.stringType;
 }
 package ValueType mapValueType(ValueType type) {
     assert(isMap(type));
-    if ([ValueType.intIntMap, ValueType.intStringMap, ValueType.intGuidMap, ValueType.intBoolMap].canFind(type)) return ValueType.intType;
-    if ([ValueType.boolIntMap, ValueType.boolStringMap, ValueType.boolGuidMap, ValueType.boolBoolMap].canFind(type)) return ValueType.boolType;
-    if ([ValueType.decimalIntMap, ValueType.decimalStringMap, ValueType.decimalGuidMap, ValueType.decimalBoolMap].canFind(type)) return ValueType.decimalType;
-    if ([ValueType.guidStringMap, ValueType.guidIntMap, ValueType.guidGuidMap, ValueType.guidBoolMap].canFind(type)) return ValueType.guidType;
-    return [ValueType.primaryStringMap, ValueType.primaryIntMap, ValueType.primaryGuidMap, ValueType.primaryBoolMap].canFind(type) ? ValueType.primaryType : ValueType.stringType;
+    if ([ValueType.intIntMap, ValueType.intStringMap, ValueType.intGuidMap, ValueType.intBoolMap, ValueType.intDecimalMap].canFind(type)) return ValueType.intType;
+    if ([ValueType.boolIntMap, ValueType.boolStringMap, ValueType.boolGuidMap, ValueType.boolBoolMap, ValueType.boolDecimalMap].canFind(type)) return ValueType.boolType;
+    if ([ValueType.decimalIntMap, ValueType.decimalStringMap, ValueType.decimalGuidMap, ValueType.decimalBoolMap, ValueType.decimalDecimalMap].canFind(type)) return ValueType.decimalType;
+    if ([ValueType.guidStringMap, ValueType.guidIntMap, ValueType.guidGuidMap, ValueType.guidBoolMap, ValueType.guidDecimalMap].canFind(type)) return ValueType.guidType;
+    return [ValueType.primaryStringMap, ValueType.primaryIntMap, ValueType.primaryGuidMap, ValueType.primaryBoolMap, ValueType.primaryDecimalMap].canFind(type) ? ValueType.primaryType : ValueType.stringType;
 }
 package ValueType mapKeyArrayType(ValueType type) {
     assert(isMap(type));
     auto key = mapKeyType(type);
-    return key == ValueType.boolType ? ValueType.boolArray : key == ValueType.intType ? ValueType.intArray : key == ValueType.guidType ? ValueType.guidArray : ValueType.stringArray;
+    return key == ValueType.decimalType ? ValueType.decimalArray : key == ValueType.boolType ? ValueType.boolArray : key == ValueType.intType ? ValueType.intArray : key == ValueType.guidType ? ValueType.guidArray : ValueType.stringArray;
 }
 package ValueType mapValueArrayType(ValueType type) {
     assert(isMap(type));
@@ -160,6 +161,13 @@ package ValueType mapType(ValueType value, ValueType key) {
         if (value == ValueType.boolType) return ValueType.boolBoolMap;
         if (value == ValueType.decimalType) return ValueType.decimalBoolMap;
         if (value == ValueType.guidType) return ValueType.guidBoolMap;
+    } else if (key == ValueType.decimalType) {
+        if (value == ValueType.stringType) return ValueType.stringDecimalMap;
+        if (value == ValueType.primaryType) return ValueType.primaryDecimalMap;
+        if (value == ValueType.intType) return ValueType.intDecimalMap;
+        if (value == ValueType.boolType) return ValueType.boolDecimalMap;
+        if (value == ValueType.decimalType) return ValueType.decimalDecimalMap;
+        if (value == ValueType.guidType) return ValueType.guidDecimalMap;
     }
     return ValueType.voidType;
 }

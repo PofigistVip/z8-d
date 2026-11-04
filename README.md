@@ -46,6 +46,7 @@ python tests/map_initializers.py
 python tests/integer_maps.py
 python tests/guid_maps.py
 python tests/boolean_maps.py
+python tests/decimal_maps.py
 python tests/qualified_names.py
 python tests/records.py
 python tests/decimal_oracle.py
@@ -303,7 +304,7 @@ Unicode D и может отличаться от Java при специфичн
 `indexOf`, `remove`, `removeAll`, `isSubsetOf`, `reverse`, `unique` и передача в методы.
 Типы массивов объектов должны совпадать; элементы могут принадлежать классам-наследникам.
 Для отображений поддерживаются значения `string`, `int`, `bool`, `decimal`, `guid`
-и `primary` со строковыми, целочисленными, логическими или `guid`-ключами. Доступны создание, передача по ссылке,
+и `primary` со строковыми, целочисленными, логическими, десятичными или `guid`-ключами. Доступны создание, передача по ссылке,
 чтение и присваивание по ключу, `add` (значения или другого отображения), `get`,
 `remove`, `keys`, `values`, `size`, `isEmpty`, `containsKey`, операторы `+` и `+=`,
 `containsValue` и `clear`. Результат отсутствующего ключа можно сравнить с `null`

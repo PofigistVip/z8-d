@@ -1,0 +1,9 @@
+public class DecimalMapIndex {
+    public static int run() {
+        int[decimal] values;
+        values[1.0] = 4;
+        values[null] = null;
+        if (values[1.0] != 4 || !values.containsKey(null) || values[null] != null) return 1;
+        return 161;
+    }
+}
