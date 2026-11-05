@@ -1,0 +1,125 @@
+// Native adapter for org.zenframework.z8.server.base.json.JsonWriter.
+private enum z8_json_writer_name = "org.zenframework.z8.server.base.json.JsonWriter"w;
+private class Z8JsonWriterState {
+    wstring stream;
+    bool[] scopes = [false];
+    this() { stream = z8_string_new(""w); }
+    void comma() {
+        if (scopes.length && scopes[$ - 1]) { scopes[$ - 1] = false; stream ~= ","w; }
+    }
+    void separate() { if (scopes.length) scopes[$ - 1] = true; }
+    void start(wchar kind, wstring name = null) {
+        comma();
+        if (name !is null) stream ~= z8_json_quote(name) ~ ":"w;
+        stream ~= kind; scopes ~= false;
+    }
+    void finish(wchar kind) {
+        stream ~= kind;
+        if (!scopes.length) throw new Exception("JSON writer scope underflow");
+        scopes.length = scopes.length - 1;
+        separate();
+    }
+    void raw(wstring text) { comma(); stream ~= text; separate(); }
+    void property(wstring name) { name = z8_string_required(name); comma(); stream ~= z8_json_quote(name) ~ ":"w; }
+}
+private Z8JsonWriterState z8_json_writer_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_json_writer_name, self)) throw new Exception("invalid native JSON writer");
+    auto state = cast(Z8JsonWriterState)self.z8_get_native_state(z8_json_writer_name);
+    if (state is null) { state = new Z8JsonWriterState(); self.z8_set_native_state(z8_json_writer_name, state); }
+    return state;
+}
+private Z8Object z8_json_writer_start_object(Z8Object self) { z8_json_writer_state(self).start('{'); return self; }
+private Z8Object z8_json_writer_start_object_named(Z8Object self, wstring name) {
+    z8_json_writer_state(self).start('{', z8_string_required(name)); return self;
+}
+private Z8Object z8_json_writer_finish_object(Z8Object self) { z8_json_writer_state(self).finish('}'); return self; }
+private Z8Object z8_json_writer_start_array(Z8Object self) { z8_json_writer_state(self).start('['); return self; }
+private Z8Object z8_json_writer_start_array_named(Z8Object self, wstring name) {
+    z8_json_writer_state(self).start('[', z8_string_required(name)); return self;
+}
+private Z8Object z8_json_writer_finish_array(Z8Object self) { z8_json_writer_state(self).finish(']'); return self; }
+private void z8_json_writer_primary(Z8JsonWriterState state, Z8Primary value) {
+    if (value is null) { state.raw("null"w); return; }
+    final switch (value.kind) {
+        case Z8PrimaryKind.boolean: state.raw(value.booleanValue ? "true"w : "false"w); return;
+        case Z8PrimaryKind.integer:
+            state.raw(value.integerValue == z8_int_Min.value || value.integerValue == z8_int_Max.value ?
+                "null"w : value.integerValue.to!wstring); return;
+        case Z8PrimaryKind.decimal:
+            if (value.decimalValue.nan) state.raw(z8_json_quote("NaN"w));
+            else if (value.decimalValue == z8_decimal_Min.value || value.decimalValue == z8_decimal_Max.value) state.raw("null"w);
+            else state.raw(z8_json_bigdecimal_text(value.decimalValue).to!wstring);
+            return;
+        case Z8PrimaryKind.date:
+            auto ticks = z8_date_ticks(value.dateValue);
+            state.raw(ticks == z8_date_ticks(z8_date_min) || ticks == z8_date_ticks(z8_date_max) ? "null"w : ticks.to!wstring);
+            return;
+        case Z8PrimaryKind.geometry:
+            auto shape = z8_nonnull(value.geometryValue);
+            if (shape.rawHex is null && shape.shape == -1) return;
+            state.raw(z8_geometry_toGeoJson(shape)); return;
+        case Z8PrimaryKind.text: case Z8PrimaryKind.guid: case Z8PrimaryKind.binary:
+        case Z8PrimaryKind.datespan: case Z8PrimaryKind.file: case Z8PrimaryKind.user:
+            auto text = z8_primary_to_string(value);
+            state.raw(text is null ? "null"w : z8_json_quote(text)); return;
+    }
+}
+private void z8_json_writer_values(Z8JsonWriterState state, Z8Array!Z8Primary values) {
+    state.start('[');
+    z8_nonnull(values);
+    auto expectedVersion = values.z8_version;
+    for (long i = 0; i != values.z8_size(); ++i) {
+        if (expectedVersion != values.z8_version) throw new Exception("array modified during iteration");
+        auto value = values.z8_get(i);
+        if (value is null) throw new Exception("null JSON array element");
+        z8_json_writer_primary(state, value);
+    }
+    state.finish(']');
+}
+private void z8_json_writer_nested(Z8JsonWriterState state, Z8Object value) {
+    value = z8_nonnull(value);
+    if (z8_native_is_instance(z8_json_array_name, value)) state.raw(z8_json_array_render_state(z8_json_array_state(value)));
+    else if (z8_native_is_instance(z8_json_object_name, value)) state.raw(z8_json_object_render_state(z8_json_object_state(value)));
+    else throw new Exception("unsupported JSON writer object");
+}
+private Z8Object z8_json_writer_write_primary(Z8Object self, Z8Primary value) { z8_json_writer_primary(z8_json_writer_state(self), value); return self; }
+private Z8Object z8_json_writer_write_values(Z8Object self, Z8Array!Z8Primary values) { z8_json_writer_values(z8_json_writer_state(self), values); return self; }
+private Z8Object z8_json_writer_write_nested(Z8Object self, Z8Object value) { z8_json_writer_nested(z8_json_writer_state(self), value); return self; }
+private Z8Object z8_json_writer_property_primary(Z8Object self, wstring name, Z8Primary value) {
+    auto state = z8_json_writer_state(self); state.property(name); z8_json_writer_primary(state, value); return self;
+}
+private Z8Object z8_json_writer_property_values(Z8Object self, wstring name, Z8Array!Z8Primary values) {
+    name = z8_string_required(name);
+    auto state = z8_json_writer_state(self); state.comma(); state.stream ~= z8_json_quote(name) ~ ":"w;
+    z8_json_writer_values(state, values); return self;
+}
+private Z8Object z8_json_writer_property_nested(Z8Object self, wstring name, Z8Object value) {
+    name = z8_string_required(name); value = z8_nonnull(value);
+    auto state = z8_json_writer_state(self); state.property(name); z8_json_writer_nested(state, value); return self;
+}
+private Z8Object z8_json_writer_property_field(Z8Object self, Z8Object field) {
+    field = z8_nonnull(field);
+    auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_id"w, field);
+    auto value = z8_native_call!Z8Primary("org.zenframework.z8.server.base.table.value.Field.m_primary"w, field);
+    return z8_json_writer_property_primary(self, name, value);
+}
+private wstring z8_json_writer_to_string(Z8Object self) { return z8_string_new(z8_json_writer_state(self).stream); }
+void z8_bind_builtin_json_writer() {
+    enum prefix = z8_json_writer_name ~ "."w;
+    z8_native_bind(prefix ~ "m_startObject"w, &z8_json_writer_start_object);
+    z8_native_bind(prefix ~ "m_startObject"w, &z8_json_writer_start_object_named);
+    z8_native_bind(prefix ~ "m_finishObject"w, &z8_json_writer_finish_object);
+    z8_native_bind(prefix ~ "m_startArray"w, &z8_json_writer_start_array);
+    z8_native_bind(prefix ~ "m_startArray"w, &z8_json_writer_start_array_named);
+    z8_native_bind(prefix ~ "m_finishArray"w, &z8_json_writer_finish_array);
+    z8_native_bind(prefix ~ "m_write"w, &z8_json_writer_write_primary);
+    z8_native_bind(prefix ~ "m_write"w, &z8_json_writer_write_values);
+    z8_native_bind(prefix ~ "m_write"w, &z8_json_writer_write_nested);
+    z8_native_bind(prefix ~ "m_writeProperty"w, &z8_json_writer_property_primary);
+    z8_native_bind(prefix ~ "m_writeProperty"w, &z8_json_writer_property_values);
+    z8_native_bind(prefix ~ "m_writeProperty"w, &z8_json_writer_property_nested);
+    z8_native_bind(prefix ~ "m_writeProperty"w, &z8_json_writer_property_field);
+    z8_native_bind(prefix ~ "m_toString"w, &z8_json_writer_to_string);
+}
+shared static this() { z8_bind_builtin_json_writer(); }
