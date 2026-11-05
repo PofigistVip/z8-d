@@ -151,6 +151,7 @@ public class Probe {
     public static int nextNamed(string key) { return Sequencer.next(key); }
     public static int nextIncrement(string key, int increment) { return Sequencer.next(key, increment); }
     public static int nextField(Sample value) { return value.title.getSequencer().next(); }
+    public static guid fieldKey(Sample value) { return value.title.key(); }
     public static int nextFieldAdvanced(Sample value, int increment, int initial) { return value.title.getSequencer().next(increment, initial); }
     public static int count(Sample value) { return value.count(); }
     public static void create(Sample value, guid id) { value.create(id); }
@@ -186,6 +187,7 @@ void main(string[] args) {
     }
     db.execute("CREATE TEMP TABLE init_temp (id integer)");
     auto table = P.m_make();
+    assert(P.m_fieldKey(table) == z8_guid_create_name("Sample;--.Title"w));
     auto registry = new Z8RuntimeRegistry(); registry.registerTable(table); registry.registerTable(P.m_make());
     registry.registerTable(P.m_indexes()); registry.registerRequest(table);
     auto registeredTables = registry.tables(); auto registeredRequests = registry.requests();

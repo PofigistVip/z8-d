@@ -94,7 +94,7 @@ class Z8FieldState {
     wstring format;
     Z8Optional!long width, length, precision, scale, srs;
     Z8Optional!bool indexed, unique, trigram, caseInsensitive, totals, html, singleLine;
-    Z8Object valueFrom, valueFor, sequencer, owner;
+    Z8Object valueFrom, valueFor, sequencer;
     Z8Fts fts;
     wstring sqlOwnerAlias, sqlColumnName, sqlExpressionAlias;
     this(Z8Primary initial = null, bool wasNull = true) {

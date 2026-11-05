@@ -100,6 +100,8 @@ class Z8Object {
     private int z8_stage = -1;
     private bool z8_allocated;
     private Z8Object z8_container;
+    private Z8Object z8_owner;
+    private long z8_ordinal;
     private wstring z8_index_value, z8_id_value;
     private bool z8_index_set;
     private Z8Guid z8_key_value;
@@ -176,6 +178,10 @@ class Z8Object {
         z8_records ~= Z8StaticRecord(key, values);
     }
     final Z8StaticRecord[] z8_static_records() { return z8_records.dup; }
+    final void z8_set_owner(Z8Object owner) { z8_owner = owner; }
+    final Z8Object z8_get_owner() { return z8_owner; }
+    final void z8_set_ordinal(long ordinal) { z8_ordinal = ordinal; }
+    final long z8_get_ordinal() { return z8_ordinal; }
     final void z8_set_container(Z8Object container) { z8_container = container; }
     final void z8_ensure(int requested = 1) {
         if (z8_container !is null && z8_container.z8_stage < requested)

@@ -52,7 +52,19 @@ public class Probe extends Object {
     harness.write_text('''
 import z8.runtime;
 import z8gen.p_Probe;
-void main() { assert(z8_optional_require(Z8p_50726F6265.m_run())); }
+import z8gen.p_Leaf;
+void main() {
+    assert(z8_optional_require(Z8p_50726F6265.m_run()));
+    auto root = z8_new!Z8p_50726F6265(); root.z8_ensure();
+    assert(root.f_child.z8_get_owner() is root && root.f_child.z8_get_ordinal() == 1);
+    auto child = z8_nonnull(root.f_child);
+    assert(child.f_leaf.z8_get_owner() is child && child.f_leaf.z8_get_ordinal() == 0);
+    auto view = z8_object_array_view!Z8Object(root.f_objects());
+    auto appended = z8_new!Z8p_4C656166(); view.z8_add(appended);
+    assert(appended.z8_get_owner() is root && appended.z8_get_ordinal() == 2);
+    auto inserted = z8_new!Z8p_4C656166(); view.z8_add(0, inserted);
+    assert(inserted.z8_get_owner() is root && inserted.z8_get_ordinal() == 0);
+}
 ''', encoding="utf-8")
     exe = temp / ("object-metadata.exe" if os.name == "nt" else "object-metadata")
     subprocess.run(["dmd", "-I" + str(generated), *import_args(), *map(str, generated.rglob("*.d")),

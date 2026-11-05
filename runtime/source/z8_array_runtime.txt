@@ -5,6 +5,17 @@ class Z8Array(T) {
     else alias Element = T;
     private Element[] items;
     private size_t arrayVersion;
+    static if (is(T == Object)) {
+        private Z8Object membersOwner;
+        void z8_set_members_owner(Z8Object owner) { membersOwner = owner; }
+        private void z8_attach_member(Object value, bool setOrdinal) {
+            if (membersOwner is null) return;
+            auto member = cast(Z8Object)value;
+            if (member is null) throw new Exception("invalid object member");
+            member.z8_set_owner(membersOwner);
+            if (setOrdinal) member.z8_set_ordinal(cast(long)items.length);
+        }
+    }
     static if (sharePrimary) private Z8Array!Z8Primary primaryData;
     @property ref size_t z8_version() {
         static if (sharePrimary) if (primaryData !is null) return primaryData.z8_version;
@@ -71,12 +82,14 @@ class Z8Array(T) {
     }
     Z8Array!T z8_add(Element value) {
         static if (sharePrimary) if (primaryData !is null) { primaryData.z8_add(z8_primary_box(value)); return this; }
+        static if (is(T == Object)) z8_attach_member(value, true);
         ++z8_version; items ~= value; return this;
     }
     Z8Array!T z8_add(long index, Element value) {
         static if (sharePrimary) if (primaryData !is null) { primaryData.z8_add(index, z8_primary_box(value)); return this; }
         auto i = cast(int)index;
         if (i < 0 || cast(size_t)i > items.length) throw new Exception("array index out of bounds");
+        static if (is(T == Object)) z8_attach_member(value, false);
         items = items[0 .. i] ~ [value] ~ items[i .. $];
         ++z8_version; return this;
     }

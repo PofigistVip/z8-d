@@ -2,7 +2,7 @@
 private interface IZ8ObjectMembersCell { IZ8ObjectArrayView view(); }
 private class Z8ObjectMembersCell(T) : IZ8ObjectMembersCell if (is(T : Z8Object)) {
     Z8ObjectArray!T value;
-    this() { value = new Z8ObjectArray!T(); }
+    this(Z8Object owner) { value = new Z8ObjectArray!T(); value.z8_erased_data().z8_set_members_owner(owner); }
     IZ8ObjectArrayView view() { return value; }
 }
 // OBJECT.objects is a typed view of its own member collection. Keeping the
@@ -12,7 +12,7 @@ ref Z8ObjectArray!T z8_object_members_field(T)(Z8Object self) if (is(T : Z8Objec
     auto key = "org.zenframework.z8.server.runtime.OBJECT.f_objects:"w ~ typeid(T).name.to!wstring;
     auto cell = cast(Z8ObjectMembersCell!T)self.z8_get_native_state(key);
     if (cell is null) {
-        cell = new Z8ObjectMembersCell!T(); self.z8_set_native_state(key, cell);
+        cell = new Z8ObjectMembersCell!T(self); self.z8_set_native_state(key, cell);
         self.z8_set_native_state("org.zenframework.z8.server.runtime.OBJECT.members"w, cell);
     }
     return cell.value;
@@ -46,7 +46,7 @@ private Z8Guid z8_object_key(Z8Object self) {
     auto name = self.z8_get_attribute("name"w);
     name = name is null ? self.z8_class_id() : name;
     if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Field"w, self)) {
-        auto owner = z8_field_state(self).owner;
+        auto owner = self.z8_get_owner();
         if (owner !is null) name = z8_object_name(owner) ~ "."w ~ name;
     }
     return self.z8_key(name);
