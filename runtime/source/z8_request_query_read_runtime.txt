@@ -32,7 +32,7 @@ private Z8SqlBool z8_application_query_filter(Z8Object query, wstring json) {
 
 // Shared by read and mutation responses; field selection is checked before a
 // mutation starts, so malformed response options cannot fail after commit.
-private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges privileges, Z8StringMap params) {
+private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges privileges, Z8StringMap params, bool includeKeys = true) {
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
     auto key = z8_nonnull(z8_query_primary_key(query));
     Z8Object[] requested;
@@ -52,9 +52,11 @@ private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges priv
         }
     }
     if (!requested.length) requested = z8_query_declared_fields(query);
-    requested ~= key;
-    foreach (field; z8_query_declared_fields(query))
-        if (field.z8_get_attribute("lockKey"w) !is null) requested ~= field;
+    if (includeKeys) {
+        requested ~= key;
+        foreach (field; z8_query_declared_fields(query))
+            if (field.z8_get_attribute("lockKey"w) !is null) requested ~= field;
+    }
     Z8Object[] selected;
     foreach (field; requested) {
         bool duplicate;
@@ -76,6 +78,9 @@ private void z8_application_query_write_rows(Z8Object query, Z8JsonWriterState w
     while (z8_optional_require(z8_query_next(query))) {
         writer.start('{');
         foreach (field; selected) {
+            bool present;
+            foreach (column; z8_query_state(query).cursorFields) if (column is field) { present = true; break; }
+            if (!present) continue;
             auto value = z8_field_primary(field);
             auto wasNull = z8_optional_require(z8_field_was_null(field));
             if (field is key && wasNull) continue;
@@ -111,7 +116,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         if (name is null) throw new Exception("invalid query read parameter");
         if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "fields"w || name == "start"w || name == "limit"w ||
             name == "filter"w || name == "where"w || name == "quickFilter"w || name == "sort"w || name == "recordId"w || name == "count"w || name == "values"w ||
-            name == "lookup"w || name == "lookupFields"w || name == "period"w) continue;
+            name == "lookup"w || name == "lookupFields"w || name == "period"w || name == "having"w) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported query read parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
@@ -142,7 +147,27 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         }
     }
     if (z8_query_user_events_enabled()) query.z8_query_virtual_onReadAction();
-    auto selected = z8_application_query_fields(query, privileges, params);
+    auto groups = z8_query_array(query, "groupBy"w);
+    auto selected = z8_application_query_fields(query, privileges, params, !groups.length);
+    foreach (field; groups) {
+        if (field.z8_get_owner() !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
+            throw new Exception("linked and computed group fields are not supported");
+        auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
+        if (!privileges.getFieldAccess(queryKey, fieldKey).read) throw new Exception("query group field access denied");
+        bool exists;
+        foreach (existing; selected) if (existing is field) { exists = true; break; }
+        if (!exists) selected ~= field;
+    }
+    if (groups.length) foreach (field; selected) {
+        auto aggregation = z8_field_aggregation(field);
+        if (aggregation == Z8FieldAggregation.array || aggregation == Z8FieldAggregation.distinct)
+            throw new Exception("group array serialization is not supported");
+    }
+    void verifyGroups() {
+        auto actual = z8_query_array(query, "groupBy"w);
+        if (actual.length != groups.length) throw new Exception("changing query groups during beforeRead is not supported");
+        foreach (i, field; actual) if (field !is groups[i]) throw new Exception("changing query groups during beforeRead is not supported");
+    }
     long number(wstring key, long fallback) {
         auto value = params.z8_get(key);
         return value is null || !value.length ? fallback : z8_int_parse(value);
@@ -151,7 +176,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     if (start < 0 || start > int.max || limit < 0 || limit > int.max) throw new Exception("invalid query pagination");
     if (!limit) limit = z8_query_limit(query);
     Z8QueryReadRequest read;
-    read.fields = selected; read.start = cast(int)start; read.limit = cast(int)limit;
+    read.fields = selected; read.start = cast(int)start; read.limit = cast(int)limit; read.excludeNullRecord = true;
     auto recordIds = params.z8_get("recordId"w);
     if (recordIds !is null && recordIds.length) {
         auto json = recordIds[0] == '[' ? recordIds : recordIds[0] == '"' ? "["w ~ recordIds ~ "]"w : "[\""w ~ recordIds ~ "\"]"w;
@@ -258,6 +283,17 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         }
         read.where = z8_filter_combine(read.where, filter);
     }
+    auto having = params.z8_get("having"w);
+    if (!read.byRecordIds && having !is null && having.length) {
+        if (!groups.length) throw new Exception("query having requires grouped results");
+        read.having = z8_application_query_filter(query, having);
+        foreach (field; z8_sql_collect_fields(read.having)) {
+            if (field.z8_get_owner() !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
+                throw new Exception("linked and computed having fields are not supported");
+            auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
+            if (!privileges.getFieldAccess(queryKey, fieldKey).read) throw new Exception("query having field access denied");
+        }
+    }
     bool prepared;
     auto count = params.z8_get("count"w);
     if (count !is null && z8_bool_parse(count)) {
@@ -265,7 +301,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         if (counter is null) throw new Exception("query executor does not support count");
         z8_query_prepare_read(query, read);
         long total;
-        try { total = counter.count(query, read); }
+        try { verifyGroups(); total = counter.count(query, read); }
         catch (Throwable error) {
             if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();
             throw error;
@@ -282,7 +318,14 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         read.start = cast(int)(((total - 1) / read.limit) * read.limit);
         prepared = true;
     }
-    if (!prepared) z8_query_prepare_read(query, read);
+    if (!prepared) {
+        z8_query_prepare_read(query, read);
+        try { verifyGroups(); }
+        catch (Throwable error) {
+            if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();
+            throw error;
+        }
+    }
     // ReadAction's FramedSelect saves changed field values before attaching
     // the cursor, then restores them after writing the rows.
     auto saved = new Z8QuerySavedState(query);

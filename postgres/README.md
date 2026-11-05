@@ -110,6 +110,9 @@ readable direct scalar fields before `onReadAction` and `beforeRead` run.
 direct text fields; multiple fields are combined with OR.
 An active JSON `period` filters a readable direct `period` date field between
 the optional inclusive `start` and `finish` boundaries.
+BL-defined direct `groupBy` fields and JSON `having` conditions are supported;
+all participating fields must be readable. Group arrays and distinct arrays,
+linked groups and changes to `groupBy` from `beforeRead` are not supported.
 As in the Java `ReadAction`, a nonempty `recordId` list replaces the request
 filters and query scope; an empty list keeps the normal filters and scope.
 Linked and computed fields, other read options and custom request parameters

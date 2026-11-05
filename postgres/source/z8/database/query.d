@@ -254,7 +254,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         foreach (condition; [request.where, request.queryWhere, request.queryScope] ~ plan.where)
             if (condition !is null) filters ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
         auto key = z8_query_primary_key(query);
-        if (!groups.length && key !is null) {
+        if ((!groups.length || request.excludeNullRecord) && key !is null) {
             auto column = z8_field_sql_format(key, Z8SqlVendor.Postgres).to!string;
             auto rightKeys = plan.rightJoinKeys();
             filters ~= "(" ~ column ~ " <> '00000000-0000-0000-0000-000000000000'::uuid" ~ (rightKeys.length ? " OR " ~ column ~ " IS NULL" : "") ~ ")";
@@ -344,7 +344,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
         foreach (condition; [request.where, request.queryWhere, request.queryScope] ~ plan.where)
             if (condition !is null) filters ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
-        if (!grouped && key !is null) {
+        if ((!grouped || request.excludeNullRecord) && key !is null) {
             auto column = z8_field_sql_format(key, Z8SqlVendor.Postgres).to!string;
             auto rightKeys = plan.rightJoinKeys();
             filters ~= "(" ~ column ~ " <> '00000000-0000-0000-0000-000000000000'::uuid" ~ (rightKeys.length ? " OR " ~ column ~ " IS NULL" : "") ~ ")";

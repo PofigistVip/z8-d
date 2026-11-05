@@ -10,7 +10,7 @@ struct Z8QueryReadRequest {
     Z8SqlBool queryWhere, queryHaving, queryScope;
     int start, limit = -1;
     Z8Guid recordId;
-    bool byRecordId, byRecordIds, disableGrouping;
+    bool byRecordId, byRecordIds, disableGrouping, excludeNullRecord;
     Z8QueryReadLock readLock;
 }
 interface IZ8QueryCursor : IZ8FieldCursor {

@@ -423,6 +423,8 @@ void main(string[] args) {
     command += [str(bin_dir.parent / "lib/libpq.lib")] if os.name == "nt" else ["-L-lpq"]
     subprocess.run([*command, "-of=" + str(exe)], cwd=temp, check=True)
     with temporary_postgres(bin_dir) as (connection, environment):
-        subprocess.run([str(exe), connection], env=environment, cwd=temp, check=True,
-                       creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+        run = subprocess.run([str(exe), connection], env=environment, cwd=temp, capture_output=True, text=True, encoding="utf-8",
+                             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+        if run.returncode:
+            raise RuntimeError(f"PostgreSQL query fixture failed ({run.returncode}):\n{run.stdout}\n{run.stderr}")
 print("Generated BL table reads match the PostgreSQL integration fixture")

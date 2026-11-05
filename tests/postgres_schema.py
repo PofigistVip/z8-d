@@ -32,6 +32,7 @@ import org.zenframework.z8.base.table.value.DatespanField;
 import org.zenframework.z8.base.table.value.TextField;
 import org.zenframework.z8.base.table.value.BinaryField;
 import org.zenframework.z8.base.table.value.IntExpression;
+import org.zenframework.z8.base.table.value.Aggregation;
 import org.zenframework.z8.base.application.Application;
 [name "Sample;--"] public class Sample extends Table {
     [name "Title"] public StringField title; title.defaultValue = "O'Reilly 😀";
@@ -55,6 +56,7 @@ import org.zenframework.z8.base.application.Application;
     virtual protected void onReadAction() {
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-hook") { amount = 999; addWhere(amount >= 40); }
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-values") addWhere(amount >= amount.get());
+        if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-group") { groupBy = {flag}; amount.aggregation = Aggregation.Sum; }
     }
 }
 ''', encoding="utf-8")
@@ -654,6 +656,25 @@ void main(string[] args) {
     assert(rejectedRead("fields"w, `["title"]`w));
     queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
     db.execute(`INSERT INTO "z8_bootstrap"."Sample;--" ("RecordId", "Title", "Amount") VALUES ('00000000-0000-0000-0000-00000000012E', 'Second', 10)`);
+    wstring groupedRead(wstring having, bool count = false) {
+        auto request = new Z8ApplicationRequest(); request.session = querySession; request.monitor = new Z8RequestMonitor();
+        request.parameters.z8_add("action"w, "read"w); request.parameters.z8_add("session"w, "with-group"w);
+        request.parameters.z8_add("fields"w, `["flag","amount"]`w); request.parameters.z8_add("having"w, having);
+        if (count) request.parameters.z8_add("count"w, "true"w);
+        z8_application_set_request(request); z8_application_start_response(request, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+        z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
+    }
+    auto groupJson = parseJSON(groupedRead(`{"property":"amount","operator":"ge","value":"50"}`w).to!string);
+    assert(groupJson["data"].array.length == 1 && groupJson["data"][0]["flag"].boolean && groupJson["data"][0]["amount"].integer == 52, groupJson.toString());
+    assert("recordId" !in groupJson["data"][0].object && "lock" !in groupJson["data"][0].object);
+    assert(parseJSON(groupedRead(`{"property":"amount","operator":"gt","value":"60"}`w).to!string)["data"].array.length == 0);
+    assert(parseJSON(groupedRead(`{"property":"amount","operator":"ge","value":"50"}`w, true).to!string)["total"].integer == 1);
+    assert(parseJSON(groupedRead(`{"property":"amount","operator":"gt","value":"60"}`w, true).to!string)["total"].integer == 0);
+    queryUser.privileges.setFieldAccess(z8_guid_create_name("Sample;--.Flag"w), Z8Access.init);
+    bool groupDenied;
+    try { groupedRead(`{"property":"amount","operator":"ge","value":"50"}`w); } catch (Exception) { groupDenied = true; }
+    assert(groupDenied);
+    queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
     long sortedAmount(wstring sorting, wstring start = "0"w) {
         auto sorted = new Z8ApplicationRequest(); sorted.session = querySession; sorted.monitor = new Z8RequestMonitor();
         sorted.parameters.z8_add("action"w, "read"w); sorted.parameters.z8_add("fields"w, `["amount"]`w);
