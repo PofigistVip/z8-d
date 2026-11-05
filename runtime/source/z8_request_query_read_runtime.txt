@@ -110,7 +110,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         auto name = parameterKeys.z8_get(i);
         if (name is null) throw new Exception("invalid query read parameter");
         if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "fields"w || name == "start"w || name == "limit"w ||
-            name == "filter"w || name == "where"w || name == "quickFilter"w || name == "sort"w || name == "recordId"w || name == "count"w) continue;
+            name == "filter"w || name == "where"w || name == "quickFilter"w || name == "sort"w || name == "recordId"w || name == "count"w || name == "values"w) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported query read parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
@@ -121,6 +121,25 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     if (privileges is null || !privileges.getTableAccess(queryKey).read) throw new Exception("query read access denied");
     auto key = z8_query_primary_key(query);
     if (key is null) throw new Exception("query has no primary key");
+    auto contextValues = params.z8_get("values"w);
+    if (contextValues !is null && contextValues.length) {
+        auto parsed = z8_json_parse(contextValues.to!string);
+        if (parsed.type == JSONType.array) {
+            if (parsed.array.length) parsed = parsed.array[0];
+            else parsed = JSONValue.init;
+        }
+        if (parsed.type != JSONType.null_) {
+            if (parsed.type != JSONType.object) throw new Exception("query values must be an object");
+            foreach (name, value; parsed.object) {
+                auto field = z8_query_find_field_id(query, name.to!wstring);
+                if (field.z8_get_owner() !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
+                    throw new Exception("linked and computed context fields are not supported");
+                auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
+                if (field !is key && !privileges.getFieldAccess(queryKey, fieldKey).read) throw new Exception("query context field access denied");
+                z8_application_query_set_value(field, value);
+            }
+        }
+    }
     if (z8_query_user_events_enabled()) query.z8_query_virtual_onReadAction();
     auto selected = z8_application_query_fields(query, privileges, params);
     long number(wstring key, long fallback) {

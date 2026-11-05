@@ -53,6 +53,7 @@ import org.zenframework.z8.base.application.Application;
     virtual protected sql_bool scope() { return amount >= 0; }
     virtual protected void onReadAction() {
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-hook") { amount = 999; addWhere(amount >= 40); }
+        if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-values") addWhere(amount >= amount.get());
     }
 }
 ''', encoding="utf-8")
@@ -681,6 +682,18 @@ void main(string[] args) {
     z8_application_finish_response(hooked, cast(Z8RequestMonitor)hooked.monitor);
     auto hookedJson = parseJSON(z8_application_response_text(hooked).to!string);
     assert(hookedJson["data"].array.length == 1 && hookedJson["data"][0]["amount"].integer == 42);
+    auto contextRead = new Z8ApplicationRequest(); contextRead.session = querySession; contextRead.monitor = new Z8RequestMonitor();
+    contextRead.parameters.z8_add("action"w, "read"w); contextRead.parameters.z8_add("fields"w, `["amount"]`w);
+    contextRead.parameters.z8_add("session"w, "with-values"w); contextRead.parameters.z8_add("values"w, `[{"amount":40}]`w);
+    z8_application_set_request(contextRead); z8_application_start_response(contextRead, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+    z8_application_finish_response(contextRead, cast(Z8RequestMonitor)contextRead.monitor);
+    auto contextJson = parseJSON(z8_application_response_text(contextRead).to!string);
+    assert(contextJson["data"].array.length == 1 && contextJson["data"][0]["amount"].integer == 42);
+    assert(!rejectedRead("values"w, `[]`w));
+    assert(rejectedRead("values"w, `[42]`w));
+    queryUser.privileges.setFieldAccess(bootFieldKey, Z8Access.init);
+    assert(rejectedRead("values"w, `{"title":"Hidden"}`w));
+    queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
     bool update(wstring data, out wstring output) {
         auto request = new Z8ApplicationRequest(); request.session = querySession; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, "Sample"w); request.parameters.z8_add("action"w, "update"w);

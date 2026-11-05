@@ -104,6 +104,8 @@ non-negative `start` and `limit`, `recordId` (one GUID or a JSON array), JSON `s
 expressions are rejected rather than ignored, while `[]` means no filter.
 With `count=true`, it returns `total`; if the requested offset is past the
 last record, it also returns the final page, matching Java `ReadAction`.
+The optional `values` object (or the first object of an array) initializes
+readable direct scalar fields before `onReadAction` and `beforeRead` run.
 As in the Java `ReadAction`, a nonempty `recordId` list replaces the request
 filters and query scope; an empty list keeps the normal filters and scope.
 Linked and computed fields, other read options and custom request parameters
