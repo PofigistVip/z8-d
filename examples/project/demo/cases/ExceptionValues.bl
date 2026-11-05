@@ -1,9 +1,18 @@
 public class ExceptionValues {
     public static string message(exception value, int unused) { return value.getMessage(); }
+    private void ping() {}
     public static int run() {
         string text = "converted";
         exception converted = text;
         if (converted.getMessage() != text || message(text, 1) != text) return 5;
+        if (!(converted instanceof exception)) return 7;
+        exception missing = null;
+        if (missing instanceof exception) return 8;
+        ExceptionValues absent = null;
+        try { absent.ping(); return 10; }
+        catch (exception nativeFailure) { if (!(nativeFailure instanceof exception)) return 11; }
+        try { string noText = null; int n = noText.length(); return 12; }
+        catch (exception stringFailure) { if (!(stringFailure instanceof exception)) return 13; }
         exception explicitValue = (exception)text;
         if (explicitValue.getMessage() != text) return 6;
         exception[] errors;
@@ -12,6 +21,7 @@ public class ExceptionValues {
         try {
             throw "problem";
         } catch (exception error) {
+            if (!(error instanceof exception)) return 9;
             string message = error;
             if (message != "problem" || error.getMessage() != "problem") return 2;
             if (error.getStackTrace().indexOf("problem") < 0) return 3;

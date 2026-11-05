@@ -122,6 +122,8 @@ private string emitAttributeValue(TypeAttribute attribute) {
         auto value = emitExpr(attribute.expression);
         if (attribute.expressionType == ValueType.fileType)
             value = "z8_file_to_string(" ~ value ~ ")";
+        else if (attribute.expressionType == ValueType.exceptionType)
+            value = "z8_exception_to_java_string(" ~ value ~ ")";
         if (attribute.expression.convertToString == ValueType.selfType)
             value = "z8_attribute_from(" ~ value ~ ", " ~ emitWStringLiteral(attribute.name.text.to!wstring) ~ ")";
         return "z8_string_new(z8_string_required(" ~ value ~ "))";
@@ -226,7 +228,7 @@ private string emitExpr(Expression e) {
     if (e.optionalWrap) value = "z8_optional_wrap(" ~ value ~ ")";
     if (e.boxPrimary) value = "z8_primary_box(" ~ value ~ ")";
     if (e.makeFile) value = "z8_file_from_path(" ~ value ~ ")";
-    if (e.makeException) value = "new Exception(z8_to_utf8(z8_string_required(" ~ value ~ ")))";
+    if (e.makeException) value = "new Z8Exception(z8_to_utf8(z8_string_required(" ~ value ~ ")))";
     if (e.convertToDate) value = "z8_date_from_ticks(" ~ value ~ ")";
     if (e.convertToBinary == ValueType.fileType) return "z8_file_to_binary(" ~ value ~ ")";
     if (e.convertToBinary == ValueType.stringType || e.convertToBinary == ValueType.nullableString) return "z8_binary_from_string(" ~ value ~ ")";
@@ -375,6 +377,7 @@ private string emitExprRaw(Expression e) {
             if (e.primaryCast) return "z8_primary_cast!(" ~ dType(e.castType) ~ ")(" ~ emitExpr(e.left) ~ ")";
             return e.castType == ValueType.selfType ? "z8_cast!(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")" : emitExpr(e.left);
         case ExprKind.instanceOf:
+            if (e.exceptionInstanceOf) return "(cast(Z8Exception)(" ~ emitExpr(e.left) ~ ") !is null)";
             if (e.falseInstanceOf) {
                 if (e.inferredType == ValueType.nullType) return "false";
                 return "(() { auto z8_value = " ~ emitExpr(e.left) ~ "; return false; })()";
@@ -481,10 +484,15 @@ private string emitStatement(Statement s) {
         case StmtKind.breakStmt: return "break;\n";
         case StmtKind.continueStmt: return "continue;\n";
         case StmtKind.throwStmt:
-            return "throw " ~ (s.type == ValueType.stringType ? "new Exception(z8_to_utf8(" ~ emitExpr(s.expression) ~ "))" : "z8_nonnull(" ~ emitExpr(s.expression) ~ ")") ~ ";\n";
+            return "throw " ~ (s.type == ValueType.stringType ? "new Z8Exception(z8_to_utf8(" ~ emitExpr(s.expression) ~ "))" : "z8_nonnull(" ~ emitExpr(s.expression) ~ ")") ~ ";\n";
         case StmtKind.tryStmt:
             auto result = "try " ~ emitStatement(s.children[0]);
-            if (s.hasCatch) result ~= "catch (Throwable v_" ~ s.catchName.text ~ ") " ~ emitStatement(s.children[1]);
+            if (s.hasCatch) {
+                auto caught = "z8_caught_" ~ s.token.position.offset.to!string;
+                result ~= "catch (Throwable " ~ caught ~ ") {\n" ~
+                    "Throwable v_" ~ s.catchName.text ~ " = new Z8Exception(" ~ caught ~ ".msg, " ~ caught ~ ");\n" ~
+                    emitStatement(s.children[1]) ~ "}\n";
+            }
             if (s.hasFinally) result ~= "finally " ~ emitStatement(s.children[$-1]);
             return result;
     }
@@ -537,7 +545,7 @@ private string emitSimple(Statement s) {
     return name ~ " " ~ s.assignmentOperator ~ " " ~ emitExpr(s.expression);
 }
 private string defaultValue(ValueType type, Program objectClass = null, bool hasContainer = false) {
-    if (type == ValueType.exceptionType) return "new Exception(null)";
+    if (type == ValueType.exceptionType) return "new Z8Exception(null)";
     if (type == ValueType.encodingType) return "null";
     if (type == ValueType.primaryType) return "null";
     if (type == ValueType.guidType) return "z8_guid_zero()";

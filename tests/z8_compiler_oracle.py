@@ -297,6 +297,9 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             !"2024-02-29T12:30:45+03:00".equals(metadata.get().annotated.getAttribute("dateValue")) ||
             !"0101000020E6100000000000000000F83F00000000000002C0".equals(metadata.get().annotated.getAttribute("geometryValue")) ||
             !"report.bin".equals(metadata.get().annotated.getAttribute("binaryValue")) ||
+            !"org.zenframework.z8.server.types.exception: ошибка".equals(metadata.get().annotated.getAttribute("errorValue")) ||
+            !"org.zenframework.z8.server.types.exception".equals(metadata.get().annotated.getAttribute("emptyException")) ||
+            !"org.zenframework.z8.server.types.exception: ".equals(metadata.get().annotated.getAttribute("emptyMessage")) ||
             !"источник".equals(metadata.get().annotated.getAttribute("copied")) ||
             demo.cases.AttributeSource.calls.get() != 0 ||
             !"false".equals(metadata.get().jobTarget.getAttribute("request")) ||
@@ -529,6 +532,9 @@ void main() {
     assert(metadata.f_annotated.z8_get_attribute("dateValue"w) == "2024-02-29T12:30:45+03:00"w);
     assert(metadata.f_annotated.z8_get_attribute("geometryValue"w) == "0101000020E6100000000000000000F83F00000000000002C0"w);
     assert(metadata.f_annotated.z8_get_attribute("binaryValue"w) == "report.bin"w);
+    assert(metadata.f_annotated.z8_get_attribute("errorValue"w) == "org.zenframework.z8.server.types.exception: ошибка"w);
+    assert(metadata.f_annotated.z8_get_attribute("emptyException"w) == "org.zenframework.z8.server.types.exception"w);
+    assert(metadata.f_annotated.z8_get_attribute("emptyMessage"w) == "org.zenframework.z8.server.types.exception: "w);
     writeln("FILEATTR:", z8_to_utf8(metadata.f_annotated.z8_get_attribute("fileValue"w)));
     assert(metadata.f_annotated.z8_get_attribute("copied"w) == "источник"w);
     assert(z8_optional_require(Z8p_64656D6F2E63617365732E417474726962757465536F75726365.f_calls) == 0);

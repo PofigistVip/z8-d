@@ -66,7 +66,7 @@ unittest {
     compile(q{class A { int value; [tag value] A child; }});
     compile(q{class A { guid value; primary other = 1; [g value] [p other] A child; }});
     compile(q{class A { A source; [tag source] A child; }});
-    compile(q{class A { binary data; geometry shape; date day; file item; [b data] [g shape] [d day] [f item] A child; }});
+    compile(q{class A { binary data; geometry shape; date day; file item; exception problem; [b data] [g shape] [d day] [f item] [e problem] A child; }});
     compile(q{class A { bool flag; [request flag] A child; }});
     rejects(q{class A { string text; [name text] A child; }});
     rejects(q{class A { [flag] int x; }});
@@ -437,6 +437,7 @@ unittest {
     compileSources([unrelatedInstanceOf, arrayItem]);
     compile("class A { static bool f() { return 1 instanceof A; } }");
     compile("class A { static bool f(int x) { return x instanceof int; } }");
+    compile("class A { static bool f(exception x) { return x instanceof exception; } }");
     rejects("class A { static bool f(A x) { return x instanceof A == true; } }");
     auto badCastValue = SourceUnit("pkg.A", "A.bl", "class A { static B f() { return (B)1; } }");
     rejectsSources([badCastValue, arrayItem], "A.bl");

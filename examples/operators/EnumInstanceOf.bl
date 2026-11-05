@@ -21,6 +21,7 @@ public class EnumInstanceOf {
         if ((next() instanceof int) || calls != 2) return 11;
         if ((missingInt() instanceof bool) || calls != 3) return 12;
         if (1 instanceof bool) return 13;
+        if (1 instanceof exception) return 14;
         return 221;
     }
 }

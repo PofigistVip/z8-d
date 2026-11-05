@@ -576,7 +576,7 @@ class Checker {
                 attribute.expression.convertToString = actual;
             else if (actual == ValueType.selfType)
                 attribute.expression.convertToString = ValueType.selfType;
-            else if (actual == ValueType.fileType) { }
+            else if (actual == ValueType.fileType || actual == ValueType.exceptionType) { }
             else if (actual != ValueType.stringType && actual != ValueType.nullableString)
                 fail("this attribute expression type is not supported yet", attribute.name);
         }
@@ -1346,10 +1346,15 @@ class Checker {
                     case "geometry": targetType = ValueType.geometryType; break;
                     case "date": targetType = ValueType.dateType; break;
                     case "file": targetType = ValueType.fileType; break;
+                    case "exception": targetType = ValueType.exceptionType; break;
                     case "primary": targetType = ValueType.primaryType; break;
                     default: targetType = ValueType.voidType; break;
                 }
-                if (targetType != ValueType.voidType && sourceType == ValueType.primaryType) {
+                if (targetType == ValueType.exceptionType && sourceType == ValueType.exceptionType) {
+                    e.exceptionInstanceOf = true;
+                    return ValueType.boolType;
+                }
+                if (targetType != ValueType.voidType && targetType != ValueType.exceptionType && sourceType == ValueType.primaryType) {
                     e.castType = targetType; e.primaryInstanceOf = true;
                     return ValueType.boolType;
                 }
@@ -1366,7 +1371,7 @@ class Checker {
                     return ValueType.boolType;
                 }
                 auto target = resolveClass(currentProgram, e.token.text, e.token);
-                if (scalar || sourceType == ValueType.primaryType || isArray(sourceType) || isMap(sourceType)) {
+                if (scalar || sourceType == ValueType.primaryType || sourceType == ValueType.exceptionType || isArray(sourceType) || isMap(sourceType)) {
                     e.inferredType = sourceType;
                     e.falseInstanceOf = true;
                     return ValueType.boolType;
