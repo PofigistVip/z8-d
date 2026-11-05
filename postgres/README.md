@@ -86,6 +86,11 @@ request's event level is restored afterward. Existing tables are not migrated.
 assignments, a read-only flag based on the current user and protection against
 removing the built-in assignments. The flag is metadata; general access
 enforcement is not yet implemented.
+`z8_postgres_load_privileges` in `z8.database.privileges` loads a user's roles
+and effective table, field and request permissions. It combines grants across
+roles, falls back to their default permissions and intersects field access
+with table access. It returns a snapshot for the host; request authorization
+and refreshing that snapshot after changes remain separate work.
 The native `Users.onNew` defaults mirror the Java implementation, including its
 default password value and `changePassword` flag; explicitly supplied values
 are preserved even when user-level events are disabled. With user events enabled,
