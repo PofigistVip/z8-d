@@ -341,6 +341,8 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             z8_sql_set_field_options(Z8SqlFieldFormatOptions(grouped, false));
             auto expression = z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string;
             auto aggregation = z8_field_aggregation(field);
+            if (grouped && kind == "int"w && aggregation == Z8FieldAggregation.average)
+                expression = "trunc(" ~ expression ~ ")::bigint";
             bool raw = !grouped || aggregation == Z8FieldAggregation.none || aggregation == Z8FieldAggregation.bitwiseOr || aggregation == Z8FieldAggregation.bitwiseAnd;
             if (kind == "binary"w && raw) expression = "encode(" ~ expression ~ ", 'hex')";
             else if (kind == "geometry"w && raw) expression = "encode(ST_AsEWKB(" ~ expression ~ ", 'NDR'), 'hex')";

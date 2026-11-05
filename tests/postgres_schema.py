@@ -60,6 +60,7 @@ import org.zenframework.z8.base.application.Application;
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-hook") { amount = 999; addWhere(amount >= 40); }
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-values") addWhere(amount >= amount.get());
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-group") { groupBy = {flag}; amount.aggregation = Aggregation.Sum; }
+        if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-average") amount.aggregation = Aggregation.Average;
     }
 }
 ''', encoding="utf-8")
@@ -673,6 +674,10 @@ void main(string[] args) {
     assert(totalsJson["data"]["amount"].integer == 42);
     totalsJson = parseJSON(totalRead(`["amount"]`w, `{"property":"amount","operator":"gt","value":"100"}`w).to!string);
     assert(totalsJson["data"]["amount"].integer == 7);
+    db.execute(`UPDATE "z8_bootstrap"."Sample;--" SET "Amount" = 11 WHERE "RecordId" = '00000000-0000-0000-0000-00000000012E'`);
+    totalsJson = parseJSON(totalRead(`["amount"]`w, null, "with-average"w).to!string);
+    assert(totalsJson["data"]["amount"].integer == 26);
+    db.execute(`UPDATE "z8_bootstrap"."Sample;--" SET "Amount" = 10 WHERE "RecordId" = '00000000-0000-0000-0000-00000000012E'`);
     bool groupedTotalsDenied;
     try { totalRead(`["amount"]`w, null, "with-group"w); } catch (Exception) { groupedTotalsDenied = true; }
     assert(groupedTotalsDenied);
