@@ -250,7 +250,8 @@ framework по атрибутам пока не реализована.
 Для `sql_string` поддерживаются преобразование строки, конкатенация, сравнения,
 `IIF`, смена регистра, удаление пробелов по краям, длина, `like`, `regLike`,
 `replace`, `replaceAll`, `substring`, `reverse`, `padLeft`, `padRight`,
-`indexOf`, `patIndexOf`, `contains`, `isEmpty` и
+`indexOf`, `patIndexOf`, `contains`, `isEmpty`, `isInt`, `isNumeric`,
+`toInt`, `toDecimal`, `toString`, `quote`, `json` и
 форматирование в SQL с проверенными ограничениями диалектов.
 Повторное форматирование `indexOf` сохраняет изменения внутреннего состояния,
 которые присутствуют в исходном runtime Z8.

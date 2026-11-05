@@ -220,6 +220,11 @@ unittest {
     compile(q{class A { static sql_bool f(sql_string x) { return x.like("a%", "!"); } }});
     compile(q{class A { static sql_int f(sql_string x) { return x.indexOf("a", 1); } }});
     compile(q{class A { static sql_bool f(sql_string x) { return x.contains("a"); } }});
+    compile(q{class A { static sql_int f(sql_string x) { return x.toInt(); } }});
+    compile(q{class A { static sql_decimal f(sql_string x) { return x.toDecimal(); } }});
+    compile(q{class A { static sql_bool f(sql_string x) { return x.isInt() || x.isNumeric(); } }});
+    compile(q{class A { static sql_string f(sql_string x) { return x.json("a").json(1).quote().toString(); } }});
+    rejects(q{class A { static sql_string f(sql_string x) { return x.json(null); } }});
     rejects(q{class A { static void f() { sql_string a = "x"; string b = a; } }});
     rejects(q{class A { static void f() { sql_decimal d = 1.5; decimal x = d; } }});
     rejects(q{class A { static void f() { sql_bool a = true; if (a) {} } }});

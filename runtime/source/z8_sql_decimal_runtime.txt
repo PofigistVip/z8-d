@@ -1,9 +1,10 @@
-enum Z8SqlDecimalKind { constant, group, fromInt, negate, add, subtract, multiply, divide, modulo, choose, abs, exp, ln, power, round, truncate }
+enum Z8SqlDecimalKind { constant, group, fromInt, fromString, negate, add, subtract, multiply, divide, modulo, choose, abs, exp, ln, power, round, truncate }
 class Z8SqlDecimal : Z8SqlNumeric {
     Z8SqlDecimalKind kind;
     Z8Decimal constant;
     Z8SqlNumeric left, right;
     Z8SqlBool condition;
+    Z8SqlString textOperand;
     this(Z8SqlDecimalKind kind, Z8Decimal constant = Z8Decimal.init,
          Z8SqlNumeric left = null, Z8SqlNumeric right = null, Z8SqlBool condition = null) {
         this.kind = kind; this.constant = constant; this.left = left; this.right = right; this.condition = condition;
@@ -98,6 +99,12 @@ wstring z8_sql_decimal_format(Z8SqlDecimal value, Z8SqlVendor vendor = Z8SqlVend
             if (vendor == Z8SqlVendor.SqlServer) return "CONVERT(numeric(36,14),"w ~ text ~ ")"w;
             if (vendor == Z8SqlVendor.Postgres) return "CAST("w ~ text ~ " AS FLOAT)"w;
             throw new Exception("unsupported SQL database vendor");
+        case Z8SqlDecimalKind.fromString:
+            if (vendor == Z8SqlVendor.H2) throw new Exception("unsupported SQL database vendor");
+            auto text = z8_sql_string_format(value.textOperand, vendor);
+            if (vendor == Z8SqlVendor.Oracle) return "TO_NUMBER("w ~ text ~ ", '999999999999999999999999.9999999999')"w;
+            if (vendor == Z8SqlVendor.SqlServer) return "CONVERT(numeric(36,14),"w ~ text ~ ")"w;
+            return "CAST("w ~ text ~ " AS FLOAT)"w;
         case Z8SqlDecimalKind.negate: return "(-"w ~ z8_nonnull(value.left).z8_format(vendor) ~ ")"w;
         case Z8SqlDecimalKind.add: return z8_nonnull(value.left).z8_format(vendor) ~ " + "w ~ z8_nonnull(value.right).z8_format(vendor);
         case Z8SqlDecimalKind.subtract: return z8_nonnull(value.left).z8_format(vendor) ~ " - ("w ~ z8_nonnull(value.right).z8_format(vendor) ~ ")"w;

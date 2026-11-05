@@ -516,6 +516,24 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                     try { System.out.println("SQLSEARCHBOOL:" + vendor.name() + ":" + logical + ":" + predicate.format(vendor, null, logical)); }
                     catch (RuntimeException error) { System.out.println("SQLSEARCHBOOL:" + vendor.name() + ":" + logical + ":ERROR"); }
                 }
+            try { System.out.println("SQLCONV:" + vendor.name() + ":" + demo.cases.SqlStringValues.z8_integer().format(vendor, null)); }
+            catch (RuntimeException error) { System.out.println("SQLCONV:" + vendor.name() + ":ERROR"); }
+            try { System.out.println("SQLCONV:" + vendor.name() + ":" + demo.cases.SqlStringValues.z8_number().format(vendor, null)); }
+            catch (RuntimeException error) { System.out.println("SQLCONV:" + vendor.name() + ":ERROR"); }
+            org.zenframework.z8.server.types.sql.sql_string[] extraStrings = {
+                demo.cases.SqlStringValues.z8_quoted(), demo.cases.SqlStringValues.z8_jsonName(),
+                demo.cases.SqlStringValues.z8_jsonIndex(), demo.cases.SqlStringValues.z8_identity()
+            };
+            for (org.zenframework.z8.server.types.sql.sql_string value : extraStrings) {
+                try { System.out.println("SQLTEXTEXTRA:" + vendor.name() + ":" + value.format(vendor, null)); }
+                catch (RuntimeException error) { System.out.println("SQLTEXTEXTRA:" + vendor.name() + ":ERROR"); }
+            }
+            for (org.zenframework.z8.server.types.sql.sql_bool predicate : new org.zenframework.z8.server.types.sql.sql_bool[] {
+                    demo.cases.SqlStringValues.z8_integerTest(), demo.cases.SqlStringValues.z8_numberTest() })
+                for (boolean logical : new boolean[] {false, true}) {
+                    try { System.out.println("SQLTEXTTEST:" + vendor.name() + ":" + logical + ":" + predicate.format(vendor, null, logical)); }
+                    catch (RuntimeException error) { System.out.println("SQLTEXTTEST:" + vendor.name() + ":" + logical + ":ERROR"); }
+                }
         }
         org.zenframework.z8.server.types.sql.sql_integer sharedSearch = demo.cases.SqlStringValues.z8_indexFrom();
         for (org.zenframework.z8.server.db.DatabaseVendor vendor : org.zenframework.z8.server.db.DatabaseVendor.values())
@@ -597,11 +615,11 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         sql_sources += [server_source / "db" / "sql" / "functions" / name for name in ("If.java", "CaseToken.java", "Nvl.java", "IsNull.java")]
         sql_sources += [server_source / "db" / "sql" / "functions" / "numeric" / name for name in
                         ("Floor.java", "Mod.java", "Sign.java", "Abs.java", "Power.java", "IsNaN.java", "Ceil.java", "Exp.java", "Ln.java", "Round.java", "Truncate.java")]
-        sql_sources += [server_source / "db" / "sql" / "functions" / "conversion" / name for name in ("IntToDecimal.java", "ToDecimal.java", "ToString.java")]
+        sql_sources += [server_source / "db" / "sql" / "functions" / "conversion" / name for name in ("IntToDecimal.java", "ToDecimal.java", "ToString.java", "StringToInt.java", "IsIntString.java", "IsNumericString.java")]
         sql_sources += [server_source / "db" / "sql" / "functions" / "string" / name for name in
                         ("Concat.java", "Lower.java", "Upper.java", "LTrim.java", "RTrim.java", "Length.java", "Quote.java",
                          "Like.java", "RegLike.java", "Replace.java", "RegReplace.java", "Substr.java", "Reverse.java", "LPad.java", "RPad.java",
-                         "IndexOf.java", "RegIndexOf.java", "IsEmpty.java")]
+                         "IndexOf.java", "RegIndexOf.java", "IsEmpty.java", "GetJson.java")]
         sql_sources += [server_source / "db" / "sql" / "fts" / name for name in ("FtsLike.java", "FtsQuery.java", "FtsRank.java", "FtsVector.java")]
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
                         "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes)] + list(map(str, sql_sources)), cwd=temp, check=True)
@@ -890,6 +908,24 @@ void main() {
                 try { writeln("SQLSEARCHBOOL:", vendor, ":", logical, ":", z8_to_utf8(z8_sql_bool_format(predicate, logical, dialect))); }
                 catch (Exception error) { writeln("SQLSEARCHBOOL:", vendor, ":", logical, ":ERROR"); }
             }
+        try { writeln("SQLCONV:", vendor, ":", z8_to_utf8(z8_sql_int_format(Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_integer(), dialect))); }
+        catch (Exception error) { writeln("SQLCONV:", vendor, ":ERROR"); }
+        try { writeln("SQLCONV:", vendor, ":", z8_to_utf8(z8_sql_decimal_format(Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_number(), dialect))); }
+        catch (Exception error) { writeln("SQLCONV:", vendor, ":ERROR"); }
+        auto extraStrings = [Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_quoted(),
+            Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_jsonName(),
+            Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_jsonIndex(),
+            Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_identity()];
+        foreach (value; extraStrings) {
+            try { writeln("SQLTEXTEXTRA:", vendor, ":", z8_to_utf8(z8_sql_string_format(value, dialect))); }
+            catch (Exception error) { writeln("SQLTEXTEXTRA:", vendor, ":ERROR"); }
+        }
+        foreach (predicate; [Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_integerTest(),
+                            Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_numberTest()])
+            foreach (logical; [false, true]) {
+                try { writeln("SQLTEXTTEST:", vendor, ":", logical, ":", z8_to_utf8(z8_sql_bool_format(predicate, logical, dialect))); }
+                catch (Exception error) { writeln("SQLTEXTTEST:", vendor, ":", logical, ":ERROR"); }
+            }
     }
     auto sharedSearch = Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_indexFrom();
     foreach (vendorIndex, vendor; ["Oracle", "SqlServer", "Postgres", "H2"]) {
@@ -905,12 +941,12 @@ void main() {
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_lines = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:"))]
+        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:"))]
         original_sql = [line for line in output.splitlines() if line.startswith("SQLBOOL:")]
         d_sql = [line for line in d_lines if line.startswith("SQLBOOL:")]
         if original_sql != d_sql or len(d_sql) != 40:
             raise SystemExit(f"SQL boolean formatting differs: original={original_sql!r}, D={d_sql!r}")
-        for prefix, count in (("SQLINT:", 32), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 40), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8)):
+        for prefix, count in (("SQLINT:", 32), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 40), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 16), ("SQLTEXTTEST:", 16)):
             original_lines = [line for line in output.splitlines() if line.startswith(prefix)]
             d_formatted = [line for line in d_lines if line.startswith(prefix)]
             if original_lines != d_formatted or len(d_formatted) != count:

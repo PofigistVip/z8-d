@@ -1,4 +1,4 @@
-enum Z8SqlStringKind { constant, group, concat, lower, upper, trimLeft, trimRight, choose, replace, regReplace, substring, reverse, padLeft, padRight }
+enum Z8SqlStringKind { constant, group, concat, lower, upper, trimLeft, trimRight, choose, replace, regReplace, substring, reverse, padLeft, padRight, quote, jsonString, jsonInt }
 class Z8SqlString {
     Z8SqlStringKind kind;
     wstring constant;
@@ -43,6 +43,13 @@ Z8SqlString z8_sql_string_substring(Z8SqlString value, Z8SqlInt position, Z8SqlI
     result.position = position; result.length = length; return result;
 }
 Z8SqlString z8_sql_string_reverse(Z8SqlString value) { return new Z8SqlString(Z8SqlStringKind.reverse, null, z8_nonnull(value)); }
+Z8SqlString z8_sql_string_toString(Z8SqlString value) { return z8_nonnull(value); }
+Z8SqlString z8_sql_string_quote(Z8SqlString value) { return new Z8SqlString(Z8SqlStringKind.quote, null, z8_nonnull(value)); }
+Z8SqlString z8_sql_string_jsonString(Z8SqlString value, Z8SqlString key) { return new Z8SqlString(Z8SqlStringKind.jsonString, null, z8_nonnull(value), key); }
+Z8SqlString z8_sql_string_jsonInt(Z8SqlString value, Z8SqlInt index) {
+    auto result = new Z8SqlString(Z8SqlStringKind.jsonInt, null, z8_nonnull(value));
+    result.position = index; return result;
+}
 Z8SqlString z8_sql_string_padLeft(Z8SqlString value, Z8SqlInt length, Z8SqlString pattern = null) {
     auto result = new Z8SqlString(Z8SqlStringKind.padLeft, null, z8_nonnull(value), pattern);
     result.length = length; return result;
@@ -81,6 +88,16 @@ Z8SqlBool z8_sql_string_contains(Z8SqlString value, Z8SqlString pattern, Z8SqlIn
 Z8SqlBool z8_sql_string_isEmpty(Z8SqlString value) {
     auto result = new Z8SqlBool(Z8SqlBoolKind.textIsEmpty);
     result.textLeft = z8_nonnull(value); return result;
+}
+Z8SqlBool z8_sql_string_isInt(Z8SqlString value) { return z8_sql_string_regLike(value, z8_sql_string_const("^[0-9]+$"w)); }
+Z8SqlBool z8_sql_string_isNumeric(Z8SqlString value) { return z8_sql_string_regLike(value, z8_sql_string_const("^[0-9\\.]+$"w)); }
+Z8SqlInt z8_sql_string_toInt(Z8SqlString value) {
+    auto result = new Z8SqlInt(Z8SqlIntKind.textToInt);
+    result.textOperand = z8_nonnull(value); return result;
+}
+Z8SqlDecimal z8_sql_string_toDecimal(Z8SqlString value) {
+    auto result = new Z8SqlDecimal(Z8SqlDecimalKind.fromString);
+    result.textOperand = z8_nonnull(value); return result;
 }
 Z8SqlBool z8_sql_string_compare(string op)(Z8SqlString left, Z8SqlString right) {
     z8_nonnull(left);
@@ -140,5 +157,12 @@ wstring z8_sql_string_format(Z8SqlString value, Z8SqlVendor vendor = Z8SqlVendor
             if (value.kind == Z8SqlStringKind.padLeft) return "RIGHT(REPLICATE("w ~ pad ~ ","w ~ length ~ ")+"w ~ text ~ ","w ~ length ~ ")"w;
             if (vendor == Z8SqlVendor.Oracle) return "RPAD("w ~ text ~ ","w ~ length ~ ","w ~ pad ~ ")"w;
             return "LEFT("w ~ text ~ "+REPLICATE("w ~ pad ~ ","w ~ length ~ "),"w ~ length ~ ")"w;
+        case Z8SqlStringKind.quote:
+            if (vendor != Z8SqlVendor.Postgres) throw new Exception("unsupported SQL database vendor");
+            return "to_json("w ~ z8_sql_string_format(value.left, vendor) ~ ")"w;
+        case Z8SqlStringKind.jsonString: case Z8SqlStringKind.jsonInt:
+            if (vendor != Z8SqlVendor.Postgres) throw new Exception("unsupported SQL database vendor");
+            return "("w ~ z8_sql_string_format(value.left, vendor) ~ ")::json->>"w ~
+                (value.kind == Z8SqlStringKind.jsonString ? z8_sql_string_format(value.right, vendor) : z8_sql_int_format(value.position, vendor));
     }
 }

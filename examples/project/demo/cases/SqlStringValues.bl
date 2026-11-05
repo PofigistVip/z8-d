@@ -1,6 +1,7 @@
 import org.zenframework.z8.lang.sql.sql_string;
 import org.zenframework.z8.lang.sql.sql_bool;
 import org.zenframework.z8.lang.sql.sql_int;
+import org.zenframework.z8.lang.sql.sql_decimal;
 public class SqlStringValues {
     public static sql_string literal() { return "O'Reilly 😀"; }
     public static sql_string concatenation() { sql_string value = "alpha"; return (value + " β").toUpper(); }
@@ -25,6 +26,14 @@ public class SqlStringValues {
     public static sql_bool empty() { sql_string value = "abc"; return value.isEmpty(); }
     public static sql_int length() { sql_string value = "abc"; return value.length(); }
     public static sql_bool compare() { sql_string value = "alpha"; return value >= "beta"; }
+    public static sql_int integer() { sql_string value = "123"; return value.toInt(); }
+    public static sql_decimal number() { sql_string value = "12.5"; return value.toDecimal(); }
+    public static sql_bool integerTest() { sql_string value = "123"; return value.isInt(); }
+    public static sql_bool numberTest() { sql_string value = "12.5"; return value.isNumeric(); }
+    public static sql_string quoted() { sql_string value = "value"; return value.quote(); }
+    public static sql_string jsonName() { sql_string value = "json"; return value.json("a"); }
+    public static sql_string jsonIndex() { sql_string value = "json"; return value.json(1); }
+    public static sql_string identity() { sql_string value = "abc"; return value.toString(); }
     public static int run() {
         sql_string value = concatenation();
         if (value == null) return 1;

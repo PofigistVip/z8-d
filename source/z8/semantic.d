@@ -1030,8 +1030,16 @@ class Checker {
                     fail("unsupported SQL decimal method", e.token);
                 }
                 if (receiver == ValueType.sqlStringType) {
-                    if (["toLower", "toUpper", "trimLeft", "trimRight", "trimAll", "reverse"].canFind(e.token.text)) {
+                    if (["toLower", "toUpper", "trimLeft", "trimRight", "trimAll", "reverse", "quote", "toString"].canFind(e.token.text)) {
                         checkArguments(e, []); e.builtinCall = "z8_sql_string_" ~ e.token.text; return ValueType.sqlStringType;
+                    }
+                    if (e.token.text == "json") {
+                        if (e.arguments.length != 1) fail("incorrect argument count", e.token);
+                        auto argument = typeOf(e.arguments[0]);
+                        if (argument == ValueType.nullType) fail("ambiguous SQL json overload", e.token);
+                        bool numeric = [ValueType.intType, ValueType.optionalInt, ValueType.sqlIntType].canFind(argument);
+                        checkArguments(e, [numeric ? ValueType.sqlIntType : ValueType.sqlStringType]);
+                        e.builtinCall = numeric ? "z8_sql_string_jsonInt" : "z8_sql_string_jsonString"; return ValueType.sqlStringType;
                     }
                     if (e.token.text == "replace" || e.token.text == "replaceAll") {
                         if (e.token.text == "replaceAll" && e.arguments.length == 3)
@@ -1056,6 +1064,13 @@ class Checker {
                     }
                     if (e.token.text == "isEmpty") {
                         checkArguments(e, []); e.builtinCall = "z8_sql_string_isEmpty"; return ValueType.sqlBoolType;
+                    }
+                    if (["isInt", "isNumeric"].canFind(e.token.text)) {
+                        checkArguments(e, []); e.builtinCall = "z8_sql_string_" ~ e.token.text; return ValueType.sqlBoolType;
+                    }
+                    if (e.token.text == "toInt" || e.token.text == "toDecimal") {
+                        checkArguments(e, []); e.builtinCall = "z8_sql_string_" ~ e.token.text;
+                        return e.token.text == "toInt" ? ValueType.sqlIntType : ValueType.sqlDecimalType;
                     }
                     if (e.token.text == "indexOf" || e.token.text == "contains") {
                         checkArguments(e, e.arguments.length == 2 ? [ValueType.sqlStringType, ValueType.sqlIntType] : [ValueType.sqlStringType]);

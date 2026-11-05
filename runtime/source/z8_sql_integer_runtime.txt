@@ -1,4 +1,4 @@
-enum Z8SqlIntKind { constant, group, negate, bitNot, add, subtract, multiply, divide, modulo, bitAnd, bitOr, bitXor, sign, abs, power, choose, decimalSign, decimalCeil, decimalFloor, textLength, textIndex, textRegIndex }
+enum Z8SqlIntKind { constant, group, negate, bitNot, add, subtract, multiply, divide, modulo, bitAnd, bitOr, bitXor, sign, abs, power, choose, decimalSign, decimalCeil, decimalFloor, textLength, textIndex, textRegIndex, textToInt }
 class Z8SqlInt : Z8SqlNumeric {
     Z8SqlIntKind kind;
     long constant;
@@ -114,5 +114,11 @@ wstring z8_sql_int_format(Z8SqlInt value, Z8SqlVendor vendor = Z8SqlVendor.Postg
             if (vendor != Z8SqlVendor.Oracle && vendor != Z8SqlVendor.SqlServer) throw new Exception("unsupported SQL database vendor");
             return (vendor == Z8SqlVendor.Oracle ? "nvl(RegExp_instr("w : "isNull(patIndex("w) ~
                 z8_sql_string_format(value.textPattern, vendor) ~ ", "w ~ z8_sql_string_format(value.textOperand, vendor) ~ ") - 1,-1)"w;
+        case Z8SqlIntKind.textToInt:
+            if (vendor == Z8SqlVendor.H2) throw new Exception("unsupported SQL database vendor");
+            auto text = z8_sql_string_format(value.textOperand, vendor);
+            if (vendor == Z8SqlVendor.Oracle) return "TO_NUMBER("w ~ text ~ ")"w;
+            if (vendor == Z8SqlVendor.SqlServer) return "CONVERT(int, "w ~ text ~ ")"w;
+            return text ~ "::bigint"w;
     }
 }
