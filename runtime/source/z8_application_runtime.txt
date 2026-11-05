@@ -129,6 +129,8 @@ class Z8ApplicationSession {
     void restoreUser() { user = originalUser; }
     void touch() { lastAccessTime = z8_optional_require(z8_application_current_time()); }
 }
+// Event levels have the same ordering and nested semantics as IRequest.java.
+enum Z8EventsLevel { all, user, system, none }
 // The host supplies a request for the current thread; response wrappers share
 // the request's writer, as ApplicationServer.getRequest() does in Z8.
 class Z8ApplicationRequest {
@@ -136,6 +138,11 @@ class Z8ApplicationRequest {
     Z8Array!Z8File files;
     IZ8ApplicationMonitor monitor;
     Z8ApplicationSession session;
+    private Z8EventsLevel[] eventLevels;
+    void setEventsLevel(Z8EventsLevel level) { eventLevels ~= level; }
+    void restoreEventsLevel() { if (eventLevels.length) eventLevels.length--; }
+    Z8EventsLevel eventsLevel() { return eventLevels.length ? eventLevels[$ - 1] : Z8EventsLevel.all; }
+    bool eventsEnabled(Z8EventsLevel level) { return eventsLevel() <= level; }
     private Z8JsonWriterState writer;
     private Z8Binary binaryResponse;
     private bool hasBinaryResponse;

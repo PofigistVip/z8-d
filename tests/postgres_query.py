@@ -40,12 +40,21 @@ public class Sales extends Table {
     virtual protected sql_bool scope() { return amount >= 0; }
     virtual protected void onNew() { events += "N"; if (copying) flag = false; }
     virtual protected void onCopy(guid id) { events += "O"; }
-    virtual protected void beforeCreate(guid id) { events += "C"; }
+    virtual protected void beforeCreate(guid id) { super.beforeCreate(id); events += "C"; }
     virtual protected void afterCreate(guid id) { events += "A"; }
-    virtual protected void beforeUpdate(guid id) { events += "U"; }
+    virtual protected void beforeUpdate(guid id) { super.beforeUpdate(id); events += "U"; }
     virtual protected void afterUpdate(guid id) { events += "V"; }
     virtual protected void beforeDestroy(guid id) { events += "D"; }
     virtual protected void afterDestroy(guid id) { events += "E"; }
+}
+''', encoding="utf-8")
+    (source / "Plain.bl").write_text('''
+import org.zenframework.z8.base.table.Table;
+public class Plain extends Table {}
+''', encoding="utf-8")
+    (source / "Quiet.bl").write_text('''
+public class Quiet extends Plain {
+    virtual protected void beforeCreate(guid id) {}
 }
 ''', encoding="utf-8")
     (source / "Probe.bl").write_text('''
@@ -54,6 +63,9 @@ import org.zenframework.z8.base.table.SortDirection;
 import org.zenframework.z8.base.table.value.Aggregation;
 public class Probe {
     public static Sales make() { Sales table; return table; }
+    public static Plain makePlain() { Plain table; return table; }
+    public static Quiet makeQuiet() { Quiet table; return table; }
+    public static guid createPlain(Plain table, guid id) { return table.create(id); }
     public static void read(Sales table) {
         Field[] fields = {table.amount, table.title, table.flag, table.info, table.blob, table.instant};
         Field[] sort = {table.amount}; table.amount.sortDirection = SortDirection.Desc;
@@ -227,6 +239,37 @@ void main(string[] args) {
     assert(missingRow.rows.length == 1 && missingRow.rows[0][0].text == "0" && missingRow.rows[0][1].text == "0");
     assert(P.m_events(table) == "NOCANOCA"w);
     db.execute("ROLLBACK"); P.m_finishCopy(table); P.m_clearEvents(table);
+    db.execute("BEGIN");
+    auto request = new Z8ApplicationRequest();
+    auto creator = new Z8UserData(); creator.id = z8_guid_create(101);
+    auto editor = new Z8UserData(); editor.id = z8_guid_create(102);
+    request.session = new Z8ApplicationSession("test"w, creator, creator);
+    auto previousRequest = z8_application_set_request(request);
+    auto beforeAudit = z8_date_ticks(z8_date_now());
+    P.m_prepareCreate(table); P.m_create(table, z8_guid_create(43));
+    request.session.switchUser(editor); P.m_prepareUpdate(table);
+    assert(z8_optional_require(P.m_update(table, z8_guid_create(43))) == 1);
+    auto audit = db.execute(`SELECT "CreatedAt", "CreatedBy", "ModifiedAt", "ModifiedBy" FROM "Sales""Quote" WHERE "RecordId"='00000000-0000-0000-0000-00000000002b'`);
+    assert(audit.rows[0][0].text.to!long >= beforeAudit && audit.rows[0][2].text.to!long >= beforeAudit);
+    assert(audit.rows[0][1].text == "00000000-0000-0000-0000-000000000065" && audit.rows[0][3].text == "00000000-0000-0000-0000-000000000066");
+    auto plain = P.m_makePlain(); auto quiet = P.m_makeQuiet();
+    z8_query_set_executor(plain, new Z8PostgresQueryExecutor(db, "pg_temp"w, `Sales"Quote`w));
+    z8_query_set_executor(quiet, new Z8PostgresQueryExecutor(db, "pg_temp"w, `Sales"Quote`w));
+    P.m_createPlain(plain, z8_guid_create(45)); P.m_createPlain(quiet, z8_guid_create(46));
+    auto inherited = db.execute(`SELECT "RecordId", "CreatedBy" FROM "Sales""Quote" WHERE "RecordId" IN ('00000000-0000-0000-0000-00000000002d','00000000-0000-0000-0000-00000000002e') ORDER BY "RecordId"`);
+    assert(inherited.rows[0][1].text == "00000000-0000-0000-0000-000000000066");
+    assert(inherited.rows[1][1].text == "00000000-0000-0000-0000-000000000066");
+    auto eventsBeforeSuppression = P.m_events(table);
+    request.setEventsLevel(Z8EventsLevel.system); P.m_prepareCreate(table); P.m_create(table, z8_guid_create(47));
+    auto systemOnly = db.execute(`SELECT "CreatedBy" FROM "Sales""Quote" WHERE "RecordId"='00000000-0000-0000-0000-00000000002f'`);
+    assert(systemOnly.rows[0][0].text == "00000000-0000-0000-0000-000000000066" && P.m_events(table) == eventsBeforeSuppression);
+    request.setEventsLevel(Z8EventsLevel.none); P.m_prepareCreate(table); P.m_create(table, z8_guid_create(44));
+    auto noAudit = db.execute(`SELECT "CreatedBy" FROM "Sales""Quote" WHERE "RecordId"='00000000-0000-0000-0000-00000000002c'`);
+    assert(noAudit.rows[0][0].isNull || noAudit.rows[0][0].text != "00000000-0000-0000-0000-000000000066");
+    assert(P.m_events(table) == eventsBeforeSuppression);
+    request.restoreEventsLevel(); assert(request.eventsLevel() == Z8EventsLevel.system);
+    request.restoreEventsLevel(); assert(request.eventsLevel() == Z8EventsLevel.all);
+    z8_application_set_request(previousRequest); db.execute("ROLLBACK"); P.m_clearEvents(table);
     P.m_prepareCreate(table);
     assert(P.m_create(table, z8_guid_create(42)) == z8_guid_create(42) && P.m_events(table) == "NCA"w);
     auto inserted = db.execute(`SELECT "Amount", "Title", "Flag", convert_from("Info",'UTF8'), encode("Blob",'hex'), "When" FROM "Sales""Quote" WHERE "RecordId"='00000000-0000-0000-0000-00000000002a'`);

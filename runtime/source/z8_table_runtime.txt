@@ -36,6 +36,22 @@ Z8Object z8_query_primary_key(Z8Object self) {
 private Z8Guid z8_query_record_id(Z8Object self) {
     return z8_primary_cast!Z8Guid(z8_field_primary(z8_nonnull(z8_query_primary_key(self))));
 }
+// Table's Java lifecycle runs before the separately dispatched BL event.
+private void z8_table_before_write(Z8Object self, bool create) {
+    auto table = cast(Z8TableState)z8_nonnull(self).z8_get_native_state(z8_table_name);
+    if (table is null) return;
+    auto request = z8_application_request();
+    // An embedding program may use a standalone executor without a request.
+    if (request is null || !request.eventsEnabled(Z8EventsLevel.system)) return;
+    auto user = z8_nonnull(z8_nonnull(request.session).user);
+    if (create) {
+        z8_field_set(table.createdAt, z8_primary_box(z8_date_now()));
+        z8_field_set(table.createdBy, z8_primary_box(user.id));
+    } else {
+        z8_field_set(table.modifiedAt, z8_primary_box(z8_date_now()));
+        z8_field_set(table.modifiedBy, z8_primary_box(user.id));
+    }
+}
 void z8_bind_builtin_table() {
     enum p = z8_table_name ~ "."w;
     z8_native_bind(p ~ "m_new"w, &z8_table_new);
