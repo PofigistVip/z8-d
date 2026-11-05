@@ -86,17 +86,22 @@ void z8_native_register_factory(wstring name, TypeInfo_Class type, Z8Object func
         z8_native_factories[name] ~= Z8NativeFactory(type, create);
     }
 }
-Z8Object z8_native_new(wstring name) {
+bool z8_native_try_new(wstring name, out Z8Object value) {
     Z8NativeFactory factory;
     synchronized (z8_native_monitor) {
         auto found = name in z8_native_factories;
-        if (found is null || !(*found).length) throw new Exception("native type not registered: " ~ name.to!string);
+        if (found is null || !(*found).length) return false;
         if ((*found).length != 1) throw new Exception("native type is ambiguous: " ~ name.to!string);
         factory = (*found)[0];
     }
-    auto value = factory.create();
+    value = factory.create();
     if (value is null || !factory.type.isBaseOf(value.classinfo))
         throw new Exception("invalid native type factory result: " ~ name.to!string);
+    return true;
+}
+Z8Object z8_native_new(wstring name) {
+    Z8Object value;
+    if (!z8_native_try_new(name, value)) throw new Exception("native type not registered: " ~ name.to!string);
     return value;
 }
 bool z8_native_is_instance(wstring name, Z8Object value) {
