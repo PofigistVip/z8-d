@@ -98,6 +98,7 @@ class Z8Object {
     private bool z8_allocated;
     private Z8Object z8_container;
     private wstring[wstring] z8_attributes;
+    private Object[wstring] z8_native_states;
 
     // Primary subclasses may provide the Java value's polymorphic operations.
     wstring z8_user_primary_string_impl() { return toString().to!wstring; }
@@ -108,6 +109,12 @@ class Z8Object {
     final void z8_set_attribute(wstring key, wstring value) { z8_attributes[key] = value; }
     final wstring z8_get_attribute(wstring key) {
         auto value = key in z8_attributes;
+        return value is null ? null : *value;
+    }
+    // Native adapters attach state to the wrapper instead of retaining it globally.
+    final void z8_set_native_state(wstring key, Object value) { z8_native_states[key] = value; }
+    final Object z8_get_native_state(wstring key) {
+        auto value = key in z8_native_states;
         return value is null ? null : *value;
     }
     final void z8_set_container(Z8Object container) { z8_container = container; }

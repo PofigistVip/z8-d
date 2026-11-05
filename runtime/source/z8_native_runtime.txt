@@ -46,14 +46,25 @@ void z8_native_register_factory(wstring name, TypeInfo_Class type, Z8Object func
     }
 }
 Z8Object z8_native_new(wstring name) {
-    Z8Object function() create;
+    Z8NativeFactory factory;
     synchronized (z8_native_monitor) {
         auto found = name in z8_native_factories;
         if (found is null || !(*found).length) throw new Exception("native type not registered: " ~ name.to!string);
         if ((*found).length != 1) throw new Exception("native type is ambiguous: " ~ name.to!string);
-        create = (*found)[0].create;
+        factory = (*found)[0];
     }
-    return create();
+    auto value = factory.create();
+    if (value is null || !factory.type.isBaseOf(value.classinfo))
+        throw new Exception("invalid native type factory result: " ~ name.to!string);
+    return value;
+}
+bool z8_native_is_instance(wstring name, Z8Object value) {
+    if (value is null) return false;
+    synchronized (z8_native_monitor) {
+        auto found = name in z8_native_factories;
+        if (found !is null) foreach (entry; *found) if (entry.type.isBaseOf(value.classinfo)) return true;
+    }
+    return false;
 }
 ref T z8_native_field(T, Args...)(wstring name, Args args) {
     auto address = z8_native_call!(T*)(name, args);

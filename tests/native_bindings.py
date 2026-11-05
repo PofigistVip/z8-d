@@ -118,6 +118,10 @@ void main() {
     bool ambiguousType;
     try { z8_native_new("example.Ambiguous"w); } catch (Exception e) { ambiguousType = e.msg.indexOf("native type is ambiguous") >= 0; }
     assert(ambiguousType);
+    z8_native_register_factory("example.InvalidFactory"w, typeid(Number), &anyFactory);
+    bool invalidRegisteredFactory;
+    try { z8_native_new("example.InvalidFactory"w); } catch (Exception e) { invalidRegisteredFactory = e.msg.indexOf("invalid native type factory result") >= 0; }
+    assert(invalidRegisteredFactory);
     assert(z8_optional_require(Z8p_456167657255736572.m_run()) == 43);
     alias Holder = Z8p_4561676572486F6C646572;
     auto holder = z8_new!Holder();

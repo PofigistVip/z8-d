@@ -446,13 +446,18 @@ runtime D и отличается от Java.
 компиляцию объявлений в D и сравнивает результаты криптографических функций с Java.
 В runtime уже связаны `MD5.hex`, `Digest.md5`, `Digest.sha1` и `Digest.sha256`;
 также реализованы `Base34.encode`, `Base34.decode`, `Base34.random` и статические
-поля `RecordLock`. Смена регистра в `Base34.decode` использует Unicode D и может
+поля `RecordLock`. Класс `LoginParameters` поддерживает `userId`, `login`, `address`
+и `schema`; приложение может создать его через `z8_login_parameters_new` или
+присоединить изменяемый `Z8LoginParametersData` через `z8_login_parameters_from_data`.
+Объект сохраняет ссылку на данные, поэтому последующие изменения видны методам BL.
+Смена регистра в `Base34.decode` использует Unicode D и может
 отличаться от Java для отдельных локалей. Остальные методы этих проверяемых
 классов этим не реализуются. Строки для хеша
 кодируются в UTF-8; в исходном Java используется кодировка JVM по умолчанию.
 После вызова `z8_native_clear_bindings()` встроенные криптографические привязки
 можно восстановить функцией `z8_bind_builtin_crypto()`; поля `RecordLock` —
-функцией `z8_bind_builtin_record_lock()`, методы `Base34` — `z8_bind_builtin_base34()`.
+функцией `z8_bind_builtin_record_lock()`, методы `Base34` — `z8_bind_builtin_base34()`,
+а методы `LoginParameters` — `z8_bind_builtin_login_parameters()`.
 
 Поддерживаются конкатенация, сравнения, `length`, `isEmpty`, `compare`, `compareNoCase`, `startsWith`,
 `endsWith`, `indexOf`, `lastIndexOf`, `substring`, `charAt`, `trim`, `trimLeft`,

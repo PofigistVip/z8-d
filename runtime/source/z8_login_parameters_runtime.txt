@@ -1,0 +1,51 @@
+// State and native methods for org.zenframework.z8.base.security.LoginParameters.
+private enum wstring z8_login_parameters_name = "org.zenframework.z8.server.base.security.LoginParameters"w;
+class Z8LoginParametersData {
+    Z8Guid userId;
+    wstring login, address, schema;
+    this(Z8Guid userId, wstring login, wstring address, wstring schema) {
+        this.userId = userId; this.login = login; this.address = address; this.schema = schema;
+    }
+}
+private Z8LoginParametersData z8_login_parameters_state(Z8Object self) {
+    return cast(Z8LoginParametersData)z8_nonnull(self).z8_get_native_state(z8_login_parameters_name);
+}
+// Configuring an object mirrors the original newInstance(...) helper.
+void z8_login_parameters_attach(Z8Object self, Z8LoginParametersData data) {
+    if (!z8_native_is_instance(z8_login_parameters_name, self)) throw new Exception("invalid LoginParameters object");
+    z8_nonnull(self).z8_set_native_state(z8_login_parameters_name, data);
+}
+void z8_login_parameters_set(Z8Object self, Z8Guid userId, wstring login, wstring address, wstring schema) {
+    z8_login_parameters_attach(self, new Z8LoginParametersData(userId, login, address, schema));
+}
+Z8Object z8_login_parameters_from_data(Z8LoginParametersData data) {
+    auto value = z8_native_new(z8_login_parameters_name);
+    z8_login_parameters_attach(value, data);
+    return value;
+}
+Z8Object z8_login_parameters_new(Z8Guid userId, wstring login, wstring address, wstring schema) {
+    return z8_login_parameters_from_data(new Z8LoginParametersData(userId, login, address, schema));
+}
+private Z8Guid z8_login_parameters_user_id(Z8Object self) {
+    auto state = z8_login_parameters_state(self);
+    return state is null ? null : state.userId;
+}
+private wstring z8_login_parameters_login(Z8Object self) {
+    auto state = z8_login_parameters_state(self);
+    return state is null ? null : z8_string_new(z8_string_or_empty(state.login));
+}
+private wstring z8_login_parameters_address(Z8Object self) {
+    auto state = z8_login_parameters_state(self);
+    return state is null ? null : z8_string_new(z8_string_or_empty(state.address));
+}
+private wstring z8_login_parameters_schema(Z8Object self) {
+    auto state = z8_login_parameters_state(self);
+    return state is null ? null : z8_string_new(z8_string_or_empty(state.schema));
+}
+void z8_bind_builtin_login_parameters() {
+    z8_native_bind(z8_login_parameters_name ~ ".m_userId"w, &z8_login_parameters_user_id);
+    z8_native_bind(z8_login_parameters_name ~ ".m_login"w, &z8_login_parameters_login);
+    z8_native_bind(z8_login_parameters_name ~ ".m_address"w, &z8_login_parameters_address);
+    z8_native_bind(z8_login_parameters_name ~ ".m_schema"w, &z8_login_parameters_schema);
+}
+shared static this() { z8_bind_builtin_login_parameters(); }
