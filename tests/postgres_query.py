@@ -107,6 +107,8 @@ public class Probe {
         table.groupBy = {table.flag}; Field[] fields = {table.flag, table.amount}; table.read(fields);
     }
     public static void clearGroup(Sales table) { table.groupBy.clear(); }
+    public static void setGroup(Sales table) { table.groupBy = {table.flag}; }
+    public static bool hasGroup(Sales table) { return table.groupBy.size() == 1; }
     public static int[] groupValues(Sales table) { return table.amount.array(); }
     public static bool groupFlag(Sales table) { return table.flag.get(); }
     public static void prepareCreate(Sales table) {
@@ -119,8 +121,12 @@ public class Probe {
     }
     public static void prepareBulk(Sales table) { table.amount = 77; }
     public static int update(Sales table, guid id) { return table.update(id); }
+    public static int updateWhere(Sales table) { return table.update(table.amount >= 10); }
+    public static int updateNoMatch(Sales table) { return table.update(table.amount > 1000); }
     public static int destroy(Sales table, guid id) { return table.destroy(id); }
+    public static int destroyWhere(Sales table) { return table.destroy(table.amount >= 10); }
     public static string events(Sales table) { return table.events; }
+    public static void clearEvents(Sales table) { table.events = ""; }
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -187,6 +193,19 @@ void main(string[] args) {
     assert(z8_optional_require(P.m_count(table)) == 2);
     while (z8_optional_require(P.m_next(table))) { sum += z8_optional_require(P.m_amount(table)); ++groups; }
     assert(groups == 2 && sum == 35);
+    P.m_clearGroup(table);
+    db.execute("BEGIN"); P.m_prepareBulk(table);
+    assert(z8_optional_require(P.m_updateWhere(table)) == 2 && P.m_events(table) == "UVUV"w);
+    assert(db.execute(`SELECT count(*) FROM "Sales""Quote" WHERE "Amount"=77`).rows[0][0].text == "2");
+    assert(!z8_field_is_changed(table.f_amount));
+    db.execute("ROLLBACK"); P.m_clearEvents(table);
+    P.m_prepareBulk(table);
+    assert(z8_optional_require(P.m_updateNoMatch(table)) == 0 && !z8_field_is_changed(table.f_amount));
+    db.execute("BEGIN"); P.m_setGroup(table);
+    assert(z8_optional_require(P.m_destroyWhere(table)) == 2 && P.m_events(table) == "DEDE"w);
+    assert(z8_optional_require(P.m_hasGroup(table)));
+    assert(db.execute(`SELECT count(*) FROM "Sales""Quote"`).rows[0][0].text == "2");
+    db.execute("ROLLBACK"); P.m_clearGroup(table); P.m_clearEvents(table);
     P.m_prepareCreate(table);
     assert(P.m_create(table, z8_guid_create(42)) == z8_guid_create(42) && P.m_events(table) == "NCA"w);
     auto inserted = db.execute(`SELECT "Amount", "Title", "Flag", convert_from("Info",'UTF8'), encode("Blob",'hex'), "When" FROM "Sales""Quote" WHERE "RecordId"='00000000-0000-0000-0000-00000000002a'`);

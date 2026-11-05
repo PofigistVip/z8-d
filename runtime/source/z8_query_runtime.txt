@@ -10,7 +10,7 @@ struct Z8QueryReadRequest {
     Z8SqlBool queryWhere, queryHaving, queryScope;
     int start, limit = -1;
     Z8Guid recordId;
-    bool byRecordId;
+    bool byRecordId, disableGrouping;
     Z8QueryReadLock readLock;
 }
 interface IZ8QueryCursor : IZ8FieldCursor {
@@ -216,16 +216,19 @@ private Z8Guid z8_query_create_id(Z8Object self, Z8Guid id) {
     return result;
 }
 private Z8Guid z8_query_create(Z8Object self) { return z8_query_create_id(self, z8_guid_create_random()); }
-private Z8Optional!long z8_query_update_id(Z8Object self, Z8Guid id) {
+private long z8_query_update_id_run(Z8Object self, Z8Guid id, bool resetChanged) {
     auto writer = z8_query_writer(self);
-    if (id !is null && id == z8_guid_zero()) return z8_optional_wrap(0L);
+    if (id !is null && id == z8_guid_zero()) return 0;
     if (id !is null) self.z8_query_virtual_beforeUpdate(id);
     Z8Object[] changed;
     foreach (field; z8_query_declared_fields(self, true)) if (z8_field_is_changed(field)) changed ~= field;
     auto result = changed.length ? writer.update(self, id, changed) : 0L;
     if (id !is null) self.z8_query_virtual_afterUpdate(id);
-    foreach (field; changed) z8_field_reset(field);
-    return z8_optional_wrap(cast(long)cast(int)result);
+    if (resetChanged) foreach (field; changed) z8_field_reset(field);
+    return result;
+}
+private Z8Optional!long z8_query_update_id(Z8Object self, Z8Guid id) {
+    return z8_optional_wrap(cast(long)cast(int)z8_query_update_id_run(self, id, true));
 }
 private Z8Optional!long z8_query_destroy_id(Z8Object self, Z8Guid id) {
     auto writer = z8_query_writer(self);
@@ -268,6 +271,32 @@ private Z8ObjectArray!Z8Object z8_query_key_fields(Z8Object self) {
     auto key = z8_query_primary_key(self);
     if (key is null) throw new Exception("query has no primary key");
     return new Z8ObjectArray!Z8Object([key]);
+}
+private Z8Optional!long z8_query_update_where(Z8Object self, Z8SqlBool where) {
+    auto key = z8_nonnull(z8_query_primary_key(self));
+    z8_query_read_request(self, z8_query_key_fields(self), null, where, Z8Optional!long.init, Z8Optional!long.init);
+    int result;
+    while (z8_optional_require(z8_query_next(self))) {
+        auto id = z8_primary_cast!Z8Guid(z8_field_primary(key));
+        result += cast(int)z8_query_update_id_run(self, id, false);
+    }
+    z8_query_close(self);
+    foreach (field; z8_query_declared_fields(self, true))
+        if (z8_field_is_changed(field)) z8_field_reset(field);
+    return z8_optional_wrap(cast(long)result);
+}
+private Z8Optional!long z8_query_destroy_where(Z8Object self, Z8SqlBool where) {
+    auto key = z8_nonnull(z8_query_primary_key(self));
+    Z8QueryReadRequest request;
+    request.fields = [key]; request.where = where; request.disableGrouping = true;
+    z8_query_open(self, request);
+    int result;
+    while (z8_optional_require(z8_query_next(self))) {
+        auto id = z8_primary_cast!Z8Guid(z8_field_primary(key));
+        result += cast(int)z8_optional_require(z8_query_destroy_id(self, id));
+    }
+    z8_query_close(self);
+    return z8_optional_wrap(cast(long)result);
 }
 private Z8Optional!bool z8_query_has_record_id(Z8Object self, Z8Guid id) {
     auto state = z8_query_state(self);
@@ -421,7 +450,9 @@ void z8_bind_builtin_query() {
     z8_native_bind(p ~ "m_create"w, &z8_query_create);
     z8_native_bind(p ~ "m_create"w, &z8_query_create_id);
     z8_native_bind(p ~ "m_update"w, &z8_query_update_id);
+    z8_native_bind(p ~ "m_update"w, &z8_query_update_where);
     z8_native_bind(p ~ "m_destroy"w, &z8_query_destroy_id);
+    z8_native_bind(p ~ "m_destroy"w, &z8_query_destroy_where);
     z8_native_bind(p ~ "m_close"w, &z8_query_close);
 }
 shared static this() { z8_bind_builtin_query(); }

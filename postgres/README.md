@@ -33,6 +33,7 @@ An empty field list selects the query's direct field controls, names, columns
 and extra fields; nested form controls are not yet supported.
 
 The executor currently rejects linked queries, `aggregateBy` links, geometry,
-and nontrivial HAVING without grouping. Filter-based writes, automatic table
-audit values and schema generation are not yet implemented. Z8 table and field
+and nontrivial HAVING without grouping. Filter-based updates and deletes select
+matching records and invoke the BL events for each record. Automatic table audit
+values and schema generation are not yet implemented. Z8 table and field
 privilege checks are not implemented by this executor; the host must enforce them.
