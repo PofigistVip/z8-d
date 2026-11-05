@@ -410,6 +410,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         System.out.println("RESULT:" + demo.cases.NumericConstants.z8_run().get());
         System.out.println("RESULT:" + demo.cases.ExceptionValues.z8_run().get());
         System.out.println("RESULT:" + demo.cases.EnumFields.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.ArrayMatrices.z8_run().get());
     }
 }''', encoding="utf-8")
         logging_cache = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "commons-logging" / "commons-logging"
@@ -645,6 +646,7 @@ void main() {
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4E756D65726963436F6E7374616E7473.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E457863657074696F6E56616C756573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E456E756D4669656C6473.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E41727261794D61747269636573.m_run()));
 }
 ''', encoding="utf-8")
         d_binary = temp / ("compare.exe" if os.name == "nt" else "compare")
@@ -656,10 +658,10 @@ void main() {
         d_file_attributes = [line for line in d_lines if line.startswith("FILEATTR:")]
         if original_file_attributes != d_file_attributes or len(d_file_attributes) != 1:
             raise SystemExit(f"File attribute differs: original={original_file_attributes!r}, D={d_file_attributes!r}")
-        if original_results[-49:-14] != ["221", "219", "217", "215", "211", "213", "209", "207", "203", "201", "197", "195", "193", "185", "187", "189", "181", "183", "179", "177", "171", "169", "167", "165", "163", "159", "155", "153", "151", "149", "167", "171", "251", "28", "241"]:
-            raise SystemExit(f"Language fixtures failed in original Z8: {original_results[-49:-14]}")
-        if original_results[-14:] != ["173", "179", "181", "191", "193", "197", "199", "211", "223", "227", "229", "233", "239", "223"]:
-            raise SystemExit(f"Basic types and enum fields failed in original Z8: {original_results[-14:]}")
+        if original_results[-50:-15] != ["221", "219", "217", "215", "211", "213", "209", "207", "203", "201", "197", "195", "193", "185", "187", "189", "181", "183", "179", "177", "171", "169", "167", "165", "163", "159", "155", "153", "151", "149", "167", "171", "251", "28", "241"]:
+            raise SystemExit(f"Language fixtures failed in original Z8: {original_results[-50:-15]}")
+        if original_results[-15:] != ["173", "179", "181", "191", "193", "197", "199", "211", "223", "227", "229", "233", "239", "223", "227"]:
+            raise SystemExit(f"Basic types and composite values failed in original Z8: {original_results[-15:]}")
         if original_results != d_results:
             raise SystemExit(f"Original Z8: {original_results!r}; z8-d: {d_results!r}")
         print(f"Matched {len(d_results)} program results against the original compiler and runtime (CLASS from current source)")

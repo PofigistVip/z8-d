@@ -13,7 +13,7 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, decimalType, boolType, stringType, guidType, binaryType, datespanType, dateType, geometryType, fileType, exceptionType, encodingType, primaryType, selfType, intArray, decimalArray, decimalMatrix, boolArray, stringArray, guidArray, binaryArray, datespanArray, dateArray, geometryArray, fileArray, exceptionArray, primaryArray, selfArray, stringMap, primaryStringMap, intStringMap, boolStringMap, decimalStringMap, guidStringMap, intIntMap, stringIntMap, primaryIntMap, boolIntMap, decimalIntMap, guidIntMap, stringGuidMap, primaryGuidMap, intGuidMap, boolGuidMap, decimalGuidMap, guidGuidMap, stringBoolMap, primaryBoolMap, intBoolMap, boolBoolMap, decimalBoolMap, guidBoolMap, stringDecimalMap, primaryDecimalMap, intDecimalMap, boolDecimalMap, decimalDecimalMap, guidDecimalMap, nullType, nullableString, enumType, enumArray, optionalInt, optionalBool, optionalDecimal }
+enum ValueType { voidType, intType, decimalType, boolType, stringType, guidType, binaryType, datespanType, dateType, geometryType, fileType, exceptionType, encodingType, primaryType, selfType, intArray, intMatrix, decimalArray, decimalMatrix, boolArray, boolMatrix, stringArray, stringMatrix, guidArray, binaryArray, datespanArray, dateArray, geometryArray, fileArray, exceptionArray, primaryArray, selfArray, stringMap, primaryStringMap, intStringMap, boolStringMap, decimalStringMap, guidStringMap, intIntMap, stringIntMap, primaryIntMap, boolIntMap, decimalIntMap, guidIntMap, stringGuidMap, primaryGuidMap, intGuidMap, boolGuidMap, decimalGuidMap, guidGuidMap, stringBoolMap, primaryBoolMap, intBoolMap, boolBoolMap, decimalBoolMap, guidBoolMap, stringDecimalMap, primaryDecimalMap, intDecimalMap, boolDecimalMap, decimalDecimalMap, guidDecimalMap, nullType, nullableString, enumType, enumArray, optionalInt, optionalBool, optionalDecimal }
 enum NullableStringMode { none, required, nullAsEmpty }
 enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, guidLiteral, binaryLiteral, datespanLiteral, dateLiteral, nullLiteral, arrayLiteral, mapEntry, variable, selfRef, superRef, containerRef, newSelf, field, call, memberCall, index, castExpr, instanceOf, unary, binary, conditional, elvis }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
@@ -213,9 +213,9 @@ struct SourceUnit { string name, path, source; }
 struct GeneratedModule { string moduleName, relativePath, sourceName, source; }
 
 package bool isArray(ValueType type) {
-    return [ValueType.intArray, ValueType.decimalArray, ValueType.decimalMatrix, ValueType.boolArray, ValueType.stringArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.primaryArray, ValueType.selfArray, ValueType.enumArray].canFind(type);
+    return [ValueType.intArray, ValueType.intMatrix, ValueType.decimalArray, ValueType.decimalMatrix, ValueType.boolArray, ValueType.boolMatrix, ValueType.stringArray, ValueType.stringMatrix, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.primaryArray, ValueType.selfArray, ValueType.enumArray].canFind(type);
 }
-package bool isReferenceArray(ValueType type) { return [ValueType.selfArray, ValueType.enumArray, ValueType.primaryArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.decimalMatrix].canFind(type); }
+package bool isReferenceArray(ValueType type) { return [ValueType.selfArray, ValueType.enumArray, ValueType.primaryArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.intMatrix, ValueType.decimalMatrix, ValueType.boolMatrix, ValueType.stringMatrix].canFind(type); }
 // Each supported map has a single description of its value and key types.
 // VariableType in the original compiler likewise stores the value type and keys.
 private struct MapDescriptor { ValueType type, value, key; }
@@ -343,10 +343,13 @@ package bool safeDecimalLiteral(string text) {
 package ValueType elementType(ValueType type) {
     switch (type) {
         case ValueType.intArray: return ValueType.intType;
+        case ValueType.intMatrix: return ValueType.intArray;
         case ValueType.decimalArray: return ValueType.decimalType;
         case ValueType.decimalMatrix: return ValueType.decimalArray;
         case ValueType.boolArray: return ValueType.boolType;
+        case ValueType.boolMatrix: return ValueType.boolArray;
         case ValueType.stringArray: return ValueType.stringType;
+        case ValueType.stringMatrix: return ValueType.stringArray;
         case ValueType.primaryArray: return ValueType.primaryType;
         case ValueType.guidArray: return ValueType.guidType;
         case ValueType.binaryArray: return ValueType.binaryType;

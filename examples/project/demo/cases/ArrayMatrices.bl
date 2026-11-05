@@ -1,0 +1,21 @@
+public class ArrayMatrices {
+    public static int run() {
+        int[][] numbers = {{1, 2}, {3}};
+        bool[][] flags = {{true}, {false}};
+        string[][] words = {{"one"}, {"two", "three"}};
+        if (numbers.size() != 2 || numbers[0][1] != 2) return 1;
+        if (!flags[0][0] || flags[1][0]) return 2;
+        if (words[1][1] != "three") return 3;
+        int[] row = numbers[0];
+        row.add(4);
+        if (numbers[0].size() != 3) return 4;
+        int total = 0;
+        for (int[] item : numbers) total += item.size();
+        if (total != 4) return 5;
+        int[][] empty;
+        if (empty.first() != null || empty.last() != null) return 6;
+        empty.add(row);
+        if (empty.first()[2] != 4 || empty[0].size() != 3) return 7;
+        return 227;
+    }
+}

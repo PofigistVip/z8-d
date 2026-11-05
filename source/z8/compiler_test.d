@@ -209,9 +209,14 @@ unittest {
         string[string] values = {("a", "b"), ("c", "d"),};
         primary[string] mixed = {("number", 42), ("text", "value")};
         decimal[][] matrix = {{1.0}, {2.0, 3.0}};
+        int[][] numbers = {{1}, {2, 3}};
+        bool[][] flags = {{true}, {false}};
+        string[][] words = {{"a"}, {"b"}};
         int[] ordinary = {(1 + 2), (3)};
     } }});
     rejects(q{class A { static void f() { int[] values = {(1, 2)}; } }});
+    rejects(q{class A { static void f() { int[][] values = {{1}, {false}}; } }});
+    rejects(q{class A { static void f() { int[][] values; bool[] row; values.add(row); } }});
     rejects(q{class A { static void f() { string[string] values = {"a"}; } }});
     rejects(q{class A { static void f() { string[string] values = {(null, "x")}; } }});
     rejects(q{class A { static void f() { primary[string] values = {("x", null)}; } }});
@@ -517,7 +522,7 @@ unittest {
     rejects("class A { static int f() { return {}; } }");
     rejects("class A { static void f() { int x = 1; x[0] = 2; } }");
     rejects("class A { static void f() { int[] x; bool y = x == x; } }");
-    rejects("class A { static void f() { int[][] x; } }");
+    rejects("class A { static void f() { int[][][] x; } }");
     rejects("class A { static void f() { int[] bad; string[] x = {\"ok\", bad}; } }");
     rejects("class A { static int[] f() { return {1, false}; } }");
     rejects("class A { static int f(int[] x) { return 1; } static int g() { return f({1}); } }");

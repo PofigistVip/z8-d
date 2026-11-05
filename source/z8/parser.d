@@ -105,12 +105,18 @@ class Parser {
             }
             expect("]");
             switch (result) {
-                case ValueType.intType: return ValueType.intArray;
+                case ValueType.intType:
+                    if (accept("[")) { expect("]"); return ValueType.intMatrix; }
+                    return ValueType.intArray;
                 case ValueType.decimalType:
                     if (accept("[")) { expect("]"); return ValueType.decimalMatrix; }
                     return ValueType.decimalArray;
-                case ValueType.boolType: return ValueType.boolArray;
-                case ValueType.stringType: return ValueType.stringArray;
+                case ValueType.boolType:
+                    if (accept("[")) { expect("]"); return ValueType.boolMatrix; }
+                    return ValueType.boolArray;
+                case ValueType.stringType:
+                    if (accept("[")) { expect("]"); return ValueType.stringMatrix; }
+                    return ValueType.stringArray;
                 case ValueType.primaryType: return ValueType.primaryArray;
                 case ValueType.guidType: return ValueType.guidArray;
                 case ValueType.binaryType: return ValueType.binaryArray;

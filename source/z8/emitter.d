@@ -57,10 +57,13 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.selfType: assert(objectClass !is null); return objectClass.emittedName;
         case ValueType.selfArray: assert(objectClass !is null); return "Z8Array!(" ~ objectClass.emittedName ~ ")";
         case ValueType.intArray: return "Z8Array!long";
+        case ValueType.intMatrix: return "Z8Array!(Z8Array!long)";
         case ValueType.decimalArray: return "Z8Array!Z8Decimal";
         case ValueType.decimalMatrix: return "Z8Array!(Z8Array!Z8Decimal)";
         case ValueType.boolArray: return "Z8Array!bool";
+        case ValueType.boolMatrix: return "Z8Array!(Z8Array!bool)";
         case ValueType.stringArray: return "Z8Array!wstring";
+        case ValueType.stringMatrix: return "Z8Array!(Z8Array!wstring)";
         case ValueType.primaryArray: return "Z8Array!Z8Primary";
         case ValueType.guidArray: return "Z8Array!Z8Guid";
         case ValueType.binaryArray: return "Z8Array!Z8Binary";
