@@ -36,8 +36,10 @@ public class Sales extends Table {
     [name "Blob"] public BinaryField blob;
     [name "When"] public DatetimeField instant;
     public string events = "";
+    public bool copying = false;
     virtual protected sql_bool scope() { return amount >= 0; }
-    virtual protected void onNew() { events += "N"; }
+    virtual protected void onNew() { events += "N"; if (copying) flag = false; }
+    virtual protected void onCopy(guid id) { events += "O"; }
     virtual protected void beforeCreate(guid id) { events += "C"; }
     virtual protected void afterCreate(guid id) { events += "A"; }
     virtual protected void beforeUpdate(guid id) { events += "U"; }
@@ -116,6 +118,9 @@ public class Probe {
         table.info = "Данные 😀"; table.blob = '1, 2, 255'; table.instant = 1234;
     }
     public static guid create(Sales table, guid id) { return table.create(id); }
+    public static guid copy(Sales table, guid id) { return table.copy(id); }
+    public static void prepareCopy(Sales table) { table.amount = 88; table.title.unique = true; table.copying = true; }
+    public static void finishCopy(Sales table) { table.copying = false; }
     public static void prepareUpdate(Sales table) {
         table.amount = 40; table.title = "Changed"; table.info = "Обновлено"; table.blob = '9, 8';
     }
@@ -136,6 +141,7 @@ import z8.runtime;
 import z8.database.postgres;
 import z8.database.query;
 import z8gen.p_Probe;
+import std.conv : to;
 void main(string[] args) {
     alias P = Z8p_50726F6265;
     auto db = new Z8PostgresConnection(args[1]);
@@ -206,6 +212,21 @@ void main(string[] args) {
     assert(z8_optional_require(P.m_hasGroup(table)));
     assert(db.execute(`SELECT count(*) FROM "Sales""Quote"`).rows[0][0].text == "2");
     db.execute("ROLLBACK"); P.m_clearGroup(table); P.m_clearEvents(table);
+    db.execute("BEGIN");
+    P.m_read(table); assert(z8_optional_require(P.m_next(table)) && z8_optional_require(P.m_amount(table)) == 20);
+    P.m_prepareCopy(table);
+    auto copied = P.m_copy(table, z8_guid_create(1));
+    assert(copied != z8_guid_create(1) && copied != z8_guid_zero() && P.m_events(table) == "NOCA"w);
+    auto copyRow = db.execute(`SELECT "Amount", "Title", "Flag", convert_from("Info",'UTF8') FROM "Sales""Quote" WHERE "RecordId"=$1::uuid`, [Z8PostgresParameter.value(z8_guid_to_string(copied).to!string)]);
+    assert(copyRow.rows.length == 1 && copyRow.rows[0][0].text == "88" && copyRow.rows[0][1].text == "");
+    assert(copyRow.rows[0][2].text == "1" && copyRow.rows[0][3].text == "Русский 😀");
+    assert(z8_optional_require(P.m_amount(table)) == 20 && z8_optional_require(P.m_next(table)));
+    P.m_close(table);
+    auto missingCopy = P.m_copy(table, z8_guid_create(999));
+    auto missingRow = db.execute(`SELECT "Amount", "Flag" FROM "Sales""Quote" WHERE "RecordId"=$1::uuid`, [Z8PostgresParameter.value(z8_guid_to_string(missingCopy).to!string)]);
+    assert(missingRow.rows.length == 1 && missingRow.rows[0][0].text == "0" && missingRow.rows[0][1].text == "0");
+    assert(P.m_events(table) == "NOCANOCA"w);
+    db.execute("ROLLBACK"); P.m_finishCopy(table); P.m_clearEvents(table);
     P.m_prepareCreate(table);
     assert(P.m_create(table, z8_guid_create(42)) == z8_guid_create(42) && P.m_events(table) == "NCA"w);
     auto inserted = db.execute(`SELECT "Amount", "Title", "Flag", convert_from("Info",'UTF8'), encode("Blob",'hex'), "When" FROM "Sales""Quote" WHERE "RecordId"='00000000-0000-0000-0000-00000000002a'`);

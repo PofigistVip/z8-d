@@ -34,6 +34,7 @@ and extra fields; nested form controls are not yet supported.
 
 The executor currently rejects linked queries, `aggregateBy` links, geometry,
 and nontrivial HAVING without grouping. Filter-based updates and deletes select
-matching records and invoke the BL events for each record. Automatic table audit
+matching records and invoke the BL events for each record. Record copying reads
+the source through the executor and preserves an active query cursor. Automatic table audit
 values and schema generation are not yet implemented. Z8 table and field
 privilege checks are not implemented by this executor; the host must enforce them.
