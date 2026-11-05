@@ -217,6 +217,38 @@ private Z8Optional!bool z8_query_read_record(Z8Object self, Z8Guid id, Z8ObjectA
     request.fields = z8_query_read_fields(fields); request.recordId = id; request.byRecordId = id !is null;
     z8_query_open(self, request, false); return z8_query_next(self);
 }
+private Z8ObjectArray!Z8Object z8_query_key_fields(Z8Object self) {
+    auto key = z8_query_primary_key(self);
+    if (key is null) throw new Exception("query has no primary key");
+    return new Z8ObjectArray!Z8Object([key]);
+}
+private Z8Optional!bool z8_query_has_record_id(Z8Object self, Z8Guid id) {
+    auto state = z8_query_state(self);
+    if (state.executor is null) throw new Exception("query executor is not configured");
+    Z8QueryReadRequest request;
+    request.fields = [z8_nonnull(z8_query_primary_key(self))];
+    request.recordId = id; request.byRecordId = id !is null; request.readLock = z8_query_read_lock(self);
+    if (!request.byRecordId) {
+        request.queryWhere = z8_query_where(self); request.queryHaving = z8_query_having(self);
+        request.queryScope = z8_query_scope(self);
+    }
+    auto cursor = state.executor.read(self, request);
+    if (cursor is null) throw new Exception("query executor returned a null cursor");
+    scope(exit) cursor.close();
+    return z8_optional_wrap(cursor.next());
+}
+private Z8Optional!bool z8_query_has_record_where(Z8Object self, Z8SqlBool where) {
+    z8_query_read_request(self, z8_query_key_fields(self), null, where, Z8Optional!long.init, z8_optional_wrap(1L));
+    return z8_query_next(self);
+}
+private Z8Array!Z8Guid z8_query_find_records(Z8Object self, Z8SqlBool where) {
+    auto key = z8_nonnull(z8_query_primary_key(self));
+    z8_query_read_request(self, z8_query_key_fields(self), null, where, Z8Optional!long.init, Z8Optional!long.init);
+    auto result = new Z8Array!Z8Guid();
+    while (z8_optional_require(z8_query_next(self))) result.z8_add(z8_primary_cast!Z8Guid(z8_field_primary(key)));
+    z8_query_close(self);
+    return result;
+}
 private void z8_query_group_request(Z8Object self, Z8ObjectArray!Z8Object groups, Z8ObjectArray!Z8Object fields,
                                     Z8ObjectArray!Z8Object sort, Z8SqlBool where, Z8SqlBool having,
                                     Z8Optional!long start, Z8Optional!long limit) {
@@ -321,6 +353,9 @@ void z8_bind_builtin_query() {
     z8_native_bind(p ~ "m_readFirst"w, &z8_query_first_sort);
     z8_native_bind(p ~ "m_readFirst"w, &z8_query_first_sort_where);
     z8_native_bind(p ~ "m_readRecord"w, &z8_query_read_record);
+    z8_native_bind(p ~ "m_hasRecord"w, &z8_query_has_record_id);
+    z8_native_bind(p ~ "m_hasRecord"w, &z8_query_has_record_where);
+    z8_native_bind(p ~ "m_findRecords"w, &z8_query_find_records);
     z8_native_bind(p ~ "m_group"w, &z8_query_group_1);
     z8_native_bind(p ~ "m_group"w, &z8_query_group_where);
     z8_native_bind(p ~ "m_group"w, &z8_query_group_fields);

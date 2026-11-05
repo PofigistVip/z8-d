@@ -22,7 +22,7 @@ the generated query with `z8_query_set_executor`. It supports explicit selected
 fields, SQL filters and scope, sort direction, pagination, read locks and GUID
 record lookup. Single-table `GROUP BY`, `HAVING` and array aggregations are
 supported. `Query.count()` preserves an active cursor and counts groups when
-the query is grouped. It reads integer, boolean, decimal, string, text, file, binary, GUID
+the query is grouped; `hasRecord` and `findRecords` are also available. It reads integer, boolean, decimal, string, text, file, binary, GUID
 and date/duration fields. Ungrouped reads also select the table's primary key.
 
 An empty field list selects the query's direct field controls, names, columns
