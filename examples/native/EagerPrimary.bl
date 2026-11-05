@@ -1,0 +1,10 @@
+public class EagerPrimary extends primary {
+    public static int made;
+    public static int invoked;
+    public int id = next();
+
+    private static int next() { made += 1; return made; }
+    public void constructor() { invoked += 1; }
+    public void operator = (EagerPrimary value) {}
+    public void operator = (int value) { id = value; }
+}

@@ -15,6 +15,8 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
 import z8gen.p_NativeMath;
 import z8gen.p_NativeNumber;
 import z8gen.p_NativeConsumer;
+import z8gen.p_EagerUser;
+import z8gen.p_EagerHolder;
 alias Math = Z8p_4E61746976654D617468;
 alias Number = Z8p_4E61746976654E756D626572;
 alias Consumer = Z8p_4E6174697665436F6E73756D6572;
@@ -28,6 +30,9 @@ Z8Optional!long numberHash(Number self) { return z8_optional_wrap(37L); }
 bool numberEquals(Number self, Z8Object other) { return cast(Number)other !is null; }
 Z8Optional!long ignored(Math self) { return z8_optional_wrap(10L); }
 __gshared Z8Optional!long nativeFactor, nativeTotal;
+__gshared int numberConstructs, mathConstructs;
+void constructNumber(Number self) { assert(self !is null); ++numberConstructs; }
+void constructMath(Math self) { assert(self !is null); ++mathConstructs; }
 Z8Optional!long* factor(Math self) { assert(self !is null); return &nativeFactor; }
 Z8Optional!long* total() { return &nativeTotal; }
 Z8Optional!long* badField() { return null; }
@@ -52,6 +57,8 @@ void main() {
     z8_native_bind("example.NativeNumber.m_toString"w, &numberText);
     z8_native_bind("example.NativeNumber.m_hashCode"w, &numberHash);
     z8_native_bind("example.NativeNumber.m_equals"w, &numberEquals);
+    z8_native_bind("example.NativeNumber.m_new"w, &constructNumber);
+    z8_native_bind("example.NativeMath.m_new"w, &constructMath);
     z8_native_bind("example.NativeMath.m_ignored"w, &ignored);
     bool missingField;
     try { Consumer.m_run(); } catch (Exception e) { missingField = e.msg.indexOf("example.NativeMath.f_factor") >= 0; }
@@ -61,8 +68,20 @@ void main() {
     try { Consumer.m_run(); } catch (Exception e) { missingStaticField = e.msg.indexOf("example.NativeMath.f_total") >= 0; }
     assert(missingStaticField);
     z8_native_bind_field("example.NativeMath.f_total"w, &total);
+    numberConstructs = mathConstructs = 0;
     assert(z8_optional_require(Consumer.m_run()) == 54);
     assert(z8_optional_require(nativeFactor) == 4 && z8_optional_require(nativeTotal) == 12);
+    assert(numberConstructs == 3 && mathConstructs == 1);
+    assert(z8_optional_require(Z8p_456167657255736572.m_run()) == 43);
+    alias Holder = Z8p_4561676572486F6C646572;
+    auto holder = z8_new!Holder();
+    auto fieldPrimary = z8_nonnull(holder).f_first;
+    auto constructedPrimary = z8_nonnull(holder).m_create();
+    foreach (value; [fieldPrimary, constructedPrimary]) {
+        bool hasNoContainer;
+        try { z8_get_container!Holder(value); } catch (Exception) { hasNoContainer = true; }
+        assert(hasNoContainer);
+    }
     z8_native_clear_bindings();
 }
 '''.replace('import z8.runtime;', 'import z8.runtime;\nimport std.string : indexOf;'), encoding="utf-8")

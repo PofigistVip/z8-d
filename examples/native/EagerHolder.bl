@@ -1,0 +1,9 @@
+public class EagerHolder {
+    public EagerPrimary first;
+    public EagerPrimary second;
+    public EagerPrimary third = 10;
+    public EagerPrimary fourth;
+    fourth = 12;
+    public int after = EagerPrimary.made;
+    public EagerPrimary create() { return new EagerPrimary; }
+}

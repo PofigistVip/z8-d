@@ -254,6 +254,13 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     native_result = subprocess.run(operator_command, cwd=temp, capture_output=True, text=True, encoding="utf-8")
     if native_result.returncode:
         raise SystemExit("Original Z8 rejected native declarations:\n" + native_result.stdout + native_result.stderr)
+    eager_java = (operator_project / "out" / "EagerPrimary.java").read_text(encoding="utf-8")
+    eager_constructor = eager_java.split("public EagerPrimary() {", 1)[1].split("}", 1)[0]
+    if "id = z8_next();" not in eager_constructor or "z8_constructor(" in eager_constructor:
+        raise SystemExit("Original primary constructor lifecycle changed:\n" + eager_constructor)
+    eager_holder_java = (operator_project / "out" / "EagerHolder.java").read_text(encoding="utf-8")
+    if "third = new EagerPrimary();" not in eager_holder_java or "third.operatorAssign(" not in eager_holder_java:
+        raise SystemExit("Original primary field initialization changed")
     bad_native_static = operator_source / "BadNativeStatic.bl"
     for declaration in ("NativeNumber[NativeMath] value;", "int[NativeNumber][NativeMath] value;", "NativeMath[NativeNumber] value;"):
         bad_native_static.write_text("public class BadNativeStatic { public static " + declaration + " }", encoding="utf-8")

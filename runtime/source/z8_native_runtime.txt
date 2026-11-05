@@ -36,6 +36,17 @@ bool z8_native_try_call(R, Args...)(wstring name, out R result, Args args) if (!
     result = binding.callback(args);
     return true;
 }
+bool z8_native_try_call_void(Args...)(wstring name, Args args) {
+    auto key = z8_native_binding_key!(void, Args)(name);
+    Z8NativeBinding!(void, Args) binding;
+    synchronized (z8_native_monitor) {
+        auto found = key in z8_native_bindings;
+        if (found !is null) binding = cast(Z8NativeBinding!(void, Args))*found;
+    }
+    if (binding is null) return false;
+    binding.callback(args);
+    return true;
+}
 void z8_native_clear_bindings() { synchronized (z8_native_monitor) z8_native_bindings.clear(); }
 R z8_native_call(R, Args...)(wstring name, Args args) {
     auto key = z8_native_binding_key!(R, Args)(name);

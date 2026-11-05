@@ -154,6 +154,12 @@ T z8_new(T)(Z8Object container = null) {
     value.z8_init_type_attributes();
     return value;
 }
+// Primary values are constructed eagerly and do not have a CLASS container.
+T z8_new_primary(T)() if (is(T : Z8Object)) {
+    auto value = z8_new!T();
+    value.z8_ensure();
+    return value;
+}
 T z8_nonnull(T)(T value, int requested = 1) {
     if (value is null) throw new Exception("null reference");
     static if (is(T : Z8Object)) value.z8_ensure(requested);

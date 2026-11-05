@@ -920,7 +920,7 @@ class Checker {
                 if (e.token.text == "sql_geometry") { e.inferredType = ValueType.sqlGeometryType; return ValueType.sqlGeometryType; }
                 if (e.token.text == "sql_primary") { e.inferredType = ValueType.sqlPrimaryType; return ValueType.sqlPrimaryType; }
                 e.objectClass = resolveClass(currentProgram, e.token.text, e.token);
-                e.newHasContainer = !staticContext && !extendsBuiltinPrimary(e.objectClass);
+                e.newHasContainer = !staticContext && !isPrimaryClass(e.objectClass);
                 if (e.objectClass.isEnum) fail("cannot instantiate an enum", e.token);
                 return ValueType.selfType;
             case ExprKind.field:
@@ -2277,7 +2277,7 @@ class Checker {
                 if (s.type == ValueType.primaryType && s.expression is null && !allowUninitializedEnum) fail("primary variables require an initializer", s.token);
                 if (s.type == ValueType.voidType) fail("variable cannot be void", s.token);
                 if (hasObjectClass(s.type)) s.objectClass = resolveClass(currentProgram, s.objectName, s.token);
-                if (s.type == ValueType.selfType && extendsBuiltinPrimary(s.objectClass)) s.hasContainer = false;
+                if (s.type == ValueType.selfType && isPrimaryClass(s.objectClass)) s.hasContainer = false;
                 if (hasMapKeyClass(s.type)) s.keyObjectClasses = resolveKeyClasses(currentProgram, s.keyObjectNames, s.token);
                 if (s.nestedClass !is null) {
                     s.nestedClass.enclosingStatic = staticContext;

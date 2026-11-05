@@ -426,7 +426,7 @@ private string emitExprRaw(Expression e) {
             if (e.inferredType == ValueType.sqlBinaryType) return "new Z8SqlBinary()";
             if (e.inferredType == ValueType.sqlGeometryType) return "z8_sql_geometry_const(new Z8Geometry())";
             if (e.inferredType == ValueType.sqlPrimaryType) return "new Z8SqlPrimary()";
-            return "z8_new!(" ~ e.objectClass.emittedName ~ ")(" ~ (e.newHasContainer ? "this" : "") ~ ")";
+            return (isPrimaryClass(e.objectClass) ? "z8_new_primary!(" : "z8_new!(") ~ e.objectClass.emittedName ~ ")(" ~ (e.newHasContainer ? "this" : "") ~ ")";
         case ExprKind.field:
             if (e.nativeField.length) return "z8_nonnull(" ~ emitExpr(e.left) ~ ")." ~ e.nativeField;
             if (e.binaryNameField) return "z8_nonnull(" ~ emitExpr(e.left) ~ ").name";
@@ -771,7 +771,7 @@ private string defaultValue(ValueType type, Program objectClass = null, bool has
     if (type == ValueType.geometryType) return "new Z8Geometry()";
     if (type == ValueType.fileType) return "new Z8File()";
     if (type == ValueType.decimalType) return "z8_decimal_from_int(0)";
-    if (type == ValueType.selfType) return "z8_new!(" ~ dType(type, objectClass) ~ ")(" ~ (hasContainer && !extendsBuiltinPrimary(objectClass) ? "this" : "") ~ ")";
+    if (type == ValueType.selfType) return (isPrimaryClass(objectClass) ? "z8_new_primary!(" : "z8_new!(") ~ dType(type, objectClass) ~ ")(" ~ (hasContainer && !isPrimaryClass(objectClass) ? "this" : "") ~ ")";
     if (isMap(type)) return "new " ~ dType(type, objectClass, keyObjectClasses) ~ "()";
     if (isArray(type)) return "new " ~ dType(type, objectClass, keyObjectClasses) ~ "()";
     if (type == ValueType.intType) return "0";
@@ -806,10 +806,10 @@ private ReferenceInitialization[] orderedReferences(Program program) {
         if (current.isNative) return;
         ReferenceInitialization[] own;
         foreach (field; current.fields)
-            if (!field.isStatic && field.type == ValueType.selfType && field.initializer !is null)
+            if (!field.isStatic && field.type == ValueType.selfType && !isPrimaryClass(field.objectClass) && field.initializer !is null)
                 own ~= ReferenceInitialization(field.name.text, field.initializer, field, null);
         foreach (init; current.memberInitializers)
-            if (init.expression !is null && init.type == ValueType.selfType)
+            if (init.expression !is null && init.type == ValueType.selfType && !isPrimaryClass(init.target.objectClass))
                 own ~= ReferenceInitialization(qualifiedFieldName(init.target), init.expression, null, init);
         foreach (initializer; own) {
             auto value = initializer.value;
@@ -898,6 +898,10 @@ package string emitPrograms(Program[] programs) {
             } else result ~= storageType ~ " f_" ~ field.name.text ~ ";\n";
         }
         result ~= "override void z8_allocate_fields() {\nsuper.z8_allocate_fields();\n";
+        if (program.isNative) {
+            auto binding = emitRawWStringLiteral(program.nativeName ~ ".m_new"w);
+            result ~= "z8_native_try_call_void(" ~ binding ~ ", this);\n";
+        }
         foreach (field; program.fields) if (!program.isNative && !field.isStatic && (field.initializer is null || field.userOperatorAssignment)) {
             auto initial = field.nestedClass !is null ? "z8_new!(" ~ field.nestedClass.emittedName ~ ")(this)" :
                 field.type == ValueType.intType ? "z8_optional_wrap(0L)" :
@@ -916,7 +920,7 @@ package string emitPrograms(Program[] programs) {
         }
         result ~= "}\n";
         string autoInitializers;
-        foreach (field; program.fields) if (!program.isNative && !field.isStatic && field.type == ValueType.selfType) {
+        foreach (field; program.fields) if (!program.isNative && !isPrimaryClass(program) && !field.isStatic && field.type == ValueType.selfType) {
             for (auto owner = program; owner !is null; owner = owner.baseClass) {
                 foreach (array; owner.fields) if (array.isAuto) {
                     for (auto fieldClass = field.objectClass; fieldClass !is null; fieldClass = fieldClass.baseClass) {
@@ -934,8 +938,10 @@ package string emitPrograms(Program[] programs) {
         // TypeBody.rearrangeMembers puts declarations before standalone member initializers.
         foreach (field; program.fields) {
             if (field.isStatic || program.isNative) continue;
-            if (field.type == ValueType.selfType)
+            if (field.type == ValueType.selfType && !isPrimaryClass(field.objectClass))
                 result ~= "if (this.f_" ~ field.name.text ~ " is null) throw new Exception(\"null object field initializer\");\n";
+            else if (field.userOperatorAssignment)
+                result ~= "z8_nonnull(this.f_" ~ field.name.text ~ ").z8op_assign(" ~ emitExpr(field.initializer) ~ ");\n";
             else if (field.initializer !is null)
                 result ~= "this.f_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
             foreach (attribute; field.attributes)
@@ -943,13 +949,13 @@ package string emitPrograms(Program[] programs) {
                     emitAttributeValue(attribute) ~ ");\n";
         }
         foreach (init; program.memberInitializers) if (!program.isNative) {
-            if (init.expression !is null && init.type != ValueType.selfType) result ~= emitSimple(init) ~ ";\n";
+            if (init.expression !is null && (init.type != ValueType.selfType || isPrimaryClass(init.target.objectClass))) result ~= emitSimple(init) ~ ";\n";
             foreach (attribute; init.attributes)
                 result ~= emitExpr(init.attributeTarget) ~ ".z8_set_attribute(" ~ emitWStringLiteral(attribute.name.text.to!wstring) ~ ", " ~
                     emitAttributeValue(attribute) ~ ");\n";
         }
         result ~= "}\n";
-        foreach (method; program.methods) if (method.name.text == "constructor") {
+        foreach (method; program.methods) if (!isPrimaryClass(program) && method.name.text == "constructor") {
             result ~= "override void z8_call_constructor() { this.m_constructor(); }\n";
             break;
         }

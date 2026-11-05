@@ -1,0 +1,16 @@
+public class EagerUser {
+    private static void touch(EagerPrimary value) {}
+    public static int run() {
+        EagerPrimary.made = 0;
+        EagerPrimary.invoked = 0;
+        EagerPrimary first;
+        if (EagerPrimary.made != 1 || first.id != 1) return 1;
+        touch(new EagerPrimary);
+        if (EagerPrimary.made != 2 || EagerPrimary.invoked != 0) return 2;
+        EagerHolder holder;
+        if (holder.after != 6) return 3;
+        if (holder.first.id != 3 || holder.second.id != 4 || holder.third.id != 10 || holder.fourth.id != 12) return 4;
+        if (EagerPrimary.made != 6 || EagerPrimary.invoked != 0) return 5;
+        return 43;
+    }
+}
