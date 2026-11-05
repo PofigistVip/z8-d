@@ -1,0 +1,11 @@
+// Native org.zenframework.z8.server.db.sql.functions.Sql overloads.
+void z8_bind_builtin_sql_functions() {
+    enum name = "org.zenframework.z8.server.db.sql.functions.Sql.m_IIF"w;
+    z8_native_bind(name, &z8_sql_datespan_iif);
+    z8_native_bind(name, &z8_sql_date_iif);
+    z8_native_bind(name, &z8_sql_decimal_iif);
+    z8_native_bind(name, &z8_sql_guid_iif);
+    z8_native_bind(name, &z8_sql_int_iif);
+    z8_native_bind(name, &z8_sql_string_iif);
+}
+shared static this() { z8_bind_builtin_sql_functions(); }
