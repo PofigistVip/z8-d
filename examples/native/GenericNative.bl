@@ -1,5 +1,7 @@
 [native "example.GenericNative"]
 public class GenericNative {
+    public GenericNative partner;
+    public static NativeNumber current;
     public int get();
     public GenericNative echo(GenericNative value);
     public GenericNative invalid();

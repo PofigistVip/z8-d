@@ -15,6 +15,9 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     adapter.write_text('''module adapter;
 import z8.runtime;
 __gshared int constructed, cleared;
+__gshared Z8Object partnerValue, currentValue;
+Z8Object* partner(Z8Object self) { assert(self !is null); return &partnerValue; }
+Z8Object* current() { return &currentValue; }
 void onNew(Z8Object self) { assert(self !is null); ++constructed; }
 Z8Optional!long get(Z8Object self) { return z8_optional_wrap(21L); }
 Z8Object echo(Z8Object self, Z8Object value) { return value; }
@@ -25,6 +28,8 @@ Z8Object makeInvalid() { return new Z8Object(); }
 void clear(Z8Object self) { ++cleared; }
 bool valueEquals(Z8Object self, Z8Object other) { return other !is null && self.classinfo is other.classinfo; }
 void bindGeneric() {
+    z8_native_bind_field("example.GenericNative.f_partner"w, &partner);
+    z8_native_bind_field("example.GenericNative.f_current"w, &current);
     z8_native_bind("example.GenericNative.m_new"w, &onNew);
     z8_native_bind("example.GenericNative.m_get"w, &get);
     z8_native_bind("example.GenericNative.m_echo"w, &echo);
@@ -68,6 +73,8 @@ Z8Optional!long* total() { return &nativeTotal; }
 Z8Optional!long* badField() { return null; }
 void reset() {}
 Z8Optional!long exactGet(Generic self) { return z8_optional_wrap(22L); }
+__gshared Generic exactPartnerValue;
+Generic* exactPartner(Generic self) { return &exactPartnerValue; }
 Z8Object anyFactory() { return new Z8Object(); }
 void main() {
     bool missing;
@@ -134,6 +141,21 @@ void main() {
     }
     auto generic = z8_new!Generic();
     assert(z8_optional_require(z8_nonnull(generic).m_get()) == 21 && constructed == 1);
+    assert(z8_optional_require(Consumer.m_fieldRoundTrip(generic)));
+    assert(partnerValue is generic && z8_nonnull(generic).f_partner is generic);
+    Generic.f_current = nativeNumber;
+    assert(currentValue is nativeNumber && Generic.f_current is nativeNumber);
+    partnerValue = new Z8Object();
+    bool invalidField;
+    try { auto value = z8_nonnull(generic).f_partner; } catch (Exception e) { invalidField = e.msg.indexOf("invalid native return type") >= 0; }
+    assert(invalidField);
+    partnerValue = null;
+    z8_nonnull(generic).f_partner = null;
+    Generic.f_current = null;
+    assert(partnerValue is null && currentValue is null);
+    z8_native_bind_field("example.GenericNative.f_partner"w, &exactPartner);
+    z8_nonnull(generic).f_partner = generic;
+    assert(exactPartnerValue is generic && partnerValue is null);
     assert(z8_nonnull(generic).m_echo(generic) is generic);
     assert(z8_nonnull(generic).m_echo(null) is null);
     assert(z8_optional_require(Generic.m_inspect(generic)) == 7);

@@ -1,4 +1,8 @@
 public class NativeConsumer {
+    public static bool fieldRoundTrip(GenericNative value) {
+        value.partner = value;
+        return value.partner.get() == 21;
+    }
     private static int acceptsPrimary(primary value) { return (value instanceof NativeNumber) ? 1 : 0; }
     public static int run() {
         NativeChild child = new NativeChild;

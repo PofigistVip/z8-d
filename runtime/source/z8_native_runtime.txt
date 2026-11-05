@@ -4,6 +4,10 @@ private template Z8NativeErased(T) {
     static if (is(T : Z8Object)) alias Z8NativeErased = Z8Object;
     else alias Z8NativeErased = T;
 }
+private template Z8NativeErasedReturn(T) {
+    static if (is(T == U*, U) && is(U : Z8Object)) alias Z8NativeErasedReturn = Z8Object*;
+    else alias Z8NativeErasedReturn = Z8NativeErased!T;
+}
 private class Z8NativeBinding(R, Args...) {
     alias Callback = R function(Args);
     Callback callback;
@@ -78,7 +82,7 @@ bool z8_native_try_call(R, Args...)(wstring name, out R result, Args args) if (!
         result = binding.callback(args);
         return true;
     }
-    alias ErasedR = Z8NativeErased!R;
+    alias ErasedR = Z8NativeErasedReturn!R;
     alias ErasedArgs = staticMap!(Z8NativeErased, Args);
     auto erased = z8_native_find!(ErasedR, ErasedArgs)(name);
     if (erased is null) return false;
@@ -86,6 +90,11 @@ bool z8_native_try_call(R, Args...)(wstring name, out R result, Args args) if (!
         auto value = erased.callback(args);
         result = cast(R)value;
         if (value !is null && result is null) throw new Exception("invalid native return type: " ~ name.to!string);
+    } else static if (is(R == U*, U) && is(U : Z8Object)) {
+        auto address = erased.callback(args);
+        if (address !is null && *address !is null && cast(U)*address is null)
+            throw new Exception("invalid native return type: " ~ name.to!string);
+        result = cast(R)address;
     } else result = erased.callback(args);
     return true;
 }
