@@ -1,10 +1,12 @@
-enum Z8SqlDecimalKind { constant, group, fromInt, fromString, negate, add, subtract, multiply, divide, modulo, choose, abs, exp, ln, power, round, truncate, geometryFunction }
+enum Z8SqlDecimalKind { constant, group, fromInt, fromString, negate, add, subtract, multiply, divide, modulo, choose, abs, exp, ln, power, round, truncate, geometryFunction, textFtsRank }
 class Z8SqlDecimal : Z8SqlNumeric {
     Z8SqlDecimalKind kind;
     Z8Decimal constant;
     Z8SqlNumeric left, right;
     Z8SqlBool condition;
     Z8SqlString textOperand;
+    Z8SqlString textQuery;
+    wstring ftsConfiguration;
     Z8SqlGeometry geometryLeft, geometryRight;
     wstring geometryFunction;
     this(Z8SqlDecimalKind kind, Z8Decimal constant = Z8Decimal.init,
@@ -123,6 +125,10 @@ wstring z8_sql_decimal_format(Z8SqlDecimal value, Z8SqlVendor vendor = Z8SqlVend
             return z8_sql_bool_case(z8_sql_bool_format(value.condition, true, vendor), z8_nonnull(value.left).z8_format(vendor), z8_nonnull(value.right).z8_format(vendor));
         case Z8SqlDecimalKind.geometryFunction:
             return z8_sql_geometry_function(value.geometryFunction, value.geometryLeft, vendor, value.geometryRight, value.geometryFunction == "ST_Distance"w);
+        case Z8SqlDecimalKind.textFtsRank:
+            if (vendor != Z8SqlVendor.Postgres) throw new Exception("unsupported SQL database vendor");
+            return "ts_rank("w ~ z8_sql_fts_vector(value.textOperand, value.ftsConfiguration, vendor) ~ ", "w ~
+                z8_sql_fts_query(value.textQuery, value.ftsConfiguration, vendor) ~ ", 0)"w;
         case Z8SqlDecimalKind.abs: return "ABS("w ~ z8_nonnull(value.left).z8_format(vendor) ~ ")"w;
         case Z8SqlDecimalKind.exp: return "EXP("w ~ z8_nonnull(value.left).z8_format(vendor) ~ ")"w;
         case Z8SqlDecimalKind.ln:

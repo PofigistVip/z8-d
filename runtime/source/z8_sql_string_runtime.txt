@@ -104,6 +104,23 @@ Z8SqlBool z8_sql_string_regLike(Z8SqlString value, Z8SqlString pattern) {
     auto result = new Z8SqlBool(Z8SqlBoolKind.textRegLike);
     result.textLeft = z8_nonnull(value); result.textRight = pattern; return result;
 }
+// Matches the default Fts configuration; the host can set the server option
+// before constructing expressions, just as Z8 does at Fts initialization.
+__gshared wstring z8_sql_fts_configuration;
+Z8SqlBool z8_sql_string_ftsLike(Z8SqlString value, Z8SqlString query) {
+    auto result = new Z8SqlBool(Z8SqlBoolKind.textFtsLike);
+    result.textLeft = z8_nonnull(value); result.textRight = query; result.ftsConfiguration = z8_sql_fts_configuration; return result;
+}
+Z8SqlDecimal z8_sql_string_ftsRank(Z8SqlString value, Z8SqlString query) {
+    auto result = new Z8SqlDecimal(Z8SqlDecimalKind.textFtsRank);
+    result.textOperand = z8_nonnull(value); result.textQuery = query; result.ftsConfiguration = z8_sql_fts_configuration; return result;
+}
+private wstring z8_sql_fts_vector(Z8SqlString value, wstring configuration, Z8SqlVendor vendor) {
+    return "to_tsvector("w ~ (configuration is null ? ""w : "'"w ~ configuration ~ "', "w) ~ z8_sql_string_as_text(value, vendor) ~ ")"w;
+}
+private wstring z8_sql_fts_query(Z8SqlString value, wstring configuration, Z8SqlVendor vendor) {
+    return "plainto_tsquery("w ~ (configuration is null ? ""w : "'"w ~ configuration ~ "', "w) ~ z8_sql_string_as_text(value, vendor) ~ ")"w;
+}
 Z8SqlInt z8_sql_string_length(Z8SqlString value) {
     auto result = new Z8SqlInt(Z8SqlIntKind.textLength);
     result.textOperand = z8_nonnull(value);

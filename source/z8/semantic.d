@@ -1189,6 +1189,10 @@ class Checker {
                         checkArguments(e, [ValueType.sqlStringType]);
                         e.builtinCall = "z8_sql_string_patIndexOf"; return ValueType.sqlIntType;
                     }
+                    if (["ftsLike", "ftsRank"].canFind(e.token.text)) {
+                        checkArguments(e, [ValueType.sqlStringType]); e.builtinCall = "z8_sql_string_" ~ e.token.text;
+                        return e.token.text == "ftsLike" ? ValueType.sqlBoolType : ValueType.sqlDecimalType;
+                    }
                     fail("unsupported SQL string method", e.token);
                 }
                 if (receiver == ValueType.optionalInt) {

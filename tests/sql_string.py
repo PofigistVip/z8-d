@@ -45,6 +45,12 @@ void main() {
     assert(z8_sql_primary_toString(primary) is cast(Z8SqlString)primary);
     primary = z8_sql_decimal_const(z8_decimal_parse("1.5"w));
     assert(z8_sql_string_format(z8_sql_primary_toString(primary), Z8SqlVendor.Postgres) == "(1.5)::text"w);
+    z8_sql_fts_configuration = "russian"w;
+    auto match = z8_sql_string_ftsLike(z8_sql_string_const("текст"w), z8_sql_string_const("слово"w));
+    auto rank = z8_sql_string_ftsRank(z8_sql_string_const("текст"w), z8_sql_string_const("слово"w));
+    z8_sql_fts_configuration = null;
+    assert(z8_sql_bool_format(match) == "plainto_tsquery('russian', 'слово') @@ to_tsvector('russian', 'текст')"w);
+    assert(z8_sql_decimal_format(rank) == "ts_rank(to_tsvector('russian', 'текст'), plainto_tsquery('russian', 'слово'), 0)"w);
 }
 ''', encoding="utf-8")
     executable = temp / ("sql-string.exe" if os.name == "nt" else "sql-string")
