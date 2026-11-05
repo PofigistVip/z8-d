@@ -1,3 +1,5 @@
+[baseTag "base"]
+[sharedTag "old"]
 public class StaticOverloadBase {
     public static int shared;
     public static int select(int value) { return value + 10; }

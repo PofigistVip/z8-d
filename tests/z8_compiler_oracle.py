@@ -217,6 +217,11 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         runner.write_text('''public class ProjectRunner {
     public static void main(String[] args) throws Exception {
         org.zenframework.z8.server.config.ServerConfig.load(args[0]);
+        demo.cases.StaticOverloadChild.CLASS<?> metadata = new demo.cases.StaticOverloadChild.CLASS<>(null);
+        if (!"base".equals(metadata.getAttribute("baseTag")) ||
+            !"новое 😀".equals(metadata.getAttribute("sharedTag")) ||
+            !"".equals(metadata.getAttribute("flag")) || metadata.getAttribute("absent") != null)
+            throw new AssertionError("type attribute metadata differs");
         System.out.println("RESULT:" + demo.Main.z8_run().get());
         System.out.println("RESULT:" + demo.cases.Arithmetic.z8_run().get());
         System.out.println("RESULT:" + demo.cases.Text.z8_run().get());
@@ -380,6 +385,11 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         d_runner.write_text("module compare;\nimport z8.runtime;\n" + "".join(imports) + '''
 import std.stdio : writeln;
 void main() {
+    auto metadata = z8_new!Z8p_64656D6F2E63617365732E5374617469634F7665726C6F61644368696C64();
+    assert(metadata.z8_get_type_attribute("baseTag"w) == "base"w);
+    assert(metadata.z8_get_type_attribute("sharedTag"w) == "новое 😀"w);
+    assert(metadata.z8_get_type_attribute("flag"w) == ""w);
+    assert(metadata.z8_get_type_attribute("absent"w) is null);
     writeln(z8_optional_require(Z8p_64656D6F2E4D61696E.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E41726974686D65746963.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E54657874.m_run()));

@@ -611,6 +611,13 @@ package string emitPrograms(Program[] programs) {
         }
         result ~= "class " ~ program.emittedName ~ " : " ~ (program.baseClass is null ? "Z8Object" : program.baseClass.emittedName) ~ " {\n";
         result ~= "alias Z8Self = " ~ program.emittedName ~ ";\n";
+        if (program.attributes.length) {
+            result ~= "override void z8_init_type_attributes() {\nsuper.z8_init_type_attributes();\n";
+            foreach (attribute; program.attributes)
+                result ~= "this.z8_set_type_attribute(" ~ emitWStringLiteral(attribute.name.text.to!wstring) ~ ", " ~
+                    (attribute.hasValue ? emitStringLiteral(attribute.value.text) : `z8_string_new(""w)`) ~ ");\n";
+            result ~= "}\n";
+        }
         foreach (capture; program.captures)
             result ~= dStorageType(capture.type, capture.objectClass) ~ " z8_capture_" ~ capture.name ~ ";\n";
         bool hasStaticFields;

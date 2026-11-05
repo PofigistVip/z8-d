@@ -153,17 +153,32 @@ class Parser {
             while (accept(".")) name ~= "." ~ identifier().text;
             expect(";"); result.imports ~= Import(name, start);
         }
-        bool nativeAttribute;
-        if (accept("[")) {
-            if (current.text != "native") error("only native enum attributes are supported");
-            take();
-            if (current.kind != TokenKind.stringLiteral) error("native attribute requires a string");
-            take(); expect("]"); nativeAttribute = true;
+        bool nativeAttribute, isPublic;
+        while (current.text == "[" || current.text == "public") {
+            if (accept("public")) { if (isPublic) error("duplicate public modifier"); isPublic = true; continue; }
+            expect("[");
+            TypeAttribute attribute;
+            attribute.name = identifier();
+            foreach (previous; result.attributes)
+                if (previous.name.text == attribute.name.text) throw new CompileException("duplicate attribute", attribute.name.position);
+            if (current.text != "]") {
+                if (current.kind != TokenKind.stringLiteral) error("only string literal type attributes are supported");
+                attribute.hasValue = true; attribute.value = take();
+            }
+            expect("]");
+            if (attribute.name.text == "native") {
+                if (!attribute.hasValue) error("native attribute requires a string");
+                nativeAttribute = true;
+            } else if (["name", "primary", "request", "job"].canFind(attribute.name.text))
+                error("this type attribute is not supported yet");
+            result.attributes ~= attribute;
         }
-        accept("public"); result.isFinal = accept("final");
-        result.isEnum = accept("enum");
+        result.isFinal = accept("final");
+        result.isEnum = !result.isFinal && accept("enum");
         if (!result.isEnum) expect("class");
         if (nativeAttribute && !result.isEnum) error("native classes are not supported");
+        if (result.isEnum && result.attributes.length && !nativeAttribute) error("enum attributes are not supported yet");
+        if (result.isEnum && result.attributes.length > 1) error("additional enum attributes are not supported yet");
         result.name = identifier();
         if (result.isEnum) {
             expect("{");

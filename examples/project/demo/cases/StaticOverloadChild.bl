@@ -1,3 +1,5 @@
+[sharedTag "новое 😀"]
+[flag]
 public class StaticOverloadChild extends StaticOverloadBase {
     public static int select(string value) { return value.length() + 30; }
     public int blend(string value) { return value.length() + 70; }

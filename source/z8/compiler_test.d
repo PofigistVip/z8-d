@@ -11,6 +11,12 @@ private void rejects(string source) {
 }
 
 unittest {
+    compile(q{[flag] public [label "hello"] class A {}});
+    rejects(q{[flag] [flag] class A {}});
+    rejects(q{final public class A {}});
+    rejects(q{[request "true"] class A {}});
+    rejects(q{[native "x"] class A {}});
+    rejects(q{class A { bool f() { A a; return a.getAttribute("x") == "x"; } }});
     compile(q{class A { bool operator !() { return true; } static bool f() { A a; return !a; } }});
     compile(q{class A { virtual int f() { return 1; } A child = class { int f() { return 2; } }; }});
     compile(q{class A { A child; child = class {}; }});

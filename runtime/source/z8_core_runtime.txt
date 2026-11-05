@@ -59,7 +59,14 @@ class Z8Object {
     private int z8_stage = -1;
     private bool z8_allocated;
     private Z8Object z8_container;
+    private wstring[wstring] z8_attributes;
 
+    void z8_init_type_attributes() {}
+    final void z8_set_type_attribute(wstring key, wstring value) { z8_attributes[key] = value; }
+    final wstring z8_get_type_attribute(wstring key) {
+        auto value = key in z8_attributes;
+        return value is null ? null : *value;
+    }
     final void z8_set_container(Z8Object container) { z8_container = container; }
     final void z8_ensure(int requested = 1) {
         if (z8_container !is null && z8_container.z8_stage < requested)
@@ -94,6 +101,7 @@ T z8_get_container(T)(Z8Object value) if (is(T : Z8Object)) {
 T z8_new(T)(Z8Object container = null) {
     auto value = new T();
     value.z8_set_container(container);
+    value.z8_init_type_attributes();
     return value;
 }
 T z8_nonnull(T)(T value, int requested = 1) {
