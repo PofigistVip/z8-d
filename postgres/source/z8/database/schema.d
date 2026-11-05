@@ -1,6 +1,7 @@
 module z8.database.schema;
 
 import std.conv : to;
+import std.string : icmp;
 import z8.runtime;
 import z8.database.plan : quoteIdentifier;
 import z8.database.postgres : Z8PostgresException;
@@ -84,6 +85,35 @@ string[] z8_postgres_create_indexes_sql(wstring schema, Z8Object table) {
         if (kind == "string"w && options.caseInsensitive) expression = "LOWER(" ~ expression ~ ")";
         if (kind == "string"w && options.trigram) expression ~= " gin_trgm_ops";
         result ~= sql ~ "(" ~ expression ~ ")";
+    }
+    return result;
+}
+
+// Targets are in the same schema, as with the PostgreSQL query executor.
+string[] z8_postgres_create_foreign_keys_sql(wstring schema, Z8Object table) {
+    enum tableType = "org.zenframework.z8.server.base.table.Table"w;
+    if (!z8_native_is_instance(tableType, z8_nonnull(table)))
+        throw new Z8PostgresException("PostgreSQL schema requires a Table");
+    auto tableName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, table);
+    string[] result;
+    foreach (field; z8_query_declared_fields(table, true)) {
+        if (!z8_native_is_instance("org.zenframework.z8.server.base.table.value.Link"w, field)) continue;
+        auto enabled = field.z8_get_attribute("foreignKey"w);
+        if (enabled !is null && icmp(enabled.to!string, "true") != 0) continue;
+        auto target = z8_link_query(field);
+        auto parent = field.z8_get_attribute("parentKey"w);
+        if (target is null && parent !is null && icmp(parent.to!string, "false") != 0) target = table;
+        if (target is null || !z8_native_is_instance(tableType, target))
+            throw new Z8PostgresException("foreign key Link target is not a Table");
+        auto targetKey = z8_query_primary_key(target);
+        if (targetKey is null) throw new Z8PostgresException("foreign key target has no primary key");
+        auto targetName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, target);
+        auto fieldName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, field);
+        auto targetKeyName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, targetKey);
+        auto name = ("FK" ~ result.length.to!string ~ "_" ~ tableName.to!string).to!wstring;
+        result ~= "ALTER TABLE " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(tableName) ~
+            " ADD CONSTRAINT " ~ quoteIdentifier(name) ~ " FOREIGN KEY (" ~ quoteIdentifier(fieldName) ~
+            ") REFERENCES " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(targetName) ~ " (" ~ quoteIdentifier(targetKeyName) ~ ")";
     }
     return result;
 }

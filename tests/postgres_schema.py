@@ -61,11 +61,27 @@ import org.zenframework.z8.base.table.value.IntField;
     [name "Ignored"] public StringField ignored;
 }
 ''', encoding="utf-8")
+    (source / "ReferenceTarget.bl").write_text('''
+import org.zenframework.z8.base.table.Table;
+[name "Target;--"] public class ReferenceTarget extends Table {}
+''', encoding="utf-8")
+    (source / "ReferenceSource.bl").write_text('''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+[name "Source"] public class ReferenceSource extends Table {
+    public ReferenceTarget target;
+    [name "TargetId"] public Link targetId = target;
+    [name "UncheckedId"] [foreignKey false] public Link unchecked = target;
+    [name "ParentId"] [parentKey true] public Link parent;
+}
+''', encoding="utf-8")
     (source / "Probe.bl").write_text('''
 public class Probe {
     public static Sample make() { Sample value; return value; }
     public static GeoSample geo() { GeoSample value; return value; }
     public static IndexSample indexes() { IndexSample value; return value; }
+    public static ReferenceSource references() { ReferenceSource value; return value; }
+    public static ReferenceTarget target() { ReferenceTarget value; return value; }
     public static int count(Sample value) { return value.count(); }
     public static void create(Sample value, guid id) { value.create(id); }
 }
@@ -111,6 +127,26 @@ void main(string[] args) {
     try { db.execute(`INSERT INTO "IndexSample" ("RecordId", "Title") VALUES ('00000000-0000-0000-0000-000000000012', 'ALICE')`); }
     catch (Z8PostgresException) { insensitiveDuplicate = true; }
     assert(insensitiveDuplicate);
+    auto referenced = P.m_target(); auto referencing = P.m_references();
+    db.execute(z8_postgres_create_table_sql("pg_temp"w, referenced));
+    db.execute(z8_postgres_create_table_sql("pg_temp"w, referencing));
+    db.execute(`INSERT INTO "Target;--" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000000')`);
+    db.execute(`INSERT INTO "Source" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000000')`);
+    auto foreignKeys = z8_postgres_create_foreign_keys_sql("pg_temp"w, referencing);
+    assert(foreignKeys.length == 2);
+    bool targetKey, parentKey;
+    foreach (sql; foreignKeys) {
+        assert(!sql.canFind("UncheckedId"));
+        if (sql.canFind(`FOREIGN KEY ("TargetId") REFERENCES "pg_temp"."Target;--" ("RecordId")`)) targetKey = true;
+        if (sql.canFind(`FOREIGN KEY ("ParentId") REFERENCES "pg_temp"."Source" ("RecordId")`)) parentKey = true;
+        db.execute(sql);
+    }
+    assert(targetKey && parentKey);
+    db.execute(`INSERT INTO "Source" ("RecordId", "UncheckedId") VALUES ('00000000-0000-0000-0000-000000000021', '00000000-0000-0000-0000-000000000099')`);
+    bool invalidReference;
+    try { db.execute(`INSERT INTO "Source" ("RecordId", "TargetId") VALUES ('00000000-0000-0000-0000-000000000022', '00000000-0000-0000-0000-000000000099')`); }
+    catch (Z8PostgresException) { invalidReference = true; }
+    assert(invalidReference);
     db.execute(ddl);
     db.execute(`INSERT INTO "Sample;--" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000001')`);
     auto row = db.execute(`SELECT "Title","Amount","Flag","Price","Reference","Moment","Duration","Details","Blob" FROM "Sample;--"`);

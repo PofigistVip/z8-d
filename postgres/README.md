@@ -40,8 +40,12 @@ returns separate index statements, including case-insensitive and trigram
 indexes. Both functions only return SQL; the host chooses when to run it.
 Geometry columns and indexes require PostGIS; trigram indexes require `pg_trgm`.
 Unique GIN and GiST indexes are rejected because PostgreSQL does not support
-them. Foreign keys, existing-table migration and the original schema lifecycle
-are not yet implemented.
+them. `z8_postgres_create_foreign_keys_sql(schema, table)` returns constraints
+for enabled BL `Link` fields, including self-referencing parent keys. Create
+referenced tables and the Z8 zero-GUID records before applying constraints:
+the schema lifecycle does not yet create these records automatically.
+Existing-table migration and the original schema lifecycle are not yet
+implemented.
 
 `Z8PostgresQueryExecutor` connects BL `Query` reads to PostgreSQL tables.
 Construct it with a connection, schema and root table name, then attach it to
