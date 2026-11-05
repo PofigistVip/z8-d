@@ -1606,6 +1606,13 @@ class Checker {
                 if (left == ValueType.guidType && right == ValueType.sqlGuidType) {
                     matches(e.left, ValueType.sqlGuidType); left = ValueType.sqlGuidType;
                 }
+                if (left == ValueType.dateType && right == ValueType.sqlDateType) {
+                    matches(e.left, ValueType.sqlDateType); left = ValueType.sqlDateType;
+                }
+                if (left == ValueType.sqlDateType && right != ValueType.nullType) {
+                    if (!["==", "!=", "<", ">", "<=", ">="].canFind(op) || !matches(e.right, ValueType.sqlDateType)) fail("invalid SQL date operands", e.token);
+                    e.sqlDateOperator = true; return ValueType.sqlBoolType;
+                }
                 if (left == ValueType.sqlGuidType && right != ValueType.nullType) {
                     if (!["==", "!="].canFind(op) || !matches(e.right, ValueType.sqlGuidType)) fail("invalid SQL guid operands", e.token);
                     e.sqlGuidOperator = true; return ValueType.sqlBoolType;

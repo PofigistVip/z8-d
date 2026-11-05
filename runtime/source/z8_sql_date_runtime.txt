@@ -45,6 +45,46 @@ Z8SqlDate z8_sql_date_addDay(Z8SqlDate value, Z8SqlInt quantity) { return z8_sql
 Z8SqlDate z8_sql_date_addHour(Z8SqlDate value, Z8SqlInt quantity) { return z8_sql_date_add!(Z8SqlDateKind.addHour)(value, quantity); }
 Z8SqlDate z8_sql_date_addMinute(Z8SqlDate value, Z8SqlInt quantity) { return z8_sql_date_add!(Z8SqlDateKind.addMinute)(value, quantity); }
 Z8SqlDate z8_sql_date_addSecond(Z8SqlDate value, Z8SqlInt quantity) { return z8_sql_date_add!(Z8SqlDateKind.addSecond)(value, quantity); }
+Z8SqlBool z8_sql_date_compare(string op)(Z8SqlDate left, Z8SqlDate right) {
+    static assert(["==", "!=", "<", ">", "<=", ">="].canFind(op));
+    auto result = new Z8SqlBool(Z8SqlBoolKind.dateCompare);
+    result.dateLeft = z8_nonnull(left); result.dateRight = right; result.dateOperator = op; return result;
+}
+private wstring z8_sql_date_compare_format(Z8SqlBool value, Z8SqlVendor vendor) {
+    auto left = z8_nonnull(value.dateLeft), right = z8_nonnull(value.dateRight);
+    auto op = value.dateOperator;
+    auto sqlOp = op == "==" ? "="w : op == "!=" ? "<>"w : op.to!wstring;
+    bool leftConst = left.kind == Z8SqlDateKind.constant, rightConst = right.kind == Z8SqlDateKind.constant;
+    if (leftConst && rightConst) {
+        auto a = z8_date_ticks(z8_date_truncDay(left.constant)), b = z8_date_ticks(z8_date_truncDay(right.constant));
+        auto result = op == "==" ? a == b : op == "!=" ? a != b : op == "<" ? a < b : op == ">" ? a > b : op == "<=" ? a <= b : a >= b;
+        return result ? "1"w : "0"w;
+    }
+    if (leftConst || rightConst) {
+        auto constant = leftConst ? left.constant : right.constant;
+        auto field = z8_sql_date_format(leftConst ? right : left, vendor);
+        auto ticks = z8_date_ticks(constant);
+        if (ticks == z8_date_ticks(z8_date_min) || ticks == z8_date_ticks(z8_date_max))
+            return "("w ~ (leftConst ? ticks.to!wstring ~ " "w ~ sqlOp ~ " "w ~ field : field ~ " "w ~ sqlOp ~ " "w ~ ticks.to!wstring) ~ ")"w;
+        auto day = z8_date_truncDay(constant);
+        auto start = z8_date_ticks(day).to!wstring, end = z8_date_ticks(z8_date_addDay(day, 1)).to!wstring;
+        if (op == "==") return "("w ~ start ~ " <= "w ~ field ~ " and "w ~ field ~ " < "w ~ end ~ ")"w;
+        if (op == "!=") return "("w ~ field ~ " < "w ~ start ~ " or "w ~ end ~ " <= "w ~ field ~ ")"w;
+        if (leftConst) {
+            if (op == "<") return "("w ~ end ~ " <= "w ~ field ~ ")"w;
+            if (op == "<=") return "("w ~ start ~ " <= "w ~ field ~ ")"w;
+            if (op == ">") return "("w ~ start ~ " > "w ~ field ~ ")"w;
+            return "("w ~ end ~ " > "w ~ field ~ ")"w;
+        }
+        if (op == "<") return "("w ~ field ~ " < "w ~ start ~ ")"w;
+        if (op == "<=") return "("w ~ field ~ " < "w ~ end ~ ")"w;
+        if (op == ">") return "("w ~ field ~ " >= "w ~ end ~ ")"w;
+        return "("w ~ field ~ " >= "w ~ start ~ ")"w;
+    }
+    // Rel rewrites both operands when formatted, so repeated formatting nests TruncDay.
+    value.dateLeft = z8_sql_date_truncDay(left); value.dateRight = z8_sql_date_truncDay(right);
+    return z8_sql_date_format(value.dateLeft, vendor) ~ sqlOp ~ z8_sql_date_format(value.dateRight, vendor);
+}
 wstring z8_sql_date_format(Z8SqlDate value, Z8SqlVendor vendor = Z8SqlVendor.Postgres) {
     z8_nonnull(value);
     final switch (value.kind) {

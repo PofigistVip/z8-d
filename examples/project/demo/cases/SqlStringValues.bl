@@ -65,6 +65,7 @@ public class SqlStringValues {
     public static sql_date dateAddHour() { sql_date value = sqlDate(); return value.addHour(2); }
     public static sql_date dateAddMinute() { sql_date value = sqlDate(); return value.addMinute(2); }
     public static sql_date dateAddSecond() { sql_date value = sqlDate(); return value.addSecond(2); }
+    public static sql_bool dateCompare() { sql_date value = sqlDate(); date other = 100000000; return value < other; }
     public static int run() {
         sql_string value = concatenation();
         if (value == null) return 1;

@@ -32,7 +32,7 @@ class Expression {
     bool makeFile, makeException, convertToDate, convertToSqlBool, convertToSqlInt, convertToSqlDecimal, convertSqlIntToDecimal, convertToSqlString, convertToSqlGuid;
     bool sqlBoolOperator, sqlBoolPriority, sqlIntOperator, sqlIntComparison, sqlIntPriority, sqlDecimalOperator, sqlDecimalComparison, sqlDecimalPriority, sqlStringOperator, sqlStringComparison, sqlStringPriority;
     bool sqlGuidOperator, sqlGuidPriority;
-    bool convertToSqlDate, sqlDatePriority;
+    bool convertToSqlDate, sqlDatePriority, sqlDateOperator;
     bool dateBinary, fileBinary;
     bool primaryCast, primaryInstanceOf, objectInstanceOf, scalarInstanceOf, falseInstanceOf, exceptionInstanceOf;
     bool typedInitializer;

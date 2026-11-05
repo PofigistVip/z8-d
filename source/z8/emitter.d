@@ -484,6 +484,7 @@ private string emitExprRaw(Expression e) {
             if (e.sqlDecimalOperator) return (e.sqlDecimalComparison ? "z8_sql_numeric_compare!\"" : "z8_sql_decimal_binary!\"") ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.sqlStringOperator) return (e.sqlStringComparison ? "z8_sql_string_compare!\"" ~ e.token.text ~ "\"(" : "z8_sql_string_concat(") ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.sqlGuidOperator) return "z8_sql_guid_compare!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            if (e.sqlDateOperator) return "z8_sql_date_compare!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.userBinaryOperator) return emitReceiver(e.left) ~ "." ~ operatorDName(e.token.text) ~ "(" ~ emitExpr(e.right) ~ ")";
             if (e.dateBinary) return "z8_date_binary!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.fileBinary) return "z8_file_compare!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";

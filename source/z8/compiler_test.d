@@ -234,6 +234,7 @@ unittest {
     compile(q{class A { static sql_date f(sql_string x) { return x.toDate(); } }});
     compile(q{class A { static sql_date f(sql_date x) { return x.truncDay().addHour(1).truncMinute().addSecond(2); } }});
     compile(q{class A { static sql_int f(sql_date x) { return x.year() + x.month() + x.day() + x.hour() + x.minute(); } }});
+    compile(q{class A { static sql_bool f(sql_date x, date y) { return x >= y; } }});
     rejects(q{class A { static date f(sql_date x) { return x; } }});
     rejects(q{class A { static guid f(sql_guid x) { return x; } }});
     rejects(q{class A { static sql_string f(sql_string x) { return x.json(null); } }});

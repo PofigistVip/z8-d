@@ -262,6 +262,13 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         config.write_text("application.language=en\n", encoding="utf-8")
         runner = temp / "ProjectRunner.java"
         runner.write_text('''public class ProjectRunner {
+    static org.zenframework.z8.server.types.sql.sql_bool compareDate(int op, org.zenframework.z8.server.types.sql.sql_date left, org.zenframework.z8.server.types.sql.sql_date right) {
+        switch (op) {
+        case 0: return left.operatorEqu(right); case 1: return left.operatorNotEqu(right);
+        case 2: return left.operatorLess(right); case 3: return left.operatorMore(right);
+        case 4: return left.operatorLessEqu(right); default: return left.operatorMoreEqu(right);
+        }
+    }
     public static void main(String[] args) throws Exception {
         org.zenframework.z8.server.config.ServerConfig.load(args[0]);
         demo.cases.StaticOverloadChild.CLASS<?> metadata = new demo.cases.StaticOverloadChild.CLASS<>(null);
@@ -560,6 +567,19 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                 try { System.out.println("SQLDATEPART:" + vendor.name() + ":" + value.format(vendor, null)); }
                 catch (RuntimeException error) { System.out.println("SQLDATEPART:" + vendor.name() + ":ERROR"); }
             }
+            for (int mode = 0; mode < 7; ++mode) for (int op = 0; op < 6; ++op) {
+                org.zenframework.z8.server.types.sql.sql_date left = new org.zenframework.z8.server.types.sql.sql_date(new org.zenframework.z8.server.types.date(0L));
+                org.zenframework.z8.server.types.sql.sql_date right = new org.zenframework.z8.server.types.sql.sql_date(new org.zenframework.z8.server.types.date(100000000L));
+                if (mode == 4) { left = new org.zenframework.z8.server.types.sql.sql_date(org.zenframework.z8.server.types.date.Min); right = right.operatorPriority(); }
+                else if (mode == 5) { left = left.operatorPriority(); right = new org.zenframework.z8.server.types.sql.sql_date(org.zenframework.z8.server.types.date.Max); }
+                else if (mode == 6) right = new org.zenframework.z8.server.types.sql.sql_date(new org.zenframework.z8.server.types.date(3600000L));
+                else { if ((mode & 1) != 0) left = left.operatorPriority(); if ((mode & 2) != 0) right = right.operatorPriority(); }
+                org.zenframework.z8.server.types.sql.sql_bool result = compareDate(op, left, right);
+                for (boolean logical : new boolean[] {false, true})
+                    System.out.println("SQLDATECMP:" + vendor.name() + ":" + logical + ":" + result.format(vendor, null, logical));
+            }
+            for (boolean logical : new boolean[] {false, true})
+                System.out.println("SQLDATEBL:" + vendor.name() + ":" + logical + ":" + demo.cases.SqlStringValues.z8_dateCompare().format(vendor, null, logical));
         }
         org.zenframework.z8.server.types.sql.sql_integer sharedSearch = demo.cases.SqlStringValues.z8_indexFrom();
         for (org.zenframework.z8.server.db.DatabaseVendor vendor : org.zenframework.z8.server.db.DatabaseVendor.values())
@@ -669,6 +689,13 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         d_runner = temp / "compare.d"
         d_runner.write_text("module compare;\nimport z8.runtime;\n" + "".join(imports) + '''
 import std.stdio : writeln;
+Z8SqlBool compareDate(int op, Z8SqlDate left, Z8SqlDate right) {
+    switch (op) {
+    case 0: return z8_sql_date_compare!"=="(left, right); case 1: return z8_sql_date_compare!"!="(left, right);
+    case 2: return z8_sql_date_compare!"<"(left, right); case 3: return z8_sql_date_compare!">"(left, right);
+    case 4: return z8_sql_date_compare!"<="(left, right); default: return z8_sql_date_compare!">="(left, right);
+    }
+}
 void main() {
     auto metadata = z8_new!Z8p_64656D6F2E63617365732E5374617469634F7665726C6F61644368696C64();
     assert(metadata.z8_get_attribute("dateConstant"w) == "1709199045000L"w);
@@ -995,6 +1022,18 @@ void main() {
             try { writeln("SQLDATEPART:", vendor, ":", z8_to_utf8(z8_sql_int_format(value, dialect))); }
             catch (Exception error) { writeln("SQLDATEPART:", vendor, ":ERROR"); }
         }
+        foreach (mode; 0 .. 7) foreach (op; 0 .. 6) {
+            auto left = z8_sql_date_const(z8_date_from_ticks(0)), right = z8_sql_date_const(z8_date_from_ticks(100000000));
+            if (mode == 4) { left = z8_sql_date_const(z8_date_min); right = z8_sql_date_group(right); }
+            else if (mode == 5) { left = z8_sql_date_group(left); right = z8_sql_date_const(z8_date_max); }
+            else if (mode == 6) right = z8_sql_date_const(z8_date_from_ticks(3600000));
+            else { if (mode & 1) left = z8_sql_date_group(left); if (mode & 2) right = z8_sql_date_group(right); }
+            auto result = compareDate(op, left, right);
+            foreach (logical; [false, true])
+                writeln("SQLDATECMP:", vendor, ":", logical, ":", z8_to_utf8(z8_sql_bool_format(result, logical, dialect)));
+        }
+        foreach (logical; [false, true])
+            writeln("SQLDATEBL:", vendor, ":", logical, ":", z8_to_utf8(z8_sql_bool_format(Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_dateCompare(), logical, dialect)));
     }
     auto sharedSearch = Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_indexFrom();
     foreach (vendorIndex, vendor; ["Oracle", "SqlServer", "Postgres", "H2"]) {
@@ -1010,12 +1049,12 @@ void main() {
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_lines = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:"))]
+        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:"))]
         original_sql = [line for line in output.splitlines() if line.startswith("SQLBOOL:")]
         d_sql = [line for line in d_lines if line.startswith("SQLBOOL:")]
         if original_sql != d_sql or len(d_sql) != 40:
             raise SystemExit(f"SQL boolean formatting differs: original={original_sql!r}, D={d_sql!r}")
-        for prefix, count in (("SQLINT:", 36), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 44), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 48), ("SQLTEXTTEST:", 16), ("SQLGUID:", 8), ("SQLGUIDBOOL:", 8), ("SQLDATE:", 12), ("SQLDATETICKS:", 4), ("SQLDATEFUNC:", 36), ("SQLDATEPART:", 20)):
+        for prefix, count in (("SQLINT:", 36), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 44), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 48), ("SQLTEXTTEST:", 16), ("SQLGUID:", 8), ("SQLGUIDBOOL:", 8), ("SQLDATE:", 12), ("SQLDATETICKS:", 4), ("SQLDATEFUNC:", 36), ("SQLDATEPART:", 20), ("SQLDATECMP:", 336), ("SQLDATEBL:", 8)):
             original_lines = [line for line in output.splitlines() if line.startswith(prefix)]
             d_formatted = [line for line in d_lines if line.startswith(prefix)]
             if original_lines != d_formatted or len(d_formatted) != count:
