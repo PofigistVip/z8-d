@@ -79,6 +79,21 @@ import org.zenframework.z8.base.table.value.Link;
     [name "ParentId"] [parentKey true] public Link parent;
 }
 ''', encoding="utf-8")
+    (source / "StaticSample.bl").write_text('''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.table.value.IntField;
+[name "StaticSample"] public class StaticSample extends Table {
+    [name "Label"] public StringField label;
+    [name "Counter"] public IntField counter;
+    [name "Other"] public StringField other;
+    virtual protected void beforeUpdate(guid id) { counter = 55; }
+    records {
+        [label "Seed"] [counter 12] First = '00000000-0000-0000-0000-000000000031';
+        [label "Second"] Second = '00000000-0000-0000-0000-000000000032';
+    }
+}
+''', encoding="utf-8")
     (source / "Probe.bl").write_text('''
 public class Probe {
     public static Sample make() { Sample value; return value; }
@@ -86,6 +101,7 @@ public class Probe {
     public static IndexSample indexes() { IndexSample value; return value; }
     public static ReferenceSource references() { ReferenceSource value; return value; }
     public static ReferenceTarget target() { ReferenceTarget value; return value; }
+    public static StaticSample statics() { StaticSample value; return value; }
     public static int count(Sample value) { return value.count(); }
     public static void create(Sample value, guid id) { value.create(id); }
 }
@@ -161,6 +177,16 @@ void main(string[] args) {
     try { db.execute(`INSERT INTO "Source" ("RecordId", "TargetId") VALUES ('00000000-0000-0000-0000-000000000022', '00000000-0000-0000-0000-000000000099')`); }
     catch (Z8PostgresException) { invalidReference = true; }
     assert(invalidReference);
+    auto statics = P.m_statics();
+    db.execute(z8_postgres_create_table_sql("pg_temp"w, statics));
+    z8_postgres_apply_static_records(db, "pg_temp"w, statics);
+    auto seeded = db.execute(`SELECT "Label", "Counter" FROM "StaticSample" ORDER BY "RecordId"`);
+    assert(seeded.rows.length == 2 && seeded.rows[0][0].text == "Seed" && seeded.rows[0][1].text == "12");
+    assert(seeded.rows[1][0].text == "Second" && seeded.rows[1][1].text == "0");
+    db.execute(`UPDATE "StaticSample" SET "Label" = 'Changed', "Counter" = 99, "Other" = 'Preserved' WHERE "RecordId" = '00000000-0000-0000-0000-000000000031'`);
+    z8_postgres_apply_static_records(db, "pg_temp"w, statics);
+    seeded = db.execute(`SELECT "Label", "Counter", "Other" FROM "StaticSample" ORDER BY "RecordId"`);
+    assert(seeded.rows.length == 2 && seeded.rows[0][0].text == "Seed" && seeded.rows[0][1].text == "55" && seeded.rows[0][2].text == "Preserved");
     db.execute(ddl);
     db.execute(`INSERT INTO "Sample;--" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000001')`);
     auto row = db.execute(`SELECT "Title","Amount","Flag","Price","Reference","Moment","Duration","Details","Blob" FROM "Sample;--"`);

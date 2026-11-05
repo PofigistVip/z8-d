@@ -46,6 +46,10 @@ referenced tables and use `z8_postgres_ensure_null_record` for their zero-GUID
 records before applying constraints. The helper invokes BL creation hooks for
 missing records and preserves existing ones; callers must serialize concurrent
 schema generation. The schema lifecycle does not yet call it automatically.
+`z8_postgres_apply_static_records` creates or updates declared BL records using
+table events; it expects a clean table instance and leaves transaction control
+to the caller. Built-in Users and Roles tables are rejected until their special
+rules for preserving credentials and permissions are implemented.
 Existing-table migration and the original schema lifecycle are not yet
 implemented.
 
