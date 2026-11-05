@@ -1,0 +1,75 @@
+// Native User wrappers backed by an identity supplied by the host.
+private enum z8_user_name = "org.zenframework.z8.server.base.security.User"w;
+class Z8UserData {
+    Z8Guid id;
+    wstring login, firstName, middleName, lastName, description, phone, email;
+    Z8PrimaryMap parameters;
+    bool administrator, builtinAdministrator, builtinSystem;
+    // Java's User.initialize populates public fields only for users with roles.
+    bool hasRoles = true;
+    this() { parameters = new Z8PrimaryMap(); }
+}
+private class Z8UserState {
+    Z8UserData user;
+    Z8Guid id;
+    wstring login, firstName, middleName, lastName, description, phone, email;
+    Z8PrimaryMap parameters;
+    bool administrator;
+    this(Z8UserData user) {
+        this.user = z8_nonnull(user);
+        if (user.id is null || !user.hasRoles) return;
+        id = user.id; login = z8_string_new(user.login);
+        firstName = z8_string_new(user.firstName); middleName = z8_string_new(user.middleName);
+        lastName = z8_string_new(user.lastName); description = z8_string_new(user.description);
+        phone = z8_string_new(user.phone); email = z8_string_new(user.email);
+        parameters = user.parameters; administrator = user.administrator;
+    }
+}
+private Z8UserState z8_user_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_user_name, self)) throw new Exception("invalid User object");
+    auto state = cast(Z8UserState)self.z8_get_native_state(z8_user_name);
+    if (state is null) { state = new Z8UserState(new Z8UserData()); self.z8_set_native_state(z8_user_name, state); }
+    return state;
+}
+void z8_user_attach(Z8Object self, Z8UserData data) {
+    if (!z8_native_is_instance(z8_user_name, self)) throw new Exception("invalid User object");
+    self.z8_set_native_state(z8_user_name, new Z8UserState(data));
+}
+Z8Object z8_user_wrap(Z8UserData data) {
+    if (data is null) return null;
+    auto user = z8_native_new(z8_user_name);
+    z8_user_attach(user, data);
+    return user;
+}
+Z8UserData z8_user_data(Z8Object self) { return z8_user_state(self).user; }
+private T* z8_user_field(string name, T)(Z8Object self) {
+    return &__traits(getMember, z8_user_state(self), name);
+}
+private Z8Optional!bool z8_user_is_administrator(Z8Object self) { return z8_optional_wrap(z8_user_state(self).administrator); }
+private Z8Optional!bool z8_user_is_builtin_administrator(Z8Object self) { return z8_optional_wrap(z8_user_data(self).builtinAdministrator); }
+private Z8Optional!bool z8_user_is_builtin_system(Z8Object self) { return z8_optional_wrap(z8_user_data(self).builtinSystem); }
+private T z8_user_parameter(T, Base = T)(Z8Object self, wstring key, T fallback) {
+    auto parameters = z8_nonnull(z8_user_state(self).parameters);
+    return parameters.z8_containsKey(key) ? z8_primary_cast!Base(parameters.z8_get(key)) : fallback;
+}
+void z8_bind_builtin_user() {
+    enum prefix = z8_user_name ~ "."w;
+    z8_native_bind_field(prefix ~ "f_id"w, &z8_user_field!("id", Z8Guid));
+    z8_native_bind_field(prefix ~ "f_login"w, &z8_user_field!("login", wstring));
+    z8_native_bind_field(prefix ~ "f_firstName"w, &z8_user_field!("firstName", wstring));
+    z8_native_bind_field(prefix ~ "f_middleName"w, &z8_user_field!("middleName", wstring));
+    z8_native_bind_field(prefix ~ "f_lastName"w, &z8_user_field!("lastName", wstring));
+    z8_native_bind_field(prefix ~ "f_description"w, &z8_user_field!("description", wstring));
+    z8_native_bind_field(prefix ~ "f_phone"w, &z8_user_field!("phone", wstring));
+    z8_native_bind_field(prefix ~ "f_email"w, &z8_user_field!("email", wstring));
+    z8_native_bind_field(prefix ~ "f_parameters"w, &z8_user_field!("parameters", Z8PrimaryMap));
+    z8_native_bind(prefix ~ "m_isAdministrator"w, &z8_user_is_administrator);
+    z8_native_bind(prefix ~ "m_isBuiltinAdministrator"w, &z8_user_is_builtin_administrator);
+    z8_native_bind(prefix ~ "m_isBuiltinSystem"w, &z8_user_is_builtin_system);
+    z8_native_bind(prefix ~ "m_getParameter"w, &z8_user_parameter!wstring);
+    z8_native_bind(prefix ~ "m_getParameter"w, &z8_user_parameter!Z8Guid);
+    z8_native_bind(prefix ~ "m_getParameter"w, &z8_user_parameter!(Z8Optional!long, long));
+    z8_native_bind(prefix ~ "m_getParameter"w, &z8_user_parameter!(Z8Optional!bool, bool));
+}
+shared static this() { z8_bind_builtin_user(); }
