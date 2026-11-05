@@ -24,6 +24,9 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     (public / ".env").write_text("secret", encoding="utf-8")
     (public / "empty").mkdir()
     (temp / "outside.txt").write_text("outside secret", encoding="utf-8")
+    binary_file = temp / "stream.bin"
+    binary_content = bytes(range(256)) * 150
+    binary_file.write_bytes(binary_content)
     original_client = None
     if len(sys.argv) == 2:
         sys.path.insert(0, str(root / "webserver"))
@@ -50,6 +53,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     (source / "Object.bl").write_text('''
 [native "org.zenframework.z8.server.runtime.OBJECT"] public class Object {
     virtual protected JsonArray getData(string[string] parameters);
+    virtual protected binary processContentRequest(string[string] parameters, file[] files);
 }
 ''', encoding="utf-8")
     (source / "JsonArray.bl").write_text('''
@@ -61,6 +65,10 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
 [ui "Grid"] [displayName "Endpoint"] public class Endpoint extends Object {
     virtual protected JsonArray getData(string[string] parameters) {
         Application.info("loaded"); return JsonArray.parse("[1,2]");
+    }
+    virtual protected binary processContentRequest(string[string] parameters, file[] files) {
+        if (parameters.containsKey("empty")) return null;
+        return '0, 255, 65, 0';
     }
 }
 ''', encoding="utf-8")
@@ -137,6 +145,7 @@ import z8gen.p_Probe;
 import std.stdio : writeln, stdout, readln;
 import core.memory : GC;
 import std.string : indexOf;
+__gshared string binaryPath;
 class Authority : IZ8HttpAuthority {
     Z8SessionManager sessions;
     this() {
@@ -158,6 +167,12 @@ class Authority : IZ8HttpAuthority {
 }
 void runRequest(Z8HttpRequest request) {
     if (request.query.indexOf("collect=1") >= 0) GC.collect();
+    if (request.query.indexOf("stream=1") >= 0) {
+        auto binary = z8_binary_from_file(binaryPath);
+        ubyte[5] skipped; z8_binary_read_chunk(binary, skipped[]);
+        z8_application_set_response_binary(z8_application_request(), binary);
+        return;
+    }
     if (request.query.indexOf("dispatch=1") >= 0) {
         auto context = z8_application_request();
         z8_application_dispatch_object(context.parameters.z8_get("request"w),
@@ -175,6 +190,7 @@ void runRequest(Z8HttpRequest request) {
     }
 }
 void main(string[] args) {
+    binaryPath = args[2];
     auto server = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048);
     auto protocol = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048, Z8ResponseMode.application, "server-1"w);
     auto auth = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048, Z8ResponseMode.application, "server-1"w, new Authority());
@@ -202,7 +218,7 @@ void main(string[] args) {
     response_file = temp / "dmd.rsp"
     response_file.write_text("\n".join('"' + arg.replace('"', r'\"') + '"' for arg in args[1:]) + "\n", encoding="utf-8")
     subprocess.run(["dmd", "@" + str(response_file)], cwd=temp, check=True)
-    process = subprocess.Popen([str(executable), str(public)], cwd=temp, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+    process = subprocess.Popen([str(executable), str(public), str(binary_file)], cwd=temp, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
     try:
         line = process.stdout.readline().strip()
         ports = line.split()
@@ -285,6 +301,18 @@ void main(string[] args) {
         status, body = request("/request.json?request=Unauthorized&session=valid&server=shard&dispatch=1", target=auth_port)
         result = json.loads(body)
         assert status == 200 and not result["success"] and result["info"]["messages"][-1]["text"] == "request access denied", result
+        def binary_request(path):
+            conn = http.client.HTTPConnection("127.0.0.1", auth_port, timeout=10)
+            try:
+                conn.request("GET", path); response = conn.getresponse(); data = response.read()
+                assert response.status == 200 and response.getheader("Content-Type") == "application/xml; charset=UTF-8"
+                assert int(response.getheader("Content-Length")) == len(data)
+                return data
+            finally: conn.close()
+        base = "/request.json?request=Endpoint&session=valid&server=shard&dispatch=1&action=content"
+        assert binary_request(base) == bytes([0, 255, 65, 0])
+        assert binary_request(base + "&empty=1") == b""
+        assert binary_request("/request.json?session=valid&server=shard&stream=1") == binary_content[5:]
         status, body = request("/request.json?mode=protocol&request=demo", target=web_port)
         assert status == 200 and json.loads(body)["answer"] == 42, (status, body)
         def asset(path, method="GET"):

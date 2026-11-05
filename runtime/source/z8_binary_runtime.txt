@@ -18,7 +18,7 @@ Z8Binary z8_binary_from_file(string path) {
     result.fileInput = new Z8BinaryFileInput(path);
     return result;
 }
-private ubyte[] z8_binary_read_chunk(Z8Binary value, ubyte[] buffer) {
+ubyte[] z8_binary_read_chunk(Z8Binary value, ubyte[] buffer) {
     z8_nonnull(value);
     if (value.fileInput !is null) {
         if (value.fileInput.closed) throw new Exception("binary stream is closed");
@@ -32,6 +32,17 @@ private ubyte[] z8_binary_read_chunk(Z8Binary value, ubyte[] buffer) {
 }
 private void z8_binary_finish_read(Z8Binary value) {
     if (value.fileInput !is null) value.fileInput.close();
+}
+// HTTP hosts can stream binary content without loading a file into memory.
+void z8_binary_close(Z8Binary value) { z8_binary_finish_read(z8_nonnull(value)); }
+ulong z8_binary_remaining(Z8Binary value) {
+    z8_nonnull(value);
+    if (value.fileInput !is null) {
+        if (value.fileInput.closed) throw new Exception("binary stream is closed");
+        auto size = value.fileInput.stream.size, position = value.fileInput.stream.tell;
+        return size > position ? size - position : 0;
+    }
+    return value.data.length - value.position;
 }
 private ubyte[] z8_binary_read_all(Z8Binary value) {
     z8_nonnull(value);

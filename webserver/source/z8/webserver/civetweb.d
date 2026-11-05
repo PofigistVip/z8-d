@@ -194,13 +194,14 @@ private void addMultipart(Z8ApplicationRequest application, string contentType, 
         pos = cast(size_t)end + marker.length;
     }
 }
-private void writeAll(MgConnection* connection, string data) {
+private bool writeAll(MgConnection* connection, string data) {
     size_t offset;
     while (offset < data.length) {
         auto count = mg_write(connection, data.ptr + offset, data.length - offset);
-        if (count <= 0) return;
+        if (count <= 0) return false;
         offset += count;
     }
+    return true;
 }
 private int respond(MgConnection* connection, int status, string description, string body) {
     auto header = "HTTP/1.1 " ~ status.to!string ~ " " ~ description ~ "\r\n" ~
@@ -208,6 +209,29 @@ private int respond(MgConnection* connection, int status, string description, st
         body.length.to!string ~ "\r\n\r\n";
     writeAll(connection, header); writeAll(connection, body);
     return status;
+}
+private void closeBinary(Z8Binary content) {
+    if (content !is null) try { z8_binary_close(content); } catch (Throwable) { }
+}
+private int respondBinary(MgConnection* connection, Z8Binary content) {
+    scope(exit) closeBinary(content);
+    auto length = content is null ? 0UL : z8_binary_remaining(content);
+    auto header = "HTTP/1.1 200 OK\r\nContent-Type: application/xml; charset=UTF-8\r\nConnection: close\r\nContent-Length: " ~
+        length.to!string ~ "\r\n\r\n";
+    if (!writeAll(connection, header)) return 200;
+    if (content !is null) {
+        try {
+            ubyte[16384] buffer;
+            auto remaining = length;
+            while (remaining) {
+                auto chunk = z8_binary_read_chunk(content, buffer[0 .. cast(size_t)min(cast(ulong)buffer.length, remaining)]);
+                if (!chunk.length) break;
+                if (!writeAll(connection, cast(string)chunk)) break;
+                remaining -= chunk.length;
+            }
+        } catch (Throwable) { /* The headers are already sent; close the connection. */ }
+    }
+    return 200;
 }
 private ubyte[] readBody(MgConnection* connection, long length, bool chunked, size_t limit) {
     if (length > 0 && cast(ulong)length > limit) throw new BodyTooLarge();
@@ -331,7 +355,7 @@ class Z8CivetServer {
             if (responseMode == Z8ResponseMode.application) z8_application_start_response(application, requestId);
             try {
                 handler(request);
-                if (responseMode == Z8ResponseMode.application)
+                if (responseMode == Z8ResponseMode.application && !z8_application_has_binary_response(application))
                     z8_application_finish_response(application, request.monitor, serverId);
             } catch (Z8Redirect redirect) { throw redirect; }
             catch (Throwable error) {
@@ -340,6 +364,8 @@ class Z8CivetServer {
                 request.monitor.message(Z8MonitorLevel.error, message);
                 return respond(connection, 200, "OK", z8_application_error_response(requestId, request.monitor, serverId).to!string);
             }
+            if (z8_application_has_binary_response(application))
+                return respondBinary(connection, z8_application_response_binary(application));
             return respond(connection, 200, "OK", z8_application_response_text(application).to!string);
         } catch (Z8Redirect redirect) {
             JSONValue[string] data;

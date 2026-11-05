@@ -23,8 +23,10 @@ application-server protocol remain to be implemented.
 A handler can use `z8_application_dispatch_object(className, mayExecute)` to
 instantiate an ordinary BL `Object`, invoke its virtual `getData`, and write
 `data` and `ui`. The host must supply the permission-checking delegate; it
-receives the session, class name, and action. Query, job, and binary-content
-requests need specialized adapters and are not handled by this function.
+receives the session, class name, and action. For `action=content`, it invokes
+`processContentRequest` and the transport streams the binary result with the
+original Z8 binary content type (`application/xml`). Query and job requests
+need specialized adapters and are not handled by this function.
 
 An optional `IZ8HttpAuthority` constructor argument connects a host authority
 to the transport. With an authority present, each request must have a session

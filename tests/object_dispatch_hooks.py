@@ -75,6 +75,13 @@ void main() {
     auto result = parseJSON(z8_application_response_text(request).to!string);
     assert(checked && result["data"].array.length == 2 && result["data"][1].str == "text" && result["ui"].str == "Grid");
     assert(monitor.source == "Demo"w);
+    auto binaryRequest = new Z8ApplicationRequest(); binaryRequest.parameters = params;
+    binaryRequest.session = request.session; binaryRequest.monitor = new Z8RequestMonitor();
+    params.z8_add("action"w, "content"w);
+    z8_application_set_request(binaryRequest); z8_application_start_response(binaryRequest, "Child"w);
+    z8_application_dispatch_object("Child"w, (Z8ApplicationSession session, wstring name, wstring action) { return action == "content"w; });
+    assert(z8_application_has_binary_response(binaryRequest));
+    assert(cast(string)z8_application_response_binary(binaryRequest).data == "payload");
     z8_application_set_request(null);
 }
 ''', encoding="utf-8")
