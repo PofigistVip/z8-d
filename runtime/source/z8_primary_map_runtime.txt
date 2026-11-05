@@ -7,8 +7,8 @@ class Z8PrimaryMap {
     void z8_clear() { entries.clear(); hasNullKey = false; nullKeyValue = null; }
     bool z8_containsKey(wstring key) { return key is null ? hasNullKey : (key in entries) !is null; }
     bool z8_containsValue(Z8Primary value) {
-        if (hasNullKey && (value is nullKeyValue || (value !is null && value == nullKeyValue))) return true;
-        foreach (item; entries) if (value is item || (value !is null && value == item)) return true;
+        if (hasNullKey && z8_primary_collection_equals(value, nullKeyValue)) return true;
+        foreach (item; entries) if (z8_primary_collection_equals(value, item)) return true;
         return false;
     }
     Z8Primary z8_add(wstring key, Z8Primary value) {

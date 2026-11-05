@@ -294,6 +294,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         System.out.println("NESTEDMAP:" + demo.cases.NestedMapArrays.z8_run().get());
         System.out.println("PRIMARYKEYMAP:" + demo.cases.PrimaryKeyMaps.z8_run().get());
         System.out.println("REFKEYMAP:" + demo.cases.ReferenceKeyMaps.z8_run().get());
+        System.out.println("PRIMARYCOLL:" + demo.cases.PrimaryCollectionIdentity.z8_run().get());
         System.out.println("SQLUSERCONV:" + demo.cases.SqlConversion.z8_run().get());
         System.out.println("EXCEPTIONCONV:" + demo.cases.ExceptionConversion.z8_run().get());
         System.out.println("PRIMARYCONV:" + demo.cases.PrimaryConversion.z8_run().get());
@@ -810,6 +811,7 @@ void main() {
     writeln("NESTEDMAP:", z8_optional_require(Z8p_64656D6F2E63617365732E4E65737465644D6170417272617973.m_run()));
     writeln("PRIMARYKEYMAP:", z8_optional_require(Z8p_64656D6F2E63617365732E5072696D6172794B65794D617073.m_run()));
     writeln("REFKEYMAP:", z8_optional_require(Z8p_64656D6F2E63617365732E5265666572656E63654B65794D617073.m_run()));
+    writeln("PRIMARYCOLL:", z8_optional_require(Z8p_64656D6F2E63617365732E5072696D617279436F6C6C656374696F6E4964656E74697479.m_run()));
     writeln("SQLUSERCONV:", z8_optional_require(Z8p_64656D6F2E63617365732E53716C436F6E76657273696F6E.m_run()));
     writeln("EXCEPTIONCONV:", z8_optional_require(Z8p_64656D6F2E63617365732E457863657074696F6E436F6E76657273696F6E.m_run()));
     writeln("PRIMARYCONV:", z8_optional_require(Z8p_64656D6F2E63617365732E5072696D617279436F6E76657273696F6E.m_run()));
@@ -1259,7 +1261,7 @@ void main() {
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_lines = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "STATICEXC:", "EXCEPTIONCONV:", "PRIMARYCONV:", "ENUMCONV:", "EXPRSTMT:", "SQLARRAY:", "SQLMAP:", "OBJECTMAP:", "REFMAP:", "NESTEDMAP:", "PRIMARYKEYMAP:", "REFKEYMAP:", "SQLUSERCONV:", "SQLUSERCONVSQL:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:", "SQLSPAN:", "SQLSPANARITH:", "SQLSPANBOOL:", "SQLSPANPART:", "SQLSPANFUNC:", "SQLBINARY:", "SQLGEOM:", "SQLGEOMBOOL:", "SQLGEOMEMPTY:", "SQLGEOMFUNC:", "SQLGEOMMETRIC:", "SQLGEOMTEST:", "SQLGEOMTEXT:", "SQLGEOMCOUNT:", "SQLPRIMARY:", "SQLPRIMARYCHECK:", "SQLFTSBOOL:", "SQLFTSRANK:"))]
+        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "STATICEXC:", "EXCEPTIONCONV:", "PRIMARYCONV:", "ENUMCONV:", "EXPRSTMT:", "SQLARRAY:", "SQLMAP:", "OBJECTMAP:", "REFMAP:", "NESTEDMAP:", "PRIMARYKEYMAP:", "REFKEYMAP:", "PRIMARYCOLL:", "SQLUSERCONV:", "SQLUSERCONVSQL:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:", "SQLSPAN:", "SQLSPANARITH:", "SQLSPANBOOL:", "SQLSPANPART:", "SQLSPANFUNC:", "SQLBINARY:", "SQLGEOM:", "SQLGEOMBOOL:", "SQLGEOMEMPTY:", "SQLGEOMFUNC:", "SQLGEOMMETRIC:", "SQLGEOMTEST:", "SQLGEOMTEXT:", "SQLGEOMCOUNT:", "SQLPRIMARY:", "SQLPRIMARYCHECK:", "SQLFTSBOOL:", "SQLFTSRANK:"))]
         original_static_exception = [line for line in output.splitlines() if line.startswith("STATICEXC:")]
         d_static_exception = [line for line in d_lines if line.startswith("STATICEXC:")]
         if original_static_exception != ["STATICEXC:253"] or d_static_exception != original_static_exception:
@@ -1308,6 +1310,10 @@ void main() {
         d_reference_key_map = [line for line in d_lines if line.startswith("REFKEYMAP:")]
         if original_reference_key_map != ["REFKEYMAP:101"] or d_reference_key_map != original_reference_key_map:
             raise SystemExit(f"Reference-key map behavior differs: original={original_reference_key_map!r}, D={d_reference_key_map!r}")
+        original_primary_collection = [line for line in output.splitlines() if line.startswith("PRIMARYCOLL:")]
+        d_primary_collection = [line for line in d_lines if line.startswith("PRIMARYCOLL:")]
+        if original_primary_collection != ["PRIMARYCOLL:105"] or d_primary_collection != original_primary_collection:
+            raise SystemExit(f"Primary collection identity differs: original={original_primary_collection!r}, D={d_primary_collection!r}")
         original_sql_conversion = [line for line in output.splitlines() if line.startswith("SQLUSERCONV:")]
         d_sql_conversion = [line for line in d_lines if line.startswith("SQLUSERCONV:")]
         if original_sql_conversion != ["SQLUSERCONV:269"] or d_sql_conversion != original_sql_conversion:

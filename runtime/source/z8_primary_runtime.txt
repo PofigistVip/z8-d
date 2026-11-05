@@ -32,6 +32,23 @@ class Z8Primary {
     }
 }
 
+// Java collections first compare references, then call equals. A BL primary
+// wrapper can be recreated while retaining the same underlying object.
+bool z8_primary_collection_equals(Z8Primary left, Z8Primary right) {
+    if (left is right) return true;
+    if (left is null || right is null || left.kind != right.kind) return false;
+    final switch (left.kind) {
+        case Z8PrimaryKind.guid: if (left.guidValue is right.guidValue) return true; break;
+        case Z8PrimaryKind.binary: if (left.binaryValue is right.binaryValue) return true; break;
+        case Z8PrimaryKind.datespan: if (left.datespanValue is right.datespanValue) return true; break;
+        case Z8PrimaryKind.geometry: if (left.geometryValue is right.geometryValue) return true; break;
+        case Z8PrimaryKind.date: if (left.dateValue is right.dateValue) return true; break;
+        case Z8PrimaryKind.file: if (left.fileValue is right.fileValue) return true; break;
+        case Z8PrimaryKind.integer: case Z8PrimaryKind.boolean: case Z8PrimaryKind.decimal: case Z8PrimaryKind.text: break;
+    }
+    return left == right;
+}
+
 Z8Primary z8_primary_box(T)(T value) {
     static if (is(T == Z8Optional!long) || is(T == Z8Optional!bool) || is(T == Z8Optional!Z8Decimal)) {
         return value.present ? z8_primary_box(value.value) : null;

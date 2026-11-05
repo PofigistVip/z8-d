@@ -17,6 +17,8 @@ class Z8Array(T) {
             auto value = right.items[i];
             static if (is(T == wstring)) {
                 if (!z8_string_equals(item, value)) return false;
+            } else static if (is(T == Z8Primary)) {
+                if (!z8_primary_collection_equals(item, value)) return false;
             } else static if (is(T == class)) {
                 if (item !is value && (item is null || value is null || item != value)) return false;
             } else if (item != value) return false;
@@ -69,7 +71,8 @@ class Z8Array(T) {
             } else static if (is(T == class)) {
                 if (item is value) return cast(long)i;
                 if (item is null) throw new Exception("null array element");
-                if (item == value) return cast(long)i;
+                static if (is(T == Z8Primary)) { if (z8_primary_collection_equals(item, value)) return cast(long)i; }
+                else if (item == value) return cast(long)i;
             } else static if (is(T == wstring)) {
                 if (item is null && value is null) return cast(long)i;
                 if (item is null) throw new Exception("null array element");
@@ -98,7 +101,8 @@ class Z8Array(T) {
             foreach (i, item; items) {
                 static if (isPrimitive) bool equal = item.present == value.present && (!value.present || value.value == item.value);
                 else static if (is(T == wstring)) bool equal = z8_string_equals(item, value);
-                else bool equal = item is value || (value !is null && value == item);
+                // ArrayList.remove invokes the searched value's equals, even for the same object.
+                else bool equal = value is null ? item is null : value.opEquals(item);
                 if (equal) {
                     z8_removeAt(cast(long)i); return true;
                 }
@@ -151,6 +155,7 @@ class Z8Array(T) {
                 foreach (existing; result.items) {
                     static if (isPrimitive) bool equal = item.present == existing.present && (!item.present || item.value == existing.value);
                     else static if (is(T == wstring)) bool equal = z8_string_equals(item, existing);
+                    else static if (is(T == Z8Primary)) bool equal = z8_primary_collection_equals(item, existing);
                     else bool equal = item is existing || (item !is null && item == existing);
                     if (equal) { found = true; break; }
                 }

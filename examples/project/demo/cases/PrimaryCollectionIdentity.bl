@@ -1,0 +1,17 @@
+public class PrimaryCollectionIdentity {
+    public static int run() {
+        geometry shape;
+        primary[] values = {shape};
+        if (!values.contains(shape) || values.indexOf(shape) != 0) return 1;
+        primary[string] map = {("shape", shape)};
+        if (!map.containsValue(shape)) return 2;
+        primary[int] byNumber = {(1, shape)};
+        if (!byNumber.containsValue(shape)) return 3;
+        primary[primary] byPrimary = {(1, shape)};
+        if (!byPrimary.containsValue(shape)) return 4;
+        primary[guid] byGuid = {('00000000-0000-0000-0000-000000000001', shape)};
+        if (!byGuid.containsValue(shape)) return 5;
+        if (values.remove(shape) || values.size() != 1) return 6;
+        return 105;
+    }
+}

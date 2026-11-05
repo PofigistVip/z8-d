@@ -15,6 +15,7 @@ class Z8GuidMap(V) {
         static if (is(V == long) || is(V == bool) || is(V == Z8Decimal))
             return left.present == right.present && (!left.present || left.value == right.value);
         else static if (is(V == wstring)) return z8_string_equals(left, right);
+        else static if (is(V == Z8Primary)) return z8_primary_collection_equals(left, right);
         else return left is right || (left !is null && left == right);
     }
 
