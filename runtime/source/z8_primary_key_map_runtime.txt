@@ -1,0 +1,86 @@
+// A primary key retains its concrete scalar kind and Java HashMap hash.
+class Z8PrimaryKeyMap(V) {
+    static if (is(V == long) || is(V == bool) || is(V == Z8Decimal)) alias Element = Z8Optional!V;
+    else static if (is(V == wstring) || is(V == class)) alias Element = V;
+    else static assert(0, "unsupported primary-key map value");
+    private struct Entry { Z8Primary key; Element value; }
+    private Entry[][uint] buckets;
+    private size_t count;
+
+    private static uint keyHash(Z8Primary key) {
+        auto h = key is null ? 0u : cast(uint)z8_primary_hash(key);
+        return h ^ (h >> 16);
+    }
+    private static bool keyEquals(Z8Primary left, Z8Primary right) {
+        return left is right || (left !is null && right !is null && left == right);
+    }
+    private static bool valueEquals(Element left, Element right) {
+        static if (is(V == long) || is(V == bool) || is(V == Z8Decimal))
+            return left.present == right.present && (!left.present || left.value == right.value);
+        else static if (is(V == wstring)) return z8_string_equals(left, right);
+        else return left is right || (left !is null && right !is null && left == right);
+    }
+    long z8_size() { return cast(long)count; }
+    bool z8_isEmpty() { return count == 0; }
+    void z8_clear() { buckets.clear(); count = 0; }
+    bool z8_containsKey(Z8Primary key) {
+        auto bucket = keyHash(key) in buckets;
+        if (bucket !is null) foreach (entry; *bucket) if (keyEquals(key, entry.key)) return true;
+        return false;
+    }
+    bool z8_containsValue(Element value) {
+        foreach (bucket; buckets) foreach (entry; bucket) if (valueEquals(value, entry.value)) return true;
+        return false;
+    }
+    Element z8_add(Z8Primary key, Element value) {
+        auto hash = keyHash(key);
+        auto bucket = hash in buckets;
+        if (bucket !is null) foreach (ref entry; *bucket) if (keyEquals(key, entry.key)) {
+            auto previous = entry.value; entry.value = value; return previous;
+        }
+        buckets[hash] ~= Entry(key, value);
+        ++count;
+        return Element.init;
+    }
+    void z8_add(Z8PrimaryKeyMap!V other) {
+        z8_nonnull(other);
+        if (other is this) return;
+        foreach (bucket; other.buckets) foreach (entry; bucket) z8_add(entry.key, entry.value);
+    }
+    Element z8_get(Z8Primary key) {
+        auto bucket = keyHash(key) in buckets;
+        if (bucket !is null) foreach (entry; *bucket) if (keyEquals(key, entry.key)) return entry.value;
+        return Element.init;
+    }
+    Element z8_remove(Z8Primary key) {
+        auto hash = keyHash(key);
+        auto bucket = hash in buckets;
+        if (bucket !is null) foreach (i, entry; *bucket) if (keyEquals(key, entry.key)) {
+            auto previous = entry.value;
+            *bucket = (*bucket)[0 .. i] ~ (*bucket)[i + 1 .. $];
+            if (!(*bucket).length) buckets.remove(hash);
+            --count;
+            return previous;
+        }
+        return Element.init;
+    }
+    Z8Array!Z8Primary z8_keys() {
+        auto result = new Z8Array!Z8Primary();
+        foreach (bucket; buckets) foreach (entry; bucket) result.z8_add(entry.key);
+        return result;
+    }
+    Z8Array!V z8_values() {
+        auto result = new Z8Array!V();
+        foreach (bucket; buckets) foreach (entry; bucket) result.z8_add(entry.value);
+        return result;
+    }
+}
+Z8PrimaryKeyMap!V z8_map_union(V)(Z8PrimaryKeyMap!V left, Z8PrimaryKeyMap!V right) {
+    auto result = new Z8PrimaryKeyMap!V();
+    result.z8_add(z8_nonnull(left)); result.z8_add(z8_nonnull(right));
+    return result;
+}
+void z8_map_add_assign(V)(ref Z8PrimaryKeyMap!V left, lazy Z8PrimaryKeyMap!V previous, lazy Z8PrimaryKeyMap!V right) {
+    auto oldValue = previous; auto newValue = right;
+    left = z8_map_union(oldValue, newValue);
+}

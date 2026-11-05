@@ -113,7 +113,7 @@ class Parser {
                 result = arrayOf(result);
                 if (result == ValueType.voidType) error("this array element type is not supported");
             } else {
-                auto key = accept("string") ? ValueType.stringType : accept("int") ? ValueType.intType : accept("guid") ? ValueType.guidType : accept("bool") ? ValueType.boolType : accept("decimal") ? ValueType.decimalType : ValueType.voidType;
+                auto key = accept("string") ? ValueType.stringType : accept("int") ? ValueType.intType : accept("guid") ? ValueType.guidType : accept("bool") ? ValueType.boolType : accept("decimal") ? ValueType.decimalType : accept("primary") ? ValueType.primaryType : ValueType.voidType;
                 result = mapType(result, key);
                 if (result == ValueType.voidType) error("unsupported map key or value type");
                 expect("]");

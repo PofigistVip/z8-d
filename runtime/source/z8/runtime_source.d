@@ -30,5 +30,5 @@ package enum string runtimeSource = import("z8_core_runtime.txt") ~
     import("z8_geometry_json_runtime.txt") ~ "\n" ~
     import("z8_file_runtime.txt") ~ "\n" ~
     import("z8_zip_runtime.txt") ~ "\n" ~
-    import("z8_primary_runtime.txt") ~ "\n" ~ import("z8_primary_map_runtime.txt") ~ "\n" ~
+    import("z8_primary_runtime.txt") ~ "\n" ~ import("z8_primary_key_map_runtime.txt") ~ "\n" ~ import("z8_primary_map_runtime.txt") ~ "\n" ~
     import("z8_messageformat_runtime.txt") ~ "\n";

@@ -1,0 +1,29 @@
+public class PrimaryKeyMaps {
+    public int field = 9;
+    public static int run() {
+        string[primary] labels = {("name", "text"), (1, "integer"), (true, "boolean"), (1.5, "decimal")};
+        if (labels["name"] != "text" || labels[1] != "integer" || labels[true] != "boolean" || labels[1.5] != "decimal") return 1;
+        labels.add(null, "null");
+        labels.add(0, "zero");
+        if (labels[null] != "null" || labels[0] != "zero" || labels.size() != 6) return 2;
+        if (labels.add("name", "updated") != "text" || labels.remove(0) != "zero") return 3;
+        if (labels.keys().size() != 5 || !labels.containsValue("updated")) return 4;
+        primary[primary] mixed = {("value", 42), (2, "answer")};
+        if ((int)mixed["value"] != 42 || (string)mixed[2] != "answer") return 5;
+        PrimaryKeyMaps object = new PrimaryKeyMaps;
+        PrimaryKeyMaps[primary] objects = {("object", object)};
+        if (objects["object"].field != 9 || objects.values().first().field != 9) return 6;
+        string[][primary] arrays = {("array", {"one", "two"})};
+        if (arrays["array"][1] != "two") return 7;
+        string[primary] extra = {(true, "replacement")};
+        string[primary] combined = labels + extra;
+        if (combined[true] != "replacement" || labels[true] != "boolean") return 8;
+        string[primary] collisions = {(true, "boolean"), (1231, "number")};
+        if (collisions[true] != "boolean" || collisions[1231] != "number" || collisions.size() != 2) return 9;
+        date mutableKey = '01/01/2024';
+        string[primary] dated = {(mutableKey, "date")};
+        mutableKey = 0;
+        if (dated.containsKey(mutableKey) || dated.size() != 1) return 10;
+        return 97;
+    }
+}

@@ -37,7 +37,8 @@ private string dType(ValueType type, Program objectClass = null) {
         if (type == ValueType.stringMap) return "Z8StringMap";
         if (type == ValueType.primaryStringMap) return "Z8PrimaryMap";
         if (type == ValueType.intStringMap) return "Z8StringIntMap";
-        auto templateName = key == ValueType.stringType ? "Z8StringValueMap" :
+        auto templateName = key == ValueType.primaryType ? "Z8PrimaryKeyMap" :
+            key == ValueType.stringType ? "Z8StringValueMap" :
             key == ValueType.intType ? "Z8IntMap" : key == ValueType.boolType ? "Z8BoolMap" :
             key == ValueType.decimalType ? "Z8DecimalMap" : "Z8GuidMap";
         return templateName ~ "!(" ~ dType(value, objectClass) ~ ")";
