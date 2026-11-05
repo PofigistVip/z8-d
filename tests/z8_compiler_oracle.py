@@ -170,6 +170,8 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         (True, {"NameA": 'public class NameA { static bool f(bool value) { return (bool)(!value); } }'}),
         (True, {"NameA": 'public class NameA extends primary { public void operator = (NameA value) {} }'}),
         (False, {"NameA": 'public class NameA extends primary { public void operator = (NameA value) {} public string toString() { return "test"; } }'}),
+        (False, {"Base": 'public class Base {}', "Child": 'public class Child extends Base {}',
+                 "NameA": 'public class NameA { public static void f() { Base[Child] a; Child[Base] b; Base[Base] c = true ? a : b; } }'}),
         (False, {"NameA": 'public class NameA extends primary {}'}),
         (False, {"NameA": 'public class NameA { [name "same"] NameA first; }',
                  "NameB": 'public class NameB extends NameA { [name "same"] NameA second; }'}),

@@ -2157,6 +2157,10 @@ class Checker {
                 }
                 if (left == ValueType.stringType && right == ValueType.nullableString) left = ValueType.nullableString;
                 if (left == ValueType.nullableString && right == ValueType.stringType) right = ValueType.nullableString;
+                if (left != ValueType.primaryType && right == ValueType.primaryType && matches(e.right, ValueType.primaryType))
+                    left = ValueType.primaryType;
+                if (right != ValueType.primaryType && left == ValueType.primaryType && matches(e.third, ValueType.primaryType))
+                    right = ValueType.primaryType;
                 if (left == ValueType.decimalType && right == ValueType.intType) { e.third.promoteToDecimal = true; right = ValueType.decimalType; }
                 if (left == ValueType.intType && right == ValueType.decimalType) { e.right.promoteToDecimal = true; left = ValueType.decimalType; }
                 if (left == ValueType.stringType && hasStringConversion(right)) {
@@ -2167,10 +2171,29 @@ class Checker {
                 }
                 if (left == ValueType.stringType && right == ValueType.stringType &&
                     (e.right.kind == ExprKind.nullLiteral || e.third.kind == ExprKind.nullLiteral)) left = right = ValueType.nullableString;
-                if (left == ValueType.voidType || left != right || (hasObjectClass(left) && e.right.objectClass !is e.third.objectClass) || (hasMapKeyClass(left) && e.right.keyObjectClasses != e.third.keyObjectClasses))
+                bool selectedReferenceType;
+                Program conditionalClass;
+                Program[] conditionalKeys;
+                if (left == right && (isArray(left) || isMap(left)) &&
+                    (e.right.objectClass !is e.third.objectClass || e.right.keyObjectClasses != e.third.keyObjectClasses)) {
+                    if (covariantCollectionMatches(left, e.right.objectClass, e.right.keyObjectClasses, e.third.objectClass, e.third.keyObjectClasses)) {
+                        if (!matches(e.right, left, e.third.objectClass, e.third.keyObjectClasses)) fail("conditional branch type mismatch", e.token);
+                        conditionalClass = e.third.objectClass; conditionalKeys = e.third.keyObjectClasses;
+                    } else if (covariantCollectionMatches(left, e.third.objectClass, e.third.keyObjectClasses, e.right.objectClass, e.right.keyObjectClasses)) {
+                        if (!matches(e.third, left, e.right.objectClass, e.right.keyObjectClasses)) fail("conditional branch type mismatch", e.token);
+                        conditionalClass = e.right.objectClass; conditionalKeys = e.right.keyObjectClasses;
+                    } else fail("conditional branch type mismatch", e.token);
+                    selectedReferenceType = true;
+                } else if (left == ValueType.selfType && right == left && e.right.objectClass !is e.third.objectClass) {
+                    if (isAssignable(e.right.objectClass, e.third.objectClass)) conditionalClass = e.third.objectClass;
+                    else if (isAssignable(e.third.objectClass, e.right.objectClass)) conditionalClass = e.right.objectClass;
+                    else fail("conditional branch type mismatch", e.token);
+                    selectedReferenceType = true;
+                }
+                if (left == ValueType.voidType || left != right || (!selectedReferenceType && hasObjectClass(left) && e.right.objectClass !is e.third.objectClass) || (!selectedReferenceType && hasMapKeyClass(left) && e.right.keyObjectClasses != e.third.keyObjectClasses))
                     fail("conditional branch type mismatch", e.token);
-                if (hasObjectClass(left)) e.objectClass = e.right.objectClass;
-                if (hasMapKeyClass(left)) e.keyObjectClasses = e.right.keyObjectClasses;
+                if (hasObjectClass(left)) e.objectClass = selectedReferenceType ? conditionalClass : e.right.objectClass;
+                if (hasMapKeyClass(left)) e.keyObjectClasses = selectedReferenceType ? conditionalKeys : e.right.keyObjectClasses;
                 return left;
             case ExprKind.elvis:
                 auto left = typeOf(e.left);

@@ -11,6 +11,10 @@ public class NativeConsumer {
         if (NativeMath.add("a", "b") != "ab") return 1;
         int converted = number;
         primary boxed = number;
+        primary selected = true ? number : boxed;
+        if (!(selected instanceof NativeNumber)) return 14;
+        primary scalarChoice = true ? 5 : boxed;
+        if (!(scalarChoice instanceof int) || (int)scalarChoice != 5) return 15;
         if (!(number instanceof primary) || !(boxed instanceof NativeNumber)) return 3;
         NativeNumber unboxed = (NativeNumber)boxed;
         if (unboxed.read() != 9) return 4;

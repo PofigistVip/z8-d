@@ -1,0 +1,31 @@
+public class CovariantConditional {
+    private static int effects;
+    private static CovariantLeaf[][] makeLeaf() { effects += 1; return {{new CovariantLeaf}}; }
+    private static CovariantMiddle[][] makeMiddle() { effects += 10; return {{new CovariantMiddle}}; }
+    public static int run() {
+        CovariantMiddle[][] middle = {{new CovariantMiddle}};
+        CovariantLeaf[][] leaves = {{new CovariantLeaf}};
+        CovariantBase[][] rows = false ? middle : leaves;
+        rows[0].add(new CovariantBase);
+        if (leaves[0].size() != 2 || middle[0].size() != 1) return 1;
+        try { CovariantLeaf invalid = leaves[0][1]; return 2; }
+        catch (exception expectedRow) {}
+
+        CovariantLeaf leaf = new CovariantLeaf;
+        CovariantMiddle middleKey = new CovariantMiddle;
+        CovariantLeaf[CovariantLeaf][] narrow = {{(leaf, leaf)}};
+        CovariantMiddle[CovariantMiddle][] medium = {{(middleKey, middleKey)}};
+        CovariantBase[CovariantBase][] selected = true ? narrow : medium;
+        CovariantBase base = new CovariantBase;
+        selected[0].add(base, base);
+        if (narrow[0].size() != 2 || medium[0].size() != 1) return 3;
+        try { for (CovariantLeaf key : narrow[0].keys()) { int seen = key.value; } return 4; }
+        catch (exception expectedKey) {}
+        CovariantBase single = false ? new CovariantMiddle : new CovariantLeaf;
+        if (!(single instanceof CovariantLeaf)) return 5;
+        effects = 0;
+        CovariantBase[][] lazy = true ? makeLeaf() : makeMiddle();
+        if (effects != 1 || lazy.size() != 1) return 6;
+        return 145;
+    }
+}

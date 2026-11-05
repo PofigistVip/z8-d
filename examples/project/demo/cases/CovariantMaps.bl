@@ -53,6 +53,7 @@ public class CovariantMaps {
         try { for (CovariantChild key : keyedRows.keys()) { int seen = key.value; } return 19; }
         catch (exception expectedNestedKey) {}
         if (CovariantNestedMaps.run() != 143) return 20;
+        if (CovariantConditional.run() != 145) return 21;
         return 135;
     }
 }
