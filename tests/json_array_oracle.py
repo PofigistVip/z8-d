@@ -31,6 +31,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     (source / "Probe.bl").write_text("""
 import org.zenframework.z8.base.json.JsonArray;
 import org.zenframework.z8.base.json.JsonObject;
+import org.zenframework.z8.base.json.JsonPath;
 public class Probe {
     public static JsonArray parse(string text) { return JsonArray.parse(text); }
     public static void assign(JsonArray array, string text) { array = text; }
@@ -76,6 +77,12 @@ public class Probe {
     public static bool objectHas(JsonObject object, string key) { return object.has(key); }
     public static JsonObject fromArrayMap(JsonArray[primary] values) { return JsonObject.fromJsonArrayMap(values); }
     public static JsonObject fromObjectMap(JsonObject[primary] values) { return JsonObject.fromJsonObjectMap(values); }
+    public static JsonPath path(string text) { return JsonPath.path(text); }
+    public static JsonPath pathAssign(JsonPath path, string text) { path = text; return path; }
+    public static int pathLength(JsonPath path) { return path.length(); }
+    public static string pathName(JsonPath path, int index) { return path.name(index); }
+    public static JsonPath pathParent(JsonPath path) { return path.getParent(); }
+    public static string pathText(JsonPath path) { return path.toString(); }
     public static string render(JsonArray array) { return (string)array; }
     public static string display(JsonArray array) { return array.toString(); }
 }
@@ -212,6 +219,14 @@ class JsonArrayOracle {
         System.out.println("jsonmapnull:" + (org.zenframework.z8.server.base.json.parser.JsonObject.z8_fromJsonArrayMap(null) == null) + ":" + (org.zenframework.z8.server.base.json.parser.JsonObject.z8_fromJsonObjectMap(null) == null));
         arrayMap.put(new integer(2), null);
         try { org.zenframework.z8.server.base.json.parser.JsonObject.z8_fromJsonArrayMap(arrayMap); System.out.println("bad"); } catch (RuntimeException expected) { System.out.println("jsonmapvalue:error"); }
+        for (String pathText : new String[] {" a/b[02]/c ", "/x//y[1]garbage/z", "[0]/root[3]", "", "/a-b/c"}) {
+            org.zenframework.z8.server.base.json.parser.JsonPath path = org.zenframework.z8.server.base.json.parser.JsonPath.z8_path(new string(pathText)).get();
+            System.out.println("path:" + path.z8_toString().get() + ":" + path.z8_length().get());
+            for (int i = 0; i < path.z8_length().get(); i++) {
+                try { System.out.println("part:" + path.z8_name(new integer(i)).get()); } catch (RuntimeException expected) { System.out.println("part:error"); }
+            }
+            try { System.out.println("parent:" + path.z8_getParent().get().z8_toString().get()); } catch (RuntimeException expected) { System.out.println("parent:error"); }
+        }
         for (String input : new String[] {"", "1,2", " [1,2]", "[1,]", "[1,,2]", "[1", "{x:1}"}) {
             try { System.out.println("p:" + parse(input).string().get()); } catch (RuntimeException expected) { System.out.println("p:error"); }
         }
@@ -225,6 +240,7 @@ class JsonArrayOracle {
     server_source = original / "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server"
     current_sources = list((server_source / "json/parser").glob("*.java")) + [
         server_source / "base/json/parser/JsonObject.java", server_source / "base/json/parser/JsonArray.java",
+        server_source / "base/json/parser/JsonPath.java",
         server_source / "types/date.java", server_source / "types/decimal.java",
     ]
     subprocess.run(["javac", "-source", "8", "-target", "8", "-cp", classpath, "-d", str(temp),
@@ -359,6 +375,16 @@ void main() {
     writeln("jsonmapnull:", P.m_fromArrayMap(null) is null, ":", P.m_fromObjectMap(null) is null);
     arrayMap.z8_add(z8_primary_box(2L), null);
     try { P.m_fromArrayMap(arrayMap); writeln("bad"); } catch (Exception) { writeln("jsonmapvalue:error"); }
+    foreach (text; [" a/b[02]/c "w, "/x//y[1]garbage/z"w, "[0]/root[3]"w, ""w, "/a-b/c"w]) {
+        auto path = P.m_path(text);
+        writeln("path:", P.m_pathText(path).to!string, ":", z8_optional_require(P.m_pathLength(path)));
+        foreach (i; 0 .. z8_optional_require(P.m_pathLength(path))) {
+            try { writeln("part:", P.m_pathName(path, i).to!string); } catch (Exception) { writeln("part:error"); }
+        }
+        try { writeln("parent:", P.m_pathText(P.m_pathParent(path)).to!string); } catch (Exception) { writeln("parent:error"); }
+    }
+    auto assignedPath = P.m_path("/old"w); assert(P.m_pathAssign(assignedPath, "/new"w) is assignedPath);
+    assert(P.m_pathText(assignedPath) == "/new"w);
     foreach (input; [""w, "1,2"w, " [1,2]"w, "[1,]"w, "[1,,2]"w, "[1"w, "{x:1}"w]) {
         try { writeln("p:", P.m_render(P.m_parse(input)).to!string); } catch (Exception) { writeln("p:error"); }
     }
@@ -377,4 +403,4 @@ void main() {
     actual = subprocess.check_output([str(executable)], cwd=temp, text=True, encoding="utf-8").splitlines()
     if actual != expected:
         raise SystemExit(f"JsonArray differs:\nJava={expected!r}\nD={actual!r}")
-print("JsonArray parsing, mutation, conversions and nested references match Java")
+print("JSON operations, nested references and path parsing match Java")

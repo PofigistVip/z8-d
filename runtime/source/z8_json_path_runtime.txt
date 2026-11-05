@@ -1,0 +1,91 @@
+// Native adapter for org.zenframework.z8.server.base.json.parser.JsonPath.
+private enum z8_json_path_name = "org.zenframework.z8.server.base.json.parser.JsonPath"w;
+private struct Z8JsonPathPart {
+    bool ordinal;
+    int index;
+    wstring name;
+}
+private class Z8JsonPathState {
+    wstring text;
+    Z8JsonPathPart[] parts;
+}
+private bool z8_json_path_word(wchar c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
+}
+private Z8JsonPathState z8_json_path_parse(wstring source) {
+    source = z8_string_required(source);
+    while (source.length && source[0] <= 0x20) source = source[1 .. $];
+    while (source.length && source[$ - 1] <= 0x20) source = source[0 .. $ - 1];
+    auto result = new Z8JsonPathState();
+    result.text = source;
+    size_t i;
+    while (i < source.length) {
+        if ((i == 0 && z8_json_path_word(source[i])) ||
+            (source[i] == '/' && i + 1 < source.length && z8_json_path_word(source[i + 1]))) {
+            if (source[i] == '/') ++i;
+            auto start = i;
+            while (i < source.length && z8_json_path_word(source[i])) ++i;
+            Z8JsonPathPart part; part.name = source[start .. i]; result.parts ~= part;
+        } else if (source[i] == '[') {
+            auto start = i + 1, end = start;
+            while (end < source.length && source[end] >= '0' && source[end] <= '9') ++end;
+            if (end > start && end < source.length && source[end] == ']') {
+                auto number = z8_int_parse(source[start .. end]);
+                if (number > int.max) throw new Exception("invalid JSON path index");
+                Z8JsonPathPart part; part.ordinal = true; part.index = cast(int)number; result.parts ~= part;
+                i = end + 1;
+            } else ++i;
+        } else ++i;
+    }
+    return result;
+}
+private Z8JsonPathState z8_json_path_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_json_path_name, self)) throw new Exception("invalid native JSON path");
+    auto state = cast(Z8JsonPathState)self.z8_get_native_state(z8_json_path_name);
+    if (state is null) throw new Exception("uninitialized JSON path");
+    return state;
+}
+private Z8Object z8_json_path_wrap(Z8JsonPathState state) {
+    auto result = z8_native_new(z8_json_path_name);
+    z8_nonnull(result).z8_set_native_state(z8_json_path_name, state);
+    return result;
+}
+private Z8Object z8_json_path_new(wstring source) { return z8_json_path_wrap(z8_json_path_parse(source)); }
+private Z8Object z8_json_path_assign(Z8Object self, wstring source) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_json_path_name, self)) throw new Exception("invalid native JSON path");
+    self.z8_set_native_state(z8_json_path_name, z8_json_path_parse(source));
+    return self;
+}
+private Z8Optional!long z8_json_path_length(Z8Object self) {
+    return z8_optional_wrap(cast(long)z8_json_path_state(self).parts.length);
+}
+private wstring z8_json_path_part_name(Z8Object self, Z8Optional!long index) {
+    auto parts = z8_json_path_state(self).parts;
+    auto position = cast(int)z8_optional_require(index);
+    if (position < 0 || cast(size_t)position >= parts.length || parts[position].ordinal)
+        throw new Exception("invalid JSON path name");
+    return z8_string_new(parts[position].name);
+}
+private Z8Object z8_json_path_parent(Z8Object self) {
+    auto parts = z8_json_path_state(self).parts;
+    if (!parts.length) throw new Exception("JSON path has no parent");
+    auto parent = new Z8JsonPathState();
+    parent.parts = parts[0 .. $ - 1].dup;
+    parent.text = " "w[0 .. 0];
+    foreach (part; parent.parts)
+        parent.text ~= part.ordinal ? "["w ~ part.index.to!wstring ~ "]"w : "/"w ~ part.name;
+    return z8_json_path_wrap(parent);
+}
+private wstring z8_json_path_string(Z8Object self) { return z8_string_new(z8_json_path_state(self).text); }
+void z8_bind_builtin_json_path() {
+    enum prefix = z8_json_path_name ~ "."w;
+    z8_native_bind(prefix ~ "m_path"w, &z8_json_path_new);
+    z8_native_bind(prefix ~ "z8op_assign"w, &z8_json_path_assign);
+    z8_native_bind(prefix ~ "m_length"w, &z8_json_path_length);
+    z8_native_bind(prefix ~ "m_name"w, &z8_json_path_part_name);
+    z8_native_bind(prefix ~ "m_getParent"w, &z8_json_path_parent);
+    z8_native_bind(prefix ~ "m_toString"w, &z8_json_path_string);
+}
+shared static this() { z8_bind_builtin_json_path(); }

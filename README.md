@@ -494,6 +494,8 @@ GUID- и date-значений. Методы `set`, `put` и `remove` работ
 типов, добавление, вставка и удаление скалярных значений, создание и
 присваивание из `primary[]`, сложение JSON-массивов, чтение и изменение
 вложенных объектов и массивов.
+Для `JsonPath` поддержаны создание, присваивание, разбор частей и получение
+родительского пути; выполнение пути по JSON ещё не реализовано.
 Смена регистра в `Base34.decode` использует Unicode D и может
 отличаться от Java для отдельных локалей. Остальные методы этих проверяемых
 классов этим не реализуются. Строки для хеша
@@ -505,7 +507,7 @@ GUID- и date-значений. Методы `set`, `put` и `remove` работ
 `z8_bind_builtin_cron()`, методы `Sql` — `z8_bind_builtin_sql_functions()`,
 конструктор `Object` — `z8_bind_builtin_object()`, а доступные методы
 `JsonObject` — `z8_bind_builtin_json_object()`, `JsonArray` —
-`z8_bind_builtin_json_array()`.
+`z8_bind_builtin_json_array()`, `JsonPath` — `z8_bind_builtin_json_path()`.
 
 Поддерживаются конкатенация, сравнения, `length`, `isEmpty`, `compare`, `compareNoCase`, `startsWith`,
 `endsWith`, `indexOf`, `lastIndexOf`, `substring`, `charAt`, `trim`, `trimLeft`,
