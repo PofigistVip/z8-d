@@ -2,10 +2,38 @@
 // cursors, typed field constructors and SQL expressions are separate adapters.
 private enum z8_field_name = "org.zenframework.z8.server.base.table.value.Field"w;
 class Z8FieldState {
-    Z8Primary value;
+    private enum Storage { boxed, integer, text }
+    private Storage storage;
+    private Z8Primary boxedValue;
+    private Z8Optional!long integerValue;
+    private wstring textValue;
     private Z8Primary originalValue;
     bool changed, wasNull = true;
     this(Z8Primary initial = null, bool wasNull = true) { value = initial; this.wasNull = wasNull; }
+    @property Z8Primary value() {
+        final switch (storage) {
+            case Storage.boxed: return boxedValue;
+            case Storage.integer: return z8_primary_box(integerValue);
+            case Storage.text: return z8_primary_box(textValue);
+        }
+    }
+    @property void value(Z8Primary item) {
+        final switch (storage) {
+            case Storage.boxed: boxedValue = item; break;
+            case Storage.integer: integerValue = z8_primary_cast!long(item); break;
+            case Storage.text: textValue = z8_primary_cast!wstring(item); break;
+        }
+    }
+    void useInteger() {
+        if (storage == Storage.integer) return;
+        auto item = value; auto converted = z8_primary_cast!long(item);
+        storage = Storage.integer; integerValue = converted; boxedValue = null;
+    }
+    void useText() {
+        if (storage == Storage.text) return;
+        auto item = value; auto converted = z8_primary_cast!wstring(item);
+        storage = Storage.text; textValue = converted; boxedValue = null;
+    }
 }
 private Z8FieldState z8_field_state(Z8Object self) {
     self = z8_nonnull(self);
@@ -28,7 +56,7 @@ void z8_field_reset(Z8Object self) {
     auto state = z8_field_state(self);
     if (state.changed) { state.value = state.originalValue; state.changed = false; }
 }
-private Z8Primary z8_field_primary(Z8Object self) { return z8_field_state(self).value; }
+private Z8Primary z8_field_primary(Z8Object self) { return z8_nonnull(self).z8_field_virtual_get(); }
 private auto z8_field_cast(T)(Z8Object self) { return z8_primary_cast!T(z8_field_primary(self)); }
 private Z8Optional!bool z8_field_changed(Z8Object self) { return z8_optional_wrap(z8_field_state(self).changed); }
 private Z8Optional!bool z8_field_was_null(Z8Object self) { return z8_optional_wrap(z8_field_state(self).wasNull); }

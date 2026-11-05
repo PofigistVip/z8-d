@@ -936,6 +936,17 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 dStorageType(method.parameters[1].type, method.parameters[1].objectClass, method.parameters[1].keyObjectClasses) == "Z8Array!Z8File")
                 result ~= "override Z8Binary z8_object_process_content(Z8StringMap parameters, Z8Array!Z8File files) { return this.m_processContentRequest(parameters, files); }\n";
         }
+        bool isTypedFieldSubclass;
+        for (auto base = program.baseClass; base !is null; base = base.baseClass)
+            if (base.isNative && (base.nativeName == "org.zenframework.z8.server.base.table.value.IntegerField"w ||
+                                  base.nativeName == "org.zenframework.z8.server.base.table.value.StringField"w))
+                isTypedFieldSubclass = true;
+        if (isTypedFieldSubclass && !program.isNative) foreach (method; program.methods)
+            if (method.overrides && !method.isStatic && method.name.text == "get" && !method.parameters.length &&
+                (method.returnType == ValueType.intType || method.returnType == ValueType.stringType)) {
+                result ~= "override Z8Primary z8_field_virtual_get() { return z8_primary_box(this.m_get()); }\n";
+                break;
+            }
         if (extendsBuiltinPrimary(program)) {
             if (program.isNative) {
                 auto stringBinding = emitRawWStringLiteral(program.nativeName ~ ".m_toString"w);
