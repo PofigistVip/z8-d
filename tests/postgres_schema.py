@@ -113,6 +113,7 @@ import z8.runtime;
 import z8.database.postgres;
 import z8.database.connection;
 import z8.database.schema;
+import z8.database.catalog;
 import z8gen.p_Probe;
 import std.algorithm.searching : canFind;
 void main(string[] args) {
@@ -206,6 +207,28 @@ void main(string[] args) {
     try { z8_postgres_create_tables(db, "z8_test"w, [P.m_statics()]); }
     catch (Z8PostgresException) { nestedRejected = true; }
     assert(nestedRejected && db.inTransaction()); db.rollback();
+    auto sourceInfo = z8_postgres_describe_table(db, "z8_test"w, "Source"w);
+    assert(sourceInfo !is null && sourceInfo.schema == "z8_test" && sourceInfo.primaryKeyColumns == ["RecordId"]);
+    assert(sourceInfo.foreignKeys.length == 2 && sourceInfo.indexes.length >= 2);
+    bool primaryIndex, linkIndex, linkColumn;
+    foreach (idx; sourceInfo.indexes) {
+        if (idx.primary) primaryIndex = idx.unique && idx.definition.canFind("RecordId");
+        if (idx.definition.canFind("TargetId")) linkIndex = true;
+    }
+    foreach (column; sourceInfo.columns) if (column.name == "TargetId")
+        linkColumn = column.type == "uuid" && !column.nullable && column.hasDefault;
+    assert(primaryIndex && linkIndex && linkColumn);
+    auto targetInfo = z8_postgres_describe_table(db, "pg_temp"w, "Target;--"w);
+    assert(targetInfo !is null && targetInfo.schema.canFind("pg_temp_") && targetInfo.name == "Target;--");
+    assert(z8_postgres_describe_table(db, "z8_test"w, "Source' OR true --"w) is null);
+    assert(z8_postgres_describe_table(db, "does_not_exist"w, "Source"w) is null);
+    db.execute(`CREATE TABLE "z8_test"."Composite" ("B" integer, "A" integer, PRIMARY KEY ("A", "B"))`);
+    auto composite = z8_postgres_describe_table(db, "z8_test"w, "Composite"w);
+    assert(composite.primaryKeyColumns == ["A", "B"] && composite.columns[0].name == "B");
+    db.execute(`CREATE SCHEMA "dot.name"`);
+    db.execute(`CREATE TABLE "dot.name"."quoted""table" ("a" integer)`);
+    auto quoted = z8_postgres_describe_table(db, "dot.name"w, `quoted"table`w);
+    assert(quoted !is null && quoted.schema == "dot.name" && quoted.columns[0].name == "a");
     db.execute(ddl);
     db.execute(`INSERT INTO "Sample;--" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000001')`);
     auto row = db.execute(`SELECT "Title","Amount","Flag","Price","Reference","Moment","Duration","Details","Blob" FROM "Sample;--"`);

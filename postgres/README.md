@@ -57,6 +57,12 @@ does not migrate existing tables. Database changes roll back on failure; side
 effects performed by BL event handlers outside the database do not. The full
 original schema lifecycle is not yet implemented.
 
+`z8_postgres_describe_table` in `z8.database.catalog` reads a table's columns,
+default expressions, ordered primary key, indexes and foreign-key definitions
+from PostgreSQL catalogs. It returns null for a missing table and accepts
+`pg_temp` as the current connection's temporary schema. The result is a
+read-only snapshot, not an automatic migration plan.
+
 `Z8PostgresQueryExecutor` connects BL `Query` reads to PostgreSQL tables.
 Construct it with a connection, schema and root table name, then attach it to
 the generated query with `z8_query_set_executor`. It supports explicit selected
