@@ -7,7 +7,7 @@ import std.format : format;
 import std.string : replace, startsWith, split;
 import std.regex : matchAll, regex;
 import z8.compiler_model;
-import z8.lexer : TokenKind;
+import z8.lexer : TokenKind, decodeStringLiteral;
 import z8.d_writer : formatDSource;
 
 private string operatorDName(string symbol) {
@@ -81,21 +81,7 @@ private string dType(ValueType type, Program objectClass = null) {
 }
 /// The Java runtime stores strings as UTF-16; preserve its code-unit ordering.
 private string emitStringLiteral(string text) {
-    auto raw = text.to!wstring;
-    wchar[] value;
-    for (size_t i = 1; i + 1 < raw.length; ++i) {
-        wchar c = raw[i];
-        if (c == '\\') {
-            c = raw[++i];
-            switch (c) {
-                case 'b': c = '\b'; break; case 'f': c = '\f'; break;
-                case 'n': c = '\n'; break; case 'r': c = '\r'; break; case 't': c = '\t'; break;
-                default: break; // lexer has validated quotes and backslash
-            }
-            value ~= c;
-        } else if (c >= ' ' || c == '\t' || c == '\r' || c == '\n') value ~= c;
-    }
-    return emitWStringLiteral(value);
+    return emitWStringLiteral(decodeStringLiteral(text));
 }
 
 /// Emit readable UTF-16 literals, falling back to code units for lone surrogates.

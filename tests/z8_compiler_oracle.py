@@ -230,6 +230,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             !"существующее".equals(metadata.get().annotated.getAttribute("initTag")) ||
             !"false".equals(metadata.get().annotated.getAttribute("enabled")) ||
             !"7L".equals(metadata.get().annotated.getAttribute("count")) ||
+            !"*/15 0 1-31 1,3,5 1-5".equals(metadata.get().annotated.getAttribute("job")) ||
             !"true".equals(metadata.get().annotated.getAttribute("selected")) ||
             !"вложенное".equals(metadata.get().annotated.get().annotated.getAttribute("chainTag")) ||
             !"специализация поля".equals(metadata.get().ownSpecial.getAttribute("specialTag")))
@@ -412,6 +413,7 @@ void main() {
     assert(metadata.f_annotated.z8_get_attribute("initTag"w) == "существующее"w);
     assert(metadata.f_annotated.z8_get_attribute("enabled"w) == "false"w);
     assert(metadata.f_annotated.z8_get_attribute("count"w) == "7L"w);
+    assert(metadata.f_annotated.z8_get_attribute("job"w) == "*/15 0 1-31 1,3,5 1-5"w);
     assert(metadata.f_annotated.z8_get_attribute("selected"w) == "true"w);
     assert(z8_nonnull(metadata.f_annotated).f_annotated.z8_get_attribute("chainTag"w) == "вложенное"w);
     assert(metadata.f_ownSpecial.z8_get_attribute("specialTag"w) == "специализация поля"w);

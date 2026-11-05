@@ -2,6 +2,7 @@ module z8.parser;
 
 import std.algorithm : canFind;
 import std.conv : to;
+import std.regex : matchFirst, regex;
 import z8.compiler_model;
 import z8.lexer;
 
@@ -160,10 +161,20 @@ class Parser {
         return attribute;
     }
     private void checkSupportedAttribute(TypeAttribute attribute) {
-        if (["name", "primary", "job"].canFind(attribute.name.text))
+        if (["name", "primary"].canFind(attribute.name.text))
             throw new CompileException("this attribute is not supported yet", attribute.name.position);
         if (attribute.name.text == "request" && attribute.hasValue && attribute.value.kind != TokenKind.booleanLiteral)
             throw new CompileException("request attribute requires a boolean literal", attribute.value.position);
+        if (attribute.name.text == "job" && attribute.hasValue) {
+            if (attribute.value.kind != TokenKind.stringLiteral)
+                throw new CompileException("job attribute requires a string literal", attribute.value.position);
+            auto cron = decodeStringLiteral(attribute.value.text).to!string;
+            enum column = `((\*|[0-9]{1,2}(-[0-9]{1,2})?)(/[0-9]{1,2})?(,(\*|[0-9]{1,2}(-[0-9]{1,2})?)(/[0-9]{1,2})?)*)`;
+            enum space = `[ \t\r\n\f\x0b]+`;
+            auto pattern = regex("^" ~ column ~ space ~ column ~ space ~ column ~ space ~ column ~ space ~ column ~ "$");
+            if (cron.length && matchFirst(cron, pattern).empty)
+                throw new CompileException("job attribute requires a valid CRON expression", attribute.value.position);
+        }
     }
     Program parse() {
         auto result = new Program;

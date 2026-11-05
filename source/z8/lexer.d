@@ -21,6 +21,25 @@ class LexException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
+// Decode a validated BL string token into Java-compatible UTF-16 code units.
+package wstring decodeStringLiteral(string text) {
+    auto raw = text.to!wstring;
+    wchar[] value;
+    for (size_t i = 1; i + 1 < raw.length; ++i) {
+        wchar c = raw[i];
+        if (c == '\\') {
+            c = raw[++i];
+            switch (c) {
+                case 'b': c = '\b'; break; case 'f': c = '\f'; break;
+                case 'n': c = '\n'; break; case 'r': c = '\r'; break; case 't': c = '\t'; break;
+                default: break;
+            }
+            value ~= c;
+        } else if (c >= ' ' || c == '\t' || c == '\r' || c == '\n') value ~= c;
+    }
+    return value.idup;
+}
+
 private enum keywords = ["operator", "do", "for", "while", "if", "else", "break",
     "continue", "return", "this", "super", "container", "null", "import", "class",
     "public", "protected", "private", "extends", "enum", "records", "auto", "new",

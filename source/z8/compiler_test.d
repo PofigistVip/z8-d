@@ -18,6 +18,15 @@ unittest {
     rejects(q{[native true] enum A {}});
     compile(q{[request true] [flag false] [count 0x10] class A {}});
     rejects(q{[request 1] class A {}});
+    compile(q{[job "*/15 0 1-31 1,3,5 1-5"] class A {}});
+    compile(q{[job ""] class A {}});
+    compile(q{[job] class A {}});
+    rejects(q{[job "* * * *"] class A {}});
+    rejects(q{[job "* * * * * "] class A {}});
+    rejects(q{[job "* * * * *\n"] class A {}});
+    compile(q{[job "99 99 99 99 99"] class A {}});
+    compile(q{[job "*\t* * * *"] class A {}});
+    rejects(q{[job true] class A {}});
     rejects(q{[native "x"] class A {}});
     compile(q{class A { [flag] A child; public [tag "value"] A nested = class {}; }});
     rejects(q{class A { [flag] int x; }});
