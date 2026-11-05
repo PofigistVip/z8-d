@@ -1995,8 +1995,9 @@ class Checker {
                 if (operand == ValueType.selfType && ["!", "~", "-"].canFind(e.token.text)) {
                     auto method = lookupUnaryOperator(e.left.objectClass, "operator" ~ e.token.text);
                     if (method is null) {
-                        ValueType[] targets = e.token.text == "!" ? [ValueType.boolType] :
-                            e.token.text == "~" ? [ValueType.intType] : [ValueType.intType, ValueType.decimalType];
+                        ValueType[] targets = e.token.text == "!" ? [ValueType.boolType, ValueType.sqlBoolType] :
+                            e.token.text == "~" ? [ValueType.intType, ValueType.sqlIntType] :
+                            [ValueType.intType, ValueType.decimalType, ValueType.sqlIntType, ValueType.sqlDecimalType];
                         Method conversion;
                         ValueType convertedType;
                         foreach (target; targets) {
@@ -2007,7 +2008,10 @@ class Checker {
                         }
                         if (conversion is null) fail("undefined unary operator", e.token);
                         e.left.userConversion = conversion;
-                        e.left.optionalRequired = true;
+                        if (convertedType == ValueType.sqlBoolType) e.sqlBoolOperator = true;
+                        else if (convertedType == ValueType.sqlIntType) e.sqlIntOperator = true;
+                        else if (convertedType == ValueType.sqlDecimalType) e.sqlDecimalOperator = true;
+                        else e.left.optionalRequired = true;
                         return convertedType;
                     }
                     auto selected = selectOverload(method, e);
