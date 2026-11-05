@@ -1,7 +1,13 @@
-// Host-populated values for the shared native Field interface. Database
-// cursors, typed field constructors and SQL expressions are separate adapters.
+// Host-populated values for the shared native Field interface.
 private enum z8_field_name = "org.zenframework.z8.server.base.table.value.Field"w;
 enum Z8FieldAggregation { none, sum, max, min, average, count, array, distinct, concat, bitwiseOr, bitwiseAnd }
+// A query adapter owns the cursor and supplies the decoded value for the current
+// row. SQL NULL must be represented by the type's Z8 default plus wasNull=true.
+interface IZ8FieldCursor {
+    bool isClosed();
+    bool isGrouped();
+    Z8Primary read(Z8Object field, out bool wasNull);
+}
 // Like FormatOptions, this affects the current formatting operation, not the
 // stored expression. Keep it thread-local for concurrent HTTP requests.
 struct Z8SqlFieldFormatOptions { bool aggregation, orderBy; }
@@ -82,6 +88,7 @@ class Z8FieldState {
     private Z8Primary originalValue;
     Z8SqlPrimary sqlExpression;
     bool resolvingExpression;
+    IZ8FieldCursor cursor;
     bool changed, wasNull = true;
     wstring format;
     Z8Optional!long width, length, precision, scale, srs;
@@ -222,6 +229,20 @@ void z8_field_set(Z8Object self, Z8Primary value) {
     state.value = value;
 }
 void z8_field_set_default(Z8Object self, Z8Primary value) { z8_field_state(self).value = value; }
+void z8_field_set_cursor(Z8Object self, IZ8FieldCursor cursor) { z8_field_state(self).cursor = cursor; }
+private bool z8_field_is_array(Z8FieldState state) {
+    return state.cursor !is null && state.cursor.isGrouped() &&
+        (state.aggregation == Z8FieldAggregation.array || state.aggregation == Z8FieldAggregation.distinct);
+}
+private Z8Primary z8_field_current(Z8Object self) {
+    auto state = z8_field_state(self);
+    if (z8_field_is_array(state)) return null;
+    if (state.changed || state.cursor is null || state.cursor.isClosed()) return state.value;
+    bool wasNull;
+    auto value = state.cursor.read(self, wasNull);
+    state.wasNull = wasNull;
+    return value;
+}
 // Mirrors the alias information normally supplied by Query and FormatOptions.
 void z8_field_bind_sql(Z8Object self, wstring ownerAlias, wstring columnName, wstring expressionAlias = null) {
     auto state = z8_field_state(self);

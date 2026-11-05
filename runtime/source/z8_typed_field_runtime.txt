@@ -27,8 +27,10 @@ private Z8Optional!long* z8_integer_field_default_address(Z8Object self) {
 private wstring* z8_string_field_default_address(Z8Object self) {
     return &z8_field_state(self).useSlot!wstring().item;
 }
-private Z8Optional!long z8_integer_field_get(Z8Object self) { return z8_primary_cast!long(z8_field_state(self).value); }
-private wstring z8_string_field_get(Z8Object self) { return z8_primary_cast!wstring(z8_field_state(self).value); }
+private Z8Optional!long z8_integer_field_get(Z8Object self) { return z8_primary_cast!long(z8_field_current(self)); }
+private wstring z8_string_field_get(Z8Object self) { return z8_primary_cast!wstring(z8_field_current(self)); }
+private Z8Optional!long z8_integer_field_get_default(Z8Object self) { return z8_primary_cast!long(z8_field_state(self).value); }
+private wstring z8_string_field_get_default(Z8Object self) { return z8_primary_cast!wstring(z8_field_state(self).value); }
 private void z8_integer_field_set_default(Z8Object self, Z8Optional!long value) { z8_field_set_default(self, z8_primary_box(value)); }
 private void z8_string_field_set_default(Z8Object self, wstring value) { z8_field_set_default(self, z8_primary_box(value)); }
 private Z8Object z8_integer_field_assign(Z8Object self, Z8Optional!long value) { z8_field_set(self, z8_primary_box(value)); return self; }
@@ -37,7 +39,7 @@ private void z8_integer_expression_new(Z8Object self) {
     state.format = "0,000"w; state.useSlot!(Z8Optional!long, long)(); z8_field_attach(self, state);
 }
 private Z8SqlInt z8_integer_expression_default(Z8Object self) {
-    return z8_sql_int_const(z8_integer_field_get(self));
+    return z8_sql_int_const(z8_integer_field_get_default(self));
 }
 private void z8_integer_expression_set(Z8Object self, Z8SqlInt value) { z8_field_state(self).sqlExpression = value; }
 private Z8Object z8_integer_expression_assign(Z8Object self, Z8SqlInt value) { z8_integer_expression_set(self, value); return self; }
@@ -74,7 +76,8 @@ private void z8_geometry_field_new(Z8Object self) {
 private T* z8_typed_field_default_address(T, Base = T)(Z8Object self) {
     return &z8_field_state(self).useSlot!(T, Base)().item;
 }
-private T z8_typed_field_get(T, Base = T)(Z8Object self) { return z8_primary_cast!Base(z8_field_state(self).value); }
+private T z8_typed_field_get(T, Base = T)(Z8Object self) { return z8_primary_cast!Base(z8_field_current(self)); }
+private T z8_typed_field_get_default(T, Base = T)(Z8Object self) { return z8_primary_cast!Base(z8_field_state(self).value); }
 private void z8_typed_field_set_default(T)(Z8Object self, T value) { z8_field_set_default(self, z8_primary_box(value)); }
 private Z8Object z8_typed_field_assign(T)(Z8Object self, T value) { z8_field_set(self, z8_primary_box(value)); return self; }
 private Z8SqlInt z8_integer_field_sql(Z8Object self) {
@@ -111,7 +114,7 @@ private void z8_register_value_field(T, Base = T)(wstring name, void function(Z8
     z8_native_bind(name ~ ".m_new"w, create);
     z8_native_bind_field(name ~ ".f_defaultValue"w, &z8_typed_field_default_address!(T, Base));
     z8_native_bind(name ~ ".m_get"w, &z8_typed_field_get!(T, Base));
-    z8_native_bind(name ~ ".m_getDefault"w, &z8_typed_field_get!(T, Base));
+    z8_native_bind(name ~ ".m_getDefault"w, &z8_typed_field_get_default!(T, Base));
     z8_native_bind(name ~ ".m_setDefault"w, &z8_typed_field_set_default!T);
     z8_native_bind(name ~ ".z8op_assign"w, &z8_typed_field_assign!T);
 }
@@ -133,13 +136,13 @@ void z8_bind_builtin_typed_fields() {
     z8_native_bind(z8_integer_field_name ~ ".m_new"w, &z8_integer_field_new);
     z8_native_bind_field(z8_integer_field_name ~ ".f_defaultValue"w, &z8_integer_field_default_address);
     z8_native_bind(z8_integer_field_name ~ ".m_get"w, &z8_integer_field_get);
-    z8_native_bind(z8_integer_field_name ~ ".m_getDefault"w, &z8_integer_field_get);
+    z8_native_bind(z8_integer_field_name ~ ".m_getDefault"w, &z8_integer_field_get_default);
     z8_native_bind(z8_integer_field_name ~ ".m_setDefault"w, &z8_integer_field_set_default);
     z8_native_bind(z8_integer_field_name ~ ".z8op_assign"w, &z8_integer_field_assign);
     z8_native_bind(z8_string_field_name ~ ".m_new"w, &z8_string_field_new);
     z8_native_bind_field(z8_string_field_name ~ ".f_defaultValue"w, &z8_string_field_default_address);
     z8_native_bind(z8_string_field_name ~ ".m_get"w, &z8_string_field_get);
-    z8_native_bind(z8_string_field_name ~ ".m_getDefault"w, &z8_string_field_get);
+    z8_native_bind(z8_string_field_name ~ ".m_getDefault"w, &z8_string_field_get_default);
     z8_native_bind(z8_string_field_name ~ ".m_setDefault"w, &z8_string_field_set_default);
     z8_native_bind(z8_string_field_name ~ ".z8op_assign"w, &z8_string_field_assign);
     z8_register_value_field!(Z8Optional!bool, bool)(z8_bool_field_name, &z8_bool_field_new);

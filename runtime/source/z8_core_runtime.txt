@@ -112,7 +112,7 @@ class Z8Object {
     // Virtual request hooks are overridden by generated OBJECT subclasses.
     Z8Object z8_object_get_data(Z8StringMap parameters) { return null; }
     Z8Binary z8_object_process_content(Z8StringMap parameters, Z8Array!Z8File files) { return null; }
-    Z8Primary z8_field_virtual_get() { return z8_field_state(this).value; }
+    Z8Primary z8_field_virtual_get() { return z8_field_current(this); }
     Z8SqlPrimary z8_field_virtual_expression() { throw new Exception("unsupported SQL field expression"); }
 
     // Primary subclasses may provide the Java value's polymorphic operations.
