@@ -53,6 +53,9 @@ rules for preserving credentials and permissions are implemented.
 Users' and Roles' native fields, built-in identifiers and Java-defined static
 record metadata are available; authorization behavior, lock enforcement and
 applying these system records to the database are still pending.
+The native `Users.onNew` defaults mirror the Java implementation, including its
+default password value and `changePassword` flag; explicitly supplied values
+are preserved even when user-level events are disabled.
 `z8_postgres_create_tables` runs these operations, index creation and foreign
 keys in phases inside one transaction for a new set of tables. The schema and
 required extensions must already exist. It rejects an existing transaction and

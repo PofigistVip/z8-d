@@ -57,6 +57,14 @@ void z8_users_initialize_static_records(Z8Object self) {
         Z8StaticRecordValue(state.fields[0], z8_primary_box("System"w)),
         Z8StaticRecordValue(table.lock, z8_primary_box(3L))]);
 }
+// Users.onNew applies these defaults after the BL hook and field defaults,
+// including when user-level events are disabled.
+void z8_users_on_new(Z8Object self) {
+    auto state = z8_users_state(self);
+    auto password = state.fields[2], changePassword = state.fields[12];
+    if (!z8_field_is_changed(password)) z8_field_set(password, z8_primary_box("d41d8cd98f00b204e9800998ecf8427e"w));
+    if (!z8_field_is_changed(changePassword)) z8_field_set(changePassword, z8_primary_box(true));
+}
 private Z8Guid* z8_user_system_address() { return &z8_user_system; }
 private Z8Guid* z8_user_administrator_address() { return &z8_user_administrator; }
 shared static this() {

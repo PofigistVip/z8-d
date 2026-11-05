@@ -108,6 +108,8 @@ public class Probe {
     public static Users users() { Users value; return value; }
     public static guid systemUser() { return Users.System; }
     public static guid administratorUser() { return Users.Administrator; }
+    public static void createUser(Users value, guid id) { value.create(id); }
+    public static void createCustomUser(Users value, guid id) { value.password = "custom"; value.changePassword = false; value.create(id); }
     public static guid administratorRole() { return Roles.Administrator; }
     public static guid userRole() { return Roles.User; }
     public static guid guestRole() { return Roles.Guest; }
@@ -315,6 +317,19 @@ void main(string[] args) {
     auto userRecords = userTable.z8_static_records();
     assert(userRecords.length == 2 && userRecords[0].values[0].value.textValue == "Admin"w);
     assert(userRecords[0].values[1].value.integerValue == 3 && userRecords[1].values[0].value.textValue == "System"w);
+    db.execute(userDDL);
+    auto userBackend = new Z8PostgresDatabase(db, "z8_test"w);
+    auto savedBackend = z8_connection_set_current(userBackend);
+    P.m_createUser(userTable, z8_guid_create(70));
+    P.m_createCustomUser(userTable, z8_guid_create(71));
+    auto suppressed = new Z8ApplicationRequest(); suppressed.setEventsLevel(Z8EventsLevel.none);
+    auto savedRequest = z8_application_set_request(suppressed);
+    P.m_createUser(P.m_users(), z8_guid_create(72));
+    z8_application_set_request(savedRequest); z8_connection_set_current(savedBackend);
+    auto createdUsers = db.execute(`SELECT "Password", "Change Password" FROM "z8_test"."SystemUsers" ORDER BY "RecordId"`);
+    assert(createdUsers.rows.length == 3 && createdUsers.rows[0][0].text == "d41d8cd98f00b204e9800998ecf8427e" && createdUsers.rows[0][1].text == "1");
+    assert(createdUsers.rows[1][0].text == "custom" && createdUsers.rows[1][1].text == "0");
+    assert(createdUsers.rows[2][0].text == "d41d8cd98f00b204e9800998ecf8427e" && createdUsers.rows[2][1].text == "1");
     db.execute(`ALTER TABLE "z8_test"."StaticSample" DROP CONSTRAINT "StaticSample_pkey", ADD PRIMARY KEY ("Label")`);
     differences = z8_postgres_compare_table(expectedStatic, z8_postgres_describe_table(db, "z8_test"w, "StaticSample"w));
     bool changedKey;
