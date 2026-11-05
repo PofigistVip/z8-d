@@ -250,7 +250,10 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     public static void main(String[] args) throws Exception {
         org.zenframework.z8.server.config.ServerConfig.load(args[0]);
         demo.cases.StaticOverloadChild.CLASS<?> metadata = new demo.cases.StaticOverloadChild.CLASS<>(null);
-        if (!"DfixtureChild".equals(metadata.getAttribute("name")) ||
+        if (!"2".equals(metadata.getAttribute("typeCount")) ||
+            !"статическое значение".equals(metadata.getAttribute("typeText")) ||
+            !"false".equals(metadata.getAttribute("typeFlag")) ||
+            !"DfixtureChild".equals(metadata.getAttribute("name")) ||
             !"base".equals(metadata.getAttribute("baseTag")) ||
             !"новое 😀".equals(metadata.getAttribute("sharedTag")) ||
             !"".equals(metadata.getAttribute("flag")) || !"false".equals(metadata.getAttribute("request")) ||
@@ -469,6 +472,9 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
 import std.stdio : writeln;
 void main() {
     auto metadata = z8_new!Z8p_64656D6F2E63617365732E5374617469634F7665726C6F61644368696C64();
+    assert(metadata.z8_get_attribute("typeCount"w) == "2"w);
+    assert(metadata.z8_get_attribute("typeText"w) == "статическое значение"w);
+    assert(metadata.z8_get_attribute("typeFlag"w) == "false"w);
     assert(metadata.z8_get_attribute("name"w) == "DfixtureChild"w);
     assert(metadata.z8_get_attribute("baseTag"w) == "base"w);
     assert(metadata.z8_get_attribute("sharedTag"w) == "новое 😀"w);

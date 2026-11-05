@@ -2,6 +2,7 @@ public class StaticState {
     public static int count = 2;
     public static int[] hits = {1, 2};
     public static bool flag;
+    public static string label = "статическое значение";
 
     public static void increase() { count += 1; }
 

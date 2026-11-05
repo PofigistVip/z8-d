@@ -49,6 +49,8 @@ unittest {
     compile(q{class A { [flag] A child; public [tag "value"] A nested = class {}; }});
     compile(q{class A { string text = "value"; [tag text + "!"] A child; }});
     rejects(q{[tag "a" + "b"] class A {}});
+    rejects(q{[tag value] class A { static string value; }});
+    rejects(q{[tag A.value] class A { string value; }});
     compile(q{class A { int value; [tag value] A child; }});
     compile(q{class A { guid value; primary other = 1; [g value] [p other] A child; }});
     compile(q{class A { A source; [tag source] A child; }});
@@ -265,6 +267,9 @@ private void rejectsSources(SourceUnit[] sources, string expectedFile) {
 }
 
 unittest {
+    auto attributes = SourceUnit("pkg.Attributes", "Attributes.bl", q{[tag Constants.value] class Attributes {}});
+    auto constants = SourceUnit("pkg.Constants", "Constants.bl", q{class Constants { static string value = "label"; }});
+    compileSources([attributes, constants]);
     auto namedA = SourceUnit("a.NamedA", "NamedA.bl", q{[name "same"] class NamedA {}});
     auto namedB = SourceUnit("b.NamedB", "NamedB.bl", q{[name "same"] class NamedB {}});
     rejectsSources([namedA, namedB], "NamedB.bl");

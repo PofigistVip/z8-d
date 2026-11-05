@@ -161,8 +161,6 @@ class Checker {
     }
     void prepareDeclarations(Program program, Program[string] programs) {
         currentProgram = program; allClasses = programs;
-        foreach (attribute; program.attributes)
-            if (attribute.expression !is null) fail("type attribute expressions are not supported yet", attribute.name);
         checkAttributeNameConflicts(program, programs);
         foreach (field; program.fields) {
             field.type = resolveDeclaredType(field.type, program, field.objectName, field.name);
@@ -474,6 +472,16 @@ class Checker {
         variables = null; objectVariables = null; staticContext = false;
         foreach (field; program.fields)
             if (hasObjectClass(field.type)) field.objectClass = resolveClass(program, field.objectName, field.name);
+        foreach (attribute; program.attributes) if (attribute.expression !is null) {
+            if (attribute.expression.kind != ExprKind.field || attribute.expression.left.kind != ExprKind.variable)
+                fail("type attribute requires a qualified static field", attribute.name);
+        }
+        // Type attributes are evaluated in the generated CLASS constructor;
+        // no instance or unqualified member is available there.
+        auto savedFields = fields;
+        fields = null; staticContext = true; fieldInitialization = false;
+        checkAttributeExpressions(program.attributes);
+        fields = savedFields; staticContext = false;
         foreach (field; program.fields) {
             staticContext = field.isStatic;
             fieldInitialization = !field.isStatic;

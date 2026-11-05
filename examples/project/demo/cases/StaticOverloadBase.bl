@@ -1,3 +1,6 @@
+[typeCount StaticState.count]
+[typeText StaticState.label]
+[typeFlag StaticState.flag]
 [smallExponent .0001e-2]
 [price 001.2300]
 [tiny .0000001]
