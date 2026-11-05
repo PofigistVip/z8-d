@@ -16,6 +16,17 @@ public class SqlBoolValues {
         sql_bool left = true;
         return left != false;
     }
+    public static sql_bool complex() {
+        sql_bool first = true;
+        sql_bool second = false;
+        sql_bool third = false;
+        return (first || second) && !third;
+    }
+    public static sql_bool nested() {
+        sql_bool first = true;
+        sql_bool second = false;
+        return ((first.IIF(first, second)) || (first == second)) && (first || second);
+    }
     public static int run() {
         calls = 0;
         sql_bool condition = expression();

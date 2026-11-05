@@ -417,6 +417,16 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         System.out.println("RESULT:" + demo.cases.StaticInitCases.z8_run().get());
         System.out.println("RESULT:" + demo.cases.FinallyControl.z8_run().get());
         System.out.println("RESULT:" + demo.cases.SqlBoolValues.z8_run().get());
+        for (org.zenframework.z8.server.db.DatabaseVendor vendor : org.zenframework.z8.server.db.DatabaseVendor.values()) {
+            org.zenframework.z8.server.types.sql.sql_bool[] expressions = {
+                demo.cases.SqlBoolValues.z8_expression(), demo.cases.SqlBoolValues.z8_choose(),
+                demo.cases.SqlBoolValues.z8_compare(), demo.cases.SqlBoolValues.z8_complex(),
+                demo.cases.SqlBoolValues.z8_nested()
+            };
+            for (org.zenframework.z8.server.types.sql.sql_bool expression : expressions)
+                for (boolean logical : new boolean[] {false, true})
+                    System.out.println("SQLBOOL:" + vendor.name() + ":" + logical + ":" + expression.format(vendor, null, logical));
+        }
     }
 }''', encoding="utf-8")
         logging_cache = Path.home() / ".gradle" / "caches" / "modules-2" / "files-2.1" / "commons-logging" / "commons-logging"
@@ -656,13 +666,27 @@ void main() {
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E537461746963496E69744361736573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E46696E616C6C79436F6E74726F6C.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E53716C426F6F6C56616C756573.m_run()));
+    foreach (vendor; ["Oracle", "SqlServer", "Postgres", "H2"]) {
+        auto expressions = [Z8p_64656D6F2E63617365732E53716C426F6F6C56616C756573.m_expression(),
+            Z8p_64656D6F2E63617365732E53716C426F6F6C56616C756573.m_choose(),
+            Z8p_64656D6F2E63617365732E53716C426F6F6C56616C756573.m_compare(),
+            Z8p_64656D6F2E63617365732E53716C426F6F6C56616C756573.m_complex(),
+            Z8p_64656D6F2E63617365732E53716C426F6F6C56616C756573.m_nested()];
+        foreach (expression; expressions)
+            foreach (logical; [false, true])
+                writeln("SQLBOOL:", vendor, ":", logical, ":", z8_to_utf8(z8_sql_bool_format(expression, logical)));
+    }
 }
 ''', encoding="utf-8")
         d_binary = temp / ("compare.exe" if os.name == "nt" else "compare")
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_lines = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        d_results = [line for line in d_lines if not line.startswith("FILEATTR:")]
+        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "SQLBOOL:"))]
+        original_sql = [line for line in output.splitlines() if line.startswith("SQLBOOL:")]
+        d_sql = [line for line in d_lines if line.startswith("SQLBOOL:")]
+        if original_sql != d_sql or len(d_sql) != 40:
+            raise SystemExit(f"SQL boolean formatting differs: original={original_sql!r}, D={d_sql!r}")
         original_file_attributes = [line for line in output.splitlines() if line.startswith("FILEATTR:")]
         d_file_attributes = [line for line in d_lines if line.startswith("FILEATTR:")]
         if original_file_attributes != d_file_attributes or len(d_file_attributes) != 1:
