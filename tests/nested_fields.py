@@ -11,14 +11,14 @@ with tempfile.TemporaryDirectory() as directory:
     temp = Path(directory)
     source = temp / "source"
     source.mkdir()
-    for name in ("NestedBase", "NestedOwner", "NestedLocalCases", "MemberBase", "MemberMid", "MemberLeaf", "MemberOwn"):
+    for name in ("NestedBase", "NestedOwner", "NestedLocalCases", "MemberBase", "MemberMid", "MemberLeaf", "MemberOwn", "ChainOuter", "ChainOwner"):
         shutil.copy2(root / "examples" / "project" / "demo" / "cases" / (name + ".bl"), source)
     generated = temp / "generated"
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     modules = list(generated.rglob("*.d"))
-    if len(modules) != 7:
+    if len(modules) != 9:
         raise SystemExit(f"Expected one module per source, got {len(modules)}")
-    for name, expected in (("NestedOwner", 207), ("NestedLocalCases", 209), ("MemberLeaf", 211), ("MemberOwn", 213)):
+    for name, expected in (("NestedOwner", 207), ("NestedLocalCases", 209), ("MemberLeaf", 211), ("MemberOwn", 213), ("ChainOwner", 217)):
         executable = temp / (name + (".exe" if os.name == "nt" else ""))
         subprocess.run([str(compiler), "build", str(source), name + ".run", str(executable)], check=True)
         result = subprocess.run([str(executable)])

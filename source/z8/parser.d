@@ -49,6 +49,12 @@ class Parser {
         return i;
     }
     // A for-each initializer is a declarator, including optional final and array types.
+    private bool isMemberSpecializationStart() {
+        if (current.kind != TokenKind.identifier) return false;
+        size_t i = 1;
+        while (look(i).text == "." && look(i + 1).kind == TokenKind.identifier) i += 2;
+        return look(i).text == "=" && look(i + 1).text == "class";
+    }
     private bool isForEachStart() {
         auto i = afterType(current.text == "final" ? 1 : 0);
         return i != 0 && look(i).kind == TokenKind.identifier && look(i + 1).text == ":";
@@ -191,19 +197,25 @@ class Parser {
                 take();
             }
             if (result.lexicalOwner !is null && isStatic) error("static members cannot be declared in a nested type");
-            if (current.kind == TokenKind.identifier && look(1).text == "=" && look(2).text == "class") {
+            if (isMemberSpecializationStart()) {
                 if (hasAccess || isStatic || isVirtual || isAuto) error("modifiers cannot be applied to a field specialization");
-                auto name = take();
-                foreach (previous; result.memberSpecializations)
-                    if (previous.specializedName.text == name.text) throw new CompileException("duplicate field specialization", name.position);
+                Token[] path;
+                path ~= identifier();
+                while (accept(".")) path ~= identifier();
                 expect("="); expect("class");
-                auto nested = new Program;
-                nested.name = name; nested.name.text = "__nested_" ~ name.position.offset.to!string;
-                nested.specializedName = name; nested.baseToken = name; nested.isFieldSpecialization = true;
-                nested.lexicalOwner = result; nested.imports = result.imports.dup;
-                parseClassBody(nested);
-                result.memberSpecializations ~= nested;
-                result.nestedPrograms ~= nested;
+                auto owner = result;
+                foreach (name; path) {
+                    foreach (previous; owner.memberSpecializations)
+                        if (previous.specializedName.text == name.text) throw new CompileException("duplicate field specialization", name.position);
+                    auto nested = new Program;
+                    nested.name = name; nested.name.text = "__nested_" ~ name.position.offset.to!string;
+                    nested.specializedName = name; nested.baseToken = name; nested.isFieldSpecialization = true;
+                    nested.lexicalOwner = owner; nested.imports = owner.imports.dup;
+                    owner.memberSpecializations ~= nested;
+                    owner.nestedPrograms ~= nested;
+                    owner = nested;
+                }
+                parseClassBody(owner);
                 expect(";"); continue;
             }
             if (accept("records")) { parseRecords(result); continue; }

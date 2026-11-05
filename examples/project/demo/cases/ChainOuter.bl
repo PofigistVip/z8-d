@@ -1,0 +1,4 @@
+public class ChainOuter {
+    public int amount = 4;
+    public NestedBase inner;
+}

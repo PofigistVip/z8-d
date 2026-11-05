@@ -1,0 +1,12 @@
+public class ChainOwner {
+    private int offset = 5;
+    public ChainOuter outer;
+    outer.inner = class {
+        public int value() { return super.value() + container.amount + container.container.offset; }
+    };
+    public static int run() {
+        ChainOwner owner;
+        if (owner.outer.inner.value() != 12) return 1;
+        return 217;
+    }
+}
