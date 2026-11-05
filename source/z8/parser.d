@@ -147,21 +147,21 @@ class Parser {
     private void parseRecords(Program program) {
         expect("{");
         while (current.text != "}") {
-            if (current.text == "[") error("record attributes are not supported yet");
             bool isPublic, isProtected, hasAccess;
-            while (["public", "private", "protected"].canFind(current.text)) {
+            TypeAttribute[] attributes;
+            while (current.text == "[" || ["public", "private", "protected"].canFind(current.text)) {
+                if (current.text == "[") { attributes ~= parseAttribute(attributes); continue; }
                 if (hasAccess) error("duplicate access modifier");
                 hasAccess = true; isPublic = current.text == "public"; isProtected = current.text == "protected";
                 take();
             }
-            if (current.text == "[") error("record attributes are not supported yet");
             auto name = identifier();
             expect("=");
             if (current.kind != TokenKind.guidLiteral) error("record requires a GUID literal");
             auto value = new Expression(ExprKind.guidLiteral, take());
             expect(";");
             auto field = new Field;
-            field.type = ValueType.guidType; field.name = name; field.initializer = value;
+            field.type = ValueType.guidType; field.name = name; field.initializer = value; field.recordAttributes = attributes;
             field.isStatic = true; field.isRecord = true; field.isPublic = isPublic || !hasAccess; field.isProtected = isProtected; field.owner = program;
             program.fields ~= field;
         }

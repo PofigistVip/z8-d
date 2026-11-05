@@ -4,7 +4,7 @@ import std.algorithm : canFind, sort;
 import std.conv : to;
 import std.string : lastIndexOf, indexOf, icmp;
 import z8.compiler_model;
-import z8.lexer : Token;
+import z8.lexer : Token, TokenKind;
 
 /// Checks the entire program before emitting code; unsupported constructs fail closed.
 class Checker {
@@ -610,6 +610,52 @@ class Checker {
         foreach (field; program.fields) {
             if (hasObjectClass(field.type)) field.objectClass = resolveClass(program, field.objectName, field.name);
             if (hasMapKeyClass(field.type)) field.keyObjectClasses = resolveKeyClasses(program, field.keyObjectNames, field.name);
+        }
+        // Record attributes name table fields and retain primary values, unlike
+        // ordinary attributes, which become textual CLASS metadata.
+        foreach (record; program.fields) if (record.isRecord) {
+            staticContext = false; fieldInitialization = false;
+            foreach (ref attribute; record.recordAttributes) {
+                if (!attribute.hasValue) fail("record attribute requires a value", attribute.name);
+                auto target = attribute.name.text in fields;
+                if (target is null) fail("record attribute does not name a field", attribute.name);
+                attribute.recordField = *target;
+                if (attribute.expression !is null) attribute.recordExpression = attribute.expression;
+                else {
+                    ExprKind kind;
+                    switch (attribute.value.kind) {
+                        case TokenKind.integerLiteral: kind = ExprKind.integer; break;
+                        case TokenKind.decimalLiteral: kind = ExprKind.decimalLiteral; break;
+                        case TokenKind.booleanLiteral: kind = ExprKind.boolean; break;
+                        case TokenKind.stringLiteral: kind = ExprKind.stringLiteral; break;
+                        case TokenKind.guidLiteral: kind = ExprKind.guidLiteral; break;
+                        case TokenKind.binaryLiteral: kind = ExprKind.binaryLiteral; break;
+                        case TokenKind.datespanLiteral: kind = ExprKind.datespanLiteral; break;
+                        case TokenKind.dateLiteral: kind = ExprKind.dateLiteral; break;
+                        default: fail("unsupported record attribute value", attribute.name);
+                    }
+                    attribute.recordExpression = new Expression(kind, attribute.value);
+                }
+                auto actual = typeOf(attribute.recordExpression);
+                if (isOptionalPrimitive(actual)) actual = optionalBaseType(actual);
+                if (actual == ValueType.nullableString) actual = ValueType.stringType;
+                ValueType sqlType;
+                switch (actual) {
+                    case ValueType.intType: sqlType = ValueType.sqlIntType; break;
+                    case ValueType.boolType: sqlType = ValueType.sqlBoolType; break;
+                    case ValueType.decimalType: sqlType = ValueType.sqlDecimalType; break;
+                    case ValueType.stringType: sqlType = ValueType.sqlStringType; break;
+                    case ValueType.guidType: sqlType = ValueType.sqlGuidType; break;
+                    case ValueType.binaryType: sqlType = ValueType.sqlBinaryType; break;
+                    case ValueType.datespanType: sqlType = ValueType.sqlDatespanType; break;
+                    case ValueType.dateType: sqlType = ValueType.sqlDateType; break;
+                    case ValueType.geometryType: sqlType = ValueType.sqlGeometryType; break;
+                    default: fail("record attribute requires a supported primary value", attribute.name);
+                }
+                if (attribute.recordField.type != ValueType.selfType ||
+                    findConversion(attribute.recordField.objectClass, sqlType) is null)
+                    fail("record attribute value does not match the field type", attribute.name);
+            }
         }
         foreach (attribute; program.attributes) if (attribute.expression !is null) {
             if (attribute.expression.kind != ExprKind.field || attribute.expression.left.kind != ExprKind.variable)

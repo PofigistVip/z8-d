@@ -110,8 +110,8 @@ class Method {
     bool isPriorityOperator;
     bool isNativeDeclaration;
 }
-class Field { ValueType type; Token name; TypeAttribute[] attributes; Expression initializer; bool isPublic, isProtected, isStatic, isAuto, isRecord, declaredFinal, userOperatorAssignment; string objectName; string[] keyObjectNames; Program objectClass; Program[] keyObjectClasses; Program owner, nestedClass; }
-struct TypeAttribute { Token name; Token value; Expression expression; ValueType expressionType; long capturedDateTicks; bool hasValue, dateTickCaptured; }
+class Field { ValueType type; Token name; TypeAttribute[] attributes, recordAttributes; Expression initializer; bool isPublic, isProtected, isStatic, isAuto, isRecord, declaredFinal, userOperatorAssignment; string objectName; string[] keyObjectNames; Program objectClass; Program[] keyObjectClasses; Program owner, nestedClass; }
+struct TypeAttribute { Token name; Token value; Expression expression, recordExpression; Field recordField; ValueType expressionType; long capturedDateTicks; bool hasValue, dateTickCaptured; }
 // Match the original lexer and BigDecimal.toString, including preserved scale
 // and its scientific notation for an adjusted exponent below -6.
 package string canonicalDecimalLiteral(Token token) {

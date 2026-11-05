@@ -93,12 +93,15 @@ Object z8_static_class_lock(ref Object monitor) {
         return monitor;
     }
 }
+struct Z8StaticRecordValue { Z8Object field; Z8Primary value; }
+struct Z8StaticRecord { Z8Guid key; Z8StaticRecordValue[] values; }
 class Z8Object {
     private int z8_stage = -1;
     private bool z8_allocated;
     private Z8Object z8_container;
     private wstring[wstring] z8_attributes;
     private Object[wstring] z8_native_states;
+    private Z8StaticRecord[] z8_records;
 
     // Primary subclasses may provide the Java value's polymorphic operations.
     wstring z8_user_primary_string_impl() { return toString().to!wstring; }
@@ -117,6 +120,14 @@ class Z8Object {
         auto value = key in z8_native_states;
         return value is null ? null : *value;
     }
+    // Table implementations can override registration; the default retains
+    // field identities and primary values until a table adapter consumes them.
+    void z8_init_static_records() {}
+    void z8_add_static_record(Z8Guid key, Z8StaticRecordValue[] values) {
+        foreach (record; z8_records) if (record.key == key) return;
+        z8_records ~= Z8StaticRecord(key, values);
+    }
+    final Z8StaticRecord[] z8_static_records() { return z8_records.dup; }
     final void z8_set_container(Z8Object container) { z8_container = container; }
     final void z8_ensure(int requested = 1) {
         if (z8_container !is null && z8_container.z8_stage < requested)
@@ -160,6 +171,9 @@ T z8_new(T)(Z8Object container = null) {
     value.z8_set_container(container);
     value.z8_init_type_attributes();
     return value;
+}
+void z8_initialize_static_records(Z8Object table) {
+    z8_nonnull(table).z8_init_static_records();
 }
 // Primary values are constructed eagerly and do not have a CLASS container.
 T z8_new_primary(T)() if (is(T : Z8Object)) {

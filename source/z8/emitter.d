@@ -889,6 +889,19 @@ package string emitPrograms(Program[] programs) {
                     emitAttributeValue(attribute) ~ ");\n";
             result ~= "}\n";
         }
+        bool hasRecords;
+        foreach (record; program.fields) if (record.isRecord) hasRecords = true;
+        if (hasRecords) {
+            result ~= "override void z8_init_static_records() {\nsuper.z8_init_static_records();\n";
+            foreach (record; program.fields) if (record.isRecord && record.recordAttributes.length) {
+                string[] values;
+                foreach (attribute; record.recordAttributes)
+                    values ~= "Z8StaticRecordValue(z8_nonnull(this.f_" ~ attribute.recordField.name.text ~
+                        "), z8_primary_box(" ~ emitExpr(attribute.recordExpression) ~ "))";
+                result ~= "z8_add_static_record(" ~ emitExpr(record.initializer) ~ ", [" ~ values.join(", ") ~ "]);\n";
+            }
+            result ~= "}\n";
+        }
         foreach (capture; program.captures)
             result ~= dStorageType(capture.type, capture.objectClass, capture.keyObjectClasses) ~ " z8_capture_" ~ capture.name ~ ";\n";
         foreach (field; program.fields) {
