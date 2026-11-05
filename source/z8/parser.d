@@ -603,7 +603,7 @@ class Parser {
         bool primitiveCast = castEnd == 2 && ["int", "decimal", "bool", "string"].canFind(look(1).text);
         bool objectCast = castEnd != 0 && look(castEnd - 1).kind == TokenKind.identifier &&
             (look(castEnd + 1).kind == TokenKind.identifier || [TokenKind.integerLiteral, TokenKind.decimalLiteral, TokenKind.booleanLiteral, TokenKind.stringLiteral].canFind(look(castEnd + 1).kind) ||
-             ["(", "this", "super", "new", "!", "~", "null"].canFind(look(castEnd + 1).text));
+             ["(", "this", "super", "container", "new", "!", "~", "null"].canFind(look(castEnd + 1).text));
         if (castEnd != 0 && look(castEnd).text == ")" && (primitiveCast || objectCast)) {
             // The BL cast grammar takes a postfix operand; null and unary
             // operators need their own parentheses after the cast.

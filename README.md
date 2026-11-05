@@ -55,6 +55,7 @@ python tests/mixed_overloads.py
 python tests/unary_operators.py
 python tests/binary_operators.py
 python tests/cast_operators.py
+python tests/cast_container.py
 python tests/object_conversion.py
 python tests/value_conversion_operators.py
 python tests/operator_distance.py
