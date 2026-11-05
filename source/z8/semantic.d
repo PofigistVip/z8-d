@@ -1529,6 +1529,8 @@ class Checker {
                     if (["exists", "isEmpty", "isFolder"].canFind(e.token.text)) {
                         e.builtinCall = "z8_file_" ~ e.token.text; return ValueType.boolType;
                     }
+                    if (e.token.text == "binary") { e.builtinCall = "z8_file_to_binary"; return ValueType.binaryType; }
+                    if (e.token.text == "string") { e.builtinCall = "z8_file_path"; return ValueType.stringType; }
                     if (e.token.text == "read") { e.builtinCall = "z8_file_read"; return ValueType.stringType; }
                     if (e.token.text == "lastModified") { e.builtinCall = "z8_file_lastModified"; return ValueType.dateType; }
                     if (e.token.text == "hashCode") { e.builtinCall = "z8_file_hashCode"; return ValueType.intType; }
