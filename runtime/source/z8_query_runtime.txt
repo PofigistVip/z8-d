@@ -126,11 +126,11 @@ private void z8_query_close(Z8Object self) {
     }
     cursor.close();
 }
-private void z8_query_open(Z8Object self, Z8QueryReadRequest request) {
+private void z8_query_open(Z8Object self, Z8QueryReadRequest request, bool useQueryLimit = true) {
     auto state = z8_query_state(self);
     if (state.executor is null) throw new Exception("query executor is not configured");
     z8_query_close(self);
-    if (request.limit < 0 && state.limit.present) request.limit = cast(int)state.limit.value;
+    if (useQueryLimit && request.limit < 0 && state.limit.present) request.limit = cast(int)state.limit.value;
     request.readLock = z8_query_read_lock(self);
     auto cursor = state.executor.read(self, request);
     if (cursor is null) throw new Exception("query executor returned a null cursor");
@@ -175,6 +175,28 @@ private Z8Optional!bool z8_query_first_sort(Z8Object self, Z8ObjectArray!Z8Objec
 private Z8Optional!bool z8_query_first_sort_where(Z8Object self, Z8ObjectArray!Z8Object fields, Z8ObjectArray!Z8Object sort, Z8SqlBool where) {
     z8_query_read_request(self, fields, sort, where, Z8Optional!long.init, z8_optional_wrap(1L)); return z8_query_next(self);
 }
+private Z8Optional!bool z8_query_read_record(Z8Object self, Z8Guid id, Z8ObjectArray!Z8Object fields) {
+    Z8QueryReadRequest request;
+    request.fields = z8_query_read_fields(fields); request.recordId = id; request.byRecordId = id !is null;
+    z8_query_open(self, request, false); return z8_query_next(self);
+}
+private void z8_query_group_request(Z8Object self, Z8ObjectArray!Z8Object groups, Z8ObjectArray!Z8Object fields,
+                                    Z8ObjectArray!Z8Object sort, Z8SqlBool where, Z8SqlBool having,
+                                    Z8Optional!long start, Z8Optional!long limit) {
+    Z8QueryReadRequest request;
+    request.groupFields = z8_query_read_fields(groups); request.fields = z8_query_read_fields(fields);
+    request.sortFields = z8_query_read_fields(sort); request.where = where; request.having = having;
+    request.start = start.present ? cast(int)start.value : 0; request.limit = limit.present ? cast(int)limit.value : -1;
+    z8_query_open(self, request);
+}
+private void z8_query_group_1(Z8Object s, Z8ObjectArray!Z8Object g) { z8_query_group_request(s, g, null, null, null, null, Z8Optional!long.init, Z8Optional!long.init); }
+private void z8_query_group_where(Z8Object s, Z8ObjectArray!Z8Object g, Z8SqlBool w) { z8_query_group_request(s, g, null, null, w, null, Z8Optional!long.init, Z8Optional!long.init); }
+private void z8_query_group_fields(Z8Object s, Z8ObjectArray!Z8Object g, Z8ObjectArray!Z8Object f) { z8_query_group_request(s, g, f, null, null, null, Z8Optional!long.init, Z8Optional!long.init); }
+private void z8_query_group_fields_where(Z8Object s, Z8ObjectArray!Z8Object g, Z8ObjectArray!Z8Object f, Z8SqlBool w) { z8_query_group_request(s, g, f, null, w, null, Z8Optional!long.init, Z8Optional!long.init); }
+private void z8_query_group_fields_having(Z8Object s, Z8ObjectArray!Z8Object g, Z8ObjectArray!Z8Object f, Z8SqlBool w, Z8SqlBool h) { z8_query_group_request(s, g, f, null, w, h, Z8Optional!long.init, Z8Optional!long.init); }
+private void z8_query_group_sort(Z8Object s, Z8ObjectArray!Z8Object g, Z8ObjectArray!Z8Object f, Z8ObjectArray!Z8Object o) { z8_query_group_request(s, g, f, o, null, null, Z8Optional!long.init, Z8Optional!long.init); }
+private void z8_query_group_sort_where(Z8Object s, Z8ObjectArray!Z8Object g, Z8ObjectArray!Z8Object f, Z8ObjectArray!Z8Object o, Z8SqlBool w) { z8_query_group_request(s, g, f, o, w, null, Z8Optional!long.init, Z8Optional!long.init); }
+private void z8_query_group_sort_having(Z8Object s, Z8ObjectArray!Z8Object g, Z8ObjectArray!Z8Object f, Z8ObjectArray!Z8Object o, Z8SqlBool w, Z8SqlBool h) { z8_query_group_request(s, g, f, o, w, h, Z8Optional!long.init, Z8Optional!long.init); }
 
 private Z8ObjectArray!Z8Object z8_query_data_fields(Z8Object self, bool primaryOnly = false) {
     self = z8_nonnull(self);
@@ -249,6 +271,16 @@ void z8_bind_builtin_query() {
     z8_native_bind(p ~ "m_readFirst"w, &z8_query_first_where);
     z8_native_bind(p ~ "m_readFirst"w, &z8_query_first_sort);
     z8_native_bind(p ~ "m_readFirst"w, &z8_query_first_sort_where);
+    z8_native_bind(p ~ "m_readRecord"w, &z8_query_read_record);
+    z8_native_bind(p ~ "m_group"w, &z8_query_group_1);
+    z8_native_bind(p ~ "m_group"w, &z8_query_group_where);
+    z8_native_bind(p ~ "m_group"w, &z8_query_group_fields);
+    z8_native_bind(p ~ "m_group"w, &z8_query_group_fields_where);
+    z8_native_bind(p ~ "m_group"w, &z8_query_group_fields_having);
+    z8_native_bind(p ~ "m_group"w, &z8_query_group_sort);
+    z8_native_bind(p ~ "m_group"w, &z8_query_group_sort_where);
+    z8_native_bind(p ~ "m_group"w, &z8_query_group_sort_having);
+    z8_native_bind(p ~ "m_group"w, &z8_query_group_request);
     z8_native_bind(p ~ "m_next"w, &z8_query_next);
     z8_native_bind(p ~ "m_close"w, &z8_query_close);
 }

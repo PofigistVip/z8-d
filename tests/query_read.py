@@ -26,6 +26,7 @@ public class Report extends Query { public IntField amount; public StringField t
 ''', encoding="utf-8")
     (source / "Probe.bl").write_text('''
 import org.zenframework.z8.base.table.value.Field;
+import org.zenframework.z8.base.table.value.Aggregation;
 public class Probe {
     public static Report make() { Report query; query.limit = 7; return query; }
     public static void all(Report query) { Field[] fields = {query.amount, query.title}; query.read(fields); }
@@ -37,6 +38,17 @@ public class Probe {
     public static bool firstWhere(Report query) { Field[] fields = {query.amount}; return query.readFirst(fields, query.amount > 3); }
     public static bool firstSort(Report query) { Field[] fields = {query.amount}; return query.readFirst(fields, fields); }
     public static bool firstSortWhere(Report query) { Field[] fields = {query.amount}; return query.readFirst(fields, fields, query.amount > 3); }
+    public static bool record(Report query, guid id) { Field[] fields = {query.amount}; return query.readRecord(id, fields); }
+    public static void groupOne(Report query) { Field[] fields = {query.amount}; query.group(fields); }
+    public static void groupWhere(Report query) { Field[] fields = {query.amount}; query.group(fields, query.amount > 3); }
+    public static void groupFields(Report query) { Field[] fields = {query.amount}; query.group(fields, fields); }
+    public static void groupFieldsWhere(Report query) { Field[] fields = {query.amount}; query.group(fields, fields, query.amount > 3); }
+    public static void groupFieldsHaving(Report query) { Field[] fields = {query.amount}; query.group(fields, fields, query.amount > 3, query.amount < 50); }
+    public static void groupSort(Report query) { Field[] fields = {query.amount}; query.group(fields, fields, fields); }
+    public static void groupSortWhere(Report query) { Field[] fields = {query.amount}; query.group(fields, fields, fields, query.amount > 3); }
+    public static void groupSortHaving(Report query) { Field[] fields = {query.amount}; query.group(fields, fields, fields, query.amount > 3, query.amount < 50); }
+    public static void groupPaged(Report query) { Field[] fields = {query.amount}; query.group(fields, fields, fields, query.amount > 3, query.amount < 50, 4, 6); }
+    public static int[] groupValues(Report query) { query.amount.aggregation = Aggregation.Array; return query.amount.array(); }
     public static bool next(Report query) { return query.next(); }
     public static void close(Report query) { query.close(); }
     public static int amount(Report query) { return query.amount.get(); }
@@ -52,15 +64,16 @@ class Rows : IZ8QueryCursor {
     Z8Object amount, title;
     Z8Object[] selected;
     int position = -1, count = 2;
-    bool closed;
+    bool closed, grouped;
     this(Z8Object amount, Z8Object title, Z8Object[] selected) { this.amount = amount; this.title = title; this.selected = selected; }
     Z8Object[] fields() { return selected; }
     bool isClosed() { return closed; }
-    bool isGrouped() { return false; }
+    bool isGrouped() { return grouped; }
     bool next() { if (closed) throw new Exception("closed"); return ++position < count; }
     void close() { closed = true; }
     Z8Primary read(Z8Object field, bool asArray, out bool wasNull) {
-        assert(!asArray && !closed && position >= 0 && position < count);
+        assert(!closed && position >= 0 && position < count);
+        if (asArray) return z8_primary_box("[10,20]"w);
         if (field is amount) return z8_primary_box(position == 0 ? 10L : 20L);
         if (field is title) return z8_primary_box(position == 0 ? "first"w : "second"w);
         throw new Exception("unknown field");
@@ -77,7 +90,7 @@ class Executor : IZ8QueryExecutor {
         if (fail) throw new Exception("executor failure");
         auto selected = request.fields.length ? request.fields : [amount, title];
         if (invalid) selected = [query];
-        cursor = new Rows(amount, title, selected); if (empty) cursor.count = 0;
+        cursor = new Rows(amount, title, selected); cursor.grouped = request.groupFields.length != 0; if (empty) cursor.count = 0;
         return cursor;
     }
 }
@@ -114,6 +127,19 @@ void main() {
     assert(z8_optional_require(P.m_firstWhere(query)) && executor.last.where !is null && executor.last.limit == 1);
     assert(z8_optional_require(P.m_firstSort(query)) && executor.last.sortFields.length == 1 && executor.last.where is null);
     assert(z8_optional_require(P.m_firstSortWhere(query)) && executor.last.sortFields.length == 1 && executor.last.where !is null);
+    assert(z8_optional_require(P.m_record(query, z8_guid_create(5))) && executor.last.byRecordId && executor.last.recordId == z8_guid_create(5) && executor.last.limit == -1);
+    assert(z8_optional_require(P.m_record(query, null)) && !executor.last.byRecordId);
+    P.m_groupOne(query); assert(executor.last.groupFields.length == 1 && executor.last.fields.length == 0 && executor.last.limit == 7);
+    P.m_groupWhere(query); assert(executor.last.where !is null && executor.last.fields.length == 0);
+    P.m_groupFields(query); assert(executor.last.fields.length == 1 && executor.last.where is null);
+    P.m_groupFieldsWhere(query); assert(executor.last.where !is null && executor.last.having is null);
+    P.m_groupFieldsHaving(query); assert(executor.last.where !is null && executor.last.having !is null);
+    P.m_groupSort(query); assert(executor.last.sortFields.length == 1 && executor.last.where is null);
+    P.m_groupSortWhere(query); assert(executor.last.sortFields.length == 1 && executor.last.where !is null && executor.last.having is null);
+    P.m_groupSortHaving(query); assert(executor.last.sortFields.length == 1 && executor.last.having !is null);
+    P.m_groupPaged(query); assert(executor.last.start == 4 && executor.last.limit == 6);
+    assert(z8_optional_require(P.m_next(query)));
+    auto grouped = P.m_groupValues(query); assert(grouped.z8_size() == 2 && grouped.z8_get(0) == 10 && grouped.z8_get(1) == 20);
     P.m_close(query);
 }
 ''', encoding="utf-8")
