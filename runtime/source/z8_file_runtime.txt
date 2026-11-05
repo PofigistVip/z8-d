@@ -53,29 +53,78 @@ void z8_file_assign(Z8File value, wstring path) {
 Z8File z8_file_from_path(wstring path) { auto result = new Z8File(); z8_file_assign(result, path); return result; }
 wstring z8_file_path(Z8File value) { return z8_nonnull(value).path; }
 long z8_file_hashCode(Z8File value) { z8_nonnull(value); return value.id is null ? 0 : z8_guid_hash(value.id); }
+// JsonObject.quote in the Java runtime escapes only slashes following '<'
+// and also escapes C1 controls and U+2000..U+20FF.
+private wstring z8_file_json_quote(wstring value) {
+    import std.format : format;
+    if (value is null) return "null"w;
+    wstring result = "\""w;
+    wchar previous;
+    foreach (wchar c; value) {
+        switch (c) {
+            case '\\': result ~= "\\\\"w; break;
+            case '"': result ~= "\\\""w; break;
+            case '/': if (previous == '<') result ~= "\\"w; result ~= "/"w; break;
+            case '\b': result ~= "\\b"w; break;
+            case '\t': result ~= "\\t"w; break;
+            case '\n': result ~= "\\n"w; break;
+            case '\f': result ~= "\\f"w; break;
+            case '\r': result ~= "\\r"w; break;
+            default:
+                if (c < 0x20 || (c >= 0x80 && c < 0xa0) || (c >= 0x2000 && c < 0x2100))
+                    result ~= format("\\u%04x", cast(uint)c).to!wstring;
+                else result ~= c;
+        }
+        previous = c;
+    }
+    return result ~ "\""w;
+}
+private uint z8_file_json_hash(wstring key) {
+    uint hash;
+    foreach (wchar c; key) hash = hash * 31 + c;
+    return hash ^ (hash >> 16);
+}
 wstring z8_file_to_string(Z8File value) {
-    import std.json : JSONValue;
     z8_nonnull(value);
-    JSONValue jsonString(wstring text) { return text is null ? JSONValue.init : JSONValue(text.to!string); }
-    JSONValue[string] fields;
-    fields["name"] = jsonString(value.name);
-    if (value.time is null) fields["time"] = JSONValue.init;
-    else {
-        auto ticks = z8_date_ticks(value.time);
-        fields["time"] = jsonString(ticks == z8_date_ticks(z8_date_min) || ticks == z8_date_ticks(z8_date_max) ? ""w : z8_date_toString(value.time));
-    }
-    fields["size"] = value.size.present ? JSONValue(value.size.value) : JSONValue.init;
-    fields["path"] = jsonString(value.path);
-    fields["id"] = value.id is null ? JSONValue.init : jsonString(z8_guid_to_string(value.id));
-    fields["user"] = value.user is null ? JSONValue.init : jsonString(z8_guid_to_string(value.user));
-    fields["author"] = jsonString(value.author);
-    JSONValue[string] details;
+    wstring details = "{"w;
     if (value.details !is null) {
-        foreach (key, item; value.details.entries) if (item !is null) details[key.to!string] = jsonString(item);
         if (value.details.hasNullKey && value.details.nullKeyValue !is null) throw new Exception("null file detail key");
+        wstring[] keys;
+        foreach (key; value.details.insertionKeys)
+            if (value.details.entries[key] !is null) keys ~= key;
+        size_t capacity = 16;
+        while (keys.length > capacity * 3 / 4) capacity *= 2;
+        // HashMap traverses buckets in order and preserves insertion order
+        // within a bucket (for ordinary, non-treeified buckets).
+        foreach (i; 1 .. keys.length) {
+            auto key = keys[i];
+            auto bucket = z8_file_json_hash(key) & (capacity - 1);
+            auto j = i;
+            while (j > 0 && (z8_file_json_hash(keys[j - 1]) & (capacity - 1)) > bucket) {
+                keys[j] = keys[j - 1]; --j;
+            }
+            keys[j] = key;
+        }
+        foreach (i, key; keys) {
+            if (i) details ~= ","w;
+            details ~= z8_file_json_quote(key) ~ ":"w ~ z8_file_json_quote(value.details.entries[key]);
+        }
     }
-    fields["details"] = JSONValue(details);
-    return JSONValue(fields).toString().to!wstring;
+    details ~= "}"w;
+    wstring time;
+    if (value.time !is null) {
+        auto ticks = z8_date_ticks(value.time);
+        time = ticks == z8_date_ticks(z8_date_min) || ticks == z8_date_ticks(z8_date_max) ? ""w : z8_date_toString(value.time);
+    }
+    // These fixed keys follow Java HashMap's bucket order for eight entries.
+    return "{\"path\":"w ~ z8_file_json_quote(value.path) ~
+        ",\"size\":"w ~ (value.size.present ? value.size.value.to!wstring : "null"w) ~
+        ",\"author\":"w ~ z8_file_json_quote(value.author) ~
+        ",\"name\":"w ~ z8_file_json_quote(value.name) ~
+        ",\"details\":"w ~ details ~
+        ",\"time\":"w ~ z8_file_json_quote(time) ~
+        ",\"id\":"w ~ z8_file_json_quote(value.id is null ? null : z8_guid_to_string(value.id)) ~
+        ",\"user\":"w ~ z8_file_json_quote(value.user is null ? null : z8_guid_to_string(value.user)) ~ "}"w;
 }
 Z8Array!Z8File z8_file_parse(wstring input) {
     import std.json : JSONValue, JSONType, parseJSON;

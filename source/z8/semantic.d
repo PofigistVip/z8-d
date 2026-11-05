@@ -551,18 +551,20 @@ class Checker {
         }
     }
     private void checkAttributeExpressions(TypeAttribute[] attributes) {
-        foreach (attribute; attributes) if (attribute.expression !is null) {
+        foreach (ref attribute; attributes) if (attribute.expression !is null) {
             auto actual = typeOf(attribute.expression);
             if (isOptionalPrimitive(actual)) {
                 attribute.expression.optionalRequired = true;
                 actual = optionalBaseType(actual);
             }
+            attribute.expressionType = actual;
             if ([ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.primaryType,
                  ValueType.guidType, ValueType.datespanType, ValueType.dateType,
                  ValueType.geometryType, ValueType.binaryType].canFind(actual))
                 attribute.expression.convertToString = actual;
             else if (actual == ValueType.selfType)
                 attribute.expression.convertToString = ValueType.selfType;
+            else if (actual == ValueType.fileType) { }
             else if (actual != ValueType.stringType && actual != ValueType.nullableString)
                 fail("this attribute expression type is not supported yet", attribute.name);
         }

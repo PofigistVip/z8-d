@@ -292,6 +292,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             !"вложенное".equals(metadata.get().annotated.get().annotated.getAttribute("chainTag")) ||
             !"специализация поля".equals(metadata.get().ownSpecial.getAttribute("specialTag")))
             throw new AssertionError("field attribute metadata differs");
+        System.out.println("FILEATTR:" + metadata.get().annotated.getAttribute("fileValue"));
         try {
             new demo.cases.AttributeNull.CLASS<>(null).get();
             throw new AssertionError("null string attribute accepted");
@@ -498,6 +499,7 @@ void main() {
     assert(metadata.f_annotated.z8_get_attribute("dateValue"w) == "2024-02-29T12:30:45+03:00"w);
     assert(metadata.f_annotated.z8_get_attribute("geometryValue"w) == "0101000020E6100000000000000000F83F00000000000002C0"w);
     assert(metadata.f_annotated.z8_get_attribute("binaryValue"w) == "report.bin"w);
+    writeln("FILEATTR:", z8_to_utf8(metadata.f_annotated.z8_get_attribute("fileValue"w)));
     assert(metadata.f_annotated.z8_get_attribute("copied"w) == "источник"w);
     assert(z8_optional_require(Z8p_64656D6F2E63617365732E417474726962757465536F75726365.f_calls) == 0);
     assert(metadata.f_jobTarget.z8_get_attribute("request"w) == "false"w);
@@ -610,7 +612,12 @@ void main() {
         d_binary = temp / ("compare.exe" if os.name == "nt" else "compare")
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
-        d_results = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
+        d_lines = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
+        d_results = [line for line in d_lines if not line.startswith("FILEATTR:")]
+        original_file_attributes = [line for line in output.splitlines() if line.startswith("FILEATTR:")]
+        d_file_attributes = [line for line in d_lines if line.startswith("FILEATTR:")]
+        if original_file_attributes != d_file_attributes or len(d_file_attributes) != 1:
+            raise SystemExit(f"File attribute differs: original={original_file_attributes!r}, D={d_file_attributes!r}")
         if original_results[-48:-13] != ["221", "219", "217", "215", "211", "213", "209", "207", "203", "201", "197", "195", "193", "185", "187", "189", "181", "183", "179", "177", "171", "169", "167", "165", "163", "159", "155", "153", "151", "149", "167", "171", "251", "28", "241"]:
             raise SystemExit(f"Language fixtures failed in original Z8: {original_results[-48:-13]}")
         if original_results[-13:] != ["173", "179", "181", "191", "193", "197", "199", "211", "223", "227", "229", "233", "239"]:

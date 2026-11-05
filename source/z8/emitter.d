@@ -120,6 +120,8 @@ private string emitWStringLiteral(const(wchar)[] value) {
 private string emitAttributeValue(TypeAttribute attribute) {
     if (attribute.expression !is null) {
         auto value = emitExpr(attribute.expression);
+        if (attribute.expressionType == ValueType.fileType)
+            value = "z8_file_to_string(" ~ value ~ ")";
         if (attribute.expression.convertToString == ValueType.selfType)
             value = "z8_attribute_from(" ~ value ~ ", " ~ emitWStringLiteral(attribute.name.text.to!wstring) ~ ")";
         return "z8_string_new(z8_string_required(" ~ value ~ "))";

@@ -89,7 +89,7 @@ class Method {
     bool isCastOperator;
 }
 class Field { ValueType type; Token name; TypeAttribute[] attributes; Expression initializer; bool isPublic, isProtected, isStatic, isAuto, isRecord, declaredFinal, userOperatorAssignment; string objectName; Program objectClass; Program owner, nestedClass; }
-struct TypeAttribute { Token name; Token value; Expression expression; bool hasValue; }
+struct TypeAttribute { Token name; Token value; Expression expression; ValueType expressionType; bool hasValue; }
 // Match the original lexer and BigDecimal.toString, including preserved scale
 // and its scientific notation for an adjusted exponent below -6.
 package string canonicalDecimalLiteral(Token token) {
