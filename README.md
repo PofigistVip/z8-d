@@ -450,6 +450,8 @@ runtime D и отличается от Java.
 и `schema`; приложение может создать его через `z8_login_parameters_new` или
 присоединить изменяемый `Z8LoginParametersData` через `z8_login_parameters_from_data`.
 Объект сохраняет ссылку на данные, поэтому последующие изменения видны методам BL.
+Для `Cron` доступны проверка выражений и поиск следующей даты для пяти- и
+шестипольного формата; вычисления используют часовой пояс runtime `Europe/Moscow`.
 Смена регистра в `Base34.decode` использует Unicode D и может
 отличаться от Java для отдельных локалей. Остальные методы этих проверяемых
 классов этим не реализуются. Строки для хеша
@@ -457,7 +459,8 @@ runtime D и отличается от Java.
 После вызова `z8_native_clear_bindings()` встроенные криптографические привязки
 можно восстановить функцией `z8_bind_builtin_crypto()`; поля `RecordLock` —
 функцией `z8_bind_builtin_record_lock()`, методы `Base34` — `z8_bind_builtin_base34()`,
-а методы `LoginParameters` — `z8_bind_builtin_login_parameters()`.
+методы `LoginParameters` — `z8_bind_builtin_login_parameters()`, а `Cron` —
+`z8_bind_builtin_cron()`.
 
 Поддерживаются конкатенация, сравнения, `length`, `isEmpty`, `compare`, `compareNoCase`, `startsWith`,
 `endsWith`, `indexOf`, `lastIndexOf`, `substring`, `charAt`, `trim`, `trimLeft`,

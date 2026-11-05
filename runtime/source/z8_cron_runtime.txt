@@ -1,0 +1,86 @@
+// The server Cron class uses five fields, or six with a leading seconds field.
+private struct Z8CronRange { int lower, upper, step; }
+private struct Z8CronRule {
+    bool any;
+    Z8CronRange[] ranges;
+    bool matches(int value) {
+        if (any) return true;
+        foreach (range; ranges) {
+            if (range.lower <= value && value <= range.upper) {
+                if (!range.step) throw new Exception("CRON step is zero");
+                if ((value - range.lower) % range.step == 0) return true;
+            }
+        }
+        return false;
+    }
+}
+private bool z8_cron_valid(wstring expression) {
+    import std.regex : matchFirst, regex;
+    auto input = z8_string_required(expression).to!string;
+    enum column = `((\*)|([0-9]{1,2}(-[0-9]{1,2})?))(/[0-9]{1,2})?(,((\*)|([0-9]{1,2}(-[0-9]{1,2})?))(/[0-9]{1,2})?)*`;
+    enum space = `[ \t\r\n\f\x0b]+`;
+    auto hit = matchFirst(input, regex("^" ~ column ~ space ~ column ~ space ~ column ~ space ~ column ~ space ~ column ~ "(" ~ space ~ column ~ ")?$"));
+    return !hit.empty && hit.hit.length == input.length;
+}
+private Z8CronRule[] z8_cron_parse(wstring expression) {
+    import std.string : split, replace;
+    if (!z8_cron_valid(expression)) throw new Exception("invalid CRON expression");
+    Z8CronRule[] rules;
+    foreach (column; expression.to!string.split()) {
+        Z8CronRule rule;
+        if (column == "*") rule.any = true;
+        else foreach (part; column.split(",")) {
+            auto values = part.replace("/", "-").split("-");
+            Z8CronRange range;
+            if (values[0] == "*") {
+                range.lower = 0; range.upper = 100;
+                range.step = values.length > 1 ? values[1].to!int : 1;
+            } else {
+                range.lower = values[0].to!int;
+                range.upper = values.length > 1 ? values[1].to!int : range.lower;
+                range.step = values.length > 2 ? values[2].to!int : 1;
+            }
+            rule.ranges ~= range;
+        }
+        rules ~= rule;
+    }
+    return rules;
+}
+private Z8Date z8_cron_trunc_second(Z8Date value) {
+    auto result = z8_date_from_ticks(z8_date_ticks(value));
+    z8_date_set(result, z8_date_year(value), z8_date_month(value), z8_date_day(value),
+                z8_date_hours(value), z8_date_minutes(value), z8_date_seconds(value), 0);
+    return result;
+}
+private Z8Date z8_cron_next_date(Z8Date value, wstring expression) {
+    auto rules = z8_cron_parse(expression);
+    bool seconds = rules.length == 6;
+    auto minute = seconds ? 1 : 0, hour = seconds ? 2 : 1, day = seconds ? 3 : 2;
+    auto month = seconds ? 4 : 3, weekday = seconds ? 5 : 4;
+    bool monthOk = true, dayOk = true, hourOk = true, minuteOk = true, secondOk = true;
+    auto current = z8_nonnull(value);
+    do {
+        if (!monthOk) current = z8_date_addMonth(z8_date_truncMonth(current), 1);
+        else if (!dayOk) current = z8_date_addDay(z8_date_truncDay(current), 1);
+        else if (!hourOk) current = z8_date_addHour(z8_date_truncHour(current), 1);
+        else if (!seconds) current = z8_date_addMinute(z8_date_truncMinute(current), 1);
+        else current = z8_date_addSecond(z8_cron_trunc_second(current), 1);
+        if (z8_datespan_days(z8_date_binary!"-"(current, value)) > 366)
+            throw new Exception("no matching CRON date within 366 days");
+        monthOk = rules[month].matches(cast(int)z8_date_month(current));
+        auto mondayFirst = cast(int)((z8_date_dayOfWeek(current) + 5) % 7 + 1);
+        dayOk = rules[day].matches(cast(int)z8_date_day(current)) && rules[weekday].matches(mondayFirst);
+        hourOk = rules[hour].matches(cast(int)z8_date_hours(current));
+        minuteOk = rules[minute].matches(cast(int)z8_date_minutes(current));
+        secondOk = !seconds || rules[0].matches(cast(int)z8_date_seconds(current));
+    } while (!monthOk || !dayOk || !hourOk || !minuteOk || !secondOk);
+    return current;
+}
+private Z8Optional!bool z8_cron_check_exp(wstring expression) {
+    return z8_optional_wrap(z8_cron_valid(expression));
+}
+void z8_bind_builtin_cron() {
+    z8_native_bind("org.zenframework.z8.server.utils.Cron.m_checkExp"w, &z8_cron_check_exp);
+    z8_native_bind("org.zenframework.z8.server.utils.Cron.m_nextDate"w, &z8_cron_next_date);
+}
+shared static this() { z8_bind_builtin_cron(); }
