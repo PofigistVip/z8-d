@@ -675,6 +675,24 @@ void main(string[] args) {
     try { groupedRead(`{"property":"amount","operator":"ge","value":"50"}`w); } catch (Exception) { groupDenied = true; }
     assert(groupDenied);
     queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
+    db.execute(`UPDATE "z8_bootstrap"."Sample;--" SET "Flag" = 0 WHERE "RecordId" = '00000000-0000-0000-0000-00000000012E'`);
+    wstring orderedGroup(wstring group, wstring sort) {
+        auto request = new Z8ApplicationRequest(); request.session = querySession; request.monitor = new Z8RequestMonitor();
+        request.parameters.z8_add("action"w, "read"w); request.parameters.z8_add("fields"w, `["flag","amount"]`w);
+        request.parameters.z8_add("group"w, group); request.parameters.z8_add("sort"w, sort);
+        z8_application_set_request(request); z8_application_start_response(request, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+        z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
+    }
+    auto orderedJson = parseJSON(orderedGroup(`{"property":"flag"}`w, `[{"property":"amount","direction":"DESC"}]`w).to!string);
+    assert(orderedJson["data"].array.length == 2 && orderedJson["data"][0]["amount"].integer == 10 && orderedJson["data"][1]["amount"].integer == 42);
+    orderedJson = parseJSON(orderedGroup(`[{"property":"flag"}]`w, `[{"property":"flag","direction":"DESC"}]`w).to!string);
+    assert(orderedJson["data"][0]["amount"].integer == 42 && orderedJson["data"][1]["amount"].integer == 10);
+    queryUser.privileges.setFieldAccess(z8_guid_create_name("Sample;--.Flag"w), Z8Access.init);
+    groupDenied = false;
+    try { orderedGroup(`{"property":"flag"}`w, `[]`w); } catch (Exception) { groupDenied = true; }
+    assert(groupDenied);
+    queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
+    db.execute(`UPDATE "z8_bootstrap"."Sample;--" SET "Flag" = 1 WHERE "RecordId" = '00000000-0000-0000-0000-00000000012E'`);
     long sortedAmount(wstring sorting, wstring start = "0"w) {
         auto sorted = new Z8ApplicationRequest(); sorted.session = querySession; sorted.monitor = new Z8RequestMonitor();
         sorted.parameters.z8_add("action"w, "read"w); sorted.parameters.z8_add("fields"w, `["amount"]`w);

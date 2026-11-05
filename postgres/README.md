@@ -113,6 +113,8 @@ the optional inclusive `start` and `finish` boundaries.
 BL-defined direct `groupBy` fields and JSON `having` conditions are supported;
 all participating fields must be readable. Group arrays and distinct arrays,
 linked groups and changes to `groupBy` from `beforeRead` are not supported.
+The client `group` parameter places its fields first in the sort order; it
+does not turn ordinary rows into SQL aggregates.
 As in the Java `ReadAction`, a nonempty `recordId` list replaces the request
 filters and query scope; an empty list keeps the normal filters and scope.
 Linked and computed fields, other read options and custom request parameters

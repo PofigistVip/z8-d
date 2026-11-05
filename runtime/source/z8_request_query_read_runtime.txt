@@ -116,7 +116,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         if (name is null) throw new Exception("invalid query read parameter");
         if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "fields"w || name == "start"w || name == "limit"w ||
             name == "filter"w || name == "where"w || name == "quickFilter"w || name == "sort"w || name == "recordId"w || name == "count"w || name == "values"w ||
-            name == "lookup"w || name == "lookupFields"w || name == "period"w || name == "having"w) continue;
+            name == "lookup"w || name == "lookupFields"w || name == "period"w || name == "having"w || name == "group"w) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported query read parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
@@ -195,6 +195,24 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
             read.byRecordIds = true;
         }
     }
+    Z8Object[] groupOrder;
+    auto group = params.z8_get("group"w);
+    if (group !is null && group.length) {
+        auto parsed = z8_json_parse(group.to!string);
+        JSONValue[] entries;
+        if (parsed.type == JSONType.array) entries = parsed.array;
+        else if (parsed.type == JSONType.object) entries = [parsed];
+        else throw new Exception("query group must contain objects");
+        foreach (item; entries) {
+            if (item.type != JSONType.object) throw new Exception("invalid query group entry");
+            auto property = "property" in item.object;
+            if (property is null || property.type != JSONType.string || !property.str.length) throw new Exception("invalid query group entry");
+            auto field = z8_query_find_field_id(query, property.str.to!wstring);
+            bool exists;
+            foreach (existing; groupOrder) if (existing is field) { exists = true; break; }
+            if (!exists) groupOrder ~= field;
+        }
+    }
     auto sorting = params.z8_get("sort"w);
     if (sorting !is null && sorting.length) {
         auto parsed = z8_json_parse(sorting.to!string);
@@ -212,7 +230,12 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
             if (!exists) read.sortFields ~= field;
         }
     }
-    if (!read.sortFields.length) read.sortFields = z8_query_array(query, "sortFields"w);
+    foreach (field; read.sortFields) {
+        bool exists;
+        foreach (existing; groupOrder) if (existing is field) { exists = true; break; }
+        if (!exists) groupOrder ~= field;
+    }
+    read.sortFields = groupOrder;
     foreach (field; read.sortFields) {
         if (field.z8_get_owner() !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
             throw new Exception("linked and computed sort fields are not supported");
