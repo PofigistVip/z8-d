@@ -855,6 +855,12 @@ package string emitPrograms(Program[] programs) {
         }
         result ~= "class " ~ program.emittedName ~ " : " ~ (program.baseClass is null ? "Z8Object" : program.baseClass.emittedName) ~ " {\n";
         result ~= "alias Z8Self = " ~ program.emittedName ~ ";\n";
+        if (program.isNative) {
+            auto nativeName = emitRawWStringLiteral(program.nativeName);
+            result ~= "private static Z8Object z8_native_create_instance() { return " ~
+                (isPrimaryClass(program) ? "z8_new_primary!Z8Self()" : "z8_new!Z8Self()") ~ "; }\n";
+            result ~= "shared static this() { z8_native_register_factory(" ~ nativeName ~ ", typeid(Z8Self), &z8_native_create_instance); }\n";
+        }
         result ~= "override void z8_ensure_type_initialized() { Z8Self.z8_ensure_static(); }\n";
         if (extendsBuiltinPrimary(program)) {
             if (program.isNative) {

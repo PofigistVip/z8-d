@@ -11,6 +11,11 @@ private class Z8NativeBinding(R, Args...) {
 }
 private __gshared Object[wstring] z8_native_bindings;
 private __gshared Object z8_native_monitor;
+private struct Z8NativeFactory {
+    TypeInfo_Class type;
+    Z8Object function() create;
+}
+private __gshared Z8NativeFactory[][wstring] z8_native_factories;
 shared static this() { z8_native_monitor = new Object(); }
 private wstring z8_native_binding_key(R, Args...)(wstring name) {
     return name ~ "|"w ~ typeid(Z8NativeBinding!(R, Args)).name.to!wstring;
@@ -30,6 +35,25 @@ void z8_native_bind(R, Args...)(wstring name, R function(Args) callback) {
 // Field callbacks return an address owned by the native implementation.
 void z8_native_bind_field(T, Args...)(wstring name, T* function(Args) callback) {
     z8_native_bind(name, callback);
+}
+// Generated native classes register factories independently of method bindings.
+void z8_native_register_factory(wstring name, TypeInfo_Class type, Z8Object function() create) {
+    if (type is null || create is null) throw new Exception("invalid native type factory");
+    synchronized (z8_native_monitor) {
+        auto found = name in z8_native_factories;
+        if (found !is null) foreach (ref entry; *found) if (entry.type is type) { entry.create = create; return; }
+        z8_native_factories[name] ~= Z8NativeFactory(type, create);
+    }
+}
+Z8Object z8_native_new(wstring name) {
+    Z8Object function() create;
+    synchronized (z8_native_monitor) {
+        auto found = name in z8_native_factories;
+        if (found is null || !(*found).length) throw new Exception("native type not registered: " ~ name.to!string);
+        if ((*found).length != 1) throw new Exception("native type is ambiguous: " ~ name.to!string);
+        create = (*found)[0].create;
+    }
+    return create();
 }
 ref T z8_native_field(T, Args...)(wstring name, Args args) {
     auto address = z8_native_call!(T*)(name, args);

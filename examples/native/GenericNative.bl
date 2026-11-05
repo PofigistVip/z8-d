@@ -4,5 +4,7 @@ public class GenericNative {
     public GenericNative echo(GenericNative value);
     public GenericNative invalid();
     public static int inspect(GenericNative value);
+    public static GenericNative make();
+    public static GenericNative makeInvalid();
     public void clear();
 }

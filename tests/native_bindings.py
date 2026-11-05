@@ -20,6 +20,8 @@ Z8Optional!long get(Z8Object self) { return z8_optional_wrap(21L); }
 Z8Object echo(Z8Object self, Z8Object value) { return value; }
 Z8Object invalid(Z8Object self) { return new Z8Object(); }
 Z8Optional!long inspect(Z8Object value) { return z8_optional_wrap(value is null ? 0L : 7L); }
+Z8Object make() { return z8_native_new("example.GenericNative"w); }
+Z8Object makeInvalid() { return new Z8Object(); }
 void clear(Z8Object self) { ++cleared; }
 bool valueEquals(Z8Object self, Z8Object other) { return other !is null && self.classinfo is other.classinfo; }
 void bindGeneric() {
@@ -28,6 +30,8 @@ void bindGeneric() {
     z8_native_bind("example.GenericNative.m_echo"w, &echo);
     z8_native_bind("example.GenericNative.m_invalid"w, &invalid);
     z8_native_bind("example.GenericNative.m_inspect"w, &inspect);
+    z8_native_bind("example.GenericNative.m_make"w, &make);
+    z8_native_bind("example.GenericNative.m_makeInvalid"w, &makeInvalid);
     z8_native_bind("example.GenericNative.m_clear"w, &clear);
     z8_native_bind("example.NativeNumber.m_equals"w, &valueEquals);
 }
@@ -64,6 +68,7 @@ Z8Optional!long* total() { return &nativeTotal; }
 Z8Optional!long* badField() { return null; }
 void reset() {}
 Z8Optional!long exactGet(Generic self) { return z8_optional_wrap(22L); }
+Z8Object anyFactory() { return new Z8Object(); }
 void main() {
     bool missing;
     try { Consumer.m_run(); } catch (Exception e) { missing = e.msg.indexOf("native binding not found") >= 0; }
@@ -99,6 +104,20 @@ void main() {
     assert(z8_optional_require(Consumer.m_run()) == 54);
     assert(z8_optional_require(nativeFactor) == 4 && z8_optional_require(nativeTotal) == 12);
     assert(numberConstructs == 3 && mathConstructs == 1);
+    auto nativeNumber = cast(Number)z8_native_new("example.NativeNumber"w);
+    assert(nativeNumber !is null && numberConstructs == 4);
+    auto nativeMath = cast(Math)z8_native_new("example.NativeMath"w);
+    assert(nativeMath !is null && mathConstructs == 1);
+    z8_nonnull(nativeMath);
+    assert(mathConstructs == 2);
+    bool missingType;
+    try { z8_native_new("example.Missing"w); } catch (Exception e) { missingType = e.msg.indexOf("native type not registered") >= 0; }
+    assert(missingType);
+    z8_native_register_factory("example.Ambiguous"w, typeid(Number), &anyFactory);
+    z8_native_register_factory("example.Ambiguous"w, typeid(Math), &anyFactory);
+    bool ambiguousType;
+    try { z8_native_new("example.Ambiguous"w); } catch (Exception e) { ambiguousType = e.msg.indexOf("native type is ambiguous") >= 0; }
+    assert(ambiguousType);
     assert(z8_optional_require(Z8p_456167657255736572.m_run()) == 43);
     alias Holder = Z8p_4561676572486F6C646572;
     auto holder = z8_new!Holder();
@@ -115,6 +134,12 @@ void main() {
     assert(z8_nonnull(generic).m_echo(null) is null);
     assert(z8_optional_require(Generic.m_inspect(generic)) == 7);
     assert(z8_optional_require(Generic.m_inspect(null)) == 0);
+    auto created = Generic.m_make();
+    assert(created !is null && created !is generic && constructed == 1);
+    assert(z8_optional_require(z8_nonnull(created).m_get()) == 21 && constructed == 2);
+    bool invalidFactoryResult;
+    try { Generic.m_makeInvalid(); } catch (Exception e) { invalidFactoryResult = e.msg.indexOf("invalid native return type") >= 0; }
+    assert(invalidFactoryResult);
     z8_nonnull(generic).m_clear();
     assert(cleared == 1);
     bool invalidReturn;
@@ -123,6 +148,7 @@ void main() {
     z8_native_bind("example.GenericNative.m_get"w, &exactGet);
     assert(z8_optional_require(z8_nonnull(generic).m_get()) == 22);
     z8_native_clear_bindings();
+    assert(cast(Generic)z8_native_new("example.GenericNative"w) !is null);
 }
 '''.replace('import z8.runtime;', 'import z8.runtime;\nimport std.string : indexOf;'), encoding="utf-8")
     executable = temp / ("native.exe" if os.name == "nt" else "native")
