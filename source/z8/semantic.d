@@ -2480,6 +2480,11 @@ class Checker {
                     e.inferredType = left;
                     return optionalBaseType(left);
                 }
+                if ([ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(left)) {
+                    if (!matchesStored(e.right, left)) fail("elvis branch type mismatch", e.token);
+                    e.inferredType = left;
+                    return left;
+                }
                 if (!isNullableReference(left)) fail("elvis requires a supported reference type", e.token);
                 auto expectedRight = left == ValueType.nullableString ? ValueType.stringType : left;
                 if (!matches(e.right, expectedRight, e.left.objectClass, e.left.keyObjectClasses)) fail("elvis branch type mismatch", e.token);

@@ -623,6 +623,7 @@ private string emitExprRaw(Expression e) {
         case ExprKind.conditional:
             return "(" ~ emitExpr(e.left) ~ " ? " ~ emitExpr(e.right) ~ " : " ~ emitExpr(e.third) ~ ")";
         case ExprKind.elvis:
+            if ([ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(e.inferredType)) return emitExpr(e.left);
             if (isOptionalPrimitive(e.inferredType))
                 return (e.optionalElvis ? "z8_optional_elvis_optional(" : "z8_optional_elvis(") ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             return "z8_elvis!(" ~ dType(e.inferredType, e.objectClass, e.keyObjectClasses) ~ ")(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
