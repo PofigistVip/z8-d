@@ -9,6 +9,7 @@ private enum z8_datespan_field_name = "org.zenframework.z8.server.base.table.val
 private enum z8_binary_field_name = "org.zenframework.z8.server.base.table.value.BinaryField"w;
 private enum z8_geometry_field_name = "org.zenframework.z8.server.base.table.value.GeometryField"w;
 private enum z8_text_field_name = "org.zenframework.z8.server.base.table.value.TextField"w;
+private enum z8_integer_expression_name = "org.zenframework.z8.server.base.table.value.IntegerExpression"w;
 
 private void z8_integer_field_new(Z8Object self) {
     auto state = new Z8FieldState(z8_primary_box(0L)); state.aggregation = Z8FieldAggregation.sum;
@@ -31,6 +32,15 @@ private wstring z8_string_field_get(Z8Object self) { return z8_primary_cast!wstr
 private void z8_integer_field_set_default(Z8Object self, Z8Optional!long value) { z8_field_set_default(self, z8_primary_box(value)); }
 private void z8_string_field_set_default(Z8Object self, wstring value) { z8_field_set_default(self, z8_primary_box(value)); }
 private Z8Object z8_integer_field_assign(Z8Object self, Z8Optional!long value) { z8_field_set(self, z8_primary_box(value)); return self; }
+private void z8_integer_expression_new(Z8Object self) {
+    auto state = new Z8FieldState(z8_primary_box(0L), false); state.aggregation = Z8FieldAggregation.sum;
+    state.format = "0,000"w; state.useSlot!(Z8Optional!long, long)(); z8_field_attach(self, state);
+}
+private Z8SqlInt z8_integer_expression_default(Z8Object self) {
+    return z8_sql_int_const(z8_integer_field_get(self));
+}
+private void z8_integer_expression_set(Z8Object self, Z8SqlInt value) { z8_field_state(self).sqlExpression = value; }
+private Z8Object z8_integer_expression_assign(Z8Object self, Z8SqlInt value) { z8_integer_expression_set(self, value); return self; }
 private Z8Object z8_string_field_assign(Z8Object self, wstring value) { z8_field_set(self, z8_primary_box(value)); return self; }
 private void z8_bool_field_new(Z8Object self) {
     auto state = new Z8FieldState(z8_primary_box(false)); state.aggregation = Z8FieldAggregation.max;
@@ -107,6 +117,13 @@ private void z8_register_value_field(T, Base = T)(wstring name, void function(Z8
 }
 
 void z8_bind_builtin_typed_fields() {
+    z8_native_bind(z8_integer_expression_name ~ ".m_new"w, &z8_integer_expression_new);
+    z8_native_bind(z8_integer_expression_name ~ ".m_get"w, &z8_integer_field_get);
+    z8_native_bind(z8_integer_expression_name ~ ".m_setDefault"w, &z8_integer_field_set_default);
+    z8_native_bind(z8_integer_expression_name ~ ".m_expression"w, &z8_integer_expression_default);
+    z8_native_bind(z8_integer_expression_name ~ ".m_setExpression"w, &z8_integer_expression_set);
+    z8_native_bind(z8_integer_expression_name ~ ".z8op_assign"w, &z8_integer_expression_assign);
+    z8_native_bind(z8_integer_expression_name ~ ".z8cast_sql_int"w, &z8_integer_field_sql);
     z8_native_bind_field(z8_string_field_name ~ ".f_length"w, &z8_field_metadata_address!"length");
     z8_native_bind_field(z8_decimal_field_name ~ ".f_precision"w, &z8_field_metadata_address!"precision");
     z8_native_bind_field(z8_decimal_field_name ~ ".f_scale"w, &z8_field_metadata_address!"scale");

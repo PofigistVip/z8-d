@@ -80,6 +80,8 @@ class Z8FieldState {
     private IZ8FieldOrderCell usedFieldsCell, columnsCell;
     private Z8FieldAggregation initialAggregation;
     private Z8Primary originalValue;
+    Z8SqlPrimary sqlExpression;
+    bool resolvingExpression;
     bool changed, wasNull = true;
     wstring format;
     Z8Optional!long width, length, precision, scale, srs;
@@ -181,6 +183,7 @@ private wstring z8_field_type_name(Z8Object self) {
     if (z8_native_is_instance(prefix ~ "GuidField"w, self) || z8_native_is_instance(prefix ~ "GuidExpression"w, self)) return "guid"w;
     if (z8_native_is_instance(prefix ~ "BinaryField"w, self)) return "binary"w;
     if (z8_native_is_instance(prefix ~ "GeometryField"w, self) || z8_native_is_instance(prefix ~ "GeometryExpression"w, self)) return "geometry"w;
+    if (z8_native_is_instance(prefix ~ "Expression"w, self)) return "none"w;
     throw new Exception("unknown native Field type");
 }
 T z8_field_type(T)(Z8Object self) {
@@ -198,6 +201,7 @@ T z8_field_type(T)(Z8Object self) {
         case "guid"w: return T.e_Guid;
         case "binary"w: return T.e_Binary;
         case "geometry"w: return T.e_Geometry;
+        case "none"w: return T.e_None;
         default: throw new Exception("unknown native Field type");
     }
 }
@@ -228,7 +232,16 @@ wstring z8_field_sql_format(Z8Object self, Z8SqlVendor vendor, bool booleanLogic
     auto state = z8_field_state(self);
     wstring expression;
     if (state.sqlExpressionAlias !is null) expression = state.sqlExpressionAlias;
-    else {
+    else if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, self)) {
+        if (state.resolvingExpression) throw new Exception("recursive SQL field expression");
+        state.resolvingExpression = true;
+        scope(exit) state.resolvingExpression = false;
+        auto previous = z8_sql_field_options;
+        z8_sql_field_options.aggregation = false;
+        scope(exit) z8_sql_field_options = previous;
+        if (state.sqlExpression is null) state.sqlExpression = z8_nonnull(self.z8_field_virtual_expression());
+        expression = z8_sql_functions_format(state.sqlExpression, vendor);
+    } else {
         if (state.sqlOwnerAlias is null) throw new Exception("SQL field owner alias is not configured");
         auto column = state.sqlColumnName is null ? z8_object_name(self) : state.sqlColumnName;
         expression = vendor == Z8SqlVendor.SqlServer ? state.sqlOwnerAlias ~ ".["w ~ column.replace("]"w, "]]"w) ~ "]"w :
@@ -323,7 +336,11 @@ void z8_field_reset(Z8Object self) {
 private Z8Primary z8_field_primary(Z8Object self) { return z8_nonnull(self).z8_field_virtual_get(); }
 private auto z8_field_cast(T)(Z8Object self) { return z8_primary_cast!T(z8_field_primary(self)); }
 private Z8Optional!bool z8_field_changed(Z8Object self) { return z8_optional_wrap(z8_field_state(self).changed); }
-private Z8Optional!bool z8_field_was_null(Z8Object self) { return z8_optional_wrap(z8_field_state(self).wasNull); }
+private Z8Optional!bool z8_field_was_null(Z8Object self) {
+    if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, z8_nonnull(self)))
+        return z8_optional_wrap(false);
+    return z8_optional_wrap(z8_field_state(self).wasNull);
+}
 private wstring z8_field_string_value(Z8Object self) {
     return z8_string_new(z8_primary_to_string(z8_nonnull(z8_field_primary(self))));
 }

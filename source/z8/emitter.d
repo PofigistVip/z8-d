@@ -947,7 +947,8 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                                   base.nativeName == "org.zenframework.z8.server.base.table.value.DatespanField"w ||
                                   base.nativeName == "org.zenframework.z8.server.base.table.value.BinaryField"w ||
                                   base.nativeName == "org.zenframework.z8.server.base.table.value.GeometryField"w ||
-                                  base.nativeName == "org.zenframework.z8.server.base.table.value.TextField"w))
+                                  base.nativeName == "org.zenframework.z8.server.base.table.value.TextField"w ||
+                                  base.nativeName == "org.zenframework.z8.server.base.table.value.IntegerExpression"w))
                 isTypedFieldSubclass = true;
         if (isTypedFieldSubclass && !program.isNative) foreach (method; program.methods)
             if (method.overrides && !method.isStatic && method.name.text == "get" && !method.parameters.length &&
@@ -958,6 +959,12 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 result ~= "override Z8Primary z8_field_virtual_get() { return z8_primary_box(this.m_get()); }\n";
                 break;
             }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.value.IntegerExpression"w) {
+            foreach (method; program.methods) if (method.name.text == "expression" && method.returnType == ValueType.sqlIntType && !method.parameters.length) {
+                result ~= "override Z8SqlPrimary z8_field_virtual_expression() { return this.m_expression(); }\n";
+                break;
+            }
+        }
         if (extendsBuiltinPrimary(program)) {
             if (program.isNative) {
                 auto stringBinding = emitRawWStringLiteral(program.nativeName ~ ".m_toString"w);
