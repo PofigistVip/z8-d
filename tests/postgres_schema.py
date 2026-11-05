@@ -194,6 +194,15 @@ void main(string[] args) {
     assert(registeredTables.length == 2 && registeredRequests.length == 1);
     assert(registeredTables[0].key == z8_guid_create_name("Sample;--"w));
     assert(registeredRequests[0].key == z8_guid_create_name(registeredRequests[0].classId));
+    bool titleMetadata;
+    foreach (field; registeredTables[0].fields) if (field.index == "title"w) {
+        titleMetadata = field.name == "Title"w && field.displayName == "Title"w && field.type == "string(30)"w && field.ordinal == 6 && field.key == z8_guid_create_name("Sample;--.Title"w);
+        field.key.minorBits = 0;
+    }
+    assert(titleMetadata);
+    bool titleKeyIntact;
+    foreach (field; registry.tables()[0].fields) if (field.index == "title"w) titleKeyIntact = field.key == z8_guid_create_name("Sample;--.Title"w);
+    assert(titleKeyIntact && registeredRequests[0].fields.length == 0);
     registeredTables[0].key.minorBits = 0; assert(registry.tableKeys()[0] == z8_guid_create_name("Sample;--"w));
     auto conflict = P.m_indexes(); conflict.z8_set_attribute("name"w, "Sample;--"w);
     bool duplicateRegistration; try { registry.registerTable(conflict); } catch (Exception) { duplicateRegistration = true; }

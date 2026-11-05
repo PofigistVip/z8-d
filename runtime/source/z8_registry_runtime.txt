@@ -1,8 +1,14 @@
 // Host-populated subset of AbstractRuntime's table and request registry.
 // Keys use table names for tables and class IDs for requests, as in Java.
-struct Z8RuntimeRegistration {
-    wstring classId, name, displayName;
+struct Z8RuntimeFieldRegistration {
+    wstring index, name, displayName, description, type;
+    long ordinal;
     Z8Guid key;
+}
+struct Z8RuntimeRegistration {
+    wstring classId, name, displayName, description;
+    Z8Guid key;
+    Z8RuntimeFieldRegistration[] fields;
 }
 class Z8RuntimeRegistry {
     private Z8RuntimeRegistration[] tableEntries, requestEntries;
@@ -18,12 +24,30 @@ class Z8RuntimeRegistry {
         auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, value);
         if (classId is null || !classId.length || name is null || !name.length) throw new Exception("runtime class ID and name are required");
         auto displayName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_displayName"w, value);
-        return Z8RuntimeRegistration(classId.idup, name.idup, displayName.idup, z8_guid_create_name(table ? name : classId));
+        Z8RuntimeRegistration entry;
+        entry.classId = classId.idup; entry.name = name.idup; entry.displayName = displayName.idup;
+        entry.description = value.z8_get_attribute("description"w);
+        entry.key = z8_guid_create_name(table ? name : classId);
+        if (table) foreach (field; z8_query_declared_fields(value, true)) {
+            Z8RuntimeFieldRegistration item;
+            item.index = field.z8_index();
+            item.name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, field);
+            item.displayName = field.z8_get_attribute("displayName"w);
+            if (item.displayName is null || !item.displayName.length) item.displayName = item.name;
+            item.description = field.z8_get_attribute("description"w);
+            item.type = z8_field_type_id(field);
+            if (item.type == "string"w) item.type ~= "("w ~ z8_optional_require(z8_field_state(field).length).to!wstring ~ ")"w;
+            item.ordinal = field.z8_get_ordinal();
+            item.key = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
+            foreach (existing; entry.fields) if (existing.key == item.key) throw new Exception("duplicate runtime field key");
+            entry.fields ~= item;
+        }
+        return entry;
     }
     private void add(ref Z8RuntimeRegistration[] entries, Z8RuntimeRegistration entry, bool table) {
         synchronized (mutex) {
             foreach (ref existing; entries) {
-                if (existing.classId == entry.classId && existing.name == entry.name && existing.key == entry.key) { existing.displayName = entry.displayName; return; }
+                if (existing.classId == entry.classId && existing.name == entry.name && existing.key == entry.key) { existing = entry; return; }
                 if (existing.classId == entry.classId || existing.key == entry.key || (table && existing.name == entry.name))
                     throw new Exception("conflicting runtime registration");
             }
@@ -37,7 +61,10 @@ class Z8RuntimeRegistry {
         synchronized (mutex) {
             auto entries = table ? tableEntries : requestEntries;
             foreach (entry; entries) {
-                entry.key = new Z8Guid(entry.key.majorBits, entry.key.minorBits); result ~= entry;
+                entry.key = new Z8Guid(entry.key.majorBits, entry.key.minorBits);
+                entry.fields = entry.fields.dup;
+                foreach (ref field; entry.fields) field.key = new Z8Guid(field.key.majorBits, field.key.minorBits);
+                result ~= entry;
             }
         }
         return result;
