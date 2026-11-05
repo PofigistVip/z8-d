@@ -547,8 +547,6 @@ class Parser {
             auto s = new Statement(StmtKind.assignment, t);
             s.target = e; s.assignmentOperator = take().text; s.expression = initializer(); return s;
         }
-        if (e.kind != ExprKind.call && e.kind != ExprKind.memberCall)
-            throw new CompileException("only method calls may be used as expression statements", e.token.position);
         auto s = new Statement(StmtKind.expressionStmt, t); s.expression = e; return s;
     }
     private Expression initializer() {

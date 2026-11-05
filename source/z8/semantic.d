@@ -2140,8 +2140,6 @@ class Checker {
                 return false;
             case StmtKind.expressionStmt:
                 typeOf(s.expression);
-                if (s.expression.kind == ExprKind.memberCall && s.expression.inferredType == ValueType.stringType && s.expression.builtinCall != "z8_regex_setupMatcher")
-                    fail("string query cannot be used as a statement", s.token);
                 return false;
             case StmtKind.returnStmt:
                 if (s.expression is null) { if (returnType != ValueType.voidType) fail("return value required", s.token); }

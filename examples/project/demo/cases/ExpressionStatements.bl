@@ -1,0 +1,14 @@
+public class ExpressionStatements {
+    private static int calls;
+    private static int mark() { calls += 1; return calls; }
+
+    public static int run() {
+        calls = 0;
+        mark() + mark();
+        if (calls != 2) return 1;
+        for (int index = 0; index < 2; mark() + mark()) { index += 1; }
+        if (calls != 6) return 2;
+        "hello".toUpperCase();
+        return 283;
+    }
+}

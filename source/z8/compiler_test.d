@@ -257,6 +257,7 @@ unittest {
     compile(q{class A { static sql_int[] f() { sql_int[] a = {1, 2, null}; a.add(3); return a; } }});
     compile(q{class A { static sql_int[][] f() { sql_int[][] a = {{1}, {2}}; return a; } }});
     compile(q{class A { static sql_primary[] f(sql_int x, sql_bool y) { return {x, y, null}; } }});
+    compile(q{class A { static void f() { int x = 1; x + 2; x; 7; "hello".toUpperCase(); } }});
     compile(q{class A { static sql_primary[string] f(sql_int x) { sql_primary[string] a = {("x", x)}; return a; } }});
     compile(q{class A { public operator sql_int() { return 42; } static sql_int f(A x) { return x; } }});
     compile(q{class A { public operator exception() { return "error"; } static void f(A x) { throw x; } }});

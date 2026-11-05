@@ -678,7 +678,7 @@ private string emitSimple(Statement s) {
     if (s.kind == StmtKind.variable)
         return dStorageType(s.type, s.objectClass) ~ " v_" ~ s.token.text ~ " = " ~
             (s.expression !is null ? emitExpr(s.expression) : s.type == ValueType.intType ? "z8_optional_wrap(0L)" : s.type == ValueType.boolType ? "z8_optional_wrap(false)" : s.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(s.type, s.objectClass, s.hasContainer));
-    if (s.kind == StmtKind.expressionStmt) return emitExpr(s.expression);
+    if (s.kind == StmtKind.expressionStmt) return "cast(void)(" ~ emitExpr(s.expression) ~ ")";
     assert(s.kind == StmtKind.assignment);
     if (s.userOperatorAssignment)
         return emitReceiver(s.target) ~ ".z8op_assign(" ~ emitExpr(s.expression) ~ ")";
