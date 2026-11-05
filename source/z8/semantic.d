@@ -502,6 +502,49 @@ class Checker {
             return (right == ValueType.stringType || hasStringConversion(right)) && ["+", "==", "!=", "<", ">", "<=", ">="].canFind(op);
         return false;
     }
+    private bool canConvertSqlOperand(Expression expression, ValueType actual, ValueType expected) {
+        if (actual == ValueType.selfType) return findConversion(expression.objectClass, expected) !is null;
+        if (isOptionalPrimitive(actual)) actual = optionalBaseType(actual);
+        if (actual == ValueType.nullableString) actual = ValueType.stringType;
+        if (actual == expected) return true;
+        if (expected == ValueType.sqlBoolType) return actual == ValueType.boolType;
+        if (expected == ValueType.sqlIntType) return actual == ValueType.intType;
+        if (expected == ValueType.sqlDecimalType) return actual == ValueType.decimalType || actual == ValueType.sqlIntType;
+        if (expected == ValueType.sqlStringType) return actual == ValueType.stringType;
+        if (expected == ValueType.sqlGuidType) return actual == ValueType.guidType;
+        if (expected == ValueType.sqlDateType) return actual == ValueType.dateType;
+        if (expected == ValueType.sqlDatespanType) return actual == ValueType.datespanType;
+        if (expected == ValueType.sqlGeometryType) return actual == ValueType.geometryType;
+        return false;
+    }
+    private ValueType sqlBinaryOperand(ValueType left, Expression expression, ValueType right, string op) {
+        ValueType[] allowed;
+        if (left == ValueType.sqlBoolType && ["&&", "||", "==", "!="].canFind(op)) allowed = [ValueType.sqlBoolType];
+        else if (left == ValueType.sqlIntType && ["+", "-", "*", "/", "%", "&", "|", "^", "==", "!=", "<", ">", "<=", ">="].canFind(op)) {
+            allowed = [ValueType.sqlIntType];
+            if (!["&", "|", "^"].canFind(op)) allowed ~= ValueType.sqlDecimalType;
+        } else if (left == ValueType.sqlDecimalType && ["+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">="].canFind(op))
+            allowed = [ValueType.sqlIntType, ValueType.sqlDecimalType];
+        else if (left == ValueType.sqlStringType && ["+", "==", "!=", "<", ">", "<=", ">="].canFind(op)) allowed = [ValueType.sqlStringType];
+        else if (left == ValueType.sqlGuidType && ["==", "!="].canFind(op)) allowed = [ValueType.sqlGuidType];
+        else if (left == ValueType.sqlDateType) {
+            if (["+", "-"].canFind(op)) allowed ~= ValueType.sqlDatespanType;
+            if (["-", "==", "!=", "<", ">", "<=", ">="].canFind(op)) allowed ~= ValueType.sqlDateType;
+        } else if (left == ValueType.sqlDatespanType) {
+            if (["+", "-", "==", "!=", "<", ">", "<=", ">="].canFind(op)) allowed ~= ValueType.sqlDatespanType;
+            if (op == "+") allowed ~= ValueType.sqlDateType;
+        } else if (left == ValueType.sqlGeometryType && ["==", "!=", "&&"].canFind(op)) allowed = [ValueType.sqlGeometryType];
+        ValueType selected = ValueType.voidType;
+        foreach (target; allowed) if (canConvertSqlOperand(expression, right, target)) {
+            // sql_int is also convertible to sql_decimal, but its exact
+            // operator is preferred over the extra conversion.
+            if (selected == ValueType.sqlIntType && target == ValueType.sqlDecimalType &&
+                [ValueType.intType, ValueType.optionalInt, ValueType.sqlIntType].canFind(right)) continue;
+            if (selected != ValueType.voidType) fail("ambiguous binary operator", expression.token);
+            selected = target;
+        }
+        return selected;
+    }
     private void checkArguments(Expression e, ValueType[] types) {
         if (e.arguments.length != types.length) fail("incorrect argument count", e.token);
         foreach (i, arg; e.arguments) if (!matches(arg, types[i])) fail("argument type mismatch", arg.token);
@@ -1565,6 +1608,10 @@ class Checker {
                 if (receiver == ValueType.selfType) {
                     auto owner = e.left.objectClass;
                     auto target = lookupMethod(owner, e.token.text);
+                    if (target is null && !e.arguments.length) {
+                        target = lookupMethod(owner, "operatorCast:" ~ e.token.text);
+                        if (target !is null) e.namedConversion = target;
+                    }
                     if (target is null && extendsBuiltinPrimary(owner) && ["toString", "hashCode"].canFind(e.token.text)) {
                         checkArguments(e, []);
                         e.builtinCall = e.token.text == "toString" ? "z8_user_primary_string" : "z8_user_primary_hash";
@@ -1924,6 +1971,40 @@ class Checker {
                 fail("invalid unary operand", e.token); assert(0);
             case ExprKind.binary:
                 auto left = typeOf(e.left), right = typeOf(e.right), op = e.token.text;
+                if (left == ValueType.selfType && right != ValueType.nullType) {
+                    auto method = lookupMethod(e.left.objectClass, "operator" ~ op);
+                    if (method !is null) {
+                        e.arguments = [e.right];
+                        auto selected = selectOverload(method, e, true, true);
+                        if (selected !is null) {
+                            e.userBinaryOperator = true;
+                            return checkCall(selected, selected.owner, e);
+                        }
+                    }
+                    Method selectedConversion;
+                    ValueType selectedRight;
+                    foreach (target; [ValueType.sqlBoolType, ValueType.sqlIntType, ValueType.sqlDecimalType,
+                                      ValueType.sqlStringType, ValueType.sqlGuidType, ValueType.sqlDateType,
+                                      ValueType.sqlDatespanType, ValueType.sqlGeometryType]) {
+                        auto conversion = findConversion(e.left.objectClass, target);
+                        if (conversion is null) continue;
+                        auto operand = sqlBinaryOperand(target, e.right, right, op);
+                        if (operand == ValueType.voidType) continue;
+                        if (selectedConversion !is null) fail("ambiguous binary operator", e.token);
+                        selectedConversion = conversion; selectedRight = operand;
+                    }
+                    if (selectedConversion !is null) {
+                        foreach (target; [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType])
+                            if (supportsConvertedBinary(target, right, op) && findConversion(e.left.objectClass, target) !is null)
+                                fail("ambiguous binary operator", e.token);
+                        e.left.userConversion = selectedConversion;
+                        left = selectedConversion.returnType;
+                        if (right == ValueType.selfType) {
+                            if (!matches(e.right, selectedRight)) fail("invalid SQL operands", e.token);
+                            right = selectedRight;
+                        }
+                    }
+                }
                 if ([ValueType.boolType, ValueType.optionalBool].canFind(left) && right == ValueType.sqlBoolType) {
                     matches(e.left, ValueType.sqlBoolType); left = ValueType.sqlBoolType;
                 }

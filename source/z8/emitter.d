@@ -472,6 +472,7 @@ private string emitExprRaw(Expression e) {
             }
             if (e.instanceCall) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                if (e.namedConversion !is null) return emitReceiver(e.left) ~ "." ~ methodDName(e.namedConversion) ~ "()";
                 return emitReceiver(e.left) ~ ".m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
             }
             if (e.targetClass.length) {

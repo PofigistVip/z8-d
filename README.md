@@ -66,6 +66,8 @@ python tests/nested_packages.py
 python tests/member_initializers.py
 python tests/qualified_names.py
 python tests/records.py
+python tests/record_attributes.py
+python tests/sql_field_operators.py
 python tests/static_initialization.py
 python tests/decimal_oracle.py
 python tests/string_oracle.py
@@ -81,6 +83,10 @@ python tests/z8_compiler_oracle.py path/to/original-z8
 задать переменную `Z8_ORACLE_RUN=1`, пример проекта дополнительно выполняется и
 сравнивается с D-версией, используя имеющиеся собранные классы и JAR оригинального
 runtime. Этот JAR может отличаться по версии от текущих исходников.
+Проверка `python tests/stdlib_project.py <путь-к-org.zenframework.z8>`
+транслирует всю исходную BL-библиотеку и компилирует полученные D-модули в
+объектные файлы через DMD;
+она не проверяет связывание и работу ещё не перенесённых native-компонентов.
 
 `z8d lex` выводит по одному JSON-объекту на токен. `kind` — категория,
 `text` — исходное написание, `offset` и `length` измеряются в кодовых единицах
@@ -249,6 +255,9 @@ framework по атрибутам пока не реализована.
 Для SQL-типов поддерживаются одномерные и двумерные массивы, включая массивы
 `sql_primary` с элементами разных SQL-подтипов, а также отображения с ключами
 `string`, `int`, `guid`, `bool` и `decimal`.
+Пользовательские типы могут неявно преобразовываться к SQL-типам при выборе
+бинарного оператора; оператор преобразования доступен и как вызов вида
+`поле.sql_string()`.
 Начата поддержка `sql_bool`: преобразование из `bool`, операции `!`, `&&`,
 `||`, `==`, `!=` и `IIF` для логических аргументов строят дерево выражения.
 Операнды SQL-операторов вычисляются без короткого замыкания. Runtime-функция

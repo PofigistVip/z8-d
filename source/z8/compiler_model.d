@@ -50,7 +50,7 @@ class Expression {
     ValueType castType;
     string emittedOperator;
     bool userUnaryOperator, userBinaryOperator;
-    Method userConversion;
+    Method userConversion, namedConversion;
     string builtinCall;
     string emittedOverride;
     Program objectClass;
