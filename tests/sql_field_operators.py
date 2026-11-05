@@ -20,7 +20,9 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
 public class Probe {
     public static sql_bool guid(GuidField field, guid value) { return field != value; }
     public static sql_bool fields(GuidField left, GuidField right) { return left == right; }
+    public static sql_bool rightGuid(guid left, GuidField right) { return left != right; }
     public static sql_int add(IntField field, int value) { return field + value; }
+    public static sql_int rightInt(int value, IntField field) { return value + field; }
     public static sql_bool check(IntField field, int value) { return field > value; }
     public static sql_string named(TextField field) { return field.sql_string(); }
     public static bool direct(Direct field, guid value) { return field != value; }
@@ -70,11 +72,14 @@ void main() {
         "'00000000-0000-0000-0000-000000000001'<>'00000000-0000-0000-0000-000000000002'"w);
     assert(z8_sql_bool_format(P.m_fields(g, g), true) ==
         "'00000000-0000-0000-0000-000000000001'='00000000-0000-0000-0000-000000000001'"w);
-    assert(guidCalls == 3);
+    assert(z8_sql_bool_format(P.m_rightGuid(id, g), true) ==
+        "'00000000-0000-0000-0000-000000000002'<>'00000000-0000-0000-0000-000000000001'"w);
+    assert(guidCalls == 4);
     assert(z8_sql_int_format(P.m_add(i, 5)) == "(7 + 5)"w);
-    assert(z8_sql_bool_format(P.m_check(i, 5), true) == "7>5"w && intCalls == 2);
+    assert(z8_sql_int_format(P.m_rightInt(5, i)) == "(5 + 7)"w);
+    assert(z8_sql_bool_format(P.m_check(i, 5), true) == "7>5"w && intCalls == 3);
     assert(z8_sql_string_format(P.m_named(s)) == "('Hello')"w && stringCalls == 1);
-    assert(z8_optional_require(P.m_direct(d, id)) && directCalls == 1 && guidCalls == 3);
+    assert(z8_optional_require(P.m_direct(d, id)) && directCalls == 1 && guidCalls == 4);
 }
 """, encoding="utf-8")
     adapter_object = temp / ("adapter.obj" if os.name == "nt" else "adapter.o")

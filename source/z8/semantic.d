@@ -500,7 +500,27 @@ class Checker {
             return [ValueType.intType, ValueType.decimalType].canFind(right) && ["+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">="].canFind(op);
         if (left == ValueType.stringType)
             return (right == ValueType.stringType || hasStringConversion(right)) && ["+", "==", "!=", "<", ">", "<=", ">="].canFind(op);
+        if (left == ValueType.guidType || left == ValueType.fileType)
+            return left == right && ["==", "!="].canFind(op);
+        if (left == ValueType.dateType)
+            return (right == ValueType.dateType && ["-", "==", "!=", "<", ">", "<=", ">="].canFind(op)) ||
+                   (right == ValueType.datespanType && ["+", "-"].canFind(op));
+        if (left == ValueType.datespanType)
+            return (right == ValueType.datespanType && ["+", "-", "==", "!=", "<", ">", "<=", ">="].canFind(op)) ||
+                   (right == ValueType.dateType && op == "+");
         return false;
+    }
+    private ValueType convertedBinaryOperand(ValueType left, Expression expression, ValueType right, string op) {
+        if (right != ValueType.selfType)
+            return supportsConvertedBinary(left, right, op) ? right : ValueType.voidType;
+        ValueType selected = ValueType.voidType;
+        foreach (target; [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType,
+                          ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.fileType]) {
+            if (!supportsConvertedBinary(left, target, op) || findConversion(expression.objectClass, target) is null) continue;
+            if (selected != ValueType.voidType) fail("ambiguous binary operator", expression.token);
+            selected = target;
+        }
+        return selected;
     }
     private bool canConvertSqlOperand(Expression expression, ValueType actual, ValueType expected) {
         if (actual == ValueType.selfType) return findConversion(expression.objectClass, expected) !is null;
@@ -1994,8 +2014,10 @@ class Checker {
                         selectedConversion = conversion; selectedRight = operand;
                     }
                     if (selectedConversion !is null) {
-                        foreach (target; [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType])
-                            if (supportsConvertedBinary(target, right, op) && findConversion(e.left.objectClass, target) !is null)
+                        foreach (target; [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType,
+                                         ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.fileType])
+                            if (findConversion(e.left.objectClass, target) !is null &&
+                                convertedBinaryOperand(target, e.right, right, op) != ValueType.voidType)
                                 fail("ambiguous binary operator", e.token);
                         e.left.userConversion = selectedConversion;
                         left = selectedConversion.returnType;
@@ -2003,6 +2025,34 @@ class Checker {
                             if (!matches(e.right, selectedRight)) fail("invalid SQL operands", e.token);
                             right = selectedRight;
                         }
+                    }
+                }
+                if (right == ValueType.selfType &&
+                    [ValueType.intType, ValueType.optionalInt, ValueType.boolType, ValueType.optionalBool,
+                     ValueType.decimalType, ValueType.optionalDecimal, ValueType.stringType, ValueType.nullableString,
+                     ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.fileType,
+                     ValueType.geometryType].canFind(left)) {
+                    auto plainLeft = isOptionalPrimitive(left) ? optionalBaseType(left) :
+                        left == ValueType.nullableString ? ValueType.stringType : left;
+                    auto operand = convertedBinaryOperand(plainLeft, e.right, right, op);
+                    if (operand == ValueType.voidType) {
+                        ValueType sqlLeft;
+                        switch (plainLeft) {
+                            case ValueType.boolType: sqlLeft = ValueType.sqlBoolType; break;
+                            case ValueType.intType: sqlLeft = ValueType.sqlIntType; break;
+                            case ValueType.decimalType: sqlLeft = ValueType.sqlDecimalType; break;
+                            case ValueType.stringType: sqlLeft = ValueType.sqlStringType; break;
+                            case ValueType.guidType: sqlLeft = ValueType.sqlGuidType; break;
+                            case ValueType.dateType: sqlLeft = ValueType.sqlDateType; break;
+                            case ValueType.datespanType: sqlLeft = ValueType.sqlDatespanType; break;
+                            case ValueType.geometryType: sqlLeft = ValueType.sqlGeometryType; break;
+                            default: break;
+                        }
+                        if (sqlLeft != ValueType.voidType) operand = sqlBinaryOperand(sqlLeft, e.right, right, op);
+                    }
+                    if (operand != ValueType.voidType) {
+                        if (!matches(e.right, operand)) fail("invalid binary operands", e.token);
+                        right = operand;
                     }
                 }
                 if ([ValueType.boolType, ValueType.optionalBool].canFind(left) && right == ValueType.sqlBoolType) {
@@ -2104,16 +2154,23 @@ class Checker {
                         return checkCall(selected, selected.owner, e);
                     }
                     Method conversion;
-                    foreach (target; [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType]) {
-                        if (!supportsConvertedBinary(target, right, op)) continue;
+                    ValueType convertedRight;
+                    foreach (target; [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType,
+                                     ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.fileType]) {
                         auto candidate = findConversion(e.left.objectClass, target);
                         if (candidate is null) continue;
+                        auto operand = convertedBinaryOperand(target, e.right, right, op);
+                        if (operand == ValueType.voidType) continue;
                         if (conversion !is null) fail("ambiguous binary operator", e.token);
-                        conversion = candidate;
+                        conversion = candidate; convertedRight = operand;
                     }
                     if (conversion is null) fail("undefined binary operator", e.token);
                     e.left.userConversion = conversion;
                     left = conversion.returnType == ValueType.stringType ? ValueType.nullableString : storedValueType(conversion.returnType);
+                    if (right == ValueType.selfType) {
+                        if (!matches(e.right, convertedRight)) fail("invalid binary operands", e.token);
+                        right = convertedRight;
+                    }
                 }
                 if (((left == ValueType.intType || left == ValueType.boolType || left == ValueType.decimalType) && right == ValueType.nullType) ||
                     ((right == ValueType.intType || right == ValueType.boolType || right == ValueType.decimalType) && left == ValueType.nullType)) {
