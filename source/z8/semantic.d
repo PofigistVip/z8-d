@@ -786,16 +786,21 @@ class Checker {
             auto name = memberPath(init.target);
             if (initializedMembers.canFind(name)) fail("duplicate field initialization", init.token);
             initializedMembers ~= name;
+            Field initializedDeclaration;
             if (init.target.kind == ExprKind.variable)
                 foreach (field; program.fields)
                     if (field.name.text == name && (field.initializer !is null || field.nestedClass !is null))
-                        fail("duplicate field initialization", init.token);
+                        initializedDeclaration = field;
             staticContext = false; fieldInitialization = true;
             if (init.expression is null) {
                 init.type = typeOf(init.target);
                 if (isOptionalPrimitive(init.type)) init.type = optionalBaseType(init.type);
                 if (init.type == ValueType.nullableString) init.type = ValueType.stringType;
             } else checkStatement(init);
+            // A nested type initializer creates a specialized reference; an
+            // independent MemberInit for that reference is allowed by Z8.
+            if (initializedDeclaration !is null && initializedDeclaration.nestedClass is null)
+                fail("duplicate field initialization", init.token);
             auto root = init.target;
             while (root.kind == ExprKind.field) root = root.left;
             if (!root.isField || root.targetClass.length) fail("field initialization requires an instance field", init.token);

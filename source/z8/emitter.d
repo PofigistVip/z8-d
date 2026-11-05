@@ -1,6 +1,7 @@
 module z8.emitter;
 
 import std.algorithm : canFind, sort;
+import std.algorithm.mutation : SwapStrategy;
 import std.array : join;
 import std.conv : to;
 import std.format : format;
@@ -844,7 +845,7 @@ private ReferenceInitialization[] orderedReferences(Program program) {
         references ~= own;
     }
     collect(program);
-    sort!((a, b) => a.name < b.name)(references);
+    sort!((a, b) => a.name < b.name, SwapStrategy.stable)(references);
     bool[] checked = new bool[references.length];
     for (size_t index = 0; index < references.length; ++index) {
         if (checked[index]) continue;
