@@ -589,6 +589,18 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                 System.out.println("SQLSPANARITH:" + vendor.name() + ":" + value.format(vendor, null));
             for (boolean logical : new boolean[] {false, true})
                 System.out.println("SQLSPANBOOL:" + vendor.name() + ":" + logical + ":" + demo.cases.SqlStringValues.z8_spanCompare().format(vendor, null, logical));
+            for (org.zenframework.z8.server.types.sql.sql_integer value : new org.zenframework.z8.server.types.sql.sql_integer[] {
+                demo.cases.SqlStringValues.z8_spanDays(), demo.cases.SqlStringValues.z8_spanHours(), demo.cases.SqlStringValues.z8_spanMinutes(),
+                demo.cases.SqlStringValues.z8_spanSeconds(), demo.cases.SqlStringValues.z8_spanTotalHours(), demo.cases.SqlStringValues.z8_spanTotalMinutes(), demo.cases.SqlStringValues.z8_spanTotalSeconds() }) {
+                try { System.out.println("SQLSPANPART:" + vendor.name() + ":" + value.format(vendor, null)); }
+                catch (RuntimeException error) { System.out.println("SQLSPANPART:" + vendor.name() + ":ERROR"); }
+            }
+            for (org.zenframework.z8.server.types.sql.sql_datespan value : new org.zenframework.z8.server.types.sql.sql_datespan[] {
+                demo.cases.SqlStringValues.z8_spanTruncHour(), demo.cases.SqlStringValues.z8_spanTruncMinute(), demo.cases.SqlStringValues.z8_spanTruncSecond(),
+                demo.cases.SqlStringValues.z8_spanAddDay(), demo.cases.SqlStringValues.z8_spanAddHour(), demo.cases.SqlStringValues.z8_spanAddMinute(), demo.cases.SqlStringValues.z8_spanAddSecond() }) {
+                try { System.out.println("SQLSPANFUNC:" + vendor.name() + ":" + value.format(vendor, null)); }
+                catch (RuntimeException error) { System.out.println("SQLSPANFUNC:" + vendor.name() + ":ERROR"); }
+            }
         }
         org.zenframework.z8.server.types.sql.sql_integer sharedSearch = demo.cases.SqlStringValues.z8_indexFrom();
         for (org.zenframework.z8.server.db.DatabaseVendor vendor : org.zenframework.z8.server.db.DatabaseVendor.values())
@@ -673,6 +685,8 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         sql_sources += [server_source / "db" / "sql" / "functions" / "conversion" / name for name in ("IntToDecimal.java", "ToDecimal.java", "ToString.java", "StringToInt.java", "IsIntString.java", "IsNumericString.java", "GuidToString.java", "DateToString.java", "DateToInt.java", "ToDate.java", "DatespanToString.java")]
         sql_sources += [server_source / "db" / "sql" / "functions" / "date" / (name + ".java") for name in
                         ("ExtractDatePart", "ExtractMinute", "ExtractHour", "ExtractDay", "ExtractMonth", "ExtractYear", "TruncDay", "TruncHour", "TruncMinute", "TruncSecond", "AddDay", "AddHour", "AddMinute", "AddSecond")]
+        sql_sources += [server_source / "db" / "sql" / "functions" / "datespan" / (name + ".java") for name in
+                        ("Days", "Hours", "Minutes", "Seconds", "TotalHours", "TotalMinutes", "TotalSeconds", "TruncHour", "TruncMinute", "TruncSecond", "AddDay", "AddHour", "AddMinute", "AddSecond")]
         sql_sources += [server_source / "db" / "sql" / "functions" / "string" / name for name in
                         ("Concat.java", "Lower.java", "Upper.java", "LTrim.java", "RTrim.java", "Length.java", "Quote.java",
                          "Like.java", "RegLike.java", "Replace.java", "RegReplace.java", "Substr.java", "Reverse.java", "LPad.java", "RPad.java",
@@ -1056,6 +1070,26 @@ void main() {
             writeln("SQLSPANARITH:", vendor, ":", z8_to_utf8(z8_sql_date_format(value, dialect)));
         foreach (logical; [false, true])
             writeln("SQLSPANBOOL:", vendor, ":", logical, ":", z8_to_utf8(z8_sql_bool_format(Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_spanCompare(), logical, dialect)));
+        foreach (value; [Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_spanDays(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_spanHours(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_spanMinutes(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_spanSeconds(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_spanTotalHours(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_spanTotalMinutes(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_spanTotalSeconds()]) {
+            try { writeln("SQLSPANPART:", vendor, ":", z8_to_utf8(z8_sql_int_format(value, dialect))); }
+            catch (Exception error) { writeln("SQLSPANPART:", vendor, ":ERROR"); }
+        }
+        foreach (value; [Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_spanTruncHour(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_spanTruncMinute(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_spanTruncSecond(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_spanAddDay(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_spanAddHour(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_spanAddMinute(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_spanAddSecond()]) {
+            try { writeln("SQLSPANFUNC:", vendor, ":", z8_to_utf8(z8_sql_datespan_format(value, dialect))); }
+            catch (Exception error) { writeln("SQLSPANFUNC:", vendor, ":ERROR"); }
+        }
     }
     auto sharedSearch = Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_indexFrom();
     foreach (vendorIndex, vendor; ["Oracle", "SqlServer", "Postgres", "H2"]) {
@@ -1071,12 +1105,12 @@ void main() {
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_lines = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:", "SQLSPAN:", "SQLSPANARITH:", "SQLSPANBOOL:"))]
+        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:", "SQLSPAN:", "SQLSPANARITH:", "SQLSPANBOOL:", "SQLSPANPART:", "SQLSPANFUNC:"))]
         original_sql = [line for line in output.splitlines() if line.startswith("SQLBOOL:")]
         d_sql = [line for line in d_lines if line.startswith("SQLBOOL:")]
         if original_sql != d_sql or len(d_sql) != 40:
             raise SystemExit(f"SQL boolean formatting differs: original={original_sql!r}, D={d_sql!r}")
-        for prefix, count in (("SQLINT:", 36), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 44), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 52), ("SQLTEXTTEST:", 16), ("SQLGUID:", 8), ("SQLGUIDBOOL:", 8), ("SQLDATE:", 12), ("SQLDATETICKS:", 4), ("SQLDATEFUNC:", 36), ("SQLDATEPART:", 20), ("SQLDATECMP:", 336), ("SQLDATEBL:", 8), ("SQLSPAN:", 20), ("SQLSPANARITH:", 12), ("SQLSPANBOOL:", 8)):
+        for prefix, count in (("SQLINT:", 36), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 44), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 52), ("SQLTEXTTEST:", 16), ("SQLGUID:", 8), ("SQLGUIDBOOL:", 8), ("SQLDATE:", 12), ("SQLDATETICKS:", 4), ("SQLDATEFUNC:", 36), ("SQLDATEPART:", 20), ("SQLDATECMP:", 336), ("SQLDATEBL:", 8), ("SQLSPAN:", 20), ("SQLSPANARITH:", 12), ("SQLSPANBOOL:", 8), ("SQLSPANPART:", 28), ("SQLSPANFUNC:", 28)):
             original_lines = [line for line in output.splitlines() if line.startswith(prefix)]
             d_formatted = [line for line in d_lines if line.startswith(prefix)]
             if original_lines != d_formatted or len(d_formatted) != count:

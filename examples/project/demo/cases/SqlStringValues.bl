@@ -77,6 +77,20 @@ public class SqlStringValues {
     public static sql_date spanPlusDate() { sql_datespan value = sqlSpan(); return value + sqlDate(); }
     public static sql_bool spanCompare() { sql_datespan value = sqlSpan(); return value >= value; }
     public static sql_string spanText() { sql_datespan value = sqlSpan(); return value.toString(); }
+    public static sql_int spanDays() { sql_datespan value = sqlSpan(); return value.days(); }
+    public static sql_int spanHours() { sql_datespan value = sqlSpan(); return value.hours(); }
+    public static sql_int spanMinutes() { sql_datespan value = sqlSpan(); return value.minutes(); }
+    public static sql_int spanSeconds() { sql_datespan value = sqlSpan(); return value.seconds(); }
+    public static sql_int spanTotalHours() { sql_datespan value = sqlSpan(); return value.totalHours(); }
+    public static sql_int spanTotalMinutes() { sql_datespan value = sqlSpan(); return value.totalMinutes(); }
+    public static sql_int spanTotalSeconds() { sql_datespan value = sqlSpan(); return value.totalSeconds(); }
+    public static sql_datespan spanTruncHour() { sql_datespan value = sqlSpan(); return value.truncHour(); }
+    public static sql_datespan spanTruncMinute() { sql_datespan value = sqlSpan(); return value.truncMinute(); }
+    public static sql_datespan spanTruncSecond() { sql_datespan value = sqlSpan(); return value.truncSecond(); }
+    public static sql_datespan spanAddDay() { sql_datespan value = sqlSpan(); return value.addDay(2); }
+    public static sql_datespan spanAddHour() { sql_datespan value = sqlSpan(); return value.addHour(2); }
+    public static sql_datespan spanAddMinute() { sql_datespan value = sqlSpan(); return value.addMinute(2); }
+    public static sql_datespan spanAddSecond() { sql_datespan value = sqlSpan(); return value.addSecond(2); }
     public static int run() {
         sql_string value = concatenation();
         if (value == null) return 1;

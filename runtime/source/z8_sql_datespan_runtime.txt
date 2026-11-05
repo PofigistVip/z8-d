@@ -1,10 +1,11 @@
-enum Z8SqlDatespanKind { constant, group, choose, add, subtract, dateDifference }
+enum Z8SqlDatespanKind { constant, group, choose, add, subtract, dateDifference, truncHour, truncMinute, truncSecond, addDay, addHour, addMinute, addSecond }
 class Z8SqlDatespan {
     Z8SqlDatespanKind kind;
     Z8Datespan constant;
     Z8SqlDatespan left, right;
     Z8SqlDate dateLeft, dateRight;
     Z8SqlBool condition;
+    Z8SqlInt quantity;
     this(Z8SqlDatespanKind kind, Z8Datespan constant = null, Z8SqlDatespan left = null,
          Z8SqlDatespan right = null, Z8SqlBool condition = null) {
         this.kind = kind; this.constant = constant; this.left = left; this.right = right; this.condition = condition;
@@ -18,6 +19,43 @@ Z8SqlDatespan z8_sql_datespan_iif(Z8SqlBool condition, Z8SqlDatespan yes, Z8SqlD
 Z8SqlDatespan z8_sql_datespan_binary(string op)(Z8SqlDatespan left, Z8SqlDatespan right) {
     static assert(op == "+" || op == "-");
     return new Z8SqlDatespan(op == "+" ? Z8SqlDatespanKind.add : Z8SqlDatespanKind.subtract, null, z8_nonnull(left), right);
+}
+Z8SqlInt z8_sql_datespan_part(string part)(Z8SqlDatespan value) {
+    auto result = new Z8SqlInt(Z8SqlIntKind.spanPart);
+    result.spanOperand = z8_nonnull(value); result.spanPart = part; return result;
+}
+Z8SqlInt z8_sql_datespan_days(Z8SqlDatespan value) { return z8_sql_datespan_part!"days"(value); }
+Z8SqlInt z8_sql_datespan_hours(Z8SqlDatespan value) { return z8_sql_datespan_part!"hours"(value); }
+Z8SqlInt z8_sql_datespan_minutes(Z8SqlDatespan value) { return z8_sql_datespan_part!"minutes"(value); }
+Z8SqlInt z8_sql_datespan_seconds(Z8SqlDatespan value) { return z8_sql_datespan_part!"seconds"(value); }
+Z8SqlInt z8_sql_datespan_totalHours(Z8SqlDatespan value) { return z8_sql_datespan_part!"totalHours"(value); }
+Z8SqlInt z8_sql_datespan_totalMinutes(Z8SqlDatespan value) { return z8_sql_datespan_part!"totalMinutes"(value); }
+Z8SqlInt z8_sql_datespan_totalSeconds(Z8SqlDatespan value) { return z8_sql_datespan_part!"totalSeconds"(value); }
+Z8SqlDatespan z8_sql_datespan_unary(Z8SqlDatespanKind kind)(Z8SqlDatespan value) { return new Z8SqlDatespan(kind, null, z8_nonnull(value)); }
+Z8SqlDatespan z8_sql_datespan_truncHour(Z8SqlDatespan value) { return z8_sql_datespan_unary!(Z8SqlDatespanKind.truncHour)(value); }
+Z8SqlDatespan z8_sql_datespan_truncMinute(Z8SqlDatespan value) { return z8_sql_datespan_unary!(Z8SqlDatespanKind.truncMinute)(value); }
+Z8SqlDatespan z8_sql_datespan_truncSecond(Z8SqlDatespan value) { return z8_sql_datespan_unary!(Z8SqlDatespanKind.truncSecond)(value); }
+Z8SqlDatespan z8_sql_datespan_add(Z8SqlDatespanKind kind)(Z8SqlDatespan value, Z8SqlInt quantity) {
+    auto result = new Z8SqlDatespan(kind, null, z8_nonnull(value)); result.quantity = quantity; return result;
+}
+Z8SqlDatespan z8_sql_datespan_addDay(Z8SqlDatespan value, Z8SqlInt quantity) { return z8_sql_datespan_add!(Z8SqlDatespanKind.addDay)(value, quantity); }
+Z8SqlDatespan z8_sql_datespan_addHour(Z8SqlDatespan value, Z8SqlInt quantity) { return z8_sql_datespan_add!(Z8SqlDatespanKind.addHour)(value, quantity); }
+Z8SqlDatespan z8_sql_datespan_addMinute(Z8SqlDatespan value, Z8SqlInt quantity) { return z8_sql_datespan_add!(Z8SqlDatespanKind.addMinute)(value, quantity); }
+Z8SqlDatespan z8_sql_datespan_addSecond(Z8SqlDatespan value, Z8SqlInt quantity) { return z8_sql_datespan_add!(Z8SqlDatespanKind.addSecond)(value, quantity); }
+private wstring z8_sql_datespan_round(wstring value, Z8SqlVendor vendor) {
+    if (vendor == Z8SqlVendor.Oracle || vendor == Z8SqlVendor.Postgres) return "ROUND(CAST("w ~ value ~ " AS numeric), 0)"w;
+    if (vendor == Z8SqlVendor.SqlServer) return "ROUND("w ~ value ~ ", 0, 0)"w;
+    throw new Exception("unsupported SQL database vendor");
+}
+private wstring z8_sql_datespan_part_format(Z8SqlDatespan value, string part, Z8SqlVendor vendor) {
+    auto unit = part == "days" ? "86400000"w : part == "hours" || part == "totalHours" ? "3600000"w :
+        part == "minutes" || part == "totalMinutes" ? "60000"w : "1000"w;
+    auto total = z8_sql_datespan_round(z8_sql_datespan_format(value, vendor) ~ "/"w ~ unit, vendor);
+    if (part == "days" || part == "totalHours" || part == "totalMinutes" || part == "totalSeconds") return total;
+    auto base = part == "hours" ? "24"w : "60"w;
+    auto mod = vendor == Z8SqlVendor.Oracle ? "MOD("w ~ total ~ ", "w ~ base ~ ")"w : vendor == Z8SqlVendor.Postgres ?
+        "mod("w ~ total ~ ", "w ~ base ~ ")"w : total ~ " % "w ~ base;
+    return z8_sql_datespan_round(mod, vendor);
 }
 Z8SqlBool z8_sql_datespan_compare(string op)(Z8SqlDatespan left, Z8SqlDatespan right) {
     auto result = new Z8SqlBool(Z8SqlBoolKind.spanCompare);
@@ -50,5 +88,12 @@ wstring z8_sql_datespan_format(Z8SqlDatespan value, Z8SqlVendor vendor = Z8SqlVe
         case Z8SqlDatespanKind.add: return z8_sql_datespan_format(value.left, vendor) ~ " + "w ~ z8_sql_datespan_format(value.right, vendor);
         case Z8SqlDatespanKind.subtract: return z8_sql_datespan_format(value.left, vendor) ~ " - ("w ~ z8_sql_datespan_format(value.right, vendor) ~ ")"w;
         case Z8SqlDatespanKind.dateDifference: return z8_sql_date_format(value.dateLeft, vendor) ~ " - ("w ~ z8_sql_date_format(value.dateRight, vendor) ~ ")"w;
+        case Z8SqlDatespanKind.truncHour: case Z8SqlDatespanKind.truncMinute: case Z8SqlDatespanKind.truncSecond:
+            auto part = value.kind == Z8SqlDatespanKind.truncHour ? "days" : value.kind == Z8SqlDatespanKind.truncMinute ? "totalHours" : "totalMinutes";
+            auto unit = value.kind == Z8SqlDatespanKind.truncHour ? "86400000"w : value.kind == Z8SqlDatespanKind.truncMinute ? "3600000"w : "60000"w;
+            return z8_sql_datespan_part_format(value.left, part, vendor) ~ "*"w ~ unit;
+        case Z8SqlDatespanKind.addDay: case Z8SqlDatespanKind.addHour: case Z8SqlDatespanKind.addMinute: case Z8SqlDatespanKind.addSecond:
+            auto unit = value.kind == Z8SqlDatespanKind.addDay ? "86400000"w : value.kind == Z8SqlDatespanKind.addHour ? "3600000"w : value.kind == Z8SqlDatespanKind.addMinute ? "60000"w : "1000"w;
+            return z8_sql_datespan_format(value.left, vendor) ~ " + ("w ~ z8_sql_int_format(value.quantity, vendor) ~ " * "w ~ unit ~ ")"w;
     }
 }

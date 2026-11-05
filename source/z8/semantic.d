@@ -1059,6 +1059,18 @@ class Checker {
                     }
                     fail("unsupported SQL date method", e.token);
                 }
+                if (receiver == ValueType.sqlDatespanType) {
+                    if (["days", "hours", "minutes", "seconds", "totalHours", "totalMinutes", "totalSeconds"].canFind(e.token.text)) {
+                        checkArguments(e, []); e.builtinCall = "z8_sql_datespan_" ~ e.token.text; return ValueType.sqlIntType;
+                    }
+                    if (["truncHour", "truncMinute", "truncSecond"].canFind(e.token.text)) {
+                        checkArguments(e, []); e.builtinCall = "z8_sql_datespan_" ~ e.token.text; return ValueType.sqlDatespanType;
+                    }
+                    if (["addDay", "addHour", "addMinute", "addSecond"].canFind(e.token.text)) {
+                        checkArguments(e, [ValueType.sqlIntType]); e.builtinCall = "z8_sql_datespan_" ~ e.token.text; return ValueType.sqlDatespanType;
+                    }
+                    fail("unsupported SQL datespan method", e.token);
+                }
                 if (receiver == ValueType.sqlDecimalType) {
                     if (["abs", "exp", "ln"].canFind(e.token.text)) {
                         checkArguments(e, []); e.builtinCall = "z8_sql_decimal_" ~ e.token.text; return ValueType.sqlDecimalType;
