@@ -1030,8 +1030,26 @@ class Checker {
                     fail("unsupported SQL decimal method", e.token);
                 }
                 if (receiver == ValueType.sqlStringType) {
-                    if (["toLower", "toUpper", "trimLeft", "trimRight", "trimAll"].canFind(e.token.text)) {
+                    if (["toLower", "toUpper", "trimLeft", "trimRight", "trimAll", "reverse"].canFind(e.token.text)) {
                         checkArguments(e, []); e.builtinCall = "z8_sql_string_" ~ e.token.text; return ValueType.sqlStringType;
+                    }
+                    if (e.token.text == "replace" || e.token.text == "replaceAll") {
+                        if (e.token.text == "replaceAll" && e.arguments.length == 3)
+                            checkArguments(e, [ValueType.sqlStringType, ValueType.sqlStringType, ValueType.sqlStringType]);
+                        else checkArguments(e, [ValueType.sqlStringType, ValueType.sqlStringType]);
+                        e.builtinCall = "z8_sql_string_" ~ e.token.text; return ValueType.sqlStringType;
+                    }
+                    if (e.token.text == "substring") {
+                        checkArguments(e, [ValueType.sqlIntType, ValueType.sqlIntType]);
+                        e.builtinCall = "z8_sql_string_substring"; return ValueType.sqlStringType;
+                    }
+                    if (e.token.text == "padLeft" || e.token.text == "padRight") {
+                        checkArguments(e, e.arguments.length == 2 ? [ValueType.sqlIntType, ValueType.sqlStringType] : [ValueType.sqlIntType]);
+                        e.builtinCall = "z8_sql_string_" ~ e.token.text; return ValueType.sqlStringType;
+                    }
+                    if (e.token.text == "like" || e.token.text == "regLike") {
+                        checkArguments(e, e.token.text == "like" && e.arguments.length == 2 ? [ValueType.sqlStringType, ValueType.sqlStringType] : [ValueType.sqlStringType]);
+                        e.builtinCall = "z8_sql_string_" ~ e.token.text; return ValueType.sqlBoolType;
                     }
                     if (e.token.text == "length") {
                         checkArguments(e, []); e.builtinCall = "z8_sql_string_length"; return ValueType.sqlIntType;

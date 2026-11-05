@@ -1,8 +1,10 @@
-enum Z8SqlStringKind { constant, group, concat, lower, upper, trimLeft, trimRight, choose }
+enum Z8SqlStringKind { constant, group, concat, lower, upper, trimLeft, trimRight, choose, replace, regReplace, substring, reverse, padLeft, padRight }
 class Z8SqlString {
     Z8SqlStringKind kind;
     wstring constant;
     Z8SqlString left, right;
+    Z8SqlString replacement, flags;
+    Z8SqlInt position, length;
     Z8SqlBool condition;
     this(Z8SqlStringKind kind, wstring constant = null, Z8SqlString left = null,
          Z8SqlString right = null, Z8SqlBool condition = null) {
@@ -28,6 +30,35 @@ Z8SqlString z8_sql_string_toUpper(Z8SqlString value) { return z8_sql_string_unar
 Z8SqlString z8_sql_string_trimLeft(Z8SqlString value) { return z8_sql_string_unary!"trimLeft"(value); }
 Z8SqlString z8_sql_string_trimRight(Z8SqlString value) { return z8_sql_string_unary!"trimRight"(value); }
 Z8SqlString z8_sql_string_trimAll(Z8SqlString value) { return z8_sql_string_trimRight(z8_sql_string_trimLeft(value)); }
+Z8SqlString z8_sql_string_replace(Z8SqlString value, Z8SqlString pattern, Z8SqlString replacement) {
+    auto result = new Z8SqlString(Z8SqlStringKind.replace, null, z8_nonnull(value), pattern);
+    result.replacement = replacement; return result;
+}
+Z8SqlString z8_sql_string_replaceAll(Z8SqlString value, Z8SqlString pattern, Z8SqlString replacement, Z8SqlString flags = null) {
+    auto result = new Z8SqlString(Z8SqlStringKind.regReplace, null, z8_nonnull(value), pattern);
+    result.replacement = replacement; result.flags = flags; return result;
+}
+Z8SqlString z8_sql_string_substring(Z8SqlString value, Z8SqlInt position, Z8SqlInt length) {
+    auto result = new Z8SqlString(Z8SqlStringKind.substring, null, z8_nonnull(value));
+    result.position = position; result.length = length; return result;
+}
+Z8SqlString z8_sql_string_reverse(Z8SqlString value) { return new Z8SqlString(Z8SqlStringKind.reverse, null, z8_nonnull(value)); }
+Z8SqlString z8_sql_string_padLeft(Z8SqlString value, Z8SqlInt length, Z8SqlString pattern = null) {
+    auto result = new Z8SqlString(Z8SqlStringKind.padLeft, null, z8_nonnull(value), pattern);
+    result.length = length; return result;
+}
+Z8SqlString z8_sql_string_padRight(Z8SqlString value, Z8SqlInt length, Z8SqlString pattern = null) {
+    auto result = new Z8SqlString(Z8SqlStringKind.padRight, null, z8_nonnull(value), pattern);
+    result.length = length; return result;
+}
+Z8SqlBool z8_sql_string_like(Z8SqlString value, Z8SqlString pattern, Z8SqlString escape = null) {
+    auto result = new Z8SqlBool(Z8SqlBoolKind.textLike);
+    result.textLeft = z8_nonnull(value); result.textRight = pattern; result.textEscape = escape; return result;
+}
+Z8SqlBool z8_sql_string_regLike(Z8SqlString value, Z8SqlString pattern) {
+    auto result = new Z8SqlBool(Z8SqlBoolKind.textRegLike);
+    result.textLeft = z8_nonnull(value); result.textRight = pattern; return result;
+}
 Z8SqlInt z8_sql_string_length(Z8SqlString value) {
     auto result = new Z8SqlInt(Z8SqlIntKind.textLength);
     result.textOperand = z8_nonnull(value);
@@ -72,5 +103,24 @@ wstring z8_sql_string_format(Z8SqlString value, Z8SqlVendor vendor = Z8SqlVendor
         case Z8SqlStringKind.trimRight: return "RTRIM("w ~ z8_sql_string_format(value.left, vendor) ~ ")"w;
         case Z8SqlStringKind.choose:
             return z8_sql_bool_case(z8_sql_bool_format(value.condition, true, vendor), z8_sql_string_format(value.left, vendor), z8_sql_string_format(value.right, vendor));
+        case Z8SqlStringKind.replace: case Z8SqlStringKind.regReplace:
+            if (vendor == Z8SqlVendor.H2) throw new Exception("unsupported SQL database vendor");
+            auto name = value.kind == Z8SqlStringKind.replace ? "replace("w : "regexp_replace("w;
+            return name ~ z8_sql_string_format(value.left, vendor) ~ ", "w ~ z8_sql_string_format(value.right, vendor) ~ ", "w ~
+                z8_sql_string_format(value.replacement, vendor) ~ (value.flags is null ? ""w : ", "w ~ z8_sql_string_format(value.flags, vendor)) ~ ")"w;
+        case Z8SqlStringKind.substring:
+            if (vendor == Z8SqlVendor.H2) throw new Exception("unsupported SQL database vendor");
+            return (vendor == Z8SqlVendor.SqlServer ? "subString("w : "substr("w) ~ z8_sql_string_format(value.left, vendor) ~ ","w ~
+                z8_sql_int_format(value.position, vendor) ~ " + 1,"w ~
+                (value.length is null ? z8_sql_int_format(z8_sql_string_length(value.left), vendor) : z8_sql_int_format(value.length, vendor)) ~ ")"w;
+        case Z8SqlStringKind.reverse: return "REVERSE("w ~ z8_sql_string_format(value.left, vendor) ~ ")"w;
+        case Z8SqlStringKind.padLeft: case Z8SqlStringKind.padRight:
+            if (vendor == Z8SqlVendor.H2) throw new Exception("unsupported SQL database vendor");
+            auto text = z8_sql_string_format(value.left, vendor), length = z8_sql_int_format(value.length, vendor);
+            auto pad = value.right is null ? (vendor == Z8SqlVendor.Postgres ? "' '"w : "N' '"w) : z8_sql_string_format(value.right, vendor);
+            if (vendor == Z8SqlVendor.Postgres) return (value.kind == Z8SqlStringKind.padLeft ? "lpad("w : "rpad("w) ~ text ~ ", "w ~ length ~ ", "w ~ pad ~ ")"w;
+            if (value.kind == Z8SqlStringKind.padLeft) return "RIGHT(REPLICATE("w ~ pad ~ ","w ~ length ~ ")+"w ~ text ~ ","w ~ length ~ ")"w;
+            if (vendor == Z8SqlVendor.Oracle) return "RPAD("w ~ text ~ ","w ~ length ~ ","w ~ pad ~ ")"w;
+            return "LEFT("w ~ text ~ "+REPLICATE("w ~ pad ~ ","w ~ length ~ "),"w ~ length ~ ")"w;
     }
 }

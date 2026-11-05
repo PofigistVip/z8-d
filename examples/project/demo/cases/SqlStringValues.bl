@@ -8,6 +8,15 @@ public class SqlStringValues {
     public static sql_string lower() { sql_string value = " ABC "; return value.toLower(); }
     public static sql_string trimmed() { sql_string value = " ABC "; return value.trimAll(); }
     public static sql_string choice() { sql_bool condition = true; return condition.IIF("yes", "no"); }
+    public static sql_string replace() { sql_string value = "ababa"; return value.replace("a", "x"); }
+    public static sql_string replaceAll() { sql_string value = "ababa"; return value.replaceAll("a", "x", "g"); }
+    public static sql_string substring() { sql_string value = "abcdef"; return value.substring(1, 3); }
+    public static sql_string remainder() { sql_string value = "abcdef"; return value.substring(1, null); }
+    public static sql_string reverse() { sql_string value = "abc"; return value.reverse(); }
+    public static sql_string padLeft() { sql_string value = "abc"; return value.padLeft(5); }
+    public static sql_string padRight() { sql_string value = "abc"; return value.padRight(5, "_"); }
+    public static sql_bool like() { sql_string value = "a%b"; return value.like("a!%b", "!"); }
+    public static sql_bool regLike() { sql_string value = "abc"; return value.regLike("a.*"); }
     public static sql_int length() { sql_string value = "abc"; return value.length(); }
     public static sql_bool compare() { sql_string value = "alpha"; return value >= "beta"; }
     public static int run() {
