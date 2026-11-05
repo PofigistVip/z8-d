@@ -31,6 +31,7 @@ private string methodDName(Method method) {
 }
 
 private string dType(ValueType type, Program objectClass = null) {
+    if (isSqlArray(type)) return "Z8Array!(" ~ dType(elementType(type)) ~ ")";
     if (isMap(type)) {
         auto key = mapKeyType(type), value = mapValueType(type);
         if (type == ValueType.stringMap) return "Z8StringMap";
@@ -363,7 +364,8 @@ private string emitExprRaw(Expression e) {
                 return body ~ "return z8_result;\n})()";
             }
             string[] elements; foreach (element; e.arguments)
-                elements ~= (e.inferredType == ValueType.selfArray || e.inferredType == ValueType.enumArray) ? "cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(element) ~ ")" : emitExpr(element);
+                elements ~= (e.inferredType == ValueType.selfArray || e.inferredType == ValueType.enumArray) ? "cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(element) ~ ")" :
+                    e.inferredType == ValueType.sqlPrimaryArray ? "cast(Z8SqlPrimary)(" ~ emitExpr(element) ~ ")" : emitExpr(element);
             return "new " ~ dType(e.inferredType, e.objectClass) ~ "(" ~ (elements.length ? "[" ~ elements.join(", ") ~ "]" ~ ([ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(e.inferredType) ? ", true" : "") : "") ~ ")";
         case ExprKind.mapEntry: assert(0, "map entries are emitted by their initializer");
         case ExprKind.variable: return e.isCapture ? "this.z8_capture_" ~ e.token.text : e.isField ? (e.targetClass.length ? e.targetClass ~ ".f_" : "this.f_") ~ e.token.text : "v_" ~ e.token.text;

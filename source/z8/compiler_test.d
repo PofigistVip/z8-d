@@ -254,6 +254,9 @@ unittest {
     compile(q{class A { static sql_string f(sql_geometry x) { return x.strType() + x.asGeoJSON(); } }});
     compile(q{class A { static sql_primary f(sql_int x) { return x; } static sql_int g(sql_primary x) { return (sql_int)x; } }});
     compile(q{class A { static bool f(sql_primary x) { return x instanceof sql_int; } static sql_string g(sql_primary x) { return x.toString(); } }});
+    compile(q{class A { static sql_int[] f() { sql_int[] a = {1, 2, null}; a.add(3); return a; } }});
+    compile(q{class A { static sql_int[][] f() { sql_int[][] a = {{1}, {2}}; return a; } }});
+    compile(q{class A { static sql_primary[] f(sql_int x, sql_bool y) { return {x, y, null}; } }});
     rejects(q{class A { static sql_binary f(binary x) { return x; } }});
     rejects(q{class A { static date f(sql_date x) { return x; } }});
     rejects(q{class A { static guid f(sql_guid x) { return x; } }});

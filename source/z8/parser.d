@@ -116,6 +116,11 @@ class Parser {
                 expect("]"); return map;
             }
             expect("]");
+            if (isSqlType(result)) {
+                bool matrix = accept("[");
+                if (matrix) expect("]");
+                return sqlArrayType(result, matrix);
+            }
             switch (result) {
                 case ValueType.intType:
                     if (accept("[")) { expect("]"); return ValueType.intMatrix; }

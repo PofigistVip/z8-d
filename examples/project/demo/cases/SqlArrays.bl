@@ -1,0 +1,40 @@
+import org.zenframework.z8.lang.sql.sql_int;
+import org.zenframework.z8.lang.sql.sql_bool;
+import org.zenframework.z8.lang.sql.sql_string;
+import org.zenframework.z8.lang.sql.sql_primary;
+import org.zenframework.z8.lang.sql.sql_decimal;
+import org.zenframework.z8.lang.sql.sql_guid;
+import org.zenframework.z8.lang.sql.sql_date;
+import org.zenframework.z8.lang.sql.sql_datespan;
+import org.zenframework.z8.lang.sql.sql_binary;
+import org.zenframework.z8.lang.sql.sql_geometry;
+
+public class SqlArrays {
+    public static int run() {
+        sql_int[] values = {1, 2, null};
+        if (values.size() != 3 || values[2] != null) return 1;
+        values.add(3);
+        if (values.size() != 4 || values[0] == null) return 2;
+        sql_int[][] matrix = {{1, 2}, {3}};
+        if (matrix.size() != 2 || matrix[0].size() != 2 || matrix[1][0] == null) return 3;
+        sql_bool flag = true;
+        sql_string text = "value";
+        sql_primary[] mixed = {values[0], flag, text, null};
+        if (!(mixed[0] instanceof sql_int) || !(mixed[1] instanceof sql_bool) || !(mixed[2] instanceof sql_string)) return 4;
+        if (mixed[3] != null) return 5;
+        int count = 0;
+        for (sql_int value : values) { if (value != null) count += 1; }
+        if (count != 3) return 6;
+        sql_bool[] booleans; sql_bool[][] booleanMatrix;
+        sql_decimal[] decimals; sql_decimal[][] decimalMatrix;
+        sql_string[] strings; sql_string[][] stringMatrix;
+        sql_guid[] guids; sql_guid[][] guidMatrix;
+        sql_date[] dates; sql_date[][] dateMatrix;
+        sql_datespan[] spans; sql_datespan[][] spanMatrix;
+        sql_binary[] binaries; sql_binary[][] binaryMatrix;
+        sql_geometry[] geometries; sql_geometry[][] geometryMatrix;
+        sql_primary[][] primaryMatrix;
+        if (!booleans.isEmpty() || !decimalMatrix.isEmpty() || !geometryMatrix.isEmpty() || !primaryMatrix.isEmpty()) return 7;
+        return 257;
+    }
+}
