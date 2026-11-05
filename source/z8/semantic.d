@@ -122,10 +122,10 @@ class Checker {
         return *found;
     }
     private ValueType resolveDeclaredType(ValueType type, Program owner, string objectName, Token site) {
-        if (type != ValueType.selfType && type != ValueType.selfArray) return type;
+        if (type != ValueType.selfType && type != ValueType.selfArray && type != ValueType.selfMatrix) return type;
         auto target = resolveClass(owner, objectName, site);
         if (!target.isEnum) return type;
-        return type == ValueType.selfArray ? ValueType.enumArray : ValueType.enumType;
+        return type == ValueType.selfMatrix ? ValueType.enumMatrix : type == ValueType.selfArray ? ValueType.enumArray : ValueType.enumType;
     }
     private void checkAttributeNameConflicts(Program program, Program[string] programs) {
         Program sourceRoot(Program owner) {
@@ -169,7 +169,7 @@ class Checker {
                 fail("attributes require an object reference field", field.name);
             if (field.isAuto && (field.isStatic || field.type != ValueType.selfArray))
                 fail("auto requires an instance array of object references", field.name);
-            if (field.isStatic && field.type == ValueType.selfType)
+            if (field.isStatic && [ValueType.selfType, ValueType.selfArray, ValueType.selfMatrix].canFind(field.type))
                 fail("static object fields are not supported", field.name);
             if (field.type == ValueType.primaryType && field.initializer is null)
                 fail("primary fields require an initializer", field.name);
@@ -205,7 +205,7 @@ class Checker {
         return best;
     }
     private bool matches(Expression e, ValueType expected, Program expectedClass = null) {
-        if (e.kind == ExprKind.arrayLiteral && (expected == ValueType.selfArray || expected == ValueType.enumArray)) e.objectClass = expectedClass;
+        if (e.kind == ExprKind.arrayLiteral && hasObjectClass(expected)) e.objectClass = expectedClass;
         auto actual = typeOf(e, expected);
         if (actual == ValueType.selfType) {
             if (expected == ValueType.selfType && isAssignable(e.objectClass, expectedClass)) return true;
@@ -257,7 +257,7 @@ class Checker {
         if (expected == ValueType.stringType && actual == ValueType.exceptionType) { e.convertToString = actual; return true; }
         if (expected == ValueType.stringType && [ValueType.dateType, ValueType.geometryType].canFind(actual)) { e.convertToString = actual; return true; }
         return actual == expected && (expected == ValueType.selfType ? isAssignable(e.objectClass, expectedClass) :
-            (expected != ValueType.selfArray && expected != ValueType.enumType && expected != ValueType.enumArray) || e.objectClass is expectedClass);
+            !hasObjectClass(expected) || e.objectClass is expectedClass);
     }
     private bool matchesStored(Expression e, ValueType expected, Program expectedClass = null) {
         if (expected != ValueType.intType && expected != ValueType.boolType && expected != ValueType.decimalType) return matches(e, expected, expectedClass);
@@ -342,9 +342,7 @@ class Checker {
                             }
                         }
                     }
-                    if (actual == ValueType.selfArray && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
-                    if (actual == ValueType.enumType && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
-                    if (actual == ValueType.enumArray && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
+                    if (actual != ValueType.selfType && hasObjectClass(actual) && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
                 } else if (actual == ValueType.selfType && findConversion(e.arguments[i].objectClass, p.type) !is null) weight += 100;
                 else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
                 else if (actual == ValueType.intType && p.type == ValueType.dateType) weight += 100;
@@ -1296,7 +1294,7 @@ class Checker {
                 }
                 if (!isArray(array)) fail("indexing requires an array", e.token);
                 if (!matches(e.right, ValueType.intType)) fail("array index must be int", e.token);
-                if (array == ValueType.selfArray || array == ValueType.enumArray) e.objectClass = e.left.objectClass;
+                if (hasObjectClass(array)) e.objectClass = e.left.objectClass;
                 e.inferredType = array;
                 return array == ValueType.stringArray ? ValueType.nullableString : storedValueType(elementType(array));
             case ExprKind.castExpr:
@@ -1517,7 +1515,7 @@ class Checker {
                     return left;
                 }
                 if (isArray(left) && left == right && op == "+") {
-                    if ((left == ValueType.selfArray || left == ValueType.enumArray) && e.left.objectClass !is e.right.objectClass)
+                    if (hasObjectClass(left) && e.left.objectClass !is e.right.objectClass)
                         fail("array element type mismatch", e.token);
                     e.inferredType = left;
                     e.objectClass = e.left.objectClass;
@@ -1802,6 +1800,7 @@ class Checker {
                 if (!isArray(array) || elementType(array) != s.initial.type) fail("foreach element type mismatch", s.token);
                 if (array == ValueType.selfArray && !isAssignable(s.expression.objectClass, s.initial.objectClass)) fail("foreach element type mismatch", s.token);
                 if (array == ValueType.enumArray && s.expression.objectClass !is s.initial.objectClass) fail("foreach element type mismatch", s.token);
+                if ((array == ValueType.selfMatrix || array == ValueType.enumMatrix) && s.expression.objectClass !is s.initial.objectClass) fail("foreach element type mismatch", s.token);
                 ++loopDepth; checkStatement(s.children[0]); --loopDepth;
                 variables = old; objectVariables = oldObjects; return false;
             case StmtKind.breakStmt:

@@ -56,6 +56,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.primaryType: return "Z8Primary";
         case ValueType.selfType: assert(objectClass !is null); return objectClass.emittedName;
         case ValueType.selfArray: assert(objectClass !is null); return "Z8Array!(" ~ objectClass.emittedName ~ ")";
+        case ValueType.selfMatrix: assert(objectClass !is null); return "Z8Array!(Z8Array!(" ~ objectClass.emittedName ~ "))";
         case ValueType.intArray: return "Z8Array!long";
         case ValueType.intMatrix: return "Z8Array!(Z8Array!long)";
         case ValueType.decimalArray: return "Z8Array!Z8Decimal";
@@ -84,6 +85,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.nullableString: return "wstring";
         case ValueType.enumType: assert(objectClass !is null); return objectClass.emittedName;
         case ValueType.enumArray: assert(objectClass !is null); return "Z8Array!(" ~ objectClass.emittedName ~ ")";
+        case ValueType.enumMatrix: assert(objectClass !is null); return "Z8Array!(Z8Array!(" ~ objectClass.emittedName ~ "))";
         case ValueType.optionalInt: return "Z8Optional!long";
         case ValueType.optionalBool: return "Z8Optional!bool";
         case ValueType.optionalDecimal: return "Z8Optional!Z8Decimal";

@@ -141,7 +141,9 @@ class Parser {
                 case ValueType.exceptionType:
                     if (accept("[")) { expect("]"); return ValueType.exceptionMatrix; }
                     return ValueType.exceptionArray;
-                case ValueType.selfType: return ValueType.selfArray;
+                case ValueType.selfType:
+                    if (accept("[")) { expect("]"); return ValueType.selfMatrix; }
+                    return ValueType.selfArray;
                 default: error("this array element type is not supported"); assert(0);
             }
         }
@@ -367,7 +369,7 @@ class Parser {
             if (current.text != "(") {
                 if (operatorSymbol.length || isCastOperator) error("operator requires parameters");
                 if (isVirtual || declaredType == ValueType.voidType) error("this field type or modifier is not supported");
-                if (isStatic && (declaredType == ValueType.selfArray || declaredType == ValueType.exceptionType || isMap(declaredType)))
+                if (isStatic && (declaredType == ValueType.exceptionType || isMap(declaredType)))
                     error("static object fields are not supported");
                 auto field = new Field; field.attributes = attributes; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.isProtected = isProtected; field.isStatic = isStatic; field.isAuto = isAuto; field.declaredFinal = declaredFinal; field.objectName = declaredObjectName; field.owner = result;
                 if (accept("=")) {

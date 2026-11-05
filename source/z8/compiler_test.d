@@ -429,6 +429,8 @@ unittest {
     rejectsSources([enumWrite, enumType], "A.bl");
     auto enumArray = SourceUnit("pkg.A", "A.bl", "class A { void f() { Mode[] values; } }");
     compileSources([enumArray, enumType]);
+    auto enumMatrix = SourceUnit("pkg.A", "A.bl", "class A { static Mode[] values; void f() { Mode[][] matrix = {{Mode.One}}; Mode first = matrix[0][0]; } }");
+    compileSources([enumMatrix, enumType]);
     auto enumChild = SourceUnit("pkg.A", "A.bl", "class A extends Mode { }");
     rejectsSources([enumChild, enumType], "A.bl");
     auto otherEnum = SourceUnit("pkg.Other", "Other.bl", "enum Other { One }");
@@ -436,6 +438,12 @@ unittest {
     rejectsSources([enumCompare, enumType, otherEnum], "A.bl");
     auto enumArrayMismatch = SourceUnit("pkg.A", "A.bl", "class A { void f() { Mode[] x; Other[] y; x.addAll(y); } }");
     rejectsSources([enumArrayMismatch, enumType, otherEnum], "A.bl");
+    auto enumMatrixMismatch = SourceUnit("pkg.A", "A.bl", "class A { void f() { Mode[][] x; Other[][] y; x.addAll(y); } }");
+    rejectsSources([enumMatrixMismatch, enumType, otherEnum], "A.bl");
+    auto enumMatrixArgument = SourceUnit("pkg.A", "A.bl", "class A { void f(Mode[][] x) {} void g(Other[][] y) { f(y); } }");
+    rejectsSources([enumMatrixArgument, enumType, otherEnum], "A.bl");
+    auto enumMatrixForeach = SourceUnit("pkg.A", "A.bl", "class A { void f(Mode[][] x) { for (Other[] row : x) {} } }");
+    rejectsSources([enumMatrixForeach, enumType, otherEnum], "A.bl");
     auto enumForeachMismatch = SourceUnit("pkg.A", "A.bl", "class A { void f() { Mode[] x; for (Other item : x) {} } }");
     rejectsSources([enumForeachMismatch, enumType, otherEnum], "A.bl");
     auto wrongForeach = SourceUnit("pkg.A", "A.bl", "class A { void f() { B[] x; for (A item : x) {} } }");
