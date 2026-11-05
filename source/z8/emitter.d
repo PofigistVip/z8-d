@@ -7,7 +7,7 @@ import std.format : format;
 import std.string : replace, startsWith, split;
 import std.regex : matchAll, regex;
 import z8.compiler_model;
-import z8.lexer : decodeStringLiteral;
+import z8.lexer : TokenKind, decodeStringLiteral;
 import z8.d_writer : formatDSource;
 
 private string operatorDName(string symbol) {
@@ -125,6 +125,13 @@ private string emitAttributeValue(TypeAttribute attribute) {
         if (attribute.expression.convertToString == ValueType.selfType)
             value = "z8_attribute_from(" ~ value ~ ", " ~ emitWStringLiteral(attribute.name.text.to!wstring) ~ ")";
         return "z8_string_new(z8_string_required(" ~ value ~ "))";
+    }
+    if (attribute.hasValue && attribute.value.kind == TokenKind.dateLiteral) {
+        if (attribute.dateTickCaptured)
+            return emitWStringLiteral((attribute.capturedDateTicks.to!string ~ "L").to!wstring);
+        return "z8_string_new((z8_date_ticks(z8_date_literal(z8_to_utf8(" ~
+            emitWStringLiteral(attribute.value.text[1 .. $ - 1].to!wstring) ~
+            ")))).to!string.to!wstring ~ \"L\"w)";
     }
     return emitWStringLiteral(attributeLiteralValue(attribute));
 }

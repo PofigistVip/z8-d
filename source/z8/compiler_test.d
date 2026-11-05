@@ -22,6 +22,10 @@ unittest {
     assert(specialAttributes.canFind("new byte[] {0, -1}"));
     auto spanAttribute = compile("[s '25 00:00:00'] class A {}");
     assert(spanAttribute.canFind("-2134967296L"));
+    compile("[d '29/02/2024 12:30:45'] class A {}");
+    auto timeAttribute = (new Parser("[clock '23:59:59'] class A {} ")).parse();
+    assert(timeAttribute.attributes[0].dateTickCaptured);
+    rejects("[name '29/02/2024'] class A {}");
     rejects(q{[flag -true] class A {}});
     auto decimalAttributes = compile(q{[a 001.2300] [b .0000001] [c 1.2300e+7] [d -12.340] [e -0.00] [f .0001e-2] class A {}});
     foreach (value; [`"1.2300"w`, `"1E-7"w`, `"1.23001447"w`, `"-12.340"w`, `"0.00"w`, `"0.00011462"w`])

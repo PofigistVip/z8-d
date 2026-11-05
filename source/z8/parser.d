@@ -3,6 +3,7 @@ module z8.parser;
 import std.algorithm : canFind;
 import std.conv : to;
 import std.regex : matchFirst, regex;
+import std.string : indexOf;
 import std.uni : unicode;
 import z8.compiler_model;
 import z8.lexer;
@@ -154,13 +155,19 @@ class Parser {
         foreach (old; previous)
             if (old.name.text == attribute.name.text) throw new CompileException("duplicate attribute", attribute.name.position);
         if (current.text != "]") {
-            bool literal = [TokenKind.stringLiteral, TokenKind.booleanLiteral, TokenKind.integerLiteral, TokenKind.decimalLiteral, TokenKind.guidLiteral, TokenKind.binaryLiteral, TokenKind.datespanLiteral].canFind(current.kind) && look(1).text == "]";
+            bool literal = [TokenKind.stringLiteral, TokenKind.booleanLiteral, TokenKind.integerLiteral, TokenKind.decimalLiteral, TokenKind.guidLiteral, TokenKind.binaryLiteral, TokenKind.datespanLiteral, TokenKind.dateLiteral].canFind(current.kind) && look(1).text == "]";
             bool negative = current.text == "-" && [TokenKind.integerLiteral, TokenKind.decimalLiteral].canFind(look(1).kind) && look(2).text == "]";
             attribute.hasValue = true;
             if (literal || negative) {
                 auto sign = current;
                 if (negative) take();
                 attribute.value = take();
+                if (attribute.value.kind == TokenKind.dateLiteral && attribute.value.text.indexOf('/') < 0) {
+                    import std.datetime : Clock, SysTime, UTC;
+                    auto now = Clock.currTime(UTC());
+                    attribute.capturedDateTicks = (now - SysTime.fromUnixTime(0, UTC())).total!"msecs";
+                    attribute.dateTickCaptured = true;
+                }
                 if (negative) {
                     attribute.value.text = "-" ~ attribute.value.text;
                     attribute.value.position = sign.position;
@@ -175,6 +182,8 @@ class Parser {
             throw new CompileException("this attribute is not supported yet", attribute.name.position);
         if (attribute.name.text == "name" && attribute.hasValue) {
             if (attribute.expression !is null) throw new CompileException("name attribute requires a constant", attribute.name.position);
+            if (attribute.value.kind == TokenKind.dateLiteral)
+                throw new CompileException("name attribute has an illegal character", attribute.name.position);
             auto value = attributeLiteralValue(attribute);
             if (attribute.value.kind == TokenKind.stringLiteral && value.length > 2 && value[0] == '$' && value[$-1] == '$')
                 throw new CompileException("name attribute cannot be a resource key", attribute.value.position);
