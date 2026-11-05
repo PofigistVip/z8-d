@@ -1,0 +1,64 @@
+// Query's declared data fields are the Field members of its OBJECT collection.
+private enum z8_query_name = "org.zenframework.z8.server.base.query.Query"w;
+private enum z8_expression_name = "org.zenframework.z8.server.base.table.value.Expression"w;
+
+private Z8ObjectArray!Z8Object z8_query_data_fields(Z8Object self, bool primaryOnly = false) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_query_name, self)) throw new Exception("invalid Query object");
+    auto result = new Z8ObjectArray!Z8Object();
+    foreach (member; z8_object_members(self)) {
+        if (z8_native_is_instance(z8_field_name, member) &&
+            (!primaryOnly || !z8_native_is_instance(z8_expression_name, member)) && !result.z8_contains(member)) result.z8_add(member);
+    }
+    return result;
+}
+private Z8ObjectArray!Z8Object z8_query_fields(Z8Object self) { return z8_query_data_fields(self); }
+private Z8ObjectArray!Z8Object z8_query_primary_fields(Z8Object self) { return z8_query_data_fields(self, true); }
+private Z8Object z8_query_find_direct(string kind)(Z8Object self, wstring value) {
+    value = z8_string_required(value);
+    auto fields = z8_query_data_fields(self);
+    for (long i; i < fields.z8_size(); ++i) {
+        auto field = fields.z8_get(i);
+        static if (kind == "index") auto actual = z8_object_index(field);
+        else static if (kind == "id") auto actual = z8_object_id(field);
+        else static if (kind == "name") auto actual = z8_object_name(field);
+        else static assert(0, "unknown field lookup");
+        if (actual == value) return field;
+    }
+    throw new Exception("query field not found");
+}
+private Z8Object z8_query_find_field_id(Z8Object self, wstring id) {
+    import std.array : split;
+    self = z8_nonnull(self); id = z8_string_required(id);
+    auto own = self.z8_id();
+    if (id.length < own.length || id[0 .. own.length] != own) throw new Exception("query field not found");
+    auto path = id[own.length .. $];
+    if (own.length && path.length) {
+        if (path[0] != '.') throw new Exception("query field not found");
+        path = path[1 .. $];
+    }
+    auto current = self;
+    auto parts = path.split("."w);
+    foreach (i, part; parts) {
+        if (!part.length) {
+            if (i + 1 == parts.length) continue;
+            throw new Exception("query field not found");
+        }
+        Z8Object found;
+        foreach (member; z8_object_members(current)) if (member.z8_index() == part) { found = member; break; }
+        if (found is null) throw new Exception("query field not found");
+        current = found;
+    }
+    if (!z8_native_is_instance(z8_field_name, current)) throw new Exception("query field not found");
+    return current;
+}
+void z8_bind_builtin_query() {
+    enum p = z8_query_name ~ "."w;
+    z8_native_bind(p ~ "m_fields"w, &z8_query_fields);
+    z8_native_bind(p ~ "m_primaryFields"w, &z8_query_primary_fields);
+    z8_native_bind(p ~ "m_getFieldByIndex"w, &z8_query_find_direct!"index");
+    z8_native_bind(p ~ "m_getFieldById"w, &z8_query_find_direct!"id");
+    z8_native_bind(p ~ "m_getFieldByName"w, &z8_query_find_direct!"name");
+    z8_native_bind(p ~ "m_findFieldById"w, &z8_query_find_field_id);
+}
+shared static this() { z8_bind_builtin_query(); }

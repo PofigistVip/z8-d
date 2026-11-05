@@ -1,7 +1,9 @@
 // OBJECT.z8_constructor is an empty virtual hook in the original runtime.
-private class Z8ObjectMembersCell(T) if (is(T : Z8Object)) {
+private interface IZ8ObjectMembersCell { IZ8ObjectArrayView view(); }
+private class Z8ObjectMembersCell(T) : IZ8ObjectMembersCell if (is(T : Z8Object)) {
     Z8ObjectArray!T value;
     this() { value = new Z8ObjectArray!T(); }
+    IZ8ObjectArrayView view() { return value; }
 }
 // OBJECT.objects is a typed view of its own member collection. Keeping the
 // cell on the instance makes reference assignment and inherited views stable.
@@ -9,8 +11,21 @@ ref Z8ObjectArray!T z8_object_members_field(T)(Z8Object self) if (is(T : Z8Objec
     if (self is null) throw new Exception("null reference");
     auto key = "org.zenframework.z8.server.runtime.OBJECT.f_objects:"w ~ typeid(T).name.to!wstring;
     auto cell = cast(Z8ObjectMembersCell!T)self.z8_get_native_state(key);
-    if (cell is null) { cell = new Z8ObjectMembersCell!T(); self.z8_set_native_state(key, cell); }
+    if (cell is null) {
+        cell = new Z8ObjectMembersCell!T(); self.z8_set_native_state(key, cell);
+        self.z8_set_native_state("org.zenframework.z8.server.runtime.OBJECT.members"w, cell);
+    }
     return cell.value;
+}
+private Z8Object[] z8_object_members(Z8Object self) {
+    self = z8_nonnull(self);
+    auto cell = cast(IZ8ObjectMembersCell)self.z8_get_native_state("org.zenframework.z8.server.runtime.OBJECT.members"w);
+    if (cell is null) return [];
+    if (cell.view() is null) throw new Exception("null object member collection");
+    auto items = cell.view().z8_erased_data();
+    Z8Object[] result;
+    for (long i; i < items.z8_size(); ++i) result ~= z8_nonnull(cast(Z8Object)items.z8_get(i));
+    return result;
 }
 private void z8_object_constructor(Z8Object self) { }
 private Z8Object z8_object_default_data(Z8Object self, Z8StringMap parameters) { z8_nonnull(self); return null; }
