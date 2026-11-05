@@ -155,6 +155,17 @@ package bool hasMapKeyClass(ValueType type) {
     if (isDynamicArray(type)) return hasMapKeyClass(elementType(type));
     return isMap(type) && ([ValueType.selfType, ValueType.enumType].canFind(mapKeyType(type)) || hasMapKeyClass(mapValueType(type)));
 }
+// Names and resolved classes are stored from the innermost key outwards.
+package T outerMapKeyClass(T)(ValueType type, T[] keys) {
+    if (!isMap(type) || ![ValueType.selfType, ValueType.enumType].canFind(mapKeyType(type))) return T.init;
+    assert(keys.length, "missing map key class");
+    return keys[$ - 1];
+}
+package T[] innerMapKeyClasses(T)(ValueType type, T[] keys) {
+    if (!isMap(type) || ![ValueType.selfType, ValueType.enumType].canFind(mapKeyType(type))) return keys;
+    assert(keys.length, "missing map key class");
+    return keys[0 .. $ - 1];
+}
 package ValueType mapKeyType(ValueType type) {
     assert(isMap(type), "not a map");
     auto id = cast(uint)type;

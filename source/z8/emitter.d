@@ -30,22 +30,23 @@ private string methodDName(Method method) {
     return method.operatorSymbol.length ? operatorDName(method.operatorSymbol) : "m_" ~ method.name.text;
 }
 
-private string dType(ValueType type, Program objectClass = null, Program keyObjectClass = null) {
-    if (isDynamicArray(type)) return "Z8Array!(" ~ dType(elementType(type), objectClass, keyObjectClass) ~ ")";
+private string dType(ValueType type, Program objectClass = null, Program[] keyObjectClasses = null) {
+    if (isDynamicArray(type)) return "Z8Array!(" ~ dType(elementType(type), objectClass, keyObjectClasses) ~ ")";
     if (isSqlArray(type)) return "Z8Array!(" ~ dType(elementType(type)) ~ ")";
     if (isMap(type)) {
         auto key = mapKeyType(type), value = mapValueType(type);
         if (value == ValueType.stringType && key == ValueType.stringType) return "Z8StringMap";
         if (value == ValueType.primaryType && key == ValueType.stringType) return "Z8PrimaryMap";
         if (value == ValueType.intType && key == ValueType.stringType) return "Z8StringIntMap";
-        if ([ValueType.selfType, ValueType.enumType].canFind(key)) return "Z8ObjectKeyMap!(" ~ dType(key, keyObjectClass) ~ ", " ~ dType(value, objectClass, keyObjectClass) ~ ")";
+        auto innerKeys = innerMapKeyClasses(type, keyObjectClasses);
+        if ([ValueType.selfType, ValueType.enumType].canFind(key)) return "Z8ObjectKeyMap!(" ~ dType(key, outerMapKeyClass(type, keyObjectClasses)) ~ ", " ~ dType(value, objectClass, innerKeys) ~ ")";
         if ([ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(key))
-            return "Z8ReferenceKeyMap!(" ~ dType(key) ~ ", " ~ dType(value, objectClass, keyObjectClass) ~ ")";
+            return "Z8ReferenceKeyMap!(" ~ dType(key) ~ ", " ~ dType(value, objectClass, innerKeys) ~ ")";
         auto templateName = key == ValueType.primaryType ? "Z8PrimaryKeyMap" :
             key == ValueType.stringType ? "Z8StringValueMap" :
             key == ValueType.intType ? "Z8IntMap" : key == ValueType.boolType ? "Z8BoolMap" :
             key == ValueType.decimalType ? "Z8DecimalMap" : "Z8GuidMap";
-        return templateName ~ "!(" ~ dType(value, objectClass, keyObjectClass) ~ ")";
+        return templateName ~ "!(" ~ dType(value, objectClass, innerKeys) ~ ")";
     }
     switch (type) {
         case ValueType.intType: return "long"; case ValueType.boolType: return "bool";
@@ -183,8 +184,8 @@ unittest {
     assert(emitWStringLiteral([cast(wchar) 0xDC00]) ==
         "z8_string_new([cast(wchar)0xDC00].idup)");
 }
-private string dStorageType(ValueType type, Program objectClass = null, Program keyObjectClass = null) {
-    return type == ValueType.intType ? "Z8Optional!long" : type == ValueType.boolType ? "Z8Optional!bool" : type == ValueType.decimalType ? "Z8Optional!Z8Decimal" : dType(type, objectClass, keyObjectClass);
+private string dStorageType(ValueType type, Program objectClass = null, Program[] keyObjectClasses = null) {
+    return type == ValueType.intType ? "Z8Optional!long" : type == ValueType.boolType ? "Z8Optional!bool" : type == ValueType.decimalType ? "Z8Optional!Z8Decimal" : dType(type, objectClass, keyObjectClasses);
 }
 private string emitExpr(Expression e) {
     string value;
@@ -316,7 +317,7 @@ private string emitExpr(Expression e) {
     if (e.nullableStringMode == NullableStringMode.required) value = "z8_string_required(" ~ value ~ ")";
     if (e.nullableStringMode == NullableStringMode.nullAsEmpty) value = "z8_string_or_empty(" ~ value ~ ")";
     if (e.kind == ExprKind.conditional && isNullableReference(e.inferredType))
-        value = "cast(" ~ dType(e.inferredType, e.objectClass, e.keyObjectClass) ~ ")(" ~ value ~ ")";
+        value = "cast(" ~ dType(e.inferredType, e.objectClass, e.keyObjectClasses) ~ ")(" ~ value ~ ")";
     if (e.promoteToDecimal) value = "z8_decimal_from_int(" ~ value ~ ")";
     if (e.optionalWrap) value = "z8_optional_wrap(" ~ value ~ ")";
     if (e.boxPrimary) value = "z8_primary_box(" ~ value ~ ")";
@@ -354,16 +355,16 @@ private string emitExprRaw(Expression e) {
         case ExprKind.binaryLiteral: return "z8_binary_literal(\"" ~ e.token.text[1 .. $ - 1] ~ "\")";
         case ExprKind.datespanLiteral: return "z8_datespan_literal(\"" ~ e.token.text[1 .. $ - 1] ~ "\")";
         case ExprKind.dateLiteral: return "z8_date_literal(\"" ~ e.token.text[1 .. $ - 1] ~ "\")";
-        case ExprKind.nullLiteral: return isOptionalPrimitive(e.inferredType) ? dType(e.inferredType) ~ ".init" : e.inferredType == ValueType.voidType ? "null" : "cast(" ~ dType(e.inferredType, e.objectClass, e.keyObjectClass) ~ ")null";
+        case ExprKind.nullLiteral: return isOptionalPrimitive(e.inferredType) ? dType(e.inferredType) ~ ".init" : e.inferredType == ValueType.voidType ? "null" : "cast(" ~ dType(e.inferredType, e.objectClass, e.keyObjectClasses) ~ ")null";
         case ExprKind.arrayLiteral:
             if (isMap(e.inferredType)) {
                 string body = "(() {\n";
                 foreach (i, entry; e.arguments)
-                    body ~= dStorageType(mapKeyType(e.inferredType), e.keyObjectClass) ~ " z8_key_" ~ i.to!string ~ " = " ~ emitExpr(entry.left) ~ ";\n";
-                auto valueType = dStorageType(mapValueType(e.inferredType), e.objectClass, e.keyObjectClass);
+                    body ~= dStorageType(mapKeyType(e.inferredType), outerMapKeyClass(e.inferredType, e.keyObjectClasses)) ~ " z8_key_" ~ i.to!string ~ " = " ~ emitExpr(entry.left) ~ ";\n";
+                auto valueType = dStorageType(mapValueType(e.inferredType), e.objectClass, innerMapKeyClasses(e.inferredType, e.keyObjectClasses));
                 foreach (i, entry; e.arguments)
                     body ~= valueType ~ " z8_value_" ~ i.to!string ~ " = " ~ emitExpr(entry.right) ~ ";\n";
-                body ~= "auto z8_result = new " ~ dType(e.inferredType, e.objectClass, e.keyObjectClass) ~ "();\n";
+                body ~= "auto z8_result = new " ~ dType(e.inferredType, e.objectClass, e.keyObjectClasses) ~ "();\n";
                 foreach (i, entry; e.arguments)
                     body ~= "z8_result.z8_add(z8_key_" ~ i.to!string ~ ", z8_value_" ~ i.to!string ~ ");\n";
                 return body ~ "return z8_result;\n})()";
@@ -371,7 +372,7 @@ private string emitExprRaw(Expression e) {
             string[] elements; foreach (element; e.arguments)
                 elements ~= (e.inferredType == ValueType.selfArray || e.inferredType == ValueType.enumArray) ? "cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(element) ~ ")" :
                     e.inferredType == ValueType.sqlPrimaryArray ? "cast(Z8SqlPrimary)(" ~ emitExpr(element) ~ ")" : emitExpr(element);
-            return "new " ~ dType(e.inferredType, e.objectClass, e.keyObjectClass) ~ "(" ~ (elements.length ? "[" ~ elements.join(", ") ~ "]" ~ ([ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(e.inferredType) ? ", true" : "") : "") ~ ")";
+            return "new " ~ dType(e.inferredType, e.objectClass, e.keyObjectClasses) ~ "(" ~ (elements.length ? "[" ~ elements.join(", ") ~ "]" ~ ([ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(e.inferredType) ? ", true" : "") : "") ~ ")";
         case ExprKind.mapEntry: assert(0, "map entries are emitted by their initializer");
         case ExprKind.variable: return e.isCapture ? "this.z8_capture_" ~ e.token.text : e.isField ? (e.targetClass.length ? e.targetClass ~ ".f_" : "this.f_") ~ e.token.text : "v_" ~ e.token.text;
         case ExprKind.selfRef: return "this";
@@ -448,7 +449,7 @@ private string emitExprRaw(Expression e) {
             if (isMap(e.inferredType)) {
                 if (e.token.text == "add" && e.arguments.length == 2 &&
                     e.arguments[0].kind == ExprKind.nullLiteral && e.arguments[1].kind == ExprKind.nullLiteral)
-                    return "z8_map_add_null_pair!(" ~ dStorageType(mapValueType(e.inferredType), e.objectClass, e.keyObjectClass) ~ ")(" ~ emitExpr(e.left) ~ ")";
+                    return "z8_map_add_null_pair!(" ~ dStorageType(mapValueType(e.inferredType), e.objectClass, e.keyObjectClasses) ~ ")(" ~ emitExpr(e.left) ~ ")";
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return "z8_invoke!\"z8_" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
             }
@@ -573,13 +574,13 @@ private string emitExprRaw(Expression e) {
         case ExprKind.elvis:
             if (isOptionalPrimitive(e.inferredType))
                 return (e.optionalElvis ? "z8_optional_elvis_optional(" : "z8_optional_elvis(") ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
-            return "z8_elvis!(" ~ dType(e.inferredType, e.objectClass, e.keyObjectClass) ~ ")(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            return "z8_elvis!(" ~ dType(e.inferredType, e.objectClass, e.keyObjectClasses) ~ ")(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
     }
 }
 private struct ControlContext {
     bool enabled;
     ValueType returnType;
-    Program returnClass, returnKeyClass;
+    Program returnClass; Program[] returnKeyClasses;
     size_t[] loops;
 }
 
@@ -620,7 +621,7 @@ private string emitStatement(Statement s, ControlContext context = ControlContex
             if (s.sqlDatespanReturnPriority) returned = "z8_sql_datespan_group(" ~ returned ~ ")";
             if (s.sqlGeometryReturnPriority) returned = "z8_sql_geometry_group(" ~ returned ~ ")";
             if (context.enabled) return s.expression is null ? "throw new Z8ReturnVoid();\n" :
-                "throw new Z8Return!(" ~ dStorageType(context.returnType, context.returnClass, context.returnKeyClass) ~ ")(" ~ returned ~ ");\n";
+                "throw new Z8Return!(" ~ dStorageType(context.returnType, context.returnClass, context.returnKeyClasses) ~ ")(" ~ returned ~ ");\n";
             return "return" ~ (s.expression is null ? "" : " " ~ returned) ~ ";\n";
         case StmtKind.ifStmt:
             auto result = "if (" ~ emitExpr(s.expression) ~ ") {\n" ~ emitStatement(s.children[0], context) ~ "}\n";
@@ -638,7 +639,7 @@ private string emitStatement(Statement s, ControlContext context = ControlContex
             return "{\nauto " ~ iter ~ " = " ~ emitReceiver(s.expression) ~ ";\nauto " ~ versionName ~ " = " ~ iter ~ ".z8_version;\n" ~
                 "for (long " ~ indexName ~ " = 0; " ~ indexName ~ " != " ~ iter ~ ".z8_size(); ++" ~ indexName ~ ") {\n" ~
                 "if (" ~ versionName ~ " != " ~ iter ~ ".z8_version) throw new Exception(\"array modified during iteration\");\n" ~
-                dStorageType(s.initial.type, s.initial.objectClass, s.initial.keyObjectClass) ~ " v_" ~ s.initial.token.text ~ " = " ~ iter ~ ".z8_get(" ~ indexName ~ ");\n" ~
+                dStorageType(s.initial.type, s.initial.objectClass, s.initial.keyObjectClasses) ~ " v_" ~ s.initial.token.text ~ " = " ~ iter ~ ".z8_get(" ~ indexName ~ ");\n" ~
                 emitLoopBody(s, context) ~ "}\n}\n";
         case StmtKind.breakStmt: case StmtKind.continueStmt:
             if (context.enabled) return "throw new Z8LoopControl(" ~ context.loops[$-1].to!string ~ ", " ~ (s.kind == StmtKind.continueStmt ? "true" : "false") ~ ");\n";
@@ -668,21 +669,21 @@ private string emitSimple(Statement s) {
         auto temporary = "z8_nested_" ~ s.token.position.offset.to!string;
         auto creation = "z8_new!(" ~ s.nestedClass.emittedName ~ ")(" ~ (s.hasContainer ? "this" : "") ~ ")";
         if (!s.nestedClass.captures.length)
-            return dStorageType(s.type, s.objectClass, s.keyObjectClass) ~ " v_" ~ s.token.text ~ " = " ~ creation;
-        auto result = dStorageType(s.type, s.objectClass, s.keyObjectClass) ~ " v_" ~ s.token.text ~ " = (() { auto " ~ temporary ~ " = " ~ creation ~ "; ";
+            return dStorageType(s.type, s.objectClass, s.keyObjectClasses) ~ " v_" ~ s.token.text ~ " = " ~ creation;
+        auto result = dStorageType(s.type, s.objectClass, s.keyObjectClasses) ~ " v_" ~ s.token.text ~ " = (() { auto " ~ temporary ~ " = " ~ creation ~ "; ";
         foreach (capture; s.nestedClass.captures)
             result ~= temporary ~ ".z8_capture_" ~ capture.name ~ " = v_" ~ capture.name ~ "; ";
         return result ~ "return " ~ temporary ~ "; })()";
     }
     if (s.kind == StmtKind.variable && s.userOperatorAssignment) {
         auto temporary = "z8_initial_" ~ s.token.position.offset.to!string;
-        return dStorageType(s.type, s.objectClass, s.keyObjectClass) ~ " v_" ~ s.token.text ~ " = (() { auto " ~ temporary ~ " = " ~
-            defaultValue(s.type, s.objectClass, s.hasContainer, s.keyObjectClass) ~ "; z8_nonnull(" ~ temporary ~ ").z8op_assign(" ~
+        return dStorageType(s.type, s.objectClass, s.keyObjectClasses) ~ " v_" ~ s.token.text ~ " = (() { auto " ~ temporary ~ " = " ~
+            defaultValue(s.type, s.objectClass, s.hasContainer, s.keyObjectClasses) ~ "; z8_nonnull(" ~ temporary ~ ").z8op_assign(" ~
             emitExpr(s.expression) ~ "); return " ~ temporary ~ "; })()";
     }
     if (s.kind == StmtKind.variable)
-        return dStorageType(s.type, s.objectClass, s.keyObjectClass) ~ " v_" ~ s.token.text ~ " = " ~
-            (s.expression !is null ? emitExpr(s.expression) : s.type == ValueType.intType ? "z8_optional_wrap(0L)" : s.type == ValueType.boolType ? "z8_optional_wrap(false)" : s.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(s.type, s.objectClass, s.hasContainer, s.keyObjectClass));
+        return dStorageType(s.type, s.objectClass, s.keyObjectClasses) ~ " v_" ~ s.token.text ~ " = " ~
+            (s.expression !is null ? emitExpr(s.expression) : s.type == ValueType.intType ? "z8_optional_wrap(0L)" : s.type == ValueType.boolType ? "z8_optional_wrap(false)" : s.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(s.type, s.objectClass, s.hasContainer, s.keyObjectClasses));
     if (s.kind == StmtKind.expressionStmt) return "cast(void)(" ~ emitExpr(s.expression) ~ ")";
     assert(s.kind == StmtKind.assignment);
     if (s.userOperatorAssignment)
@@ -710,7 +711,7 @@ private string emitSimple(Statement s) {
         return "z8_string_add_assign(" ~ name ~ ", " ~ oldValue ~ emitExpr(s.expression) ~ ")";
     return name ~ " " ~ s.assignmentOperator ~ " " ~ emitExpr(s.expression);
 }
-private string defaultValue(ValueType type, Program objectClass = null, bool hasContainer = false, Program keyObjectClass = null) {
+private string defaultValue(ValueType type, Program objectClass = null, bool hasContainer = false, Program[] keyObjectClasses = null) {
     if (type == ValueType.exceptionType) return "new Z8Exception(null)";
     if (type == ValueType.encodingType) return "null";
     if (type == ValueType.sqlBoolType) return "z8_sql_bool_const(false)";
@@ -735,8 +736,8 @@ private string defaultValue(ValueType type, Program objectClass = null, bool has
     if (type == ValueType.fileType) return "new Z8File()";
     if (type == ValueType.decimalType) return "z8_decimal_from_int(0)";
     if (type == ValueType.selfType) return "z8_new!(" ~ dType(type, objectClass) ~ ")(" ~ (hasContainer ? "this" : "") ~ ")";
-    if (isMap(type)) return "new " ~ dType(type, objectClass, keyObjectClass) ~ "()";
-    if (isArray(type)) return "new " ~ dType(type, objectClass, keyObjectClass) ~ "()";
+    if (isMap(type)) return "new " ~ dType(type, objectClass, keyObjectClasses) ~ "()";
+    if (isArray(type)) return "new " ~ dType(type, objectClass, keyObjectClasses) ~ "()";
     if (type == ValueType.intType) return "0";
     if (type == ValueType.stringType) return `z8_string_new(""w)`;
     assert(type == ValueType.boolType); return "false";
@@ -826,9 +827,9 @@ package string emitPrograms(Program[] programs) {
             result ~= "}\n";
         }
         foreach (capture; program.captures)
-            result ~= dStorageType(capture.type, capture.objectClass, capture.keyObjectClass) ~ " z8_capture_" ~ capture.name ~ ";\n";
+            result ~= dStorageType(capture.type, capture.objectClass, capture.keyObjectClasses) ~ " z8_capture_" ~ capture.name ~ ";\n";
         foreach (field; program.fields) {
-            auto storageType = dStorageType(field.type, field.objectClass, field.keyObjectClass);
+            auto storageType = dStorageType(field.type, field.objectClass, field.keyObjectClasses);
             if (field.isStatic) {
                 result ~= "private __gshared " ~ storageType ~ " z8_static_storage_" ~ field.name.text ~ ";\n";
                 result ~= "static @property ref " ~ storageType ~ " f_" ~ field.name.text ~ "() { z8_ensure_static(); return z8_static_storage_" ~ field.name.text ~ "; }\n";
@@ -839,7 +840,7 @@ package string emitPrograms(Program[] programs) {
             auto initial = field.nestedClass !is null ? "z8_new!(" ~ field.nestedClass.emittedName ~ ")(this)" :
                 field.type == ValueType.intType ? "z8_optional_wrap(0L)" :
                 field.type == ValueType.boolType ? "z8_optional_wrap(false)" :
-                field.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(field.type, field.objectClass, true, field.keyObjectClass);
+                field.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(field.type, field.objectClass, true, field.keyObjectClasses);
             result ~= "this.f_" ~ field.name.text ~ " = " ~ initial ~ ";\n";
         }
         foreach (specialization; program.memberSpecializations)
@@ -899,7 +900,7 @@ package string emitPrograms(Program[] programs) {
         // Z8 first allocates default values for all static declarations, then
         // executes explicit initializers in declaration order.
         foreach (field; program.fields) if (field.isStatic && field.initializer is null)
-            result ~= "z8_static_storage_" ~ field.name.text ~ " = " ~ (field.type == ValueType.intType ? "z8_optional_wrap(0L)" : field.type == ValueType.boolType ? "z8_optional_wrap(false)" : field.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(field.type, field.objectClass, false, field.keyObjectClass)) ~ ";\n";
+            result ~= "z8_static_storage_" ~ field.name.text ~ " = " ~ (field.type == ValueType.intType ? "z8_optional_wrap(0L)" : field.type == ValueType.boolType ? "z8_optional_wrap(false)" : field.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(field.type, field.objectClass, false, field.keyObjectClasses)) ~ ";\n";
         foreach (field; program.fields) if (field.isStatic && field.initializer !is null)
             result ~= "z8_static_storage_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
         result ~= "z8_static_state = 2;\n} catch (Throwable failure) { z8_static_failure = failure; z8_static_state = 3; throw failure; }\n}\n}\n";
@@ -916,16 +917,16 @@ package string emitPrograms(Program[] programs) {
                     result ~= "alias " ~ methodDName(m) ~ " = " ~ program.baseClass.emittedName ~ "." ~ methodDName(m) ~ ";\n";
             }
             string[] params;
-            foreach (p; m.parameters) params ~= dStorageType(p.type, p.objectClass, p.keyObjectClass) ~ " v_" ~ p.name.text;
+            foreach (p; m.parameters) params ~= dStorageType(p.type, p.objectClass, p.keyObjectClasses) ~ " v_" ~ p.name.text;
             bool hasIntParameter;
             foreach (p; m.parameters) if (p.type == ValueType.intType || p.type == ValueType.boolType || p.type == ValueType.decimalType) hasIntParameter = true;
             if (hasIntParameter && !m.overrides) {
                 string[] nativeParams, nativeArgs;
                 foreach (p; m.parameters) {
-                    nativeParams ~= dType(p.type, p.objectClass, p.keyObjectClass) ~ " v_" ~ p.name.text;
+                    nativeParams ~= dType(p.type, p.objectClass, p.keyObjectClasses) ~ " v_" ~ p.name.text;
                     nativeArgs ~= (p.type == ValueType.intType || p.type == ValueType.boolType || p.type == ValueType.decimalType) ? "z8_optional_wrap(v_" ~ p.name.text ~ ")" : "v_" ~ p.name.text;
                 }
-                result ~= (m.isStatic ? "static " : "final ") ~ dStorageType(m.returnType, m.returnObjectClass, m.returnKeyObjectClass) ~ " " ~ methodDName(m) ~ "(" ~ nativeParams.join(", ") ~ ") { " ~
+                result ~= (m.isStatic ? "static " : "final ") ~ dStorageType(m.returnType, m.returnObjectClass, m.returnKeyObjectClasses) ~ " " ~ methodDName(m) ~ "(" ~ nativeParams.join(", ") ~ ") { " ~
                     (m.returnType == ValueType.voidType ? "" : "return ") ~ methodDName(m) ~ "(" ~ nativeArgs.join(", ") ~ "); }\n";
             }
             auto modifiers = m.isStatic ? "static " : m.overrides ? "override " : m.isVirtual ? "" : "final ";
@@ -933,16 +934,16 @@ package string emitPrograms(Program[] programs) {
             context.enabled = needsControlLowering(m.body);
             context.returnType = m.returnType;
             context.returnClass = m.returnObjectClass;
-            context.returnKeyClass = m.returnKeyObjectClass;
+            context.returnKeyClasses = m.returnKeyObjectClasses;
             auto body = emitStatement(m.body, context);
             if (context.enabled) {
-                auto returnSignal = m.returnType == ValueType.voidType ? "Z8ReturnVoid" : "Z8Return!(" ~ dStorageType(m.returnType, m.returnObjectClass, m.returnKeyObjectClass) ~ ")";
+                auto returnSignal = m.returnType == ValueType.voidType ? "Z8ReturnVoid" : "Z8Return!(" ~ dStorageType(m.returnType, m.returnObjectClass, m.returnKeyObjectClasses) ~ ")";
                 body = "{\ntry " ~ body ~ "catch (" ~ returnSignal ~ " z8_return) { " ~
                     (m.returnType == ValueType.voidType ? "return;" : "return z8_return.value;") ~ " }\n" ~
                     (m.returnType == ValueType.voidType ? "" : "assert(0, \"unreachable BL method exit\");\n") ~ "}\n";
             }
             if (m.isStatic) body = "{\nz8_ensure_static();\n" ~ body[1 .. $];
-            result ~= modifiers ~ dStorageType(m.returnType, m.returnObjectClass, m.returnKeyObjectClass) ~ " " ~ methodDName(m) ~ "(" ~ params.join(", ") ~ ")\n" ~ body;
+            result ~= modifiers ~ dStorageType(m.returnType, m.returnObjectClass, m.returnKeyObjectClasses) ~ " " ~ methodDName(m) ~ "(" ~ params.join(", ") ~ ")\n" ~ body;
         }
         result ~= "}\n";
     }

@@ -41,7 +41,8 @@ class Expression {
     bool firstParenthesisIsConditional;
     Method priorityMethod;
     ValueType initializerType;
-    string initializerObjectName, initializerKeyObjectName;
+    string initializerObjectName;
+    string[] initializerKeyObjectNames;
     bool promoteToDecimal;
     bool boxPrimary;
     ValueType convertToString;
@@ -52,7 +53,7 @@ class Expression {
     Method userConversion;
     string builtinCall;
     string emittedOverride;
-    Program objectClass, keyObjectClass;
+    Program objectClass; Program[] keyObjectClasses;
     NullableStringMode nullableStringMode;
     bool nullableStringReceiver, nullableStringLeft, nonNullStringResult;
     bool enumConstant;
@@ -77,8 +78,8 @@ class Statement {
     bool hasCatch, hasFinally, hasContainer;
     bool declaredFinal, catchDeclaredFinal;
     bool filePathAssignment, dateTickAssignment, userOperatorAssignment, userCompoundAssignment, isMemberInitializer;
-    string objectName, keyObjectName;
-    Program objectClass, keyObjectClass, nestedClass;
+    string objectName; string[] keyObjectNames;
+    Program objectClass, nestedClass; Program[] keyObjectClasses;
     Method priorityMethod;
     bool sqlBoolReturnPriority, sqlIntReturnPriority, sqlDecimalReturnPriority, sqlStringReturnPriority;
     bool sqlGuidReturnPriority;
@@ -87,7 +88,7 @@ class Statement {
     bool sqlGeometryReturnPriority;
     this(StmtKind kind, Token token) { this.kind = kind; this.token = token; }
 }
-struct Parameter { ValueType type; Token name; string objectName, keyObjectName; Program objectClass, keyObjectClass; bool declaredFinal; }
+struct Parameter { ValueType type; Token name; string objectName; string[] keyObjectNames; Program objectClass; Program[] keyObjectClasses; bool declaredFinal; }
 class Method {
     ValueType returnType;
     Token name;
@@ -96,15 +97,15 @@ class Method {
     Statement body;
     bool isPublic, isProtected;
     bool isStatic;
-    string returnObjectName, returnKeyObjectName;
-    Program returnObjectClass, returnKeyObjectClass;
+    string returnObjectName; string[] returnKeyObjectNames;
+    Program returnObjectClass; Program[] returnKeyObjectClasses;
     Program owner;
     bool isVirtual, overrides;
     string operatorSymbol;
     bool isCastOperator;
     bool isPriorityOperator;
 }
-class Field { ValueType type; Token name; TypeAttribute[] attributes; Expression initializer; bool isPublic, isProtected, isStatic, isAuto, isRecord, declaredFinal, userOperatorAssignment; string objectName, keyObjectName; Program objectClass, keyObjectClass; Program owner, nestedClass; }
+class Field { ValueType type; Token name; TypeAttribute[] attributes; Expression initializer; bool isPublic, isProtected, isStatic, isAuto, isRecord, declaredFinal, userOperatorAssignment; string objectName; string[] keyObjectNames; Program objectClass; Program[] keyObjectClasses; Program owner, nestedClass; }
 struct TypeAttribute { Token name; Token value; Expression expression; ValueType expressionType; long capturedDateTicks; bool hasValue, dateTickCaptured; }
 // Match the original lexer and BigDecimal.toString, including preserved scale
 // and its scientific notation for an adjusted exponent below -6.
@@ -198,7 +199,7 @@ package wstring attributeLiteralValue(TypeAttribute attribute) {
     return (value.to!string ~ "L").to!wstring;
 }
 struct Import { string name; Token token; }
-struct Capture { string name; ValueType type; Program objectClass, keyObjectClass; }
+struct Capture { string name; ValueType type; Program objectClass; Program[] keyObjectClasses; }
 class Program {
     Token name;
     Method[] methods;

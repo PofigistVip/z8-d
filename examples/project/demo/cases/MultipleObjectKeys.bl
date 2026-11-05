@@ -1,0 +1,18 @@
+public class MultipleObjectKeys {
+    private static ValueItem[KeyItem][ValueItem] echo(ValueItem[KeyItem][ValueItem] input) { return input; }
+    public static int run() {
+        KeyItem inner = new KeyItem;
+        ValueItem outer = new ValueItem;
+        ValueItem value = new ValueItem;
+        ValueItem[KeyItem][ValueItem] values = {(outer, {(inner, value)})};
+        if (echo(values)[outer][inner].number != 11) return 1;
+        if (values.keys().first().number != 11 || values[outer].keys().first().number != 7) return 2;
+        if (values.values().size() != 1) return 3;
+        int[MapFlavor][KeyItem] enumInside = {(inner, {(MapFlavor.First, 5)})};
+        int[KeyItem][MapFlavor] enumOutside = {(MapFlavor.Second, {(inner, 6)})};
+        if (enumInside[inner][MapFlavor.First] != 5 || enumOutside[MapFlavor.Second][inner] != 6) return 4;
+        int[MapFlavor][KeyItem][] arrays = {enumInside};
+        if (arrays[0][inner][MapFlavor.First] != 5) return 5;
+        return 127;
+    }
+}

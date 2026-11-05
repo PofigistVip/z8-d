@@ -37,7 +37,6 @@ with tempfile.TemporaryDirectory() as directory:
     for body in (
         "int[string][int] a; int[string][bool] b; a = b;",
         "ValueItem[KeyItem][int] a; KeyItem[KeyItem][int] b; a = b;",
-        "int[KeyItem][ValueItem] values;",
     ):
         bad.write_text("public class BadNestedMaps { public static void run() { " + body + " } }", encoding="utf-8")
         result = subprocess.run([str(compiler), "project", str(temp), str(temp / "out")], capture_output=True, text=True)

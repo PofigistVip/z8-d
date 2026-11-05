@@ -16,9 +16,11 @@ class Checker {
     private bool staticContext, fieldInitialization;
     private bool importedMath;
     private ValueType[string] variables;
-    private Program[string] objectVariables, keyObjectVariables;
+    private Program[string] objectVariables;
+    private Program[][string] keyObjectVariables;
     private ValueType returnType;
-    private Program returnObjectClass, returnKeyObjectClass;
+    private Program returnObjectClass;
+    private Program[] returnKeyObjectClasses;
     private size_t loopDepth;
     private void fail(string message, Token t) { throw new CompileException(message, t.position); }
     void bindBase(Program program, Program[string] programs) {
@@ -107,19 +109,24 @@ class Checker {
         if (found is null) fail("unknown class '" ~ name ~ "'", site);
         return *found;
     }
-    private ValueType resolveDeclaredType(ValueType type, Program owner, string objectName, string keyObjectName, Token site) {
+    private ValueType resolveDeclaredType(ValueType type, Program owner, string objectName, string[] keyObjectNames, Token site) {
         if (isDynamicArray(type))
-            return arrayOf(resolveDeclaredType(elementType(type), owner, objectName, keyObjectName, site));
+            return arrayOf(resolveDeclaredType(elementType(type), owner, objectName, keyObjectNames, site));
         if (isMap(type)) {
-            auto value = resolveDeclaredType(mapValueType(type), owner, objectName, keyObjectName, site);
+            auto value = resolveDeclaredType(mapValueType(type), owner, objectName, innerMapKeyClasses(type, keyObjectNames), site);
             auto key = mapKeyType(type);
-            if (key == ValueType.selfType && resolveClass(owner, keyObjectName, site).isEnum) key = ValueType.enumType;
+            if (key == ValueType.selfType && resolveClass(owner, outerMapKeyClass(type, keyObjectNames), site).isEnum) key = ValueType.enumType;
             return mapType(value, key);
         }
         if (type != ValueType.selfType && type != ValueType.selfArray && type != ValueType.selfMatrix) return type;
         auto target = resolveClass(owner, objectName, site);
         if (!target.isEnum) return type;
         return type == ValueType.selfMatrix ? ValueType.enumMatrix : type == ValueType.selfArray ? ValueType.enumArray : ValueType.enumType;
+    }
+    private Program[] resolveKeyClasses(Program owner, string[] names, Token site) {
+        Program[] result;
+        foreach (name; names) result ~= resolveClass(owner, name, site);
+        return result;
     }
     private void checkAttributeNameConflicts(Program program, Program[string] programs) {
         Program sourceRoot(Program owner) {
@@ -158,7 +165,7 @@ class Checker {
         currentProgram = program; allClasses = programs;
         checkAttributeNameConflicts(program, programs);
         foreach (field; program.fields) {
-            field.type = resolveDeclaredType(field.type, program, field.objectName, field.keyObjectName, field.name);
+            field.type = resolveDeclaredType(field.type, program, field.objectName, field.keyObjectNames, field.name);
             if (field.attributes.length && field.type != ValueType.selfType)
                 fail("attributes require an object reference field", field.name);
             if (field.isAuto && (field.isStatic || field.type != ValueType.selfArray))
@@ -169,13 +176,13 @@ class Checker {
                 fail("primary fields require an initializer", field.name);
         }
         foreach (method; program.methods) {
-            method.returnType = resolveDeclaredType(method.returnType, program, method.returnObjectName, method.returnKeyObjectName, method.name);
+            method.returnType = resolveDeclaredType(method.returnType, program, method.returnObjectName, method.returnKeyObjectNames, method.name);
             if (method.isCastOperator && [ValueType.selfType, ValueType.enumType].canFind(method.returnType)) {
                 method.returnObjectClass = resolveClass(program, method.returnObjectName, method.name);
                 method.name.text = "operatorCast:" ~ method.returnObjectClass.qualifiedName;
             }
             foreach (ref parameter; method.parameters)
-                parameter.type = resolveDeclaredType(parameter.type, program, parameter.objectName, parameter.keyObjectName, parameter.name);
+                parameter.type = resolveDeclaredType(parameter.type, program, parameter.objectName, parameter.keyObjectNames, parameter.name);
         }
     }
     private Method findConversion(Program owner, ValueType target, Program targetClass = null) {
@@ -200,9 +207,9 @@ class Checker {
             }
         return best;
     }
-    private bool matches(Expression e, ValueType expected, Program expectedClass = null, Program expectedKeyClass = null) {
+    private bool matches(Expression e, ValueType expected, Program expectedClass = null, Program[] expectedKeyClasses = null) {
         if (e.kind == ExprKind.arrayLiteral && hasObjectClass(expected)) e.objectClass = expectedClass;
-        if (e.kind == ExprKind.arrayLiteral && hasMapKeyClass(expected)) e.keyObjectClass = expectedKeyClass;
+        if (e.kind == ExprKind.arrayLiteral && hasMapKeyClass(expected)) e.keyObjectClasses = expectedKeyClasses;
         auto actual = typeOf(e, expected);
         if (expected == ValueType.sqlBoolType && (actual == ValueType.boolType || actual == ValueType.optionalBool)) {
             e.convertToSqlBool = true;
@@ -273,7 +280,7 @@ class Checker {
             return true;
         }
         if (actual == ValueType.nullType && isNullableReference(expected)) {
-            e.inferredType = expected; e.objectClass = expectedClass; e.keyObjectClass = expectedKeyClass; return true;
+            e.inferredType = expected; e.objectClass = expectedClass; e.keyObjectClasses = expectedKeyClasses; return true;
         }
         if (actual == ValueType.intType && expected == ValueType.decimalType) { e.promoteToDecimal = true; return true; }
         if (actual == ValueType.intType && expected == ValueType.dateType) { e.convertToDate = true; return true; }
@@ -292,10 +299,10 @@ class Checker {
         if (expected == ValueType.stringType && [ValueType.dateType, ValueType.geometryType].canFind(actual)) { e.convertToString = actual; return true; }
         return actual == expected && (expected == ValueType.selfType ? isAssignable(e.objectClass, expectedClass) :
             !hasObjectClass(expected) || e.objectClass is expectedClass) &&
-            (!hasMapKeyClass(expected) || e.keyObjectClass is expectedKeyClass);
+            (!hasMapKeyClass(expected) || e.keyObjectClasses == expectedKeyClasses);
     }
-    private bool matchesStored(Expression e, ValueType expected, Program expectedClass = null, Program expectedKeyClass = null) {
-        if (expected != ValueType.intType && expected != ValueType.boolType && expected != ValueType.decimalType) return matches(e, expected, expectedClass, expectedKeyClass);
+    private bool matchesStored(Expression e, ValueType expected, Program expectedClass = null, Program[] expectedKeyClasses = null) {
+        if (expected != ValueType.intType && expected != ValueType.boolType && expected != ValueType.decimalType) return matches(e, expected, expectedClass, expectedKeyClasses);
         auto optional = storedValueType(expected);
         auto actual = typeOf(e, expected);
         if (actual == ValueType.selfType) {
@@ -308,11 +315,11 @@ class Checker {
         if (expected == ValueType.decimalType && matches(e, expected, expectedClass)) { e.optionalWrap = true; return true; }
         return false;
     }
-    private bool matchesInitializer(Expression e, ValueType expected, Program expectedClass = null, Program expectedKeyClass = null) {
+    private bool matchesInitializer(Expression e, ValueType expected, Program expectedClass = null, Program[] expectedKeyClasses = null) {
         if (expected == ValueType.fileType && [ValueType.stringType, ValueType.nullableString].canFind(typeOf(e))) {
             e.makeFile = true; return true;
         }
-        return matchesStored(e, expected, expectedClass, expectedKeyClass);
+        return matchesStored(e, expected, expectedClass, expectedKeyClasses);
     }
     private ValueType checkCall(Method method, Program owner, Expression e) {
         if (e.arguments.length != method.parameters.length) fail("incorrect argument count", e.token);
@@ -320,12 +327,12 @@ class Checker {
             auto p = method.parameters[i];
             if (arg.kind == ExprKind.arrayLiteral && !arg.typedInitializer) fail("array initializer requires a known target", arg.token);
             auto objectClass = hasObjectClass(p.type) ? resolveClass(owner, p.objectName, p.name) : null;
-            auto keyObjectClass = hasMapKeyClass(p.type) ? resolveClass(owner, p.keyObjectName, p.name) : null;
-            if (!matchesStored(arg, p.type, objectClass, keyObjectClass)) fail("argument type mismatch", arg.token);
+            auto keyObjectClasses = hasMapKeyClass(p.type) ? resolveKeyClasses(owner, p.keyObjectNames, p.name) : null;
+            if (!matchesStored(arg, p.type, objectClass, keyObjectClasses)) fail("argument type mismatch", arg.token);
         }
         if (hasObjectClass(method.returnType))
             e.objectClass = resolveClass(owner, method.returnObjectName, method.name);
-        if (hasMapKeyClass(method.returnType)) e.keyObjectClass = resolveClass(owner, method.returnKeyObjectName, method.name);
+        if (hasMapKeyClass(method.returnType)) e.keyObjectClasses = resolveKeyClasses(owner, method.returnKeyObjectNames, method.name);
         return method.returnType == ValueType.stringType ? ValueType.nullableString : storedValueType(method.returnType);
     }
     private bool sameParameters(Method left, Method right) {
@@ -334,7 +341,7 @@ class Checker {
             auto q = right.parameters[i];
             if (p.type != q.type) return false;
             if (hasObjectClass(p.type) && resolveClass(left.owner, p.objectName, p.name) !is resolveClass(right.owner, q.objectName, q.name)) return false;
-            if (hasMapKeyClass(p.type) && resolveClass(left.owner, p.keyObjectName, p.name) !is resolveClass(right.owner, q.keyObjectName, q.name)) return false;
+            if (hasMapKeyClass(p.type) && resolveKeyClasses(left.owner, p.keyObjectNames, p.name) != resolveKeyClasses(right.owner, q.keyObjectNames, q.name)) return false;
         }
         return true;
     }
@@ -381,7 +388,7 @@ class Checker {
                         }
                     }
                     if (actual != ValueType.selfType && hasObjectClass(actual) && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
-                    if (hasMapKeyClass(actual) && e.arguments[i].keyObjectClass !is resolveClass(candidate.owner, p.keyObjectName, p.name)) applicable = false;
+                    if (hasMapKeyClass(actual) && e.arguments[i].keyObjectClasses != resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name)) applicable = false;
                 } else if (actual == ValueType.selfType && findConversion(e.arguments[i].objectClass, p.type,
                             p.type == ValueType.enumType ? resolveClass(candidate.owner, p.objectName, p.name) : null) !is null) weight += 100;
                 else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
@@ -513,7 +520,7 @@ class Checker {
                     fail("override signature mismatch", m.name);
                 if (hasObjectClass(m.returnType) && resolveClass(program, m.returnObjectName, m.name) !is resolveClass(baseMethod.owner, baseMethod.returnObjectName, baseMethod.name))
                     fail("override return type mismatch", m.name);
-                if (hasMapKeyClass(m.returnType) && resolveClass(program, m.returnKeyObjectName, m.name) !is resolveClass(baseMethod.owner, baseMethod.returnKeyObjectName, baseMethod.name))
+                if (hasMapKeyClass(m.returnType) && resolveKeyClasses(program, m.returnKeyObjectNames, m.name) != resolveKeyClasses(baseMethod.owner, baseMethod.returnKeyObjectNames, baseMethod.name))
                     fail("override return type mismatch", m.name);
                 foreach (i, p; m.parameters) {
                     auto baseParam = baseMethod.parameters[i];
@@ -531,7 +538,7 @@ class Checker {
         variables = null; objectVariables = null; keyObjectVariables = null; staticContext = false;
         foreach (field; program.fields) {
             if (hasObjectClass(field.type)) field.objectClass = resolveClass(program, field.objectName, field.name);
-            if (hasMapKeyClass(field.type)) field.keyObjectClass = resolveClass(program, field.keyObjectName, field.name);
+            if (hasMapKeyClass(field.type)) field.keyObjectClasses = resolveKeyClasses(program, field.keyObjectNames, field.name);
         }
         foreach (attribute; program.attributes) if (attribute.expression !is null) {
             if (attribute.expression.kind != ExprKind.field || attribute.expression.left.kind != ExprKind.variable)
@@ -549,7 +556,7 @@ class Checker {
             if (field.initializer !is null) {
                 if (program.enclosingStatic && !field.isStatic)
                     fail("instance field initializer in a static local specialization", field.name);
-                auto direct = matchesInitializer(field.initializer, field.type, field.objectClass, field.keyObjectClass);
+                auto direct = matchesInitializer(field.initializer, field.type, field.objectClass, field.keyObjectClasses);
                 if (field.type == ValueType.selfType && !field.isStatic)
                     field.userOperatorAssignment = useAssignmentOperator(field.objectClass, field.initializer, field.name, direct);
                 if (!direct && !field.userOperatorAssignment) fail("field initializer type mismatch", field.name);
@@ -606,8 +613,8 @@ class Checker {
             returnType = m.returnType; loopDepth = 0; staticContext = m.isStatic;
             m.returnObjectClass = hasObjectClass(m.returnType) ? resolveClass(program, m.returnObjectName, m.name) : null;
             returnObjectClass = m.returnObjectClass;
-            m.returnKeyObjectClass = hasMapKeyClass(m.returnType) ? resolveClass(program, m.returnKeyObjectName, m.name) : null;
-            returnKeyObjectClass = m.returnKeyObjectClass;
+            m.returnKeyObjectClasses = hasMapKeyClass(m.returnType) ? resolveKeyClasses(program, m.returnKeyObjectNames, m.name) : null;
+            returnKeyObjectClasses = m.returnKeyObjectClasses;
             foreach (ref p; m.parameters) {
                 if (p.type == ValueType.voidType) fail("parameter cannot be void", p.name);
                 if (p.name.text in variables) fail("duplicate parameter", p.name);
@@ -617,8 +624,8 @@ class Checker {
                     objectVariables[p.name.text] = p.objectClass;
                 }
                 if (hasMapKeyClass(p.type)) {
-                    p.keyObjectClass = resolveClass(program, p.keyObjectName, p.name);
-                    keyObjectVariables[p.name.text] = p.keyObjectClass;
+                    p.keyObjectClasses = resolveKeyClasses(program, p.keyObjectNames, p.name);
+                    keyObjectVariables[p.name.text] = p.keyObjectClasses;
                 }
             }
             checkStatement(m.body);
@@ -722,9 +729,9 @@ class Checker {
             case ExprKind.nullLiteral: return ValueType.nullType;
             case ExprKind.arrayLiteral:
                 if (e.typedInitializer) {
-                    expected = resolveDeclaredType(e.initializerType, currentProgram, e.initializerObjectName, e.initializerKeyObjectName, e.token);
+                    expected = resolveDeclaredType(e.initializerType, currentProgram, e.initializerObjectName, e.initializerKeyObjectNames, e.token);
                     if (hasObjectClass(expected)) e.objectClass = resolveClass(currentProgram, e.initializerObjectName, e.token);
-                    if (hasMapKeyClass(expected)) e.keyObjectClass = resolveClass(currentProgram, e.initializerKeyObjectName, e.token);
+                    if (hasMapKeyClass(expected)) e.keyObjectClasses = resolveKeyClasses(currentProgram, e.initializerKeyObjectNames, e.token);
                 }
                 if (isMap(expected)) {
                     auto keyType = mapKeyType(expected);
@@ -738,13 +745,13 @@ class Checker {
                         if ([ValueType.selfType, ValueType.enumType].canFind(keyType)) {
                             auto actualKey = typeOf(entry.left);
                             if (actualKey != keyType || (keyType == ValueType.selfType ?
-                                !isAssignable(entry.left.objectClass, e.keyObjectClass) : entry.left.objectClass !is e.keyObjectClass))
+                                !isAssignable(entry.left.objectClass, outerMapKeyClass(expected, e.keyObjectClasses)) : entry.left.objectClass !is outerMapKeyClass(expected, e.keyObjectClasses)))
                                 fail("map key type mismatch", entry.left.token);
                         }
                         if (keyType == ValueType.stringType) {
                             if (![ValueType.stringType, ValueType.nullableString].canFind(typeOf(entry.left)))
                                 fail("map key type mismatch", entry.left.token);
-                        } else if (!matchesStored(entry.left, keyType, e.keyObjectClass)) fail("map key type mismatch", entry.left.token);
+                        } else if (!matchesStored(entry.left, keyType, outerMapKeyClass(expected, e.keyObjectClasses))) fail("map key type mismatch", entry.left.token);
                         if (valueType == ValueType.stringType) {
                             if (![ValueType.stringType, ValueType.nullableString].canFind(typeOf(entry.right)))
                                 fail("map value type mismatch", entry.right.token);
@@ -768,14 +775,14 @@ class Checker {
                                 if (actualValue != valueType && !(valueType == ValueType.sqlPrimaryType && isSqlType(actualValue)))
                                     fail("map value type mismatch", entry.right.token);
                             }
-                            if (!matchesStored(entry.right, valueType, e.objectClass, e.keyObjectClass)) fail("map value type mismatch", entry.right.token);
+                            if (!matchesStored(entry.right, valueType, e.objectClass, innerMapKeyClasses(expected, e.keyObjectClasses))) fail("map value type mismatch", entry.right.token);
                         }
                     }
                     e.inferredType = expected; return expected;
                 }
                 if (!isArray(expected)) fail("array initializer requires an array type", e.token);
                 foreach (element; e.arguments)
-                    if (!matchesStored(element, elementType(expected), e.objectClass, e.keyObjectClass)) fail("array element type mismatch", element.token);
+                    if (!matchesStored(element, elementType(expected), e.objectClass, e.keyObjectClasses)) fail("array element type mismatch", element.token);
                 e.inferredType = expected; return expected;
             case ExprKind.mapEntry: fail("key-value pair requires a map initializer", e.token); assert(0);
             case ExprKind.variable:
@@ -785,7 +792,7 @@ class Checker {
                     if (field is null) {
                         foreach (capture; currentProgram.captures) if (capture.name == e.token.text) {
                             e.isCapture = true;
-                            e.objectClass = capture.objectClass; e.keyObjectClass = capture.keyObjectClass;
+                            e.objectClass = capture.objectClass; e.keyObjectClasses = capture.keyObjectClasses;
                             return capture.type == ValueType.stringType ? ValueType.nullableString : storedValueType(capture.type);
                         }
                         fail("unknown variable '" ~ e.token.text ~ "'", e.token);
@@ -795,11 +802,11 @@ class Checker {
                     e.isField = true;
                     if ((*field).isStatic) e.targetClass = (*field).owner.emittedName;
                     if (hasObjectClass((*field).type)) e.objectClass = (*field).objectClass;
-                    if (hasMapKeyClass((*field).type)) e.keyObjectClass = (*field).keyObjectClass;
+                    if (hasMapKeyClass((*field).type)) e.keyObjectClasses = (*field).keyObjectClasses;
                     return (*field).type == ValueType.stringType ? ValueType.nullableString : storedValueType((*field).type);
                 }
                 if (hasObjectClass(*variable)) e.objectClass = objectVariables[e.token.text];
-                if (hasMapKeyClass(*variable)) e.keyObjectClass = keyObjectVariables[e.token.text];
+                if (hasMapKeyClass(*variable)) e.keyObjectClasses = keyObjectVariables[e.token.text];
                 return *variable == ValueType.stringType ? ValueType.nullableString : storedValueType(*variable);
             case ExprKind.selfRef:
                 if (staticContext) fail("this in static context", e.token);
@@ -951,7 +958,7 @@ class Checker {
                 if (hasObjectClass(field.type))
                     e.objectClass = field.objectClass !is null ? field.objectClass : resolveClass(field.owner, field.objectName, field.name);
                 if (hasMapKeyClass(field.type))
-                    e.keyObjectClass = field.keyObjectClass !is null ? field.keyObjectClass : resolveClass(field.owner, field.keyObjectName, field.name);
+                    e.keyObjectClasses = field.keyObjectClasses.length ? field.keyObjectClasses : resolveKeyClasses(field.owner, field.keyObjectNames, field.name);
                 return field.type == ValueType.stringType ? ValueType.nullableString : storedValueType(field.type);
             case ExprKind.call:
                 auto method = e.token.text in methods;
@@ -1519,34 +1526,34 @@ class Checker {
                 } else if (isMap(receiver)) {
                     auto mapValue = mapValueType(receiver);
                     if (hasObjectClass(receiver)) e.objectClass = e.left.objectClass;
-                    if (hasMapKeyClass(receiver)) e.keyObjectClass = e.left.keyObjectClass;
+                    if (hasMapKeyClass(receiver)) e.keyObjectClasses = innerMapKeyClasses(receiver, e.left.keyObjectClasses);
                     switch (e.token.text) {
                         case "size": case "isEmpty": case "clear":
                             checkArguments(e, []);
                             return e.token.text == "size" ? ValueType.intType : e.token.text == "isEmpty" ? ValueType.boolType : ValueType.voidType;
-                        case "containsKey": checkStoredArguments(e, [mapKeyType(receiver)], e.left.keyObjectClass); return ValueType.boolType;
+                        case "containsKey": checkStoredArguments(e, [mapKeyType(receiver)], outerMapKeyClass(receiver, e.left.keyObjectClasses)); return ValueType.boolType;
                         case "containsValue":
-                            if (e.arguments.length != 1 || !matchesStored(e.arguments[0], mapValue, e.left.objectClass, e.left.keyObjectClass)) fail("argument type mismatch", e.token);
+                            if (e.arguments.length != 1 || !matchesStored(e.arguments[0], mapValue, e.left.objectClass, innerMapKeyClasses(receiver, e.left.keyObjectClasses))) fail("argument type mismatch", e.token);
                             return ValueType.boolType;
                         case "get":
-                            checkStoredArguments(e, [mapKeyType(receiver)], e.left.keyObjectClass); return mapValueReadType(receiver);
+                            checkStoredArguments(e, [mapKeyType(receiver)], outerMapKeyClass(receiver, e.left.keyObjectClasses)); return mapValueReadType(receiver);
                         case "remove":
-                            checkStoredArguments(e, [mapKeyType(receiver)], e.left.keyObjectClass); return mapValueReadType(receiver);
+                            checkStoredArguments(e, [mapKeyType(receiver)], outerMapKeyClass(receiver, e.left.keyObjectClasses)); return mapValueReadType(receiver);
                         case "add":
                             if (e.arguments.length == 1) {
-                                if (!matches(e.arguments[0], receiver, e.left.objectClass, e.left.keyObjectClass)) fail("argument type mismatch", e.token);
+                                if (!matches(e.arguments[0], receiver, e.left.objectClass, e.left.keyObjectClasses)) fail("argument type mismatch", e.token);
                                 return ValueType.voidType;
                             }
-                            if (e.arguments.length != 2 || !matchesStored(e.arguments[0], mapKeyType(receiver), e.left.keyObjectClass) || !matchesStored(e.arguments[1], mapValue, e.left.objectClass, e.left.keyObjectClass)) fail("argument type mismatch", e.token);
+                            if (e.arguments.length != 2 || !matchesStored(e.arguments[0], mapKeyType(receiver), outerMapKeyClass(receiver, e.left.keyObjectClasses)) || !matchesStored(e.arguments[1], mapValue, e.left.objectClass, innerMapKeyClasses(receiver, e.left.keyObjectClasses))) fail("argument type mismatch", e.token);
                             return mapValueReadType(receiver);
-                        case "keys": checkArguments(e, []); e.objectClass = e.left.keyObjectClass; return mapKeyArrayType(receiver);
+                        case "keys": checkArguments(e, []); e.objectClass = outerMapKeyClass(receiver, e.left.keyObjectClasses); return mapKeyArrayType(receiver);
                         case "values": checkArguments(e, []); return mapValueArrayType(receiver);
                         default: break;
                     }
                 } else if (isArray(receiver)) {
                     if (isReferenceArray(receiver)) {
                         e.objectClass = e.left.objectClass;
-                        e.keyObjectClass = e.left.keyObjectClass;
+                        e.keyObjectClasses = e.left.keyObjectClasses;
                         if (!["size", "isEmpty", "clear", "first", "last", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
                             fail("this method is not yet supported for object arrays", e.token);
                     }
@@ -1567,38 +1574,38 @@ class Checker {
                             return receiver == ValueType.stringArray ? ValueType.nullableString : storedValueType(elementType(receiver));
                         case "add":
                             if (e.arguments.length == 1) {
-                                if (!matchesStored(e.arguments[0], elementType(receiver), e.left.objectClass, e.left.keyObjectClass)) fail("add requires an element of the array type", e.token);
+                                if (!matchesStored(e.arguments[0], elementType(receiver), e.left.objectClass, e.left.keyObjectClasses)) fail("add requires an element of the array type", e.token);
                             } else if (e.arguments.length == 2) {
-                                if (!matches(e.arguments[0], ValueType.intType) || !matchesStored(e.arguments[1], elementType(receiver), e.left.objectClass, e.left.keyObjectClass))
+                                if (!matches(e.arguments[0], ValueType.intType) || !matchesStored(e.arguments[1], elementType(receiver), e.left.objectClass, e.left.keyObjectClasses))
                                     fail("add requires an int index and an element of the array type", e.token);
                             } else fail("incorrect argument count", e.token);
                             return receiver;
                         case "addAll":
                             if (e.arguments.length == 1) {
-                                if (!matches(e.arguments[0], receiver, e.left.objectClass, e.left.keyObjectClass)) fail("addAll requires an array of the same type", e.token);
+                                if (!matches(e.arguments[0], receiver, e.left.objectClass, e.left.keyObjectClasses)) fail("addAll requires an array of the same type", e.token);
                             } else if (e.arguments.length == 2) {
-                                if (!matches(e.arguments[0], ValueType.intType) || !matches(e.arguments[1], receiver, e.left.objectClass, e.left.keyObjectClass)) fail("addAll requires an int index and an array of the same type", e.token);
+                                if (!matches(e.arguments[0], ValueType.intType) || !matches(e.arguments[1], receiver, e.left.objectClass, e.left.keyObjectClasses)) fail("addAll requires an int index and an array of the same type", e.token);
                             } else fail("incorrect argument count", e.token);
                             return ValueType.voidType;
                         case "isSubsetOf":
-                            if (e.arguments.length != 1 || !matches(e.arguments[0], receiver, e.left.objectClass, e.left.keyObjectClass)) fail("isSubsetOf requires an array of the same type", e.token);
+                            if (e.arguments.length != 1 || !matches(e.arguments[0], receiver, e.left.objectClass, e.left.keyObjectClasses)) fail("isSubsetOf requires an array of the same type", e.token);
                             return ValueType.boolType;
                         case "removeAll":
                             if (e.arguments.length != 1) fail("incorrect argument count", e.token);
                             auto argType = typeOf(e.arguments[0]);
                             if (argType == receiver) {
-                                if (!matches(e.arguments[0], receiver, e.left.objectClass, e.left.keyObjectClass)) fail("removeAll requires an array of the same type", e.token);
-                            } else if (!matchesStored(e.arguments[0], elementType(receiver), e.left.objectClass, e.left.keyObjectClass)) fail("removeAll requires an element or array of the same type", e.token);
+                                if (!matches(e.arguments[0], receiver, e.left.objectClass, e.left.keyObjectClasses)) fail("removeAll requires an array of the same type", e.token);
+                            } else if (!matchesStored(e.arguments[0], elementType(receiver), e.left.objectClass, e.left.keyObjectClasses)) fail("removeAll requires an element or array of the same type", e.token);
                             return receiver;
                         case "contains": case "indexOf": case "remove":
-                            if (e.arguments.length != 1 || !matchesStored(e.arguments[0], elementType(receiver), e.left.objectClass, e.left.keyObjectClass)) fail("method requires an element of the array type", e.token);
+                            if (e.arguments.length != 1 || !matchesStored(e.arguments[0], elementType(receiver), e.left.objectClass, e.left.keyObjectClasses)) fail("method requires an element of the array type", e.token);
                             return e.token.text == "indexOf" ? ValueType.intType : ValueType.boolType;
                         case "removeAt":
                             if (e.arguments.length != 1 || !matches(e.arguments[0], ValueType.intType)) fail("removeAt requires an int index", e.token);
                             return receiver == ValueType.stringArray ? ValueType.nullableString : storedValueType(elementType(receiver));
                         case "set":
                             if (e.arguments.length != 2 || !matches(e.arguments[0], ValueType.intType) ||
-                                !matchesStored(e.arguments[1], elementType(receiver), e.left.objectClass, e.left.keyObjectClass)) fail("set requires an int index and an element of the array type", e.token);
+                                !matchesStored(e.arguments[1], elementType(receiver), e.left.objectClass, e.left.keyObjectClasses)) fail("set requires an int index and an element of the array type", e.token);
                             return ValueType.voidType;
                         default: break;
                     }
@@ -1607,16 +1614,16 @@ class Checker {
             case ExprKind.index:
                 auto array = typeOf(e.left);
                 if (isMap(array)) {
-                    if (!matchesStored(e.right, mapKeyType(array), e.left.keyObjectClass)) fail("map key type mismatch", e.token);
+                    if (!matchesStored(e.right, mapKeyType(array), outerMapKeyClass(array, e.left.keyObjectClasses))) fail("map key type mismatch", e.token);
                     e.inferredType = array;
                     if (hasObjectClass(array)) e.objectClass = e.left.objectClass;
-                    if (hasMapKeyClass(mapValueType(array))) e.keyObjectClass = e.left.keyObjectClass;
+                    if (hasMapKeyClass(mapValueType(array))) e.keyObjectClasses = innerMapKeyClasses(array, e.left.keyObjectClasses);
                     return mapValueReadType(array);
                 }
                 if (!isArray(array)) fail("indexing requires an array", e.token);
                 if (!matches(e.right, ValueType.intType)) fail("array index must be int", e.token);
                 if (hasObjectClass(array)) e.objectClass = e.left.objectClass;
-                if (hasMapKeyClass(array)) e.keyObjectClass = e.left.keyObjectClass;
+                if (hasMapKeyClass(array)) e.keyObjectClasses = e.left.keyObjectClasses;
                 e.inferredType = array;
                 return array == ValueType.stringArray ? ValueType.nullableString : storedValueType(elementType(array));
             case ExprKind.castExpr:
@@ -1944,8 +1951,8 @@ class Checker {
                     e.emittedOperator = op == "==" ? "is" : "!is"; return ValueType.boolType;
                 }
                 if (isMap(left) && left == right && op == "+") {
-                    if (hasMapKeyClass(left) && e.left.keyObjectClass !is e.right.keyObjectClass) fail("map key type mismatch", e.token);
-                    e.keyObjectClass = e.left.keyObjectClass;
+                    if (hasMapKeyClass(left) && e.left.keyObjectClasses != e.right.keyObjectClasses) fail("map key type mismatch", e.token);
+                    e.keyObjectClasses = e.left.keyObjectClasses;
                     if (hasObjectClass(left) && e.left.objectClass !is e.right.objectClass)
                         fail("map value type mismatch", e.token);
                     e.objectClass = e.left.objectClass;
@@ -1953,9 +1960,9 @@ class Checker {
                     return left;
                 }
                 if (isArray(left) && left == right && op == "+") {
-                    if (hasMapKeyClass(left) && e.left.keyObjectClass !is e.right.keyObjectClass)
+                    if (hasMapKeyClass(left) && e.left.keyObjectClasses != e.right.keyObjectClasses)
                         fail("array map key type mismatch", e.token);
-                    e.keyObjectClass = e.left.keyObjectClass;
+                    e.keyObjectClasses = e.left.keyObjectClasses;
                     if (hasObjectClass(left) && e.left.objectClass !is e.right.objectClass)
                         fail("array element type mismatch", e.token);
                     e.inferredType = left;
@@ -2023,10 +2030,10 @@ class Checker {
                 if (!matches(e.left, ValueType.boolType)) fail("conditional expression requires a bool condition", e.token);
                 auto left = typeOf(e.right), right = typeOf(e.third);
                 if (left == ValueType.nullType && isNullableReference(right)) {
-                    matches(e.right, right, e.third.objectClass, e.third.keyObjectClass); left = right;
+                    matches(e.right, right, e.third.objectClass, e.third.keyObjectClasses); left = right;
                 }
                 if (right == ValueType.nullType && isNullableReference(left)) {
-                    matches(e.third, left, e.right.objectClass, e.right.keyObjectClass); right = left;
+                    matches(e.third, left, e.right.objectClass, e.right.keyObjectClasses); right = left;
                 }
                 if (right == ValueType.nullType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(left)) {
                     e.right.optionalWrap = true; left = storedValueType(left); e.third.inferredType = left; right = left;
@@ -2060,10 +2067,10 @@ class Checker {
                 }
                 if (left == ValueType.stringType && right == ValueType.stringType &&
                     (e.right.kind == ExprKind.nullLiteral || e.third.kind == ExprKind.nullLiteral)) left = right = ValueType.nullableString;
-                if (left == ValueType.voidType || left != right || (hasObjectClass(left) && e.right.objectClass !is e.third.objectClass) || (hasMapKeyClass(left) && e.right.keyObjectClass !is e.third.keyObjectClass))
+                if (left == ValueType.voidType || left != right || (hasObjectClass(left) && e.right.objectClass !is e.third.objectClass) || (hasMapKeyClass(left) && e.right.keyObjectClasses != e.third.keyObjectClasses))
                     fail("conditional branch type mismatch", e.token);
                 if (hasObjectClass(left)) e.objectClass = e.right.objectClass;
-                if (hasMapKeyClass(left)) e.keyObjectClass = e.right.keyObjectClass;
+                if (hasMapKeyClass(left)) e.keyObjectClasses = e.right.keyObjectClasses;
                 return left;
             case ExprKind.elvis:
                 auto left = typeOf(e.left);
@@ -2079,10 +2086,10 @@ class Checker {
                 }
                 if (!isNullableReference(left)) fail("elvis requires a supported reference type", e.token);
                 auto expectedRight = left == ValueType.nullableString ? ValueType.stringType : left;
-                if (!matches(e.right, expectedRight, e.left.objectClass, e.left.keyObjectClass)) fail("elvis branch type mismatch", e.token);
+                if (!matches(e.right, expectedRight, e.left.objectClass, e.left.keyObjectClasses)) fail("elvis branch type mismatch", e.token);
                 e.inferredType = left;
                 e.objectClass = e.left.objectClass;
-                e.keyObjectClass = e.left.keyObjectClass;
+                e.keyObjectClasses = e.left.keyObjectClasses;
                 return left;
         }
     }
@@ -2138,12 +2145,12 @@ class Checker {
             case StmtKind.variable:
                 s.hasContainer = !staticContext;
                 if (s.token.text in variables) fail("duplicate or shadowed variable", s.token);
-                s.type = resolveDeclaredType(s.type, currentProgram, s.objectName, s.keyObjectName, s.token);
+                s.type = resolveDeclaredType(s.type, currentProgram, s.objectName, s.keyObjectNames, s.token);
                 if (s.type == ValueType.enumType && s.expression is null && !allowUninitializedEnum) fail("enum variables require an initializer", s.token);
                 if (s.type == ValueType.primaryType && s.expression is null && !allowUninitializedEnum) fail("primary variables require an initializer", s.token);
                 if (s.type == ValueType.voidType) fail("variable cannot be void", s.token);
                 if (hasObjectClass(s.type)) s.objectClass = resolveClass(currentProgram, s.objectName, s.token);
-                if (hasMapKeyClass(s.type)) s.keyObjectClass = resolveClass(currentProgram, s.keyObjectName, s.token);
+                if (hasMapKeyClass(s.type)) s.keyObjectClasses = resolveKeyClasses(currentProgram, s.keyObjectNames, s.token);
                 if (s.nestedClass !is null) {
                     s.nestedClass.enclosingStatic = staticContext;
                     auto names = variables.keys;
@@ -2153,14 +2160,14 @@ class Checker {
                         s.nestedClass.captures ~= Capture(name, variables[name], name in objectVariables ? objectVariables[name] : null, name in keyObjectVariables ? keyObjectVariables[name] : null);
                 }
                 if (s.expression !is null) {
-                    auto direct = matchesInitializer(s.expression, s.type, s.objectClass, s.keyObjectClass);
+                    auto direct = matchesInitializer(s.expression, s.type, s.objectClass, s.keyObjectClasses);
                     if (s.type == ValueType.selfType)
                         s.userOperatorAssignment = useAssignmentOperator(s.objectClass, s.expression, s.token, direct);
                     if (!direct && !s.userOperatorAssignment) fail("initializer type mismatch", s.token);
                 }
                 variables[s.token.text] = s.type;
                 if (hasObjectClass(s.type)) objectVariables[s.token.text] = s.objectClass;
-                if (hasMapKeyClass(s.type)) keyObjectVariables[s.token.text] = s.keyObjectClass;
+                if (hasMapKeyClass(s.type)) keyObjectVariables[s.token.text] = s.keyObjectClasses;
                 return false;
             case StmtKind.assignment:
                 auto variableType = typeOf(s.target);
@@ -2197,8 +2204,8 @@ class Checker {
                 if (s.target.kind == ExprKind.index && isMap(s.target.inferredType))
                     variableType = mapValueType(s.target.inferredType);
                 if ((s.target.kind != ExprKind.index || isMap(s.target.inferredType) || [ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(s.target.inferredType)) && (s.assignmentOperator == "=" || variableType == ValueType.intType || variableType == ValueType.decimalType) ?
-                    !matchesStored(s.expression, variableType, s.target.objectClass, s.target.keyObjectClass) :
-                    !matches(s.expression, variableType, s.target.objectClass, s.target.keyObjectClass)) fail("assignment type mismatch", s.token);
+                    !matchesStored(s.expression, variableType, s.target.objectClass, s.target.keyObjectClasses) :
+                    !matches(s.expression, variableType, s.target.objectClass, s.target.keyObjectClasses)) fail("assignment type mismatch", s.token);
                 if (s.target.kind == ExprKind.index && isMap(s.target.inferredType) && s.assignmentOperator != "=") fail("compound assignment to a map entry is not supported", s.token);
                 s.type = variableType;
                 if (s.assignmentOperator != "=" && variableType != ValueType.intType &&
@@ -2213,7 +2220,7 @@ class Checker {
                 return false;
             case StmtKind.returnStmt:
                 if (s.expression is null) { if (returnType != ValueType.voidType) fail("return value required", s.token); }
-                else if (returnType == ValueType.voidType || !matchesStored(s.expression, returnType, returnObjectClass, returnKeyObjectClass)) fail("return type mismatch", s.token);
+                else if (returnType == ValueType.voidType || !matchesStored(s.expression, returnType, returnObjectClass, returnKeyObjectClasses)) fail("return type mismatch", s.token);
                 if (s.expression !is null && returnType == ValueType.selfType)
                     s.priorityMethod = lookupUnaryOperator(returnObjectClass, "operatorPriority");
                 if (s.expression !is null && returnType == ValueType.sqlBoolType) s.sqlBoolReturnPriority = true;
@@ -2253,7 +2260,7 @@ class Checker {
                 if (array == ValueType.selfArray && !isAssignable(s.expression.objectClass, s.initial.objectClass)) fail("foreach element type mismatch", s.token);
                 if (array == ValueType.enumArray && s.expression.objectClass !is s.initial.objectClass) fail("foreach element type mismatch", s.token);
                 if ((array == ValueType.selfMatrix || array == ValueType.enumMatrix || (isDynamicArray(array) && hasObjectClass(array))) && s.expression.objectClass !is s.initial.objectClass) fail("foreach element type mismatch", s.token);
-                if (hasMapKeyClass(array) && s.expression.keyObjectClass !is s.initial.keyObjectClass) fail("foreach element type mismatch", s.token);
+                if (hasMapKeyClass(array) && s.expression.keyObjectClasses != s.initial.keyObjectClasses) fail("foreach element type mismatch", s.token);
                 ++loopDepth; checkStatement(s.children[0]); --loopDepth;
                 variables = old; objectVariables = oldObjects; keyObjectVariables = oldKeyObjects; return false;
             case StmtKind.breakStmt:
