@@ -942,12 +942,19 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                                   base.nativeName == "org.zenframework.z8.server.base.table.value.StringField"w ||
                                   base.nativeName == "org.zenframework.z8.server.base.table.value.BoolField"w ||
                                   base.nativeName == "org.zenframework.z8.server.base.table.value.DecimalField"w ||
-                                  base.nativeName == "org.zenframework.z8.server.base.table.value.GuidField"w))
+                                  base.nativeName == "org.zenframework.z8.server.base.table.value.GuidField"w ||
+                                  base.nativeName == "org.zenframework.z8.server.base.table.value.DatetimeField"w ||
+                                  base.nativeName == "org.zenframework.z8.server.base.table.value.DatespanField"w ||
+                                  base.nativeName == "org.zenframework.z8.server.base.table.value.BinaryField"w ||
+                                  base.nativeName == "org.zenframework.z8.server.base.table.value.GeometryField"w ||
+                                  base.nativeName == "org.zenframework.z8.server.base.table.value.TextField"w))
                 isTypedFieldSubclass = true;
         if (isTypedFieldSubclass && !program.isNative) foreach (method; program.methods)
             if (method.overrides && !method.isStatic && method.name.text == "get" && !method.parameters.length &&
                 (method.returnType == ValueType.intType || method.returnType == ValueType.stringType ||
-                 method.returnType == ValueType.boolType || method.returnType == ValueType.decimalType || method.returnType == ValueType.guidType)) {
+                 method.returnType == ValueType.boolType || method.returnType == ValueType.decimalType || method.returnType == ValueType.guidType ||
+                 method.returnType == ValueType.dateType || method.returnType == ValueType.datespanType || method.returnType == ValueType.binaryType ||
+                 method.returnType == ValueType.geometryType)) {
                 result ~= "override Z8Primary z8_field_virtual_get() { return z8_primary_box(this.m_get()); }\n";
                 break;
             }
