@@ -20,6 +20,9 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     public static bool isRequest(); public static int currentTimeMillis();
     public static string[string] requestParameters(); public static file[] requestFiles();
     public static JsonWriter responseWriter();
+    public static void info(string value); public static void warning(string value); public static void error(string value);
+    public static void logInfo(string value); public static void logWarning(string value); public static void logError(string value);
+    public static void print(file value); public static void redirect(string value);
 }
 ''', encoding="utf-8")
     (source / "JsonWriter.bl").write_text('''
@@ -35,6 +38,7 @@ public class Probe {
         try { Application.requestParameters(); return false; } catch (exception expected) {}
         try { Application.requestFiles(); return false; } catch (exception expected) {}
         try { Application.responseWriter(); return false; } catch (exception expected) {}
+        try { Application.info("outside"); return false; } catch (exception expected) {}
         return true;
     }
     public static string run() {
@@ -44,6 +48,9 @@ public class Probe {
         parameters.add("written", "ok");
         file[] files = Application.requestFiles();
         if (files.size() != 1) return "missing file";
+        Application.info("notice"); Application.warning("careful"); Application.error("error");
+        Application.logInfo("log-info"); Application.logWarning("log-warning"); Application.logError("log-error");
+        Application.print(files.first());
         files.clear();
         JsonWriter first = Application.responseWriter();
         JsonWriter second = Application.responseWriter();
@@ -52,6 +59,12 @@ public class Probe {
         return first.toString();
     }
     public static int now() { return Application.currentTimeMillis(); }
+    public static void redirect() { Application.redirect("/next"); }
+    public static bool noMonitor() {
+        Application.info(null);
+        try { Application.logInfo("missing"); return false; } catch (exception expected) {}
+        return true;
+    }
 }
 ''', encoding="utf-8")
     if len(sys.argv) == 2:
@@ -71,6 +84,14 @@ public class Probe {
 import z8.runtime;
 import z8gen.p_Probe;
 import core.thread : Thread;
+class Monitor : IZ8ApplicationMonitor {
+    wstring[] messages, logs;
+    Z8File[] files;
+    void message(Z8MonitorLevel level, wstring text) { messages ~= level.to!string.to!wstring ~ ":"w ~ text; }
+    void log(Z8MonitorLevel level, wstring text) { logs ~= level.to!string.to!wstring ~ ":"w ~ text; }
+    void print(Z8File value) { files ~= value; }
+}
+import std.conv : to;
 void main() {
     alias P = Z8p_50726F6265;
     assert(z8_optional_require(P.m_noRequest()));
@@ -78,10 +99,18 @@ void main() {
     request.parameters.z8_add("incoming"w, "yes"w);
     request.files.z8_add(z8_file_from_path("one.txt"w));
     assert(z8_application_set_request(request) is null);
+    assert(z8_optional_require(P.m_noMonitor()));
+    auto monitor = new Monitor(); request.monitor = monitor;
     assert(P.m_run() == `{"from":"yes","count":3}`w);
     assert(z8_application_response_text(request) == `{"from":"yes","count":3}`w);
     assert(request.parameters.z8_get("written"w) == "ok"w);
     assert(request.files.z8_size() == 1);
+    assert(monitor.messages == ["info:notice"w, "warning:careful"w, "error:error"w]);
+    assert(monitor.logs == ["info:log-info"w, "warning:log-warning"w, "error:log-error"w]);
+    assert(monitor.files.length == 1 && monitor.files[0] is request.files.z8_get(0));
+    bool redirected;
+    try { P.m_redirect(); } catch (Z8Redirect event) { redirected = event.location == "/next"w; }
+    assert(redirected);
     assert(z8_optional_require(P.m_now()) > 1_600_000_000_000L);
     auto nested = new Z8ApplicationRequest();
     assert(z8_application_set_request(nested) is request);

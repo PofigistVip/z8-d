@@ -1,8 +1,21 @@
+enum Z8MonitorLevel { info, warning, error }
+// The embedding server chooses how messages, log events and files are stored.
+interface IZ8ApplicationMonitor {
+    void message(Z8MonitorLevel level, wstring text);
+    void log(Z8MonitorLevel level, wstring text);
+    void print(Z8File value);
+}
+class Z8Redirect : Z8Exception {
+    wstring location;
+    this(wstring location) { super(null); this.location = location; }
+}
+
 // The host supplies a request for the current thread; response wrappers share
 // the request's writer, as ApplicationServer.getRequest() does in Z8.
 class Z8ApplicationRequest {
     Z8StringMap parameters;
     Z8Array!Z8File files;
+    IZ8ApplicationMonitor monitor;
     private Z8JsonWriterState writer;
     this() {
         parameters = new Z8StringMap();
@@ -42,6 +55,19 @@ private Z8Object z8_application_response_writer() {
     z8_nonnull(wrapper).z8_set_native_state(z8_json_writer_name, request.writer);
     return wrapper;
 }
+private void z8_application_message(Z8MonitorLevel level)(wstring text) {
+    auto monitor = z8_application_require_request().monitor;
+    if (monitor !is null) monitor.message(level, z8_string_required(text));
+}
+private void z8_application_log(Z8MonitorLevel level)(wstring text) {
+    auto monitor = z8_application_require_request().monitor;
+    z8_nonnull(monitor).log(level, z8_string_required(text));
+}
+private void z8_application_print(Z8File value) {
+    auto monitor = z8_application_require_request().monitor;
+    z8_nonnull(monitor).print(value);
+}
+private void z8_application_redirect(wstring location) { throw new Z8Redirect(z8_string_required(location)); }
 void z8_bind_builtin_application_request() {
     enum prefix = "org.zenframework.z8.server.base.application.Application."w;
     z8_native_bind(prefix ~ "m_isRequest"w, &z8_application_is_request);
@@ -49,5 +75,13 @@ void z8_bind_builtin_application_request() {
     z8_native_bind(prefix ~ "m_requestParameters"w, &z8_application_request_parameters);
     z8_native_bind(prefix ~ "m_requestFiles"w, &z8_application_request_files);
     z8_native_bind(prefix ~ "m_responseWriter"w, &z8_application_response_writer);
+    z8_native_bind(prefix ~ "m_info"w, &z8_application_message!(Z8MonitorLevel.info));
+    z8_native_bind(prefix ~ "m_warning"w, &z8_application_message!(Z8MonitorLevel.warning));
+    z8_native_bind(prefix ~ "m_error"w, &z8_application_message!(Z8MonitorLevel.error));
+    z8_native_bind(prefix ~ "m_logInfo"w, &z8_application_log!(Z8MonitorLevel.info));
+    z8_native_bind(prefix ~ "m_logWarning"w, &z8_application_log!(Z8MonitorLevel.warning));
+    z8_native_bind(prefix ~ "m_logError"w, &z8_application_log!(Z8MonitorLevel.error));
+    z8_native_bind(prefix ~ "m_print"w, &z8_application_print);
+    z8_native_bind(prefix ~ "m_redirect"w, &z8_application_redirect);
 }
 shared static this() { z8_bind_builtin_application_request(); }
