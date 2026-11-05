@@ -52,7 +52,7 @@ import org.zenframework.z8.base.application.Application;
     virtual protected void onDestroyAction(guid id) { actionEvents = "D"; }
     virtual protected sql_bool scope() { return amount >= 0; }
     virtual protected void onReadAction() {
-        if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-hook") addWhere(amount >= 40);
+        if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-hook") { amount = 999; addWhere(amount >= 40); }
     }
 }
 ''', encoding="utf-8")

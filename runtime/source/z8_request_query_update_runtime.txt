@@ -31,8 +31,9 @@ private void z8_application_query_write_affected(Z8Object query, Z8Object[] sele
     read.fields = selected; read.where = filter; read.byRecordIds = true;
     z8_query_prepare_read(query, read);
     read.queryScope = z8_query_scope(query);
+    auto saved = new Z8QuerySavedState(query);
+    scope(exit) saved.restore();
     z8_query_open(query, read, true, true);
-    scope(exit) z8_query_close(query);
     z8_application_query_write_rows(query, writer, selected);
 }
 

@@ -214,7 +214,11 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         read.start = cast(int)(((total - 1) / read.limit) * read.limit);
         prepared = true;
     }
-    z8_query_open(query, read, true, prepared);
-    scope(exit) z8_query_close(query);
+    if (!prepared) z8_query_prepare_read(query, read);
+    // ReadAction's FramedSelect saves changed field values before attaching
+    // the cursor, then restores them after writing the rows.
+    auto saved = new Z8QuerySavedState(query);
+    scope(exit) saved.restore();
+    z8_query_open(query, read, true, true);
     z8_application_query_write_rows(query, writer, selected);
 }
