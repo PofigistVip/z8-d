@@ -1,4 +1,4 @@
-enum Z8SqlStringKind { constant, group, concat, lower, upper, trimLeft, trimRight, choose, replace, regReplace, substring, reverse, padLeft, padRight, quote, jsonString, jsonInt, fromBool, fromNumeric, fromGuid, fromDate, fromDatespan, fromBinary }
+enum Z8SqlStringKind { constant, group, concat, lower, upper, trimLeft, trimRight, choose, replace, regReplace, substring, reverse, padLeft, padRight, quote, jsonString, jsonInt, fromBool, fromNumeric, fromGuid, fromDate, fromDatespan, fromBinary, fromGeometry }
 class Z8SqlString {
     Z8SqlStringKind kind;
     wstring constant;
@@ -11,6 +11,7 @@ class Z8SqlString {
     Z8SqlDate dateOperand;
     Z8SqlDatespan spanOperand;
     Z8SqlBinary binaryOperand;
+    Z8SqlGeometry geometryOperand;
     this(Z8SqlStringKind kind, wstring constant = null, Z8SqlString left = null,
          Z8SqlString right = null, Z8SqlBool condition = null) {
         this.kind = kind; this.constant = constant; this.left = left; this.right = right; this.condition = condition;
@@ -75,6 +76,10 @@ Z8SqlString z8_sql_datespan_toString(Z8SqlDatespan value) {
 Z8SqlString z8_sql_binary_toString(Z8SqlBinary value) {
     auto result = new Z8SqlString(Z8SqlStringKind.fromBinary);
     result.binaryOperand = z8_nonnull(value); return result;
+}
+Z8SqlString z8_sql_geometry_toString(Z8SqlGeometry value) {
+    auto result = new Z8SqlString(Z8SqlStringKind.fromGeometry);
+    result.geometryOperand = z8_nonnull(value); return result;
 }
 Z8SqlString z8_sql_string_quote(Z8SqlString value) { return new Z8SqlString(Z8SqlStringKind.quote, null, z8_nonnull(value)); }
 Z8SqlString z8_sql_string_jsonString(Z8SqlString value, Z8SqlString key) { return new Z8SqlString(Z8SqlStringKind.jsonString, null, z8_nonnull(value), key); }
@@ -185,7 +190,9 @@ wstring z8_sql_string_format(Z8SqlString value, Z8SqlVendor vendor = Z8SqlVendor
                 if (value.constant[i] == '\'') escaped ~= '\'';
             }
             return (vendor == Z8SqlVendor.Oracle || vendor == Z8SqlVendor.SqlServer ? "N'"w : "'"w) ~ escaped ~ "'"w;
-        case Z8SqlStringKind.group: return "("w ~ z8_sql_string_format(value.left, vendor, logical) ~ ")"w;
+        case Z8SqlStringKind.group:
+            auto text = z8_sql_string_format(value.left, vendor, logical);
+            return text is null ? null : "("w ~ text ~ ")"w;
         case Z8SqlStringKind.concat:
             if (vendor == Z8SqlVendor.H2) throw new Exception("unsupported SQL database vendor");
             auto left = z8_sql_string_format(value.left, vendor), right = z8_sql_string_format(value.right, vendor);
@@ -246,5 +253,8 @@ wstring z8_sql_string_format(Z8SqlString value, Z8SqlVendor vendor = Z8SqlVendor
         case Z8SqlStringKind.fromBinary:
             auto binary = z8_sql_binary_format(value.binaryOperand, vendor);
             return vendor == Z8SqlVendor.SqlServer ? "Cast("w ~ binary ~ " as nvarchar(max))"w : binary;
+        case Z8SqlStringKind.fromGeometry:
+            auto geometry = z8_sql_geometry_format(value.geometryOperand, vendor);
+            return vendor == Z8SqlVendor.SqlServer ? "Cast("w ~ (geometry is null ? "null"w : geometry) ~ " as nvarchar(max))"w : geometry;
     }
 }

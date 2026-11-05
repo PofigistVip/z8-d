@@ -6,6 +6,7 @@ import org.zenframework.z8.lang.sql.sql_guid;
 import org.zenframework.z8.lang.sql.sql_date;
 import org.zenframework.z8.lang.sql.sql_datespan;
 import org.zenframework.z8.lang.sql.sql_binary;
+import org.zenframework.z8.lang.sql.sql_geometry;
 public class SqlStringValues {
     public static sql_string literal() { return "O'Reilly 😀"; }
     public static sql_string concatenation() { sql_string value = "alpha"; return (value + " β").toUpper(); }
@@ -94,6 +95,15 @@ public class SqlStringValues {
     public static sql_datespan spanAddSecond() { sql_datespan value = sqlSpan(); return value.addSecond(2); }
     public static sql_binary sqlBinary() { sql_binary value; return value; }
     public static sql_string binaryText() { sql_binary value = sqlBinary(); return value.toString(); }
+    public static sql_geometry sqlGeometry() { geometry value = geometry.point(1.5, 2.5, 4326); return value; }
+    public static sql_geometry geometryPoint() { return sql_geometry.point(1.5, 2.5, 4326); }
+    public static sql_geometry geometryChoice() { sql_bool condition = true; sql_geometry value = sqlGeometry(); return condition.IIF(value, value); }
+    public static sql_bool geometryEqual() { sql_geometry value = sqlGeometry(); return value == value; }
+    public static sql_bool geometryIntersects() { sql_geometry value = sqlGeometry(); return value && value; }
+    public static sql_string geometryText() { sql_geometry value = sqlGeometry(); return value.toString(); }
+    public static sql_geometry emptyGeometry() { sql_geometry value; return value; }
+    public static sql_string emptyGeometryText() { sql_geometry value; return value.toString(); }
+    public static sql_bool emptyGeometryIntersects() { sql_geometry value; return value.intersects(value); }
     public static int run() {
         sql_string value = concatenation();
         if (value == null) return 1;

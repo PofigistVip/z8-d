@@ -242,6 +242,9 @@ unittest {
     compile(q{class A { static sql_datespan f(sql_datespan x) { return x.truncHour().addDay(1).truncMinute().addSecond(2); } }});
     compile(q{class A { static sql_int f(sql_datespan x) { return x.days() + x.hours() + x.totalMinutes(); } }});
     compile(q{class A { static sql_binary f() { sql_binary x; return x; } static sql_string g(sql_binary x) { return x.toString(); } }});
+    compile(q{class A { static sql_geometry f(geometry x) { sql_geometry y = x; return y; } }});
+    compile(q{class A { static sql_geometry f() { return sql_geometry.point(1.5, 2.5, 4326); } }});
+    compile(q{class A { static sql_bool f(sql_geometry x, sql_geometry y) { return x && y; } }});
     rejects(q{class A { static sql_binary f(binary x) { return x; } }});
     rejects(q{class A { static date f(sql_date x) { return x; } }});
     rejects(q{class A { static guid f(sql_guid x) { return x; } }});

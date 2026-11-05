@@ -532,7 +532,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                 demo.cases.SqlStringValues.z8_jsonIndex(), demo.cases.SqlStringValues.z8_identity(),
                 demo.cases.SqlStringValues.z8_booleanText(), demo.cases.SqlStringValues.z8_integerText(),
                 demo.cases.SqlStringValues.z8_decimalText(), demo.cases.SqlStringValues.z8_regexText(),
-                demo.cases.SqlStringValues.z8_notIntegerText(), demo.cases.SqlStringValues.z8_choiceRegexText(), demo.cases.SqlStringValues.z8_guidText(), demo.cases.SqlStringValues.z8_dateText(), demo.cases.SqlStringValues.z8_spanText(), demo.cases.SqlStringValues.z8_binaryText()
+                demo.cases.SqlStringValues.z8_notIntegerText(), demo.cases.SqlStringValues.z8_choiceRegexText(), demo.cases.SqlStringValues.z8_guidText(), demo.cases.SqlStringValues.z8_dateText(), demo.cases.SqlStringValues.z8_spanText(), demo.cases.SqlStringValues.z8_binaryText(), demo.cases.SqlStringValues.z8_geometryText()
             };
             for (org.zenframework.z8.server.types.sql.sql_string value : extraStrings) {
                 try { System.out.println("SQLTEXTEXTRA:" + vendor.name() + ":" + value.format(vendor, null)); }
@@ -602,6 +602,17 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                 catch (RuntimeException error) { System.out.println("SQLSPANFUNC:" + vendor.name() + ":ERROR"); }
             }
             System.out.println("SQLBINARY:" + vendor.name() + ":" + demo.cases.SqlStringValues.z8_sqlBinary().format(vendor, null));
+            for (org.zenframework.z8.server.types.sql.sql_geometry value : new org.zenframework.z8.server.types.sql.sql_geometry[] {
+                demo.cases.SqlStringValues.z8_sqlGeometry(), demo.cases.SqlStringValues.z8_geometryPoint(), demo.cases.SqlStringValues.z8_geometryChoice() }) {
+                try { System.out.println("SQLGEOM:" + vendor.name() + ":" + value.format(vendor, null)); }
+                catch (RuntimeException error) { System.out.println("SQLGEOM:" + vendor.name() + ":ERROR"); }
+            }
+            for (org.zenframework.z8.server.types.sql.sql_bool value : new org.zenframework.z8.server.types.sql.sql_bool[] {
+                demo.cases.SqlStringValues.z8_geometryEqual(), demo.cases.SqlStringValues.z8_geometryIntersects(), demo.cases.SqlStringValues.z8_emptyGeometryIntersects() })
+                for (boolean logical : new boolean[] {false, true})
+                    System.out.println("SQLGEOMBOOL:" + vendor.name() + ":" + logical + ":" + value.format(vendor, null, logical));
+            System.out.println("SQLGEOMEMPTY:" + vendor.name() + ":" + demo.cases.SqlStringValues.z8_emptyGeometry().format(vendor, null));
+            System.out.println("SQLGEOMEMPTY:" + vendor.name() + ":" + demo.cases.SqlStringValues.z8_emptyGeometryText().format(vendor, null));
         }
         org.zenframework.z8.server.types.sql.sql_integer sharedSearch = demo.cases.SqlStringValues.z8_indexFrom();
         for (org.zenframework.z8.server.db.DatabaseVendor vendor : org.zenframework.z8.server.db.DatabaseVendor.values())
@@ -676,7 +687,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         # The cached SQL runtime can predate the checked-out operator methods.
         # Compile the SQL classes exercised here from the current sources.
         server_source = original / "org.zenframework.z8.server" / "src" / "main" / "java" / "org" / "zenframework" / "z8" / "server"
-        sql_sources = [server_source / "types" / "sql" / name for name in ("sql_primary.java", "sql_bool.java", "sql_integer.java", "sql_decimal.java", "sql_string.java", "sql_guid.java", "sql_date.java", "sql_datespan.java", "sql_binary.java")]
+        sql_sources = [server_source / "types" / "sql" / name for name in ("sql_primary.java", "sql_bool.java", "sql_integer.java", "sql_decimal.java", "sql_string.java", "sql_guid.java", "sql_date.java", "sql_datespan.java", "sql_binary.java", "sql_geometry.java")]
         sql_sources += [server_source / "db" / "sql" / name for name in ("SqlConst.java", "SqlStringToken.java")]
         sql_sources += [server_source / "db" / "sql" / "expressions" / name for name in
                         ("Operation.java", "Add.java", "Mul.java", "Group.java", "And.java", "Or.java", "Rel.java", "Equ.java", "Unary.java", "UnaryNot.java", "Bitwise.java")]
@@ -688,6 +699,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                         ("ExtractDatePart", "ExtractMinute", "ExtractHour", "ExtractDay", "ExtractMonth", "ExtractYear", "TruncDay", "TruncHour", "TruncMinute", "TruncSecond", "AddDay", "AddHour", "AddMinute", "AddSecond")]
         sql_sources += [server_source / "db" / "sql" / "functions" / "datespan" / (name + ".java") for name in
                         ("Days", "Hours", "Minutes", "Seconds", "TotalHours", "TotalMinutes", "TotalSeconds", "TruncHour", "TruncMinute", "TruncSecond", "AddDay", "AddHour", "AddMinute", "AddSecond")]
+        sql_sources += [server_source / "db" / "sql" / "functions" / "geometry" / "Point.java", server_source / "db" / "sql" / "expressions" / "Intersects.java"]
         sql_sources += [server_source / "db" / "sql" / "functions" / "string" / name for name in
                         ("Concat.java", "Lower.java", "Upper.java", "LTrim.java", "RTrim.java", "Length.java", "Quote.java",
                          "Like.java", "RegLike.java", "Replace.java", "RegReplace.java", "Substr.java", "Reverse.java", "LPad.java", "RPad.java",
@@ -1006,7 +1018,8 @@ void main() {
             Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_guidText(),
             Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_dateText(),
             Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_spanText(),
-            Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_binaryText()];
+            Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_binaryText(),
+            Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_geometryText()];
         foreach (value; extraStrings) {
             try { writeln("SQLTEXTEXTRA:", vendor, ":", z8_to_utf8(z8_sql_string_format(value, dialect))); }
             catch (Exception error) { writeln("SQLTEXTEXTRA:", vendor, ":ERROR"); }
@@ -1093,6 +1106,21 @@ void main() {
             catch (Exception error) { writeln("SQLSPANFUNC:", vendor, ":ERROR"); }
         }
         writeln("SQLBINARY:", vendor, ":", z8_to_utf8(z8_sql_binary_format(Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_sqlBinary(), dialect)));
+        foreach (value; [Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_sqlGeometry(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_geometryPoint(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_geometryChoice()]) {
+            try { writeln("SQLGEOM:", vendor, ":", z8_to_utf8(z8_sql_geometry_format(value, dialect))); }
+            catch (Exception error) { writeln("SQLGEOM:", vendor, ":ERROR"); }
+        }
+        foreach (value; [Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_geometryEqual(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_geometryIntersects(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_emptyGeometryIntersects()])
+            foreach (logical; [false, true])
+                writeln("SQLGEOMBOOL:", vendor, ":", logical, ":", z8_to_utf8(z8_sql_bool_format(value, logical, dialect)));
+        auto emptyGeometry = z8_sql_geometry_format(Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_emptyGeometry(), dialect);
+        auto emptyGeometryText = z8_sql_string_format(Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_emptyGeometryText(), dialect);
+        writeln("SQLGEOMEMPTY:", vendor, ":", emptyGeometry is null ? "null" : z8_to_utf8(emptyGeometry));
+        writeln("SQLGEOMEMPTY:", vendor, ":", emptyGeometryText is null ? "null" : z8_to_utf8(emptyGeometryText));
     }
     auto sharedSearch = Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_indexFrom();
     foreach (vendorIndex, vendor; ["Oracle", "SqlServer", "Postgres", "H2"]) {
@@ -1108,12 +1136,12 @@ void main() {
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_lines = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:", "SQLSPAN:", "SQLSPANARITH:", "SQLSPANBOOL:", "SQLSPANPART:", "SQLSPANFUNC:", "SQLBINARY:"))]
+        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:", "SQLSPAN:", "SQLSPANARITH:", "SQLSPANBOOL:", "SQLSPANPART:", "SQLSPANFUNC:", "SQLBINARY:", "SQLGEOM:", "SQLGEOMBOOL:", "SQLGEOMEMPTY:"))]
         original_sql = [line for line in output.splitlines() if line.startswith("SQLBOOL:")]
         d_sql = [line for line in d_lines if line.startswith("SQLBOOL:")]
         if original_sql != d_sql or len(d_sql) != 40:
             raise SystemExit(f"SQL boolean formatting differs: original={original_sql!r}, D={d_sql!r}")
-        for prefix, count in (("SQLINT:", 36), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 44), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 56), ("SQLTEXTTEST:", 16), ("SQLGUID:", 8), ("SQLGUIDBOOL:", 8), ("SQLDATE:", 12), ("SQLDATETICKS:", 4), ("SQLDATEFUNC:", 36), ("SQLDATEPART:", 20), ("SQLDATECMP:", 336), ("SQLDATEBL:", 8), ("SQLSPAN:", 20), ("SQLSPANARITH:", 12), ("SQLSPANBOOL:", 8), ("SQLSPANPART:", 28), ("SQLSPANFUNC:", 28), ("SQLBINARY:", 4)):
+        for prefix, count in (("SQLINT:", 36), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 44), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 60), ("SQLTEXTTEST:", 16), ("SQLGUID:", 8), ("SQLGUIDBOOL:", 8), ("SQLDATE:", 12), ("SQLDATETICKS:", 4), ("SQLDATEFUNC:", 36), ("SQLDATEPART:", 20), ("SQLDATECMP:", 336), ("SQLDATEBL:", 8), ("SQLSPAN:", 20), ("SQLSPANARITH:", 12), ("SQLSPANBOOL:", 8), ("SQLSPANPART:", 28), ("SQLSPANFUNC:", 28), ("SQLBINARY:", 4), ("SQLGEOM:", 12), ("SQLGEOMBOOL:", 24), ("SQLGEOMEMPTY:", 8)):
             original_lines = [line for line in output.splitlines() if line.startswith(prefix)]
             d_formatted = [line for line in d_lines if line.startswith(prefix)]
             if original_lines != d_formatted or len(d_formatted) != count:

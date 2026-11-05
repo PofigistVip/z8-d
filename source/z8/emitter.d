@@ -55,6 +55,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.sqlDateType: return "Z8SqlDate";
         case ValueType.sqlDatespanType: return "Z8SqlDatespan";
         case ValueType.sqlBinaryType: return "Z8SqlBinary";
+        case ValueType.sqlGeometryType: return "Z8SqlGeometry";
         case ValueType.guidType: return "Z8Guid";
         case ValueType.binaryType: return "Z8Binary";
         case ValueType.datespanType: return "Z8Datespan";
@@ -287,6 +288,10 @@ private string emitExpr(Expression e) {
         auto count = e.parenthesisCount - (e.firstParenthesisIsConditional ? 1 : 0);
         foreach (_; 0 .. count) value = "z8_sql_datespan_group(" ~ value ~ ")";
     }
+    if (!e.emittedOverride.length && e.sqlGeometryPriority) {
+        auto count = e.parenthesisCount - (e.firstParenthesisIsConditional ? 1 : 0);
+        foreach (_; 0 .. count) value = "z8_sql_geometry_group(" ~ value ~ ")";
+    }
     if (e.userConversion !is null) value = "z8_nonnull(" ~ value ~ ")." ~ methodDName(e.userConversion) ~ "()";
     if (e.nonNullStringResult) value = "z8_string_or_empty(" ~ value ~ ")";
     if (e.optionalRequired) value = "z8_optional_require(" ~ value ~ ")";
@@ -298,6 +303,7 @@ private string emitExpr(Expression e) {
     if (e.convertToSqlGuid) value = "z8_sql_guid_const(" ~ value ~ ")";
     if (e.convertToSqlDate) value = "z8_sql_date_const(" ~ value ~ ")";
     if (e.convertToSqlDatespan) value = "z8_sql_datespan_const(" ~ value ~ ")";
+    if (e.convertToSqlGeometry) value = "z8_sql_geometry_const(" ~ value ~ ")";
     if (e.nullableStringMode == NullableStringMode.required) value = "z8_string_required(" ~ value ~ ")";
     if (e.nullableStringMode == NullableStringMode.nullAsEmpty) value = "z8_string_or_empty(" ~ value ~ ")";
     if (e.kind == ExprKind.conditional && isNullableReference(e.inferredType))
@@ -371,6 +377,7 @@ private string emitExprRaw(Expression e) {
             if (e.inferredType == ValueType.sqlDateType) return "z8_sql_date_const(z8_date_now())";
             if (e.inferredType == ValueType.sqlDatespanType) return "z8_sql_datespan_const(new Z8Datespan())";
             if (e.inferredType == ValueType.sqlBinaryType) return "new Z8SqlBinary()";
+            if (e.inferredType == ValueType.sqlGeometryType) return "z8_sql_geometry_const(new Z8Geometry())";
             return "z8_new!(" ~ e.objectClass.emittedName ~ ")(" ~ (e.newHasContainer ? "this" : "") ~ ")";
         case ExprKind.field:
             if (e.nativeField.length) return "z8_nonnull(" ~ emitExpr(e.left) ~ ")." ~ e.nativeField;
@@ -385,6 +392,7 @@ private string emitExprRaw(Expression e) {
         case ExprKind.memberCall:
             if (e.builtinCall.length) {
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
+                if (e.builtinCall == "z8_sql_geometry_point") return e.builtinCall ~ "(" ~ args.join(", ") ~ ")";
                 if (e.builtinCall.startsWith("z8_regex_") || e.builtinCall == "z8_string_format" || e.builtinCall.startsWith("z8_sql_"))
                     return e.builtinCall ~ "(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
                 if ((e.inferredType == ValueType.binaryType || e.inferredType == ValueType.datespanType || e.inferredType == ValueType.dateType || e.inferredType == ValueType.geometryType || e.inferredType == ValueType.fileType) && e.left !is null)
@@ -494,6 +502,7 @@ private string emitExprRaw(Expression e) {
             if (e.sqlStringOperator) return (e.sqlStringComparison ? "z8_sql_string_compare!\"" ~ e.token.text ~ "\"(" : "z8_sql_string_concat(") ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.sqlGuidOperator) return "z8_sql_guid_compare!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.sqlDateOperator) return "z8_sql_date_compare!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            if (e.sqlGeometryOperator) return "z8_sql_geometry_compare!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.sqlDateArithmetic) return "z8_sql_date_arithmetic!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.sqlDatespanOperator) return (e.sqlDatespanComparison ? "z8_sql_datespan_compare!\"" : "z8_sql_datespan_binary!\"") ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.userBinaryOperator) return emitReceiver(e.left) ~ "." ~ operatorDName(e.token.text) ~ "(" ~ emitExpr(e.right) ~ ")";
@@ -595,6 +604,7 @@ private string emitStatement(Statement s, ControlContext context = ControlContex
             if (s.sqlGuidReturnPriority) returned = "z8_sql_guid_group(" ~ returned ~ ")";
             if (s.sqlDateReturnPriority) returned = "z8_sql_date_group(" ~ returned ~ ")";
             if (s.sqlDatespanReturnPriority) returned = "z8_sql_datespan_group(" ~ returned ~ ")";
+            if (s.sqlGeometryReturnPriority) returned = "z8_sql_geometry_group(" ~ returned ~ ")";
             if (context.enabled) return s.expression is null ? "throw new Z8ReturnVoid();\n" :
                 "throw new Z8Return!(" ~ dStorageType(context.returnType, context.returnClass) ~ ")(" ~ returned ~ ");\n";
             return "return" ~ (s.expression is null ? "" : " " ~ returned) ~ ";\n";
@@ -697,6 +707,7 @@ private string defaultValue(ValueType type, Program objectClass = null, bool has
     if (type == ValueType.sqlDateType) return "z8_sql_date_const(z8_date_now())";
     if (type == ValueType.sqlDatespanType) return "z8_sql_datespan_const(new Z8Datespan())";
     if (type == ValueType.sqlBinaryType) return "new Z8SqlBinary()";
+    if (type == ValueType.sqlGeometryType) return "z8_sql_geometry_const(new Z8Geometry())";
     if (type == ValueType.enumType) return "null";
     if (type == ValueType.primaryType) return "null";
     if (type == ValueType.guidType) return "z8_guid_zero()";

@@ -1,0 +1,49 @@
+enum Z8SqlGeometryKind { constant, group, choose, point }
+class Z8SqlGeometry {
+    Z8SqlGeometryKind kind;
+    Z8Geometry constant;
+    Z8SqlGeometry left, right;
+    Z8SqlBool condition;
+    Z8SqlDecimal x, y;
+    Z8SqlInt srs;
+    this(Z8SqlGeometryKind kind, Z8Geometry constant = null, Z8SqlGeometry left = null,
+         Z8SqlGeometry right = null, Z8SqlBool condition = null) {
+        this.kind = kind; this.constant = constant; this.left = left; this.right = right; this.condition = condition;
+    }
+}
+Z8SqlGeometry z8_sql_geometry_const(Z8Geometry value) { return new Z8SqlGeometry(Z8SqlGeometryKind.constant, z8_nonnull(value)); }
+Z8SqlGeometry z8_sql_geometry_group(Z8SqlGeometry value) { return new Z8SqlGeometry(Z8SqlGeometryKind.group, null, z8_nonnull(value)); }
+Z8SqlGeometry z8_sql_geometry_iif(Z8SqlBool condition, Z8SqlGeometry yes, Z8SqlGeometry no) {
+    return new Z8SqlGeometry(Z8SqlGeometryKind.choose, null, yes, no, z8_nonnull(condition));
+}
+Z8SqlGeometry z8_sql_geometry_point(Z8SqlDecimal x, Z8SqlDecimal y, Z8SqlInt srs) {
+    auto result = new Z8SqlGeometry(Z8SqlGeometryKind.point);
+    result.x = x; result.y = y; result.srs = srs; return result;
+}
+Z8SqlBool z8_sql_geometry_compare(string op)(Z8SqlGeometry left, Z8SqlGeometry right) {
+    static assert(op == "==" || op == "!=" || op == "&&");
+    auto result = new Z8SqlBool(Z8SqlBoolKind.geometryCompare);
+    result.geometryLeft = z8_nonnull(left); result.geometryRight = right; result.geometryOperator = op; return result;
+}
+Z8SqlBool z8_sql_geometry_intersects(Z8SqlGeometry left, Z8SqlGeometry right) { return z8_sql_geometry_compare!"&&"(left, right); }
+private wstring z8_sql_geometry_text(Z8SqlGeometry value, Z8SqlVendor vendor) {
+    auto text = z8_sql_geometry_format(value, vendor);
+    return text is null ? "null"w : text;
+}
+wstring z8_sql_geometry_format(Z8SqlGeometry value, Z8SqlVendor vendor = Z8SqlVendor.Postgres) {
+    z8_nonnull(value);
+    final switch (value.kind) {
+        case Z8SqlGeometryKind.constant:
+            auto geometry = z8_nonnull(value.constant);
+            z8_geometry_ensure(geometry);
+            return geometry.shape == -1 ? null : "st_geomFromEWKT('"w ~ z8_geometry_to_string(geometry) ~ "')"w;
+        case Z8SqlGeometryKind.group:
+            auto text = z8_sql_geometry_format(value.left, vendor);
+            return text is null ? null : "("w ~ text ~ ")"w;
+        case Z8SqlGeometryKind.choose:
+            return z8_sql_bool_case(z8_sql_bool_format(value.condition, true, vendor), z8_sql_geometry_text(value.left, vendor), z8_sql_geometry_text(value.right, vendor));
+        case Z8SqlGeometryKind.point:
+            if (vendor != Z8SqlVendor.Postgres) throw new Exception("unsupported SQL database vendor");
+            return "ST_SetSRID(ST_Point("w ~ z8_sql_decimal_format(value.x, vendor) ~ ", "w ~ z8_sql_decimal_format(value.y, vendor) ~ "), "w ~ z8_sql_int_format(value.srs, vendor) ~ ")"w;
+    }
+}
