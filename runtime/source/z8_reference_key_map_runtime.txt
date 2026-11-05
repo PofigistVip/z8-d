@@ -4,6 +4,10 @@ class Z8ReferenceKeyMap(K, V) {
     alias Element = Z8PrimaryKeyMap!V.Element;
     private Z8PrimaryKeyMap!V entries;
     this() { entries = new Z8PrimaryKeyMap!V(); }
+    override bool opEquals(Object other) {
+        auto right = cast(Z8ReferenceKeyMap!(K, V))other;
+        return right !is null && z8_map_content_equals(this, right);
+    }
     long z8_size() { return entries.z8_size(); }
     bool z8_isEmpty() { return entries.z8_isEmpty(); }
     void z8_clear() { entries.z8_clear(); }

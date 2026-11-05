@@ -11,6 +11,7 @@ class Z8Array(T) {
     } else this(T[] values) { items = values; }
     // RCollection inherits ArrayList, whose equals compares element values.
     override bool opEquals(Object other) {
+        if (this is other) return true;
         auto right = cast(Z8Array!T)other;
         if (right is null || items.length != right.items.length) return false;
         foreach (i, item; items) {

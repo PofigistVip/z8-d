@@ -1,0 +1,28 @@
+public class ArrayMapEquality {
+    public static int run() {
+        string[int] first = {(1, "one")};
+        string[int] second = {(1, "one")};
+        string[int][] values = {first};
+        if (!values.contains(second) || values.indexOf(second) != 0) return 1;
+        if (!values.remove(second) || !values.isEmpty()) return 2;
+        string[string] text1 = {("x", "same")};
+        string[string] text2 = {("x", "same")};
+        string[string][] texts = {text1};
+        if (!texts.contains(text2)) return 3;
+        KeyItem key = new KeyItem;
+        int[KeyItem] object1 = {(key, 4)};
+        int[KeyItem] object2 = {(key, 4)};
+        int[KeyItem][] objects = {object1};
+        if (!objects.contains(object2)) return 4;
+        string[date] date1 = {('01/01/2024', "x")};
+        string[date] date2 = {('01/01/2024', "x")};
+        string[date][] dates = {date1};
+        if (!dates.contains(date2)) return 5;
+        geometry shape;
+        primary[guid] primary1 = {('00000000-0000-0000-0000-000000000001', shape)};
+        primary[guid] primary2 = {('00000000-0000-0000-0000-000000000001', shape)};
+        primary[guid][] primaries = {primary1};
+        if (primaries.contains(primary2) || !primaries.contains(primary1)) return 6;
+        return 117;
+    }
+}

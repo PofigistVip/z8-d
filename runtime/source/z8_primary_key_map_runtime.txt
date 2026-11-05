@@ -21,6 +21,10 @@ class Z8PrimaryKeyMap(V) {
         else static if (is(V == Z8Primary)) return z8_primary_collection_equals(left, right);
         else return left is right || (left !is null && right !is null && left == right);
     }
+    override bool opEquals(Object other) {
+        auto right = cast(Z8PrimaryKeyMap!V)other;
+        return right !is null && z8_map_content_equals(this, right);
+    }
     long z8_size() { return cast(long)count; }
     bool z8_isEmpty() { return count == 0; }
     void z8_clear() { buckets.clear(); count = 0; }

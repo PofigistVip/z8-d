@@ -2,6 +2,10 @@ class Z8PrimaryMap {
     private Z8Primary[wstring] entries;
     private bool hasNullKey;
     private Z8Primary nullKeyValue;
+    override bool opEquals(Object other) {
+        auto right = cast(Z8PrimaryMap)other;
+        return right !is null && z8_map_content_equals(this, right);
+    }
     long z8_size() { return cast(long)entries.length + (hasNullKey ? 1 : 0); }
     bool z8_isEmpty() { return entries.length == 0 && !hasNullKey; }
     void z8_clear() { entries.clear(); hasNullKey = false; nullKeyValue = null; }

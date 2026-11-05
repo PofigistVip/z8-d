@@ -26,6 +26,10 @@ class Z8ScalarKeyMap(K, V) {
         else return left is right || (left !is null && left == right);
     }
 
+    override bool opEquals(Object other) {
+        auto right = cast(Z8ScalarKeyMap!(K, V))other;
+        return right !is null && z8_map_content_equals(this, right);
+    }
     long z8_size() { return cast(long)entries.length + (hasNullKey ? 1 : 0); }
     bool z8_isEmpty() { return entries.length == 0 && !hasNullKey; }
     void z8_clear() { entries.clear(); hasNullKey = false; nullKeyValue = Element.init; }

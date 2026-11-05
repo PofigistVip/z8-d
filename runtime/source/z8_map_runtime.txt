@@ -1,9 +1,32 @@
+// Map.equals in the original runtime compares entries, not map identity.
+private bool z8_map_content_equals(M)(M left, M right) {
+    if (left is right) return true;
+    if (left.z8_size() != right.z8_size()) return false;
+    auto keys = left.z8_keys();
+    auto values = left.z8_values();
+    for (long i; i < keys.z8_size(); ++i) {
+        auto key = keys.z8_get(i);
+        if (!right.z8_containsKey(key)) return false;
+        auto a = values.z8_get(i), b = right.z8_get(key);
+        static if (is(typeof(a) == wstring)) {
+            if (!z8_string_equals(a, b)) return false;
+        } else static if (is(typeof(a) == class)) {
+            // AbstractMap.equals calls the stored value's equals directly.
+            if (a is null ? b !is null : (b is null || !a.opEquals(b))) return false;
+        } else if (a != b) return false;
+    }
+    return true;
+}
 class Z8StringMap {
     private wstring[wstring] entries;
     // Retain insertion order so serializers can reproduce Java HashMap bucket ties.
     private wstring[] insertionKeys;
     private bool hasNullKey;
     private wstring nullKeyValue;
+    override bool opEquals(Object other) {
+        auto right = cast(Z8StringMap)other;
+        return right !is null && z8_map_content_equals(this, right);
+    }
     long z8_size() { return cast(long)entries.length + (hasNullKey ? 1 : 0); }
     bool z8_isEmpty() { return entries.length == 0 && !hasNullKey; }
     void z8_clear() { entries.clear(); insertionKeys = null; hasNullKey = false; nullKeyValue = null; }
