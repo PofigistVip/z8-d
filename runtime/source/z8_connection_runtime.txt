@@ -9,6 +9,11 @@ interface IZ8DatabaseConnection {
     void flush();
     IZ8QueryExecutor queryExecutor(Z8Object query);
 }
+// Optional database capability used by Sequencer; transaction behavior belongs
+// to the backend rather than the generated BL application.
+interface IZ8SequenceConnection {
+    long nextSequence(wstring key, long increment, long defaultValue);
+}
 private class Z8ConnectionState {
     IZ8DatabaseConnection backend;
     this(IZ8DatabaseConnection backend) { this.backend = backend; }

@@ -98,6 +98,7 @@ import org.zenframework.z8.base.table.value.IntField;
 import org.zenframework.z8.base.table.system.Roles;
 import org.zenframework.z8.base.table.system.Users;
 import org.zenframework.z8.base.table.system.Sequences;
+import org.zenframework.z8.base.table.Sequencer;
 public class Probe {
     public static Sample make() { Sample value; return value; }
     public static GeoSample geo() { GeoSample value; return value; }
@@ -118,6 +119,11 @@ public class Probe {
     public static guid administratorRole() { return Roles.Administrator; }
     public static guid userRole() { return Roles.User; }
     public static guid guestRole() { return Roles.Guest; }
+    public static int nextSequence(string key, int increment, int initial) { return Sequencer.next(key, increment, initial); }
+    public static int nextNamed(string key) { return Sequencer.next(key); }
+    public static int nextIncrement(string key, int increment) { return Sequencer.next(key, increment); }
+    public static int nextField(Sample value) { return value.title.getSequencer().next(); }
+    public static int nextFieldAdvanced(Sample value, int increment, int initial) { return value.title.getSequencer().next(increment, initial); }
     public static int count(Sample value) { return value.count(); }
     public static void create(Sample value, guid id) { value.create(id); }
 }
@@ -137,6 +143,18 @@ import std.algorithm.searching : canFind;
 void main(string[] args) {
     alias P = Z8p_50726F6265;
     auto db = new Z8PostgresConnection(args[1]);
+    if (args.length > 2) {
+        import std.stdio : writeln;
+        auto backend = new Z8PostgresDatabase(db, "z8_test"w); z8_connection_set_current(backend);
+        auto transactional = args[2] == "worker_tx";
+        foreach (i; 0 .. (transactional ? 20 : 30)) {
+            if (transactional) db.beginTransaction();
+            auto value = P.m_nextSequence(transactional ? "parallel_tx"w : "parallel"w, z8_optional_wrap(1L), z8_optional_wrap(1L));
+            if (transactional) db.commit();
+            writeln(z8_optional_require(value));
+        }
+        db.close(); return;
+    }
     db.execute("CREATE TEMP TABLE init_temp (id integer)");
     auto table = P.m_make();
     auto ddl = z8_postgres_create_table_sql("pg_temp"w, table);
@@ -310,6 +328,32 @@ void main(string[] args) {
         auto length = z8_native_field!(Z8Optional!long)("org.zenframework.z8.server.base.table.value.StringField.f_length"w, field);
         assert(z8_optional_require(length) == 256);
     }
+    z8_postgres_create_tables(db, "z8_test"w, [sequences]);
+    auto sequenceBackend = new Z8PostgresDatabase(db, "z8_test"w);
+    auto savedSequenceBackend = z8_connection_set_current(sequenceBackend);
+    assert(z8_optional_require(P.m_nextSequence("Тест 😀"w, z8_optional_wrap(2L), z8_optional_wrap(5L))) == 7);
+    assert(z8_optional_require(P.m_nextSequence("Тест 😀"w, z8_optional_wrap(3L), z8_optional_wrap(100L))) == 10);
+    assert(z8_optional_require(P.m_nextNamed("named"w)) == 2);
+    assert(z8_optional_require(P.m_nextIncrement("named"w, z8_optional_wrap(4L))) == 6);
+    assert(z8_optional_require(P.m_nextField(P.m_make())) == 2);
+    assert(z8_optional_require(P.m_nextField(P.m_make())) == 3);
+    assert(z8_optional_require(P.m_nextFieldAdvanced(P.m_make(), z8_optional_wrap(4L), z8_optional_wrap(99L))) == 7);
+    db.beginTransaction();
+    assert(z8_optional_require(P.m_nextSequence("rollback"w, z8_optional_wrap(2L), z8_optional_wrap(10L))) == 12);
+    assert(z8_optional_require(P.m_nextSequence("rollback"w, z8_optional_wrap(2L), z8_optional_wrap(10L))) == 14);
+    db.rollback();
+    assert(z8_optional_require(P.m_nextSequence("rollback"w, z8_optional_wrap(2L), z8_optional_wrap(99L))) == 12);
+    db.beginTransaction();
+    assert(z8_optional_require(P.m_nextSequence("rollback"w, z8_optional_wrap(2L), z8_optional_wrap(1L))) == 14);
+    db.rollback();
+    assert(z8_optional_require(P.m_nextSequence("rollback"w, z8_optional_wrap(2L), z8_optional_wrap(1L))) == 14);
+    db.execute(`INSERT INTO "z8_test"."SystemSequences" ("RecordId", "Key", "Value") VALUES ('00000000-0000-0000-0000-000000000099', 'legacy', 40)`);
+    assert(z8_optional_require(P.m_nextSequence("legacy"w, z8_optional_wrap(2L), z8_optional_wrap(1L))) == 42);
+    db.execute(`INSERT INTO "z8_test"."SystemSequences" ("RecordId", "Key", "Value") VALUES ('00000000-0000-0000-0000-000000000098', 'legacy', 50)`);
+    bool ambiguousSequence;
+    try { P.m_nextNamed("legacy"w); } catch (Z8PostgresException) { ambiguousSequence = true; }
+    assert(ambiguousSequence);
+    z8_connection_set_current(savedSequenceBackend);
     auto userTable = P.m_users();
     auto userDDL = z8_postgres_create_table_sql("z8_test"w, userTable);
     assert(userDDL.canFind(`"Name" character varying`) && userDDL.canFind(`"Password" character varying DEFAULT 'd41d8cd98f00b204e9800998ecf8427e'`));
@@ -403,4 +447,24 @@ void main(string[] args) {
                                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
         if result.returncode:
             raise SystemExit(f"Schema fixture failed ({result.returncode}):\n{result.stdout}\n{result.stderr}")
+        workers = [subprocess.Popen([str(exe), connection, "worker"], env=environment, cwd=temp, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, text=True,
+                                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0) for _ in range(4)]
+        values = []
+        for worker in workers:
+            stdout, stderr = worker.communicate(timeout=30)
+            if worker.returncode:
+                raise SystemExit(f"Sequence worker failed ({worker.returncode}):\n{stdout}\n{stderr}")
+            values.extend(map(int, stdout.splitlines()))
+        assert sorted(values) == list(range(2, 122)), values
+        workers = [subprocess.Popen([str(exe), connection, "worker_tx"], env=environment, cwd=temp, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, text=True,
+                                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0) for _ in range(4)]
+        values = []
+        for worker in workers:
+            stdout, stderr = worker.communicate(timeout=30)
+            if worker.returncode:
+                raise SystemExit(f"Transactional sequence worker failed ({worker.returncode}):\n{stdout}\n{stderr}")
+            values.extend(map(int, stdout.splitlines()))
+        assert sorted(values) == list(range(2, 82)), values
 print("BL table schema generation, defaults and primary key verified in PostgreSQL")

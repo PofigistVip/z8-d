@@ -59,6 +59,7 @@ private void z8PgValidate(string value) {
 class Z8PostgresConnection {
     private PGconn* connection;
     private uint transactionDepth;
+    private string connectionInfo;
     this(string connectionInfo) {
         z8PgValidate(connectionInfo);
         connection = PQconnectdb(connectionInfo.toStringz);
@@ -68,6 +69,7 @@ class Z8PostgresConnection {
             PQfinish(connection); connection = null;
             throw new Z8PostgresException(message);
         }
+        this.connectionInfo = connectionInfo.idup;
     }
     ~this() { if (connection !is null) PQfinish(connection); }
 
@@ -75,9 +77,20 @@ class Z8PostgresConnection {
         synchronized (this) {
             if (connection !is null) { PQfinish(connection); connection = null; }
             transactionDepth = 0;
+            connectionInfo = null;
         }
     }
     bool isClosed() { synchronized (this) return connection is null; }
+    // Used when Z8 must persist sequence initialization independently of an
+    // active transaction. Session-local settings are not copied.
+    Z8PostgresConnection openSibling() {
+        string info;
+        synchronized (this) {
+            if (connection is null) throw new Z8PostgresException("PostgreSQL connection is closed");
+            info = connectionInfo;
+        }
+        return new Z8PostgresConnection(info);
+    }
     bool inTransaction() { synchronized (this) return transactionDepth != 0; }
     void beginTransaction() {
         synchronized (this) {

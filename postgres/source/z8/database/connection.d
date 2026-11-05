@@ -7,7 +7,7 @@ import z8.database.query;
 import z8.database.plan : quoteIdentifier;
 
 // Adapter for the request-local BL Connection and Query.setConnection APIs.
-class Z8PostgresDatabase : IZ8DatabaseConnection {
+class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection {
     private Z8PostgresConnection connection;
     private wstring schema;
     this(Z8PostgresConnection connection, wstring schema) {
@@ -52,6 +52,37 @@ class Z8PostgresDatabase : IZ8DatabaseConnection {
     }
     // libpq executes immediately, so there is no pending JDBC batch to flush.
     void flush() { if (connection.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed"); }
+    long nextSequence(wstring key, long increment, long defaultValue) {
+        key = z8_string_required(key);
+        synchronized (connection) {
+            auto table = quoteIdentifier(schema) ~ `."SystemSequences"`;
+            auto keyParameter = Z8PostgresParameter.value(key.to!string);
+            auto rows = connection.execute("SELECT \"RecordId\"::text FROM " ~ table ~
+                ` WHERE "Key" = $1::text AND "RecordId" <> '00000000-0000-0000-0000-000000000000'::uuid LIMIT 2`, [keyParameter]);
+            if (rows.rows.length > 1) throw new Z8PostgresException("multiple records for a sequence key");
+            auto id = rows.rows.length ? rows.rows[0][0].text : z8_guid_to_string(z8_guid_create_name(key)).to!string;
+            auto idParameter = Z8PostgresParameter.value(id);
+            auto initial = Z8PostgresParameter.value(defaultValue.to!string);
+            auto step = Z8PostgresParameter.value(increment.to!string);
+            Z8PostgresResult result;
+            if (!rows.rows.length && connection.inTransaction()) {
+                auto sibling = connection.openSibling();
+                scope(exit) sibling.close();
+                sibling.execute("INSERT INTO " ~ table ~ ` ("RecordId", "Key", "Value") VALUES ($1::uuid, $2::text, $3::bigint) ON CONFLICT ("RecordId") DO NOTHING`,
+                    [idParameter, keyParameter, initial]);
+            }
+            if (!rows.rows.length && !connection.inTransaction()) {
+                result = connection.execute("INSERT INTO " ~ table ~ ` AS seq ("RecordId", "Key", "Value") VALUES ($1::uuid, $2::text, $3::bigint + $4::bigint)
+                    ON CONFLICT ("RecordId") DO UPDATE SET "Value" = seq."Value" + $4::bigint WHERE seq."Key" = $2::text RETURNING "Value"`,
+                    [idParameter, keyParameter, initial, step]);
+            } else {
+                result = connection.execute("UPDATE " ~ table ~ ` SET "Value" = "Value" + $3::bigint WHERE "RecordId" = $1::uuid AND "Key" = $2::text RETURNING "Value"`,
+                    [idParameter, keyParameter, step]);
+            }
+            if (result.rows.length != 1 || result.rows[0][0].isNull) throw new Z8PostgresException("sequence record is missing or has a conflicting key");
+            return result.rows[0][0].text.to!long;
+        }
+    }
     IZ8QueryExecutor queryExecutor(Z8Object query) {
         auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, query);
         return new Z8PostgresQueryExecutor(connection, schema, name);

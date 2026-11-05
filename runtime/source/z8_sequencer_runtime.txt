@@ -1,0 +1,55 @@
+// Sequencer.java delegates allocation to the current database connection.
+private enum z8_sequencer_name = "org.zenframework.z8.server.base.table.value.Sequencer"w;
+private class Z8SequencerState { wstring key; long increment = 1, defaultValue = 1; }
+private Z8SequencerState z8_sequencer_state(Z8Object self) {
+    auto state = cast(Z8SequencerState)z8_nonnull(self).z8_get_native_state(z8_sequencer_name);
+    if (state is null) { state = new Z8SequencerState(); self.z8_set_native_state(z8_sequencer_name, state); }
+    return state;
+}
+private Z8Object z8_field_get_sequencer(Z8Object self) {
+    self = z8_nonnull(self);
+    auto field = z8_field_state(self);
+    if (field.sequencer is null) {
+        auto owner = z8_nonnull(z8_object_container(self));
+        auto ownerName = owner.z8_get_attribute("name"w);
+        if (ownerName is null) ownerName = owner.z8_class_id();
+        auto fieldName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, self);
+        auto sequencer = z8_native_new(z8_sequencer_name);
+        sequencer.z8_set_container(self);
+        z8_sequencer_state(sequencer).key = ownerName ~ "."w ~ fieldName;
+        field.sequencer = sequencer;
+    }
+    return field.sequencer;
+}
+private Z8Optional!long z8_sequence_next(wstring key, long increment, long defaultValue) {
+    auto backend = cast(IZ8SequenceConnection)z8_connection_current_backend();
+    if (backend is null) throw new Exception("current database connection does not support sequences");
+    return z8_optional_wrap(backend.nextSequence(z8_string_required(key), increment, defaultValue));
+}
+private Z8Optional!long z8_sequencer_next(Z8Object self) {
+    auto state = z8_sequencer_state(self);
+    return z8_sequence_next(state.key, state.increment, state.defaultValue);
+}
+private Z8Optional!long z8_sequencer_next_increment(Z8Object self, Z8Optional!long increment) {
+    z8_sequencer_state(self).increment = z8_optional_require(increment); return z8_sequencer_next(self);
+}
+private Z8Optional!long z8_sequencer_next_default(Z8Object self, Z8Optional!long increment, Z8Optional!long initial) {
+    auto state = z8_sequencer_state(self); state.increment = z8_optional_require(increment); state.defaultValue = z8_optional_require(initial);
+    return z8_sequencer_next(self);
+}
+private Z8Optional!long z8_sequencer_next_key(wstring key) { return z8_sequence_next(key, 1, 1); }
+private Z8Optional!long z8_sequencer_next_key_increment(wstring key, Z8Optional!long increment) {
+    return z8_sequence_next(key, z8_optional_require(increment), 1);
+}
+private Z8Optional!long z8_sequencer_next_key_default(wstring key, Z8Optional!long increment, Z8Optional!long initial) {
+    return z8_sequence_next(key, z8_optional_require(increment), z8_optional_require(initial));
+}
+shared static this() {
+    z8_native_bind("org.zenframework.z8.server.base.table.value.Field.m_getSequencer"w, &z8_field_get_sequencer);
+    z8_native_bind(z8_sequencer_name ~ ".m_next"w, &z8_sequencer_next);
+    z8_native_bind(z8_sequencer_name ~ ".m_next"w, &z8_sequencer_next_increment);
+    z8_native_bind(z8_sequencer_name ~ ".m_next"w, &z8_sequencer_next_default);
+    z8_native_bind(z8_sequencer_name ~ ".m_next"w, &z8_sequencer_next_key);
+    z8_native_bind(z8_sequencer_name ~ ".m_next"w, &z8_sequencer_next_key_increment);
+    z8_native_bind(z8_sequencer_name ~ ".m_next"w, &z8_sequencer_next_key_default);
+}
