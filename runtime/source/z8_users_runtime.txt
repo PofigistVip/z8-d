@@ -1,0 +1,61 @@
+// Native Users.java field metadata. Authentication and notification methods
+// are implemented separately from the table's physical fields.
+private enum z8_users_name = "org.zenframework.z8.server.base.table.system.Users"w;
+private class Z8UsersState { Z8Object[17] fields; }
+private __gshared Z8Guid z8_user_system, z8_user_administrator;
+private void z8_users_new(Z8Object self) {
+    enum base = "org.zenframework.z8.server.base.table.value."w;
+    enum kinds = ["StringField"w, "TextField"w, "StringField"w, "StringField"w, "StringField"w,
+        "StringField"w, "StringField"w, "StringField"w, "StringField"w, "StringField"w, "BoolField"w,
+        "DatetimeField"w, "BoolField"w, "TextField"w, "StringField"w, "DatetimeField"w, "IntegerField"w];
+    enum indexes = ["name"w, "description"w, "password"w, "firstName"w, "middleName"w, "lastName"w,
+        "phone"w, "email"w, "company"w, "position"w, "banned"w, "bannedUntil"w, "changePassword"w,
+        "settings"w, "verification"w, "verificationModAt"w, "failedAuthCount"w];
+    enum names = ["Name"w, "Description"w, "Password"w, "First Name"w, "Middle Name"w, "Last Name"w,
+        "Phone"w, "Email"w, "Company"w, "Position"w, "Banned"w, "Banned Until"w, "Change Password"w,
+        "Settings"w, "Verification"w, "Verification Modified At"w, "Failed Auth Count"w];
+    auto state = new Z8UsersState();
+    foreach (i; 0 .. state.fields.length)
+        state.fields[i] = z8_table_system_field(self, base ~ kinds[i], indexes[i], names[i]);
+    state.fields[2].z8_set_attribute("exportable"w, "false"w);
+    state.fields[2].z8_set_attribute("system"w, "true"w);
+    self.z8_set_native_state(z8_users_name, state);
+}
+private Z8UsersState z8_users_state(Z8Object self) {
+    auto state = cast(Z8UsersState)z8_nonnull(self, -1).z8_get_native_state(z8_users_name);
+    if (state is null) throw new Exception("Users fields are not initialized");
+    return state;
+}
+private Z8Object* z8_users_field_address(size_t index)(Z8Object self) { return &z8_users_state(self).fields[index]; }
+void z8_users_add_hidden_members(T)(Z8Object self, Z8ObjectArray!T members) if (is(T : Z8Object)) {
+    auto state = z8_users_state(self);
+    foreach (i; [14, 15]) {
+        auto field = cast(T)state.fields[i];
+        if (field is null) throw new Exception("invalid Users field type");
+        z8_nonnull(members).z8_add(field);
+    }
+}
+void z8_users_configure(Z8Object self) {
+    auto state = z8_users_state(self);
+    foreach (field; state.fields) z8_nonnull(field);
+    auto login = z8_field_state(state.fields[0]);
+    login.length = z8_optional_wrap(128L); login.unique = login.caseInsensitive = z8_optional_wrap(true);
+    auto password = z8_field_state(state.fields[2]);
+    password.length = z8_optional_wrap(32L); password.value = z8_primary_box("d41d8cd98f00b204e9800998ecf8427e"w);
+    foreach (i; [3, 4, 5, 8, 9]) z8_field_state(state.fields[i]).length = z8_optional_wrap(100L);
+    foreach (i; [6, 7]) z8_field_state(state.fields[i]).length = z8_optional_wrap(128L);
+    z8_field_state(state.fields[14]).length = z8_optional_wrap(32L);
+}
+private Z8Guid* z8_user_system_address() { return &z8_user_system; }
+private Z8Guid* z8_user_administrator_address() { return &z8_user_administrator; }
+shared static this() {
+    z8_user_system = z8_guid_literal("00000000-0000-0000-0000-000000000001");
+    z8_user_administrator = z8_guid_literal("00000000-0000-0000-0000-000000000002");
+    z8_native_bind(z8_users_name ~ ".m_new"w, &z8_users_new);
+    static foreach (i, name; ["name"w, "description"w, "password"w, "firstName"w, "middleName"w, "lastName"w,
+        "phone"w, "email"w, "company"w, "position"w, "banned"w, "bannedUntil"w, "changePassword"w,
+        "settings"w, "verification"w, "verificationModAt"w, "failedAuthCount"w])
+        z8_native_bind_field(z8_users_name ~ ".f_"w ~ name, &z8_users_field_address!i);
+    z8_native_bind_field(z8_users_name ~ ".f_System"w, &z8_user_system_address);
+    z8_native_bind_field(z8_users_name ~ ".f_Administrator"w, &z8_user_administrator_address);
+}

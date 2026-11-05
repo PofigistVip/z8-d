@@ -96,6 +96,7 @@ import org.zenframework.z8.base.table.value.IntField;
 ''', encoding="utf-8")
     (source / "Probe.bl").write_text('''
 import org.zenframework.z8.base.table.system.Roles;
+import org.zenframework.z8.base.table.system.Users;
 public class Probe {
     public static Sample make() { Sample value; return value; }
     public static GeoSample geo() { GeoSample value; return value; }
@@ -104,6 +105,9 @@ public class Probe {
     public static ReferenceTarget target() { ReferenceTarget value; return value; }
     public static StaticSample statics() { StaticSample value; return value; }
     public static Roles roles() { Roles value; return value; }
+    public static Users users() { Users value; return value; }
+    public static guid systemUser() { return Users.System; }
+    public static guid administratorUser() { return Users.Administrator; }
     public static guid administratorRole() { return Roles.Administrator; }
     public static guid userRole() { return Roles.User; }
     public static guid guestRole() { return Roles.Guest; }
@@ -285,6 +289,25 @@ void main(string[] args) {
     assert(z8_guid_to_string(P.m_guestRole()) == "BE41CEB5-02DF-44EE-885F-B82DDEDCAA08"w);
     z8_initialize_static_records(roleTable);
     assert(roleTable.z8_static_records().length == 3);
+    auto userTable = P.m_users();
+    auto userDDL = z8_postgres_create_table_sql("z8_test"w, userTable);
+    assert(userDDL.canFind(`"Name" character varying`) && userDDL.canFind(`"Password" character varying DEFAULT 'd41d8cd98f00b204e9800998ecf8427e'`));
+    assert(userDDL.canFind(`"Verification" character varying`) && userDDL.canFind(`"Verification Modified At" bigint`));
+    foreach (field; z8_query_declared_fields(userTable, true)) {
+        if (field.z8_index() == "name"w) {
+            auto length = z8_native_field!(Z8Optional!long)("org.zenframework.z8.server.base.table.value.StringField.f_length"w, field);
+            assert(z8_optional_require(length) == 128);
+        }
+        if (field.z8_index() == "password"w)
+            assert(field.z8_get_attribute("system"w) == "true"w && field.z8_get_attribute("exportable"w) == "false"w);
+    }
+    auto userIndexes = z8_postgres_create_indexes_sql("z8_test"w, userTable);
+    bool uniqueLogin;
+    foreach (index; userIndexes) if (index.canFind(`LOWER("Name")`)) uniqueLogin = index.canFind("CREATE UNIQUE INDEX");
+    assert(uniqueLogin);
+    assert(z8_guid_to_string(P.m_systemUser()) == "00000000-0000-0000-0000-000000000001"w);
+    assert(z8_guid_to_string(P.m_administratorUser()) == "00000000-0000-0000-0000-000000000002"w);
+    z8_initialize_static_records(userTable); assert(userTable.z8_static_records().length == 2);
     db.execute(`ALTER TABLE "z8_test"."StaticSample" DROP CONSTRAINT "StaticSample_pkey", ADD PRIMARY KEY ("Label")`);
     differences = z8_postgres_compare_table(expectedStatic, z8_postgres_describe_table(db, "z8_test"w, "StaticSample"w));
     bool changedKey;

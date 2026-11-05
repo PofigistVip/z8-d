@@ -1123,7 +1123,17 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 result ~= "this.f_objects().z8_add(this.f_" ~ name ~ "());\n";
             result ~= "}\n";
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Users"w) {
+            result ~= "override void z8_init_members() {\nsuper.z8_init_members();\n";
+            foreach (name; ["name", "description", "password", "firstName", "middleName", "lastName", "phone", "email", "company", "position", "banned", "bannedUntil", "changePassword", "settings"])
+                result ~= "this.f_objects().z8_add(this.f_" ~ name ~ "());\n";
+            result ~= "z8_users_add_hidden_members(this, this.f_objects());\nthis.f_objects().z8_add(this.f_failedAuthCount());\n}\n";
+        }
         result ~= "override void z8_init_values() {\nsuper.z8_init_values();\n";
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Roles"w)
+            result ~= "z8_roles_configure(this);\n";
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Users"w)
+            result ~= "z8_users_configure(this);\n";
         // TypeBody.rearrangeMembers puts declarations before standalone member initializers.
         foreach (field; program.fields) {
             if (field.isStatic || program.isNative) continue;

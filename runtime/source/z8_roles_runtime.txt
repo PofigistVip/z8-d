@@ -18,6 +18,12 @@ private Z8Object* z8_roles_field_address(size_t index)(Z8Object self) {
     if (state is null) throw new Exception("Roles fields are not initialized");
     return &state.fields[index];
 }
+void z8_roles_configure(Z8Object self) {
+    auto state = cast(Z8RolesState)z8_nonnull(self, -1).z8_get_native_state(z8_roles_name);
+    if (state is null) throw new Exception("Roles fields are not initialized");
+    z8_nonnull(state.fields[0]);
+    z8_field_state(state.fields[0]).length = z8_optional_wrap(50L);
+}
 private Z8Guid* z8_role_administrator_address() { return &z8_role_administrator; }
 private Z8Guid* z8_role_user_address() { return &z8_role_user; }
 private Z8Guid* z8_role_guest_address() { return &z8_role_guest; }
