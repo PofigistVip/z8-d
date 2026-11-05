@@ -222,8 +222,12 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             !"новое 😀".equals(metadata.getAttribute("sharedTag")) ||
             !"".equals(metadata.getAttribute("flag")) || metadata.getAttribute("absent") != null)
             throw new AssertionError("type attribute metadata differs");
-        if (!"от родителя".equals(metadata.get().annotated.getAttribute("fieldTag")) ||
-            !"специализация".equals(metadata.get().specialized.getAttribute("fieldTag")))
+        if (metadata.get().annotated != metadata.get().replacement ||
+            !"от родителя".equals(metadata.get().annotated.getAttribute("fieldTag")) ||
+            !"специализация".equals(metadata.get().specialized.getAttribute("fieldTag")) ||
+            !"существующее".equals(metadata.get().annotated.getAttribute("initTag")) ||
+            !"вложенное".equals(metadata.get().annotated.get().annotated.getAttribute("chainTag")) ||
+            !"специализация поля".equals(metadata.get().ownSpecial.getAttribute("specialTag")))
             throw new AssertionError("field attribute metadata differs");
         System.out.println("RESULT:" + demo.Main.z8_run().get());
         System.out.println("RESULT:" + demo.cases.Arithmetic.z8_run().get());
@@ -394,8 +398,12 @@ void main() {
     assert(metadata.z8_get_attribute("flag"w) == ""w);
     assert(metadata.z8_get_attribute("absent"w) is null);
     z8_nonnull(metadata);
+    assert(metadata.f_annotated is metadata.f_replacement);
     assert(metadata.f_annotated.z8_get_attribute("fieldTag"w) == "от родителя"w);
     assert(metadata.f_specialized.z8_get_attribute("fieldTag"w) == "специализация"w);
+    assert(metadata.f_annotated.z8_get_attribute("initTag"w) == "существующее"w);
+    assert(z8_nonnull(metadata.f_annotated).f_annotated.z8_get_attribute("chainTag"w) == "вложенное"w);
+    assert(metadata.f_ownSpecial.z8_get_attribute("specialTag"w) == "специализация поля"w);
     writeln(z8_optional_require(Z8p_64656D6F2E4D61696E.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E41726974686D65746963.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E54657874.m_run()));

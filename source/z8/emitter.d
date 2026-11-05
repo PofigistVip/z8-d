@@ -670,8 +670,12 @@ package string emitPrograms(Program[] programs) {
                 result ~= "this.f_" ~ field.name.text ~ ".z8_set_attribute(" ~ emitWStringLiteral(attribute.name.text.to!wstring) ~ ", " ~
                     (attribute.hasValue ? emitStringLiteral(attribute.value.text) : `z8_string_new(""w)`) ~ ");\n";
         }
-        foreach (init; program.memberInitializers)
+        foreach (init; program.memberInitializers) {
             if (init.expression !is null && init.type != ValueType.selfType) result ~= emitSimple(init) ~ ";\n";
+            foreach (attribute; init.attributes)
+                result ~= emitExpr(init.attributeTarget) ~ ".z8_set_attribute(" ~ emitWStringLiteral(attribute.name.text.to!wstring) ~ ", " ~
+                    (attribute.hasValue ? emitStringLiteral(attribute.value.text) : `z8_string_new(""w)`) ~ ");\n";
+        }
         result ~= "}\n";
         foreach (method; program.methods) if (method.name.text == "constructor") {
             result ~= "override void z8_call_constructor() { this.m_constructor(); }\n";

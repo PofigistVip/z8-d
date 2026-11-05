@@ -60,7 +60,8 @@ class Statement {
     Token token;
     ValueType type;
     Expression expression;
-    Expression target;
+    Expression target, attributeTarget;
+    TypeAttribute[] attributes;
     Statement[] children;
     Statement initial, step;
     string assignmentOperator;

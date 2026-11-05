@@ -480,6 +480,15 @@ class Checker {
             auto root = init.target;
             while (root.kind == ExprKind.field) root = root.left;
             if (!root.isField || root.targetClass.length) fail("field initialization requires an instance field", init.token);
+            if (init.attributes.length) {
+                if (init.type != ValueType.selfType) fail("attributes require an object reference field", init.token);
+                // Attribute writes occur in constructor2, independently of the
+                // earlier reference assignment and its receiver stages.
+                init.attributeTarget = copyQualifiedTarget(init.target);
+                fieldInitialization = false;
+                typeOf(init.attributeTarget);
+                fieldInitialization = true;
+            }
             setTargetStage(init.target, init.type == ValueType.selfType);
         }
         fieldInitialization = false;

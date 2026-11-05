@@ -234,7 +234,7 @@ class Parser {
             }
             if (result.lexicalOwner !is null && isStatic) error("static members cannot be declared in a nested type");
             if (isMemberSpecializationStart()) {
-                if (hasAccess || isStatic || isVirtual || isAuto || attributes.length) error("modifiers cannot be applied to a field specialization");
+                if (hasAccess || isStatic || isVirtual || isAuto) error("modifiers cannot be applied to a field specialization");
                 Token[] path;
                 path ~= identifier();
                 while (accept(".")) path ~= identifier();
@@ -251,11 +251,12 @@ class Parser {
                     owner.nestedPrograms ~= nested;
                     owner = nested;
                 }
+                owner.attributes = attributes;
                 parseClassBody(owner);
                 expect(";"); continue;
             }
             if (isMemberInitializationStart()) {
-                if (hasAccess || isStatic || isVirtual || isAuto || attributes.length) error("modifiers cannot be applied to a field initialization");
+                if (hasAccess || isStatic || isVirtual || isAuto) error("modifiers cannot be applied to a field initialization");
                 auto name = identifier();
                 auto target = new Expression(ExprKind.variable, name);
                 while (accept(".")) {
@@ -263,7 +264,7 @@ class Parser {
                     member.left = target; target = member;
                 }
                 auto init = new Statement(StmtKind.assignment, name);
-                init.target = target; init.isMemberInitializer = true;
+                init.target = target; init.isMemberInitializer = true; init.attributes = attributes;
                 if (current.text != ";") { init.assignmentOperator = take().text; init.expression = initializer(); }
                 expect(";"); result.memberInitializers ~= init; continue;
             }
