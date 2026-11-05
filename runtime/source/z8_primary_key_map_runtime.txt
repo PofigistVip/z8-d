@@ -74,8 +74,8 @@ class Z8PrimaryKeyMap(V) {
         foreach (bucket; buckets) foreach (entry; bucket) result.z8_add(entry.key);
         return result;
     }
-    Z8Array!V z8_values() {
-        auto result = new Z8Array!V();
+    Z8ValueArray!V z8_values() {
+        auto result = new Z8ValueArray!V();
         foreach (bucket; buckets) foreach (entry; bucket) result.z8_add(entry.value);
         return result;
     }

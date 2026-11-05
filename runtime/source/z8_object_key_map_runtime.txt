@@ -45,13 +45,13 @@ class Z8ObjectKeyMap(K, V) {
         if (found is null) return Element.init;
         auto previous = found.value; entries.remove(id); return previous;
     }
-    Z8Array!K z8_keys() {
-        auto result = new Z8Array!K();
+    Z8ValueArray!K z8_keys() {
+        auto result = new Z8ValueArray!K();
         foreach (entry; entries) result.z8_add(entry.key);
         return result;
     }
-    Z8Array!V z8_values() {
-        auto result = new Z8Array!V();
+    Z8ValueArray!V z8_values() {
+        auto result = new Z8ValueArray!V();
         foreach (entry; entries) result.z8_add(entry.value);
         return result;
     }

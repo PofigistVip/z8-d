@@ -302,6 +302,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         System.out.println("NESTEDMAPS:" + demo.cases.NestedMaps.z8_run().get());
         System.out.println("MULTIKEY:" + demo.cases.MultipleObjectKeys.z8_run().get());
         System.out.println("NATIVEKEY:" + demo.cases.NativeKeyMaps.z8_run().get());
+        System.out.println("COVARRAY:" + demo.cases.CovariantArrays.z8_run().get());
         System.out.println("SQLUSERCONV:" + demo.cases.SqlConversion.z8_run().get());
         System.out.println("EXCEPTIONCONV:" + demo.cases.ExceptionConversion.z8_run().get());
         System.out.println("PRIMARYCONV:" + demo.cases.PrimaryConversion.z8_run().get());
@@ -826,6 +827,7 @@ void main() {
     writeln("NESTEDMAPS:", z8_optional_require(Z8p_64656D6F2E63617365732E4E65737465644D617073.m_run()));
     writeln("MULTIKEY:", z8_optional_require(Z8p_64656D6F2E63617365732E4D756C7469706C654F626A6563744B657973.m_run()));
     writeln("NATIVEKEY:", z8_optional_require(Z8p_64656D6F2E63617365732E4E61746976654B65794D617073.m_run()));
+    writeln("COVARRAY:", z8_optional_require(Z8p_64656D6F2E63617365732E436F76617269616E74417272617973.m_run()));
     writeln("SQLUSERCONV:", z8_optional_require(Z8p_64656D6F2E63617365732E53716C436F6E76657273696F6E.m_run()));
     writeln("EXCEPTIONCONV:", z8_optional_require(Z8p_64656D6F2E63617365732E457863657074696F6E436F6E76657273696F6E.m_run()));
     writeln("PRIMARYCONV:", z8_optional_require(Z8p_64656D6F2E63617365732E5072696D617279436F6E76657273696F6E.m_run()));
@@ -1275,7 +1277,7 @@ void main() {
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_lines = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "STATICEXC:", "EXCEPTIONCONV:", "PRIMARYCONV:", "ENUMCONV:", "EXPRSTMT:", "SQLARRAY:", "SQLMAP:", "OBJECTMAP:", "REFMAP:", "NESTEDMAP:", "PRIMARYKEYMAP:", "REFKEYMAP:", "PRIMARYCOLL:", "OBJECTKEYMAP:", "DEEPARRAY:", "MATRIXMAP:", "MAPEQUALITY:", "NESTEDMAPS:", "MULTIKEY:", "NATIVEKEY:", "SQLUSERCONV:", "SQLUSERCONVSQL:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:", "SQLSPAN:", "SQLSPANARITH:", "SQLSPANBOOL:", "SQLSPANPART:", "SQLSPANFUNC:", "SQLBINARY:", "SQLGEOM:", "SQLGEOMBOOL:", "SQLGEOMEMPTY:", "SQLGEOMFUNC:", "SQLGEOMMETRIC:", "SQLGEOMTEST:", "SQLGEOMTEXT:", "SQLGEOMCOUNT:", "SQLPRIMARY:", "SQLPRIMARYCHECK:", "SQLFTSBOOL:", "SQLFTSRANK:"))]
+        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "STATICEXC:", "EXCEPTIONCONV:", "PRIMARYCONV:", "ENUMCONV:", "EXPRSTMT:", "SQLARRAY:", "SQLMAP:", "OBJECTMAP:", "REFMAP:", "NESTEDMAP:", "PRIMARYKEYMAP:", "REFKEYMAP:", "PRIMARYCOLL:", "OBJECTKEYMAP:", "DEEPARRAY:", "MATRIXMAP:", "MAPEQUALITY:", "NESTEDMAPS:", "MULTIKEY:", "NATIVEKEY:", "COVARRAY:", "SQLUSERCONV:", "SQLUSERCONVSQL:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:", "SQLSPAN:", "SQLSPANARITH:", "SQLSPANBOOL:", "SQLSPANPART:", "SQLSPANFUNC:", "SQLBINARY:", "SQLGEOM:", "SQLGEOMBOOL:", "SQLGEOMEMPTY:", "SQLGEOMFUNC:", "SQLGEOMMETRIC:", "SQLGEOMTEST:", "SQLGEOMTEXT:", "SQLGEOMCOUNT:", "SQLPRIMARY:", "SQLPRIMARYCHECK:", "SQLFTSBOOL:", "SQLFTSRANK:"))]
         original_static_exception = [line for line in output.splitlines() if line.startswith("STATICEXC:")]
         d_static_exception = [line for line in d_lines if line.startswith("STATICEXC:")]
         if original_static_exception != ["STATICEXC:253"] or d_static_exception != original_static_exception:
@@ -1356,6 +1358,10 @@ void main() {
         d_native_keys = [line for line in d_lines if line.startswith("NATIVEKEY:")]
         if original_native_keys != ["NATIVEKEY:129"] or d_native_keys != original_native_keys:
             raise SystemExit(f"Native map keys differ: original={original_native_keys!r}, D={d_native_keys!r}")
+        original_covariant_array = [line for line in output.splitlines() if line.startswith("COVARRAY:")]
+        d_covariant_array = [line for line in d_lines if line.startswith("COVARRAY:")]
+        if original_covariant_array != ["COVARRAY:131"] or d_covariant_array != original_covariant_array:
+            raise SystemExit(f"Covariant arrays differ: original={original_covariant_array!r}, D={d_covariant_array!r}")
         original_sql_conversion = [line for line in output.splitlines() if line.startswith("SQLUSERCONV:")]
         d_sql_conversion = [line for line in d_lines if line.startswith("SQLUSERCONV:")]
         if original_sql_conversion != ["SQLUSERCONV:269"] or d_sql_conversion != original_sql_conversion:

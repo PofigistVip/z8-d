@@ -83,8 +83,8 @@ class Z8ScalarKeyMap(K, V) {
         if (hasNullKey) result.z8_add(Z8Optional!K.init);
         return result;
     }
-    Z8Array!V z8_values() {
-        auto result = new Z8Array!V();
+    Z8ValueArray!V z8_values() {
+        auto result = new Z8ValueArray!V();
         foreach (entry; entries) result.z8_add(entry.value);
         if (hasNullKey) result.z8_add(nullKeyValue);
         return result;

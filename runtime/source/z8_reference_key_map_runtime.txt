@@ -23,7 +23,7 @@ class Z8ReferenceKeyMap(K, V) {
         for (long i; i < keys.z8_size(); ++i) result.z8_add(z8_primary_cast!K(keys.z8_get(i)));
         return result;
     }
-    Z8Array!V z8_values() { return entries.z8_values(); }
+    Z8ValueArray!V z8_values() { return entries.z8_values(); }
 }
 Z8ReferenceKeyMap!(K, V) z8_map_union(K, V)(Z8ReferenceKeyMap!(K, V) left, Z8ReferenceKeyMap!(K, V) right) {
     auto result = new Z8ReferenceKeyMap!(K, V)();

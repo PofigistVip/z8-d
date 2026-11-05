@@ -76,8 +76,8 @@ class Z8GuidMap(V) {
         if (hasNullKey) result.z8_add(null);
         return result;
     }
-    Z8Array!V z8_values() {
-        auto result = new Z8Array!V();
+    Z8ValueArray!V z8_values() {
+        auto result = new Z8ValueArray!V();
         foreach (entry; entries) result.z8_add(entry.value);
         if (hasNullKey) result.z8_add(nullKeyValue);
         return result;

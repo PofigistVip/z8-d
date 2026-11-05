@@ -63,8 +63,8 @@ class Z8StringValueMap(V) {
         if (hasNullKey) result.z8_add(null);
         return result;
     }
-    Z8Array!V z8_values() {
-        auto result = new Z8Array!V();
+    Z8ValueArray!V z8_values() {
+        auto result = new Z8ValueArray!V();
         foreach (value; entries) result.z8_add(value);
         if (hasNullKey) result.z8_add(nullKeyValue);
         return result;

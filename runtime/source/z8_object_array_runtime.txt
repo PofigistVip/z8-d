@@ -1,0 +1,62 @@
+// Views of object collections retain shared storage across BL inheritance casts.
+template Z8ValueArray(T) {
+    static if (is(T : Z8Object)) alias Z8ValueArray = Z8ObjectArray!T;
+    else alias Z8ValueArray = Z8Array!T;
+}
+
+private ref T z8_object_array_slot(T)(ref Object item) {
+    if (item !is null && cast(T)item is null) throw new Exception("invalid object array element cast");
+    return *cast(T*)&item;
+}
+class Z8ObjectArray(T) if (is(T : Z8Object)) {
+    private Z8Array!Object data;
+    this() { data = new Z8Array!Object(); }
+    this(T[] values) { this(); foreach (value; values) data.z8_add(value); }
+    private this(Z8Array!Object sharedData) { data = sharedData; }
+    @property size_t z8_version() { return data.z8_version; }
+    override bool opEquals(Object other) {
+        if (this is other) return true;
+        auto right = cast(Z8ObjectArray!T)other;
+        return right !is null && data.opEquals(right.data);
+    }
+    long z8_size() { return data.z8_size(); }
+    bool z8_isEmpty() { return data.z8_isEmpty(); }
+    void z8_clear() { data.z8_clear(); }
+    ref T z8_at(long index) { return z8_object_array_slot!T(data.z8_at(index)); }
+    T z8_get(long index) { return z8_at(index); }
+    T z8_first() { return z8_isEmpty() ? null : z8_get(0); }
+    T z8_last() { return z8_isEmpty() ? null : z8_get(z8_size() - 1); }
+    Z8ObjectArray!T z8_add(T value) { data.z8_add(value); return this; }
+    Z8ObjectArray!T z8_add(long index, T value) { data.z8_add(index, value); return this; }
+    void z8_addAll(Z8ObjectArray!T other) { data.z8_addAll(z8_nonnull(other).data); }
+    void z8_addAll(long index, Z8ObjectArray!T other) { data.z8_addAll(index, z8_nonnull(other).data); }
+    long z8_indexOf(T value) { return data.z8_indexOf(value); }
+    bool z8_contains(T value) { return data.z8_contains(value); }
+    bool z8_isSubsetOf(Z8ObjectArray!T other) { return data.z8_isSubsetOf(z8_nonnull(other).data); }
+    T z8_removeAt(long index) {
+        auto value = data.z8_removeAt(index);
+        auto result = cast(T)value;
+        if (value !is null && result is null) throw new Exception("invalid object array element cast");
+        return result;
+    }
+    bool z8_remove(T value) { return data.z8_remove(value); }
+    Z8ObjectArray!T z8_removeAll(T value) { data.z8_removeAll(value); return this; }
+    Z8ObjectArray!T z8_removeAll(Z8ObjectArray!T values) { data.z8_removeAll(z8_nonnull(values).data); return this; }
+    Z8ObjectArray!T z8_reverse() { data.z8_reverse(); return this; }
+    Z8ObjectArray!T z8_unique() { return new Z8ObjectArray!T(data.z8_unique()); }
+    void z8_set(long index, T value) { data.z8_set(index, value); }
+}
+Z8ObjectArray!To z8_object_array_view(To, From)(Z8ObjectArray!From value)
+if (is(To : Z8Object) && is(From : Z8Object)) {
+    if (value is null) return null;
+    return new Z8ObjectArray!To(value.data);
+}
+ref T z8_array_at(T)(Z8ObjectArray!T value, long index) { return z8_nonnull(value).z8_at(index); }
+Z8ObjectArray!T z8_array_union(T)(Z8ObjectArray!T left, Z8ObjectArray!T right) {
+    auto result = new Z8ObjectArray!T();
+    result.z8_addAll(z8_nonnull(left)); result.z8_addAll(z8_nonnull(right)); return result;
+}
+void z8_array_add_assign(T)(ref Z8ObjectArray!T left, lazy Z8ObjectArray!T previous, lazy Z8ObjectArray!T right) {
+    auto oldValue = previous; auto newValue = right;
+    left = z8_array_union(oldValue, newValue);
+}

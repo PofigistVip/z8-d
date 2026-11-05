@@ -1,0 +1,23 @@
+public class CovariantArrays {
+    private static int count(CovariantBase[] values) { return values.size(); }
+    private static CovariantBase[] widen(CovariantChild[] values) { return values; }
+    public static int run() {
+        CovariantChild first = new CovariantChild;
+        CovariantChild[] children = {first};
+        CovariantBase[] bases = children;
+        if (count(children) != 1 || widen(children).first().value != 11) return 1;
+        bases.add(new CovariantBase);
+        if (children.size() != 2 || bases[1].value != 11) return 2;
+        try { CovariantBase invalid = children[1]; return 3; }
+        catch (exception caught) {}
+        bases.removeAt(1);
+        if (children.size() != 1 || children.first().extra != 7) return 4;
+        CovariantBase[][] nested = {children};
+        nested[0].add(new CovariantBase);
+        if (children.size() != 2) return 5;
+        try { CovariantChild invalid = children.removeAt(1); return 6; }
+        catch (exception caughtRemoval) {}
+        if (children.size() != 1) return 7;
+        return 131;
+    }
+}

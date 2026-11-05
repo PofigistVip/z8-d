@@ -1,0 +1,1 @@
+public class CovariantChild extends CovariantBase { public int extra = 7; }

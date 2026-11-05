@@ -75,8 +75,8 @@ private string dType(ValueType type, Program objectClass = null, Program[] keyOb
         case ValueType.fileType: return "Z8File";
         case ValueType.primaryType: return "Z8Primary";
         case ValueType.selfType: assert(objectClass !is null); return objectClass.emittedName;
-        case ValueType.selfArray: assert(objectClass !is null); return "Z8Array!(" ~ objectClass.emittedName ~ ")";
-        case ValueType.selfMatrix: assert(objectClass !is null); return "Z8Array!(Z8Array!(" ~ objectClass.emittedName ~ "))";
+        case ValueType.selfArray: assert(objectClass !is null); return "Z8ObjectArray!(" ~ objectClass.emittedName ~ ")";
+        case ValueType.selfMatrix: assert(objectClass !is null); return "Z8Array!(Z8ObjectArray!(" ~ objectClass.emittedName ~ "))";
         case ValueType.intArray: return "Z8Array!long";
         case ValueType.intMatrix: return "Z8Array!(Z8Array!long)";
         case ValueType.decimalArray: return "Z8Array!Z8Decimal";
@@ -210,9 +210,11 @@ private string emitExpr(Expression e) {
         bool[] savedPromotions;
         bool[] savedFileConversions, savedExceptionConversions, savedDateConversions, savedSqlBoolConversions, savedSqlIntConversions, savedSqlDecimalConversions, savedSqlIntDecimalConversions, savedSqlStringConversions;
         Method[] savedUserConversions;
+        Program[] savedArrayConversions;
         foreach (i, argument; e.arguments) {
             savedOverrides ~= argument.emittedOverride;
             savedUserConversions ~= argument.userConversion;
+            savedArrayConversions ~= argument.arrayConversionClass;
             savedBinaryConversions ~= argument.convertToBinary;
             savedFileConversions ~= argument.makeFile;
             savedExceptionConversions ~= argument.makeException;
@@ -240,12 +242,14 @@ private string emitExpr(Expression e) {
             argument.convertToSqlString = required && savedSqlStringConversions[$ - 1];
             argument.emittedOverride = name;
             argument.userConversion = null;
+            argument.arrayConversionClass = null;
         }
         value ~= "return " ~ emitExprRaw(e) ~ "; })()";
         if (!e.builtinCall.length) e.left.emittedOverride = savedReceiver;
         foreach (i, argument; e.arguments) {
             argument.emittedOverride = savedOverrides[i];
             argument.userConversion = savedUserConversions[i];
+            argument.arrayConversionClass = savedArrayConversions[i];
             argument.promoteToDecimal = savedPromotions[i]; argument.convertToString = savedStringConversions[i];
             argument.convertToBinary = savedBinaryConversions[i];
             argument.makeFile = savedFileConversions[i]; argument.makeException = savedExceptionConversions[i];
@@ -303,6 +307,7 @@ private string emitExpr(Expression e) {
         auto count = e.parenthesisCount - (e.firstParenthesisIsConditional ? 1 : 0);
         foreach (_; 0 .. count) value = "z8_sql_geometry_group(" ~ value ~ ")";
     }
+    if (e.arrayConversionClass !is null) value = "z8_object_array_view!(" ~ e.arrayConversionClass.emittedName ~ ")(" ~ value ~ ")";
     if (e.userConversion !is null) value = "z8_nonnull(" ~ value ~ ")." ~ methodDName(e.userConversion) ~ "()";
     if (e.nonNullStringResult) value = "z8_string_or_empty(" ~ value ~ ")";
     if (e.optionalRequired) value = "z8_optional_require(" ~ value ~ ")";

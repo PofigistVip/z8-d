@@ -1,0 +1,1 @@
+public class CovariantBase { public int value = 11; }

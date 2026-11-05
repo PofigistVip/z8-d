@@ -248,6 +248,12 @@ class Checker {
             return true;
         }
         if (expected == ValueType.sqlPrimaryType && isSqlType(actual)) return true;
+        if (expected == ValueType.selfArray && actual == ValueType.selfArray &&
+            isAssignable(e.objectClass, expectedClass)) {
+            if (e.objectClass !is expectedClass) e.arrayConversionClass = expectedClass;
+            return true;
+        }
+
         if (actual == ValueType.selfType) {
             if (expected == ValueType.selfType && isAssignable(e.objectClass, expectedClass)) return true;
             auto conversion = findConversion(e.objectClass, expected, expectedClass);
@@ -387,7 +393,11 @@ class Checker {
                             }
                         }
                     }
-                    if (actual != ValueType.selfType && hasObjectClass(actual) && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
+                    if (actual != ValueType.selfType && hasObjectClass(actual)) {
+                        auto parameterClass = resolveClass(candidate.owner, p.objectName, p.name);
+                        if (actual == ValueType.selfArray ? !isAssignable(e.arguments[i].objectClass, parameterClass) : e.arguments[i].objectClass !is parameterClass)
+                            applicable = false;
+                    }
                     if (hasMapKeyClass(actual) && e.arguments[i].keyObjectClasses != resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name)) applicable = false;
                 } else if (actual == ValueType.selfType && findConversion(e.arguments[i].objectClass, p.type,
                             p.type == ValueType.enumType ? resolveClass(candidate.owner, p.objectName, p.name) : null) !is null) weight += 100;
