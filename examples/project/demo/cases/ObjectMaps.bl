@@ -1,11 +1,13 @@
 public class ObjectMaps {
     public int value = 17;
+    private static MapFlavor[string] staticEnums = {("first", MapFlavor.First)};
 
     private static ObjectMaps[string] make(ObjectMaps item) {
         ObjectMaps[string] result = {("first", item)};
         return result;
     }
     public static int run() {
+        if (staticEnums["first"] != MapFlavor.First) return 8;
         ObjectMaps item = new ObjectMaps;
         ObjectMaps[string] names = make(item);
         if (names["first"].value != 17 || names.get("first").value != 17) return 1;

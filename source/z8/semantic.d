@@ -160,8 +160,9 @@ class Checker {
                 fail("attributes require an object reference field", field.name);
             if (field.isAuto && (field.isStatic || field.type != ValueType.selfArray))
                 fail("auto requires an instance array of object references", field.name);
-            if (field.isStatic && [ValueType.selfType, ValueType.selfArray, ValueType.selfMatrix].canFind(field.type))
-                fail("static object fields are not supported", field.name);
+            if (field.isStatic && ([ValueType.selfType, ValueType.selfArray, ValueType.selfMatrix].canFind(field.type) ||
+                (isMap(field.type) && [ValueType.selfType, ValueType.selfArray].canFind(mapValueType(field.type)))))
+                fail("static reference fields are not allowed", field.name);
             if (field.type == ValueType.primaryType && field.initializer is null)
                 fail("primary fields require an initializer", field.name);
         }

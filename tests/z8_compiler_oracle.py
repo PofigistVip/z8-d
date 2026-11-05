@@ -234,6 +234,13 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     if tie_result.returncode == 0 or "ambiguous" not in tie_result.stdout:
         raise SystemExit("Original Z8 did not reject an equally ranked assignment:\n" + tie_result.stdout)
     tie.unlink()
+    reference_map = operator_source / "StaticReferenceMap.bl"
+    for declaration in ("StaticReferenceMap[string] value;", "StaticReferenceMap[][primary] value;"):
+        reference_map.write_text("public class StaticReferenceMap { public static " + declaration + " }", encoding="utf-8")
+        reference_result = subprocess.run(operator_command, cwd=temp, capture_output=True, text=True, encoding="utf-8")
+        if reference_result.returncode == 0 or "reference type member" not in reference_result.stdout:
+            raise SystemExit("Original Z8 did not reject a static reference map:\n" + reference_result.stdout)
+    reference_map.unlink()
     sql_map_probe = operator_source / "SqlMapConversion.bl"
     sql_map_probe.write_text('''import org.zenframework.z8.lang.sql.sql_int;
     public class SqlMapConversion { public static void run() { sql_int[string] values = {("x", 1)}; } }''', encoding="utf-8")
