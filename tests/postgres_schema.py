@@ -220,6 +220,17 @@ void main(string[] args) {
     foreach (column; sourceInfo.columns) if (column.name == "TargetId")
         linkColumn = column.type == "uuid" && !column.nullable && column.hasDefault;
     assert(primaryIndex && linkIndex && linkColumn);
+    auto expectedSource = P.m_references();
+    assert(z8_postgres_compare_table(expectedSource, sourceInfo).length == 0);
+    db.execute(`ALTER TABLE "z8_test"."Source" DROP CONSTRAINT "FK0_Source"`);
+    db.execute(`ALTER TABLE "z8_test"."Source" ADD CONSTRAINT "WrongAction" FOREIGN KEY ("TargetId") REFERENCES "z8_test"."Target;--" ("RecordId") ON DELETE CASCADE`);
+    auto foreignDifferences = z8_postgres_compare_table(expectedSource, z8_postgres_describe_table(db, "z8_test"w, "Source"w));
+    bool missingForeign, extraForeign;
+    foreach (difference; foreignDifferences) {
+        if (difference.kind == Z8SchemaDifferenceKind.missingForeignKey && difference.column == "TargetId") missingForeign = true;
+        if (difference.kind == Z8SchemaDifferenceKind.extraForeignKey && difference.actual.canFind("WrongAction")) extraForeign = true;
+    }
+    assert(missingForeign && extraForeign && foreignDifferences.length == 2);
     auto targetInfo = z8_postgres_describe_table(db, "pg_temp"w, "Target;--"w);
     assert(targetInfo !is null && targetInfo.schema.canFind("pg_temp_") && targetInfo.name == "Target;--");
     assert(z8_postgres_describe_table(db, "z8_test"w, "Source' OR true --"w) is null);
@@ -227,6 +238,9 @@ void main(string[] args) {
     db.execute(`CREATE TABLE "z8_test"."Composite" ("B" integer, "A" integer, PRIMARY KEY ("A", "B"))`);
     auto composite = z8_postgres_describe_table(db, "z8_test"w, "Composite"w);
     assert(composite.primaryKeyColumns == ["A", "B"] && composite.columns[0].name == "B");
+    db.execute(`CREATE TABLE "z8_test"."CompositeRef" ("X" integer, "Y" integer, FOREIGN KEY ("X", "Y") REFERENCES "z8_test"."Composite" ("A", "B"))`);
+    auto compositeRef = z8_postgres_describe_table(db, "z8_test"w, "CompositeRef"w);
+    assert(compositeRef.foreignKeys.length == 1 && compositeRef.foreignKeys[0].columns == ["X", "Y"] && compositeRef.foreignKeys[0].targetColumns == ["A", "B"]);
     db.execute(`CREATE SCHEMA "dot.name"`);
     db.execute(`CREATE TABLE "dot.name"."quoted""table" ("a" integer)`);
     auto quoted = z8_postgres_describe_table(db, "dot.name"w, `quoted"table`w);

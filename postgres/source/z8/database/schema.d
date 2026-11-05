@@ -90,22 +90,26 @@ string[] z8_postgres_create_indexes_sql(wstring schema, Z8Object table) {
     return result;
 }
 
+package Z8Object foreignKeyTarget(Z8Object table, Z8Object field) {
+    if (!z8_native_is_instance("org.zenframework.z8.server.base.table.value.Link"w, field)) return null;
+    auto enabled = field.z8_get_attribute("foreignKey"w);
+    if (enabled !is null && icmp(enabled.to!string, "true") != 0) return null;
+    auto target = z8_link_query(field);
+    auto parent = field.z8_get_attribute("parentKey"w);
+    if (target is null && parent !is null && icmp(parent.to!string, "false") != 0) target = table;
+    if (target is null || !z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, target))
+        throw new Z8PostgresException("foreign key Link target is not a Table");
+    return target;
+}
 // Targets are in the same schema, as with the PostgreSQL query executor.
 string[] z8_postgres_create_foreign_keys_sql(wstring schema, Z8Object table) {
-    enum tableType = "org.zenframework.z8.server.base.table.Table"w;
-    if (!z8_native_is_instance(tableType, z8_nonnull(table)))
+    if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, z8_nonnull(table)))
         throw new Z8PostgresException("PostgreSQL schema requires a Table");
     auto tableName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, table);
     string[] result;
     foreach (field; z8_query_declared_fields(table, true)) {
-        if (!z8_native_is_instance("org.zenframework.z8.server.base.table.value.Link"w, field)) continue;
-        auto enabled = field.z8_get_attribute("foreignKey"w);
-        if (enabled !is null && icmp(enabled.to!string, "true") != 0) continue;
-        auto target = z8_link_query(field);
-        auto parent = field.z8_get_attribute("parentKey"w);
-        if (target is null && parent !is null && icmp(parent.to!string, "false") != 0) target = table;
-        if (target is null || !z8_native_is_instance(tableType, target))
-            throw new Z8PostgresException("foreign key Link target is not a Table");
+        auto target = foreignKeyTarget(table, field);
+        if (target is null) continue;
         auto targetKey = z8_query_primary_key(target);
         if (targetKey is null) throw new Z8PostgresException("foreign key target has no primary key");
         auto targetName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, target);

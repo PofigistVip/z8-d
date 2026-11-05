@@ -5,9 +5,9 @@ import std.conv : to;
 import z8.runtime;
 import z8.database.catalog;
 import z8.database.postgres : Z8PostgresException;
-import z8.database.schema : fieldType;
+import z8.database.schema : fieldType, foreignKeyTarget;
 
-enum Z8SchemaDifferenceKind { missingTable, missingColumn, extraColumn, columnType, nullability, primaryKey }
+enum Z8SchemaDifferenceKind { missingTable, missingColumn, extraColumn, columnType, nullability, primaryKey, missingForeignKey, extraForeignKey }
 struct Z8SchemaDifference {
     Z8SchemaDifferenceKind kind;
     string column, expected, actual;
@@ -20,8 +20,8 @@ private string normalizedType(string value) {
     return cast(string)result;
 }
 
-// Read-only structural comparison. Defaults, indexes and foreign-key
-// equivalence require separate PostgreSQL expression/constraint comparison.
+// Read-only structural comparison. Defaults and indexes require separate
+// PostgreSQL expression comparison.
 Z8SchemaDifference[] z8_postgres_compare_table(Z8Object table, Z8PostgresTableDescription actual) {
     if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, z8_nonnull(table)))
         throw new Z8PostgresException("PostgreSQL schema requires a Table");
@@ -57,5 +57,27 @@ Z8SchemaDifference[] z8_postgres_compare_table(Z8Object table, Z8PostgresTableDe
         import std.array : join;
         result ~= Z8SchemaDifference(Z8SchemaDifferenceKind.primaryKey, "", keyName, actual.primaryKeyColumns.join(", "));
     }
+    bool[] matchedKeys; matchedKeys.length = actual.foreignKeys.length;
+    foreach (field; fields) {
+        auto target = foreignKeyTarget(table, field);
+        if (target is null) continue;
+        auto targetKey = z8_query_primary_key(target);
+        if (targetKey is null) throw new Z8PostgresException("foreign key target has no primary key");
+        auto fieldName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, field).to!string;
+        auto targetName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, target).to!string;
+        auto targetKeyName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, targetKey).to!string;
+        bool found;
+        foreach (i, fk; actual.foreignKeys) {
+            if (!matchedKeys[i] && fk.columns == [fieldName] && fk.targetSchema == actual.schema && fk.targetTable == targetName &&
+                fk.targetColumns == [targetKeyName] && fk.matchType == "s" && fk.updateAction == "a" && fk.deleteAction == "a" &&
+                !fk.deferrable && !fk.initiallyDeferred && fk.validated) {
+                matchedKeys[i] = true; found = true; break;
+            }
+        }
+        if (!found) result ~= Z8SchemaDifference(Z8SchemaDifferenceKind.missingForeignKey, fieldName,
+            actual.schema ~ "." ~ targetName ~ "(" ~ targetKeyName ~ ")", "");
+    }
+    foreach (i, fk; actual.foreignKeys)
+        if (!matchedKeys[i]) result ~= Z8SchemaDifference(Z8SchemaDifferenceKind.extraForeignKey, "", "", fk.name ~ ": " ~ fk.definition);
     return result;
 }

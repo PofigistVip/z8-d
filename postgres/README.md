@@ -63,8 +63,10 @@ from PostgreSQL catalogs. It returns null for a missing table and accepts
 `pg_temp` as the current connection's temporary schema. The result is a
 read-only snapshot, not an automatic migration plan.
 `z8_postgres_compare_table` in `z8.database.compare` reports missing or extra
-columns, mismatched types and nullability, and primary-key differences. It does
-not yet compare defaults, indexes or foreign keys, and never changes the schema.
+columns, mismatched types and nullability, primary-key differences, and missing
+or extra foreign keys. Foreign keys are compared by their columns, target and
+PostgreSQL constraint behavior. It does not yet compare defaults or indexes,
+and never changes the schema.
 `z8_postgres_plan_add_columns` in `z8.database.migration` returns SQL for
 missing non-primary columns with their BL defaults and nullability. The caller
 can review and execute the statements; other differences, indexes and foreign

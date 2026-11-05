@@ -15,6 +15,10 @@ struct Z8PostgresIndexDescription {
 }
 struct Z8PostgresForeignKeyDescription {
     string name, definition;
+    string targetSchema, targetTable;
+    string[] columns, targetColumns;
+    string matchType, updateAction, deleteAction;
+    bool deferrable, initiallyDeferred, validated;
 }
 class Z8PostgresTableDescription {
     string schema, name, primaryKeyName;
@@ -56,9 +60,28 @@ Z8PostgresTableDescription z8_postgres_describe_table(Z8PostgresConnection db, w
         FROM pg_catalog.pg_class c JOIN pg_catalog.pg_index x ON x.indrelid = c.oid
         JOIN pg_catalog.pg_class i ON i.oid = x.indexrelid` ~ whereTable ~ ` ORDER BY i.relname`, params);
     foreach (row; indexes.rows) description.indexes ~= Z8PostgresIndexDescription(row[0].text, row[1].text, row[2].text == "t", row[3].text == "t");
-    auto foreignKeys = db.execute(`SELECT k.conname, pg_catalog.pg_get_constraintdef(k.oid)
-        FROM pg_catalog.pg_class c JOIN pg_catalog.pg_constraint k ON k.conrelid = c.oid AND k.contype = 'f'` ~ whereTable ~
-        ` ORDER BY k.conname`, params);
-    foreach (row; foreignKeys.rows) description.foreignKeys ~= Z8PostgresForeignKeyDescription(row[0].text, row[1].text);
+    auto foreignKeys = db.execute(`SELECT k.conname, pg_catalog.pg_get_constraintdef(k.oid), n.nspname, r.relname,
+        source_col.attname, target_col.attname, k.confmatchtype::text, k.confupdtype::text, k.confdeltype::text,
+        k.condeferrable, k.condeferred, k.convalidated
+        FROM pg_catalog.pg_class c JOIN pg_catalog.pg_constraint k ON k.conrelid = c.oid AND k.contype = 'f'
+        JOIN pg_catalog.pg_class r ON r.oid = k.confrelid
+        JOIN pg_catalog.pg_namespace n ON n.oid = r.relnamespace
+        JOIN LATERAL unnest(k.conkey) WITH ORDINALITY AS source_keys(attnum, position) ON true
+        JOIN LATERAL unnest(k.confkey) WITH ORDINALITY AS target_keys(attnum, position) ON target_keys.position = source_keys.position
+        JOIN pg_catalog.pg_attribute source_col ON source_col.attrelid = c.oid AND source_col.attnum = source_keys.attnum
+        JOIN pg_catalog.pg_attribute target_col ON target_col.attrelid = r.oid AND target_col.attnum = target_keys.attnum` ~ whereTable ~
+        ` ORDER BY k.conname, source_keys.position`, params);
+    foreach (row; foreignKeys.rows) {
+        if (!description.foreignKeys.length || description.foreignKeys[$ - 1].name != row[0].text) {
+            Z8PostgresForeignKeyDescription key;
+            key.name = row[0].text; key.definition = row[1].text;
+            key.targetSchema = row[2].text; key.targetTable = row[3].text;
+            key.matchType = row[6].text; key.updateAction = row[7].text; key.deleteAction = row[8].text;
+            key.deferrable = row[9].text == "t"; key.initiallyDeferred = row[10].text == "t"; key.validated = row[11].text == "t";
+            description.foreignKeys ~= key;
+        }
+        description.foreignKeys[$ - 1].columns ~= row[4].text;
+        description.foreignKeys[$ - 1].targetColumns ~= row[5].text;
+    }
     return description;
 }
