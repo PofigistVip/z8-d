@@ -53,7 +53,7 @@ class Authority : IZ8HttpAuthority {
     Z8ApplicationSession authorize(Z8HttpRequest request, wstring id, wstring server) {
         if (server != "test"w || (id != "full"w && id != "limited"w && id != "denied"w)) return null;
         auto user = new Z8UserData(); user.id = z8_guid_create(1);
-        user.privileges = new Z8Privileges(Z8Access(true, false, false, false, true, true));
+        user.privileges = new Z8Privileges(Z8Access(true, true, false, false, true, true));
         if (id == "limited"w) {
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.Title"w), Z8Access.init);
             user.privileges.setTableAccess(z8_guid_create_name("Sample"w), Z8Access(true, false, false, false, false, true));
@@ -66,7 +66,7 @@ class Authority : IZ8HttpAuthority {
 void main(string[] args) {
     databaseInfo = args[1];
     auto setup = new Z8PostgresConnection(databaseInfo);
-    setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Lock" bigint DEFAULT 0)`);
+    setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Lock" bigint DEFAULT 0, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     setup.execute(`INSERT INTO "Sample" ("RecordId", "Title", "Amount") VALUES ('00000000-0000-0000-0000-000000000001', 'First', 5), ('00000000-0000-0000-0000-000000000002', 'Second', 10)`);
     setup.close();
     auto server = new Z8CivetServer("127.0.0.1:0", (Z8HttpRequest request) {
@@ -126,13 +126,18 @@ void main(string[] args) {
                 results = list(workers.map(lambda i: request(session="limited" if i % 2 else "full"), range(16)))
             assert all(result["success"] and len(result["data"]) == 2 for result in results)
             assert all(("title" not in result["data"][0]) == (i % 2 == 1) for i, result in enumerate(results))
+            change = '[{"recordId":"00000000-0000-0000-0000-000000000002","title":"Updated","amount":12}]'
+            result = request(session="limited", action="update", data=change)
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = request(action="update", data=change)
+            assert result["success"] and result["data"][0]["title"] == "Updated" and result["data"][0]["amount"] == 12, result
             data = '["00000000-0000-0000-0000-000000000001"]'
             result = request(session="limited", action="destroy", data=data)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(action="destroy", data=data)
             assert result["success"], result
             result = request()
-            assert len(result["data"]) == 1 and result["data"][0]["title"] == "Second", result
+            assert len(result["data"]) == 1 and result["data"][0]["title"] == "Updated", result
         finally:
             if process.poll() is None:
                 try:

@@ -110,7 +110,14 @@ Linked and computed fields, other read options and custom request parameters
 are rejected. The host must open the application response before calling it.
 `z8_application_dispatch_request` selects this adapter for a table request;
 the CivetWeb host must explicitly call the dispatcher and install a backend for
-the worker thread. The separately supported `destroy` action is described below.
+the worker thread. The separately supported write actions are described below.
+The direct-table `update` action accepts a nonempty `data` array of objects
+containing the primary key and fields to change. It requires table and field
+write access, runs the BL update hooks in a transaction, and returns the
+readable requested fields of the affected records after commit. String, text,
+integer, decimal, boolean, GUID, date, datetime and datespan values are
+supported. Linked or computed fields, files, binary and geometry uploads, and
+additional update options are rejected.
 The direct-table `destroy` action accepts a nonempty `data` array of GUID
 strings or objects containing the primary-key field. It checks request execute
 and table destroy access, invokes the BL destroy hooks, and processes all records

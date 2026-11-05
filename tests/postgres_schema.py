@@ -48,7 +48,7 @@ import org.zenframework.z8.base.application.Application;
     public string getActionEvents() { return actionEvents; }
     virtual protected void onCopyAction(guid id) { actionEvents = "C"; }
     virtual protected void onCreateAction(guid id) { actionEvents += "N"; }
-    virtual protected void onUpdateAction(guid id) { actionEvents += "U"; }
+    virtual protected void onUpdateAction(guid id) { actionEvents = "U"; }
     virtual protected void onDestroyAction(guid id) { actionEvents = "D"; }
     virtual protected sql_bool scope() { return amount >= 0; }
     virtual protected void onReadAction() {
@@ -214,7 +214,8 @@ void main(string[] args) {
     auto table = P.m_make();
     auto eventTarget = P.m_make();
     eventTarget.z8_query_virtual_onCopyAction(z8_guid_create(1)); eventTarget.z8_query_virtual_onCreateAction(z8_guid_create(1));
-    eventTarget.z8_query_virtual_onUpdateAction(z8_guid_create(1)); assert(eventTarget.m_getActionEvents() == "CNU"w);
+    assert(eventTarget.m_getActionEvents() == "CN"w);
+    eventTarget.z8_query_virtual_onUpdateAction(z8_guid_create(1)); assert(eventTarget.m_getActionEvents() == "U"w);
     eventTarget.z8_query_virtual_onDestroyAction(z8_guid_create(1)); assert(eventTarget.m_getActionEvents() == "D"w);
     assert(P.m_fieldKey(table) == z8_guid_create_name("Sample;--.Title"w));
     auto registry = new Z8RuntimeRegistry(); registry.registerTable(table); registry.registerTable(P.m_make());
@@ -680,6 +681,28 @@ void main(string[] args) {
     z8_application_finish_response(hooked, cast(Z8RequestMonitor)hooked.monitor);
     auto hookedJson = parseJSON(z8_application_response_text(hooked).to!string);
     assert(hookedJson["data"].array.length == 1 && hookedJson["data"][0]["amount"].integer == 42);
+    bool update(wstring data, out wstring output) {
+        auto request = new Z8ApplicationRequest(); request.session = querySession; request.monitor = new Z8RequestMonitor();
+        request.parameters.z8_add("request"w, "Sample"w); request.parameters.z8_add("action"w, "update"w);
+        request.parameters.z8_add("fields"w, `["title","amount"]`w); request.parameters.z8_add("data"w, data);
+        z8_application_set_request(request); z8_application_start_response(request, "Sample"w);
+        try { z8_application_dispatch_request(); } catch (Exception) { return false; }
+        z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); output = z8_application_response_text(request); return true;
+    }
+    wstring updateResult;
+    assert(update(`[{"recordId":"00000000-0000-0000-0000-00000000012D","title":"Updated","amount":44}]`w, updateResult));
+    auto updatedJson = parseJSON(updateResult.to!string);
+    assert(updatedJson["data"].array.length == 1 && updatedJson["data"][0]["title"].str == "Updated" && updatedJson["data"][0]["amount"].integer == 44);
+    assert(update(`[{"recordId":"00000000-0000-0000-0000-00000000012D","flag":false,"price":"17.25","reference":"00000000-0000-0000-0000-000000000063","moment":"2024-01-02T03:04:05Z","duration":"01:02:03","details":"Данные"}]`w, updateResult));
+    auto scalars = db.execute(`SELECT "Flag", "Price", "Reference", "Moment", "Duration", convert_from("Details", 'UTF8') FROM "z8_bootstrap"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-00000000012D'`);
+    assert(scalars.rows[0][0].text == "0" && scalars.rows[0][1].text == "17.25" && scalars.rows[0][2].text == "00000000-0000-0000-0000-000000000063");
+    assert(scalars.rows[0][3].text.to!long == z8_date_ticks(z8_date_parse("2024-01-02T03:04:05Z"w)) && scalars.rows[0][4].text == "3723000" && scalars.rows[0][5].text == "Данные");
+    assert(!update(`[{"recordId":"00000000-0000-0000-0000-00000000012D","amount":55},{"recordId":"00000000-0000-0000-0000-00000000012E","amount":"invalid"}]`w, updateResult));
+    assert(db.execute(`SELECT "Amount" FROM "z8_bootstrap"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-00000000012D'`).rows[0][0].text == "44");
+    queryUser.privileges.setFieldAccess(bootFieldKey, Z8Access(true, false, false, false, false, false));
+    assert(!update(`[{"recordId":"00000000-0000-0000-0000-00000000012D","title":"Denied"}]`w, updateResult));
+    queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
+    assert(!update(`[{"title":"Missing id"}]`w, updateResult));
     db.execute(`CREATE TABLE "z8_bootstrap"."DeleteRef" ("Target" uuid REFERENCES "z8_bootstrap"."Sample;--" ("RecordId"))`);
     db.execute(`INSERT INTO "z8_bootstrap"."DeleteRef" VALUES ('00000000-0000-0000-0000-00000000012E')`);
     bool destroy(wstring data) {

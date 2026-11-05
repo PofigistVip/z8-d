@@ -1,0 +1,90 @@
+// QueryUtils.setFieldValue for the scalar field types currently supported by
+// the PostgreSQL writer. File uploads and geometry require separate adapters.
+private void z8_application_query_set_value(Z8Object field, JSONValue value) {
+    if (value.type == JSONType.array || value.type == JSONType.object) throw new Exception("invalid query field value");
+    auto type = z8_field_type_id(field);
+    auto text = z8_json_value_text(value);
+    Z8Primary boxed;
+    if (type == "string"w || type == "text"w) boxed = z8_primary_box(text);
+    else if (type == "binary"w || type == "geometry"w || type == "file"w || type == "attachments"w)
+        throw new Exception("unsupported query update field type");
+    else if (!text.length) boxed = z8_field_default_value(field);
+    else switch (type) {
+        case "int"w: boxed = z8_primary_box(z8_int_parse(text)); break;
+        case "float"w: boxed = z8_primary_box(z8_decimal_parse(text)); break;
+        case "boolean"w: boxed = z8_primary_box(z8_bool_parse(text)); break;
+        case "guid"w: boxed = z8_primary_box(z8_guid_parse(text)); break;
+        case "date"w: case "datetime"w: boxed = z8_primary_box(z8_date_parse(text)); break;
+        case "datespan"w: boxed = z8_primary_box(z8_datespan_parse(text)); break;
+        default: throw new Exception("unsupported query update field type");
+    }
+    z8_field_set(field, boxed);
+}
+
+void z8_application_dispatch_query_update(wstring className) {
+    z8_application_dispatch_query_update_target(className, null);
+}
+private void z8_application_dispatch_query_update_target(wstring className, Z8Object query) {
+    auto request = z8_application_require_request();
+    auto session = z8_nonnull(request.session);
+    auto params = z8_nonnull(request.parameters);
+    if (request.writer.scopes.length != 2) throw new Exception("response object is not open");
+    if (params.z8_get("action"w) != "update"w) throw new Exception("unsupported query action");
+    if (!z8_application_may_execute(session, className, "update"w)) throw new Exception("request access denied");
+    auto keys = params.z8_keys();
+    for (long i; i < keys.z8_size(); ++i) {
+        auto name = keys.z8_get(i);
+        if (name is null) throw new Exception("invalid query update parameter");
+        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "data"w || name == "fields"w) continue;
+        if (params.z8_get(name).length) throw new Exception("unsupported query update parameter: " ~ name.to!string);
+    }
+    if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
+    if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, query))
+        throw new Exception("query update requires a Table");
+    auto privileges = z8_nonnull(session.user).privileges;
+    auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
+    if (privileges is null || !privileges.getTableAccess(queryKey).write) throw new Exception("query update access denied");
+    auto key = z8_query_primary_key(query);
+    if (key is null) throw new Exception("query has no primary key");
+    auto selected = z8_application_query_fields(query, privileges, params);
+    auto json = params.z8_get("data"w);
+    if (json is null || !json.length) throw new Exception("query update requires records");
+    auto records = z8_json_parse(json.to!string);
+    if (records.type != JSONType.array || !records.array.length) throw new Exception("query update requires records");
+    auto connection = z8_connection_current_backend();
+    if (connection is null) throw new Exception("no current database connection");
+    Z8Guid[] ids;
+    connection.beginTransaction();
+    scope(failure) connection.rollback();
+    foreach (record; records.array) {
+        if (record.type != JSONType.object) throw new Exception("invalid query update record");
+        auto member = key.z8_id().to!string in record.object;
+        if (member is null || member.type != JSONType.string || !member.str.length) throw new Exception("query update requires a record id");
+        auto id = z8_guid_parse(member.str.to!wstring);
+        if (id is null) throw new Exception("invalid query update record id");
+        foreach (name, value; record.object) {
+            auto field = z8_query_find_field_id(query, name.to!wstring);
+            if (field is key) continue;
+            if (field.z8_get_owner() !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
+                throw new Exception("linked and computed fields are not supported by query update");
+            auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
+            if (!privileges.getFieldAccess(queryKey, fieldKey).write) throw new Exception("query update field access denied");
+            z8_application_query_set_value(field, value);
+        }
+        if (z8_query_user_events_enabled()) query.z8_query_virtual_onUpdateAction(id);
+        z8_query_update_id(query, id);
+        ids ~= id;
+    }
+    connection.commit();
+    foreach (field; z8_query_declared_fields(query, true)) z8_field_reset(field);
+    auto filter = new Z8SqlBool(Z8SqlBoolKind.inVector);
+    filter.vectorValue = new Z8SqlFieldToken(key);
+    foreach (id; ids) filter.vectorItems ~= new Z8SqlBoxedConstant(z8_primary_box(id));
+    Z8QueryReadRequest read;
+    read.fields = selected; read.where = filter; read.byRecordIds = true;
+    z8_query_prepare_read(query, read);
+    read.queryScope = z8_query_scope(query);
+    z8_query_open(query, read, true, true);
+    scope(exit) z8_query_close(query);
+    z8_application_query_write_rows(query, request.writer, selected);
+}
