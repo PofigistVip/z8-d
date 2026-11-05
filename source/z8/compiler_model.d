@@ -235,6 +235,13 @@ package bool extendsBuiltinPrimary(Program program) {
         if (current.baseIsPrimary) return true;
     return false;
 }
+// Z8 treats attributed primary types and their descendants as values even
+// when their BL declaration does not derive from the built-in primary.
+package bool isPrimaryClass(Program program) {
+    for (auto current = program; current !is null; current = current.baseClass)
+        if (current.isPrimary || current.baseIsPrimary) return true;
+    return false;
+}
 struct SourceUnit { string name, path, source; }
 /// One generated D module and its path relative to the output directory.
 struct GeneratedModule { string moduleName, relativePath, sourceName, source; }

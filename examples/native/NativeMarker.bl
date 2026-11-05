@@ -1,0 +1,3 @@
+[primary "example.NativeMarker"]
+public class NativeMarker {
+}

@@ -1,0 +1,15 @@
+public class NativeStatics {
+    public static NativeNumber value = new NativeNumber;
+    public static NativeNumber[] values = {value};
+    public static int[NativeNumber] keys = {(value, 4)};
+    public static NativeNumber[string] byName = {("value", value)};
+    public static NativeMarker marker = new NativeMarker;
+    public static int[NativeMarker] markerKeys = {(marker, 6)};
+    public static NativeNumber[NativeMarker][string] nested = {("group", {(marker, value)})};
+
+    public static int check() {
+        if (value.read() != 9 || values[0].read() != 9 || byName["value"].read() != 9) return 1;
+        if (keys[value] != 4 || markerKeys[marker] != 6 || nested["group"][marker].read() != 9) return 2;
+        return 17;
+    }
+}

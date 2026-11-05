@@ -252,6 +252,19 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     native_result = subprocess.run(operator_command, cwd=temp, capture_output=True, text=True, encoding="utf-8")
     if native_result.returncode:
         raise SystemExit("Original Z8 rejected native declarations:\n" + native_result.stdout + native_result.stderr)
+    bad_native_static = operator_source / "BadNativeStatic.bl"
+    for declaration in ("NativeNumber[NativeMath] value;", "int[NativeNumber][NativeMath] value;", "NativeMath[NativeNumber] value;"):
+        bad_native_static.write_text("public class BadNativeStatic { public static " + declaration + " }", encoding="utf-8")
+        native_result = subprocess.run(operator_command, cwd=temp, capture_output=True, text=True, encoding="utf-8")
+        if native_result.returncode == 0 or "reference type member" not in native_result.stdout:
+            raise SystemExit("Original Z8 did not reject native reference in static collection:\n" + native_result.stdout)
+    bad_native_static.unlink()
+    bad_primary_attribute = operator_source / "BadPrimaryAttribute.bl"
+    bad_primary_attribute.write_text('public class BadPrimaryAttribute { [name "number"] NativeNumber value; }', encoding="utf-8")
+    native_result = subprocess.run(operator_command, cwd=temp, capture_output=True, text=True, encoding="utf-8")
+    if native_result.returncode == 0 or "Attributes can only be applied to variables of a reference type" not in native_result.stdout:
+        raise SystemExit("Original Z8 did not reject attributes on a primary field:\n" + native_result.stdout)
+    bad_primary_attribute.unlink()
     for fixture in native_fixtures:
         fixture.unlink()
     sql_map_probe = operator_source / "SqlMapConversion.bl"

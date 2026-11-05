@@ -130,6 +130,14 @@ class Checker {
         foreach (name; names) result ~= resolveClass(owner, name, site);
         return result;
     }
+    private bool containsReferenceClass(ValueType type, Program valueClass, Program[] keyClasses) {
+        if (isArray(type)) return containsReferenceClass(elementType(type), valueClass, keyClasses);
+        if (isMap(type)) {
+            if (mapKeyType(type) == ValueType.selfType && !isPrimaryClass(outerMapKeyClass(type, keyClasses))) return true;
+            return containsReferenceClass(mapValueType(type), valueClass, innerMapKeyClasses(type, keyClasses));
+        }
+        return type == ValueType.selfType && !isPrimaryClass(valueClass);
+    }
     private void checkAttributeNameConflicts(Program program, Program[string] programs) {
         Program sourceRoot(Program owner) {
             while (owner.lexicalOwner !is null) owner = owner.lexicalOwner;
@@ -168,12 +176,17 @@ class Checker {
         checkAttributeNameConflicts(program, programs);
         foreach (field; program.fields) {
             field.type = resolveDeclaredType(field.type, program, field.objectName, field.keyObjectNames, field.name);
-            if (field.attributes.length && field.type != ValueType.selfType)
+            if (field.attributes.length && (field.type != ValueType.selfType ||
+                isPrimaryClass(resolveClass(program, field.objectName, field.name))))
                 fail("attributes require an object reference field", field.name);
             if (field.isAuto && (field.isStatic || field.type != ValueType.selfArray))
                 fail("auto requires an instance array of object references", field.name);
-            if (field.isStatic && containsUserReference(field.type))
-                fail("static reference fields are not allowed", field.name);
+            if (field.isStatic && containsUserReference(field.type)) {
+                auto valueClass = hasObjectClass(field.type) ? resolveClass(program, field.objectName, field.name) : null;
+                auto keyClasses = hasMapKeyClass(field.type) ? resolveKeyClasses(program, field.keyObjectNames, field.name) : null;
+                if (containsReferenceClass(field.type, valueClass, keyClasses))
+                    fail("static reference fields are not allowed", field.name);
+            }
             if (field.type == ValueType.primaryType && field.initializer is null)
                 fail("primary fields require an initializer", field.name);
         }

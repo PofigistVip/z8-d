@@ -29,6 +29,7 @@ public class NativeConsumer {
         if (acceptsPrimary(number) != 1) return 9;
         int[primary] keys = {(number, 4)};
         if (keys[number] != 4) return 10;
+        if (NativeStatics.check() != 17) return 13;
         return NativeMath.add(2, 3) + object.scale(4) + number.read() + object.ignored() + converted + object.factor + NativeMath.total;
     }
 }

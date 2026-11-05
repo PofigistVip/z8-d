@@ -103,4 +103,17 @@ void main() { assert(z8_optional_require(Z8p_476F6F6455736572.m_run()) == 31); }
     result = subprocess.run([str(compiler), "project", str(source), str(temp / "bad-override")], capture_output=True, text=True)
     if result.returncode == 0 or "only virtual instance methods" not in result.stderr:
         raise SystemExit("A primary subclass was allowed to override non-virtual toString")
+    for declaration in (
+        "NativeNumber[NativeMath] value;",
+        "int[NativeNumber][NativeMath] value;",
+        "NativeMath[NativeNumber] value;",
+    ):
+        (source / "Bad.bl").write_text("class Bad { public static " + declaration + " }", encoding="utf-8")
+        result = subprocess.run([str(compiler), "project", str(source), str(temp / "bad-static")], capture_output=True, text=True)
+        if result.returncode == 0 or "static reference fields" not in result.stderr:
+            raise SystemExit("A static collection containing reference objects was accepted: " + declaration)
+    (source / "Bad.bl").write_text('class Bad { [name "number"] NativeNumber value; }', encoding="utf-8")
+    result = subprocess.run([str(compiler), "project", str(source), str(temp / "bad-attribute")], capture_output=True, text=True)
+    if result.returncode == 0 or "attributes require an object reference field" not in result.stderr:
+        raise SystemExit("Attributes were accepted on a primary field")
 print("Native and primary declarations bound through the separate runtime")
