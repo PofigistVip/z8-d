@@ -35,10 +35,13 @@ parameters are not yet supported.
 
 `z8_postgres_create_table_sql(schema, table)` in `z8.database.schema` generates
 `CREATE TABLE` SQL for a BL `Table`, including physical fields, PostgreSQL types,
-defaults and the primary key. It only returns SQL; the host chooses when to run
-it. Executing a geometry column definition requires PostGIS. Indexes, foreign
-keys, existing-table migration and the original schema lifecycle are not yet
-implemented.
+defaults and the primary key. `z8_postgres_create_indexes_sql(schema, table)`
+returns separate index statements, including case-insensitive and trigram
+indexes. Both functions only return SQL; the host chooses when to run it.
+Geometry columns and indexes require PostGIS; trigram indexes require `pg_trgm`.
+Unique GIN and GiST indexes are rejected because PostgreSQL does not support
+them. Foreign keys, existing-table migration and the original schema lifecycle
+are not yet implemented.
 
 `Z8PostgresQueryExecutor` connects BL `Query` reads to PostgreSQL tables.
 Construct it with a connection, schema and root table name, then attach it to

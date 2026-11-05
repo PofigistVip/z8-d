@@ -61,3 +61,29 @@ string z8_postgres_create_table_sql(wstring schema, Z8Object table) {
     auto keyName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, key);
     return sql ~ ", PRIMARY KEY (" ~ quoteIdentifier(keyName) ~ "))";
 }
+
+// Indexes are separate so callers can create records and extensions first.
+string[] z8_postgres_create_indexes_sql(wstring schema, Z8Object table) {
+    if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, z8_nonnull(table)))
+        throw new Z8PostgresException("PostgreSQL schema requires a Table");
+    auto tableName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, table);
+    string[] result;
+    foreach (field; z8_query_declared_fields(table, true)) {
+        auto options = z8_field_index_options(field);
+        auto kind = z8_field_type_id(field);
+        if (!options.indexed && !options.unique && !(kind == "string"w && options.trigram)) continue;
+        auto fieldName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, field);
+        auto indexName = (options.unique ? "Unq" : "Idx") ~ result.length.to!string ~ tableName.to!string;
+        if (options.unique && (kind == "geometry"w || (kind == "string"w && options.trigram)))
+            throw new Z8PostgresException("PostgreSQL GIN and GiST indexes cannot be unique");
+        string sql = "CREATE " ~ (options.unique ? "UNIQUE " : "") ~ "INDEX " ~
+            quoteIdentifier(indexName.to!wstring) ~ " ON " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(tableName) ~ " ";
+        if (kind == "geometry"w) sql ~= "USING gist ";
+        if (kind == "string"w && options.trigram) sql ~= "USING gin ";
+        auto expression = quoteIdentifier(fieldName);
+        if (kind == "string"w && options.caseInsensitive) expression = "LOWER(" ~ expression ~ ")";
+        if (kind == "string"w && options.trigram) expression ~= " gin_trgm_ops";
+        result ~= sql ~ "(" ~ expression ~ ")";
+    }
+    return result;
+}

@@ -48,12 +48,24 @@ import org.zenframework.z8.base.table.value.IntExpression;
     (source / "GeoSample.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.GeometryField;
-[name "GeoSample"] public class GeoSample extends Table { [name "Shape"] public GeometryField shape; }
+[name "GeoSample"] public class GeoSample extends Table { [name "Shape"] public GeometryField shape; shape.indexed = true; }
+''', encoding="utf-8")
+    (source / "IndexSample.bl").write_text('''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.table.value.IntField;
+[name "IndexSample"] public class IndexSample extends Table {
+    [name "Title"] public StringField title; title.unique = true; title.caseInsensitive = true;
+    [name "Search"] public StringField search; search.trigram = true; search.caseInsensitive = true;
+    [name "Amount"] public IntField amount; amount.indexed = true;
+    [name "Ignored"] public StringField ignored;
+}
 ''', encoding="utf-8")
     (source / "Probe.bl").write_text('''
 public class Probe {
     public static Sample make() { Sample value; return value; }
     public static GeoSample geo() { GeoSample value; return value; }
+    public static IndexSample indexes() { IndexSample value; return value; }
     public static int count(Sample value) { return value.count(); }
     public static void create(Sample value, guid id) { value.create(id); }
 }
@@ -78,6 +90,27 @@ void main(string[] args) {
     assert(ddl.canFind(`PRIMARY KEY ("RecordId")`));
     auto geo = z8_postgres_create_table_sql("pg_temp"w, P.m_geo());
     assert(geo.canFind(`"Shape" geometry(Geometry, 3857) DEFAULT NULL`));
+    bool geometryIndex;
+    foreach (index; z8_postgres_create_indexes_sql("pg_temp"w, P.m_geo()))
+        if (index.canFind(`USING gist ("Shape")`)) geometryIndex = true;
+    assert(geometryIndex);
+    auto indexedTable = P.m_indexes();
+    db.execute(z8_postgres_create_table_sql("pg_temp"w, indexedTable));
+    db.execute("CREATE EXTENSION pg_trgm");
+    bool uniqueIndex, trigramIndex, amountIndex;
+    foreach (index; z8_postgres_create_indexes_sql("pg_temp"w, indexedTable)) {
+        assert(!index.canFind(`"Ignored"`));
+        if (index.canFind(`LOWER("Title")`)) uniqueIndex = index.canFind("CREATE UNIQUE INDEX");
+        if (index.canFind(`USING gin (LOWER("Search") gin_trgm_ops)`)) trigramIndex = true;
+        if (index.canFind(`("Amount")`)) amountIndex = true;
+        db.execute(index);
+    }
+    assert(uniqueIndex && trigramIndex && amountIndex);
+    db.execute(`INSERT INTO "IndexSample" ("RecordId", "Title") VALUES ('00000000-0000-0000-0000-000000000011', 'Alice')`);
+    bool insensitiveDuplicate;
+    try { db.execute(`INSERT INTO "IndexSample" ("RecordId", "Title") VALUES ('00000000-0000-0000-0000-000000000012', 'ALICE')`); }
+    catch (Z8PostgresException) { insensitiveDuplicate = true; }
+    assert(insensitiveDuplicate);
     db.execute(ddl);
     db.execute(`INSERT INTO "Sample;--" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000001')`);
     auto row = db.execute(`SELECT "Title","Amount","Flag","Price","Reference","Moment","Duration","Details","Blob" FROM "Sample;--"`);

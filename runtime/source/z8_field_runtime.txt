@@ -220,6 +220,17 @@ private wstring z8_field_type_name(Z8Object self) {
 }
 wstring z8_field_type_id(Z8Object self) { return z8_field_type_name(self); }
 Z8Optional!long z8_field_srs(Z8Object self) { return z8_field_state(self).srs; }
+struct Z8FieldIndexOptions {
+    bool indexed, unique, trigram, caseInsensitive;
+}
+Z8FieldIndexOptions z8_field_index_options(Z8Object self) {
+    auto state = z8_field_state(self);
+    return Z8FieldIndexOptions(
+        state.indexed.present && state.indexed.value,
+        state.unique.present && state.unique.value,
+        state.trigram.present && state.trigram.value,
+        state.caseInsensitive.present && state.caseInsensitive.value);
+}
 wstring z8_field_sort_direction(Z8Object self) {
     auto cell = z8_field_state(self).sortCell;
     return cell is null ? "asc"w : cell.text();
