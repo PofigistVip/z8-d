@@ -289,6 +289,12 @@ unittest {
     auto attributes = SourceUnit("pkg.Attributes", "Attributes.bl", q{[tag Constants.value] class Attributes {}});
     auto constants = SourceUnit("pkg.Constants", "Constants.bl", q{class Constants { static string value = "label"; }});
     compileSources([attributes, constants]);
+    auto castEnum = SourceUnit("pkg.CastEnum", "CastEnum.bl", q{enum CastEnum { Value }});
+    auto castUser = SourceUnit("pkg.CastUser", "CastUser.bl", q{class CastUser { static CastEnum f(CastEnum x) { return (CastEnum)x; } }});
+    compileSources([castEnum, castUser]);
+    auto otherEnum = SourceUnit("pkg.OtherEnum", "OtherEnum.bl", q{enum OtherEnum { Value }});
+    auto badEnumCast = SourceUnit("pkg.BadEnumCast", "BadEnumCast.bl", q{class BadEnumCast { static CastEnum f(OtherEnum x) { return (CastEnum)x; } }});
+    rejectsSources([castEnum, otherEnum, badEnumCast], "BadEnumCast.bl");
     auto namedA = SourceUnit("a.NamedA", "NamedA.bl", q{[name "same"] class NamedA {}});
     auto namedB = SourceUnit("b.NamedB", "NamedB.bl", q{[name "same"] class NamedB {}});
     rejectsSources([namedA, namedB], "NamedB.bl");

@@ -1309,7 +1309,14 @@ class Checker {
                 }
                 if (e.castType == ValueType.selfType) {
                     auto target = resolveClass(currentProgram, e.token.text, e.token);
-                    if (target.isEnum) fail("enum casts are not supported", e.token);
+                    if (target.isEnum) {
+                        auto source = typeOf(e.left);
+                        if (source != ValueType.enumType || e.left.objectClass !is target)
+                            fail("unsupported enum cast", e.token);
+                        e.castType = ValueType.enumType;
+                        e.objectClass = target;
+                        return ValueType.enumType;
+                    }
                     if (typeOf(e.left) != ValueType.selfType) fail("unsupported object cast", e.token);
                     if (!isAssignable(e.left.objectClass, target)) {
                         auto conversion = findConversion(e.left.objectClass, ValueType.selfType, target);
