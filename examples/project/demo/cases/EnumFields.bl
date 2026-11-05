@@ -1,0 +1,19 @@
+public class EnumFields {
+    private FieldMode member;
+    private FieldMode initialized = FieldMode.One;
+    private static FieldMode shared;
+    private static FieldMode missing = null;
+
+    public static int run() {
+        EnumFields first;
+        EnumFields second;
+        if (first.member != null || shared != null || missing != null) return 1;
+        if (first.initialized != FieldMode.One) return 2;
+        first.member = FieldMode.Two;
+        shared = first.member;
+        if (second.member != null || shared != FieldMode.Two) return 3;
+        first.member = null;
+        if (first.member != null || shared != FieldMode.Two) return 4;
+        return 223;
+    }
+}

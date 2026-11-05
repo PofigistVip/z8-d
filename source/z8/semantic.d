@@ -169,10 +169,8 @@ class Checker {
                 fail("attributes require an object reference field", field.name);
             if (field.isAuto && (field.isStatic || field.type != ValueType.selfArray))
                 fail("auto requires an instance array of object references", field.name);
-            if (field.isStatic && (field.type == ValueType.selfType || field.type == ValueType.enumType))
-                fail("static object and enum fields are not supported", field.name);
-            if (field.type == ValueType.enumType && field.initializer is null)
-                fail("enum fields require an initializer", field.name);
+            if (field.isStatic && field.type == ValueType.selfType)
+                fail("static object fields are not supported", field.name);
             if (field.type == ValueType.primaryType && field.initializer is null)
                 fail("primary fields require an initializer", field.name);
         }

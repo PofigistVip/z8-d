@@ -547,6 +547,7 @@ private string emitSimple(Statement s) {
 private string defaultValue(ValueType type, Program objectClass = null, bool hasContainer = false) {
     if (type == ValueType.exceptionType) return "new Z8Exception(null)";
     if (type == ValueType.encodingType) return "null";
+    if (type == ValueType.enumType) return "null";
     if (type == ValueType.primaryType) return "null";
     if (type == ValueType.guidType) return "z8_guid_zero()";
     if (type == ValueType.binaryType) return "new Z8Binary()";
