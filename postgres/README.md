@@ -33,6 +33,13 @@ invokes a procedure in the configured schema with parameterized scalar, GUID,
 date, duration, binary and geometry values; file and user-defined primary
 parameters are not yet supported.
 
+`z8_postgres_create_table_sql(schema, table)` in `z8.database.schema` generates
+`CREATE TABLE` SQL for a BL `Table`, including physical fields, PostgreSQL types,
+defaults and the primary key. It only returns SQL; the host chooses when to run
+it. Executing a geometry column definition requires PostGIS. Indexes, foreign
+keys, existing-table migration and the original schema lifecycle are not yet
+implemented.
+
 `Z8PostgresQueryExecutor` connects BL `Query` reads to PostgreSQL tables.
 Construct it with a connection, schema and root table name, then attach it to
 the generated query with `z8_query_set_executor`. It supports explicit selected
@@ -58,5 +65,5 @@ HAVING without grouping. Filter-based updates and deletes select
 matching records and invoke the BL events for each record. Record copying reads
 the source through the executor and preserves an active query cursor. Table audit
 values use the active request's session and event level; standalone use without
-an active request does not populate them. Schema generation is not yet implemented. Z8 table and field
+an active request does not populate them. Z8 table and field
 privilege checks are not implemented by this executor; the host must enforce them.

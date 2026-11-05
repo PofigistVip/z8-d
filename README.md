@@ -579,6 +579,9 @@ BL `Connection.get()`, транзакции, `execute`, `call`, `flush` и `Quer
 работают через текущий для потока адаптер базы данных; PostgreSQL-адаптер описан
 в [postgres/README.md](postgres/README.md). В `call` пока не поддержаны значения
 типа `file` и пользовательские наследники `primary`.
+Для новой таблицы `z8_postgres_create_table_sql` формирует PostgreSQL DDL из
+BL-полей, их значений по умолчанию и первичного ключа; миграции существующей
+схемы, индексы и внешние ключи ещё не реализованы.
 Стандартный `Table` создаёт системные поля `recordId`, `createdAt`,
 `modifiedAt`, `createdBy`, `modifiedBy` и `lock`; `recordId()` возвращает
 текущее значение первичного ключа.

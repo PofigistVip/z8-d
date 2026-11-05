@@ -219,6 +219,7 @@ private wstring z8_field_type_name(Z8Object self) {
     throw new Exception("unknown native Field type");
 }
 wstring z8_field_type_id(Z8Object self) { return z8_field_type_name(self); }
+Z8Optional!long z8_field_srs(Z8Object self) { return z8_field_state(self).srs; }
 wstring z8_field_sort_direction(Z8Object self) {
     auto cell = z8_field_state(self).sortCell;
     return cell is null ? "asc"w : cell.text();
