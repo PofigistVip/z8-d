@@ -1,0 +1,27 @@
+// Physical metadata fields from Requests.java. Dynamic localized names require
+// the application request registry and are not supplied by this adapter yet.
+private enum z8_system_requests_name = "org.zenframework.z8.server.base.table.system.Requests"w;
+private class Z8SystemRequestsState { Z8Object[2] fields; }
+private void z8_system_requests_new(Z8Object self) {
+    enum base = "org.zenframework.z8.server.base.table.value.StringField"w;
+    auto state = new Z8SystemRequestsState();
+    state.fields[0] = z8_table_system_field(self, base, "name"w, "Name"w);
+    state.fields[1] = z8_table_system_field(self, base, "classId"w, "Class"w);
+    self.z8_set_native_state(z8_system_requests_name, state);
+}
+private Z8SystemRequestsState z8_system_requests_state(Z8Object self) {
+    auto state = cast(Z8SystemRequestsState)z8_nonnull(self, -1).z8_get_native_state(z8_system_requests_name);
+    if (state is null) throw new Exception("Requests fields are not initialized");
+    return state;
+}
+private Z8Object* z8_system_requests_field_address(size_t index)(Z8Object self) { return &z8_system_requests_state(self).fields[index]; }
+void z8_system_requests_configure(Z8Object self) {
+    auto state = z8_system_requests_state(self);
+    z8_field_state(z8_nonnull(state.fields[0])).length = z8_optional_wrap(256L);
+    z8_field_state(z8_nonnull(state.fields[1])).length = z8_optional_wrap(1024L);
+}
+shared static this() {
+    z8_native_bind(z8_system_requests_name ~ ".m_new"w, &z8_system_requests_new);
+    static foreach (i, name; ["name"w, "classId"w])
+        z8_native_bind_field(z8_system_requests_name ~ ".f_"w ~ name, &z8_system_requests_field_address!i);
+}

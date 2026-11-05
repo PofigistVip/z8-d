@@ -99,6 +99,8 @@ import org.zenframework.z8.base.table.system.Roles;
 import org.zenframework.z8.base.table.system.Users;
 import org.zenframework.z8.base.table.system.Sequences;
 import org.zenframework.z8.base.table.Sequencer;
+import org.zenframework.z8.base.table.system.Tables;
+import org.zenframework.z8.base.table.system.Requests;
 public class Probe {
     public static Sample make() { Sample value; return value; }
     public static GeoSample geo() { GeoSample value; return value; }
@@ -109,6 +111,8 @@ public class Probe {
     public static Roles roles() { Roles value; return value; }
     public static Users users() { Users value; return value; }
     public static Sequences sequences() { Sequences value; return value; }
+    public static Tables systemTables() { Tables value; return value; }
+    public static Requests systemRequests() { Requests value; return value; }
     public static guid systemUser() { return Users.System; }
     public static guid administratorUser() { return Users.Administrator; }
     public static void createUser(Users value, guid id) { value.create(id); }
@@ -436,6 +440,18 @@ void main(string[] args) {
     bool rolesUnavailable;
     try { z8_postgres_apply_static_records(db, "z8_security"w, P.m_roles()); } catch (Z8PostgresException) { rolesUnavailable = true; }
     assert(rolesUnavailable);
+    auto systemTables = P.m_systemTables(); auto systemRequests = P.m_systemRequests();
+    auto tablesDDL = z8_postgres_create_table_sql("z8_security"w, systemTables);
+    auto requestsDDL = z8_postgres_create_table_sql("z8_security"w, systemRequests);
+    assert(tablesDDL.canFind(`"Name" character varying`) && tablesDDL.canFind(`"Description" bytea`) && tablesDDL.canFind(`"Class" character varying`) && tablesDDL.canFind(`"Display Name" character varying`));
+    assert(requestsDDL.canFind(`"Name" character varying`) && requestsDDL.canFind(`"Class" character varying`));
+    foreach (field; z8_query_declared_fields(systemRequests, true)) if (field.z8_index() == "classId"w) {
+        auto length = z8_native_field!(Z8Optional!long)("org.zenframework.z8.server.base.table.value.StringField.f_length"w, field);
+        assert(z8_optional_require(length) == 1024);
+    }
+    z8_postgres_create_tables(db, "z8_security"w, [systemTables, systemRequests]);
+    assert(db.execute(`SELECT count(*) FROM "z8_security"."SystemTables"`).rows[0][0].text == "1");
+    assert(db.execute(`SELECT count(*) FROM "z8_security"."SystemRequests"`).rows[0][0].text == "1");
     db.execute(`ALTER TABLE "z8_test"."StaticSample" DROP CONSTRAINT "StaticSample_pkey", ADD PRIMARY KEY ("Label")`);
     differences = z8_postgres_compare_table(expectedStatic, z8_postgres_describe_table(db, "z8_test"w, "StaticSample"w));
     bool changedKey;

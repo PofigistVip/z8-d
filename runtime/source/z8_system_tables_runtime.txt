@@ -1,0 +1,29 @@
+// Physical metadata fields from Tables.java. Dynamic localized display names
+// require the application registry and are not supplied by this adapter yet.
+private enum z8_system_tables_name = "org.zenframework.z8.server.base.table.system.Tables"w;
+private class Z8SystemTablesState { Z8Object[4] fields; }
+private void z8_system_tables_new(Z8Object self) {
+    enum base = "org.zenframework.z8.server.base.table.value."w;
+    enum kinds = ["StringField"w, "TextField"w, "StringField"w, "StringField"w];
+    enum indexes = ["name"w, "description"w, "classId"w, "displayName"w];
+    enum names = ["Name"w, "Description"w, "Class"w, "Display Name"w];
+    auto state = new Z8SystemTablesState();
+    foreach (i; 0 .. state.fields.length)
+        state.fields[i] = z8_table_system_field(self, base ~ kinds[i], indexes[i], names[i]);
+    self.z8_set_native_state(z8_system_tables_name, state);
+}
+private Z8SystemTablesState z8_system_tables_state(Z8Object self) {
+    auto state = cast(Z8SystemTablesState)z8_nonnull(self, -1).z8_get_native_state(z8_system_tables_name);
+    if (state is null) throw new Exception("Tables fields are not initialized");
+    return state;
+}
+private Z8Object* z8_system_tables_field_address(size_t index)(Z8Object self) { return &z8_system_tables_state(self).fields[index]; }
+void z8_system_tables_configure(Z8Object self) {
+    auto state = z8_system_tables_state(self);
+    foreach (i; [0, 2, 3]) z8_field_state(z8_nonnull(state.fields[i])).length = z8_optional_wrap(256L);
+}
+shared static this() {
+    z8_native_bind(z8_system_tables_name ~ ".m_new"w, &z8_system_tables_new);
+    static foreach (i, name; ["name"w, "description"w, "classId"w, "displayName"w])
+        z8_native_bind_field(z8_system_tables_name ~ ".f_"w ~ name, &z8_system_tables_field_address!i);
+}
