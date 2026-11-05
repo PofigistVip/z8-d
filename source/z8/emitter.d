@@ -1131,6 +1131,10 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 auto binding = emitRawWStringLiteral(program.nativeName ~ "."w ~ methodDName(m).to!wstring);
                 auto call = "z8_native_call!(" ~ dStorageType(m.returnType, m.returnObjectClass, m.returnKeyObjectClasses) ~ ")(" ~ binding ~
                     (arguments.length ? ", " ~ arguments.join(", ") : "") ~ ")";
+                if (program.nativeName == "org.zenframework.z8.server.base.table.value.Field"w &&
+                    m.name.text == "getType" && !m.isStatic && m.parameters.length == 0 &&
+                    m.returnType == ValueType.enumType && m.returnObjectClass !is null)
+                    call = "z8_field_type!(" ~ m.returnObjectClass.emittedName ~ ")(this)";
                 body = "{\n" ~ (m.returnType == ValueType.voidType ? "" : "return ") ~ call ~ ";\n}\n";
             } else {
                 ControlContext context;

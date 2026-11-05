@@ -19,11 +19,17 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     None, Sum, Max, Min, Average, Count, Array, Distinct, Concat, BitwiseOr, BitwiseAnd
 }
 ''', encoding="utf-8")
+    (source / "FieldType.bl").write_text('''
+[native "org.zenframework.z8.server.db.FieldType"] public enum FieldType {
+    None, Guid, Geometry, Boolean, Integer, String, Date, Datetime, Datespan, Decimal, Binary, Text, Attachments, File, Null
+}
+''', encoding="utf-8")
     (source / "Object.bl").write_text('[native "org.zenframework.z8.server.runtime.OBJECT"] public class Object {}', encoding="utf-8")
     (source / "Field.bl").write_text('''
 [native "org.zenframework.z8.server.base.table.value.Field"] public class Field extends Object {
     public string format; public int width; public bool indexed; public bool unique; public bool trigram;
     public bool caseInsensitive; public bool totals;
+    public FieldType getType(); public string getTypeName();
     public primary primary(); public int int(); public string string(); public bool bool(); public decimal decimal(); public guid guid();
     public Aggregation aggregation = Aggregation.None;
     public bool isChanged(); public bool wasNull();
@@ -59,6 +65,7 @@ public class Probe {
     public static bool maxAggregation(IntField field) { return field.aggregation == Aggregation.Max; }
     public static bool run() {
         IntField number;
+        if (number.getType() != FieldType.Integer || number.getTypeName() != "int") return false;
         if (number.format != "0,000" || number.width != 0 || number.indexed || number.unique || number.trigram || number.caseInsensitive || !number.totals) return false;
         number.width = 150; number.indexed = true; number.unique = true; number.trigram = true;
         number.caseInsensitive = true; number.totals = false; number.format = "custom";
@@ -73,6 +80,7 @@ public class Probe {
         number.setDefault(11);
         if (number.get() != 11 || !number.isChanged()) return false;
         StringField text;
+        if (text.getType() != FieldType.String || text.getTypeName() != "string") return false;
         if (text.length != 30) return false;
         text.length = 100; if (text.length != 100) return false;
         if (text.aggregation != Aggregation.Max) return false;
@@ -84,17 +92,20 @@ public class Probe {
         text.setDefault("replacement");
         if (text.get() != "replacement" || !text.isChanged()) return false;
         BoolField flag;
+        if (flag.getType() != FieldType.Boolean || flag.getTypeName() != "boolean") return false;
         if (flag.width != 50) return false;
         if (flag.get() || flag.defaultValue || flag.isChanged()) return false;
         flag.defaultValue = true; if (!flag.getDefault() || !flag.bool()) return false;
         flag = false; if (flag.get() || !flag.isChanged()) return false;
         DecimalField amount;
+        if (amount.getType() != FieldType.Decimal || amount.getTypeName() != "float") return false;
         if (amount.precision != 19 || amount.scale != 4 || amount.format != "0,000.00") return false;
         amount.precision = 12; amount.scale = 2; if (amount.precision != 12 || amount.scale != 2) return false;
         if (amount.get() != decimal.parse("0")) return false;
         amount.defaultValue = 12.5; if (amount.decimal() != 12.5) return false;
         amount = 7.25; if (amount.get() != 7.25 || !amount.isChanged()) return false;
         GuidField id;
+        if (id.getType() != FieldType.Guid || id.getTypeName() != "guid") return false;
         if (id.get() != guid.Null) return false;
         id.defaultValue = guid.create(1); if (id.guid() != guid.create(1)) return false;
         id = guid.create(2); if (id.get() != guid.create(2) || !id.isChanged()) return false;
@@ -107,11 +118,11 @@ public class Probe {
     if len(sys.argv) == 2:
         language = Path(sys.argv[1]).resolve() / "org.zenframework.z8.lang/src/bl"
         if not language.is_dir(): raise SystemExit("Original BL standard library not found")
-        for name in ("Object", "Aggregation", "Field", "IntField", "StringField", "BoolField", "DecimalField", "GuidField"): (source / (name + ".bl")).unlink()
+        for name in ("Object", "Aggregation", "FieldType", "Field", "IntField", "StringField", "BoolField", "DecimalField", "GuidField"): (source / (name + ".bl")).unlink()
         shutil.copytree(language, source, dirs_exist_ok=True)
         for name in ("Custom", "CustomBool", "Probe"):
             path = source / (name + ".bl")
-            path.write_text("import org.zenframework.z8.base.table.value.Aggregation;\nimport org.zenframework.z8.base.table.value.IntField;\nimport org.zenframework.z8.base.table.value.StringField;\nimport org.zenframework.z8.base.table.value.BoolField;\nimport org.zenframework.z8.base.table.value.DecimalField;\nimport org.zenframework.z8.base.table.value.GuidField;\n" + path.read_text(encoding="utf-8"), encoding="utf-8")
+            path.write_text("import org.zenframework.z8.base.table.value.Aggregation;\nimport org.zenframework.z8.base.table.value.FieldType;\nimport org.zenframework.z8.base.table.value.IntField;\nimport org.zenframework.z8.base.table.value.StringField;\nimport org.zenframework.z8.base.table.value.BoolField;\nimport org.zenframework.z8.base.table.value.DecimalField;\nimport org.zenframework.z8.base.table.value.GuidField;\n" + path.read_text(encoding="utf-8"), encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "main.d"
     harness.write_text('''

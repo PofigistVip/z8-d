@@ -101,6 +101,45 @@ ref T z8_field_aggregation_ref(T)(Z8Object self) {
 }
 void z8_field_set_aggregation(Z8Object self, Z8FieldAggregation value) { z8_field_state(self).aggregation = value; }
 Z8FieldAggregation z8_field_aggregation(Z8Object self) { return z8_field_state(self).aggregation; }
+// FieldType is a generated BL enum, so its concrete type is supplied by the
+// generated Field method while the runtime determines the native field kind.
+private wstring z8_field_type_name(Z8Object self) {
+    self = z8_nonnull(self);
+    enum prefix = "org.zenframework.z8.server.base.table.value."w;
+    if (z8_native_is_instance(prefix ~ "AttachmentField"w, self)) return "attachments"w;
+    if (z8_native_is_instance(prefix ~ "FileField"w, self) || z8_native_is_instance(prefix ~ "FileExpression"w, self)) return "file"w;
+    if (z8_native_is_instance(prefix ~ "DateField"w, self) || z8_native_is_instance(prefix ~ "DateExpression"w, self)) return "date"w;
+    if (z8_native_is_instance(prefix ~ "DatetimeField"w, self) || z8_native_is_instance(prefix ~ "DatetimeExpression"w, self)) return "datetime"w;
+    if (z8_native_is_instance(prefix ~ "DatespanField"w, self) || z8_native_is_instance(prefix ~ "DatespanExpression"w, self)) return "datespan"w;
+    if (z8_native_is_instance(prefix ~ "IntegerField"w, self) || z8_native_is_instance(prefix ~ "IntegerExpression"w, self)) return "int"w;
+    if (z8_native_is_instance(prefix ~ "StringField"w, self) || z8_native_is_instance(prefix ~ "StringExpression"w, self) ||
+        z8_native_is_instance(prefix ~ "JsonObjectExpression"w, self)) return "string"w;
+    if (z8_native_is_instance(prefix ~ "TextField"w, self) || z8_native_is_instance(prefix ~ "TextExpression"w, self)) return "text"w;
+    if (z8_native_is_instance(prefix ~ "BoolField"w, self) || z8_native_is_instance(prefix ~ "BoolExpression"w, self)) return "boolean"w;
+    if (z8_native_is_instance(prefix ~ "DecimalField"w, self) || z8_native_is_instance(prefix ~ "DecimalExpression"w, self)) return "float"w;
+    if (z8_native_is_instance(prefix ~ "GuidField"w, self) || z8_native_is_instance(prefix ~ "GuidExpression"w, self)) return "guid"w;
+    if (z8_native_is_instance(prefix ~ "BinaryField"w, self)) return "binary"w;
+    if (z8_native_is_instance(prefix ~ "GeometryField"w, self) || z8_native_is_instance(prefix ~ "GeometryExpression"w, self)) return "geometry"w;
+    throw new Exception("unknown native Field type");
+}
+T z8_field_type(T)(Z8Object self) {
+    switch (z8_field_type_name(self)) {
+        case "attachments"w: return T.e_Attachments;
+        case "file"w: return T.e_File;
+        case "date"w: return T.e_Date;
+        case "datetime"w: return T.e_Datetime;
+        case "datespan"w: return T.e_Datespan;
+        case "int"w: return T.e_Integer;
+        case "string"w: return T.e_String;
+        case "text"w: return T.e_Text;
+        case "boolean"w: return T.e_Boolean;
+        case "float"w: return T.e_Decimal;
+        case "guid"w: return T.e_Guid;
+        case "binary"w: return T.e_Binary;
+        case "geometry"w: return T.e_Geometry;
+        default: throw new Exception("unknown native Field type");
+    }
+}
 private Z8FieldState z8_field_state(Z8Object self) {
     self = z8_nonnull(self);
     if (!z8_native_is_instance(z8_field_name, self)) throw new Exception("invalid Field object");
@@ -224,5 +263,6 @@ void z8_bind_builtin_field() {
     z8_native_bind(prefix ~ "m_inVector"w, &z8_field_in_vector);
     z8_native_bind(prefix ~ "m_notInVector"w, &z8_field_not_in_vector);
     z8_native_bind(prefix ~ "m_toString"w, &z8_field_string_value);
+    z8_native_bind(prefix ~ "m_getTypeName"w, &z8_field_type_name);
 }
 shared static this() { z8_bind_builtin_field(); }
