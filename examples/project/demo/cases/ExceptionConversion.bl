@@ -1,0 +1,14 @@
+public class ExceptionConversion {
+    public operator exception() { return "converted exception"; }
+
+    public static int run() {
+        ExceptionConversion value;
+        exception converted = value;
+        if (converted.getMessage() != "converted exception") return 1;
+        try { throw value; }
+        catch (exception error) {
+            if (error.getMessage() != "converted exception") return 2;
+            return 271;
+        }
+    }
+}

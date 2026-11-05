@@ -283,6 +283,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         System.out.println("SQLARRAY:" + demo.cases.SqlArrays.z8_run().get());
         System.out.println("SQLMAP:" + demo.cases.SqlMaps.z8_run().get());
         System.out.println("SQLUSERCONV:" + demo.cases.SqlConversion.z8_run().get());
+        System.out.println("EXCEPTIONCONV:" + demo.cases.ExceptionConversion.z8_run().get());
         if (!"1709199045000L".equals(metadata.getAttribute("dateConstant")) ||
             !"-2134967296L".equals(metadata.getAttribute("spanConstant")) ||
             !"/* 00112233-4455-6677-8899-aabbccddeeff */4822678189205111L, -8603657889541918977L".equals(metadata.getAttribute("guidConstant")) ||
@@ -790,6 +791,7 @@ void main() {
     writeln("SQLARRAY:", z8_optional_require(Z8p_64656D6F2E63617365732E53716C417272617973.m_run()));
     writeln("SQLMAP:", z8_optional_require(Z8p_64656D6F2E63617365732E53716C4D617073.m_run()));
     writeln("SQLUSERCONV:", z8_optional_require(Z8p_64656D6F2E63617365732E53716C436F6E76657273696F6E.m_run()));
+    writeln("EXCEPTIONCONV:", z8_optional_require(Z8p_64656D6F2E63617365732E457863657074696F6E436F6E76657273696F6E.m_run()));
     auto metadata = z8_new!Z8p_64656D6F2E63617365732E5374617469634F7665726C6F61644368696C64();
     assert(metadata.z8_get_attribute("dateConstant"w) == "1709199045000L"w);
     assert(metadata.z8_get_attribute("spanConstant"w) == "-2134967296L"w);
@@ -1234,11 +1236,15 @@ void main() {
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_lines = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "STATICEXC:", "SQLARRAY:", "SQLMAP:", "SQLUSERCONV:", "SQLUSERCONVSQL:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:", "SQLSPAN:", "SQLSPANARITH:", "SQLSPANBOOL:", "SQLSPANPART:", "SQLSPANFUNC:", "SQLBINARY:", "SQLGEOM:", "SQLGEOMBOOL:", "SQLGEOMEMPTY:", "SQLGEOMFUNC:", "SQLGEOMMETRIC:", "SQLGEOMTEST:", "SQLGEOMTEXT:", "SQLGEOMCOUNT:", "SQLPRIMARY:", "SQLPRIMARYCHECK:", "SQLFTSBOOL:", "SQLFTSRANK:"))]
+        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "STATICEXC:", "EXCEPTIONCONV:", "SQLARRAY:", "SQLMAP:", "SQLUSERCONV:", "SQLUSERCONVSQL:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:", "SQLSPAN:", "SQLSPANARITH:", "SQLSPANBOOL:", "SQLSPANPART:", "SQLSPANFUNC:", "SQLBINARY:", "SQLGEOM:", "SQLGEOMBOOL:", "SQLGEOMEMPTY:", "SQLGEOMFUNC:", "SQLGEOMMETRIC:", "SQLGEOMTEST:", "SQLGEOMTEXT:", "SQLGEOMCOUNT:", "SQLPRIMARY:", "SQLPRIMARYCHECK:", "SQLFTSBOOL:", "SQLFTSRANK:"))]
         original_static_exception = [line for line in output.splitlines() if line.startswith("STATICEXC:")]
         d_static_exception = [line for line in d_lines if line.startswith("STATICEXC:")]
         if original_static_exception != ["STATICEXC:253"] or d_static_exception != original_static_exception:
             raise SystemExit(f"Static exception behavior differs: original={original_static_exception!r}, D={d_static_exception!r}")
+        original_exception_conversion = [line for line in output.splitlines() if line.startswith("EXCEPTIONCONV:")]
+        d_exception_conversion = [line for line in d_lines if line.startswith("EXCEPTIONCONV:")]
+        if original_exception_conversion != ["EXCEPTIONCONV:271"] or d_exception_conversion != original_exception_conversion:
+            raise SystemExit(f"Exception conversion behavior differs: original={original_exception_conversion!r}, D={d_exception_conversion!r}")
         original_sql_array = [line for line in output.splitlines() if line.startswith("SQLARRAY:")]
         d_sql_array = [line for line in d_lines if line.startswith("SQLARRAY:")]
         if original_sql_array != ["SQLARRAY:257"] or d_sql_array != original_sql_array:

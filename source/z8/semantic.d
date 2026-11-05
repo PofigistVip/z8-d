@@ -2187,6 +2187,7 @@ class Checker {
             case StmtKind.throwStmt:
                 s.type = typeOf(s.expression);
                 if (s.type == ValueType.nullType) { matches(s.expression, ValueType.exceptionType); s.type = ValueType.exceptionType; }
+                if (s.type == ValueType.selfType && matches(s.expression, ValueType.exceptionType)) s.type = ValueType.exceptionType;
                 if (s.type == ValueType.nullableString) { s.type = ValueType.stringType; s.expression.nullableStringMode = NullableStringMode.required; }
                 if (s.type != ValueType.exceptionType && s.type != ValueType.stringType) fail("throw requires exception or string", s.token);
                 return true;
