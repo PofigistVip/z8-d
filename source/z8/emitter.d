@@ -26,7 +26,7 @@ private string operatorDName(string symbol) {
 }
 private string methodDName(Method method) {
     if (method.isCastOperator)
-        return "z8cast_" ~ (method.returnType == ValueType.selfType ? method.returnObjectClass.emittedName : method.name.text[13 .. $]);
+        return "z8cast_" ~ ([ValueType.selfType, ValueType.enumType].canFind(method.returnType) ? method.returnObjectClass.emittedName : method.name.text[13 .. $]);
     return method.operatorSymbol.length ? operatorDName(method.operatorSymbol) : "m_" ~ method.name.text;
 }
 

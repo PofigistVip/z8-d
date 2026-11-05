@@ -162,9 +162,7 @@ class Checker {
         }
         foreach (method; program.methods) {
             method.returnType = resolveDeclaredType(method.returnType, program, method.returnObjectName, method.name);
-            if (method.isCastOperator && method.returnType == ValueType.enumType)
-                fail("conversion operators to enums are not supported", method.name);
-            if (method.isCastOperator && method.returnType == ValueType.selfType) {
+            if (method.isCastOperator && [ValueType.selfType, ValueType.enumType].canFind(method.returnType)) {
                 method.returnObjectClass = resolveClass(program, method.returnObjectName, method.name);
                 method.name.text = "operatorCast:" ~ method.returnObjectClass.qualifiedName;
             }
@@ -179,6 +177,10 @@ class Checker {
             foreach (method; current.methods) {
                 if (!method.isCastOperator || method.returnType != target ||
                     !accessible(method.owner, method.isPublic, method.isProtected)) continue;
+                if (target == ValueType.enumType) {
+                    if (targetClass !is null && method.returnObjectClass is targetClass) return method;
+                    continue;
+                }
                 if (target != ValueType.selfType) return method;
                 if (targetClass is null) continue;
                 size_t distance;
@@ -366,7 +368,8 @@ class Checker {
                         }
                     }
                     if (actual != ValueType.selfType && hasObjectClass(actual) && e.arguments[i].objectClass !is resolveClass(candidate.owner, p.objectName, p.name)) applicable = false;
-                } else if (actual == ValueType.selfType && findConversion(e.arguments[i].objectClass, p.type) !is null) weight += 100;
+                } else if (actual == ValueType.selfType && findConversion(e.arguments[i].objectClass, p.type,
+                            p.type == ValueType.enumType ? resolveClass(candidate.owner, p.objectName, p.name) : null) !is null) weight += 100;
                 else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
                 else if (actual == ValueType.intType && p.type == ValueType.dateType) weight += 100;
                 else if (actual == ValueType.boolType && p.type == ValueType.sqlBoolType) weight += 100;
@@ -1571,7 +1574,11 @@ class Checker {
                     auto target = resolveClass(currentProgram, e.token.text, e.token);
                     if (target.isEnum) {
                         auto source = typeOf(e.left);
-                        if (source != ValueType.nullType && (source != ValueType.enumType || e.left.objectClass !is target))
+                        if (source == ValueType.selfType) {
+                            auto conversion = findConversion(e.left.objectClass, ValueType.enumType, target);
+                            if (conversion is null) fail("unsupported enum cast", e.token);
+                            e.left.userConversion = conversion;
+                        } else if (source != ValueType.nullType && (source != ValueType.enumType || e.left.objectClass !is target))
                             fail("unsupported enum cast", e.token);
                         e.castType = ValueType.enumType;
                         e.objectClass = target;

@@ -1,0 +1,17 @@
+public class EnumConversion {
+    public operator Flavor() { return Flavor.Red; }
+    public operator OtherFlavor() { return OtherFlavor.Dark; }
+
+    private static bool isRed(Flavor value) { return value == Flavor.Red; }
+
+    public static int run() {
+        EnumConversion value;
+        Flavor assigned = value;
+        Flavor explicit = (Flavor)value;
+        OtherFlavor other = value;
+        OtherFlavor explicitOther = (OtherFlavor)value;
+        if (assigned != Flavor.Red || explicit != Flavor.Red || !isRed(value)) return 1;
+        if (other != OtherFlavor.Dark || explicitOther != OtherFlavor.Dark) return 2;
+        return 281;
+    }
+}
