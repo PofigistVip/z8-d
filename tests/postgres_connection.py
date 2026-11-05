@@ -36,6 +36,7 @@ public class Probe {
     public static void rollback() { Connection.get().rollback(); }
     public static void flush() { Connection.get().flush(); }
     public static void execute(string sql) { Connection.get().execute(sql); }
+    public static void call(string name, primary[] parameters) { Connection.get().call(name, parameters); }
     public static void insert(Report report, guid id, int amount) { report.amount = amount; report.create(id); }
     public static int count(Report report) { return report.count(); }
 }
@@ -54,11 +55,28 @@ void main(string[] args) {
     auto first = new Z8PostgresConnection(args[1]); auto second = new Z8PostgresConnection(args[1]);
     immutable createSql = `CREATE TEMP TABLE "Reports" ("RecordId" uuid PRIMARY KEY, "CreatedAt" bigint, "ModifiedAt" bigint, "CreatedBy" uuid, "ModifiedBy" uuid, "Lock" bigint, "Amount" bigint)`;
     first.execute(createSql); second.execute(createSql);
+    first.execute(`CREATE TEMP TABLE "Calls" ("I" bigint, "B" integer, "N" numeric, "G" uuid, "T" bigint, "S" bigint, "Bytes" bytea, "Text" text, "Null" text, "Geom" bytea)`);
+    first.execute(`CREATE PROCEDURE pg_temp."Capture"";quote" (bigint, integer, numeric, uuid, bigint, bigint, bytea, text, text, bytea) LANGUAGE plpgsql AS $$ BEGIN INSERT INTO "Calls" VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10); END $$`);
+    first.execute(`CREATE PROCEDURE pg_temp."Noop" () LANGUAGE plpgsql AS $$ BEGIN NULL; END $$`);
     auto db1 = new Z8PostgresDatabase(first, "pg_temp"w), db2 = new Z8PostgresDatabase(second, "pg_temp"w);
     auto previous = z8_connection_set_current(db1);
     auto thread = new Thread({ assert(z8_connection_current_backend() is null); z8_connection_set_current(db2); assert(z8_connection_current_backend() is db2); });
     thread.start(); thread.join(); assert(z8_connection_current_backend() is db1);
     auto report = P.m_make(); auto wrapper = P.m_current();
+    auto parameters = new Z8Array!Z8Primary([z8_primary_box(42L), z8_primary_box(true), z8_primary_box(z8_decimal_parse("12.30"w)),
+        z8_primary_box(z8_guid_create(7)), z8_primary_box(z8_date_from_ticks(1234)), z8_primary_box(new Z8Datespan(7654)),
+        z8_primary_box(new Z8Binary([cast(ubyte)0, 1, 255])), z8_primary_box("O'Reilly 😀"w), null,
+        z8_primary_box(z8_geometry_point(z8_decimal_from_int(1), z8_decimal_from_int(2), 4326))]);
+    P.m_begin(); P.m_call(`Capture";quote`w, parameters); P.m_rollback();
+    assert(first.execute(`SELECT count(*) FROM "Calls"`).rows[0][0].text == "0");
+    parameters.z8_set(6, z8_primary_box(new Z8Binary([cast(ubyte)0, 1, 255])));
+    P.m_call(`Capture";quote`w, parameters); P.m_call("Noop"w, new Z8Array!Z8Primary());
+    auto callResult = first.execute(`SELECT "I","B","N","G","T","S",encode("Bytes",'hex'),"Text","Null",octet_length("Geom") FROM "Calls"`);
+    assert(callResult.rows.length == 1 && callResult.rows[0][0].text == "42" && callResult.rows[0][1].text == "1" && callResult.rows[0][2].text == "12.30");
+    assert(callResult.rows[0][3].text == "00000000-0000-0000-0000-000000000007" && callResult.rows[0][4].text == "1234" && callResult.rows[0][5].text == "7654");
+    assert(callResult.rows[0][6].text == "0001ff" && callResult.rows[0][7].text == "O'Reilly 😀" && callResult.rows[0][8].isNull && callResult.rows[0][9].text != "0");
+    bool unsupported; try { P.m_call("Noop"w, new Z8Array!Z8Primary([z8_primary_box(report)])); } catch (Z8PostgresException) { unsupported = true; }
+    assert(unsupported && first.execute(`SELECT count(*) FROM "Calls"`).rows[0][0].text == "1");
     P.m_begin(); P.m_insert(report, z8_guid_create(1), z8_optional_wrap(12L));
     P.m_begin(); P.m_insert(report, z8_guid_create(2), z8_optional_wrap(25L)); P.m_rollback();
     assert(first.inTransaction() && z8_optional_require(P.m_count(report)) == 2);

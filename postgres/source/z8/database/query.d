@@ -32,7 +32,7 @@ private ubyte[] decodeHex(string value) {
     for (size_t i; i < value.length; i += 2) result ~= cast(ubyte)((digit(value[i]) << 4) | digit(value[i + 1]));
     return result;
 }
-private string encodeBinary(Z8Binary binary) {
+package string encodeBinary(Z8Binary binary) {
     immutable digits = "0123456789abcdef";
     char[] result;
     ubyte[8192] buffer;

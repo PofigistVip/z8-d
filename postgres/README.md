@@ -28,8 +28,10 @@ BL `Connection` API. Install it for the current thread with
 request ends. `Connection.get()` uses that backend; queries without an explicit
 executor use it and derive the table name from the BL query's `name` attribute.
 `Query.setConnection` binds a query to a specific connection. `flush()` is a
-no-op because this client executes statements immediately. BL `Connection.call`
-for stored procedures is not yet implemented.
+no-op because this client executes statements immediately. `Connection.call`
+invokes a procedure in the configured schema with parameterized scalar, GUID,
+date, duration, binary and geometry values; file and user-defined primary
+parameters are not yet supported.
 
 `Z8PostgresQueryExecutor` connects BL `Query` reads to PostgreSQL tables.
 Construct it with a connection, schema and root table name, then attach it to

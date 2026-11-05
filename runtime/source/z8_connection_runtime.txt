@@ -5,6 +5,7 @@ interface IZ8DatabaseConnection {
     void commit();
     void rollback();
     void execute(wstring sql);
+    void call(wstring name, Z8Array!Z8Primary parameters);
     void flush();
     IZ8QueryExecutor queryExecutor(Z8Object query);
 }
@@ -38,8 +39,7 @@ private void z8_connection_rollback(Z8Object self) { z8_connection_backend(self)
 private void z8_connection_execute(Z8Object self, wstring sql) { z8_connection_backend(self).execute(z8_string_required(sql)); }
 private void z8_connection_flush(Z8Object self) { z8_connection_backend(self).flush(); }
 private void z8_connection_call(Z8Object self, wstring name, Z8Array!Z8Primary parameters) {
-    z8_connection_backend(self);
-    throw new Exception("database stored procedure calls are not implemented");
+    z8_connection_backend(self).call(z8_string_required(name), z8_nonnull(parameters));
 }
 private void z8_query_set_connection(Z8Object self, Z8Object connection) {
     auto executor = z8_connection_backend(connection).queryExecutor(z8_nonnull(self));

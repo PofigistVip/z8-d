@@ -575,9 +575,10 @@ Runtime поддерживает `copy` с сохранением текущег
 использует параметризованные запросы. При активном запросе системные поля автора
 и времени заполняются из его сессии; уровень событий можно задать в
 `Z8ApplicationRequest`. Без контекста запроса автоматическое заполнение отключено.
-BL `Connection.get()`, транзакции, `execute`, `flush` и `Query.setConnection`
+BL `Connection.get()`, транзакции, `execute`, `call`, `flush` и `Query.setConnection`
 работают через текущий для потока адаптер базы данных; PostgreSQL-адаптер описан
-в [postgres/README.md](postgres/README.md). Вызов хранимых процедур ещё не реализован.
+в [postgres/README.md](postgres/README.md). В `call` пока не поддержаны значения
+типа `file` и пользовательские наследники `primary`.
 Стандартный `Table` создаёт системные поля `recordId`, `createdAt`,
 `modifiedAt`, `createdBy`, `modifiedBy` и `lock`; `recordId()` возвращает
 текущее значение первичного ключа.
