@@ -1,0 +1,17 @@
+public class NestedOwner {
+    public NestedBase item = class {
+        public NestedBase inner = class {
+            public int value() { return super.value() + 20; }
+        };
+        public int value() { return super.value() + 10; }
+        public int nested() { return inner.value(); }
+    };
+    public NestedBase plain;
+    public static int run() {
+        NestedOwner owner;
+        if (owner.item.value() != 13 || owner.plain.value() != 3) return 1;
+        NestedBase saved = owner.item;
+        if (saved.value() != 13 || saved.nested() != 23) return 2;
+        return 207;
+    }
+}

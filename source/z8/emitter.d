@@ -577,7 +577,8 @@ package string emitPrograms(Program[] programs) {
         }
         result ~= "override void z8_allocate_fields() {\nsuper.z8_allocate_fields();\n";
         foreach (field; program.fields) if (!field.isStatic && (field.initializer is null || field.userOperatorAssignment)) {
-            auto initial = field.type == ValueType.intType ? "z8_optional_wrap(0L)" :
+            auto initial = field.nestedClass !is null ? "z8_new!(" ~ field.nestedClass.emittedName ~ ")(this)" :
+                field.type == ValueType.intType ? "z8_optional_wrap(0L)" :
                 field.type == ValueType.boolType ? "z8_optional_wrap(false)" :
                 field.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(field.type, field.objectClass, true);
             result ~= "this.f_" ~ field.name.text ~ " = " ~ initial ~ ";\n";
@@ -673,17 +674,27 @@ package string moduleNameFor(string qualifiedName) {
 /// Produce one module per Z8 type, importing only referenced generated types.
 package GeneratedModule[] emitProjectModules(Program[] programs) {
     string[string] moduleByClass;
-    foreach (program; programs) moduleByClass[program.emittedName] = moduleNameFor(program.qualifiedName);
+    Program rootOf(Program program) {
+        while (program.lexicalOwner !is null) program = program.lexicalOwner;
+        return program;
+    }
+    Program[][string] groupsByModule;
+    foreach (program; programs) {
+        auto name = moduleNameFor(rootOf(program).qualifiedName);
+        moduleByClass[program.emittedName] = name;
+        groupsByModule[name] ~= program;
+    }
     auto symbolPattern = regex(`Z8p_[0-9A-F]+`);
     GeneratedModule[] modules;
     foreach (program; programs) {
-        auto body = emitPrograms([program]);
+        if (program.lexicalOwner !is null) continue;
+        auto body = emitPrograms(groupsByModule[moduleByClass[program.emittedName]]);
         string[] dependencies;
         bool[string] seen;
         foreach (match; matchAll(body, symbolPattern)) {
             auto symbol = match.hit;
             auto dependency = symbol in moduleByClass;
-            if (dependency !is null && symbol != program.emittedName && !(*dependency in seen)) {
+            if (dependency !is null && *dependency != moduleByClass[program.emittedName] && !(*dependency in seen)) {
                 seen[*dependency] = true;
                 dependencies ~= *dependency;
             }

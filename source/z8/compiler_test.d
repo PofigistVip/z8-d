@@ -12,6 +12,9 @@ private void rejects(string source) {
 
 unittest {
     compile(q{class A { bool operator !() { return true; } static bool f() { A a; return !a; } }});
+    compile(q{class A { virtual int f() { return 1; } A child = class { int f() { return 2; } }; }});
+    rejects(q{class A { int child = class {}; }});
+    rejects(q{class A { A child = class { static int f() { return 1; } }; }});
     rejects(q{class A { static int f() { return +null; } }});
     compile(q{class A { operator int() { return 3; } static int f() { A a; return a; } }});
     rejects(q{class A { operator int(int value) { return value; } }});

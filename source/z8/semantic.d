@@ -347,7 +347,7 @@ class Checker {
         foreach (qualified, target; allPrograms) {
             auto targetDot = qualified.lastIndexOf('.');
             auto targetPackage = targetDot < 0 ? "" : qualified[0 .. targetDot + 1];
-            if (targetPackage == packageName) visibleClasses[target.name.text] = target;
+            if (target.lexicalOwner is null && targetPackage == packageName) visibleClasses[target.name.text] = target;
         }
         Program[string] imported;
         foreach (item; program.imports) {

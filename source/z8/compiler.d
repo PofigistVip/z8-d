@@ -15,10 +15,21 @@ string compile(string source) {
     program.emittedName = "Z8_" ~ program.name.text;
     Program[string] programs;
     programs[program.qualifiedName] = program;
-    prepareInheritance([program], programs);
-    (new Checker).prepareDeclarations(program, programs);
-    (new Checker).check(program, programs);
-    return emitPrograms([program]);
+    Program[] ordered = [program];
+    void addNested(Program owner) {
+        foreach (nested; owner.nestedPrograms) {
+            nested.qualifiedName = owner.qualifiedName ~ "$" ~ nested.name.text;
+            nested.emittedName = owner.emittedName ~ "_" ~ nested.name.text;
+            programs[nested.qualifiedName] = nested;
+            ordered ~= nested;
+            addNested(nested);
+        }
+    }
+    addNested(program);
+    prepareInheritance(ordered, programs);
+    foreach (unit; ordered) (new Checker).prepareDeclarations(unit, programs);
+    foreach (unit; ordered) (new Checker).check(unit, programs);
+    return emitPrograms(ordered);
 }
 
 private void prepareInheritance(Program[] ordered, Program[string] programs) {
@@ -69,6 +80,20 @@ GeneratedModule[] compileSources(SourceUnit[] units, string entry = "") {
         programs[unit.name] = program;
         ordered ~= program;
     }
+    void addNested(Program owner) {
+        foreach (nested; owner.nestedPrograms) {
+            nested.qualifiedName = owner.qualifiedName ~ "$" ~ nested.name.text;
+            nested.emittedName = "Z8p_";
+            foreach (i; 0 .. nested.qualifiedName.length) nested.emittedName ~= format("%02X", cast(ubyte)nested.qualifiedName[i]);
+            nested.sourceName = owner.sourceName;
+            programs[nested.qualifiedName] = nested;
+            ordered ~= nested;
+            addNested(nested);
+        }
+    }
+    // Keep each specialization in its containing BL source module.
+    auto roots = ordered.dup;
+    foreach (program; roots) addNested(program);
     prepareInheritance(ordered, programs);
     foreach (program; ordered) {
         try { (new Checker).prepareDeclarations(program, programs); }

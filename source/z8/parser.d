@@ -1,6 +1,7 @@
 module z8.parser;
 
 import std.algorithm : canFind;
+import std.conv : to;
 import z8.compiler_model;
 import z8.lexer;
 
@@ -186,6 +187,7 @@ class Parser {
                 else { if (hasAccess) error("duplicate access modifier"); hasAccess = true; isPublic = current.text == "public"; isProtected = current.text == "protected"; }
                 take();
             }
+            if (result.lexicalOwner !is null && isStatic) error("static members cannot be declared in a nested type");
             if (accept("records")) { parseRecords(result); continue; }
             auto declaredFinal = accept("final");
             bool isCastOperator = current.text == "operator";
@@ -212,7 +214,18 @@ class Parser {
                 if (isStatic && (declaredType == ValueType.selfArray || declaredType == ValueType.exceptionType || isMap(declaredType)))
                     error("static object fields are not supported");
                 auto field = new Field; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.isProtected = isProtected; field.isStatic = isStatic; field.isAuto = isAuto; field.declaredFinal = declaredFinal; field.objectName = declaredObjectName; field.owner = result;
-                if (accept("=")) field.initializer = initializer();
+                if (accept("=")) {
+                    if (accept("class")) {
+                        if (isStatic || declaredType != ValueType.selfType) error("nested specialization requires an instance object field");
+                        auto nested = new Program;
+                        nested.name = name; nested.name.text = "__nested_" ~ name.position.offset.to!string;
+                        nested.baseName = declaredObjectName; nested.baseToken = name;
+                        nested.lexicalOwner = result; nested.imports = result.imports.dup;
+                        parseClassBody(nested);
+                        field.nestedClass = nested;
+                        result.nestedPrograms ~= nested;
+                    } else field.initializer = initializer();
+                }
                 expect(";"); result.fields ~= field; continue;
             }
             if (isAuto) error("auto cannot be applied to a method");

@@ -55,6 +55,7 @@ python tests/object_conversion.py
 python tests/operator_distance.py
 python tests/assignment_operators.py
 python tests/compound_objects.py
+python tests/nested_fields.py
 python tests/qualified_names.py
 python tests/records.py
 python tests/decimal_oracle.py
@@ -167,7 +168,10 @@ Java backend оригинала в проверенных случаях ген�
 `auto T[]` заполняются совместимыми ссылками на стадии инициализации членов,
 включая поля производных классов. Для явно инициализированного `auto`-массива
 возможна ошибка на этой стадии, как в исходном Z8: его инициализатор выполняется
-позднее. Атрибуты и выражение `container` пока не поддерживаются.
+позднее. Поддерживается специализация объектного поля `T поле = class { ... };`,
+включая вложенные специализации и переопределение виртуальных методов. Сгенерированные
+классы специализаций находятся в том же D-модуле, что и содержащий `.bl`-файл.
+Локальные специализации, атрибуты и выражение `container` пока не поддерживаются.
 Типы: `int` (64-битный знаковый), `decimal`, `bool`,
 `string`, `guid`, `binary`, `datespan`, `date`, `geometry`, `file`, `exception`, `primary`, одномерные массивы этих типов и `decimal[][]`
 и пользовательских классов,

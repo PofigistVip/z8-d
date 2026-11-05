@@ -1,0 +1,5 @@
+public class NestedBase {
+    public int initial = 3;
+    virtual public int value() { return initial; }
+    virtual public int nested() { return 0; }
+}
