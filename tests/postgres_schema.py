@@ -173,6 +173,7 @@ import z8.database.privileges;
 import z8gen.p_Probe;
 import std.algorithm.searching : canFind;
 import std.conv : to;
+import std.json : parseJSON;
 void main(string[] args) {
     alias P = Z8p_50726F6265;
     auto db = new Z8PostgresConnection(args[1]);
@@ -538,6 +539,53 @@ void main(string[] args) {
     assert(adminPrivileges.roleIds.length == 1 && adminPrivileges.privileges.getDefaultAccess().execute);
     assert(adminPrivileges.privileges.getTableAccess(bootTableKey).write && adminPrivileges.privileges.getFieldAccess(bootTableKey, bootFieldKey).read);
     assert(adminPrivileges.privileges.getRequestAccess(bootRequestKey).execute);
+    db.execute(`INSERT INTO "z8_bootstrap"."Sample;--" ("RecordId", "Title", "Amount") VALUES ('00000000-0000-0000-0000-00000000012D', 'Visible', 42)`);
+    auto queryUser = new Z8UserData(); queryUser.id = z8_guid_create(2); queryUser.privileges = adminPrivileges.privileges;
+    auto querySession = new Z8ApplicationSession("query"w, queryUser, queryUser);
+    auto readRequest = new Z8ApplicationRequest(); readRequest.session = querySession; readRequest.monitor = new Z8RequestMonitor();
+    readRequest.parameters.z8_add("action"w, "read"w); readRequest.parameters.z8_add("fields"w, `["title",{"id":"amount"}]`w);
+    readRequest.parameters.z8_add("limit"w, "1"w);
+    auto priorReadRequest = z8_application_set_request(readRequest);
+    auto priorReadBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "z8_bootstrap"w));
+    z8_application_start_response(readRequest, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+    z8_application_finish_response(readRequest, cast(Z8RequestMonitor)readRequest.monitor);
+    auto readJson = parseJSON(z8_application_response_text(readRequest).to!string);
+    assert(readJson["data"].array.length == 1 && readJson["data"][0]["title"].str == "Visible" && readJson["data"][0]["amount"].integer == 42);
+    assert(readJson["data"][0]["recordId"].str == "00000000-0000-0000-0000-00000000012D");
+    queryUser.privileges.setFieldAccess(bootFieldKey, Z8Access.init);
+    auto masked = new Z8ApplicationRequest(); masked.session = querySession; masked.monitor = new Z8RequestMonitor();
+    masked.parameters.z8_add("action"w, "read"w); masked.parameters.z8_add("fields"w, `["title","amount"]`w);
+    z8_application_set_request(masked); z8_application_start_response(masked, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+    z8_application_finish_response(masked, cast(Z8RequestMonitor)masked.monitor);
+    auto maskedJson = parseJSON(z8_application_response_text(masked).to!string);
+    assert("title" !in maskedJson["data"][0].object && maskedJson["data"][0]["amount"].integer == 42);
+    queryUser.privileges.setTableAccess(bootTableKey, Z8Access.init);
+    auto deniedRead = new Z8ApplicationRequest(); deniedRead.session = querySession; deniedRead.parameters.z8_add("action"w, "read"w);
+    z8_application_set_request(deniedRead); z8_application_start_response(deniedRead, "Sample"w);
+    bool noTableRead; try { z8_application_dispatch_query_read("Sample"w); } catch (Exception) { noTableRead = true; }
+    assert(noTableRead);
+    queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
+    auto unsupportedRead = new Z8ApplicationRequest(); unsupportedRead.session = querySession;
+    unsupportedRead.parameters.z8_add("action"w, "read"w); unsupportedRead.parameters.z8_add("filter"w, "{}"w);
+    z8_application_set_request(unsupportedRead); z8_application_start_response(unsupportedRead, "Sample"w);
+    bool unsupportedFilter; try { z8_application_dispatch_query_read("Sample"w); } catch (Exception) { unsupportedFilter = true; }
+    assert(unsupportedFilter);
+    bool rejectedRead(wstring parameter, wstring value) {
+        auto bad = new Z8ApplicationRequest(); bad.session = querySession;
+        bad.parameters.z8_add("action"w, "read"w); bad.parameters.z8_add(parameter, value);
+        z8_application_set_request(bad); z8_application_start_response(bad, "Sample"w);
+        try { z8_application_dispatch_query_read("Sample"w); } catch (Exception) { return true; }
+        return false;
+    }
+    assert(rejectedRead("otherOption"w, "true"w));
+    assert(rejectedRead("action"w, "write"w));
+    assert(rejectedRead("fields"w, `{"id":"title"}`w));
+    assert(rejectedRead("fields"w, `["computed"]`w));
+    assert(rejectedRead("start"w, "-1"w));
+    queryUser.privileges.setRequestAccess(bootRequestKey, Z8Access.init);
+    assert(rejectedRead("fields"w, `["title"]`w));
+    queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
+    z8_application_set_request(priorReadRequest); z8_connection_set_current(priorReadBackend);
     auto noRoles = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(999));
     assert(noRoles.roleIds.length == 0 && !noRoles.privileges.getTableAccess(bootTableKey).read && !noRoles.privileges.getRequestAccess(bootRequestKey).execute);
     db.execute(`INSERT INTO "z8_bootstrap"."SystemUsers" ("RecordId", "Name") VALUES ('00000000-0000-0000-0000-0000000000DE', 'Multiple roles')`);

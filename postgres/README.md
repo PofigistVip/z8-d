@@ -93,7 +93,16 @@ with table access. `z8_postgres_refresh_user_privileges` installs the snapshot
 on a host user only after a successful load. The host can pass that user to
 `z8_application_dispatch_authorized_object`, which checks request execution
 permission before dispatch. Refresh after changes and authorization of query
-and job adapters remain separate work.
+and job adapters remain separate work, except for the limited table-read
+adapter described below.
+`z8_application_dispatch_query_read` reads a table using the current database
+connection and the session's privilege snapshot. It requires request execute
+and table read permissions, omits fields without read permission, and always
+includes the primary key. It supports `action=read`, a JSON `fields` array and
+non-negative `start` and `limit`. Linked and computed fields, filters, sorting,
+other read options and custom request parameters are rejected. The host must
+open the application response before calling it; the CivetWeb transport does
+not select this adapter automatically. Other query actions are not implemented.
 The native `Users.onNew` defaults mirror the Java implementation, including its
 default password value and `changePassword` flag; explicitly supplied values
 are preserved even when user-level events are disabled. With user events enabled,
