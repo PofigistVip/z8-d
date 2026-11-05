@@ -7,4 +7,5 @@ z8d
 *.ilk
 
 runtime/lib/
+postgres/lib/
 __pycache__/

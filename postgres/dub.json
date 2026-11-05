@@ -1,0 +1,9 @@
+{
+  "name": "z8-postgres",
+  "description": "Optional PostgreSQL client for Z8 D runtime",
+  "license": "LGPL-3.0-or-later",
+  "targetType": "staticLibrary",
+  "targetName": "z8-postgres",
+  "targetPath": "lib",
+  "sourcePaths": ["source"]
+}
