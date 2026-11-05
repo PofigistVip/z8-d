@@ -2377,8 +2377,10 @@ class Checker {
                 if (["+", "==", "!=", "<", ">", "<=", ">="].canFind(op) && left == ValueType.stringType && hasStringConversion(right)) {
                     e.right.convertToString = right; right = ValueType.stringType;
                 }
-                if (op == "+" && right == ValueType.stringType && hasStringConversion(left)) {
+                if (right == ValueType.stringType && hasStringConversion(left) &&
+                    (op == "+" || (left == ValueType.guidType && ["==", "!=", "<", ">", "<=", ">="].canFind(op)))) {
                     e.left.convertToString = left; left = ValueType.stringType;
+                    e.nullableStringLeft = true;
                 }
                 if (left == ValueType.decimalType && right == ValueType.intType) { e.right.promoteToDecimal = true; right = ValueType.decimalType; }
                 if (left == ValueType.intType && right == ValueType.decimalType) {
