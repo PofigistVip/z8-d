@@ -57,6 +57,14 @@ private wstring z8_sql_date_compare_format(Z8SqlBool value, Z8SqlVendor vendor) 
     auto left = z8_nonnull(value.dateLeft), right = z8_nonnull(value.dateRight);
     auto op = value.dateOperator;
     auto sqlOp = op == "==" ? "="w : op == "!=" ? "<>"w : op.to!wstring;
+    // Java Rel truncates only when both operands have FieldType.Date.
+    // A DatetimeField comparison retains its full millisecond precision.
+    bool isDatetimeField(Z8SqlDate expression) {
+        if (expression.kind == Z8SqlDateKind.group) return isDatetimeField(z8_nonnull(expression.left));
+        return expression.kind == Z8SqlDateKind.field && z8_field_type_name(expression.field) == "datetime"w;
+    }
+    if (isDatetimeField(left) || isDatetimeField(right))
+        return z8_sql_date_format(left, vendor) ~ sqlOp ~ z8_sql_date_format(right, vendor);
     bool leftConst = left.kind == Z8SqlDateKind.constant, rightConst = right.kind == Z8SqlDateKind.constant;
     if (leftConst && rightConst) {
         auto a = z8_date_ticks(z8_date_truncDay(left.constant)), b = z8_date_ticks(z8_date_truncDay(right.constant));

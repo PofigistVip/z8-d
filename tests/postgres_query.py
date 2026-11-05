@@ -28,6 +28,7 @@ import org.zenframework.z8.base.table.value.BoolField;
 import org.zenframework.z8.base.table.value.TextField;
 import org.zenframework.z8.base.table.value.BinaryField;
 import org.zenframework.z8.base.table.value.DatetimeField;
+import org.zenframework.z8.base.table.value.DateField;
 public class Sales extends Table {
     [name "Amount"] public IntField amount;
     [name "Title"] public StringField title;
@@ -35,6 +36,7 @@ public class Sales extends Table {
     [name "Info"] public TextField info;
     [name "Blob"] public BinaryField blob;
     [name "When"] public DatetimeField instant;
+    [name "DateOnly"] public DateField calendarDate;
     public string events = "";
     public bool copying = false;
     public bool observeRead = false; public int observedRead;
@@ -104,6 +106,11 @@ public class Probe {
     public static void jsonTitle(Sales table, string op, string value) { table.setWhere("{property:'" + table.title.id() + "',operator:'" + op + "',value:'" + value + "'}"); }
     public static void jsonInfo(Sales table, string op, string value) { table.setWhere("{property:'" + table.info.id() + "',operator:'" + op + "',value:'" + value + "'}"); }
     public static void jsonId(Sales table, string op, string value) { table.setWhere("{property:'" + table.recordId.id() + "',operator:'" + op + "',value:'" + value + "'}"); }
+    public static void jsonDate(Sales table, string op, string value) { table.setWhere("{property:'" + table.instant.id() + "',operator:'" + op + "',value:'" + value + "'}"); }
+    public static void jsonCalendar(Sales table, string op, string value) { table.setWhere("{property:'" + table.calendarDate.id() + "',operator:'" + op + "',value:'" + value + "'}"); }
+    public static void dateBl(Sales table, date value) { table.setWhere(table.instant == value); }
+    public static void calendarBl(Sales table, date value) { table.setWhere(table.calendarDate == value); }
+    public static void restrictDates(Sales table) { table.addWhere(table.amount >= 100); }
     public static void jsonHaving(Sales table) {
         table.groupBy = {table.flag}; table.amount.aggregation = Aggregation.Sum;
         table.addHaving("{property:'" + table.amount.id() + "',operator:'ge',value:'20'}");
@@ -183,7 +190,7 @@ import std.conv : to;
 void main(string[] args) {
     alias P = Z8p_50726F6265;
     auto db = new Z8PostgresConnection(args[1]);
-    db.execute(`CREATE TEMP TABLE "Sales""Quote" ("RecordId" uuid PRIMARY KEY, "CreatedAt" bigint, "ModifiedAt" bigint, "CreatedBy" uuid, "ModifiedBy" uuid, "Lock" bigint, "Amount" bigint, "Title" varchar(30), "Flag" smallint, "Info" bytea, "Blob" bytea, "When" bigint)`);
+    db.execute(`CREATE TEMP TABLE "Sales""Quote" ("RecordId" uuid PRIMARY KEY, "CreatedAt" bigint, "ModifiedAt" bigint, "CreatedBy" uuid, "ModifiedBy" uuid, "Lock" bigint, "Amount" bigint, "Title" varchar(30), "Flag" smallint, "Info" bytea, "Blob" bytea, "When" bigint, "DateOnly" bigint)`);
     db.execute(`INSERT INTO "Sales""Quote" ("RecordId","Amount","Title","Flag","Info","Blob","When") VALUES ('00000000-0000-0000-0000-000000000001',10,'O''Reilly',1,convert_to('Русский 😀','UTF8'),decode('0001ff','hex'),1234)`);
     db.execute(`INSERT INTO "Sales""Quote" ("RecordId","Amount","Title","Flag","Info","Blob","When") VALUES ('00000000-0000-0000-0000-000000000002',20,NULL,NULL,NULL,NULL,NULL)`);
     db.execute(`INSERT INTO "Sales""Quote" ("RecordId","Amount","Title","Flag","Info","Blob","When") VALUES ('00000000-0000-0000-0000-000000000003',-1,'hidden',1,NULL,NULL,NULL)`);
@@ -240,6 +247,45 @@ void main(string[] args) {
     P.m_jsonTitle(table, "contains"w, "   "w); assert(z8_optional_require(P.m_count(table)) == 7);
     P.m_jsonInfo(table, "contains"w, "quick FOX"w); assert(z8_optional_require(P.m_count(table)) == 1);
     P.m_jsonId(table, "endsWith"w, "0005"w); assert(z8_optional_require(P.m_count(table)) == 1);
+    P.m_jsonReset(table); db.execute("ROLLBACK");
+    db.execute("BEGIN");
+    db.execute(`INSERT INTO "Sales""Quote" ("RecordId","Amount","When","DateOnly") VALUES ('00000000-0000-0000-0000-000000000032',100,1234,1234), ('00000000-0000-0000-0000-000000000033',100,1235,1235)`);
+    P.m_jsonDate(table, "eq"w, "1234"w); P.m_restrictDates(table); assert(z8_optional_require(P.m_count(table)) == 1);
+    P.m_jsonCalendar(table, "eq"w, "1234"w); P.m_restrictDates(table); assert(z8_optional_require(P.m_count(table)) == 2);
+    P.m_dateBl(table, z8_date_from_ticks(1234)); P.m_restrictDates(table); assert(z8_optional_require(P.m_count(table)) == 1);
+    P.m_calendarBl(table, z8_date_from_ticks(1234)); P.m_restrictDates(table); assert(z8_optional_require(P.m_count(table)) == 2);
+    auto anchor = z8_date_now(), day = z8_date_truncDay(anchor), hour = z8_date_truncHour(anchor);
+    auto week = z8_date_addDay(day, -((z8_date_dayOfWeek(day) + 5) % 7));
+    auto month = z8_date_truncMonth(anchor), year = z8_date_truncYear(anchor);
+    auto moments = [z8_date_addYear(year, -1), year, z8_date_addMonth(month, -1), month,
+        z8_date_addDay(week, -7), week, z8_date_addDay(day, -2), z8_date_addDay(day, -1), day,
+        z8_date_addHour(hour, -2), z8_date_addHour(hour, -1), hour, z8_date_addHour(hour, 1),
+        z8_date_addDay(day, 1), z8_date_addDay(day, 2), z8_date_addDay(week, 7),
+        z8_date_addMonth(month, 1), z8_date_addYear(year, 1)];
+    foreach (index, moment; moments) db.execute(`INSERT INTO "Sales""Quote" ("RecordId","Amount","When") VALUES ($1::uuid,100,$2::bigint)`,
+        [Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create(100 + index)).to!string), Z8PostgresParameter.value(z8_date_ticks(moment).to!string)]);
+    void checkRange(wstring op, wstring quantity, Z8Date lower, Z8Date upper) {
+        P.m_jsonDate(table, op, quantity); P.m_restrictDates(table);
+        auto expected = db.execute(`SELECT count(*) FROM "Sales""Quote" WHERE "Amount">=100 AND "When">=$1::bigint AND "When"<$2::bigint`,
+            [Z8PostgresParameter.value(z8_date_ticks(lower).to!string), Z8PostgresParameter.value(z8_date_ticks(upper).to!string)]);
+        assert(z8_optional_require(P.m_count(table)) == expected.rows[0][0].text.to!long);
+    }
+    checkRange("yesterday"w, ""w, z8_date_addDay(day, -1), day);
+    checkRange("today"w, ""w, day, z8_date_addDay(day, 1));
+    checkRange("tomorrow"w, ""w, z8_date_addDay(day, 1), z8_date_addDay(day, 2));
+    checkRange("lastWeek"w, ""w, z8_date_addDay(week, -7), week);
+    checkRange("thisWeek"w, ""w, week, z8_date_addDay(week, 7));
+    checkRange("nextWeek"w, ""w, z8_date_addDay(week, 7), z8_date_addDay(week, 14));
+    checkRange("lastMonth"w, ""w, z8_date_addMonth(month, -1), month);
+    checkRange("thisMonth"w, ""w, month, z8_date_addMonth(month, 1));
+    checkRange("nextMonth"w, ""w, z8_date_addMonth(month, 1), z8_date_addMonth(month, 2));
+    checkRange("lastYear"w, ""w, z8_date_addYear(year, -1), year);
+    checkRange("thisYear"w, ""w, year, z8_date_addYear(year, 1));
+    checkRange("nextYear"w, ""w, z8_date_addYear(year, 1), z8_date_addYear(year, 2));
+    checkRange("lastDays"w, "2"w, z8_date_addDay(day, -2), day);
+    checkRange("nextDays"w, "2"w, day, z8_date_addDay(day, 2));
+    checkRange("lastHours"w, "2"w, z8_date_addHour(hour, -2), hour);
+    checkRange("nextHours"w, "2"w, hour, z8_date_addHour(hour, 2));
     P.m_jsonReset(table); db.execute("ROLLBACK");
     auto groupedFilter = P.m_make(); z8_query_set_executor(groupedFilter, new Z8PostgresQueryExecutor(db, "pg_temp"w, `Sales"Quote`w));
     P.m_jsonHaving(groupedFilter); assert(z8_optional_require(P.m_count(groupedFilter)) == 1);

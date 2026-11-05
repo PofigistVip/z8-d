@@ -62,6 +62,38 @@ private Z8SqlBool z8_filter_text_operation(Z8Object field, wstring type, wstring
     }
     return negative && result !is null ? z8_sql_bool_not(result) : result;
 }
+private Z8SqlBool z8_filter_relative_date(Z8Object field, wstring operation, wstring value) {
+    auto now = z8_date_now();
+    Z8Date start, end;
+    switch (operation) {
+        case "yesterday"w: case "today"w: case "tomorrow"w:
+            auto day = operation == "yesterday"w ? -1 : operation == "tomorrow"w ? 1 : 0;
+            start = z8_date_truncDay(z8_date_addDay(now, day)); end = z8_date_addDay(start, 1); break;
+        case "lastweek"w: case "thisweek"w: case "nextweek"w:
+            auto day = z8_date_truncDay(now);
+            auto daysSinceMonday = (z8_date_dayOfWeek(day) + 5) % 7;
+            auto offset = operation == "lastweek"w ? -7 : operation == "nextweek"w ? 7 : 0;
+            start = z8_date_addDay(day, offset - daysSinceMonday); end = z8_date_addDay(start, 7); break;
+        case "lastmonth"w: case "thismonth"w: case "nextmonth"w:
+            auto offset = operation == "lastmonth"w ? -1 : operation == "nextmonth"w ? 1 : 0;
+            start = z8_date_addMonth(z8_date_truncMonth(now), offset); end = z8_date_addMonth(start, 1); break;
+        case "lastyear"w: case "thisyear"w: case "nextyear"w:
+            auto offset = operation == "lastyear"w ? -1 : operation == "nextyear"w ? 1 : 0;
+            start = z8_date_addYear(z8_date_truncYear(now), offset); end = z8_date_addYear(start, 1); break;
+        case "lastdays"w: case "nextdays"w: case "lasthours"w: case "nexthours"w:
+            if (value is null || !value.length) throw new Exception("relative date filter requires a quantity");
+            auto count = cast(int)z8_int_parse(value);
+            bool hours = operation == "lasthours"w || operation == "nexthours"w;
+            bool previous = operation == "lastdays"w || operation == "lasthours"w;
+            auto base = hours ? z8_date_truncHour(now) : z8_date_truncDay(now);
+            start = previous ? (hours ? z8_date_addHour(base, -cast(long)count) : z8_date_addDay(base, -cast(long)count)) : base;
+            end = hours ? z8_date_addHour(start, count) : z8_date_addDay(start, count); break;
+        default: throw new Exception("unsupported relative date filter operation");
+    }
+    auto column = z8_datetime_field_sql(field);
+    return z8_sql_bool_binary!"&&"(z8_sql_date_compare!">="(column, z8_sql_date_const(start)),
+        z8_sql_date_compare!"<"(column, z8_sql_date_const(end)));
+}
 private Z8SqlBool z8_filter_compare(Z8Object field, wstring operation, wstring[] values) {
     auto type = z8_field_type_name(field);
     if (values.length > 1) {
@@ -77,6 +109,10 @@ private Z8SqlBool z8_filter_compare(Z8Object field, wstring operation, wstring[]
         bool number = operation == "istrue"w ? true : operation == "isfalse"w ? false : z8_bool_parse(value);
         return z8_sql_bool_binary!"=="(z8_bool_field_sql(field), z8_sql_bool_const(number));
     }
+    if ((type == "date"w || type == "datetime"w) && ["yesterday"w, "today"w, "tomorrow"w,
+        "lastweek"w, "thisweek"w, "nextweek"w, "lastmonth"w, "thismonth"w, "nextmonth"w,
+        "lastyear"w, "thisyear"w, "nextyear"w, "lastdays"w, "nextdays"w, "lasthours"w, "nexthours"w].canFind(operation))
+        return z8_filter_relative_date(field, operation, value);
     bool textType = type == "string"w || type == "text"w || type == "file"w || type == "attachments"w;
     if ((textType || type == "guid"w) && ["beginswith"w, "notbeginswith"w, "endswith"w, "notendswith"w,
         "contains"w, "notcontains"w, "containsword"w, "notcontainsword"w, "isempty"w, "isnotempty"w].canFind(operation))
