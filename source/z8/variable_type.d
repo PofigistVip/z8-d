@@ -295,8 +295,8 @@ package ValueType optionalForArray(ValueType type) {
         default: assert(0, "not a primitive array");
     }
 }
-// Until Java's legacy Double.toString conversion is fully reproduced, reject
-// literal values for which a shorter D rendering may differ from the Java backend.
+// Java's legacy Double.toString has different edge cases outside this range.
+// Retain the magnitude guard until those cases are reproduced as well.
 package bool safeDecimalLiteral(string text) {
     auto spelling = text.replace(" ", "").replace("\t", "");
     auto exponent = spelling.indexOf('e');
@@ -307,7 +307,6 @@ package bool safeDecimalLiteral(string text) {
     size_t first, last = digits.length;
     while (first < last && digits[first] == '0') ++first;
     while (last > first && digits[last - 1] == '0') --last;
-    if (last - first > 15) return false;
     try {
         auto value = spelling.to!double;
         if (!value.isFinite) return false;

@@ -71,6 +71,8 @@ python tests/record_attributes.py
 python tests/sql_field_operators.py
 python tests/static_initialization.py
 python tests/decimal_oracle.py
+python tests/decimal_literal_precision.py
+python tests/bl_standard_probes.py path/to/bl-standard
 python tests/string_oracle.py
 python tests/lexer_oracle.py path/to/original-z8 --corpus
 python tests/z8_compiler_oracle.py path/to/original-z8
@@ -586,9 +588,9 @@ BL-компилятором, но сгенерированная им Java в п
 Значение NaN поддерживается в арифметике, сравнении и математических функциях;
 полная совместимость численных результатов с Java ещё не подтверждена.
 Исходный компилятор пропускает десятичные литералы через Java `double`, в отличие
-от `decimal.parse`, который читает строку точно. Для литералов z8-d пока принимает
-не более 15 значащих цифр и ненулевые значения в диапазоне от `1e-15` до `1e15`
-по модулю (верхняя граница исключена); для остальных значений используйте
+от `decimal.parse`, который читает строку точно. Для литералов z8-d принимает
+ненулевые значения в диапазоне от `1e-15` до `1e15` по модулю
+(верхняя граница исключена); для остальных значений используйте
 `decimal.parse("...")`. Полная совместимость форматирования Java `double` ещё
 не подтверждена.
 Поддерживаются преобразования `int` → `decimal` и `int`/`bool`/`decimal` → `string`,

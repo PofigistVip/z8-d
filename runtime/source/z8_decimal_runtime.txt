@@ -212,6 +212,38 @@ Z8Decimal z8_decimal_parse(wstring value) {
     return z8_decimal(z8_java_normalize_digits(value));
 }
 
+version (Windows) {
+    private extern(C) void* _create_locale(int category, const(char)* locale);
+    private extern(C) double _strtod_l(const(char)* input, char** end, void* locale);
+    private __gshared void* z8_literal_c_locale;
+    shared static this() {
+        import core.stdc.locale : LC_NUMERIC;
+        z8_literal_c_locale = _create_locale(LC_NUMERIC, "C".ptr);
+        if (z8_literal_c_locale is null) throw new Exception("cannot create numeric locale");
+    }
+} else version (Posix) {
+    private import core.sys.posix.locale : locale_t, newlocale, LC_NUMERIC_MASK;
+    private extern(C) double strtod_l(const(char)* input, char** end, locale_t locale);
+    private __gshared locale_t z8_literal_c_locale;
+    shared static this() {
+        z8_literal_c_locale = newlocale(LC_NUMERIC_MASK, "C".ptr, null);
+        if (z8_literal_c_locale is null) throw new Exception("cannot create numeric locale");
+    }
+}
+private double z8_literal_parse_double(string input) {
+    import std.string : toStringz;
+    const(char)* end;
+    auto source = input.toStringz;
+    double value;
+    version (Windows) value = _strtod_l(source, cast(char**)&end, z8_literal_c_locale);
+    else version (Posix) value = strtod_l(source, cast(char**)&end, z8_literal_c_locale);
+    else {
+        import core.stdc.stdlib : strtod;
+        value = strtod(source, &end);
+    }
+    if (!input.length || end != source + input.length) throw new Exception("invalid double literal");
+    return value;
+}
 // The original Java backend emits decimal literals as double literals and the
 // runtime constructs BigDecimal through BigDecimal.valueOf(double).
 string z8_java_double_string(double value) {
@@ -222,7 +254,7 @@ string z8_java_double_string(double value) {
     string shortest;
     foreach (precision; 1 .. 18) {
         auto candidate = format("%.*g", precision, value);
-        if (candidate.to!double == value) { shortest = candidate; break; }
+        if (z8_literal_parse_double(candidate) == value) { shortest = candidate; break; }
     }
     if (!shortest.length) throw new Exception("cannot format decimal literal");
     string sign;
@@ -257,7 +289,7 @@ string z8_java_double_string(double value) {
     return sign ~ rendered;
 }
 Z8Decimal z8_decimal_literal(string input) {
-    double value = input.to!double;
+    double value = z8_literal_parse_double(input);
     if (!value.isFinite) throw new Exception("decimal literal is outside double range");
     return z8_decimal(z8_java_double_string(value));
 }
