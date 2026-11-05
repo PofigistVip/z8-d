@@ -58,13 +58,13 @@ private class Z8PostgresRows : IZ8QueryCursor {
     private wstring[] kinds;
     private Z8PostgresResult result;
     private long position = -1;
-    private bool closed;
-    this(Z8Object[] selected, wstring[] kinds, Z8PostgresResult result) {
-        this.selected = selected.dup; this.kinds = kinds.dup; this.result = result;
+    private bool closed, grouped;
+    this(Z8Object[] selected, wstring[] kinds, Z8PostgresResult result, bool grouped) {
+        this.selected = selected.dup; this.kinds = kinds.dup; this.result = result; this.grouped = grouped;
     }
     Z8Object[] fields() { return selected.dup; }
     bool isClosed() { return closed; }
-    bool isGrouped() { return false; }
+    bool isGrouped() { return grouped; }
     bool next() {
         if (closed) throw new Z8PostgresException("PostgreSQL cursor is closed");
         return ++position < cast(long)result.rows.length;
@@ -72,16 +72,16 @@ private class Z8PostgresRows : IZ8QueryCursor {
     void close() { closed = true; result.rows = null; }
     Z8Primary read(Z8Object field, bool asArray, out bool wasNull) {
         if (closed || position < 0 || position >= cast(long)result.rows.length) throw new Z8PostgresException("PostgreSQL cursor is not on a row");
-        if (asArray) throw new Z8PostgresException("grouped PostgreSQL reads are not implemented");
         foreach (column, selectedField; selected) if (selectedField is field) {
             auto value = result.rows[cast(size_t)position][column]; wasNull = value.isNull;
+            if (asArray) return z8_primary_box(value.isNull ? ""w : value.text.to!wstring);
             return decodeField(kinds[column], value);
         }
         throw new Z8PostgresException("field is not present in PostgreSQL cursor");
     }
 }
 
-// Executes the single-table subset of Query. Links, grouping and UI-derived
+// Executes the single-table subset of Query. Links and UI-derived
 // default field selection are rejected until their query planning is available.
 class Z8PostgresQueryExecutor : IZ8QueryExecutor {
     private Z8PostgresConnection connection;
@@ -92,9 +92,10 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor {
         this.connection = connection; this.schema = schema.idup; this.table = table.idup;
     }
     IZ8QueryCursor read(Z8Object query, Z8QueryReadRequest request) {
-        if (request.groupFields.length || z8_query_array(query, "groupBy"w).length || z8_query_array(query, "aggregateBy"w).length)
-            throw new Z8PostgresException("grouped PostgreSQL queries are not implemented");
-        if (!trivialTrue(request.having) || !trivialTrue(request.queryHaving))
+        if (z8_query_array(query, "aggregateBy"w).length) throw new Z8PostgresException("PostgreSQL aggregateBy links are not implemented");
+        auto groups = request.groupFields.length ? request.groupFields : z8_query_array(query, "groupBy"w);
+        bool grouped = groups.length != 0;
+        if (!grouped && (!trivialTrue(request.having) || !trivialTrue(request.queryHaving)))
             throw new Z8PostgresException("PostgreSQL HAVING filters require grouped query support");
         if (!request.fields.length) throw new Z8PostgresException("PostgreSQL query requires explicit selected fields");
         if (request.start < 0) throw new Z8PostgresException("negative PostgreSQL query offset");
@@ -109,9 +110,17 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor {
             selected ~= dependency;
         }
         auto key = z8_query_primary_key(query);
-        if (key !is null) selected ~= key;
+        if (grouped) selected ~= groups;
+        else if (key !is null) selected ~= key;
         selected = uniqueFields(selected);
+        if (grouped) {
+            Z8Object[] projected;
+            foreach (field; selected) if (containsField(groups, field) || z8_field_aggregation(field) != Z8FieldAggregation.none ||
+                z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field)) projected ~= field;
+            selected = projected;
+        }
         foreach (field; request.sortFields) if (!containsField(declared, field)) throw new Z8PostgresException("PostgreSQL sort field belongs to another query");
+        foreach (field; groups) if (!containsField(declared, field)) throw new Z8PostgresException("PostgreSQL group field belongs to another query");
         auto previous = z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
         scope(exit) z8_sql_set_field_options(previous);
         string sql = "SELECT ";
@@ -120,14 +129,18 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor {
             if (index) sql ~= ", ";
             auto kind = z8_field_type_id(field); kinds ~= kind;
             if (kind == "geometry"w || kind == "none"w) throw new Z8PostgresException("unsupported PostgreSQL field type: " ~ kind.to!string);
+            z8_sql_set_field_options(Z8SqlFieldFormatOptions(grouped, false));
             auto expression = z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string;
-            if (kind == "binary"w) expression = "encode(" ~ expression ~ ", 'hex')";
-            else if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.TextField"w, field))
+            auto aggregation = z8_field_aggregation(field);
+            bool raw = !grouped || aggregation == Z8FieldAggregation.none || aggregation == Z8FieldAggregation.bitwiseOr || aggregation == Z8FieldAggregation.bitwiseAnd;
+            if (kind == "binary"w && raw) expression = "encode(" ~ expression ~ ", 'hex')";
+            else if (raw && z8_native_is_instance("org.zenframework.z8.server.base.table.value.TextField"w, field))
                 expression = "convert_from(" ~ expression ~ ", 'UTF8')";
             sql ~= expression ~ " AS " ~ quoteIdentifier(("z8_" ~ index.to!string).to!wstring);
         }
         sql ~= " FROM " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(table) ~ " AS t";
         string[] filters;
+        z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
         foreach (condition; [request.where, request.queryWhere, request.queryScope])
             if (condition !is null) filters ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
         Z8PostgresParameter[] parameters;
@@ -140,7 +153,23 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor {
             sql ~= " WHERE ";
             foreach (index, filter; filters) { if (index) sql ~= " AND "; sql ~= filter; }
         }
+        if (grouped) {
+            sql ~= " GROUP BY ";
+            foreach (index, field; groups) {
+                if (index) sql ~= ", ";
+                sql ~= z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string;
+            }
+            z8_sql_set_field_options(Z8SqlFieldFormatOptions(true, false));
+            string[] having;
+            foreach (condition; [request.having, request.queryHaving])
+                if (!trivialTrue(condition)) having ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
+            if (having.length) {
+                sql ~= " HAVING ";
+                foreach (index, condition; having) { if (index) sql ~= " AND "; sql ~= condition; }
+            }
+        }
         if (request.sortFields.length) {
+            z8_sql_set_field_options(Z8SqlFieldFormatOptions(grouped, true));
             sql ~= " ORDER BY ";
             foreach (index, field; request.sortFields) {
                 if (index) sql ~= ", ";
@@ -158,6 +187,6 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor {
             case Z8QueryReadLock.updateNoWait: sql ~= " FOR UPDATE NOWAIT"; break;
             case Z8QueryReadLock.shareNoWait: sql ~= " FOR SHARE NOWAIT"; break;
         }
-        return new Z8PostgresRows(selected, kinds, connection.execute(sql, parameters));
+        return new Z8PostgresRows(selected, kinds, connection.execute(sql, parameters), grouped);
     }
 }

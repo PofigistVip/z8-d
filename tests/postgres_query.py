@@ -41,6 +41,7 @@ public class Sales extends Table {
     (source / "Probe.bl").write_text('''
 import org.zenframework.z8.base.table.value.Field;
 import org.zenframework.z8.base.table.SortDirection;
+import org.zenframework.z8.base.table.value.Aggregation;
 public class Probe {
     public static Sales make() { Sales table; return table; }
     public static void read(Sales table) {
@@ -69,7 +70,23 @@ public class Probe {
             table.info.get() == "Русский 😀" && table.blob.get().length() == 3 && table.instant.get().ticks() == 1234;
     }
     public static int amount(Sales table) { return table.amount.get(); }
-    public static void group(Sales table) { Field[] fields = {table.amount}; table.group(fields, fields); }
+    public static void groupSum(Sales table) {
+        table.title.aggregation = Aggregation.None; table.amount.aggregation = Aggregation.Sum;
+        Field[] groups = {table.title}; Field[] fields = {table.amount, table.title};
+        table.group(groups, fields, table.amount >= 0, table.amount > 5);
+    }
+    public static void groupArray(Sales table) {
+        table.flag.aggregation = Aggregation.None; table.amount.aggregation = Aggregation.Array;
+        table.amount.arrayOrderBy.add(table.amount); table.amount.sortDirection = SortDirection.Desc;
+        Field[] groups = {table.flag}; Field[] fields = {table.flag, table.amount};
+        table.group(groups, fields);
+    }
+    public static void groupConfigured(Sales table) {
+        table.flag.aggregation = Aggregation.None; table.amount.aggregation = Aggregation.Sum;
+        table.groupBy = {table.flag}; Field[] fields = {table.flag, table.amount}; table.read(fields);
+    }
+    public static int[] groupValues(Sales table) { return table.amount.array(); }
+    public static bool groupFlag(Sales table) { return table.flag.get(); }
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -96,7 +113,23 @@ void main(string[] args) {
     assert(!z8_optional_require(P.m_next(table)));
     assert(z8_optional_require(P.m_record(table, z8_guid_create(3))) && z8_optional_require(P.m_amount(table)) == -1);
     P.m_close(table);
-    bool unsupported; try { P.m_group(table); } catch (Z8PostgresException) { unsupported = true; } assert(unsupported);
+    db.execute(`INSERT INTO "Sales""Quote" VALUES ('00000000-0000-0000-0000-000000000004',5,'O''Reilly',1,NULL,NULL,NULL)`);
+    P.m_groupSum(table);
+    long sum, groups;
+    while (z8_optional_require(P.m_next(table))) { sum += z8_optional_require(P.m_amount(table)); ++groups; }
+    assert(groups == 2 && sum == 35);
+    P.m_groupArray(table); groups = 0; sum = 0;
+    while (z8_optional_require(P.m_next(table))) {
+        auto values = P.m_groupValues(table);
+        if (values.z8_size() == 2) assert(values.z8_get(0) == 10 && values.z8_get(1) == 5);
+        else assert(values.z8_size() == 1 && values.z8_get(0) == 20);
+        for (long i; i < values.z8_size(); ++i) sum += z8_optional_require(values.z8_get(i));
+        ++groups;
+    }
+    assert(groups == 2 && sum == 35);
+    P.m_groupConfigured(table); groups = 0; sum = 0;
+    while (z8_optional_require(P.m_next(table))) { sum += z8_optional_require(P.m_amount(table)); ++groups; }
+    assert(groups == 2 && sum == 35);
     db.close();
 }
 ''', encoding="utf-8")
