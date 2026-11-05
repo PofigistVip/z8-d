@@ -1,0 +1,54 @@
+// Host-populated values for the shared native Field interface. Database
+// cursors, typed field constructors and SQL expressions are separate adapters.
+private enum z8_field_name = "org.zenframework.z8.server.base.table.value.Field"w;
+class Z8FieldState {
+    Z8Primary value;
+    private Z8Primary originalValue;
+    bool changed, wasNull = true;
+    this(Z8Primary initial = null, bool wasNull = true) { value = initial; this.wasNull = wasNull; }
+}
+private Z8FieldState z8_field_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_field_name, self)) throw new Exception("invalid Field object");
+    auto state = cast(Z8FieldState)self.z8_get_native_state(z8_field_name);
+    if (state is null) { state = new Z8FieldState(); self.z8_set_native_state(z8_field_name, state); }
+    return state;
+}
+void z8_field_attach(Z8Object self, Z8FieldState state) {
+    if (!z8_native_is_instance(z8_field_name, self)) throw new Exception("invalid Field object");
+    self.z8_set_native_state(z8_field_name, z8_nonnull(state));
+}
+void z8_field_set(Z8Object self, Z8Primary value) {
+    auto state = z8_field_state(self);
+    if (!state.changed) { state.originalValue = state.value; state.changed = true; }
+    state.value = value;
+}
+void z8_field_set_default(Z8Object self, Z8Primary value) { z8_field_state(self).value = value; }
+void z8_field_reset(Z8Object self) {
+    auto state = z8_field_state(self);
+    if (state.changed) { state.value = state.originalValue; state.changed = false; }
+}
+private Z8Primary z8_field_primary(Z8Object self) { return z8_field_state(self).value; }
+private auto z8_field_cast(T)(Z8Object self) { return z8_primary_cast!T(z8_field_primary(self)); }
+private Z8Optional!bool z8_field_changed(Z8Object self) { return z8_optional_wrap(z8_field_state(self).changed); }
+private Z8Optional!bool z8_field_was_null(Z8Object self) { return z8_optional_wrap(z8_field_state(self).wasNull); }
+private wstring z8_field_string_value(Z8Object self) {
+    return z8_string_new(z8_primary_to_string(z8_nonnull(z8_field_primary(self))));
+}
+void z8_bind_builtin_field() {
+    enum prefix = z8_field_name ~ "."w;
+    z8_native_bind(prefix ~ "m_primary"w, &z8_field_primary);
+    z8_native_bind(prefix ~ "m_binary"w, &z8_field_cast!Z8Binary);
+    z8_native_bind(prefix ~ "m_bool"w, &z8_field_cast!bool);
+    z8_native_bind(prefix ~ "m_geometry"w, &z8_field_cast!Z8Geometry);
+    z8_native_bind(prefix ~ "m_guid"w, &z8_field_cast!Z8Guid);
+    z8_native_bind(prefix ~ "m_date"w, &z8_field_cast!Z8Date);
+    z8_native_bind(prefix ~ "m_datespan"w, &z8_field_cast!Z8Datespan);
+    z8_native_bind(prefix ~ "m_decimal"w, &z8_field_cast!Z8Decimal);
+    z8_native_bind(prefix ~ "m_int"w, &z8_field_cast!long);
+    z8_native_bind(prefix ~ "m_string"w, &z8_field_cast!wstring);
+    z8_native_bind(prefix ~ "m_isChanged"w, &z8_field_changed);
+    z8_native_bind(prefix ~ "m_wasNull"w, &z8_field_was_null);
+    z8_native_bind(prefix ~ "m_toString"w, &z8_field_string_value);
+}
+shared static this() { z8_bind_builtin_field(); }
