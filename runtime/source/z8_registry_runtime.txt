@@ -1,0 +1,49 @@
+// Host-populated subset of AbstractRuntime's table and request registry.
+// Keys use table names for tables and class IDs for requests, as in Java.
+struct Z8RuntimeRegistration {
+    wstring classId, name, displayName;
+    Z8Guid key;
+}
+class Z8RuntimeRegistry {
+    private Z8RuntimeRegistration[] tableEntries, requestEntries;
+    private Object mutex;
+    this() { mutex = new Object(); }
+    private Z8RuntimeRegistration descriptor(Z8Object value, bool table) {
+        value = z8_nonnull(value);
+        if (table && !z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, value))
+            throw new Exception("runtime table registration requires a Table");
+        if (!z8_native_is_instance("org.zenframework.z8.server.runtime.OBJECT"w, value))
+            throw new Exception("runtime registration requires an OBJECT");
+        auto classId = value.z8_class_id();
+        auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, value);
+        if (classId is null || !classId.length || name is null || !name.length) throw new Exception("runtime class ID and name are required");
+        auto displayName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_displayName"w, value);
+        return Z8RuntimeRegistration(classId.idup, name.idup, displayName.idup, z8_guid_create_name(table ? name : classId));
+    }
+    private void add(ref Z8RuntimeRegistration[] entries, Z8RuntimeRegistration entry, bool table) {
+        synchronized (mutex) {
+            foreach (ref existing; entries) {
+                if (existing.classId == entry.classId && existing.name == entry.name && existing.key == entry.key) { existing.displayName = entry.displayName; return; }
+                if (existing.classId == entry.classId || existing.key == entry.key || (table && existing.name == entry.name))
+                    throw new Exception("conflicting runtime registration");
+            }
+            entries ~= entry;
+        }
+    }
+    void registerTable(Z8Object table) { add(tableEntries, descriptor(table, true), true); }
+    void registerRequest(Z8Object request) { add(requestEntries, descriptor(request, false), false); }
+    private Z8RuntimeRegistration[] snapshot(bool table) {
+        Z8RuntimeRegistration[] result;
+        synchronized (mutex) {
+            auto entries = table ? tableEntries : requestEntries;
+            foreach (entry; entries) {
+                entry.key = new Z8Guid(entry.key.majorBits, entry.key.minorBits); result ~= entry;
+            }
+        }
+        return result;
+    }
+    Z8RuntimeRegistration[] tables() { return snapshot(true); }
+    Z8RuntimeRegistration[] requests() { return snapshot(false); }
+    Z8Guid[] tableKeys() { Z8Guid[] keys; foreach (item; tables()) keys ~= item.key; return keys; }
+    Z8Guid[] requestKeys() { Z8Guid[] keys; foreach (item; requests()) keys ~= item.key; return keys; }
+}

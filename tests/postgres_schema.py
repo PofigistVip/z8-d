@@ -184,6 +184,16 @@ void main(string[] args) {
     }
     db.execute("CREATE TEMP TABLE init_temp (id integer)");
     auto table = P.m_make();
+    auto registry = new Z8RuntimeRegistry(); registry.registerTable(table); registry.registerTable(P.m_make());
+    registry.registerTable(P.m_indexes()); registry.registerRequest(table);
+    auto registeredTables = registry.tables(); auto registeredRequests = registry.requests();
+    assert(registeredTables.length == 2 && registeredRequests.length == 1);
+    assert(registeredTables[0].key == z8_guid_create_name("Sample;--"w));
+    assert(registeredRequests[0].key == z8_guid_create_name(registeredRequests[0].classId));
+    registeredTables[0].key.minorBits = 0; assert(registry.tableKeys()[0] == z8_guid_create_name("Sample;--"w));
+    auto conflict = P.m_indexes(); conflict.z8_set_attribute("name"w, "Sample;--"w);
+    bool duplicateRegistration; try { registry.registerTable(conflict); } catch (Exception) { duplicateRegistration = true; }
+    assert(duplicateRegistration && registry.tables().length == 2);
     auto ddl = z8_postgres_create_table_sql("pg_temp"w, table);
     assert(ddl.canFind(`"Sample;--"`) && ddl.canFind(`"Title" character varying DEFAULT 'O''Reilly 😀'`));
     assert(!ddl.canFind("computed") && ddl.canFind(`"Reference" uuid DEFAULT '00000000-0000-0000-0000-000000000000' NOT NULL`));
