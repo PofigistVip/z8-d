@@ -376,6 +376,7 @@ private string emitExprRaw(Expression e) {
             return e.castType == ValueType.selfType ? "z8_cast!(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")" : emitExpr(e.left);
         case ExprKind.instanceOf:
             if (e.primaryInstanceOf) return "z8_primary_is!(" ~ dType(e.castType) ~ ")(" ~ emitExpr(e.left) ~ ")";
+            if (e.enumInstanceOf) return "(cast(" ~ e.objectClass.emittedName ~ ")(cast(Object)(" ~ emitExpr(e.left) ~ ")) !is null)";
             return "(cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ") !is null)";
         case ExprKind.unary:
             if (e.userUnaryOperator) return emitReceiver(e.left) ~ "." ~ operatorDName(e.token.text) ~ "()";

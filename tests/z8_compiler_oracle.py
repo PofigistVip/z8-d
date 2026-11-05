@@ -198,7 +198,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     operator_source.mkdir(parents=True)
     shutil.copy2(root / "examples" / "operators" / "BinaryOperators.bl", operator_source)
     shutil.copy2(root / "examples" / "operators" / "BinaryConversionFallback.bl", operator_source)
-    for name in ("OperatorRoot", "OperatorMiddle", "OperatorLeaf", "OperatorDistance", "CompoundObject", "CompoundAccumulator", "CompoundObjectHolder", "CompoundObjectCases", "CompoundMember"):
+    for name in ("OperatorRoot", "OperatorMiddle", "OperatorLeaf", "OperatorDistance", "CompoundObject", "CompoundAccumulator", "CompoundObjectHolder", "CompoundObjectCases", "CompoundMember", "ProbeEnum", "ProbeOther", "EnumInstanceOf"):
         shutil.copy2(root / "examples" / "operators" / (name + ".bl"), operator_source)
     operator_command = ["java", "-cp", str(classes) + os.pathsep + classpath,
                         "org.zenframework.z8.compiler.cmd.Main", str(operator_project),
@@ -209,6 +209,9 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     operator_java = (operator_project / "out" / "BinaryOperators.java").read_text(encoding="utf-8")
     if "value.operatorAdd(" not in operator_java:
         raise SystemExit("Original Java backend no longer exhibits the expected reference operator call")
+    enum_java = (operator_project / "out" / "EnumInstanceOf.java").read_text(encoding="utf-8")
+    if "instanceof ProbeEnum.CLASS" not in enum_java:
+        raise SystemExit("Original Java backend no longer emits the expected enum CLASS reference")
     ambiguous_operator = operator_source / "AmbiguousConversion.bl"
     ambiguous_operator.write_text('''public class AmbiguousConversion {
         public operator int() { return 1; }

@@ -1353,8 +1353,14 @@ class Checker {
                     return ValueType.boolType;
                 }
                 auto target = resolveClass(currentProgram, e.token.text, e.token);
-                if (target.isEnum) fail("instanceof for enums is not supported", e.token);
                 auto sourceType = typeOf(e.left);
+                if (target.isEnum || sourceType == ValueType.enumType) {
+                    if (![ValueType.selfType, ValueType.enumType, ValueType.nullType].canFind(sourceType))
+                        fail("instanceof requires an object reference", e.token);
+                    e.enumInstanceOf = true;
+                    e.objectClass = target;
+                    return ValueType.boolType;
+                }
                 if (sourceType != ValueType.selfType && sourceType != ValueType.nullType)
                     fail("instanceof requires an object reference", e.token);
                 if (sourceType == ValueType.selfType && !isAssignable(e.left.objectClass, target) && !isAssignable(target, e.left.objectClass))

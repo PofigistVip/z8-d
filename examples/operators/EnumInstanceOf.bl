@@ -1,0 +1,18 @@
+public class EnumInstanceOf {
+    private static int calls;
+    private static ProbeEnum next() { calls += 1; return ProbeEnum.One; }
+    public static int run() {
+        ProbeEnum value = ProbeEnum.One;
+        if (!(value instanceof ProbeEnum)) return 1;
+        value = null;
+        if (value instanceof ProbeEnum) return 2;
+        if (null instanceof ProbeEnum) return 3;
+        if (ProbeEnum.One instanceof EnumInstanceOf) return 4;
+        EnumInstanceOf object;
+        if (object instanceof ProbeEnum) return 5;
+        ProbeOther other = ProbeOther.One;
+        if (other instanceof ProbeEnum) return 6;
+        if (!(next() instanceof ProbeEnum) || calls != 1) return 7;
+        return 221;
+    }
+}
