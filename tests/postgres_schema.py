@@ -114,6 +114,7 @@ import z8.database.postgres;
 import z8.database.connection;
 import z8.database.schema;
 import z8.database.catalog;
+import z8.database.compare;
 import z8gen.p_Probe;
 import std.algorithm.searching : canFind;
 void main(string[] args) {
@@ -229,6 +230,24 @@ void main(string[] args) {
     db.execute(`CREATE TABLE "dot.name"."quoted""table" ("a" integer)`);
     auto quoted = z8_postgres_describe_table(db, "dot.name"w, `quoted"table`w);
     assert(quoted !is null && quoted.schema == "dot.name" && quoted.columns[0].name == "a");
+    auto expectedStatic = P.m_statics();
+    assert(z8_postgres_compare_table(expectedStatic, z8_postgres_describe_table(db, "z8_test"w, "StaticSample"w)).length == 0);
+    assert(z8_postgres_compare_table(expectedStatic, null)[0].kind == Z8SchemaDifferenceKind.missingTable);
+    db.execute(`ALTER TABLE "z8_test"."StaticSample" ALTER COLUMN "Label" TYPE text, DROP COLUMN "Counter", ADD COLUMN "Extra" integer, ALTER COLUMN "Other" SET NOT NULL`);
+    auto differences = z8_postgres_compare_table(expectedStatic, z8_postgres_describe_table(db, "z8_test"w, "StaticSample"w));
+    bool changedType, missingColumn, extraColumn, changedNullability;
+    foreach (difference; differences) {
+        if (difference.kind == Z8SchemaDifferenceKind.columnType && difference.column == "Label") changedType = true;
+        if (difference.kind == Z8SchemaDifferenceKind.missingColumn && difference.column == "Counter") missingColumn = true;
+        if (difference.kind == Z8SchemaDifferenceKind.extraColumn && difference.column == "Extra") extraColumn = true;
+        if (difference.kind == Z8SchemaDifferenceKind.nullability && difference.column == "Other") changedNullability = true;
+    }
+    assert(changedType && missingColumn && extraColumn && changedNullability && differences.length == 4);
+    db.execute(`ALTER TABLE "z8_test"."StaticSample" DROP CONSTRAINT "StaticSample_pkey", ADD PRIMARY KEY ("Label")`);
+    differences = z8_postgres_compare_table(expectedStatic, z8_postgres_describe_table(db, "z8_test"w, "StaticSample"w));
+    bool changedKey;
+    foreach (difference; differences) if (difference.kind == Z8SchemaDifferenceKind.primaryKey && difference.expected == "RecordId" && difference.actual == "Label") changedKey = true;
+    assert(changedKey);
     db.execute(ddl);
     db.execute(`INSERT INTO "Sample;--" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000001')`);
     auto row = db.execute(`SELECT "Title","Amount","Flag","Price","Reference","Moment","Duration","Details","Blob" FROM "Sample;--"`);

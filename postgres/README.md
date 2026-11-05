@@ -62,6 +62,9 @@ default expressions, ordered primary key, indexes and foreign-key definitions
 from PostgreSQL catalogs. It returns null for a missing table and accepts
 `pg_temp` as the current connection's temporary schema. The result is a
 read-only snapshot, not an automatic migration plan.
+`z8_postgres_compare_table` in `z8.database.compare` reports missing or extra
+columns, mismatched types and nullability, and primary-key differences. It does
+not yet compare defaults, indexes or foreign keys, and never changes the schema.
 
 `Z8PostgresQueryExecutor` connects BL `Query` reads to PostgreSQL tables.
 Construct it with a connection, schema and root table name, then attach it to

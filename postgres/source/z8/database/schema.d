@@ -7,7 +7,7 @@ import z8.database.plan : quoteIdentifier;
 import z8.database.postgres : Z8PostgresConnection, Z8PostgresException, Z8PostgresParameter;
 import z8.database.connection : Z8PostgresDatabase;
 
-private string fieldType(Z8Object field) {
+package string fieldType(Z8Object field) {
     switch (z8_field_type_id(field)) {
         case "int"w: case "date"w: case "datetime"w: case "datespan"w: return "bigint";
         case "boolean"w: return "smallint";
