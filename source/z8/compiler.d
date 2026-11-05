@@ -57,7 +57,7 @@ GeneratedModule[] compileSources(SourceUnit[] units, string entry = "") {
     if (!units.length) throw new CompileException("no .bl source files found", Position.init);
     Program[] ordered;
     Program[string] programs;
-    foreach (unit; units) {
+    foreach (sourceIndex, unit; units) {
         Program program;
         try { program = (new Parser(unit.source)).parse(); }
         catch (LexException e) {
@@ -74,6 +74,7 @@ GeneratedModule[] compileSources(SourceUnit[] units, string entry = "") {
             error.sourceName = unit.path; throw error;
         }
         program.sourceName = unit.path;
+        program.sourceIndex = sourceIndex;
         program.qualifiedName = unit.name;
         program.emittedName = "Z8p_";
         foreach (i; 0 .. unit.name.length) program.emittedName ~= format("%02X", cast(ubyte)unit.name[i]);
@@ -86,6 +87,7 @@ GeneratedModule[] compileSources(SourceUnit[] units, string entry = "") {
             nested.emittedName = "Z8p_";
             foreach (i; 0 .. nested.qualifiedName.length) nested.emittedName ~= format("%02X", cast(ubyte)nested.qualifiedName[i]);
             nested.sourceName = owner.sourceName;
+            nested.sourceIndex = owner.sourceIndex;
             programs[nested.qualifiedName] = nested;
             ordered ~= nested;
             addNested(nested);

@@ -27,6 +27,17 @@ unittest {
     compile(q{[job "99 99 99 99 99"] class A {}});
     compile(q{[job "*\t* * * *"] class A {}});
     rejects(q{[job true] class A {}});
+    compile(q{[name "Имя 1.$"] class A {}});
+    compile(q{[name true] class A {}});
+    compile(q{[name] class A {}});
+    rejects(q{[name "1abc"] class A {}});
+    rejects(q{[name "😀"] class A {}});
+    rejects(q{[name "abc\n"] class A {}});
+    rejects(q{[name "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"] class A {}});
+    rejects(q{[name "$resource$"] class A {}});
+    rejects(q{[name 7] class A {}});
+    rejects(q{class A { [name "same"] A x; [name "same"] A y; }});
+    rejects(q{class A { [name "same"] A x; A y; [name "same"] y; }});
     rejects(q{[native "x"] class A {}});
     compile(q{class A { [flag] A child; public [tag "value"] A nested = class {}; }});
     rejects(q{class A { [flag] int x; }});
@@ -239,6 +250,16 @@ private void rejectsSources(SourceUnit[] sources, string expectedFile) {
 }
 
 unittest {
+    auto namedA = SourceUnit("a.NamedA", "NamedA.bl", q{[name "same"] class NamedA {}});
+    auto namedB = SourceUnit("b.NamedB", "NamedB.bl", q{[name "same"] class NamedB {}});
+    rejectsSources([namedA, namedB], "NamedB.bl");
+    auto emptyName = SourceUnit("a.Empty", "Empty.bl", q{[name ""] class Empty {}});
+    auto bareName = SourceUnit("b.Bare", "Bare.bl", q{[name] class Bare {}});
+    compileSources([emptyName, bareName]);
+    rejectsSources([bareName, emptyName], "Empty.bl");
+    auto namedParent = SourceUnit("pkg.NamedParent", "NamedParent.bl", q{class NamedParent { [name "shared"] NamedParent child; }});
+    auto namedChild = SourceUnit("pkg.NamedChild", "NamedChild.bl", q{class NamedChild extends NamedParent { [name "shared"] NamedParent other; }});
+    rejectsSources([namedParent, namedChild], "NamedChild.bl");
     auto base = SourceUnit("pkg.Base", "Base.bl", "class Base { public int value = 7; }");
     auto child = SourceUnit("pkg.Child", "Child.bl", "class Child extends pkg.Base { }");
     auto user = SourceUnit("other.User", "User.bl", q{class User {

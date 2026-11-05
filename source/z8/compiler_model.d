@@ -4,7 +4,7 @@ import std.algorithm : canFind;
 import std.conv : to;
 import std.string : replace, indexOf;
 import std.math : isFinite, abs;
-import z8.lexer : Position, Token;
+import z8.lexer : Position, Token, TokenKind, decodeStringLiteral;
 
 class CompileException : Exception {
     Position position;
@@ -90,6 +90,20 @@ class Method {
 }
 class Field { ValueType type; Token name; TypeAttribute[] attributes; Expression initializer; bool isPublic, isProtected, isStatic, isAuto, isRecord, declaredFinal, userOperatorAssignment; string objectName; Program objectClass; Program owner, nestedClass; }
 struct TypeAttribute { Token name; Token value; bool hasValue; }
+// Attribute constants use ConstantToken.getValueString, including the Java
+// integer suffix. This spelling is also used to compare [name] values.
+package wstring attributeLiteralValue(TypeAttribute attribute) {
+    if (!attribute.hasValue) return ""w;
+    if (attribute.value.kind == TokenKind.stringLiteral) return decodeStringLiteral(attribute.value.text);
+    if (attribute.value.kind == TokenKind.booleanLiteral) return attribute.value.text.to!wstring;
+    assert(attribute.value.kind == TokenKind.integerLiteral);
+    auto spelling = attribute.value.text.replace(" ", "").replace("\t", "");
+    long value;
+    if (spelling.length > 2 && spelling[0] == '0' && (spelling[1] == 'x' || spelling[1] == 'X'))
+        value = cast(long)spelling[2 .. $].to!ulong(16);
+    else value = spelling.to!long;
+    return (value.to!string ~ "L").to!wstring;
+}
 struct Import { string name; Token token; }
 struct Capture { string name; ValueType type; Program objectClass; }
 class Program {
@@ -100,6 +114,7 @@ class Program {
     Import[] imports;
     TypeAttribute[] attributes;
     string qualifiedName, sourceName, emittedName;
+    size_t sourceIndex;
     string baseName;
     Token baseToken;
     Program baseClass;

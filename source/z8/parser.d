@@ -3,6 +3,7 @@ module z8.parser;
 import std.algorithm : canFind;
 import std.conv : to;
 import std.regex : matchFirst, regex;
+import std.uni : unicode;
 import z8.compiler_model;
 import z8.lexer;
 
@@ -161,8 +162,25 @@ class Parser {
         return attribute;
     }
     private void checkSupportedAttribute(TypeAttribute attribute) {
-        if (["name", "primary"].canFind(attribute.name.text))
+        if (attribute.name.text == "primary")
             throw new CompileException("this attribute is not supported yet", attribute.name.position);
+        if (attribute.name.text == "name" && attribute.hasValue) {
+            auto value = attributeLiteralValue(attribute);
+            if (attribute.value.kind == TokenKind.stringLiteral && value.length > 2 && value[0] == '$' && value[$-1] == '$')
+                throw new CompileException("name attribute cannot be a resource key", attribute.value.position);
+            if (value.length > 128) throw new CompileException("name attribute is too long", attribute.value.position);
+            foreach (i, c; value) {
+                bool punctuation = (c >= '!' && c <= '/') || (c >= ':' && c <= '@') ||
+                    (c >= '[' && c <= '`') || (c >= '{' && c <= '~');
+                bool allowed = c != '\\' && c != '`' && c != '$' && c != '#' && c != '@' &&
+                    ((c in unicode.L) || (c in unicode.Nd) || (c in unicode.Nl) || (c in unicode.Sc) ||
+                     (c in unicode.Pc) || (c in unicode.Mn) || (c in unicode.Mc) || (c in unicode.Cf) ||
+                     (c >= 0x7F && c <= 0x9F));
+                bool alpha = c > ' ' && !punctuation && !(c >= '0' && c <= '9') && allowed;
+                if (c != '_' && !alpha && !(i > 0 && (c == ' ' || (c >= '0' && c <= '9') || punctuation)))
+                    throw new CompileException("name attribute has an illegal character", attribute.value.position);
+            }
+        }
         if (attribute.name.text == "request" && attribute.hasValue && attribute.value.kind != TokenKind.booleanLiteral)
             throw new CompileException("request attribute requires a boolean literal", attribute.value.position);
         if (attribute.name.text == "job" && attribute.hasValue) {

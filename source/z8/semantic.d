@@ -127,8 +127,41 @@ class Checker {
         if (!target.isEnum) return type;
         return type == ValueType.selfArray ? ValueType.enumArray : ValueType.enumType;
     }
+    private void checkAttributeNameConflicts(Program program, Program[string] programs) {
+        Program sourceRoot(Program owner) {
+            while (owner.lexicalOwner !is null) owner = owner.lexicalOwner;
+            return owner;
+        }
+        bool sameName(TypeAttribute attribute, TypeAttribute[] others) {
+            foreach (other; others)
+                if (other.name.text == "name" && attributeLiteralValue(attribute) == attributeLiteralValue(other)) return true;
+            return false;
+        }
+        foreach (attribute; program.attributes) if (attribute.name.text == "name" && attribute.hasValue) {
+            foreach (candidate; programs)
+                // Original Z8 checks types reconciled before the current unit.
+                // A bare [name] performs no check of its own.
+                if (candidate.lexicalOwner is null && candidate.sourceIndex < sourceRoot(program).sourceIndex && sameName(attribute, candidate.attributes))
+                    fail("name attribute conflicts with another type", attribute.name);
+        }
+        void checkMember(TypeAttribute[] attributes, Field selfField, Statement selfInit) {
+            foreach (attribute; attributes) if (attribute.name.text == "name" && attribute.hasValue) {
+                for (auto owner = program; owner !is null; owner = owner.baseClass) {
+                    foreach (field; owner.fields)
+                        if (field !is selfField && sameName(attribute, field.attributes))
+                            fail("name attribute conflicts with another member", attribute.name);
+                    foreach (init; owner.memberInitializers)
+                        if (init !is selfInit && sameName(attribute, init.attributes))
+                            fail("name attribute conflicts with another member", attribute.name);
+                }
+            }
+        }
+        foreach (field; program.fields) checkMember(field.attributes, field, null);
+        foreach (init; program.memberInitializers) checkMember(init.attributes, null, init);
+    }
     void prepareDeclarations(Program program, Program[string] programs) {
         currentProgram = program; allClasses = programs;
+        checkAttributeNameConflicts(program, programs);
         foreach (field; program.fields) {
             field.type = resolveDeclaredType(field.type, program, field.objectName, field.name);
             if (field.attributes.length && field.type != ValueType.selfType)

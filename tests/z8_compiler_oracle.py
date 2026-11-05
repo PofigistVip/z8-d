@@ -150,6 +150,38 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     if record_result.returncode == 0 or "id conflicts" not in record_result.stdout:
         raise SystemExit("Original Z8 did not reject a duplicate inherited record GUID:\n" + record_result.stdout)
     print("Original Z8 verified GUID records, visibility, and inherited duplicate checks")
+    # Check name validation and conflicts against the original compiler.
+    name_cases = [
+        (True, {"NameA": '[name "Имя 1.$"] public class NameA {}'}),
+        (True, {"NameA": '[name true] public class NameA {}'}),
+        (False, {"NameA": '[name "1abc"] public class NameA {}'}),
+        (False, {"NameA": '[name "$resource$"] public class NameA {}'}),
+        (False, {"NameA": '[name "same"] public class NameA {}',
+                 "NameB": '[name "same"] public class NameB {}'}),
+        (False, {"NameA": 'public class NameA { [name "same"] NameA first; [name "same"] NameA second; }'}),
+        (False, {"NameA": 'public class NameA { [name "same"] NameA first; }',
+                 "NameB": 'public class NameB extends NameA { [name "same"] NameA second; }'}),
+        (True, {"NameA": '[name ""] public class NameA {}',
+                "NameB": '[name] public class NameB {}'}),
+        (False, {"NameA": '[name ""] public class NameA {}',
+                 "NameB": '[name ""] public class NameB {}'}),
+        (False, {"NameA": 'public class NameA { [name ""] NameA first; [name] NameA second; }'}),
+        (False, {"NameA": '[name] public class NameA {}',
+                 "NameB": '[name ""] public class NameB {}'}),
+    ]
+    for case_index, (accepted, files) in enumerate(name_cases):
+        names_project = temp / ("name-attribute-project-" + str(case_index))
+        names_source = names_project / "src" / "bl"
+        names_source.mkdir(parents=True)
+        names_command = ["java", "-cp", str(classes) + os.pathsep + classpath,
+                         "org.zenframework.z8.compiler.cmd.Main", str(names_project),
+                         "-sources:src/bl", "-requires:" + str(lang), "-output:out"]
+        for name, content in files.items():
+            (names_source / (name + ".bl")).write_text(content, encoding="utf-8")
+        checked = subprocess.run(names_command, cwd=temp, capture_output=True, text=True, encoding="utf-8")
+        if (checked.returncode == 0) != accepted:
+            raise SystemExit(f"Original Z8 name attribute result differed for {files}:\n{checked.stdout}{checked.stderr}")
+    print("Original Z8 verified name attribute values and conflicts")
     # Binary operators on reference types pass BL but the Java backend emits
     # calls on CLASS wrappers rather than their objects, which javac rejects.
     operator_project = temp / "binary-operator-project"
@@ -218,7 +250,8 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     public static void main(String[] args) throws Exception {
         org.zenframework.z8.server.config.ServerConfig.load(args[0]);
         demo.cases.StaticOverloadChild.CLASS<?> metadata = new demo.cases.StaticOverloadChild.CLASS<>(null);
-        if (!"base".equals(metadata.getAttribute("baseTag")) ||
+        if (!"DfixtureChild".equals(metadata.getAttribute("name")) ||
+            !"base".equals(metadata.getAttribute("baseTag")) ||
             !"новое 😀".equals(metadata.getAttribute("sharedTag")) ||
             !"".equals(metadata.getAttribute("flag")) || !"false".equals(metadata.getAttribute("request")) ||
             !"true".equals(metadata.getAttribute("boolTag")) || !"16L".equals(metadata.getAttribute("count")) ||
@@ -228,6 +261,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             !"от родителя".equals(metadata.get().annotated.getAttribute("fieldTag")) ||
             !"специализация".equals(metadata.get().specialized.getAttribute("fieldTag")) ||
             !"существующее".equals(metadata.get().annotated.getAttribute("initTag")) ||
+            !"Second Field".equals(metadata.get().annotated.getAttribute("name")) ||
             !"false".equals(metadata.get().annotated.getAttribute("enabled")) ||
             !"7L".equals(metadata.get().annotated.getAttribute("count")) ||
             !"*/15 0 1-31 1,3,5 1-5".equals(metadata.get().annotated.getAttribute("job")) ||
@@ -399,6 +433,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
 import std.stdio : writeln;
 void main() {
     auto metadata = z8_new!Z8p_64656D6F2E63617365732E5374617469634F7665726C6F61644368696C64();
+    assert(metadata.z8_get_attribute("name"w) == "DfixtureChild"w);
     assert(metadata.z8_get_attribute("baseTag"w) == "base"w);
     assert(metadata.z8_get_attribute("sharedTag"w) == "новое 😀"w);
     assert(metadata.z8_get_attribute("flag"w) == ""w);
@@ -411,6 +446,7 @@ void main() {
     assert(metadata.f_annotated.z8_get_attribute("fieldTag"w) == "от родителя"w);
     assert(metadata.f_specialized.z8_get_attribute("fieldTag"w) == "специализация"w);
     assert(metadata.f_annotated.z8_get_attribute("initTag"w) == "существующее"w);
+    assert(metadata.f_annotated.z8_get_attribute("name"w) == "Second Field"w);
     assert(metadata.f_annotated.z8_get_attribute("enabled"w) == "false"w);
     assert(metadata.f_annotated.z8_get_attribute("count"w) == "7L"w);
     assert(metadata.f_annotated.z8_get_attribute("job"w) == "*/15 0 1-31 1,3,5 1-5"w);
