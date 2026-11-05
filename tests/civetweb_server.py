@@ -37,6 +37,15 @@ public class Probe {
         string[string] p = Application.requestParameters();
         if (p.containsKey("mode") && p["mode"] == "fail") throw "failed";
         if (p.containsKey("mode") && p["mode"] == "redirect") Application.redirect("/next");
+        if (p.containsKey("mode") && p["mode"] == "protocol") {
+            Application.info("notice");
+            Application.responseWriter().writeProperty("answer", 42);
+            return;
+        }
+        if (p.containsKey("mode") && p["mode"] == "unbalanced") {
+            Application.responseWriter().startObject();
+            return;
+        }
         if (p.containsKey("mode") && p["mode"] == "monitor") {
             Application.info("info"); Application.warning("warn"); Application.error("error");
             Application.logInfo("log info"); Application.logWarning("log warn"); Application.logError("log error");
@@ -93,8 +102,10 @@ void runRequest(Z8HttpRequest request) {
 }
 void main() {
     auto server = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048);
+    auto protocol = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048, Z8ResponseMode.application, "server-1"w);
     scope(exit) server.stop();
-    writeln(server.port()); stdout.flush();
+    scope(exit) protocol.stop();
+    writeln(server.port(), " ", protocol.port()); stdout.flush();
     readln();
     server.stop(); server.stop();
     bool stopped; try { server.port(); } catch (Exception) { stopped = true; }
@@ -115,10 +126,11 @@ void main() {
     process = subprocess.Popen([str(executable)], cwd=temp, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
     try:
         line = process.stdout.readline().strip()
-        if not line.isdigit(): raise RuntimeError("Server did not start: " + line + process.stderr.read())
-        port = int(line)
-        def request(path, body=None, headers=None):
-            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        ports = line.split()
+        if len(ports) != 2 or not all(p.isdigit() for p in ports): raise RuntimeError("Server did not start: " + line + process.stderr.read())
+        port, protocol_port = map(int, ports)
+        def request(path, body=None, headers=None, target=None):
+            conn = http.client.HTTPConnection("127.0.0.1", target or port, timeout=10)
             try:
                 conn.request("POST" if body is not None else "GET", path, body=body, headers=headers or {})
                 response = conn.getresponse()
@@ -156,6 +168,18 @@ void main() {
         assert status == 500 and json.loads(body)["error"] == "internal server error"
         status, body = request("/api?mode=monitor&name=x&value=y")
         assert status == 200 and json.loads(body)["name"] == "x", (status, body)
+        status, body = request("/api?mode=protocol&request=demo", target=protocol_port)
+        result = json.loads(body)
+        assert status == 200 and result["request"] == "demo" and result["success"] is True and result["answer"] == 42, result
+        assert result["server"] == "server-1" and result["info"]["messages"][0]["text"] == "notice", result
+        status, body = request("/api?mode=fail&request=broken", target=protocol_port)
+        result = json.loads(body)
+        assert status == 200 and result["request"] == "broken" and result["success"] is False and result["data"] == [], result
+        assert result["info"]["messages"][-1]["type"] == "error" and result["info"]["messages"][-1]["text"] == "failed", result
+        status, body = request("/api?mode=unbalanced", target=protocol_port)
+        result = json.loads(body)
+        assert status == 200 and result["request"] is None and result["success"] is False, result
+        assert result["info"]["messages"][-1]["text"] == "unbalanced response writer", result
         status, body = request("/api?name=after&value=error")
         assert status == 200 and json.loads(body)["name"] == "after", (status, body)
         status, body = request("/api?name=x", "x" * 2049)

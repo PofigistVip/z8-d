@@ -11,7 +11,14 @@ files for the host. The host can serialize its `info` object with
 `request.monitor.infoJson(serverId)`, using the same fields as the Java
 `JsonWriter.writeInfo`. Its logs remain in memory; log-file persistence and
 automatic inclusion of this information in the complete Z8 response protocol
-are still pending.
+are still pending for raw responses.
+
+Hosts can select `Z8ResponseMode.application` when constructing the server.
+It opens the standard `request`/`success` object before calling the handler,
+then adds `server` and monitor `info`; BL handlers write properties into that
+open object. Handler failures produce the Z8 error envelope and HTTP 200, as
+in `RequestDispatcher`. This mode does not yet implement authorization, request
+routing, retries, or the rest of the application-server protocol.
 
 The host owns the server and must call `stop()` from outside a request handler.
 Callbacks may run concurrently and must synchronize their own shared state.

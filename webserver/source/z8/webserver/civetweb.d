@@ -225,15 +225,19 @@ private ubyte[] readBody(MgConnection* connection, long length, bool chunked, si
     return result;
 }
 
+enum Z8ResponseMode { raw, application }
 class Z8CivetServer {
     private MgContext* context;
     private void delegate(Z8HttpRequest request) handler;
     private size_t bodyLimit;
+    private Z8ResponseMode responseMode;
+    private wstring serverId;
 
-    this(string listening, void delegate(Z8HttpRequest request) handler, size_t bodyLimit = 1024 * 1024) {
+    this(string listening, void delegate(Z8HttpRequest request) handler, size_t bodyLimit = 1024 * 1024,
+         Z8ResponseMode responseMode = Z8ResponseMode.raw, wstring serverId = null) {
         if (handler is null) throw new Exception("HTTP request handler is required");
         if (!bodyLimit) throw new Exception("HTTP body limit must be positive");
-        this.handler = handler; this.bodyLimit = bodyLimit;
+        this.handler = handler; this.bodyLimit = bodyLimit; this.responseMode = responseMode; this.serverId = serverId;
         const(char)*[7] options = ["listening_ports\0".ptr, listening.toStringz,
             "num_threads\0".ptr, "4\0".ptr, "enable_keep_alive\0".ptr, "no\0".ptr, null];
         GC.setAttr(cast(void*)this, GC.BlkAttr.NO_MOVE);
@@ -275,9 +279,21 @@ class Z8CivetServer {
                 if (type.startsWith("application/x-www-form-urlencoded")) addParameters(application.parameters, cast(string)request.body);
             }
             application.parameters.z8_add("ip"w, request.remoteAddress.to!wstring);
+            auto requestId = application.parameters.z8_get("request"w);
             auto previous = z8_application_set_request(application);
             scope (exit) z8_application_set_request(previous);
-            handler(request);
+            if (responseMode == Z8ResponseMode.application) z8_application_start_response(application, requestId);
+            try {
+                handler(request);
+                if (responseMode == Z8ResponseMode.application)
+                    z8_application_finish_response(application, request.monitor, serverId);
+            } catch (Z8Redirect redirect) { throw redirect; }
+            catch (Throwable error) {
+                if (responseMode == Z8ResponseMode.raw) throw error;
+                auto message = error.msg.length ? error.msg.to!wstring : "Internal server error."w;
+                request.monitor.message(Z8MonitorLevel.error, message);
+                return respond(connection, 200, "OK", z8_application_error_response(requestId, request.monitor, serverId).to!string);
+            }
             return respond(connection, 200, "OK", z8_application_response_text(application).to!string);
         } catch (Z8Redirect redirect) {
             JSONValue[string] data;

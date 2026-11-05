@@ -100,6 +100,33 @@ class Z8ApplicationRequest {
 wstring z8_application_response_text(Z8ApplicationRequest request) {
     return z8_nonnull(request).writer.stream;
 }
+// Host-side equivalents of RequestTarget.processRequest and its error path.
+// BL handlers write properties into the open response object.
+void z8_application_start_response(Z8ApplicationRequest request, wstring requestId, bool success = true) {
+    auto writer = z8_nonnull(request).writer;
+    if (writer.stream.length || writer.scopes.length != 1) throw new Exception("response already started");
+    writer.start('{');
+    z8_monitor_property(writer, "request"w, requestId);
+    z8_monitor_property(writer, "success"w, success);
+}
+private void z8_application_response_info(Z8JsonWriterState writer, Z8RequestMonitor monitor, wstring server) {
+    z8_monitor_property(writer, "server"w, server);
+    writer.property("info"w);
+    writer.raw(z8_nonnull(monitor).infoJson(server));
+}
+void z8_application_finish_response(Z8ApplicationRequest request, Z8RequestMonitor monitor, wstring server = null) {
+    auto writer = z8_nonnull(request).writer;
+    if (writer.scopes.length != 2) throw new Exception("unbalanced response writer");
+    z8_application_response_info(writer, monitor, server);
+    writer.finish('}');
+}
+wstring z8_application_error_response(wstring requestId, Z8RequestMonitor monitor, wstring server = null) {
+    auto request = new Z8ApplicationRequest();
+    z8_application_start_response(request, requestId, false);
+    request.writer.start('[', "data"w); request.writer.finish(']');
+    z8_application_finish_response(request, monitor, server);
+    return request.writer.stream;
+}
 private Z8ApplicationRequest z8_application_current_request;
 Z8ApplicationRequest z8_application_request() { return z8_application_current_request; }
 // Returns the previous context so nested host operations can restore it.
