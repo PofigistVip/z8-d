@@ -30,6 +30,66 @@ private Z8SqlBool z8_application_query_filter(Z8Object query, wstring json) {
     return z8_sql_bool_group(result);
 }
 
+// Shared by read and mutation responses; field selection is checked before a
+// mutation starts, so malformed response options cannot fail after commit.
+private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges privileges, Z8StringMap params) {
+    auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
+    auto key = z8_nonnull(z8_query_primary_key(query));
+    Z8Object[] requested;
+    auto fields = params.z8_get("fields"w);
+    if (fields !is null && fields.length) {
+        auto parsed = z8_json_parse(fields.to!string);
+        if (parsed.type != JSONType.array) throw new Exception("query fields must be a JSON array");
+        foreach (item; parsed.array) {
+            wstring id;
+            if (item.type == JSONType.string) id = item.str.to!wstring;
+            else if (item.type == JSONType.object) {
+                auto member = "id" in item.object;
+                if (member is null || member.type != JSONType.string) throw new Exception("query field has no id");
+                id = member.str.to!wstring;
+            } else throw new Exception("invalid query field");
+            requested ~= z8_query_find_field_id(query, id);
+        }
+    }
+    if (!requested.length) requested = z8_query_declared_fields(query);
+    requested ~= key;
+    foreach (field; z8_query_declared_fields(query))
+        if (field.z8_get_attribute("lockKey"w) !is null) requested ~= field;
+    Z8Object[] selected;
+    foreach (field; requested) {
+        bool duplicate;
+        foreach (existing; selected) if (existing is field) { duplicate = true; break; }
+        if (duplicate) continue;
+        auto owner = field.z8_get_owner();
+        auto tableKey = owner is null ? queryKey : z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, owner);
+        auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
+        if (field !is key && !privileges.getFieldAccess(tableKey, fieldKey).read) continue;
+        if (owner !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
+            throw new Exception("linked and computed fields are not supported by query read");
+        selected ~= field;
+    }
+    return selected;
+}
+private void z8_application_query_write_rows(Z8Object query, Z8JsonWriterState writer, Z8Object[] selected) {
+    auto key = z8_query_primary_key(query);
+    writer.start('[', "data"w);
+    while (z8_optional_require(z8_query_next(query))) {
+        writer.start('{');
+        foreach (field; selected) {
+            auto value = z8_field_primary(field);
+            auto wasNull = z8_optional_require(z8_field_was_null(field));
+            if (field is key && wasNull) continue;
+            writer.property(field.z8_id());
+            if (value !is null && value.kind == Z8PrimaryKind.geometry &&
+                (wasNull || (value.geometryValue !is null && value.geometryValue.rawHex is null && value.geometryValue.shape == -1)))
+                writer.raw("null"w);
+            else z8_json_writer_primary(writer, value);
+        }
+        writer.finish('}');
+    }
+    writer.finish(']');
+}
+
 // Initial ReadAction adapter for table queries. Unsupported request options
 // are rejected rather than silently changing the requested result.
 void z8_application_dispatch_query_read(wstring className) {
@@ -62,41 +122,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     auto key = z8_query_primary_key(query);
     if (key is null) throw new Exception("query has no primary key");
     if (z8_query_user_events_enabled()) query.z8_query_virtual_onReadAction();
-    Z8Object[] requested;
-    auto fields = params.z8_get("fields"w);
-    if (fields !is null && fields.length) {
-        auto parsed = z8_json_parse(fields.to!string);
-        if (parsed.type != JSONType.array) throw new Exception("query fields must be a JSON array");
-        foreach (item; parsed.array) {
-            wstring id;
-            if (item.type == JSONType.string) id = item.str.to!wstring;
-            else if (item.type == JSONType.object) {
-                auto member = "id" in item.object;
-                if (member is null || member.type != JSONType.string) throw new Exception("query field has no id");
-                id = member.str.to!wstring;
-            } else throw new Exception("invalid query field");
-            requested ~= z8_query_find_field_id(query, id);
-        }
-    }
-    if (!requested.length) requested = z8_query_declared_fields(query);
-    requested ~= key;
-    foreach (field; z8_query_declared_fields(query))
-        if (field.z8_get_attribute("lockKey"w) !is null) requested ~= field;
-    Z8Object[] selected;
-    foreach (field; requested) {
-        bool duplicate;
-        foreach (existing; selected) if (existing is field) { duplicate = true; break; }
-        if (duplicate) continue;
-        auto owner = field.z8_get_owner();
-        auto tableKey = owner is null ? queryKey : z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, owner);
-        auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
-        if (field !is key && !privileges.getFieldAccess(tableKey, fieldKey).read) continue;
-        // Expressions and linked fields require authorization of every SQL
-        // dependency; do not expose them until that check is implemented.
-        if (owner !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
-            throw new Exception("linked and computed fields are not supported by query read");
-        selected ~= field;
-    }
+    auto selected = z8_application_query_fields(query, privileges, params);
     long number(wstring key, long fallback) {
         auto value = params.z8_get(key);
         return value is null || !value.length ? fallback : z8_int_parse(value);
@@ -190,20 +216,5 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     }
     z8_query_open(query, read, true, prepared);
     scope(exit) z8_query_close(query);
-    writer.start('[', "data"w);
-    while (z8_optional_require(z8_query_next(query))) {
-        writer.start('{');
-        foreach (field; selected) {
-            auto value = z8_field_primary(field);
-            auto wasNull = z8_optional_require(z8_field_was_null(field));
-            if (field is key && wasNull) continue;
-            writer.property(field.z8_id());
-            if (value !is null && value.kind == Z8PrimaryKind.geometry &&
-                (wasNull || (value.geometryValue !is null && value.geometryValue.rawHex is null && value.geometryValue.shape == -1)))
-                writer.raw("null"w);
-            else z8_json_writer_primary(writer, value);
-        }
-        writer.finish('}');
-    }
-    writer.finish(']');
+    z8_application_query_write_rows(query, writer, selected);
 }
