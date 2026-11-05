@@ -1,0 +1,17 @@
+public class StaticExceptionValues {
+    public static exception empty;
+    public static exception message = "static error";
+    public static exception fromMethod = make();
+
+    public static exception make() { return "from method"; }
+
+    public static int run() {
+        if (empty == null || message.getMessage() != "static error") return 1;
+        if (fromMethod.getMessage() != "from method") return 2;
+        message = "changed";
+        if (message.getMessage() != "changed") return 3;
+        message = null;
+        if (message != null) return 4;
+        return 253;
+    }
+}

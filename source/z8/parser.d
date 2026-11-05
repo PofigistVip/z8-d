@@ -390,8 +390,6 @@ class Parser {
             if (current.text != "(") {
                 if (operatorSymbol.length || isCastOperator) error("operator requires parameters");
                 if (isVirtual || declaredType == ValueType.voidType) error("this field type or modifier is not supported");
-                if (isStatic && declaredType == ValueType.exceptionType)
-                    error("static object fields are not supported");
                 auto field = new Field; field.attributes = attributes; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.isProtected = isProtected; field.isStatic = isStatic; field.isAuto = isAuto; field.declaredFinal = declaredFinal; field.objectName = declaredObjectName; field.owner = result;
                 if (accept("=")) {
                     if (accept("class")) {
