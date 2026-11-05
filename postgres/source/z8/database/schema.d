@@ -148,14 +148,14 @@ bool z8_postgres_ensure_null_record(Z8PostgresConnection connection, wstring sch
 }
 
 // Apply declared records using the same create/update events as TableGenerator.
-// Built-in security tables need additional rules for preserving credentials.
+// Roles need additional access-table lifecycle handling before they can be applied.
 void z8_postgres_apply_static_records(Z8PostgresConnection connection, wstring schema, Z8Object table) {
     if (connection is null || connection.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
     if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, z8_nonnull(table)))
         throw new Z8PostgresException("PostgreSQL schema requires a Table");
-    if (z8_native_is_instance("org.zenframework.z8.server.base.table.system.Users"w, table) ||
-        z8_native_is_instance("org.zenframework.z8.server.base.table.system.Roles"w, table))
-        throw new Z8PostgresException("static security records require protected-field handling");
+    auto users = z8_native_is_instance("org.zenframework.z8.server.base.table.system.Users"w, table);
+    if (z8_native_is_instance("org.zenframework.z8.server.base.table.system.Roles"w, table))
+        throw new Z8PostgresException("static role records require access-table lifecycle handling");
     auto key = z8_query_primary_key(table);
     if (key is null) throw new Z8PostgresException("PostgreSQL table has no primary key");
     auto tableName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, table);
@@ -182,7 +182,12 @@ void z8_postgres_apply_static_records(Z8PostgresConnection connection, wstring s
     }
     foreach (record; records) {
         auto exists = connection.execute(sql, [Z8PostgresParameter.value(z8_guid_to_string(record.key).to!string)]).rows.length != 0;
-        foreach (item; record.values) z8_field_set(item.field, item.value);
+        auto protectedUser = users && exists && (record.key == z8_guid_create(1) || record.key == z8_guid_create(2));
+        foreach (item; record.values) {
+            auto index = item.field.z8_index();
+            if (protectedUser && (index == "name"w || index == "password"w || index == "description"w)) continue;
+            z8_field_set(item.field, item.value);
+        }
         if (exists)
             z8_native_call!(Z8Optional!long)("org.zenframework.z8.server.base.query.Query.m_update"w, table, record.key);
         else
@@ -199,9 +204,8 @@ void z8_postgres_create_tables(Z8PostgresConnection connection, wstring schema, 
     string[] definitions, indexes, foreignKeys;
     wstring[] names;
     foreach (table; tables) {
-        if (z8_native_is_instance("org.zenframework.z8.server.base.table.system.Users"w, table) ||
-            z8_native_is_instance("org.zenframework.z8.server.base.table.system.Roles"w, table))
-            throw new Z8PostgresException("static security records require protected-field handling");
+        if (z8_native_is_instance("org.zenframework.z8.server.base.table.system.Roles"w, table))
+            throw new Z8PostgresException("static role records require access-table lifecycle handling");
         definitions ~= z8_postgres_create_table_sql(schema, table);
         auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, table);
         foreach (existing; names) if (existing == name) throw new Z8PostgresException("duplicate PostgreSQL table name");

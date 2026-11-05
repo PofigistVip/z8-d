@@ -424,6 +424,18 @@ void main(string[] args) {
     z8_application_set_request(savedRequest);
     assert(db.execute(`SELECT count(*) FROM "z8_test"."SystemRoles"`).rows[0][0].text == "0");
     z8_connection_set_current(savedBackend);
+    db.execute(`CREATE SCHEMA "z8_security"`);
+    z8_postgres_create_tables(db, "z8_security"w, [P.m_users(), P.m_sequences()]);
+    auto builtin = db.execute(`SELECT "Name", "Lock", "Change Password" FROM "z8_security"."SystemUsers" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000' ORDER BY "RecordId"`);
+    assert(builtin.rows.length == 2 && builtin.rows[0][0].text == "System" && builtin.rows[1][0].text == "Admin");
+    assert(builtin.rows[0][1].text == "3" && builtin.rows[1][1].text == "3" && builtin.rows[1][2].text == "1");
+    db.execute(`UPDATE "z8_security"."SystemUsers" SET "Name" = 'Custom admin', "Password" = 'Secret', "Description" = convert_to('Kept', 'UTF8'), "Lock" = 0 WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
+    z8_postgres_apply_static_records(db, "z8_security"w, P.m_users());
+    auto retainedUser = db.execute(`SELECT "Name", "Password", convert_from("Description", 'UTF8'), "Lock" FROM "z8_security"."SystemUsers" WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
+    assert(retainedUser.rows[0][0].text == "Custom admin" && retainedUser.rows[0][1].text == "Secret" && retainedUser.rows[0][2].text == "Kept" && retainedUser.rows[0][3].text == "3");
+    bool rolesUnavailable;
+    try { z8_postgres_apply_static_records(db, "z8_security"w, P.m_roles()); } catch (Z8PostgresException) { rolesUnavailable = true; }
+    assert(rolesUnavailable);
     db.execute(`ALTER TABLE "z8_test"."StaticSample" DROP CONSTRAINT "StaticSample_pkey", ADD PRIMARY KEY ("Label")`);
     differences = z8_postgres_compare_table(expectedStatic, z8_postgres_describe_table(db, "z8_test"w, "StaticSample"w));
     bool changedKey;
