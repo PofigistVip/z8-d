@@ -112,9 +112,9 @@ class Checker {
             return arrayOf(resolveDeclaredType(elementType(type), owner, objectName, keyObjectName, site));
         if (isMap(type)) {
             auto value = mapValueType(type), key = mapKeyType(type);
-            if ([ValueType.selfType, ValueType.selfArray].canFind(value)) {
+            if ([ValueType.selfType, ValueType.selfArray, ValueType.selfMatrix].canFind(value)) {
                 auto target = resolveClass(owner, objectName, site);
-                if (target.isEnum) value = value == ValueType.selfArray ? ValueType.enumArray : ValueType.enumType;
+                if (target.isEnum) value = value == ValueType.selfMatrix ? ValueType.enumMatrix : value == ValueType.selfArray ? ValueType.enumArray : ValueType.enumType;
             }
             if (key == ValueType.selfType && resolveClass(owner, keyObjectName, site).isEnum) key = ValueType.enumType;
             return mapType(value, key);

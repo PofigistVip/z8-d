@@ -1,0 +1,19 @@
+import org.zenframework.z8.lang.sql.sql_int;
+public class MatrixMaps {
+    public static int run() {
+        int[][][string] grids = {("first", {{1, 2}, {3}})};
+        if (grids["first"][0][1] != 2 || grids.values().size() != 1) return 1;
+        int[][] equal = {{1, 2}, {3}};
+        if (!grids.containsValue(equal)) return 2;
+        KeyItem key = new KeyItem;
+        ValueItem value = new ValueItem;
+        ValueItem[][][KeyItem] objects = {(key, {{value}})};
+        if (objects[key][0][0].number != 11 || objects.keys().first().number != 7) return 3;
+        MapFlavor[][][bool] enums = {(true, {{MapFlavor.First, MapFlavor.Second}})};
+        if (enums[true][0][1] != MapFlavor.Second) return 4;
+        sql_int number = 5;
+        sql_int[][][guid] sql = {('00000000-0000-0000-0000-000000000001', {{number}})};
+        if (sql.values().size() != 1) return 5;
+        return 113;
+    }
+}

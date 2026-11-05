@@ -125,6 +125,13 @@ private enum ValueType[] mapValueTypes = [
     ValueType.sqlBoolArray, ValueType.sqlIntArray, ValueType.sqlDecimalArray, ValueType.sqlStringArray,
     ValueType.sqlGuidArray, ValueType.sqlDateArray, ValueType.sqlDatespanArray, ValueType.sqlBinaryArray,
     ValueType.sqlGeometryArray, ValueType.sqlPrimaryArray,
+    ValueType.stringMatrix, ValueType.primaryMatrix, ValueType.intMatrix, ValueType.boolMatrix,
+    ValueType.decimalMatrix, ValueType.guidMatrix, ValueType.binaryMatrix, ValueType.datespanMatrix,
+    ValueType.dateMatrix, ValueType.geometryMatrix, ValueType.fileMatrix, ValueType.exceptionMatrix,
+    ValueType.encodingMatrix, ValueType.selfMatrix, ValueType.enumMatrix, ValueType.sqlBoolMatrix,
+    ValueType.sqlIntMatrix, ValueType.sqlDecimalMatrix, ValueType.sqlStringMatrix, ValueType.sqlGuidMatrix,
+    ValueType.sqlDateMatrix, ValueType.sqlDatespanMatrix, ValueType.sqlBinaryMatrix, ValueType.sqlGeometryMatrix,
+    ValueType.sqlPrimaryMatrix,
 ];
 private enum ValueType[] mapKeyTypes = [
     ValueType.selfType, ValueType.enumType, ValueType.dateType, ValueType.datespanType,
