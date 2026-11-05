@@ -16,6 +16,9 @@ unittest {
     rejects(q{final public class A {}});
     rejects(q{[request "true"] class A {}});
     rejects(q{[native true] enum A {}});
+    compile(q{[title "test"] [flag] enum A { Value }});
+    compile(q{[title "test"] [native "example.A"] enum A { Value }});
+    rejects(q{[job 1] enum A { Value }});
     compile(q{[request true] [flag false] [count 0x10] [negative -7] class A {}});
     auto specialAttributes = compile("[g '00112233-4455-6677-8899-aabbccddeeff'] [b '0, 255'] class A {}");
     assert(specialAttributes.canFind("4822678189205111L, -8603657889541918977L"));

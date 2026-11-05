@@ -235,8 +235,6 @@ class Parser {
         result.isEnum = !result.isFinal && accept("enum");
         if (!result.isEnum) expect("class");
         if (nativeAttribute && !result.isEnum) error("native classes are not supported");
-        if (result.isEnum && result.attributes.length && !nativeAttribute) error("enum attributes are not supported yet");
-        if (result.isEnum && result.attributes.length > 1) error("additional enum attributes are not supported yet");
         result.name = identifier();
         if (result.isEnum) {
             expect("{");

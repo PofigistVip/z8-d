@@ -154,6 +154,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     name_cases = [
         (True, {"NameA": '[name "Имя 1.$"] public class NameA {}'}),
         (True, {"NameA": '[name true] public class NameA {}'}),
+        (True, {"NameA": '[title "label"] [native "example.NativeEnum"] public enum NameA { Value }'}),
         (False, {"NameA": '[name "1abc"] public class NameA {}'}),
         (False, {"NameA": '[name "$resource$"] public class NameA {}'}),
         (False, {"NameA": '[name "same"] public class NameA {}',

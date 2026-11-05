@@ -1,3 +1,4 @@
+[title "Цвет"] [priority 7] [dynamicValue StaticState.count]
 public enum Flavor {
     Red,
     Blue,
