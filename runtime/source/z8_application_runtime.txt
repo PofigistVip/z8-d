@@ -5,6 +5,32 @@ interface IZ8ApplicationMonitor {
     void log(Z8MonitorLevel level, wstring text);
     void print(Z8File value);
 }
+struct Z8MonitorEntry {
+    Z8MonitorLevel level;
+    wstring text, source;
+    Z8Date time;
+}
+// Request-local monitor; a host can persist logs and publish its captured
+// messages and files using the surrounding application's response protocol.
+class Z8RequestMonitor : IZ8ApplicationMonitor {
+    private Z8MonitorEntry[] messageEntries, logEntries;
+    private Z8File[] printedFiles;
+    private bool logHasErrors;
+    wstring source;
+    this(wstring source = null) { this.source = source; }
+    void message(Z8MonitorLevel level, wstring text) {
+        messageEntries ~= Z8MonitorEntry(level, text, source, z8_date_now());
+    }
+    void log(Z8MonitorLevel level, wstring text) {
+        logEntries ~= Z8MonitorEntry(level, text, source, z8_date_now());
+        if (level == Z8MonitorLevel.error) logHasErrors = true;
+    }
+    void print(Z8File value) { printedFiles ~= value; }
+    Z8MonitorEntry[] messages() { return messageEntries.dup; }
+    Z8MonitorEntry[] logs() { return logEntries.dup; }
+    Z8File[] files() { return printedFiles.dup; }
+    bool hasErrors() { return logHasErrors; }
+}
 class Z8Redirect : Z8Exception {
     wstring location;
     this(wstring location) { super(null); this.location = location; }

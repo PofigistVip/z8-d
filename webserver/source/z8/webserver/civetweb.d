@@ -49,6 +49,7 @@ extern(C) {
 class Z8HttpRequest {
     string method, path, query, contentType, remoteAddress;
     ubyte[] body;
+    Z8RequestMonitor monitor;
 }
 private class BadRequest : Exception { this(string text) { super(text); } }
 private class BodyTooLarge : Exception { this() { super("request body too large"); } }
@@ -266,6 +267,8 @@ class Z8CivetServer {
             request.body = readBody(connection, info.contentLength, transfer == "chunked", bodyLimit);
             auto type = request.contentType.toLower();
             auto application = new Z8ApplicationRequest();
+            request.monitor = new Z8RequestMonitor();
+            application.monitor = request.monitor;
             if (type.startsWith("multipart/form-data")) addMultipart(application, request.contentType, request.body);
             else {
                 addParameters(application.parameters, request.query);

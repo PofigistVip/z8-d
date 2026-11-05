@@ -20,6 +20,9 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
 [native "org.zenframework.z8.server.base.application.Application"] public class Application {
     public static string[string] requestParameters(); public static file[] requestFiles(); public static JsonWriter responseWriter();
     public static void redirect(string url);
+    public static void info(string text); public static void warning(string text); public static void error(string text);
+    public static void logInfo(string text); public static void logWarning(string text); public static void logError(string text);
+    public static void print(file value);
 }
 ''', encoding="utf-8")
     (source / "JsonWriter.bl").write_text('''
@@ -34,6 +37,11 @@ public class Probe {
         string[string] p = Application.requestParameters();
         if (p.containsKey("mode") && p["mode"] == "fail") throw "failed";
         if (p.containsKey("mode") && p["mode"] == "redirect") Application.redirect("/next");
+        if (p.containsKey("mode") && p["mode"] == "monitor") {
+            Application.info("info"); Application.warning("warn"); Application.error("error");
+            Application.logInfo("log info"); Application.logWarning("log warn"); Application.logError("log error");
+            file output; Application.print(output);
+        }
         JsonWriter writer = Application.responseWriter().startObject().writeProperty("name", p["name"])
             .writeProperty("value", p["value"]).writeProperty("ip", p["ip"]);
         file[] files = Application.requestFiles();
@@ -74,6 +82,14 @@ import std.string : indexOf;
 void runRequest(Z8HttpRequest request) {
     if (request.query.indexOf("collect=1") >= 0) GC.collect();
     Z8p_50726F6265.m_run();
+    if (request.query.indexOf("mode=monitor") >= 0) {
+        auto m = request.monitor;
+        assert(m.messages().length == 3 && m.logs().length == 3 && m.files().length == 1);
+        assert(m.messages()[0].text == "info"w && m.messages()[1].level == Z8MonitorLevel.warning);
+        assert(m.logs()[2].level == Z8MonitorLevel.error && m.hasErrors());
+        auto entries = m.messages(); entries[0].text = "changed"w;
+        assert(m.messages()[0].text == "info"w && m.messages()[0].time !is null);
+    }
 }
 void main() {
     auto server = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048);
@@ -138,6 +154,8 @@ void main() {
         assert status == 302 and json.loads(body)["redirect"] == "/next", (status, body)
         status, body = request("/api?mode=fail")
         assert status == 500 and json.loads(body)["error"] == "internal server error"
+        status, body = request("/api?mode=monitor&name=x&value=y")
+        assert status == 200 and json.loads(body)["name"] == "x", (status, body)
         status, body = request("/api?name=after&value=error")
         assert status == 200 and json.loads(body)["name"] == "after", (status, body)
         status, body = request("/api?name=x", "x" * 2049)

@@ -5,7 +5,10 @@ pinned CivetWeb 1.16 sources in `third_party/civetweb` and invokes a D delegate
 for every request. A fresh `Z8ApplicationRequest` is installed for the duration
 of that callback, so BL code can use `Application.requestParameters()` and
 `Application.responseWriter()`. The prior thread-local context is restored on
-success, redirect, or error.
+success, redirect, or error. Each request also has a `Z8RequestMonitor`, exposed
+as `Z8HttpRequest.monitor`, that captures BL messages, log entries and printed
+files for the host. Its logs remain in memory; log-file persistence and inclusion
+of monitor information in the complete Z8 response protocol are still pending.
 
 The host owns the server and must call `stop()` from outside a request handler.
 Callbacks may run concurrently and must synchronize their own shared state.
