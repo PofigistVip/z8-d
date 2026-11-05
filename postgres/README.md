@@ -22,7 +22,8 @@ the generated query with `z8_query_set_executor`. It supports explicit selected
 fields, SQL filters and scope, sort direction, pagination, read locks and GUID
 record lookup. Nested `Link` targets use their Z8 table names in the same schema;
 only links needed by selected fields, filters, sorting, grouping and expression
-dependencies are joined. Inner, left, right and full joins are supported, as
+dependencies are joined. `Join` supports a BL SQL boolean condition; its dependent
+tables are joined first, and cyclic join dependencies are rejected. Inner, left, right and full joins are supported, as
 are target-query filters and chained links. `GROUP BY`, `HAVING` and array aggregations are
 supported. `Query.count()` preserves an active cursor and counts groups when
 the query is grouped; `hasRecord` and `findRecords` are also available. It reads integer, boolean, decimal, string, text, file, binary, GUID
@@ -35,8 +36,8 @@ the SQL transaction is controlled by the connection's caller.
 An empty field list selects the query's direct field controls, names, columns
 and extra fields; nested form controls are not yet supported.
 
-The executor currently rejects arbitrary expression-based `Join` and `aggregateBy`
-links, geometry, and nontrivial HAVING without grouping. Filter-based updates and deletes select
+The executor currently rejects `aggregateBy` links, geometry, and nontrivial
+HAVING without grouping. Filter-based updates and deletes select
 matching records and invoke the BL events for each record. Record copying reads
 the source through the executor and preserves an active query cursor. Table audit
 values use the active request's session and event level; standalone use without

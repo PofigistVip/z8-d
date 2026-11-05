@@ -1,5 +1,6 @@
 // A Link is a GUID field with a target Query and a join direction.
 private enum z8_link_name = "org.zenframework.z8.server.base.table.value.Link"w;
+private enum z8_join_name = "org.zenframework.z8.server.base.table.value.Join"w;
 enum Z8JoinType { inner, left, right, full }
 private interface IZ8LinkJoinCell { Z8JoinType get(); }
 private class Z8LinkJoinCell(T) : IZ8LinkJoinCell {
@@ -19,9 +20,11 @@ private class Z8LinkState {
 }
 private Z8LinkState z8_link_state(Z8Object self) {
     self = z8_nonnull(self);
-    if (!z8_native_is_instance(z8_link_name, self)) throw new Exception("invalid Link object");
-    auto state = cast(Z8LinkState)self.z8_get_native_state(z8_link_name);
-    if (state is null) { state = new Z8LinkState(); self.z8_set_native_state(z8_link_name, state); }
+    auto name = z8_native_is_instance(z8_link_name, self) ? z8_link_name :
+        z8_native_is_instance(z8_join_name, self) ? z8_join_name : null;
+    if (name is null) throw new Exception("invalid query link object");
+    auto state = cast(Z8LinkState)self.z8_get_native_state(name);
+    if (state is null) { state = new Z8LinkState(); self.z8_set_native_state(name, state); }
     return state;
 }
 private void z8_link_new(Z8Object self) {
@@ -48,9 +51,22 @@ private void z8_link_assign(Z8Object self, Z8Object query) {
     if (query !is null && !z8_native_is_instance(z8_query_name, query)) throw new Exception("Link target is not a Query");
     z8_link_state(self).query = query;
 }
+private Z8Object* z8_join_query_address(Z8Object self) { return &z8_link_state(self).query; }
+private Z8SqlBool z8_join_default_expression(Z8Object self) { z8_nonnull(self); return z8_sql_bool_const(true); }
+private void z8_join_assign_expression(Z8Object self, Z8SqlBool expression) { z8_field_state(self).sqlExpression = expression; }
 Z8SqlBool z8_link_on(Z8Object self) {
     auto target = z8_link_query(self);
     if (target is null) throw new Exception("Link target is not configured");
+    if (z8_native_is_instance(z8_join_name, self)) {
+        auto state = z8_field_state(self);
+        if (state.resolvingExpression) throw new Exception("recursive SQL join expression");
+        state.resolvingExpression = true;
+        scope(exit) state.resolvingExpression = false;
+        if (state.sqlExpression is null) state.sqlExpression = z8_nonnull(self.z8_field_virtual_expression());
+        auto result = cast(Z8SqlBool)state.sqlExpression;
+        if (result is null) throw new Exception("Join expression must be SQL boolean");
+        return result;
+    }
     auto key = z8_query_primary_key(target);
     if (key is null) throw new Exception("Link target has no primary key");
     return z8_sql_guid_compare!"=="(z8_guid_field_sql(self), z8_guid_field_sql(key));
@@ -58,5 +74,9 @@ Z8SqlBool z8_link_on(Z8Object self) {
 void z8_bind_builtin_link() {
     z8_native_bind(z8_link_name ~ ".m_new"w, &z8_link_new);
     z8_native_bind(z8_link_name ~ ".z8op_assign"w, &z8_link_assign);
+    z8_native_bind(z8_join_name ~ ".z8op_assign"w, &z8_link_assign);
+    z8_native_bind(z8_join_name ~ ".z8op_assign"w, &z8_join_assign_expression);
+    z8_native_bind(z8_join_name ~ ".m_expression"w, &z8_join_default_expression);
+    z8_native_bind_field(z8_join_name ~ ".f_query"w, &z8_join_query_address);
 }
 shared static this() { z8_bind_builtin_link(); }

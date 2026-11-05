@@ -1050,7 +1050,8 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 field.name.text == "readLock" && !field.isStatic && field.type == ValueType.enumType && field.objectClass !is null) {
                 result ~= "@property ref " ~ storageType ~ " f_readLock() { return z8_query_lock_ref!(" ~
                     field.objectClass.emittedName ~ ")(this); }\n";
-            } else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.value.Link"w &&
+            } else if (program.isNative && ["org.zenframework.z8.server.base.table.value.Link"w,
+                "org.zenframework.z8.server.base.table.value.Join"w].canFind(program.nativeName) &&
                 field.name.text == "joinType" && !field.isStatic && field.type == ValueType.enumType && field.objectClass !is null) {
                 result ~= "@property ref " ~ storageType ~ " f_joinType() { return z8_link_join_ref!(" ~
                     field.objectClass.emittedName ~ ")(this); }\n";

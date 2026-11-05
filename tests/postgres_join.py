@@ -105,6 +105,25 @@ import org.zenframework.z8.base.table.value.Link;
     [name "ParentId"] public Link parentId = parent;
 }
 ''',
+        "ConditionOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.Join;
+import org.zenframework.z8.base.table.value.StringField;
+public class ConditionOrder extends Table {
+    [name "Title"] public StringField title;
+    public City city; [name "CityId"] public Link cityId = city;
+    public Customer customer; public Join matchingCustomer = customer;
+}
+''',
+        "CyclicOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Join;
+public class CyclicOrder extends Table {
+    public City city; public Join cityJoin = city;
+    public Customer customer; public Join customerJoin = customer;
+}
+''',
         "Probe": '''
 import org.zenframework.z8.base.table.value.Field;
 public class Probe {
@@ -114,6 +133,18 @@ public class Probe {
     public static FullOrder full() { FullOrder value; return value; }
     public static FilteredOrder filtered() { FilteredOrder value; return value; }
     public static Customer customer() { Customer value; return value; }
+    public static ConditionOrder conditional() { ConditionOrder value; return value; }
+    public static CyclicOrder cyclic() { CyclicOrder value; return value; }
+    public static void configureCycle(CyclicOrder order) {
+        order.cityJoin = order.customer.cityId.sql_guid() == order.city.recordId.sql_guid();
+        order.customerJoin = order.customer.cityId.sql_guid() == order.city.recordId.sql_guid();
+    }
+    public static void readCycle(CyclicOrder order) { Field[] fields = {order.customer.label}; order.read(fields); }
+    public static void condition(ConditionOrder order) { order.matchingCustomer = order.customer.cityId.sql_guid() == order.city.recordId.sql_guid(); }
+    public static void readCondition(ConditionOrder order) { Field[] fields = {order.title, order.customer.label}; order.read(fields); }
+    public static bool nextCondition(ConditionOrder order) { return order.next(); }
+    public static string conditionTitle(ConditionOrder order) { return order.title.get(); }
+    public static string conditionCustomer(ConditionOrder order) { return order.customer.label.get(); }
     public static RecursiveOrder recursive() { RecursiveOrder value; return value; }
     public static int recursiveCount(RecursiveOrder order) { return order.count(); }
     public static void recursiveRead(RecursiveOrder order) { Field[] fields = {order.parent.parent.recordId}; order.read(fields); }
@@ -164,14 +195,14 @@ void main(string[] args) {
     auto db = new Z8PostgresConnection(args[1]);
     db.execute(`CREATE TEMP TABLE "Cities" ("RecordId" uuid PRIMARY KEY, "Label" text)`);
     db.execute(`CREATE TEMP TABLE "Customers" ("RecordId" uuid PRIMARY KEY, "Label" text, "CityId" uuid)`);
-    db.execute(`CREATE TEMP TABLE "Orders" ("RecordId" uuid PRIMARY KEY, "Title" text, "CustomerId" uuid)`);
+    db.execute(`CREATE TEMP TABLE "Orders" ("RecordId" uuid PRIMARY KEY, "Title" text, "CustomerId" uuid, "CityId" uuid)`);
     db.execute(`CREATE TEMP TABLE "Nodes" ("RecordId" uuid PRIMARY KEY, "ParentId" uuid)`);
     db.execute(`INSERT INTO "Nodes" VALUES ('00000000-0000-0000-0000-000000000401','00000000-0000-0000-0000-000000000402'), ('00000000-0000-0000-0000-000000000402',NULL), ('00000000-0000-0000-0000-000000000403','00000000-0000-0000-0000-000000000401')`);
     db.execute(`INSERT INTO "Cities" VALUES ('00000000-0000-0000-0000-000000000101','Moscow')`);
     db.execute(`INSERT INTO "Customers" VALUES ('00000000-0000-0000-0000-000000000201','Alice','00000000-0000-0000-0000-000000000101'), ('00000000-0000-0000-0000-000000000202','Bob',NULL), ('00000000-0000-0000-0000-000000000203','Ghost',NULL), ('00000000-0000-0000-0000-000000000000','Sentinel',NULL)`);
-    db.execute(`INSERT INTO "Orders" VALUES ('00000000-0000-0000-0000-000000000301','First','00000000-0000-0000-0000-000000000201'), ('00000000-0000-0000-0000-000000000302','Second','00000000-0000-0000-0000-000000000202'), ('00000000-0000-0000-0000-000000000303','No customer',NULL), ('00000000-0000-0000-0000-000000000304','Missing customer','00000000-0000-0000-0000-000000000299')`);
-    auto inner = P.m_inner(); auto left = P.m_left(); auto right = P.m_right(); auto full = P.m_full(); auto filtered = P.m_filtered(); auto recursive = P.m_recursive();
-    foreach (query; [cast(Z8Object)inner, cast(Z8Object)left, cast(Z8Object)right, cast(Z8Object)full, cast(Z8Object)filtered])
+    db.execute(`INSERT INTO "Orders" ("RecordId","Title","CustomerId","CityId") VALUES ('00000000-0000-0000-0000-000000000301','First','00000000-0000-0000-0000-000000000201','00000000-0000-0000-0000-000000000101'), ('00000000-0000-0000-0000-000000000302','Second','00000000-0000-0000-0000-000000000202',NULL), ('00000000-0000-0000-0000-000000000303','No customer',NULL,NULL), ('00000000-0000-0000-0000-000000000304','Missing customer','00000000-0000-0000-0000-000000000299',NULL)`);
+    auto inner = P.m_inner(); auto left = P.m_left(); auto right = P.m_right(); auto full = P.m_full(); auto filtered = P.m_filtered(); auto recursive = P.m_recursive(); auto conditional = P.m_conditional(); auto cyclic = P.m_cyclic();
+    foreach (query; [cast(Z8Object)inner, cast(Z8Object)left, cast(Z8Object)right, cast(Z8Object)full, cast(Z8Object)filtered, cast(Z8Object)conditional, cast(Z8Object)cyclic])
         z8_query_set_executor(query, new Z8PostgresQueryExecutor(db, "pg_temp"w, "Orders"w));
     z8_query_set_executor(recursive, new Z8PostgresQueryExecutor(db, "pg_temp"w, "Nodes"w));
     assert(z8_optional_require(P.m_recursiveCount(recursive)) == 3);
@@ -210,6 +241,12 @@ void main(string[] args) {
     assert(fullRows == 4);
     assert(z8_optional_require(P.m_filteredCount(filtered)) == 1);
     assert(z8_optional_require(P.m_filteredRecord(filtered, z8_guid_create(0x302))) && P.m_filteredName(filtered) == "Bob"w);
+    P.m_condition(conditional); P.m_readCondition(conditional);
+    assert(z8_optional_require(P.m_nextCondition(conditional)) && P.m_conditionTitle(conditional) == "First"w && P.m_conditionCustomer(conditional) == "Alice"w);
+    assert(!z8_optional_require(P.m_nextCondition(conditional)));
+    P.m_configureCycle(cyclic); bool cycleRejected;
+    try { P.m_readCycle(cyclic); } catch (Z8PostgresException error) { cycleRejected = error.msg == "cyclic PostgreSQL join dependencies"; }
+    assert(cycleRejected);
     db.close();
 }
 ''', encoding="utf-8")
@@ -220,6 +257,8 @@ void main(string[] args) {
     command += [str(bin_dir.parent / "lib/libpq.lib")] if os.name == "nt" else ["-L-lpq"]
     subprocess.run([*command, "-of=" + str(exe)], cwd=temp, check=True)
     with temporary_postgres(bin_dir) as (connection, environment):
-        subprocess.run([str(exe), connection], env=environment, cwd=temp, check=True,
-                       creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+        result = subprocess.run([str(exe), connection], env=environment, cwd=temp, capture_output=True, text=True,
+                                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+        if result.returncode:
+            raise SystemExit(f"JOIN fixture failed ({result.returncode}):\n{result.stdout}\n{result.stderr}")
 print("PostgreSQL inner, left, right, full and chained query links verified")

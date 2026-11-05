@@ -52,7 +52,8 @@ package class Z8PostgresQueryPlan {
             if (index == size_t.max) {
                 Z8Object link;
                 foreach (fieldInParent; nodes[parent].fields) {
-                    if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Link"w, fieldInParent) &&
+                    if ((z8_native_is_instance("org.zenframework.z8.server.base.table.value.Link"w, fieldInParent) ||
+                        z8_native_is_instance("org.zenframework.z8.server.base.table.value.Join"w, fieldInParent)) &&
                         z8_link_query(fieldInParent) is target) { link = fieldInParent; break; }
                 }
                 if (link is null) throw new Z8PostgresException("PostgreSQL query path has no Link to target");
@@ -83,6 +84,8 @@ package class Z8PostgresQueryPlan {
             foreach (index; 1 .. nodes.length) {
                 if (!nodes[index].active || nodes[index].filtersCollected) continue;
                 nodes[index].filtersCollected = true; pending = true;
+                if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Join"w, nodes[index].link))
+                    includeExpression(z8_link_on(nodes[index].link));
                 if (!includeTargetFilters) continue;
                 auto query = nodes[index].query;
                 foreach (condition; [z8_query_where(query), z8_query_scope(query)]) if (!trivialTrue(condition)) {
@@ -117,21 +120,42 @@ package class Z8PostgresQueryPlan {
         string result = quoteIdentifier(schema) ~ "." ~ quoteIdentifier(rootTable) ~ " AS t";
         Z8JoinType[] effective = [Z8JoinType.inner];
         foreach (index; 1 .. nodes.length) {
-            auto node = nodes[index];
-            auto kind = z8_link_join_type(node.link);
-            if (effective[node.parent] == Z8JoinType.left) kind = Z8JoinType.left;
+            auto kind = z8_link_join_type(nodes[index].link);
+            if (effective[nodes[index].parent] == Z8JoinType.left) kind = Z8JoinType.left;
             effective ~= kind;
-            if (!node.active) continue;
-            string join;
-            final switch (kind) {
-                case Z8JoinType.inner: join = " INNER JOIN "; break;
-                case Z8JoinType.left: join = " LEFT JOIN "; break;
-                case Z8JoinType.right: join = " RIGHT JOIN "; break;
-                case Z8JoinType.full: join = " FULL JOIN "; break;
+        }
+        auto emitted = new bool[nodes.length]; emitted[0] = true;
+        size_t remaining;
+        foreach (index; 1 .. nodes.length) if (nodes[index].active) ++remaining;
+        while (remaining) {
+            bool progress;
+            foreach (index; 1 .. nodes.length) {
+                auto node = nodes[index];
+                if (!node.active || emitted[index] || !emitted[node.parent]) continue;
+                bool ready = true;
+                Z8Object[] visited;
+                void checkField(Z8Object field) {
+                    if (containsField(visited, field)) return;
+                    visited ~= field;
+                    auto ownerIndex = owner(field);
+                    if (ownerIndex != index && !emitted[ownerIndex]) ready = false;
+                    foreach (dependency; z8_field_query_dependencies(field)) if (dependency !is field) checkField(dependency);
+                }
+                foreach (field; z8_sql_collect_fields(z8_link_on(node.link))) checkField(field);
+                if (!ready) continue;
+                string join;
+                final switch (effective[index]) {
+                    case Z8JoinType.inner: join = " INNER JOIN "; break;
+                    case Z8JoinType.left: join = " LEFT JOIN "; break;
+                    case Z8JoinType.right: join = " RIGHT JOIN "; break;
+                    case Z8JoinType.full: join = " FULL JOIN "; break;
+                }
+                auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, node.query);
+                result ~= join ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(name) ~ " AS " ~ aliasOf(index).to!string ~
+                    " ON " ~ z8_sql_bool_format(z8_link_on(node.link), true, Z8SqlVendor.Postgres).to!string;
+                emitted[index] = true; --remaining; progress = true;
             }
-            auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, node.query);
-            result ~= join ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(name) ~ " AS " ~ aliasOf(index).to!string ~
-                " ON " ~ z8_sql_bool_format(z8_link_on(node.link), true, Z8SqlVendor.Postgres).to!string;
+            if (!progress) throw new Z8PostgresException("cyclic PostgreSQL join dependencies");
         }
         return result;
     }

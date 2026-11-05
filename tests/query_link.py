@@ -38,15 +38,24 @@ import org.zenframework.z8.base.table.value.Link;
 import org.zenframework.z8.base.table.value.JoinType;
 public class FullLink extends Link { joinType = JoinType.Full; }
 ''', encoding="utf-8")
+    (source / "NeverJoin.bl").write_text('''
+import org.zenframework.z8.base.table.value.Join;
+public class NeverJoin extends Join {
+    virtual protected sql_bool expression() { sql_int number = 0; return number > 1; }
+}
+''', encoding="utf-8")
     (source / "Orders.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.Join;
 public class Orders extends Table {
     public Customer customer;
     [name "CustomerId"] public Link customerId = customer;
     public LeftLink optionalCustomer = customer;
     public RightLink reverseCustomer = customer;
     public FullLink fullCustomer = customer;
+    public Join customJoin = customer;
+    public NeverJoin neverJoin = customer;
 }
 ''', encoding="utf-8")
     (source / "Probe.bl").write_text('''
@@ -55,6 +64,8 @@ public class Probe {
     public static Customer customer() { Customer value; return value; }
     public static void assign(Orders value, Customer target) { value.customerId = target; }
     public static bool indexed(Orders value) { return value.customerId.indexed; }
+    public static void condition(Orders value) { value.customJoin = value.customer.score >= 10; }
+    public static void setJoinQuery(Orders value, Customer target) { value.customJoin.query = target; }
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -71,6 +82,13 @@ void main() {
     assert(z8_link_query(link) is customer && z8_link_query(optional) is customer);
     assert(z8_link_join_type(link) == Z8JoinType.inner && z8_link_join_type(optional) == Z8JoinType.left);
     assert(z8_link_join_type(order.f_reverseCustomer) == Z8JoinType.right && z8_link_join_type(order.f_fullCustomer) == Z8JoinType.full);
+    auto custom = z8_nonnull(order.f_customJoin);
+    assert(z8_link_query(custom) is customer && z8_link_join_type(custom) == Z8JoinType.inner);
+    assert(z8_sql_bool_format(z8_link_on(custom), true) == "1=1"w);
+    assert(z8_sql_bool_format(z8_link_on(order.f_neverJoin), true) == "0>1"w);
+    z8_field_bind_sql(customer.f_score, "customers"w, "Score"w);
+    P.m_condition(order);
+    assert(z8_sql_bool_format(z8_link_on(custom), true) == `customers."Score">=10`w);
     assert(z8_optional_require(P.m_indexed(order)));
     assert(z8_query_declared_fields(order, true).length == 10);
     z8_field_bind_sql(link, "orders"w, "CustomerId"w);
@@ -88,6 +106,7 @@ void main() {
     sum.left = sum; assert(z8_sql_collect_fields(predicate).length == 0);
     auto replacement = P.m_customer(); P.m_assign(order, replacement);
     assert(z8_link_query(link) is replacement);
+    P.m_setJoinQuery(order, replacement); assert(z8_link_query(custom) is replacement);
     P.m_assign(order, null); assert(z8_link_query(link) is null);
     bool failed; try { z8_link_on(link); } catch (Exception) { failed = true; } assert(failed);
 }
