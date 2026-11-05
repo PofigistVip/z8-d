@@ -46,7 +46,7 @@ private class Z8JsonReader {
         if ((token[0] >= '0' && token[0] <= '9') || ".-+".canFind(token[0])) {
             try {
                 if (token.length > 2 && token[0] == '0' && (token[1] == 'x' || token[1] == 'X')) return JSONValue(token[2 .. $].to!int(16));
-                if (token.canFind('.') || token.canFind('e') || token.canFind('E')) return JSONValue(token.to!double);
+                if (token.canFind('.') || token.canFind('e') || token.canFind('E')) return JSONValue(z8_literal_parse_double(token));
                 return JSONValue(token.to!long);
             } catch (Exception) { }
         }

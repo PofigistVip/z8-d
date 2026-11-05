@@ -1,0 +1,130 @@
+// Native adapter for org.zenframework.z8.server.base.json.parser.JsonObject.
+private enum z8_json_object_name = "org.zenframework.z8.server.base.json.parser.JsonObject"w;
+private class Z8JsonObjectState {
+    JSONValue value;
+    this(JSONValue value) { this.value = value; }
+}
+private JSONValue z8_json_empty_object() {
+    JSONValue[string] fields;
+    return JSONValue(fields);
+}
+private JSONValue z8_json_object_read(wstring source) {
+    import std.string : strip;
+    auto text = z8_string_required(source).to!string;
+    if (!text.strip().length) return z8_json_empty_object();
+    auto result = z8_json_parse(text);
+    if (result.type != JSONType.object) throw new Exception("JSON object expected");
+    return result;
+}
+private Z8JsonObjectState z8_json_object_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_json_object_name, self)) throw new Exception("invalid native JSON object");
+    auto state = cast(Z8JsonObjectState)self.z8_get_native_state(z8_json_object_name);
+    if (state is null) {
+        state = new Z8JsonObjectState(z8_json_empty_object());
+        self.z8_set_native_state(z8_json_object_name, state);
+    }
+    return state;
+}
+private Z8Object z8_json_object_parse(wstring source) {
+    if (source is null) return null;
+    auto value = z8_json_object_read(source);
+    auto result = z8_native_new(z8_json_object_name);
+    z8_nonnull(result).z8_set_native_state(z8_json_object_name, new Z8JsonObjectState(value));
+    return result;
+}
+private void z8_json_object_assign(Z8Object self, wstring source) {
+    z8_json_object_state(self).value = z8_json_object_read(source);
+}
+private JSONValue z8_json_object_get(Z8Object self, wstring name) {
+    auto state = z8_json_object_state(self);
+    auto value = z8_string_required(name).to!string in state.value.object;
+    return value is null ? JSONValue.init : *value;
+}
+private wstring z8_json_value_text(JSONValue value) {
+    final switch (value.type) {
+        case JSONType.null_: return ""w;
+        case JSONType.string: return value.str.to!wstring;
+        case JSONType.integer: return value.integer.to!wstring;
+        case JSONType.uinteger: return value.uinteger.to!wstring;
+        case JSONType.float_: return z8_java_double_string(value.floating).to!wstring;
+        case JSONType.true_: return "true"w;
+        case JSONType.false_: return "false"w;
+        case JSONType.array: case JSONType.object: return value.toString().to!wstring;
+    }
+}
+private wstring z8_json_object_get_string(Z8Object self, wstring name) {
+    return z8_string_new(z8_json_value_text(z8_json_object_get(self, name)));
+}
+private Z8Optional!bool z8_json_object_has(Z8Object self, wstring name) {
+    auto state = z8_json_object_state(self);
+    return z8_optional_wrap((z8_string_required(name).to!string in state.value.object) !is null);
+}
+private Z8Optional!bool z8_json_object_empty(Z8Object self) {
+    return z8_optional_wrap(z8_json_object_state(self).value.object.length == 0);
+}
+private Z8Array!wstring z8_json_object_names(Z8Object self) {
+    auto result = new Z8Array!wstring();
+    foreach (name; z8_json_object_state(self).value.object.byKey)
+        result.z8_add(z8_string_new(name.to!wstring));
+    return result;
+}
+private Z8Optional!bool z8_json_object_get_bool(Z8Object self, wstring name) {
+    auto value = z8_json_object_get(self, name);
+    if (value.type == JSONType.null_) throw new Exception("null JSON boolean");
+    return z8_optional_wrap(value.type == JSONType.true_);
+}
+private Z8Optional!long z8_json_object_get_int(Z8Object self, wstring name) {
+    import std.math : isNaN;
+    auto value = z8_json_object_get(self, name);
+    switch (value.type) {
+        case JSONType.integer: return z8_optional_wrap(value.integer);
+        case JSONType.uinteger: return z8_optional_wrap(cast(long)value.uinteger);
+        case JSONType.float_:
+            auto number = value.floating;
+            if (isNaN(number)) return z8_optional_wrap(0L);
+            if (number >= cast(double)long.max) return z8_optional_wrap(long.max);
+            if (number <= cast(double)long.min) return z8_optional_wrap(long.min);
+            return z8_optional_wrap(cast(long)number);
+        case JSONType.string:
+            if (value.str.length && (value.str[$ - 1] == 'L' || value.str[$ - 1] == 'l'))
+                throw new Exception("invalid JSON integer");
+            return z8_optional_wrap(z8_int_parse(value.str.to!wstring));
+        default: throw new Exception("invalid JSON integer");
+    }
+}
+private Z8Optional!Z8Decimal z8_json_object_get_decimal(Z8Object self, wstring name) {
+    import std.string : strip;
+    auto value = z8_json_object_get(self, name);
+    double number;
+    switch (value.type) {
+        case JSONType.integer: number = cast(double)value.integer; break;
+        case JSONType.uinteger: number = cast(double)value.uinteger; break;
+        case JSONType.float_: number = value.floating; break;
+        case JSONType.string: number = z8_literal_parse_double(value.str.strip()); break;
+        default: throw new Exception("invalid JSON decimal");
+    }
+    return z8_optional_wrap(z8_math_result(number));
+}
+private Z8Guid z8_json_object_get_guid(Z8Object self, wstring name) {
+    auto value = z8_json_object_get(self, name);
+    return value.type == JSONType.null_ ? null : z8_guid_parse(z8_json_value_text(value));
+}
+private Z8Date z8_json_object_get_date(Z8Object self, wstring name) {
+    return z8_date_parse(z8_json_object_get_string(self, name));
+}
+void z8_bind_builtin_json_object() {
+    enum prefix = z8_json_object_name ~ "."w;
+    z8_native_bind(prefix ~ "m_parse"w, &z8_json_object_parse);
+    z8_native_bind(prefix ~ "z8op_assign"w, &z8_json_object_assign);
+    z8_native_bind(prefix ~ "m_getString"w, &z8_json_object_get_string);
+    z8_native_bind(prefix ~ "m_has"w, &z8_json_object_has);
+    z8_native_bind(prefix ~ "m_isEmpty"w, &z8_json_object_empty);
+    z8_native_bind(prefix ~ "m_getNames"w, &z8_json_object_names);
+    z8_native_bind(prefix ~ "m_getBool"w, &z8_json_object_get_bool);
+    z8_native_bind(prefix ~ "m_getInt"w, &z8_json_object_get_int);
+    z8_native_bind(prefix ~ "m_getDecimal"w, &z8_json_object_get_decimal);
+    z8_native_bind(prefix ~ "m_getGuid"w, &z8_json_object_get_guid);
+    z8_native_bind(prefix ~ "m_getDate"w, &z8_json_object_get_date);
+}
+shared static this() { z8_bind_builtin_json_object(); }

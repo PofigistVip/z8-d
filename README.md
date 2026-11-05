@@ -480,6 +480,10 @@ runtime D и отличается от Java.
 Для `Cron` доступны проверка выражений и поиск следующей даты для пяти- и
 шестипольного формата; вычисления используют часовой пояс runtime `Europe/Moscow`.
 Перегрузки `Sql.IIF` и `Sql.inVector` строят SQL-выражения для шести типов.
+Для `JsonObject` поддержаны разбор и присваивание JSON-строки, проверка
+наличия ключей, получение имён и чтение строковых, числовых, логических,
+GUID- и date-значений. Порядок имён может отличаться от Java; изменение
+отдельных полей и другие методы JSON ещё не перенесены.
 Смена регистра в `Base34.decode` использует Unicode D и может
 отличаться от Java для отдельных локалей. Остальные методы этих проверяемых
 классов этим не реализуются. Строки для хеша
@@ -488,7 +492,9 @@ runtime D и отличается от Java.
 можно восстановить функцией `z8_bind_builtin_crypto()`; поля `RecordLock` —
 функцией `z8_bind_builtin_record_lock()`, методы `Base34` — `z8_bind_builtin_base34()`,
 методы `LoginParameters` — `z8_bind_builtin_login_parameters()`, `Cron` —
-`z8_bind_builtin_cron()`, а методы `Sql` — `z8_bind_builtin_sql_functions()`.
+`z8_bind_builtin_cron()`, методы `Sql` — `z8_bind_builtin_sql_functions()`,
+конструктор `Object` — `z8_bind_builtin_object()`, а доступные методы
+`JsonObject` — `z8_bind_builtin_json_object()`.
 
 Поддерживаются конкатенация, сравнения, `length`, `isEmpty`, `compare`, `compareNoCase`, `startsWith`,
 `endsWith`, `indexOf`, `lastIndexOf`, `substring`, `charAt`, `trim`, `trimLeft`,

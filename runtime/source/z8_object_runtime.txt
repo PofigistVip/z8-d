@@ -1,0 +1,6 @@
+// OBJECT.z8_constructor is an empty virtual hook in the original runtime.
+private void z8_object_constructor(Z8Object self) { }
+void z8_bind_builtin_object() {
+    z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_constructor"w, &z8_object_constructor);
+}
+shared static this() { z8_bind_builtin_object(); }
