@@ -987,6 +987,12 @@ class Checker {
                     return checkCall(target, target.owner, e);
                 }
                 auto receiver = typeOf(e.left);
+                if ([ValueType.sqlBoolType, ValueType.sqlIntType, ValueType.sqlDecimalType].canFind(receiver) && e.token.text == "toString") {
+                    checkArguments(e, []);
+                    e.builtinCall = receiver == ValueType.sqlBoolType ? "z8_sql_bool_toString" :
+                        receiver == ValueType.sqlIntType ? "z8_sql_int_toString" : "z8_sql_decimal_toString";
+                    return ValueType.sqlStringType;
+                }
                 if (receiver == ValueType.sqlBoolType) {
                     if (e.token.text == "IIF") {
                         if (e.arguments.length != 2) fail("incorrect argument count", e.token);

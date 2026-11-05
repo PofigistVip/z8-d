@@ -1,4 +1,4 @@
-enum Z8SqlStringKind { constant, group, concat, lower, upper, trimLeft, trimRight, choose, replace, regReplace, substring, reverse, padLeft, padRight, quote, jsonString, jsonInt }
+enum Z8SqlStringKind { constant, group, concat, lower, upper, trimLeft, trimRight, choose, replace, regReplace, substring, reverse, padLeft, padRight, quote, jsonString, jsonInt, fromBool, fromNumeric }
 class Z8SqlString {
     Z8SqlStringKind kind;
     wstring constant;
@@ -6,6 +6,7 @@ class Z8SqlString {
     Z8SqlString replacement, flags;
     Z8SqlInt position, length;
     Z8SqlBool condition;
+    Z8SqlNumeric numericOperand;
     this(Z8SqlStringKind kind, wstring constant = null, Z8SqlString left = null,
          Z8SqlString right = null, Z8SqlBool condition = null) {
         this.kind = kind; this.constant = constant; this.left = left; this.right = right; this.condition = condition;
@@ -44,6 +45,17 @@ Z8SqlString z8_sql_string_substring(Z8SqlString value, Z8SqlInt position, Z8SqlI
 }
 Z8SqlString z8_sql_string_reverse(Z8SqlString value) { return new Z8SqlString(Z8SqlStringKind.reverse, null, z8_nonnull(value)); }
 Z8SqlString z8_sql_string_toString(Z8SqlString value) { return z8_nonnull(value); }
+Z8SqlString z8_sql_bool_toString(Z8SqlBool value) {
+    return new Z8SqlString(Z8SqlStringKind.fromBool, null, null, null, z8_nonnull(value));
+}
+Z8SqlString z8_sql_int_toString(Z8SqlInt value) {
+    auto result = new Z8SqlString(Z8SqlStringKind.fromNumeric);
+    result.numericOperand = z8_nonnull(value); return result;
+}
+Z8SqlString z8_sql_decimal_toString(Z8SqlDecimal value) {
+    auto result = new Z8SqlString(Z8SqlStringKind.fromNumeric);
+    result.numericOperand = z8_nonnull(value); return result;
+}
 Z8SqlString z8_sql_string_quote(Z8SqlString value) { return new Z8SqlString(Z8SqlStringKind.quote, null, z8_nonnull(value)); }
 Z8SqlString z8_sql_string_jsonString(Z8SqlString value, Z8SqlString key) { return new Z8SqlString(Z8SqlStringKind.jsonString, null, z8_nonnull(value), key); }
 Z8SqlString z8_sql_string_jsonInt(Z8SqlString value, Z8SqlInt index) {
@@ -116,6 +128,33 @@ private wstring z8_sql_string_as_text(Z8SqlString value, Z8SqlVendor vendor) {
     auto text = z8_sql_string_format(value, vendor);
     return vendor == Z8SqlVendor.SqlServer ? "Cast("w ~ text ~ " as nvarchar(max))"w : text;
 }
+// ToString in Z8 examines the SQL token's actual type, which can differ from
+// the BL wrapper type (RegLike reports Integer and integer ~ reports Boolean).
+private bool z8_sql_bool_is_numeric(Z8SqlBool value) {
+    z8_nonnull(value);
+    if (value.kind == Z8SqlBoolKind.group || value.kind == Z8SqlBoolKind.choose)
+        return z8_sql_bool_is_numeric(value.left);
+    return value.kind == Z8SqlBoolKind.textRegLike;
+}
+private bool z8_sql_int_is_numeric(Z8SqlInt value) {
+    z8_nonnull(value);
+    switch (value.kind) {
+        case Z8SqlIntKind.bitNot: return false;
+        case Z8SqlIntKind.group: case Z8SqlIntKind.negate: case Z8SqlIntKind.abs:
+        case Z8SqlIntKind.power: case Z8SqlIntKind.choose: return z8_sql_int_is_numeric(value.left);
+        case Z8SqlIntKind.add: case Z8SqlIntKind.subtract: case Z8SqlIntKind.multiply:
+        case Z8SqlIntKind.divide: case Z8SqlIntKind.bitAnd: case Z8SqlIntKind.bitOr: case Z8SqlIntKind.bitXor:
+            auto left = z8_sql_int_is_numeric(value.left), right = z8_sql_int_is_numeric(value.right);
+            if (left != right) throw new Exception("unsupported SQL operand types");
+            return left;
+        default: return true;
+    }
+}
+private wstring z8_sql_to_string_format(wstring value, bool numeric, Z8SqlVendor vendor) {
+    if (vendor == Z8SqlVendor.SqlServer) return "Cast("w ~ value ~ " as nvarchar(max))"w;
+    if (vendor == Z8SqlVendor.Postgres && numeric) return "("w ~ value ~ ")::text"w;
+    return value;
+}
 wstring z8_sql_string_format(Z8SqlString value, Z8SqlVendor vendor = Z8SqlVendor.Postgres, bool logical = false) {
     z8_nonnull(value);
     final switch (value.kind) {
@@ -164,5 +203,12 @@ wstring z8_sql_string_format(Z8SqlString value, Z8SqlVendor vendor = Z8SqlVendor
             if (vendor != Z8SqlVendor.Postgres) throw new Exception("unsupported SQL database vendor");
             return "("w ~ z8_sql_string_format(value.left, vendor) ~ ")::json->>"w ~
                 (value.kind == Z8SqlStringKind.jsonString ? z8_sql_string_format(value.right, vendor) : z8_sql_int_format(value.position, vendor));
+        case Z8SqlStringKind.fromBool:
+            auto boolNumeric = z8_sql_bool_is_numeric(value.condition);
+            return z8_sql_to_string_format(z8_sql_bool_format(value.condition, false, vendor), boolNumeric, vendor);
+        case Z8SqlStringKind.fromNumeric:
+            auto intValue = cast(Z8SqlInt) value.numericOperand;
+            auto numeric = intValue is null || z8_sql_int_is_numeric(intValue);
+            return z8_sql_to_string_format(value.numericOperand.z8_format(vendor), numeric, vendor);
     }
 }

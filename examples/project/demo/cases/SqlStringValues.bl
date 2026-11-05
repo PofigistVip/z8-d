@@ -34,6 +34,11 @@ public class SqlStringValues {
     public static sql_string jsonName() { sql_string value = "json"; return value.json("a"); }
     public static sql_string jsonIndex() { sql_string value = "json"; return value.json(1); }
     public static sql_string identity() { sql_string value = "abc"; return value.toString(); }
+    public static sql_string booleanText() { sql_bool value = true; return value.toString(); }
+    public static sql_string integerText() { sql_int value = 42; return value.toString(); }
+    public static sql_string decimalText() { sql_decimal value = 1.5; return value.toString(); }
+    public static sql_string regexText() { sql_string value = "abc"; return value.regLike("a.*").toString(); }
+    public static sql_string notIntegerText() { sql_int value = 42; return (~value).toString(); }
     public static int run() {
         sql_string value = concatenation();
         if (value == null) return 1;
