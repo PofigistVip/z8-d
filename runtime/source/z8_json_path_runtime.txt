@@ -79,6 +79,112 @@ private Z8Object z8_json_path_parent(Z8Object self) {
     return z8_json_path_wrap(parent);
 }
 private wstring z8_json_path_string(Z8Object self) { return z8_string_new(z8_json_path_state(self).text); }
+private struct Z8JsonPathValue {
+    JSONValue value;
+    Object child;
+    bool decimal;
+    Z8Decimal number;
+    bool missing = true;
+}
+private Z8JsonPathValue z8_json_path_evaluate(Z8Object self, Z8Object root) {
+    auto path = z8_json_path_state(self);
+    Z8JsonPathValue result;
+    if (path.text.length == 0) {
+        if (root !is null) throw new Exception("unsupported JSON path root value");
+        return result;
+    }
+    if (root is null) return result;
+    Object current = z8_json_state_from_object(root);
+    foreach (part; path.parts) {
+        if (part.ordinal) {
+            auto array = cast(Z8JsonArrayState)current;
+            if (array is null) return result;
+            auto position = cast(size_t)part.index;
+            if (position >= array.value.array.length) throw new Exception("JSON path index out of bounds");
+            result.value = array.value.array[position];
+            auto decimalValue = position in array.decimals;
+            result.decimal = decimalValue !is null;
+            if (result.decimal) result.number = *decimalValue;
+            if (result.value.type == JSONType.array || result.value.type == JSONType.object) {
+                auto child = position in array.children;
+                if (child is null) { array.children[position] = z8_json_new_state(result.value); child = position in array.children; }
+                current = *child;
+            } else current = null;
+        } else {
+            auto object = cast(Z8JsonObjectState)current;
+            if (object is null) return result;
+            auto key = part.name.to!string;
+            auto value = key in object.value.object;
+            if (value is null) return result;
+            result.value = *value;
+            auto decimalValue = key in object.decimals;
+            result.decimal = decimalValue !is null;
+            if (result.decimal) result.number = *decimalValue;
+            if (result.value.type == JSONType.array || result.value.type == JSONType.object) {
+                auto child = key in object.children;
+                if (child is null) { object.children[key] = z8_json_new_state(result.value); child = key in object.children; }
+                current = *child;
+            } else current = null;
+        }
+        if (result.value.type == JSONType.null_) return Z8JsonPathValue.init;
+    }
+    result.child = current;
+    result.missing = false;
+    return result;
+}
+private wstring z8_json_path_get_string(Z8Object self, Z8Object root, wstring fallback = null) {
+    auto result = z8_json_path_evaluate(self, root);
+    if (result.missing) return fallback;
+    if (result.decimal || result.value.type != JSONType.string) throw new Exception("JSON path value is not a string");
+    return z8_string_new(z8_json_value_text(result.value));
+}
+private Z8Optional!long z8_json_path_get_int(Z8Object self, Z8Object root, Z8Optional!long fallback = Z8Optional!long.init) {
+    auto result = z8_json_path_evaluate(self, root);
+    if (result.missing) return fallback;
+    if (result.decimal || (result.value.type != JSONType.integer && result.value.type != JSONType.uinteger))
+        throw new Exception("JSON path value is not an integer");
+    return z8_optional_wrap(result.value.type == JSONType.integer ? result.value.integer : cast(long)result.value.uinteger);
+}
+private Z8Optional!Z8Decimal z8_json_path_get_decimal(Z8Object self, Z8Object root, Z8Optional!Z8Decimal fallback = Z8Optional!Z8Decimal.init) {
+    auto result = z8_json_path_evaluate(self, root);
+    if (result.missing) return fallback;
+    if (result.decimal) return z8_optional_wrap(result.number);
+    if (result.value.type != JSONType.float_) throw new Exception("JSON path value is not a decimal");
+    return z8_optional_wrap(z8_math_result(result.value.floating));
+}
+private Z8Optional!bool z8_json_path_get_bool(Z8Object self, Z8Object root, Z8Optional!bool fallback = Z8Optional!bool.init) {
+    auto result = z8_json_path_evaluate(self, root);
+    if (result.missing) return fallback;
+    if (result.decimal || (result.value.type != JSONType.true_ && result.value.type != JSONType.false_))
+        throw new Exception("JSON path value is not a boolean");
+    return z8_optional_wrap(result.value.type == JSONType.true_);
+}
+private Z8Object z8_json_path_get_object(Z8Object self, Z8Object root, Z8Object fallback = null) {
+    auto result = z8_json_path_evaluate(self, root);
+    if (result.missing) {
+        if (fallback !is null) throw new Exception("unsupported JSON path default object");
+        return null;
+    }
+    if (result.child is null) throw new Exception("JSON path value is not an object");
+    return z8_json_wrap_state(result.child);
+}
+private Z8Guid z8_json_path_get_guid(Z8Object self, Z8Object root, Z8Guid fallback = null) {
+    auto result = z8_json_path_evaluate(self, root);
+    if (result.missing) return fallback;
+    throw new Exception("JSON path value is not a guid");
+}
+private Z8Date z8_json_path_get_date(Z8Object self, Z8Object root, Z8Date fallback = null) {
+    auto result = z8_json_path_evaluate(self, root);
+    if (result.missing) return fallback;
+    throw new Exception("JSON path value is not a date");
+}
+private wstring z8_json_path_string_value(Z8Object self, Z8Object root) { return z8_json_path_get_string(self, root); }
+private Z8Optional!long z8_json_path_int_value(Z8Object self, Z8Object root) { return z8_json_path_get_int(self, root); }
+private Z8Optional!Z8Decimal z8_json_path_decimal_value(Z8Object self, Z8Object root) { return z8_json_path_get_decimal(self, root); }
+private Z8Optional!bool z8_json_path_bool_value(Z8Object self, Z8Object root) { return z8_json_path_get_bool(self, root); }
+private Z8Object z8_json_path_object_value(Z8Object self, Z8Object root) { return z8_json_path_get_object(self, root); }
+private Z8Guid z8_json_path_guid_value(Z8Object self, Z8Object root) { return z8_json_path_get_guid(self, root); }
+private Z8Date z8_json_path_date_value(Z8Object self, Z8Object root) { return z8_json_path_get_date(self, root); }
 void z8_bind_builtin_json_path() {
     enum prefix = z8_json_path_name ~ "."w;
     z8_native_bind(prefix ~ "m_path"w, &z8_json_path_new);
@@ -87,5 +193,20 @@ void z8_bind_builtin_json_path() {
     z8_native_bind(prefix ~ "m_name"w, &z8_json_path_part_name);
     z8_native_bind(prefix ~ "m_getParent"w, &z8_json_path_parent);
     z8_native_bind(prefix ~ "m_toString"w, &z8_json_path_string);
+    z8_native_bind(prefix ~ "m_getString"w, &z8_json_path_string_value);
+    z8_native_bind(prefix ~ "m_getInt"w, &z8_json_path_int_value);
+    z8_native_bind(prefix ~ "m_getDecimal"w, &z8_json_path_decimal_value);
+    z8_native_bind(prefix ~ "m_getBool"w, &z8_json_path_bool_value);
+    z8_native_bind(prefix ~ "m_getGuid"w, &z8_json_path_guid_value);
+    z8_native_bind(prefix ~ "m_getDate"w, &z8_json_path_date_value);
+    z8_native_bind(prefix ~ "m_getJsonObject"w, &z8_json_path_object_value);
+    z8_native_bind(prefix ~ "m_getJsonArray"w, &z8_json_path_object_value);
+    z8_native_bind(prefix ~ "m_get"w, &z8_json_path_get_string);
+    z8_native_bind(prefix ~ "m_get"w, &z8_json_path_get_int);
+    z8_native_bind(prefix ~ "m_get"w, &z8_json_path_get_decimal);
+    z8_native_bind(prefix ~ "m_get"w, &z8_json_path_get_bool);
+    z8_native_bind(prefix ~ "m_get"w, &z8_json_path_get_guid);
+    z8_native_bind(prefix ~ "m_get"w, &z8_json_path_get_date);
+    z8_native_bind(prefix ~ "m_get"w, &z8_json_path_get_object);
 }
 shared static this() { z8_bind_builtin_json_path(); }

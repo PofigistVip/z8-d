@@ -83,6 +83,20 @@ public class Probe {
     public static string pathName(JsonPath path, int index) { return path.name(index); }
     public static JsonPath pathParent(JsonPath path) { return path.getParent(); }
     public static string pathText(JsonPath path) { return path.toString(); }
+    public static string pathString(JsonPath path, JsonObject json) { return path.getString(json); }
+    public static string pathStringArray(JsonPath path, JsonArray json) { return path.getString(json); }
+    public static int pathInt(JsonPath path, JsonObject json) { return path.getInt(json); }
+    public static decimal pathDecimal(JsonPath path, JsonObject json) { return path.getDecimal(json); }
+    public static bool pathBool(JsonPath path, JsonObject json) { return path.getBool(json); }
+    public static JsonObject pathObject(JsonPath path, JsonObject json) { return path.getJsonObject(json); }
+    public static JsonArray pathArray(JsonPath path, JsonObject json) { return path.getJsonArray(json); }
+    public static string pathDefaultString(JsonPath path, JsonObject json, string value) { return path.get(json, value); }
+    public static int pathDefaultInt(JsonPath path, JsonObject json, int value) { return path.get(json, value); }
+    public static JsonArray pathDefaultArray(JsonPath path, JsonObject json, JsonArray value) { return path.get(json, value); }
+    public static bool pathDefaultBool(JsonPath path, JsonObject json, bool value) { return path.get(json, value); }
+    public static decimal pathDefaultDecimal(JsonPath path, JsonObject json, decimal value) { return path.get(json, value); }
+    public static guid pathGuid(JsonPath path, JsonObject json) { return path.getGuid(json); }
+    public static date pathDate(JsonPath path, JsonObject json) { return path.getDate(json); }
     public static string render(JsonArray array) { return (string)array; }
     public static string display(JsonArray array) { return array.toString(); }
 }
@@ -227,6 +241,25 @@ class JsonArrayOracle {
             }
             try { System.out.println("parent:" + path.z8_getParent().get().z8_toString().get()); } catch (RuntimeException expected) { System.out.println("parent:error"); }
         }
+        org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> docClass = org.zenframework.z8.server.base.json.parser.JsonObject.z8_parse(new string("{items:[{name:'Anna',n:42,d:1.25,b:true}],empty:null}"));
+        org.zenframework.z8.server.base.json.parser.JsonPath.CLASS<org.zenframework.z8.server.base.json.parser.JsonPath> namePath = org.zenframework.z8.server.base.json.parser.JsonPath.z8_path(new string("items[0]/name"));
+        System.out.println("evalname:" + namePath.get().z8_getString(docClass).get());
+        System.out.println("evalarray:" + org.zenframework.z8.server.base.json.parser.JsonPath.z8_path(new string("[0]/name")).get().z8_getString(docClass.get().z8_getJsonArray(new string("items"))).get());
+        System.out.println("evalint:" + org.zenframework.z8.server.base.json.parser.JsonPath.z8_path(new string("items[0]/n")).get().z8_getInt(docClass).get());
+        System.out.println("evaldecimal:" + org.zenframework.z8.server.base.json.parser.JsonPath.z8_path(new string("items[0]/d")).get().z8_getDecimal(docClass).toString());
+        System.out.println("evalbool:" + org.zenframework.z8.server.base.json.parser.JsonPath.z8_path(new string("items[0]/b")).get().z8_getBool(docClass).get());
+        org.zenframework.z8.server.base.json.parser.JsonObject item = org.zenframework.z8.server.base.json.parser.JsonPath.z8_path(new string("items[0]")).get().z8_getJsonObject(docClass).get();
+        item.z8_set(new string("n"), new decimal("1.2500"));
+        System.out.println("evalshared:" + org.zenframework.z8.server.base.json.parser.JsonPath.z8_path(new string("items[0]/n")).get().z8_getDecimal(docClass).toString());
+        org.zenframework.z8.server.base.json.parser.JsonPath missing = org.zenframework.z8.server.base.json.parser.JsonPath.z8_path(new string("items[0]/missing")).get();
+        System.out.println("evaldefault:" + missing.z8_get(docClass, new string("fallback")).get() + ":" + missing.z8_get(docClass, new integer(77)).get() + ":" + (missing.z8_getJsonArray(docClass) == null));
+        JsonArray.CLASS<JsonArray> fallbackArray = JsonArray.z8_parse(new string("[9]"));
+        try { missing.z8_get(docClass, fallbackArray); System.out.println("bad"); } catch (RuntimeException expected) { System.out.println("evalfallback:error"); }
+        try { namePath.get().z8_getInt(docClass); System.out.println("bad"); } catch (RuntimeException expected) { System.out.println("evaltype:error"); }
+        try { org.zenframework.z8.server.base.json.parser.JsonPath.z8_path(new string("items[9]")).get().z8_getJsonObject(docClass); System.out.println("bad"); } catch (RuntimeException expected) { System.out.println("evalindex:error"); }
+        System.out.println("evaldefaults:" + missing.z8_get(docClass, new bool(true)).get() + ":" + missing.z8_get(docClass, new decimal("2.500")).toString() + ":" + (missing.z8_getGuid(docClass) == null) + ":" + (missing.z8_getDate(docClass) == null));
+        try { namePath.get().z8_getGuid(docClass); System.out.println("bad"); } catch (RuntimeException expected) { System.out.println("evalguid:error"); }
+        try { namePath.get().z8_getDate(docClass); System.out.println("bad"); } catch (RuntimeException expected) { System.out.println("evaldate:error"); }
         for (String input : new String[] {"", "1,2", " [1,2]", "[1,]", "[1,,2]", "[1", "{x:1}"}) {
             try { System.out.println("p:" + parse(input).string().get()); } catch (RuntimeException expected) { System.out.println("p:error"); }
         }
@@ -385,6 +418,25 @@ void main() {
     }
     auto assignedPath = P.m_path("/old"w); assert(P.m_pathAssign(assignedPath, "/new"w) is assignedPath);
     assert(P.m_pathText(assignedPath) == "/new"w);
+    auto doc = P.m_parseObject("{items:[{name:'Anna',n:42,d:1.25,b:true}],empty:null}"w);
+    auto namePath = P.m_path("items[0]/name"w);
+    writeln("evalname:", P.m_pathString(namePath, doc).to!string);
+    writeln("evalarray:", P.m_pathStringArray(P.m_path("[0]/name"w), P.m_objectArray(doc, "items"w)).to!string);
+    writeln("evalint:", z8_optional_require(P.m_pathInt(P.m_path("items[0]/n"w), doc)));
+    writeln("evaldecimal:", z8_optional_require(P.m_pathDecimal(P.m_path("items[0]/d"w), doc)).z8_string());
+    writeln("evalbool:", z8_optional_require(P.m_pathBool(P.m_path("items[0]/b"w), doc)));
+    auto item = P.m_pathObject(P.m_path("items[0]"w), doc);
+    P.m_objectPut(item, "n"w, z8_primary_box(z8_decimal_parse("1.2500"w)));
+    writeln("evalshared:", z8_optional_require(P.m_pathDecimal(P.m_path("items[0]/n"w), doc)).z8_string());
+    auto missing = P.m_path("items[0]/missing"w);
+    writeln("evaldefault:", P.m_pathDefaultString(missing, doc, "fallback"w).to!string, ":", z8_optional_require(P.m_pathDefaultInt(missing, doc, 77)), ":", P.m_pathArray(missing, doc) is null);
+    auto fallbackArray = P.m_parse("[9]"w);
+    try { P.m_pathDefaultArray(missing, doc, fallbackArray); writeln("bad"); } catch (Exception) { writeln("evalfallback:error"); }
+    try { P.m_pathInt(namePath, doc); writeln("bad"); } catch (Exception) { writeln("evaltype:error"); }
+    try { P.m_pathObject(P.m_path("items[9]"w), doc); writeln("bad"); } catch (Exception) { writeln("evalindex:error"); }
+    writeln("evaldefaults:", z8_optional_require(P.m_pathDefaultBool(missing, doc, true)), ":", z8_optional_require(P.m_pathDefaultDecimal(missing, doc, z8_decimal_parse("2.500"w))).z8_string(), ":", P.m_pathGuid(missing, doc) is null, ":", P.m_pathDate(missing, doc) is null);
+    try { P.m_pathGuid(namePath, doc); writeln("bad"); } catch (Exception) { writeln("evalguid:error"); }
+    try { P.m_pathDate(namePath, doc); writeln("bad"); } catch (Exception) { writeln("evaldate:error"); }
     foreach (input; [""w, "1,2"w, " [1,2]"w, "[1,]"w, "[1,,2]"w, "[1"w, "{x:1}"w]) {
         try { writeln("p:", P.m_render(P.m_parse(input)).to!string); } catch (Exception) { writeln("p:error"); }
     }
@@ -403,4 +455,4 @@ void main() {
     actual = subprocess.check_output([str(executable)], cwd=temp, text=True, encoding="utf-8").splitlines()
     if actual != expected:
         raise SystemExit(f"JsonArray differs:\nJava={expected!r}\nD={actual!r}")
-print("JSON operations, nested references and path parsing match Java")
+print("JSON operations, nested references and path evaluation match Java")
