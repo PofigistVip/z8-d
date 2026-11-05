@@ -560,6 +560,8 @@ class Checker {
             if ([ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.primaryType,
                  ValueType.guidType, ValueType.datespanType].canFind(actual))
                 attribute.expression.convertToString = actual;
+            else if (actual == ValueType.selfType)
+                attribute.expression.convertToString = ValueType.selfType;
             else if (actual != ValueType.stringType && actual != ValueType.nullableString)
                 fail("this attribute expression type is not supported yet", attribute.name);
         }

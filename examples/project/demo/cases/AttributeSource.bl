@@ -1,0 +1,4 @@
+public class AttributeSource {
+    public static int calls;
+    protected void constructor() { calls += 1; }
+}

@@ -51,6 +51,7 @@ unittest {
     rejects(q{[tag "a" + "b"] class A {}});
     compile(q{class A { int value; [tag value] A child; }});
     compile(q{class A { guid value; primary other = 1; [g value] [p other] A child; }});
+    compile(q{class A { A source; [tag source] A child; }});
     compile(q{class A { bool flag; [request flag] A child; }});
     rejects(q{class A { string text; [name text] A child; }});
     rejects(q{class A { [flag] int x; }});

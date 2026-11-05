@@ -92,6 +92,11 @@ class Z8Object {
     void z8_init_values() {}
     void z8_call_constructor() {}
 }
+// CLASS.getAttribute reads the reference metadata without advancing its stage.
+wstring z8_attribute_from(Z8Object value, wstring name) {
+    if (value is null) throw new Exception("null reference");
+    return value.z8_get_attribute(name);
+}
 T z8_get_container(T)(Z8Object value) if (is(T : Z8Object)) {
     if (value is null || value.z8_container is null) throw new Exception("missing container");
     auto container = cast(T)value.z8_container;

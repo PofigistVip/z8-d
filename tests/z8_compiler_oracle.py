@@ -273,6 +273,8 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             !"00112233-4455-6677-8899-AABBCCDDEEFF".equals(metadata.get().annotated.getAttribute("guidValue")) ||
             !"42".equals(metadata.get().annotated.getAttribute("primaryValue")) ||
             !"2 03:04:05".equals(metadata.get().annotated.getAttribute("spanValue")) ||
+            !"источник".equals(metadata.get().annotated.getAttribute("copied")) ||
+            demo.cases.AttributeSource.calls.get() != 0 ||
             !"false".equals(metadata.get().jobTarget.getAttribute("request")) ||
             !"исходное".equals(metadata.get().jobTarget.getAttribute("job")) ||
             metadata.get().attributeCalls.get() != 1 ||
@@ -295,6 +297,10 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             new demo.cases.AttributeNullNumber.CLASS<>(null).get();
             throw new AssertionError("null numeric attribute accepted");
         } catch (NullPointerException expectedNullNumericAttribute) { }
+        try {
+            new demo.cases.AttributeMissingReference.CLASS<>(null).get();
+            throw new AssertionError("missing source attribute accepted");
+        } catch (NullPointerException expectedMissingAttribute) { }
         System.out.println("RESULT:" + demo.Main.z8_run().get());
         System.out.println("RESULT:" + demo.cases.Arithmetic.z8_run().get());
         System.out.println("RESULT:" + demo.cases.Text.z8_run().get());
@@ -486,6 +492,8 @@ void main() {
     assert(metadata.f_annotated.z8_get_attribute("guidValue"w) == "00112233-4455-6677-8899-AABBCCDDEEFF"w);
     assert(metadata.f_annotated.z8_get_attribute("primaryValue"w) == "42"w);
     assert(metadata.f_annotated.z8_get_attribute("spanValue"w) == "2 03:04:05"w);
+    assert(metadata.f_annotated.z8_get_attribute("copied"w) == "источник"w);
+    assert(z8_optional_require(Z8p_64656D6F2E63617365732E417474726962757465536F75726365.f_calls) == 0);
     assert(metadata.f_jobTarget.z8_get_attribute("request"w) == "false"w);
     assert(metadata.f_jobTarget.z8_get_attribute("job"w) == "исходное"w);
     assert(z8_optional_require(metadata.f_attributeCalls) == 1);
@@ -505,6 +513,10 @@ void main() {
     assert(nullAttributeRejected);
     nullAttributeRejected = false;
     try { z8_nonnull(z8_new!Z8p_64656D6F2E63617365732E4174747269627574654E756C6C4E756D626572()); }
+    catch (Exception) { nullAttributeRejected = true; }
+    assert(nullAttributeRejected);
+    nullAttributeRejected = false;
+    try { z8_nonnull(z8_new!Z8p_64656D6F2E63617365732E4174747269627574654D697373696E675265666572656E6365()); }
     catch (Exception) { nullAttributeRejected = true; }
     assert(nullAttributeRejected);
     writeln(z8_optional_require(Z8p_64656D6F2E4D61696E.m_run()));

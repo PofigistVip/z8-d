@@ -1,0 +1,4 @@
+public class AttributeMissingReference {
+    public AttributeMissingReference source;
+    [missing source] public AttributeMissingReference nested;
+}
