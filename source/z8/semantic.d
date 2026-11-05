@@ -2465,11 +2465,13 @@ class Checker {
                 if (isOptionalPrimitive(right) && left == optionalBaseType(right)) { e.right.optionalWrap = true; left = right; }
                 if (left == ValueType.optionalDecimal && (right == ValueType.intType || right == ValueType.optionalInt)) { if (!matchesStored(e.third, ValueType.decimalType)) fail("conditional branch type mismatch", e.token); right = left; }
                 if (right == ValueType.optionalDecimal && (left == ValueType.intType || left == ValueType.optionalInt)) { if (!matchesStored(e.right, ValueType.decimalType)) fail("conditional branch type mismatch", e.token); left = right; }
-                if (left == ValueType.nullableString && (isOptionalPrimitive(right) || [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(right))) {
+                if (left == ValueType.nullableString && (isOptionalPrimitive(right) || [ValueType.intType, ValueType.boolType, ValueType.decimalType,
+                    ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.geometryType].canFind(right))) {
                     if (!matches(e.third, ValueType.stringType)) fail("conditional branch type mismatch", e.token);
                     right = left;
                 }
-                if (right == ValueType.nullableString && (isOptionalPrimitive(left) || [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(left))) {
+                if (right == ValueType.nullableString && (isOptionalPrimitive(left) || [ValueType.intType, ValueType.boolType, ValueType.decimalType,
+                    ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.geometryType].canFind(left))) {
                     if (!matches(e.right, ValueType.stringType)) fail("conditional branch type mismatch", e.token);
                     left = right;
                 }

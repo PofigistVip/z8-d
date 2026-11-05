@@ -31,6 +31,10 @@ public class Probe {
         if ((false ? value : "literal") != "literal" || TextValue.count() != 2) return 4;
         if ((false ? map["key"] : value) != "converted" || TextValue.count() != 3) return 5;
         if ((true ? value : map["key"]) != "converted" || TextValue.count() != 4) return 6;
+        guid id = guid.create(9); string expected = id.toString();
+        if ((true ? id : map["key"]) != expected) return 7;
+        if ((false ? map["key"] : id) != expected) return 8;
+        if ((false ? id : map["key"]) != "stored") return 9;
         return 0;
     }
 }
@@ -95,4 +99,4 @@ public class Runner {
                                          cwd=temp, text=True, encoding="utf-8")
         if result.strip() != "0":
             raise SystemExit("Original Java result differs: " + result)
-print("Conditional string user conversions and lazy branches verified")
+print("Conditional string conversions and lazy branches verified")
