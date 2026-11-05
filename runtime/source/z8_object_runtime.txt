@@ -1,5 +1,32 @@
 // OBJECT.z8_constructor is an empty virtual hook in the original runtime.
+private class Z8ObjectMembersCell(T) if (is(T : Z8Object)) {
+    Z8ObjectArray!T value;
+    this() { value = new Z8ObjectArray!T(); }
+}
+// OBJECT.objects is a typed view of its own member collection. Keeping the
+// cell on the instance makes reference assignment and inherited views stable.
+ref Z8ObjectArray!T z8_object_members_field(T)(Z8Object self) if (is(T : Z8Object)) {
+    if (self is null) throw new Exception("null reference");
+    auto key = "org.zenframework.z8.server.runtime.OBJECT.f_objects:"w ~ typeid(T).name.to!wstring;
+    auto cell = cast(Z8ObjectMembersCell!T)self.z8_get_native_state(key);
+    if (cell is null) { cell = new Z8ObjectMembersCell!T(); self.z8_set_native_state(key, cell); }
+    return cell.value;
+}
 private void z8_object_constructor(Z8Object self) { }
+private wstring z8_object_id(Z8Object self) { return z8_string_new(z8_nonnull(self).z8_id()); }
+private void z8_object_set_id(Z8Object self, wstring value) { z8_nonnull(self).z8_set_id(z8_string_required(value)); }
+private wstring z8_object_index(Z8Object self) { return z8_string_new(z8_string_or_empty(z8_nonnull(self).z8_index())); }
+private wstring z8_object_class_name(Z8Object self) { return z8_string_new(z8_string_or_empty(z8_nonnull(self).z8_class_id())); }
+private wstring z8_object_name(Z8Object self) {
+    self = z8_nonnull(self);
+    auto name = self.z8_get_attribute("name"w);
+    return z8_string_new(name is null ? z8_string_or_empty(self.z8_class_id()) : name);
+}
+private Z8Guid z8_object_key(Z8Object self) {
+    self = z8_nonnull(self);
+    auto name = self.z8_get_attribute("name"w);
+    return self.z8_key(name is null ? self.z8_class_id() : name);
+}
 private wstring z8_object_get_attribute(Z8Object self, wstring name) {
     return z8_string_new(z8_string_or_empty(z8_nonnull(self).z8_get_attribute(z8_string_required(name))));
 }
@@ -29,6 +56,14 @@ private Z8Optional!bool z8_object_not_equal(Z8Object self, Z8Object other) {
 }
 void z8_bind_builtin_object() {
     z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_constructor"w, &z8_object_constructor);
+    z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_id"w, &z8_object_id);
+    z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_setId"w, &z8_object_set_id);
+    z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_index"w, &z8_object_index);
+    z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_className"w, &z8_object_class_name);
+    z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_name"w, &z8_object_name);
+    z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_key"w, &z8_object_key);
+    z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_user"w, &z8_application_user);
+    z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_system"w, &z8_application_system);
     z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_getAttribute"w, &z8_object_get_attribute);
     z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_setAttribute"w, &z8_object_set_attribute);
     z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_displayName"w, &z8_object_display_name);

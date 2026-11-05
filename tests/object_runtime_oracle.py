@@ -39,6 +39,12 @@ public class Probe {
     public static string render(Object value) { return value.toString(); }
     public static bool equal(Object left, Object right) { return left == right; }
     public static bool different(Object left, Object right) { return left != right; }
+    public static string id(Object value) { return value.id(); }
+    public static string index(Object value) { return value.index(); }
+    public static string name(Object value) { return value.name(); }
+    public static string className(Object value) { return value.className(); }
+    public static guid key(Object value) { return value.key(); }
+    public static void setId(Object value, string id) { value.setId(id); }
 }
 """, encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -74,6 +80,18 @@ class ObjectOracle {
         System.out.println(value.operatorNotEqu(a).get() + ":" + value.operatorNotEqu(b).get());
         try { value.operatorEqu(null); System.out.println("bad"); } catch (RuntimeException expected) { System.out.println("error"); }
         try { value.z8_setAttribute(new string("x"), null); System.out.println("bad"); } catch (RuntimeException expected) { System.out.println("error"); }
+        OBJECT.CLASS<OBJECT> child = new OBJECT.CLASS<OBJECT>(value);
+        child.setIndex("child");
+        OBJECT member = child.get();
+        System.out.println(value.z8_id().get() + ":" + value.z8_index().get());
+        System.out.println(member.z8_id().get() + ":" + member.z8_index().get());
+        System.out.println(member.z8_name().get());
+        System.out.println(member.z8_className().get());
+        System.out.println(member.z8_key().toString());
+        member.z8_setAttribute(new string("name"), new string("Changed"));
+        System.out.println(member.z8_name().get() + ":" + member.z8_key().toString());
+        member.z8_setId(new string("renamed"));
+        System.out.println(member.z8_id().get() + ":" + member.z8_index().get());
     }
 }
 """, encoding="utf-8")
@@ -106,6 +124,16 @@ void main() {
     writeln(z8_optional_require(P.m_different(a, a)), ":", z8_optional_require(P.m_different(a, b)));
     try { P.m_equal(a, null); writeln("bad"); } catch (Exception) { writeln("error"); }
     try { P.m_put(a, "x"w, null); writeln("bad"); } catch (Exception) { writeln("error"); }
+    auto child = P.m_create(); child.z8_set_container(a); child.z8_set_index("child"w);
+    writeln(P.m_id(a).to!string, ":", P.m_index(a).to!string);
+    writeln(P.m_id(child).to!string, ":", P.m_index(child).to!string);
+    writeln(P.m_name(child).to!string);
+    writeln(P.m_className(child).to!string);
+    writeln(z8_guid_to_string(P.m_key(child)).to!string);
+    P.m_put(child, "name"w, z8_primary_box("Changed"w));
+    writeln(P.m_name(child).to!string, ":", z8_guid_to_string(P.m_key(child)).to!string);
+    P.m_setId(child, "renamed"w);
+    writeln(P.m_id(child).to!string, ":", P.m_index(child).to!string);
     z8_native_clear_bindings();
     z8_bind_builtin_object();
     assert(P.m_get(P.m_create(), "missing"w) == ""w);

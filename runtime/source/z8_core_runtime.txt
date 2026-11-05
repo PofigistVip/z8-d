@@ -100,6 +100,9 @@ class Z8Object {
     private int z8_stage = -1;
     private bool z8_allocated;
     private Z8Object z8_container;
+    private wstring z8_index_value, z8_id_value;
+    private bool z8_index_set;
+    private Z8Guid z8_key_value;
     private wstring[wstring] z8_attributes;
     private Object[wstring] z8_native_states;
     private Z8StaticRecord[] z8_records;
@@ -113,6 +116,28 @@ class Z8Object {
     bool z8_user_primary_equals_impl(Z8Object other) { return this is other || (other !is null && opEquals(other)); }
 
     void z8_init_type_attributes() {}
+    wstring z8_class_id() { return null; }
+    final void z8_set_index(wstring value) {
+        if (!z8_index_set) { z8_index_value = value; z8_index_set = true; }
+    }
+    final wstring z8_index() { return z8_container is null ? ""w : z8_index_value; }
+    final wstring z8_id() {
+        if (z8_id_value is null) {
+            z8_id_value = ""w;
+            if (z8_container !is null) {
+                auto parent = z8_container.z8_id();
+                auto index = z8_index();
+                z8_id_value = parent ~ (parent.length ? "."w : ""w) ~ (index is null ? "null"w : index);
+            }
+        }
+        return z8_id_value;
+    }
+    final void z8_set_id(wstring value) { z8_set_index(value); z8_id_value = null; }
+    final Z8Guid z8_key(wstring name) {
+        if (name is null) return null;
+        if (z8_key_value is null) z8_key_value = z8_guid_create_name(name);
+        return z8_key_value;
+    }
     final void z8_set_attribute(wstring key, wstring value) { z8_attributes[key] = value; }
     final wstring z8_get_attribute(wstring key) {
         auto value = key in z8_attributes;

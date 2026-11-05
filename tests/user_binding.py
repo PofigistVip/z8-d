@@ -14,8 +14,13 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     temp = Path(directory)
     source, generated = temp / "bl", temp / "generated"
     source.mkdir()
+    (source / "Object.bl").write_text('''
+[native "org.zenframework.z8.server.runtime.OBJECT"] public class Object {
+    public static User user(); public static User system();
+}
+''', encoding="utf-8")
     (source / "User.bl").write_text('''
-[native "org.zenframework.z8.server.base.security.User"] public class User {
+[native "org.zenframework.z8.server.base.security.User"] public class User extends Object {
     public guid id; public string login; public string firstName; public string middleName; public string lastName;
     public string description; public string phone; public string email; public primary[string] parameters;
     public bool isAdministrator(); public bool isBuiltinAdministrator(); public bool isBuiltinSystem();
@@ -43,7 +48,7 @@ public class Probe {
     public static bool session(User other) {
         if (Application.userId() != guid.create(42) || Application.systemId() != guid.create(1)) return false;
         User initial = Application.user(); initial.login = "local";
-        if (Application.user().login != "alice" || !Application.system().isBuiltinSystem()) return false;
+        if (Application.user().login != "alice" || Object.user().login != "alice" || !Object.system().isBuiltinSystem()) return false;
         Application.switchUser(other);
         if (Application.userId() != guid.create(2) || Application.user().login != "bob") return false;
         Application.switchUser(Application.system());
@@ -55,9 +60,10 @@ public class Probe {
     if len(sys.argv) == 2:
         language = Path(sys.argv[1]).resolve() / "org.zenframework.z8.lang/src/bl"
         if not language.is_dir(): raise SystemExit("Original BL standard library not found")
-        (source / "User.bl").unlink(); (source / "Application.bl").unlink(); shutil.copytree(language, source, dirs_exist_ok=True)
+        (source / "User.bl").unlink(); (source / "Application.bl").unlink(); (source / "Object.bl").unlink()
+        shutil.copytree(language, source, dirs_exist_ok=True)
         probe = source / "Probe.bl"
-        probe.write_text("import org.zenframework.z8.base.security.User;\nimport org.zenframework.z8.base.application.Application;\n" + probe.read_text(encoding="utf-8"), encoding="utf-8")
+        probe.write_text("import org.zenframework.z8.base.security.User;\nimport org.zenframework.z8.base.application.Application;\nimport org.zenframework.z8.lang.Object;\n" + probe.read_text(encoding="utf-8"), encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "main.d"
     harness.write_text('''

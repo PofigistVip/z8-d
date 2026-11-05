@@ -906,6 +906,8 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
         }
         result ~= "class " ~ program.emittedName ~ " : " ~ (program.baseClass is null ? (program.baseIsException ? "Z8ExceptionObject" : "Z8Object") : program.baseClass.emittedName) ~ " {\n";
         result ~= "alias Z8Self = " ~ program.emittedName ~ ";\n";
+        auto className = program.isNative ? program.nativeName : program.qualifiedName.replace("$", ".").to!wstring;
+        result ~= "override wstring z8_class_id() { return " ~ emitRawWStringLiteral(className) ~ "; }\n";
         if (program.isNative) {
             auto nativeName = emitRawWStringLiteral(program.nativeName);
             result ~= "private static Z8Object z8_native_create_instance() { return " ~
@@ -965,7 +967,11 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
             result ~= dStorageType(capture.type, capture.objectClass, capture.keyObjectClasses) ~ " z8_capture_" ~ capture.name ~ ";\n";
         foreach (field; program.fields) {
             auto storageType = dStorageType(field.type, field.objectClass, field.keyObjectClasses);
-            if (program.isNative) {
+            if (program.isNative && program.nativeName == "org.zenframework.z8.server.runtime.OBJECT"w &&
+                field.name.text == "objects" && !field.isStatic && field.isAuto && field.objectClass !is null) {
+                result ~= "@property ref " ~ storageType ~ " f_objects() { return z8_object_members_field!(" ~
+                    field.objectClass.emittedName ~ ")(this); }\n";
+            } else if (program.isNative) {
                 auto binding = emitRawWStringLiteral(program.nativeName ~ ".f_"w ~ field.name.text.to!wstring);
                 result ~= (field.isStatic ? "static " : "") ~ "@property ref " ~ storageType ~ " f_" ~ field.name.text ~ "() { " ~
                     (field.isStatic ? "z8_ensure_static(); " : "") ~ "return z8_native_field!(" ~ storageType ~ ")(" ~ binding ~
@@ -1025,6 +1031,8 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
             foreach (attribute; field.attributes)
                 result ~= "this.f_" ~ field.name.text ~ ".z8_set_attribute(" ~ emitWStringLiteral(attribute.name.text.to!wstring) ~ ", " ~
                     emitAttributeValue(attribute) ~ ");\n";
+            if (field.type == ValueType.selfType && !isPrimaryClass(field.objectClass))
+                result ~= "this.f_" ~ field.name.text ~ ".z8_set_index(" ~ emitRawWStringLiteral(field.name.text.to!wstring) ~ ");\n";
         }
         foreach (init; program.memberInitializers) if (!program.isNative) {
             if (init.expression !is null && (init.type != ValueType.selfType || isPrimaryClass(init.target.objectClass))) result ~= emitSimple(init) ~ ";\n";
