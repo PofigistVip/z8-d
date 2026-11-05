@@ -210,20 +210,20 @@ unittest {
 private string dStorageType(ValueType type, Program objectClass = null, Program[] keyObjectClasses = null) {
     return type == ValueType.intType ? "Z8Optional!long" : type == ValueType.boolType ? "Z8Optional!bool" : type == ValueType.decimalType ? "Z8Optional!Z8Decimal" : dType(type, objectClass, keyObjectClasses);
 }
-// Cached only while walking one left-associated binary chain; D's module
+// Cached only while walking one expression spine; D's module
 // globals are thread-local, and overrides used by argument staging take priority.
-private string[Expression] binaryEmissionCache;
+private string[Expression] expressionSpineEmissionCache;
 private string emitExpr(Expression e) {
     if (!e.emittedOverride.length) {
-        if (auto cached = e in binaryEmissionCache) return *cached;
-        if (e.kind == ExprKind.binary) {
+        if (auto cached = e in expressionSpineEmissionCache) return *cached;
+        if ((e.kind == ExprKind.binary || e.kind == ExprKind.memberCall)) {
             Expression[] chain;
-            for (auto node = e; node.kind == ExprKind.binary && !node.emittedOverride.length && !(node in binaryEmissionCache); node = node.left)
+            for (auto node = e; (node.kind == ExprKind.binary || node.kind == ExprKind.memberCall) && node.left !is null && !node.emittedOverride.length && !(node in expressionSpineEmissionCache); node = node.left)
                 chain ~= node;
             if (chain.length > 1) {
-                scope (exit) foreach (node; chain) binaryEmissionCache.remove(node);
-                foreach_reverse (node; chain) binaryEmissionCache[node] = emitExprSingle(node);
-                return binaryEmissionCache[e];
+                scope (exit) foreach (node; chain) expressionSpineEmissionCache.remove(node);
+                foreach_reverse (node; chain) expressionSpineEmissionCache[node] = emitExprSingle(node);
+                return expressionSpineEmissionCache[e];
             }
         }
     }
