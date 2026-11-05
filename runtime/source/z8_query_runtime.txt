@@ -477,8 +477,11 @@ private Z8ObjectArray!Z8Object z8_query_data_fields(Z8Object self, bool primaryO
     if (!z8_native_is_instance(z8_query_name, self)) throw new Exception("invalid Query object");
     auto result = new Z8ObjectArray!Z8Object();
     foreach (member; z8_object_members(self)) {
-        if (z8_native_is_instance(z8_field_name, member) &&
-            (!primaryOnly || !z8_native_is_instance(z8_expression_name, member)) && !result.z8_contains(member)) result.z8_add(member);
+        if (z8_native_is_instance(z8_field_name, member)) {
+            // Query.dataFields sets each direct field's owner before it is keyed.
+            z8_field_state(member).owner = self;
+            if ((!primaryOnly || !z8_native_is_instance(z8_expression_name, member)) && !result.z8_contains(member)) result.z8_add(member);
+        }
     }
     return result;
 }

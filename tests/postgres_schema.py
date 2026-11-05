@@ -196,6 +196,17 @@ void main(string[] args) {
     auto conflict = P.m_indexes(); conflict.z8_set_attribute("name"w, "Sample;--"w);
     bool duplicateRegistration; try { registry.registerTable(conflict); } catch (Exception) { duplicateRegistration = true; }
     assert(duplicateRegistration && registry.tables().length == 2);
+    Z8Object sampleTitle, indexTitle;
+    foreach (field; z8_query_declared_fields(table, true)) if (field.z8_index() == "title"w) sampleTitle = field;
+    auto otherTable = P.m_indexes();
+    foreach (field; z8_query_declared_fields(otherTable, true)) if (field.z8_index() == "title"w) indexTitle = field;
+    auto sampleFieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, sampleTitle);
+    auto indexFieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, indexTitle);
+    assert(sampleFieldKey == z8_guid_create_name("Sample;--.Title"w) && indexFieldKey == z8_guid_create_name("IndexSample.Title"w));
+    assert(sampleFieldKey != indexFieldKey);
+    auto detached = z8_native_new("org.zenframework.z8.server.base.table.value.StringField"w);
+    detached.z8_set_attribute("name"w, "Detached"w);
+    assert(z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, detached) == z8_guid_create_name("Detached"w));
     auto ddl = z8_postgres_create_table_sql("pg_temp"w, table);
     assert(ddl.canFind(`"Sample;--"`) && ddl.canFind(`"Title" character varying DEFAULT 'O''Reilly 😀'`));
     assert(!ddl.canFind("computed") && ddl.canFind(`"Reference" uuid DEFAULT '00000000-0000-0000-0000-000000000000' NOT NULL`));

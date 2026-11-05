@@ -44,7 +44,12 @@ private wstring z8_object_name(Z8Object self) {
 private Z8Guid z8_object_key(Z8Object self) {
     self = z8_nonnull(self);
     auto name = self.z8_get_attribute("name"w);
-    return self.z8_key(name is null ? self.z8_class_id() : name);
+    name = name is null ? self.z8_class_id() : name;
+    if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Field"w, self)) {
+        auto owner = z8_field_state(self).owner;
+        if (owner !is null) name = z8_object_name(owner) ~ "."w ~ name;
+    }
+    return self.z8_key(name);
 }
 // Generated project class symbols encode their BL qualified name as UTF-8 hex.
 // Looking through linked ModuleInfo avoids introducing dependency cycles between
