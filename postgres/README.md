@@ -58,6 +58,8 @@ still pending.
 The native `Users.onNew` defaults mirror the Java implementation, including its
 default password value and `changePassword` flag; explicitly supplied values
 are preserved even when user-level events are disabled.
+The native `Sequences` table fields and key index are available; the
+transaction-aware `Sequencer` allocation API is not yet implemented.
 `z8_postgres_create_tables` runs these operations, index creation and foreign
 keys in phases inside one transaction for a new set of tables. The schema and
 required extensions must already exist. It rejects an existing transaction and

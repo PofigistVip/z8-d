@@ -1,0 +1,29 @@
+// Physical fields of Sequences.java; allocation semantics live in Sequencer.
+private enum z8_sequences_name = "org.zenframework.z8.server.base.table.system.Sequences"w;
+private class Z8SequencesState { Z8Object[3] fields; }
+private void z8_sequences_new(Z8Object self) {
+    enum base = "org.zenframework.z8.server.base.table.value."w;
+    enum kinds = ["TextField"w, "StringField"w, "IntegerField"w];
+    enum indexes = ["description"w, "key"w, "value"w];
+    enum names = ["Description"w, "Key"w, "Value"w];
+    auto state = new Z8SequencesState();
+    foreach (i; 0 .. state.fields.length)
+        state.fields[i] = z8_table_system_field(self, base ~ kinds[i], indexes[i], names[i]);
+    self.z8_set_native_state(z8_sequences_name, state);
+}
+private Z8SequencesState z8_sequences_state(Z8Object self) {
+    auto state = cast(Z8SequencesState)z8_nonnull(self, -1).z8_get_native_state(z8_sequences_name);
+    if (state is null) throw new Exception("Sequences fields are not initialized");
+    return state;
+}
+private Z8Object* z8_sequences_field_address(size_t index)(Z8Object self) { return &z8_sequences_state(self).fields[index]; }
+void z8_sequences_configure(Z8Object self) {
+    auto key = z8_nonnull(z8_sequences_state(self).fields[1]);
+    auto state = z8_field_state(key);
+    state.indexed = z8_optional_wrap(true); state.length = z8_optional_wrap(256L);
+}
+shared static this() {
+    z8_native_bind(z8_sequences_name ~ ".m_new"w, &z8_sequences_new);
+    static foreach (i, name; ["description"w, "key"w, "value"w])
+        z8_native_bind_field(z8_sequences_name ~ ".f_"w ~ name, &z8_sequences_field_address!i);
+}

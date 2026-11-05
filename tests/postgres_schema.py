@@ -97,6 +97,7 @@ import org.zenframework.z8.base.table.value.IntField;
     (source / "Probe.bl").write_text('''
 import org.zenframework.z8.base.table.system.Roles;
 import org.zenframework.z8.base.table.system.Users;
+import org.zenframework.z8.base.table.system.Sequences;
 public class Probe {
     public static Sample make() { Sample value; return value; }
     public static GeoSample geo() { GeoSample value; return value; }
@@ -106,6 +107,7 @@ public class Probe {
     public static StaticSample statics() { StaticSample value; return value; }
     public static Roles roles() { Roles value; return value; }
     public static Users users() { Users value; return value; }
+    public static Sequences sequences() { Sequences value; return value; }
     public static guid systemUser() { return Users.System; }
     public static guid administratorUser() { return Users.Administrator; }
     public static void createUser(Users value, guid id) { value.create(id); }
@@ -298,6 +300,16 @@ void main(string[] args) {
     assert(roleRecords[0].values[0].value.textValue == "Administrator"w && roleRecords[0].values[2].value.booleanValue);
     assert(roleRecords[1].values[2].value.booleanValue && !roleRecords[1].values[3].value.booleanValue);
     assert(!roleRecords[2].values[2].value.booleanValue && roleRecords[2].values[8].value.integerValue == 3);
+    auto sequences = P.m_sequences();
+    auto sequenceDDL = z8_postgres_create_table_sql("z8_test"w, sequences);
+    assert(sequenceDDL.canFind(`"Description" bytea`) && sequenceDDL.canFind(`"Key" character varying`) && sequenceDDL.canFind(`"Value" bigint`));
+    bool sequenceIndex;
+    foreach (sql; z8_postgres_create_indexes_sql("z8_test"w, sequences)) if (sql.canFind(`("Key")`)) sequenceIndex = true;
+    assert(sequenceIndex);
+    foreach (field; z8_query_declared_fields(sequences, true)) if (field.z8_index() == "key"w) {
+        auto length = z8_native_field!(Z8Optional!long)("org.zenframework.z8.server.base.table.value.StringField.f_length"w, field);
+        assert(z8_optional_require(length) == 256);
+    }
     auto userTable = P.m_users();
     auto userDDL = z8_postgres_create_table_sql("z8_test"w, userTable);
     assert(userDDL.canFind(`"Name" character varying`) && userDDL.canFind(`"Password" character varying DEFAULT 'd41d8cd98f00b204e9800998ecf8427e'`));
