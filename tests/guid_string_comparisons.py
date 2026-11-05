@@ -1,4 +1,4 @@
-"""Compare GUID values with strings using BL conversion operators."""
+"""Compare GUID values and use GUID-to-string conversion in overloads."""
 from pathlib import Path
 import os
 import shutil
@@ -23,6 +23,11 @@ public class Probe {
         string[string] values;
         if (!(id != values["missing"])) return 4;
         if ("prefix:" + id != "prefix:" + text || id + ":suffix" != text + ":suffix") return 5;
+        guid named = guid.create(id);
+        if (named != guid.create(text) || named == id) return 6;
+        if (guid.create(1).minor() != 1 || guid.create(2, 3).major() != 2) return 7;
+        guid missing = null;
+        try { guid ignored = guid.create(missing); return 8; } catch (exception expectedError) {}
         return 0;
     }
 }
@@ -87,4 +92,4 @@ public class Runner {
                                          cwd=temp, text=True, encoding="utf-8")
         if result.strip() != "0":
             raise SystemExit("Original Java result differs: " + result)
-print("GUID to string comparisons verified")
+print("GUID to string comparisons and overloads verified")

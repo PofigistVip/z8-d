@@ -1320,7 +1320,7 @@ class Checker {
                     }
                     if (e.token.text == "create") {
                         if (!e.arguments.length) e.builtinCall = "z8_guid_create_random";
-                        else if (e.arguments.length == 1 && [ValueType.stringType, ValueType.nullableString].canFind(typeOf(e.arguments[0]))) {
+                        else if (e.arguments.length == 1 && [ValueType.stringType, ValueType.nullableString, ValueType.guidType].canFind(typeOf(e.arguments[0]))) {
                             checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_guid_create_name";
                         } else {
                             checkArguments(e, e.arguments.length == 1 ? [ValueType.intType] : [ValueType.intType, ValueType.intType]);
