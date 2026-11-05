@@ -282,6 +282,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         System.out.println("STATICEXC:" + demo.cases.StaticExceptionValues.z8_run().get());
         System.out.println("SQLARRAY:" + demo.cases.SqlArrays.z8_run().get());
         System.out.println("SQLMAP:" + demo.cases.SqlMaps.z8_run().get());
+        System.out.println("SQLUSERCONV:" + demo.cases.SqlConversion.z8_run().get());
         if (!"1709199045000L".equals(metadata.getAttribute("dateConstant")) ||
             !"-2134967296L".equals(metadata.getAttribute("spanConstant")) ||
             !"/* 00112233-4455-6677-8899-aabbccddeeff */4822678189205111L, -8603657889541918977L".equals(metadata.getAttribute("guidConstant")) ||
@@ -547,6 +548,8 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             catch (RuntimeException error) { System.out.println("SQLCONV:" + vendor.name() + ":ERROR"); }
             try { System.out.println("SQLCONV:" + vendor.name() + ":" + demo.cases.SqlStringValues.z8_number().format(vendor, null)); }
             catch (RuntimeException error) { System.out.println("SQLCONV:" + vendor.name() + ":ERROR"); }
+            System.out.println("SQLUSERCONVSQL:" + vendor.name() + ":" + demo.cases.SqlConversion.z8_convertedNumber().format(vendor, null));
+            System.out.println("SQLUSERCONVSQL:" + vendor.name() + ":" + demo.cases.SqlConversion.z8_convertedText().format(vendor, null));
             org.zenframework.z8.server.types.sql.sql_string[] extraStrings = {
                 demo.cases.SqlStringValues.z8_quoted(), demo.cases.SqlStringValues.z8_jsonName(),
                 demo.cases.SqlStringValues.z8_jsonIndex(), demo.cases.SqlStringValues.z8_identity(),
@@ -786,6 +789,7 @@ void main() {
     writeln("STATICEXC:", z8_optional_require(Z8p_64656D6F2E63617365732E537461746963457863657074696F6E56616C756573.m_run()));
     writeln("SQLARRAY:", z8_optional_require(Z8p_64656D6F2E63617365732E53716C417272617973.m_run()));
     writeln("SQLMAP:", z8_optional_require(Z8p_64656D6F2E63617365732E53716C4D617073.m_run()));
+    writeln("SQLUSERCONV:", z8_optional_require(Z8p_64656D6F2E63617365732E53716C436F6E76657273696F6E.m_run()));
     auto metadata = z8_new!Z8p_64656D6F2E63617365732E5374617469634F7665726C6F61644368696C64();
     assert(metadata.z8_get_attribute("dateConstant"w) == "1709199045000L"w);
     assert(metadata.z8_get_attribute("spanConstant"w) == "-2134967296L"w);
@@ -1068,6 +1072,8 @@ void main() {
         catch (Exception error) { writeln("SQLCONV:", vendor, ":ERROR"); }
         try { writeln("SQLCONV:", vendor, ":", z8_to_utf8(z8_sql_decimal_format(Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_number(), dialect))); }
         catch (Exception error) { writeln("SQLCONV:", vendor, ":ERROR"); }
+        writeln("SQLUSERCONVSQL:", vendor, ":", z8_to_utf8(z8_sql_int_format(Z8p_64656D6F2E63617365732E53716C436F6E76657273696F6E.m_convertedNumber(), dialect)));
+        writeln("SQLUSERCONVSQL:", vendor, ":", z8_to_utf8(z8_sql_string_format(Z8p_64656D6F2E63617365732E53716C436F6E76657273696F6E.m_convertedText(), dialect)));
         auto extraStrings = [Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_quoted(),
             Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_jsonName(),
             Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_jsonIndex(),
@@ -1228,7 +1234,7 @@ void main() {
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_lines = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "STATICEXC:", "SQLARRAY:", "SQLMAP:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:", "SQLSPAN:", "SQLSPANARITH:", "SQLSPANBOOL:", "SQLSPANPART:", "SQLSPANFUNC:", "SQLBINARY:", "SQLGEOM:", "SQLGEOMBOOL:", "SQLGEOMEMPTY:", "SQLGEOMFUNC:", "SQLGEOMMETRIC:", "SQLGEOMTEST:", "SQLGEOMTEXT:", "SQLGEOMCOUNT:", "SQLPRIMARY:", "SQLPRIMARYCHECK:", "SQLFTSBOOL:", "SQLFTSRANK:"))]
+        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "STATICEXC:", "SQLARRAY:", "SQLMAP:", "SQLUSERCONV:", "SQLUSERCONVSQL:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:", "SQLSPAN:", "SQLSPANARITH:", "SQLSPANBOOL:", "SQLSPANPART:", "SQLSPANFUNC:", "SQLBINARY:", "SQLGEOM:", "SQLGEOMBOOL:", "SQLGEOMEMPTY:", "SQLGEOMFUNC:", "SQLGEOMMETRIC:", "SQLGEOMTEST:", "SQLGEOMTEXT:", "SQLGEOMCOUNT:", "SQLPRIMARY:", "SQLPRIMARYCHECK:", "SQLFTSBOOL:", "SQLFTSRANK:"))]
         original_static_exception = [line for line in output.splitlines() if line.startswith("STATICEXC:")]
         d_static_exception = [line for line in d_lines if line.startswith("STATICEXC:")]
         if original_static_exception != ["STATICEXC:253"] or d_static_exception != original_static_exception:
@@ -1241,11 +1247,15 @@ void main() {
         d_sql_map = [line for line in d_lines if line.startswith("SQLMAP:")]
         if original_sql_map != ["SQLMAP:263"] or d_sql_map != original_sql_map:
             raise SystemExit(f"SQL map behavior differs: original={original_sql_map!r}, D={d_sql_map!r}")
+        original_sql_conversion = [line for line in output.splitlines() if line.startswith("SQLUSERCONV:")]
+        d_sql_conversion = [line for line in d_lines if line.startswith("SQLUSERCONV:")]
+        if original_sql_conversion != ["SQLUSERCONV:269"] or d_sql_conversion != original_sql_conversion:
+            raise SystemExit(f"SQL user conversion behavior differs: original={original_sql_conversion!r}, D={d_sql_conversion!r}")
         original_sql = [line for line in output.splitlines() if line.startswith("SQLBOOL:")]
         d_sql = [line for line in d_lines if line.startswith("SQLBOOL:")]
         if original_sql != d_sql or len(d_sql) != 40:
             raise SystemExit(f"SQL boolean formatting differs: original={original_sql!r}, D={d_sql!r}")
-        for prefix, count in (("SQLINT:", 36), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 44), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 60), ("SQLTEXTTEST:", 16), ("SQLGUID:", 8), ("SQLGUIDBOOL:", 8), ("SQLDATE:", 12), ("SQLDATETICKS:", 4), ("SQLDATEFUNC:", 36), ("SQLDATEPART:", 20), ("SQLDATECMP:", 336), ("SQLDATEBL:", 8), ("SQLSPAN:", 20), ("SQLSPANARITH:", 12), ("SQLSPANBOOL:", 8), ("SQLSPANPART:", 28), ("SQLSPANFUNC:", 28), ("SQLBINARY:", 4), ("SQLGEOM:", 12), ("SQLGEOMBOOL:", 24), ("SQLGEOMEMPTY:", 8), ("SQLGEOMFUNC:", 56), ("SQLGEOMMETRIC:", 32), ("SQLGEOMTEST:", 16), ("SQLGEOMTEXT:", 8), ("SQLGEOMCOUNT:", 4), ("SQLPRIMARY:", 4), ("SQLPRIMARYCHECK:", 4), ("SQLFTSBOOL:", 16), ("SQLFTSRANK:", 8)):
+        for prefix, count in (("SQLINT:", 36), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 44), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLUSERCONVSQL:", 8), ("SQLTEXTEXTRA:", 60), ("SQLTEXTTEST:", 16), ("SQLGUID:", 8), ("SQLGUIDBOOL:", 8), ("SQLDATE:", 12), ("SQLDATETICKS:", 4), ("SQLDATEFUNC:", 36), ("SQLDATEPART:", 20), ("SQLDATECMP:", 336), ("SQLDATEBL:", 8), ("SQLSPAN:", 20), ("SQLSPANARITH:", 12), ("SQLSPANBOOL:", 8), ("SQLSPANPART:", 28), ("SQLSPANFUNC:", 28), ("SQLBINARY:", 4), ("SQLGEOM:", 12), ("SQLGEOMBOOL:", 24), ("SQLGEOMEMPTY:", 8), ("SQLGEOMFUNC:", 56), ("SQLGEOMMETRIC:", 32), ("SQLGEOMTEST:", 16), ("SQLGEOMTEXT:", 8), ("SQLGEOMCOUNT:", 4), ("SQLPRIMARY:", 4), ("SQLPRIMARYCHECK:", 4), ("SQLFTSBOOL:", 16), ("SQLFTSRANK:", 8)):
             original_lines = [line for line in output.splitlines() if line.startswith(prefix)]
             d_formatted = [line for line in d_lines if line.startswith(prefix)]
             if original_lines != d_formatted or len(d_formatted) != count:

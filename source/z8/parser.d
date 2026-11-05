@@ -381,7 +381,7 @@ class Parser {
             if (isPriorityOperator) {
                 // The priority operator has the enclosing class as its result type.
             } else if (isCastOperator) {
-                if (![ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.dateType, ValueType.geometryType, ValueType.fileType, ValueType.selfType].canFind(declaredType))
+                if (!isSqlType(declaredType) && ![ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.dateType, ValueType.geometryType, ValueType.fileType, ValueType.selfType].canFind(declaredType))
                     error("unsupported conversion operator target");
                 if (declaredType == ValueType.selfType && declaredObjectName != typeToken.text)
                     error("conversion operator target must be a simple name");

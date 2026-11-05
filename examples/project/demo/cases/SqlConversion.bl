@@ -1,0 +1,21 @@
+import org.zenframework.z8.lang.sql.sql_int;
+import org.zenframework.z8.lang.sql.sql_string;
+
+public class SqlConversion {
+    public operator sql_int() { return 42; }
+    public operator sql_string() { return "converted"; }
+
+    public static sql_int convertedNumber() { SqlConversion value; return value; }
+    public static sql_string convertedText() { SqlConversion value; return value; }
+    private static sql_int accept(sql_int value) { return value; }
+    public static sql_int convertedArgument() { SqlConversion value; return accept(value); }
+    public static sql_string explicitConversion() { SqlConversion value; return (sql_string)value; }
+    public static int run() {
+        SqlConversion value;
+        sql_int number = value;
+        sql_string text = value;
+        if (number == null || text == null) return 1;
+        if (convertedArgument() == null || explicitConversion() == null) return 2;
+        return 269;
+    }
+}
