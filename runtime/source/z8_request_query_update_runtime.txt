@@ -1,8 +1,8 @@
 // QueryUtils.setFieldValue for the PostgreSQL writer, including uploaded
-// binary content; geometry requires a separate adapter.
+// binary content and GeoJSON geometry values.
 private void z8_application_query_set_value(Z8Object field, JSONValue value, bool acceptBinary = false) {
-    if (value.type == JSONType.array || value.type == JSONType.object) throw new Exception("invalid query field value");
     auto type = z8_field_type_id(field);
+    if (value.type == JSONType.array || (value.type == JSONType.object && type != "geometry"w)) throw new Exception("invalid query field value");
     auto text = z8_json_value_text(value);
     Z8Primary boxed;
     if (type == "string"w || type == "text"w || type == "file"w || type == "attachments"w) boxed = z8_primary_box(text);
@@ -13,7 +13,7 @@ private void z8_application_query_set_value(Z8Object field, JSONValue value, boo
         if (index < 0 || index >= files.z8_size()) throw new Exception("invalid uploaded file index");
         boxed = z8_primary_box(z8_file_to_binary(z8_nonnull(files.z8_get(index))));
     }
-    else if (type == "geometry"w) throw new Exception("unsupported query write field type");
+    else if (type == "geometry"w) boxed = z8_primary_box(z8_geometry_fromGeoJson(text, z8_optional_require(z8_field_srs(field))));
     else if (!text.length) boxed = z8_field_default_value(field);
     else switch (type) {
         case "int"w: boxed = z8_primary_box(z8_int_parse(text)); break;

@@ -87,6 +87,13 @@ private FieldParameter fieldParameter(Z8Object field, size_t index) {
             expression = "decode(" ~ marker ~ "::text, 'hex')";
             if (value !is null) text = encodeBinary(z8_primary_cast!Z8Binary(value));
             break;
+        case "geometry"w:
+            expression = "ST_GeomFromEWKB(decode(" ~ marker ~ "::text, 'hex'))";
+            if (value !is null) {
+                text = z8_geometry_to_string(z8_primary_cast!Z8Geometry(value)).to!string;
+                if (!text.length) return FieldParameter(expression, Z8PostgresParameter.nullValue());
+            }
+            break;
         default: throw new Z8PostgresException("unsupported PostgreSQL write field type: " ~ kind.to!string);
     }
     return FieldParameter(expression, value is null ? Z8PostgresParameter.nullValue() : Z8PostgresParameter.value(text));
@@ -94,7 +101,7 @@ private FieldParameter fieldParameter(Z8Object field, size_t index) {
 private string fieldColumn(Z8Object field) {
     return quoteIdentifier(z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, field));
 }
-private Z8Primary decodeField(wstring kind, Z8PostgresValue value) {
+private Z8Primary decodeField(wstring kind, Z8PostgresValue value, Z8Object field) {
     auto text = value.isNull ? null : value.text.to!wstring;
     switch (kind) {
         case "int"w: return z8_primary_box(value.isNull ? 0L : z8_int_parse(text));
@@ -106,6 +113,7 @@ private Z8Primary decodeField(wstring kind, Z8PostgresValue value) {
         case "date"w: case "datetime"w: return z8_primary_box(value.isNull ? z8_date_min : z8_date_from_ticks(z8_int_parse(text)));
         case "datespan"w: return z8_primary_box(value.isNull ? new Z8Datespan() : new Z8Datespan(z8_int_parse(text)));
         case "binary"w: return z8_primary_box(new Z8Binary(value.isNull ? null : decodeHex(value.text)));
+        case "geometry"w: return z8_primary_box(value.isNull ? z8_geometry_none(z8_optional_require(z8_field_srs(field))) : z8_geometry_fromHexString(text));
         default: throw new Z8PostgresException("unsupported PostgreSQL field type: " ~ kind.to!string);
     }
 }
@@ -131,7 +139,7 @@ private class Z8PostgresRows : IZ8QueryCursor {
         foreach (column, selectedField; selected) if (selectedField is field) {
             auto value = result.rows[cast(size_t)position][column]; wasNull = value.isNull;
             if (asArray) return z8_primary_box(value.isNull ? ""w : value.text.to!wstring);
-            return decodeField(kinds[column], value);
+            return decodeField(kinds[column], value, field);
         }
         throw new Z8PostgresException("field is not present in PostgreSQL cursor");
     }
@@ -329,12 +337,13 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         foreach (index, field; selected) {
             if (index) sql ~= ", ";
             auto kind = z8_field_type_id(field); kinds ~= kind;
-            if (kind == "geometry"w || kind == "none"w) throw new Z8PostgresException("unsupported PostgreSQL field type: " ~ kind.to!string);
+            if (kind == "none"w) throw new Z8PostgresException("unsupported PostgreSQL field type: " ~ kind.to!string);
             z8_sql_set_field_options(Z8SqlFieldFormatOptions(grouped, false));
             auto expression = z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string;
             auto aggregation = z8_field_aggregation(field);
             bool raw = !grouped || aggregation == Z8FieldAggregation.none || aggregation == Z8FieldAggregation.bitwiseOr || aggregation == Z8FieldAggregation.bitwiseAnd;
             if (kind == "binary"w && raw) expression = "encode(" ~ expression ~ ", 'hex')";
+            else if (kind == "geometry"w && raw) expression = "encode(ST_AsEWKB(" ~ expression ~ ", 'NDR'), 'hex')";
             else if (raw && z8_native_is_instance("org.zenframework.z8.server.base.table.value.TextField"w, field))
                 expression = "convert_from(" ~ expression ~ ", 'UTF8')";
             sql ~= expression ~ " AS " ~ quoteIdentifier(("z8_" ~ index.to!string).to!wstring);
