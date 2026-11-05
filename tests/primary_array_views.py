@@ -64,6 +64,23 @@ void main() {
     assert(primaryIds.opEquals(ids) && ids.opEquals(primaryIds));
     auto unshared = new Z8Array!Z8Guid([second, first]);
     unshared.z8_sort(); assert(unshared.z8_first() is first && unshared.z8_last() is second);
+    auto ints = new Z8Array!long([1L, 2L]); auto primaryInts = z8_primary_array_view(ints);
+    primaryInts.z8_set(0, z8_primary_box(9L)); ints.z8_set(1, 8L);
+    assert(z8_optional_require(ints.z8_get(0)) == 9 && z8_optional_require(z8_primary_cast!long(primaryInts.z8_get(1))) == 8);
+    primaryInts.z8_add(null); assert(!ints.z8_get(2).present); ints.z8_set(2, 3L);
+    primaryInts.z8_add(z8_primary_box("wrong"w));
+    invalid = false; try { ints.z8_get(3); } catch (Exception) { invalid = true; }
+    assert(invalid); primaryInts.z8_removeAt(3); ints.z8_sort();
+    assert(z8_optional_require(ints.z8_first()) == 3 && z8_optional_require(ints.z8_last()) == 9);
+    auto bools = new Z8Array!bool([true, false]); auto primaryBools = z8_primary_array_view(bools);
+    primaryBools.z8_set(0, z8_primary_box(false)); bools.z8_set(1, true);
+    assert(!z8_optional_require(bools.z8_get(0)) && z8_optional_require(z8_primary_cast!bool(primaryBools.z8_get(1))));
+    bools.z8_sort(); assert(bools.z8_join(","w) == "false,true"w);
+    auto decimals = new Z8Array!Z8Decimal([z8_decimal_parse("1.5"w)]); auto primaryDecimals = z8_primary_array_view(decimals);
+    primaryDecimals.z8_set(0, z8_primary_box(z8_decimal_parse("2.25"w)));
+    assert(z8_optional_require(decimals.z8_get(0)).z8_string() == "2.25"w);
+    decimals.z8_add(z8_decimal_parse("1.0"w)); decimals.z8_sort();
+    assert(decimals.z8_join(","w) == "1.0,2.25"w);
 }
 ''', encoding="utf-8")
     executable = temp / ("primary-array-views.exe" if os.name == "nt" else "primary-array-views")
@@ -91,6 +108,23 @@ public class Probe {
         values.set(2, guid.create(3)); values.add(null); ids[3] = guid.create(4);
         if (ids[2].minor() != 3 || ((guid) values[3]).minor() != 4) return 3;
         if (guidCount(ids) != 4 || Input.size(ids) != 4) return 4;
+        return 0;
+    }
+    public static int primitiveRun() {
+        bool[] flags = {true, false}; primary[] allFlags = flags;
+        allFlags.set(0, false); flags[1] = true;
+        if (flags[0] || !(bool)allFlags[1] || Input.size(flags) != 2) return 1;
+        allFlags.add("wrong");
+        try { bool invalid = flags[2]; return 2; } catch (exception expected) {}
+        allFlags.set(2, true);
+        int[] numbers = {1, 2}; primary[] allNumbers = numbers;
+        allNumbers.set(0, 5); numbers[1] += 7;
+        if (numbers[0] != 5 || (int)allNumbers[1] != 9) return 3;
+        decimal[] decimals = {1.5}; primary[] allDecimals = decimals;
+        allDecimals.set(0, 2.5); decimals[0] += 1.0;
+        if ((decimal)allDecimals[0] != 3.5) return 4;
+        int count = 0; for (primary item : numbers) { count += 1; }
+        if (count != 2) return 5;
         return 0;
     }
     public static int run() {
@@ -122,10 +156,11 @@ void main() {
     z8_native_bind("example.Input.m_size"w, &count);
     assert(z8_optional_require(Z8p_50726F6265.m_run()) == 0);
     assert(z8_optional_require(Z8p_50726F6265.m_guidRun()) == 0);
+    assert(z8_optional_require(Z8p_50726F6265.m_primitiveRun()) == 0);
 }
 ''', encoding="utf-8")
     executable = temp / ("primary-array-bl.exe" if os.name == "nt" else "primary-array-bl")
     subprocess.run(["dmd", "-I" + str(generated), *import_args(), *map(str, generated.rglob("*.d")),
                     str(harness), str(runtime), "-of=" + str(executable)], cwd=temp, check=True)
     subprocess.run([str(executable)], cwd=temp, check=True)
-print("String, GUID and primary array views share storage")
+print("Primitive, string, GUID and primary array views share storage")

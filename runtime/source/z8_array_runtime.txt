@@ -1,6 +1,6 @@
 class Z8Array(T) {
     enum isPrimitive = is(T == long) || is(T == bool) || is(T == Z8Decimal);
-    enum sharePrimary = is(T == wstring) || is(T == Z8Guid);
+    enum sharePrimary = isPrimitive || is(T == wstring) || is(T == Z8Guid);
     static if (isPrimitive) alias Element = Z8Optional!T;
     else alias Element = T;
     private Element[] items;
@@ -30,6 +30,12 @@ class Z8Array(T) {
             if (strings !is null) return this.opEquals(z8_primary_array_view(strings));
             auto guids = cast(Z8Array!Z8Guid)other;
             if (guids !is null) return this.opEquals(z8_primary_array_view(guids));
+            auto integers = cast(Z8Array!long)other;
+            if (integers !is null) return this.opEquals(z8_primary_array_view(integers));
+            auto booleans = cast(Z8Array!bool)other;
+            if (booleans !is null) return this.opEquals(z8_primary_array_view(booleans));
+            auto decimals = cast(Z8Array!Z8Decimal)other;
+            if (decimals !is null) return this.opEquals(z8_primary_array_view(decimals));
         }
         if (right is null || items.length != right.items.length) return false;
         foreach (i, item; items) {
@@ -53,8 +59,8 @@ class Z8Array(T) {
         T z8_first() { return z8_isEmpty() ? null : z8_get(0); }
         T z8_last() { return z8_isEmpty() ? null : z8_get(z8_size() - 1); }
     } else {
-        Element z8_first() { return items.length ? items[0] : Element.init; }
-        Element z8_last() { return items.length ? items[$ - 1] : Element.init; }
+        Element z8_first() { return z8_isEmpty() ? Element.init : z8_get(0); }
+        Element z8_last() { return z8_isEmpty() ? Element.init : z8_get(z8_size() - 1); }
     }
     void z8_clear() { static if (sharePrimary) if (primaryData !is null) { primaryData.z8_clear(); return; } ++z8_version; items.length = 0; }
     static if (isPrimitive) {
@@ -187,6 +193,15 @@ class Z8Array(T) {
             ++z8_version;
             return this;
         } else {
+            static if (isPrimitive) if (primaryData !is null) {
+                Element[] values;
+                foreach (i; 0 .. z8_size()) values ~= z8_get(i);
+                if (values.length > 1) foreach (value; values) if (!value.present) throw new Exception("null array element");
+                sort!("a < b", SwapStrategy.stable)(values);
+                foreach (i, value; values) primaryData.z8_set(cast(long)i, z8_primary_box(value));
+                ++primaryData.z8_version;
+                return this;
+            }
             static if (is(T == wstring)) if (primaryData !is null) {
                 wstring[] values;
                 foreach (i; 0 .. z8_size()) values ~= z8_get(i);
@@ -222,6 +237,17 @@ class Z8Array(T) {
         return result;
     }
     wstring z8_join(wstring separator = ""w) {
+        static if (isPrimitive) if (primaryData !is null) {
+            wstring result;
+            foreach (i; 0 .. z8_size()) {
+                if (i) result ~= z8_string_required(separator);
+                auto item = z8_get(i);
+                static if (is(T == Z8Decimal)) result ~= item.z8_string();
+                else static if (is(T == bool)) result ~= item ? "true"w : "false"w;
+                else result ~= z8_int_toString(item);
+            }
+            return result;
+        }
         static if (is(T == wstring)) if (primaryData !is null) {
             wstring result;
             foreach (i; 0 .. z8_size()) {
@@ -243,10 +269,13 @@ class Z8Array(T) {
     }
     ref Element z8_at(long index) {
         static if (sharePrimary) if (primaryData !is null) {
+            static if (isPrimitive) throw new Exception("primitive array element requires checked access");
+            else {
             auto value = primaryData.z8_get(index);
             if (value is null || !z8_primary_is!T(value)) throw new Exception("array element requires checked access");
             static if (is(T == wstring)) return value.textValue;
             else return value.guidValue;
+            }
         }
         auto i = cast(int)index;
         if (i < 0 || cast(size_t)i >= items.length) throw new Exception("array index out of bounds");
@@ -263,7 +292,8 @@ class Z8Array(T) {
     }
 }
 // The JVM shares the same erased RCollection when a scalar array widens to primary[].
-Z8Array!Z8Primary z8_primary_array_view(T)(Z8Array!T values) if (is(T == wstring) || is(T == Z8Guid)) {
+Z8Array!Z8Primary z8_primary_array_view(T)(Z8Array!T values)
+if (is(T == wstring) || is(T == Z8Guid) || is(T == long) || is(T == bool) || is(T == Z8Decimal)) {
     if (values is null) return null;
     if (values.primaryData is null) {
         auto data = new Z8Array!Z8Primary();
@@ -293,4 +323,23 @@ void z8_guid_array_assign(Z8Array!Z8Guid values, long index, lazy Z8Guid value) 
     auto position = cast(int)index;
     if (position < 0 || position >= z8_nonnull(values).z8_size()) throw new Exception("array index out of bounds");
     values.z8_set(index, value);
+}
+Z8Optional!T z8_primitive_array_get(T)(Z8Array!T values, long index) {
+    return z8_nonnull(values).z8_get(index);
+}
+private void z8_primitive_array_check_index(T)(Z8Array!T values, long index) {
+    auto position = cast(int)index;
+    if (position < 0 || position >= z8_nonnull(values).z8_size()) throw new Exception("array index out of bounds");
+}
+void z8_primitive_array_assign(T)(Z8Array!T values, long index, lazy Z8Optional!T value) {
+    z8_primitive_array_check_index(values, index);
+    values.z8_set(index, value);
+}
+void z8_primitive_array_compound(string op, T)(Z8Array!T values, long index, lazy Z8Optional!T value) {
+    z8_primitive_array_check_index(values, index);
+    auto before = values.z8_get(index);
+    auto after = value;
+    static if (is(T == long)) values.z8_set(index, z8_optional_wrap(z8_optional_int_binary!op(before, after)));
+    else static if (is(T == Z8Decimal)) values.z8_set(index, z8_optional_wrap(z8_optional_decimal_binary!op(before, after)));
+    else static assert(0, "unsupported primitive array compound assignment");
 }

@@ -526,6 +526,8 @@ private string emitExprRaw(Expression e) {
             if (isMap(e.inferredType)) return "z8_invoke!\"z8_get\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.inferredType == ValueType.stringArray) return "z8_string_array_get(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.inferredType == ValueType.guidArray) return "z8_guid_array_get(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            if ([ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(e.inferredType))
+                return "z8_primitive_array_get(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             return "z8_array_at(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
         case ExprKind.castExpr:
             if (e.exceptionObjectCast) return "z8_exception_cast_object!(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")";
@@ -747,6 +749,9 @@ private string emitSimple(Statement s) {
             emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.guidArray)
         return "z8_guid_array_assign(" ~ emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
+    if (s.target.kind == ExprKind.index && [ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(s.target.inferredType))
+        return (s.assignmentOperator == "=" ? "z8_primitive_array_assign(" : "z8_primitive_array_compound!\"" ~ s.assignmentOperator[0 .. $-1] ~ "\"(") ~
+            emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
     auto name = emitExpr(s.target);
     // The original BL backend evaluates a compound target again to read its
     // old value before evaluating the right operand. Indexed assignment is a
