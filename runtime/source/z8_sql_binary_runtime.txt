@@ -1,5 +1,5 @@
 // The BL declaration has no SQL binary operators or implicit conversion.
-class Z8SqlBinary {
+class Z8SqlBinary : Z8SqlPrimary {
     Z8Binary constant;
     this() { constant = new Z8Binary(); }
 }

@@ -1,5 +1,5 @@
 enum Z8SqlStringKind { constant, group, concat, lower, upper, trimLeft, trimRight, choose, replace, regReplace, substring, reverse, padLeft, padRight, quote, jsonString, jsonInt, fromBool, fromNumeric, fromGuid, fromDate, fromDatespan, fromBinary, fromGeometry, geometryFunction }
-class Z8SqlString {
+class Z8SqlString : Z8SqlPrimary {
     Z8SqlStringKind kind;
     wstring constant;
     Z8SqlString left, right;

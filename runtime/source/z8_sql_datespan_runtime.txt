@@ -1,5 +1,5 @@
 enum Z8SqlDatespanKind { constant, group, choose, add, subtract, dateDifference, truncHour, truncMinute, truncSecond, addDay, addHour, addMinute, addSecond }
-class Z8SqlDatespan {
+class Z8SqlDatespan : Z8SqlPrimary {
     Z8SqlDatespanKind kind;
     Z8Datespan constant;
     Z8SqlDatespan left, right;

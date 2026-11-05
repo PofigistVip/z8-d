@@ -7,6 +7,7 @@ import org.zenframework.z8.lang.sql.sql_date;
 import org.zenframework.z8.lang.sql.sql_datespan;
 import org.zenframework.z8.lang.sql.sql_binary;
 import org.zenframework.z8.lang.sql.sql_geometry;
+import org.zenframework.z8.lang.sql.sql_primary;
 public class SqlStringValues {
     public static sql_string literal() { return "O'Reilly 😀"; }
     public static sql_string concatenation() { sql_string value = "alpha"; return (value + " β").toUpper(); }
@@ -105,6 +106,18 @@ public class SqlStringValues {
     public static sql_string emptyGeometryText() { sql_geometry value; return value.toString(); }
     public static sql_bool emptyGeometryIntersects() { sql_geometry value; return value.intersects(value); }
     public static sql_geometry geometryChain() { sql_geometry value = sqlGeometry(); return value.centroid().buffer(1.5).element(2); }
+    public static sql_primary sqlPrimary() { sql_int value = 42; return value; }
+    public static sql_string sqlPrimaryText() { sql_primary value = sqlPrimary(); return value.toString(); }
+    public static int sqlPrimaryChecks() {
+        sql_primary value = sqlPrimary();
+        if (!(value instanceof sql_int) || !(value instanceof sql_primary) || (value instanceof sql_string)) return 1;
+        sql_int number = (sql_int)value;
+        if (!(number instanceof sql_primary)) return 2;
+        try { sql_string invalid = (sql_string)value; return 3; } catch (exception error) {}
+        value = null;
+        if ((value instanceof sql_int) || (sql_int)value != null) return 4;
+        return 251;
+    }
     public static int run() {
         sql_string value = concatenation();
         if (value == null) return 1;

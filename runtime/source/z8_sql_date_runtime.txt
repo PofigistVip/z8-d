@@ -1,5 +1,5 @@
 enum Z8SqlDateKind { constant, group, choose, fromString, truncDay, truncHour, truncMinute, truncSecond, addDay, addHour, addMinute, addSecond, addSpan, subtractSpan }
-class Z8SqlDate {
+class Z8SqlDate : Z8SqlPrimary {
     Z8SqlDateKind kind;
     Z8Date constant;
     Z8SqlDate left, right;

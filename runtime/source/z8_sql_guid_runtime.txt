@@ -1,6 +1,6 @@
 // SQL GUID values retain their expression tree until formatted for a vendor.
 enum Z8SqlGuidKind { constant, group, choose }
-class Z8SqlGuid {
+class Z8SqlGuid : Z8SqlPrimary {
     Z8SqlGuidKind kind;
     Z8Guid constant;
     Z8SqlGuid left, right;

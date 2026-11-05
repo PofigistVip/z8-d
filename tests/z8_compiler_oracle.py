@@ -613,6 +613,8 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                     System.out.println("SQLGEOMBOOL:" + vendor.name() + ":" + logical + ":" + value.format(vendor, null, logical));
             System.out.println("SQLGEOMEMPTY:" + vendor.name() + ":" + demo.cases.SqlStringValues.z8_emptyGeometry().format(vendor, null));
             System.out.println("SQLGEOMEMPTY:" + vendor.name() + ":" + demo.cases.SqlStringValues.z8_emptyGeometryText().format(vendor, null));
+            System.out.println("SQLPRIMARY:" + vendor.name() + ":" + demo.cases.SqlStringValues.z8_sqlPrimaryText().format(vendor, null));
+            System.out.println("SQLPRIMARYCHECK:" + vendor.name() + ":" + demo.cases.SqlStringValues.z8_sqlPrimaryChecks().get());
             org.zenframework.z8.server.types.sql.sql_geometry geo = demo.cases.SqlStringValues.z8_sqlGeometry();
             for (org.zenframework.z8.server.types.sql.sql_geometry value : new org.zenframework.z8.server.types.sql.sql_geometry[] {
                 geo.z8_startPoint(), geo.z8_endPoint(), geo.z8_union(), geo.z8_centroid(), geo.z8_envelope(), geo.z8_homogenize(), geo.z8_makeValid(),
@@ -1149,6 +1151,8 @@ void main() {
         auto emptyGeometryText = z8_sql_string_format(Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_emptyGeometryText(), dialect);
         writeln("SQLGEOMEMPTY:", vendor, ":", emptyGeometry is null ? "null" : z8_to_utf8(emptyGeometry));
         writeln("SQLGEOMEMPTY:", vendor, ":", emptyGeometryText is null ? "null" : z8_to_utf8(emptyGeometryText));
+        writeln("SQLPRIMARY:", vendor, ":", z8_to_utf8(z8_sql_string_format(Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_sqlPrimaryText(), dialect)));
+        writeln("SQLPRIMARYCHECK:", vendor, ":", z8_optional_require(Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_sqlPrimaryChecks()));
         auto geo = Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_sqlGeometry();
         auto half = z8_sql_decimal_const(z8_decimal_parse("0.5"w));
         auto oneHalf = z8_sql_decimal_const(z8_decimal_parse("1.5"w));
@@ -1191,16 +1195,18 @@ void main() {
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_lines = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:", "SQLSPAN:", "SQLSPANARITH:", "SQLSPANBOOL:", "SQLSPANPART:", "SQLSPANFUNC:", "SQLBINARY:", "SQLGEOM:", "SQLGEOMBOOL:", "SQLGEOMEMPTY:", "SQLGEOMFUNC:", "SQLGEOMMETRIC:", "SQLGEOMTEST:", "SQLGEOMTEXT:", "SQLGEOMCOUNT:"))]
+        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:", "SQLSPAN:", "SQLSPANARITH:", "SQLSPANBOOL:", "SQLSPANPART:", "SQLSPANFUNC:", "SQLBINARY:", "SQLGEOM:", "SQLGEOMBOOL:", "SQLGEOMEMPTY:", "SQLGEOMFUNC:", "SQLGEOMMETRIC:", "SQLGEOMTEST:", "SQLGEOMTEXT:", "SQLGEOMCOUNT:", "SQLPRIMARY:", "SQLPRIMARYCHECK:"))]
         original_sql = [line for line in output.splitlines() if line.startswith("SQLBOOL:")]
         d_sql = [line for line in d_lines if line.startswith("SQLBOOL:")]
         if original_sql != d_sql or len(d_sql) != 40:
             raise SystemExit(f"SQL boolean formatting differs: original={original_sql!r}, D={d_sql!r}")
-        for prefix, count in (("SQLINT:", 36), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 44), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 60), ("SQLTEXTTEST:", 16), ("SQLGUID:", 8), ("SQLGUIDBOOL:", 8), ("SQLDATE:", 12), ("SQLDATETICKS:", 4), ("SQLDATEFUNC:", 36), ("SQLDATEPART:", 20), ("SQLDATECMP:", 336), ("SQLDATEBL:", 8), ("SQLSPAN:", 20), ("SQLSPANARITH:", 12), ("SQLSPANBOOL:", 8), ("SQLSPANPART:", 28), ("SQLSPANFUNC:", 28), ("SQLBINARY:", 4), ("SQLGEOM:", 12), ("SQLGEOMBOOL:", 24), ("SQLGEOMEMPTY:", 8), ("SQLGEOMFUNC:", 56), ("SQLGEOMMETRIC:", 32), ("SQLGEOMTEST:", 16), ("SQLGEOMTEXT:", 8), ("SQLGEOMCOUNT:", 4)):
+        for prefix, count in (("SQLINT:", 36), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 44), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 60), ("SQLTEXTTEST:", 16), ("SQLGUID:", 8), ("SQLGUIDBOOL:", 8), ("SQLDATE:", 12), ("SQLDATETICKS:", 4), ("SQLDATEFUNC:", 36), ("SQLDATEPART:", 20), ("SQLDATECMP:", 336), ("SQLDATEBL:", 8), ("SQLSPAN:", 20), ("SQLSPANARITH:", 12), ("SQLSPANBOOL:", 8), ("SQLSPANPART:", 28), ("SQLSPANFUNC:", 28), ("SQLBINARY:", 4), ("SQLGEOM:", 12), ("SQLGEOMBOOL:", 24), ("SQLGEOMEMPTY:", 8), ("SQLGEOMFUNC:", 56), ("SQLGEOMMETRIC:", 32), ("SQLGEOMTEST:", 16), ("SQLGEOMTEXT:", 8), ("SQLGEOMCOUNT:", 4), ("SQLPRIMARY:", 4), ("SQLPRIMARYCHECK:", 4)):
             original_lines = [line for line in output.splitlines() if line.startswith(prefix)]
             d_formatted = [line for line in d_lines if line.startswith(prefix)]
             if original_lines != d_formatted or len(d_formatted) != count:
                 raise SystemExit(f"{prefix} formatting differs: original={original_lines!r}, D={d_formatted!r}")
+            if prefix == "SQLPRIMARYCHECK:" and any(not line.endswith(":251") for line in d_formatted):
+                raise SystemExit(f"SQL primary type checks failed: {d_formatted!r}")
         original_file_attributes = [line for line in output.splitlines() if line.startswith("FILEATTR:")]
         d_file_attributes = [line for line in d_lines if line.startswith("FILEATTR:")]
         if original_file_attributes != d_file_attributes or len(d_file_attributes) != 1:

@@ -1,5 +1,5 @@
 enum Z8SqlGeometryKind { constant, group, choose, point, unaryFunction, binaryFunction, intFunction, decimalFunction }
-class Z8SqlGeometry {
+class Z8SqlGeometry : Z8SqlPrimary {
     Z8SqlGeometryKind kind;
     Z8Geometry constant;
     Z8SqlGeometry left, right;

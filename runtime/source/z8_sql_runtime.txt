@@ -1,8 +1,22 @@
 // SQL values describe an expression tree; operators do not execute SQL.
 enum Z8SqlVendor { Oracle, SqlServer, Postgres, H2 }
-abstract class Z8SqlNumeric { abstract wstring z8_format(Z8SqlVendor vendor, bool logical = false); }
+class Z8SqlPrimary {}
+abstract class Z8SqlNumeric : Z8SqlPrimary { abstract wstring z8_format(Z8SqlVendor vendor, bool logical = false); }
+Z8SqlString z8_sql_primary_toString(Z8SqlPrimary value) {
+    z8_nonnull(value);
+    if (auto result = cast(Z8SqlBool)value) return z8_sql_bool_toString(result);
+    if (auto result = cast(Z8SqlInt)value) return z8_sql_int_toString(result);
+    if (auto result = cast(Z8SqlDecimal)value) return z8_sql_decimal_toString(result);
+    if (auto result = cast(Z8SqlString)value) return z8_sql_string_toString(result);
+    if (auto result = cast(Z8SqlGuid)value) return z8_sql_guid_toString(result);
+    if (auto result = cast(Z8SqlDate)value) return z8_sql_date_toString(result);
+    if (auto result = cast(Z8SqlDatespan)value) return z8_sql_datespan_toString(result);
+    if (auto result = cast(Z8SqlBinary)value) return z8_sql_binary_toString(result);
+    if (auto result = cast(Z8SqlGeometry)value) return z8_sql_geometry_toString(result);
+    throw new Exception("unsupported SQL primary conversion");
+}
 enum Z8SqlBoolKind { constant, group, not, and, or, equal, notEqual, choose, intEqual, intNotEqual, intLess, intGreater, intLessEqual, intGreaterEqual, decimalIsNaN, textEqual, textNotEqual, textLess, textGreater, textLessEqual, textGreaterEqual, textLike, textRegLike, textIsEmpty, guidEqual, guidNotEqual, dateCompare, spanCompare, geometryCompare, geometryPredicate }
-class Z8SqlBool {
+class Z8SqlBool : Z8SqlPrimary {
     Z8SqlBoolKind kind;
     bool constant;
     Z8SqlBool left, right, alternative;

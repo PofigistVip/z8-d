@@ -40,6 +40,11 @@ void main() {
     auto first = z8_sql_date_format(truncated);
     assert(z8_date_ticks(instant) != 100000000);
     assert(z8_sql_date_format(truncated) == first);
+    assert(z8_optional_require(Cases.m_sqlPrimaryChecks()) == 251);
+    Z8SqlPrimary primary = z8_sql_string_const("value"w);
+    assert(z8_sql_primary_toString(primary) is cast(Z8SqlString)primary);
+    primary = z8_sql_decimal_const(z8_decimal_parse("1.5"w));
+    assert(z8_sql_string_format(z8_sql_primary_toString(primary), Z8SqlVendor.Postgres) == "(1.5)::text"w);
 }
 ''', encoding="utf-8")
     executable = temp / ("sql-string.exe" if os.name == "nt" else "sql-string")
