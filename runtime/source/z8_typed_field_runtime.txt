@@ -12,10 +12,12 @@ private enum z8_text_field_name = "org.zenframework.z8.server.base.table.value.T
 
 private void z8_integer_field_new(Z8Object self) {
     auto state = new Z8FieldState(z8_primary_box(0L)); state.aggregation = Z8FieldAggregation.sum;
+    state.format = "0,000"w;
     state.useSlot!(Z8Optional!long, long)(); z8_field_attach(self, state);
 }
 private void z8_string_field_new(Z8Object self) {
     auto state = new Z8FieldState(z8_primary_box(""w)); state.aggregation = Z8FieldAggregation.max;
+    if (z8_native_is_instance(z8_string_field_name, self)) state.length = z8_optional_wrap(30L);
     state.useSlot!wstring(); z8_field_attach(self, state);
 }
 private Z8Optional!long* z8_integer_field_default_address(Z8Object self) {
@@ -32,10 +34,12 @@ private Z8Object z8_integer_field_assign(Z8Object self, Z8Optional!long value) {
 private Z8Object z8_string_field_assign(Z8Object self, wstring value) { z8_field_set(self, z8_primary_box(value)); return self; }
 private void z8_bool_field_new(Z8Object self) {
     auto state = new Z8FieldState(z8_primary_box(false)); state.aggregation = Z8FieldAggregation.max;
+    state.width = z8_optional_wrap(50L);
     state.useSlot!(Z8Optional!bool, bool)(); z8_field_attach(self, state);
 }
 private void z8_decimal_field_new(Z8Object self) {
     auto state = new Z8FieldState(z8_primary_box(z8_decimal_from_int(0))); state.aggregation = Z8FieldAggregation.sum;
+    state.format = "0,000.00"w;
     state.useSlot!(Z8Optional!Z8Decimal, Z8Decimal)(); z8_field_attach(self, state);
 }
 private void z8_guid_field_new(Z8Object self) {
@@ -44,6 +48,7 @@ private void z8_guid_field_new(Z8Object self) {
 }
 private void z8_datetime_field_new(Z8Object self) {
     auto state = new Z8FieldState(z8_primary_box(z8_date_min)); state.aggregation = Z8FieldAggregation.max;
+    state.format = z8_native_is_instance("org.zenframework.z8.server.base.table.value.DateField"w, self) ? "d.m.Y"w : "d.m.Y H:i"w;
     state.useSlot!Z8Date(); z8_field_attach(self, state);
 }
 private void z8_datespan_field_new(Z8Object self) {
@@ -102,6 +107,12 @@ private void z8_register_value_field(T, Base = T)(wstring name, void function(Z8
 }
 
 void z8_bind_builtin_typed_fields() {
+    z8_native_bind_field(z8_string_field_name ~ ".f_length"w, &z8_field_metadata_address!"length");
+    z8_native_bind_field(z8_decimal_field_name ~ ".f_precision"w, &z8_field_metadata_address!"precision");
+    z8_native_bind_field(z8_decimal_field_name ~ ".f_scale"w, &z8_field_metadata_address!"scale");
+    z8_native_bind_field(z8_geometry_field_name ~ ".f_srs"w, &z8_field_metadata_address!"srs");
+    z8_native_bind_field(z8_text_field_name ~ ".f_html"w, &z8_field_metadata_address!"html");
+    z8_native_bind_field(z8_text_field_name ~ ".f_singleLine"w, &z8_field_metadata_address!"singleLine");
     z8_native_bind(z8_integer_field_name ~ ".m_new"w, &z8_integer_field_new);
     z8_native_bind_field(z8_integer_field_name ~ ".f_defaultValue"w, &z8_integer_field_default_address);
     z8_native_bind(z8_integer_field_name ~ ".m_get"w, &z8_integer_field_get);

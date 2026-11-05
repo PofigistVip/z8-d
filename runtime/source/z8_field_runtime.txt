@@ -61,8 +61,17 @@ class Z8FieldState {
     private Z8FieldAggregation initialAggregation;
     private Z8Primary originalValue;
     bool changed, wasNull = true;
+    wstring format;
+    Z8Optional!long width, length, precision, scale, srs;
+    Z8Optional!bool indexed, unique, trigram, caseInsensitive, totals, html, singleLine;
     wstring sqlOwnerAlias, sqlColumnName, sqlExpressionAlias;
-    this(Z8Primary initial = null, bool wasNull = true) { value = initial; this.wasNull = wasNull; }
+    this(Z8Primary initial = null, bool wasNull = true) {
+        value = initial; this.wasNull = wasNull;
+        width = z8_optional_wrap(0L); length = z8_optional_wrap(0L);
+        precision = z8_optional_wrap(19L); scale = z8_optional_wrap(4L); srs = z8_optional_wrap(3857L);
+        indexed = unique = trigram = caseInsensitive = html = singleLine = z8_optional_wrap(false);
+        totals = z8_optional_wrap(true);
+    }
     @property Z8Primary value() { return slot is null ? boxedValue : slot.get(); }
     @property void value(Z8Primary item) { if (slot is null) boxedValue = item; else slot.put(item); }
     @property Z8FieldAggregation aggregation() { return aggregationCell is null ? initialAggregation : aggregationCell.get(); }
@@ -77,6 +86,9 @@ class Z8FieldState {
         slot = typed; boxedValue = null;
         return typed;
     }
+}
+private auto z8_field_metadata_address(string member)(Z8Object self) {
+    return &__traits(getMember, z8_field_state(self), member);
 }
 ref T z8_field_aggregation_ref(T)(Z8Object self) {
     auto state = z8_field_state(self);
@@ -189,6 +201,13 @@ private Z8SqlBool z8_field_not_in_vector(Z8Object self, Z8Array!Z8Primary values
 }
 void z8_bind_builtin_field() {
     enum prefix = z8_field_name ~ "."w;
+    z8_native_bind_field(prefix ~ "f_format"w, &z8_field_metadata_address!"format");
+    z8_native_bind_field(prefix ~ "f_width"w, &z8_field_metadata_address!"width");
+    z8_native_bind_field(prefix ~ "f_indexed"w, &z8_field_metadata_address!"indexed");
+    z8_native_bind_field(prefix ~ "f_unique"w, &z8_field_metadata_address!"unique");
+    z8_native_bind_field(prefix ~ "f_trigram"w, &z8_field_metadata_address!"trigram");
+    z8_native_bind_field(prefix ~ "f_caseInsensitive"w, &z8_field_metadata_address!"caseInsensitive");
+    z8_native_bind_field(prefix ~ "f_totals"w, &z8_field_metadata_address!"totals");
     z8_native_bind(prefix ~ "m_primary"w, &z8_field_primary);
     z8_native_bind(prefix ~ "m_binary"w, &z8_field_cast!Z8Binary);
     z8_native_bind(prefix ~ "m_bool"w, &z8_field_cast!bool);

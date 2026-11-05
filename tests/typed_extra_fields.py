@@ -17,6 +17,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     (source / "Object.bl").write_text('[native "org.zenframework.z8.server.runtime.OBJECT"] public class Object {}', encoding="utf-8")
     (source / "Field.bl").write_text('''
 [native "org.zenframework.z8.server.base.table.value.Field"] public class Field extends Object {
+    public string format;
     public primary primary(); public date date(); public datespan datespan(); public binary binary();
     public geometry geometry(); public string string(); public bool isChanged();
 }
@@ -25,9 +26,10 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
                                      ("BinaryField", "binary", True), ("GeometryField", "geometry", False),
                                      ("TextField", "string", True)):
         declaration = f"public {kind} defaultValue;" if has_default else ""
+        metadata = "public int srs;" if name == "GeometryField" else "public bool html; public bool singleLine;" if name == "TextField" else ""
         (source / (name + ".bl")).write_text(f'''
 [native "org.zenframework.z8.server.base.table.value.{name}"] public class {name} extends Field {{
-    {declaration} virtual public {kind} getDefault(); public void setDefault({kind} value);
+    {declaration} {metadata} virtual public {kind} getDefault(); public void setDefault({kind} value);
     virtual public {kind} get(); public {name} operator = ({kind} value);
 }}
 ''', encoding="utf-8")
@@ -38,10 +40,12 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
 public class Probe {
     public static bool run() {
         DatetimeField instant;
+        if (instant.format != "d.m.Y H:i") return false;
         if (instant.get() != date.Min || instant.defaultValue != date.Min) return false;
         instant.defaultValue = '01/01/2024'; if (instant.date().year() != 2024) return false;
         instant = '01/01/2025'; if (instant.get().year() != 2025 || !instant.isChanged()) return false;
         DateField day;
+        if (day.format != "d.m.Y") return false;
         if (day.get() != date.Min) return false;
         day = '29/02/2024'; if (day.date().day() != 29 || !day.isChanged()) return false;
         DatespanField duration;
@@ -53,9 +57,13 @@ public class Probe {
         bytes.defaultValue = '1, 2, 3'; if (bytes.binary().length() != 3) return false;
         bytes = '4, 5'; if (bytes.get().length() != 2 || !bytes.isChanged()) return false;
         GeometryField location;
+        if (location.srs != geometry.DefaultSRS) return false;
+        location.srs = 4326; if (location.srs != 4326) return false;
         if (location.get().srs() != geometry.DefaultSRS) return false;
         location = geometry.point(1, 2, 4326); if (location.geometry().srs() != 4326 || !location.isChanged()) return false;
         TextField text;
+        if (text.html || text.singleLine) return false;
+        text.html = true; text.singleLine = true; if (!text.html || !text.singleLine) return false;
         if (text.get() != "") return false;
         text.defaultValue = "start"; text = "changed";
         if (text.string() != "changed" || !text.isChanged()) return false;

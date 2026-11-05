@@ -22,6 +22,8 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     (source / "Object.bl").write_text('[native "org.zenframework.z8.server.runtime.OBJECT"] public class Object {}', encoding="utf-8")
     (source / "Field.bl").write_text('''
 [native "org.zenframework.z8.server.base.table.value.Field"] public class Field extends Object {
+    public string format; public int width; public bool indexed; public bool unique; public bool trigram;
+    public bool caseInsensitive; public bool totals;
     public primary primary(); public int int(); public string string(); public bool bool(); public decimal decimal(); public guid guid();
     public Aggregation aggregation = Aggregation.None;
     public bool isChanged(); public bool wasNull();
@@ -35,13 +37,16 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
 ''', encoding="utf-8")
     (source / "StringField.bl").write_text('''
 [native "org.zenframework.z8.server.base.table.value.StringField"] public class StringField extends Field {
+    public int length;
     public string defaultValue = ""; virtual public string getDefault(); public void setDefault(string value);
     virtual public string get(); public StringField operator = (string value);
 }
 ''', encoding="utf-8")
     for name, kind, native in (("BoolField", "bool", "BoolField"), ("DecimalField", "decimal", "DecimalField"), ("GuidField", "guid", "GuidField")):
+        metadata = "public int precision; public int scale;" if name == "DecimalField" else ""
         (source / (name + ".bl")).write_text(f'''
 [native "org.zenframework.z8.server.base.table.value.{native}"] public class {name} extends Field {{
+    {metadata}
     public {kind} defaultValue; virtual public {kind} getDefault(); public void setDefault({kind} value);
     virtual public {kind} get(); public {name} operator = ({kind} value);
 }}
@@ -54,6 +59,10 @@ public class Probe {
     public static bool maxAggregation(IntField field) { return field.aggregation == Aggregation.Max; }
     public static bool run() {
         IntField number;
+        if (number.format != "0,000" || number.width != 0 || number.indexed || number.unique || number.trigram || number.caseInsensitive || !number.totals) return false;
+        number.width = 150; number.indexed = true; number.unique = true; number.trigram = true;
+        number.caseInsensitive = true; number.totals = false; number.format = "custom";
+        if (number.width != 150 || !number.indexed || !number.unique || !number.trigram || !number.caseInsensitive || number.totals || number.format != "custom") return false;
         if (number.aggregation != Aggregation.Sum) return false;
         number.aggregation = Aggregation.Min; if (number.aggregation != Aggregation.Min) return false;
         if (number.get() != 0 || number.defaultValue != 0 || number.isChanged() || !number.wasNull()) return false;
@@ -64,6 +73,8 @@ public class Probe {
         number.setDefault(11);
         if (number.get() != 11 || !number.isChanged()) return false;
         StringField text;
+        if (text.length != 30) return false;
+        text.length = 100; if (text.length != 100) return false;
         if (text.aggregation != Aggregation.Max) return false;
         if (text.get() != "" || text.defaultValue != "" || text.isChanged()) return false;
         text.defaultValue = "start";
@@ -73,10 +84,13 @@ public class Probe {
         text.setDefault("replacement");
         if (text.get() != "replacement" || !text.isChanged()) return false;
         BoolField flag;
+        if (flag.width != 50) return false;
         if (flag.get() || flag.defaultValue || flag.isChanged()) return false;
         flag.defaultValue = true; if (!flag.getDefault() || !flag.bool()) return false;
         flag = false; if (flag.get() || !flag.isChanged()) return false;
         DecimalField amount;
+        if (amount.precision != 19 || amount.scale != 4 || amount.format != "0,000.00") return false;
+        amount.precision = 12; amount.scale = 2; if (amount.precision != 12 || amount.scale != 2) return false;
         if (amount.get() != decimal.parse("0")) return false;
         amount.defaultValue = 12.5; if (amount.decimal() != 12.5) return false;
         amount = 7.25; if (amount.get() != 7.25 || !amount.isChanged()) return false;

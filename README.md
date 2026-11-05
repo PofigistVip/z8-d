@@ -527,7 +527,10 @@ GUID- и date-значений. Методы `set`, `put` и `remove` работ
 реализованы значения по умолчанию, чтение, присваивание и переопределение `get`
 без курсора. Те же операции доступны для `DatetimeField`, `DateField`,
 `DatespanField`, `BinaryField`, `GeometryField`, `TextField` и наследующего его
-`FileField`. Атрибут `aggregation` доступен из BL и runtime. Для этих типов
+`FileField`. Из BL доступны свойства `format`, `width`, `indexed`, `unique`,
+`trigram`, `caseInsensitive`, `totals`, `aggregation`, а также `length` у
+`StringField`, `precision` и `scale` у `DecimalField`, `srs` у `GeometryField`,
+`html` и `singleLine` у `TextField`. Для этих типов
 доступны SQL-ссылки и `sqlIsNull`: хост задаёт
 алиас через `z8_field_bind_sql`. Для SQL-агрегации без сортировки внутри
 массива хост включает параметры через `z8_sql_set_field_options` и после
