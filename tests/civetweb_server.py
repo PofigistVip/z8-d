@@ -14,6 +14,16 @@ root = Path(__file__).resolve().parents[1]
 compiler = root / ("z8d.exe" if os.name == "nt" else "z8d")
 with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     temp = Path(directory)
+    public = temp / "public"
+    public.mkdir()
+    (public / "index.html").write_text("<html>Привет</html>", encoding="utf-8")
+    (public / "app.js").write_text("const answer = 42;", encoding="utf-8")
+    (public / "test.shtml").write_text('<!--#include file="../outside.txt" -->', encoding="utf-8")
+    (public / "WEB-INF").mkdir(); (public / "WEB-INF" / "secret.txt").write_text("secret", encoding="utf-8")
+    (public / ".git").mkdir(); (public / ".git" / "config").write_text("secret", encoding="utf-8")
+    (public / ".env").write_text("secret", encoding="utf-8")
+    (public / "empty").mkdir()
+    (temp / "outside.txt").write_text("outside secret", encoding="utf-8")
     source, generated = temp / "bl", temp / "generated"
     source.mkdir()
     (source / "Application.bl").write_text('''
@@ -129,14 +139,17 @@ void runRequest(Z8HttpRequest request) {
         assert(m.messages()[0].text == "info"w && m.messages()[0].time !is null);
     }
 }
-void main() {
+void main(string[] args) {
     auto server = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048);
     auto protocol = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048, Z8ResponseMode.application, "server-1"w);
     auto auth = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048, Z8ResponseMode.application, "server-1"w, new Authority());
+    auto web = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048, Z8ResponseMode.application,
+        "server-1"w, null, "Denied"w, args[1], "/request.json");
     scope(exit) server.stop();
     scope(exit) protocol.stop();
     scope(exit) auth.stop();
-    writeln(server.port(), " ", protocol.port(), " ", auth.port()); stdout.flush();
+    scope(exit) web.stop();
+    writeln(server.port(), " ", protocol.port(), " ", auth.port(), " ", web.port()); stdout.flush();
     readln();
     server.stop(); server.stop();
     bool stopped; try { server.port(); } catch (Exception) { stopped = true; }
@@ -154,12 +167,12 @@ void main() {
     response_file = temp / "dmd.rsp"
     response_file.write_text("\n".join('"' + arg.replace('"', r'\"') + '"' for arg in args[1:]) + "\n", encoding="utf-8")
     subprocess.run(["dmd", "@" + str(response_file)], cwd=temp, check=True)
-    process = subprocess.Popen([str(executable)], cwd=temp, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+    process = subprocess.Popen([str(executable), str(public)], cwd=temp, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
     try:
         line = process.stdout.readline().strip()
         ports = line.split()
-        if len(ports) != 3 or not all(p.isdigit() for p in ports): raise RuntimeError("Server did not start: " + line + process.stderr.read())
-        port, protocol_port, auth_port = map(int, ports)
+        if len(ports) != 4 or not all(p.isdigit() for p in ports): raise RuntimeError("Server did not start: " + line + process.stderr.read())
+        port, protocol_port, auth_port, web_port = map(int, ports)
         def request(path, body=None, headers=None, target=None):
             conn = http.client.HTTPConnection("127.0.0.1", target or port, timeout=10)
             try:
@@ -230,6 +243,29 @@ void main() {
         status, body = request("/api?mode=auth&request=login&session=invalid&login=alice&password=secret", target=auth_port)
         result = json.loads(body)
         assert status == 200 and result["login"] == "alice", result
+        status, body = request("/request.json?mode=protocol&request=demo", target=web_port)
+        assert status == 200 and json.loads(body)["answer"] == 42, (status, body)
+        def asset(path, method="GET"):
+            conn = http.client.HTTPConnection("127.0.0.1", web_port, timeout=10)
+            try:
+                conn.request(method, path); response = conn.getresponse()
+                return response.status, response.getheader("Content-Type"), response.read()
+            finally: conn.close()
+        status, kind, data = asset("/index.html")
+        assert status == 200 and kind.startswith("text/html") and data.decode("utf-8") == "<html>Привет</html>", (status, kind, data)
+        status, kind, data = asset("/app.js")
+        assert status == 200 and b"answer = 42" in data, (status, kind, data)
+        status, kind, data = asset("/app.js", "HEAD")
+        assert status == 200 and data == b"", (status, kind, data)
+        status, kind, data = asset("/test.shtml")
+        assert status == 200 and b"<!--#include" in data and b"outside secret" not in data, (status, kind, data)
+        for method in ("PUT", "DELETE"):
+            status, _, _ = asset("/app.js", method)
+            assert status in (401, 403, 405), (method, status)
+        assert (public / "app.js").read_text(encoding="utf-8") == "const answer = 42;"
+        for path in ("/WEB-INF/secret.txt", "/web-inf/secret.txt", "/%57EB-INF/secret.txt", "/.git/config", "/.env", "/empty/", "/%2e%2e/outside.txt"):
+            status, _, data = asset(path)
+            assert status in (403, 404) and b"secret" not in data, (path, status, data)
         status, body = request("/api?name=after&value=error")
         assert status == 200 and json.loads(body)["name"] == "after", (status, body)
         status, body = request("/api?name=x", "x" * 2049)

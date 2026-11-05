@@ -31,6 +31,13 @@ must handle concurrent calls and decide how to synchronize session state.
 `remoteAddress` is the connection peer; `forwardedAddress` exposes the raw
 `X-Real-IP` header for deployments where the host explicitly trusts its proxy.
 
+For a bundled web client, pass a public `documentRoot` and a specific
+`requestPath` (normally `/request.json`) to the server constructor. CivetWeb
+serves static assets from that directory and dispatches the request path to BL.
+Directory listings and server-side includes are disabled, and common servlet
+and repository metadata paths are hidden. Use a dedicated public asset directory:
+CivetWeb may follow filesystem links, so its contents and links must be trusted.
+
 The host owns the server and must call `stop()` from outside a request handler.
 Callbacks may run concurrently and must synchronize their own shared state.
 `Z8HttpRequest` exposes the HTTP method, decoded path, raw query, content type,
@@ -58,5 +65,5 @@ build and runs concurrent loopback HTTP requests through a BL handler.
 
 The bundled test build enables WebSockets, disables CGI, and does not include
 TLS. It is suitable for local integration. Session handling, authorization,
-application routing, static assets, the full Z8 response
+application routing, the full Z8 response
 protocol, and TLS-capable deployment remain to be implemented.

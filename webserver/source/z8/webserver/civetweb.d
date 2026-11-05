@@ -243,20 +243,35 @@ class Z8CivetServer {
 
     this(string listening, void delegate(Z8HttpRequest request) handler, size_t bodyLimit = 1024 * 1024,
          Z8ResponseMode responseMode = Z8ResponseMode.raw, wstring serverId = null,
-         IZ8HttpAuthority authority = null, wstring accessDeniedMessage = "Incorrect login or password"w) {
+         IZ8HttpAuthority authority = null, wstring accessDeniedMessage = "Incorrect login or password"w,
+         string documentRoot = null, string requestPath = "/") {
+        import std.file : isDir;
+        import std.path : absolutePath;
         if (handler is null) throw new Exception("HTTP request handler is required");
         if (!bodyLimit) throw new Exception("HTTP body limit must be positive");
+        if (!requestPath.startsWith("/") || requestPath.indexOf('?') >= 0 || requestPath.indexOf('#') >= 0)
+            throw new Exception("invalid request path");
+        if (documentRoot.length) {
+            if (requestPath == "/") throw new Exception("static files require a specific request path");
+            documentRoot = absolutePath(documentRoot);
+            if (!isDir(documentRoot)) throw new Exception("static document root is not a directory");
+        }
         this.handler = handler; this.bodyLimit = bodyLimit; this.responseMode = responseMode; this.serverId = serverId;
         this.authority = authority; this.accessDeniedMessage = accessDeniedMessage;
-        const(char)*[7] options = ["listening_ports\0".ptr, listening.toStringz,
-            "num_threads\0".ptr, "4\0".ptr, "enable_keep_alive\0".ptr, "no\0".ptr, null];
+        const(char)*[] options = ["listening_ports\0".ptr, listening.toStringz,
+            "num_threads\0".ptr, "4\0".ptr, "enable_keep_alive\0".ptr, "no\0".ptr];
+        if (documentRoot.length) options ~= ["document_root\0".ptr, documentRoot.toStringz,
+            "enable_directory_listing\0".ptr, "no\0".ptr,
+            "ssi_pattern\0".ptr, "\0".ptr,
+            "hide_files_patterns\0".ptr, "**/WEB-INF/**|**/META-INF/**|**/.git/**|**/.env$\0".ptr];
+        options ~= null;
         GC.setAttr(cast(void*)this, GC.BlkAttr.NO_MOVE);
         GC.addRoot(cast(void*)this);
         MgCallbacks callbacks;
         callbacks.initThread = &initWorker; callbacks.exitThread = &exitWorker;
         context = mg_start(&callbacks, null, options.ptr);
         if (context is null) { GC.removeRoot(cast(void*)this); throw new Exception("CivetWeb could not start"); }
-        mg_set_request_handler(context, "/\0".ptr, &dispatch, cast(void*)this);
+        mg_set_request_handler(context, requestPath.toStringz, &dispatch, cast(void*)this);
     }
     int port() {
         if (context is null) throw new Exception("CivetWeb server is stopped");
