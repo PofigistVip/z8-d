@@ -241,7 +241,7 @@ class Parser {
             while (accept(".")) name ~= "." ~ identifier().text;
             expect(";"); result.imports ~= Import(name, start);
         }
-        bool isPublic;
+        bool isPublic, hasNativeName;
         while (current.text == "[" || current.text == "public") {
             if (accept("public")) { if (isPublic) error("duplicate public modifier"); isPublic = true; continue; }
             auto attribute = parseAttribute(result.attributes);
@@ -251,8 +251,9 @@ class Parser {
                 result.isNative = true;
                 if (attribute.name.text == "primary") result.isPrimary = true;
                 // Native takes precedence when both attributes are present.
-                if (attribute.name.text == "native" || !result.nativeName.length)
+                if (attribute.name.text == "native" || !hasNativeName)
                     result.nativeName = decodeStringLiteral(attribute.value.text);
+                if (attribute.name.text == "native") hasNativeName = true;
             } else checkSupportedAttribute(attribute);
             result.attributes ~= attribute;
         }

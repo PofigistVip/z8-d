@@ -22,6 +22,7 @@ Z8Optional!long add(Z8Optional!long a, Z8Optional!long b) { return z8_optional_w
 wstring addText(wstring a, wstring b) { return a ~ b; }
 Z8Optional!long scale(Math self, Z8Optional!long value) { return z8_optional_wrap(z8_optional_require(value) * 3); }
 Z8Optional!long read(Number self) { return z8_optional_wrap(9L); }
+Z8Optional!long convertNumber(Number self) { return z8_optional_wrap(2L); }
 Z8Optional!long ignored(Math self) { return z8_optional_wrap(10L); }
 void reset() {}
 void main() {
@@ -33,8 +34,9 @@ void main() {
     z8_native_bind("example.NativeMath.m_scale"w, &scale);
     z8_native_bind("example.NativeMath.m_reset"w, &reset);
     z8_native_bind("example.NativeNumber.m_read"w, &read);
+    z8_native_bind("example.NativeNumber.z8cast_int"w, &convertNumber);
     z8_native_bind("example.NativeMath.m_ignored"w, &ignored);
-    assert(z8_optional_require(Consumer.m_run()) == 36);
+    assert(z8_optional_require(Consumer.m_run()) == 38);
     z8_native_clear_bindings();
 }
 '''.replace('import z8.runtime;', 'import z8.runtime;\nimport std.string : indexOf;'), encoding="utf-8")

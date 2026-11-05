@@ -58,6 +58,9 @@ unittest {
     rejects(q{class A { [name "same"] A x; [name "same"] A y; }});
     rejects(q{class A { [name "same"] A x; A y; [name "same"] y; }});
     compile(q{[native "x"] class A {}});
+    auto nativeFirst = (new Parser(q{[native ""] [primary "other"] class A {}})).parse();
+    auto primaryFirst = (new Parser(q{[primary "other"] [native ""] class A {}})).parse();
+    assert(nativeFirst.nativeName == ""w && primaryFirst.nativeName == ""w);
     compile(q{class A { [flag] A child; public [tag "value"] A nested = class {}; }});
     compile(q{class A { string text = "value"; [tag text + "!"] A child; }});
     rejects(q{[tag "a" + "b"] class A {}});

@@ -1,4 +1,5 @@
 [primary "example.NativeNumber"]
 public class NativeNumber {
     public int read();
+    public operator int();
 }
