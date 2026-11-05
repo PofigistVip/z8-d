@@ -444,6 +444,7 @@ private string emitExprRaw(Expression e) {
                 if ((e.inferredType == ValueType.binaryType || e.inferredType == ValueType.datespanType || e.inferredType == ValueType.dateType || e.inferredType == ValueType.geometryType || e.inferredType == ValueType.fileType) && e.left !is null)
                     return e.builtinCall ~ "(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
                 if (e.builtinCall == "z8_primary_to_string" || e.builtinCall == "z8_primary_hash" || e.builtinCall == "z8_primary_hash_value" ||
+                    e.builtinCall == "z8_user_primary_string" || e.builtinCall == "z8_user_primary_hash" ||
                     ["z8_guid_to_string", "z8_guid_hash", "z8_guid_major", "z8_guid_minor", "z8_guid_components"].canFind(e.builtinCall))
                     return e.builtinCall ~ "(" ~ emitExpr(e.left) ~ ")";
                 return e.builtinCall ~ "(" ~ args.join(", ") ~ ")";
@@ -853,6 +854,14 @@ package string emitPrograms(Program[] programs) {
         result ~= "class " ~ program.emittedName ~ " : " ~ (program.baseClass is null ? "Z8Object" : program.baseClass.emittedName) ~ " {\n";
         result ~= "alias Z8Self = " ~ program.emittedName ~ ";\n";
         result ~= "override void z8_ensure_type_initialized() { Z8Self.z8_ensure_static(); }\n";
+        if (extendsBuiltinPrimary(program)) {
+            if (program.isNative) {
+                auto stringBinding = emitRawWStringLiteral(program.nativeName ~ ".m_toString"w);
+                auto hashBinding = emitRawWStringLiteral(program.nativeName ~ ".m_hashCode"w);
+                result ~= "override wstring z8_user_primary_string_impl() { return z8_native_call!(wstring)(" ~ stringBinding ~ ", this); }\n";
+                result ~= "override long z8_user_primary_hash_impl() { return cast(int)z8_optional_require(z8_native_call!(Z8Optional!long)(" ~ hashBinding ~ ", this)); }\n";
+            }
+        }
         if (program.attributes.length) {
             result ~= "override void z8_init_type_attributes() {\nsuper.z8_init_type_attributes();\n";
             foreach (attribute; program.attributes)

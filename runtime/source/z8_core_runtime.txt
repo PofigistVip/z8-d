@@ -99,6 +99,10 @@ class Z8Object {
     private Z8Object z8_container;
     private wstring[wstring] z8_attributes;
 
+    // Primary subclasses may provide the Java value's polymorphic operations.
+    wstring z8_user_primary_string_impl() { return toString().to!wstring; }
+    long z8_user_primary_hash_impl() { return cast(long)cast(int)toHash(); }
+
     void z8_init_type_attributes() {}
     final void z8_set_attribute(wstring key, wstring value) { z8_attributes[key] = value; }
     final wstring z8_get_attribute(wstring key) {

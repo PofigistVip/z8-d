@@ -126,7 +126,7 @@ wstring z8_primary_to_string(Z8Primary value) {
         case Z8PrimaryKind.geometry: return z8_geometry_to_string(value.geometryValue);
         case Z8PrimaryKind.date: return z8_date_toString(value.dateValue);
         case Z8PrimaryKind.file: return z8_file_to_string(value.fileValue);
-        case Z8PrimaryKind.user: return z8_nonnull(value.userValue).toString().to!wstring;
+        case Z8PrimaryKind.user: return z8_nonnull(value.userValue).z8_user_primary_string_impl();
     }
 }
 
@@ -167,12 +167,14 @@ long z8_primary_hash(Z8Primary value) {
         case Z8PrimaryKind.geometry: return z8_geometry_hashCode(value.geometryValue);
         case Z8PrimaryKind.date: return z8_date_hashCode(value.dateValue);
         case Z8PrimaryKind.file: return z8_file_hashCode(value.fileValue);
-        case Z8PrimaryKind.user: return cast(long)cast(int)z8_nonnull(value.userValue).toHash();
+        case Z8PrimaryKind.user: return z8_nonnull(value.userValue).z8_user_primary_hash_impl();
     }
     return cast(long)cast(int)hash;
 }
 
 long z8_primary_hash_value(T)(T value) { return z8_primary_hash(z8_primary_box(value)); }
+wstring z8_user_primary_string(T)(T value) if (is(T : Z8Object)) { return z8_nonnull(value).z8_user_primary_string_impl(); }
+long z8_user_primary_hash(T)(T value) if (is(T : Z8Object)) { return z8_nonnull(value).z8_user_primary_hash_impl(); }
 
 bool z8_primary_is(T)(Z8Primary value) {
     if (value is null) return false;

@@ -23,6 +23,8 @@ wstring addText(wstring a, wstring b) { return a ~ b; }
 Z8Optional!long scale(Math self, Z8Optional!long value) { return z8_optional_wrap(z8_optional_require(value) * 3); }
 Z8Optional!long read(Number self) { return z8_optional_wrap(9L); }
 Z8Optional!long convertNumber(Number self) { return z8_optional_wrap(2L); }
+wstring numberText(Number self) { return "native:9"w; }
+Z8Optional!long numberHash(Number self) { return z8_optional_wrap(37L); }
 Z8Optional!long ignored(Math self) { return z8_optional_wrap(10L); }
 __gshared Z8Optional!long nativeFactor, nativeTotal;
 Z8Optional!long* factor(Math self) { assert(self !is null); return &nativeFactor; }
@@ -46,6 +48,8 @@ void main() {
     z8_native_bind("example.NativeMath.m_reset"w, &reset);
     z8_native_bind("example.NativeNumber.m_read"w, &read);
     z8_native_bind("example.NativeNumber.z8cast_int"w, &convertNumber);
+    z8_native_bind("example.NativeNumber.m_toString"w, &numberText);
+    z8_native_bind("example.NativeNumber.m_hashCode"w, &numberHash);
     z8_native_bind("example.NativeMath.m_ignored"w, &ignored);
     bool missingField;
     try { Consumer.m_run(); } catch (Exception e) { missingField = e.msg.indexOf("example.NativeMath.f_factor") >= 0; }
@@ -72,6 +76,31 @@ void main() {
     result = subprocess.run([str(compiler), "project", str(source), str(temp / "bad-primary")], capture_output=True, text=True)
     if result.returncode == 0 or "must implement assignment from itself" not in result.stderr:
         raise SystemExit("A non-native primary subclass without assignment was accepted")
-    (source / "Bad.bl").write_text("class Bad extends primary { public void operator = (Bad value) {} }", encoding="utf-8")
-    subprocess.run([str(compiler), "project", str(source), str(temp / "good-primary")], check=True)
+    (source / "Bad.bl").write_text('''class Bad extends primary {
+        public void operator = (Bad value) {}
+    }''', encoding="utf-8")
+    (source / "GoodUser.bl").write_text('''class GoodUser { public static int run() {
+        Bad value;
+        primary boxed = value;
+        if (value.toString() != boxed.toString()) return 1;
+        if (value.hashCode() != boxed.hashCode()) return 2;
+        return 31;
+    }}''', encoding="utf-8")
+    good = temp / "good-primary"
+    subprocess.run([str(compiler), "project", str(source), str(good)], check=True)
+    good_harness = temp / "good.d"
+    good_harness.write_text('''import z8.runtime; import z8gen.p_GoodUser;
+void main() { assert(z8_optional_require(Z8p_476F6F6455736572.m_run()) == 31); }
+''', encoding="utf-8")
+    good_executable = temp / ("good.exe" if os.name == "nt" else "good")
+    subprocess.run(["dmd", "-I" + str(good), *import_args(), *map(str, good.rglob("*.d")),
+                    str(good_harness), str(runtime), "-of=" + str(good_executable)], check=True)
+    subprocess.run([str(good_executable)], check=True)
+    (source / "Bad.bl").write_text('''class Bad extends primary {
+        public void operator = (Bad value) {}
+        public string toString() { return "invalid"; }
+    }''', encoding="utf-8")
+    result = subprocess.run([str(compiler), "project", str(source), str(temp / "bad-override")], capture_output=True, text=True)
+    if result.returncode == 0 or "only virtual instance methods" not in result.stderr:
+        raise SystemExit("A primary subclass was allowed to override non-virtual toString")
 print("Native and primary declarations bound through the separate runtime")

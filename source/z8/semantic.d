@@ -590,6 +590,9 @@ class Checker {
                     hasAssignment = true;
             if (!hasAssignment) fail("type extending primary must implement assignment from itself", program.name);
         }
+        if (extendsBuiltinPrimary(program)) foreach (method; program.methods)
+            if (!method.parameters.length && ["toString", "hashCode"].canFind(method.name.text))
+                fail("only virtual instance methods may be overridden", method.name);
         variables = null; objectVariables = null; keyObjectVariables = null; staticContext = false;
         foreach (field; program.fields) {
             if (hasObjectClass(field.type)) field.objectClass = resolveClass(program, field.objectName, field.name);
@@ -1499,6 +1502,11 @@ class Checker {
                 if (receiver == ValueType.selfType) {
                     auto owner = e.left.objectClass;
                     auto target = lookupMethod(owner, e.token.text);
+                    if (target is null && extendsBuiltinPrimary(owner) && ["toString", "hashCode"].canFind(e.token.text)) {
+                        checkArguments(e, []);
+                        e.builtinCall = e.token.text == "toString" ? "z8_user_primary_string" : "z8_user_primary_hash";
+                        return e.token.text == "toString" ? ValueType.stringType : ValueType.intType;
+                    }
                     if (target is null) fail("unknown method '" ~ e.token.text ~ "'", e.token);
                     target = selectOverload(target, e);
                     if (!accessible(target.owner, target.isPublic, target.isProtected)) fail("method is not accessible", e.token);

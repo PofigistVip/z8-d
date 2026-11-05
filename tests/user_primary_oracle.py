@@ -24,12 +24,16 @@ import org.zenframework.z8.server.types.integer;
 class UserPrimaryOracle {
     static class Number extends primary {
         public int compareTo(primary value) { return this == value ? 0 : 1; }
+        public String toString() { return "native:9"; }
+        public int hashCode() { return 37; }
     }
     public static void main(String[] args) {
         Number number = new Number();
         primary boxed = number;
         System.out.println(boxed instanceof Number);
         System.out.println(((Number)boxed) == number);
+        System.out.println(boxed.toString());
+        System.out.println(boxed.z8_hashCode().get());
         System.out.println(new integer(1) instanceof Number);
         try { Number wrong = (Number)(primary)new integer(1); System.out.println(false); }
         catch (ClassCastException expected) { System.out.println(true); }
@@ -44,12 +48,17 @@ class UserPrimaryOracle {
     source = temp / "oracle.d"
     source.write_text('''import z8.runtime;
 import std.stdio : writeln;
-class Number : Z8Object {}
+class Number : Z8Object {
+    override wstring z8_user_primary_string_impl() { return "native:9"w; }
+    override long z8_user_primary_hash_impl() { return 37; }
+}
 void main() {
     auto number = new Number();
     auto boxed = z8_primary_box(number);
     writeln(z8_primary_is!Number(boxed));
     writeln(z8_primary_cast!Number(boxed) is number);
+    writeln(z8_to_utf8(z8_primary_to_string(boxed)));
+    writeln(z8_primary_hash(boxed));
     writeln(z8_primary_is!Number(z8_primary_box(1L)));
     try { z8_primary_cast!Number(z8_primary_box(1L)); writeln(false); }
     catch (Exception) { writeln(true); }
