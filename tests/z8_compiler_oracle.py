@@ -270,6 +270,9 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             !"1".equals(metadata.get().annotated.getAttribute("numericValue")) ||
             !"false".equals(metadata.get().annotated.getAttribute("booleanValue")) ||
             !"12.34".equals(metadata.get().annotated.getAttribute("decimalValue")) ||
+            !"00112233-4455-6677-8899-AABBCCDDEEFF".equals(metadata.get().annotated.getAttribute("guidValue")) ||
+            !"42".equals(metadata.get().annotated.getAttribute("primaryValue")) ||
+            !"2 03:04:05".equals(metadata.get().annotated.getAttribute("spanValue")) ||
             !"false".equals(metadata.get().jobTarget.getAttribute("request")) ||
             !"исходное".equals(metadata.get().jobTarget.getAttribute("job")) ||
             metadata.get().attributeCalls.get() != 1 ||
@@ -480,6 +483,9 @@ void main() {
     assert(metadata.f_annotated.z8_get_attribute("numericValue"w) == "1"w);
     assert(metadata.f_annotated.z8_get_attribute("booleanValue"w) == "false"w);
     assert(metadata.f_annotated.z8_get_attribute("decimalValue"w) == "12.34"w);
+    assert(metadata.f_annotated.z8_get_attribute("guidValue"w) == "00112233-4455-6677-8899-AABBCCDDEEFF"w);
+    assert(metadata.f_annotated.z8_get_attribute("primaryValue"w) == "42"w);
+    assert(metadata.f_annotated.z8_get_attribute("spanValue"w) == "2 03:04:05"w);
     assert(metadata.f_jobTarget.z8_get_attribute("request"w) == "false"w);
     assert(metadata.f_jobTarget.z8_get_attribute("job"w) == "исходное"w);
     assert(z8_optional_require(metadata.f_attributeCalls) == 1);
