@@ -137,15 +137,30 @@ private class Z8PostgresRows : IZ8QueryCursor {
     }
 }
 
-// Executes the single-table subset of Query. Links and nested form controls
-// require query planning that is not yet available.
-class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWriter {
+// Executes queries and their required linked-table plans.
+class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWriter, IZ8RoleAccessPropagator {
     private Z8PostgresConnection connection;
     private wstring schema, table;
     this(Z8PostgresConnection connection, wstring schema, wstring table) {
         if (connection is null) throw new Z8PostgresException("PostgreSQL connection is null");
         quoteIdentifier(schema); quoteIdentifier(table);
         this.connection = connection; this.schema = schema.idup; this.table = table.idup;
+    }
+    void updateRoleFieldAccess(Z8Guid recordId, Z8Optional!bool read, Z8Optional!bool write) {
+        if (recordId is null) throw new Z8PostgresException("role access record has no GUID");
+        if (read.present && !read.value) write = z8_optional_wrap(false);
+        else if (!read.present && write.present && write.value) read = z8_optional_wrap(true);
+        string[] changes;
+        if (read.present) changes ~= `"Read" = ` ~ (read.value ? "1" : "0");
+        if (write.present) changes ~= `"Write" = ` ~ (write.value ? "1" : "0");
+        if (!changes.length) return;
+        import std.array : join;
+        auto namespaceName = quoteIdentifier(schema);
+        auto sql = "UPDATE " ~ namespaceName ~ `."SystemRoleFieldAccess" AS a SET ` ~ changes.join(", ") ~
+            " FROM " ~ namespaceName ~ `."SystemFields" AS f, ` ~ namespaceName ~ "." ~ quoteIdentifier(table) ~ " AS t" ~
+            ` WHERE t."RecordId" = $1::uuid AND a."Role" = t."Role" AND a."Field" = f."RecordId" AND f."Table" = t."Table"` ~
+            ` AND a."RecordId" <> '00000000-0000-0000-0000-000000000000'::uuid`;
+        connection.execute(sql, [Z8PostgresParameter.value(z8_guid_to_string(recordId).to!string)]);
     }
     void insert(Z8Object query, Z8Object[] fields) {
         auto declared = z8_query_declared_fields(query, true);

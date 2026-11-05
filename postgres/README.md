@@ -61,8 +61,10 @@ are available, including the `Fields` link to `Tables`. Registry-based localized
 display values remain unimplemented.
 The native `RoleTableAccess`, `RoleFieldAccess` and `RoleRequestAccess` fields
 and their table links are available. `RoleFieldAccess` keeps read and write
-permissions consistent during user-level updates; the remaining authorization
-hooks and lifecycle are not yet implemented.
+permissions consistent during user-level updates. `RoleTableAccess` also
+normalizes table permissions and propagates read/write changes to matching field
+access rows using the same database connection. Role-change notifications and
+the remaining authorization lifecycle are not yet implemented.
 The native `Users.onNew` defaults mirror the Java implementation, including its
 default password value and `changePassword` flag; explicitly supplied values
 are preserved even when user-level events are disabled. With user events enabled,

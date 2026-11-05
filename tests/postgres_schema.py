@@ -126,6 +126,11 @@ public class Probe {
     public static void setFieldRead(RoleFieldAccess value, guid id, bool flag) { value.read = flag; value.update(id); }
     public static void setFieldWrite(RoleFieldAccess value, guid id, bool flag) { value.write = flag; value.update(id); }
     public static void setFieldBoth(RoleFieldAccess value, guid id) { value.read = false; value.write = true; value.update(id); }
+    public static void setTableRead(RoleTableAccess value, guid id, bool flag) { value.read = flag; value.update(id); }
+    public static void setTableWrite(RoleTableAccess value, guid id, bool flag) { value.write = flag; value.update(id); }
+    public static void setTableCreate(RoleTableAccess value, guid id, bool flag) { value.create = flag; value.update(id); }
+    public static void setTableCopy(RoleTableAccess value, guid id, bool flag) { value.copy = flag; value.update(id); }
+    public static void setTableDestroy(RoleTableAccess value, guid id, bool flag) { value.destroy = flag; value.update(id); }
     public static string fieldTableName(Fields value) { Field[] fields = {value.tables.name}; value.read(fields); if (value.next()) return value.tables.name.get(); return "missing"; }
     public static guid systemUser() { return Users.System; }
     public static guid administratorUser() { return Users.Administrator; }
@@ -509,6 +514,10 @@ void main(string[] args) {
     assert(P.m_accessRoleName(roleTableAccess) == "Admins"w);
     db.execute(`INSERT INTO "z8_access"."SystemFields" ("RecordId", "Table") VALUES ('00000000-0000-0000-0000-000000000064', '00000000-0000-0000-0000-000000000062')`);
     db.execute(`INSERT INTO "z8_access"."SystemRoleFieldAccess" ("RecordId", "Role", "Field") VALUES ('00000000-0000-0000-0000-000000000065', 'DC08CA72-C668-412F-91B7-022F1C82AC09', '00000000-0000-0000-0000-000000000064')`);
+    db.execute(`INSERT INTO "z8_access"."SystemRoles" ("RecordId", "Name") VALUES ('BE41CEB5-02DF-44EE-885F-B82DDEDCAA08', 'Guests')`);
+    db.execute(`INSERT INTO "z8_access"."SystemTables" ("RecordId", "Name") VALUES ('00000000-0000-0000-0000-000000000066', 'Other')`);
+    db.execute(`INSERT INTO "z8_access"."SystemFields" ("RecordId", "Table") VALUES ('00000000-0000-0000-0000-000000000067', '00000000-0000-0000-0000-000000000066')`);
+    db.execute(`INSERT INTO "z8_access"."SystemRoleFieldAccess" ("RecordId", "Role", "Field", "Read", "Write") VALUES ('00000000-0000-0000-0000-000000000068', 'DC08CA72-C668-412F-91B7-022F1C82AC09', '00000000-0000-0000-0000-000000000067', 1, 1), ('00000000-0000-0000-0000-000000000069', 'BE41CEB5-02DF-44EE-885F-B82DDEDCAA08', '00000000-0000-0000-0000-000000000064', 1, 1)`);
     auto accessId = z8_guid_create(101);
     P.m_setFieldWrite(roleFieldAccess, accessId, z8_optional_wrap(true));
     auto accessRow = db.execute(`SELECT "Read", "Write" FROM "z8_access"."SystemRoleFieldAccess" WHERE "RecordId" = '00000000-0000-0000-0000-000000000065'`);
@@ -525,6 +534,28 @@ void main(string[] args) {
     z8_application_set_request(previousAccessRequest);
     accessRow = db.execute(`SELECT "Read", "Write" FROM "z8_access"."SystemRoleFieldAccess" WHERE "RecordId" = '00000000-0000-0000-0000-000000000065'`);
     assert(accessRow.rows[0][0].text == "0" && accessRow.rows[0][1].text == "1");
+    string tableRights() { return db.execute(`SELECT "Read"::text || "Write"::text || "Create"::text || "Copy"::text || "Destroy"::text FROM "z8_access"."SystemRoleTableAccess" WHERE "RecordId" = '00000000-0000-0000-0000-000000000063'`).rows[0][0].text; }
+    string fieldRights() { return db.execute(`SELECT "Read"::text || "Write"::text FROM "z8_access"."SystemRoleFieldAccess" WHERE "RecordId" = '00000000-0000-0000-0000-000000000065'`).rows[0][0].text; }
+    auto tableAccessId = z8_guid_create(99);
+    P.m_setTableWrite(roleTableAccess, tableAccessId, z8_optional_wrap(true)); assert(tableRights() == "11000" && fieldRights() == "11");
+    P.m_setTableRead(roleTableAccess, tableAccessId, z8_optional_wrap(false)); assert(tableRights() == "00000" && fieldRights() == "00");
+    P.m_setTableRead(roleTableAccess, tableAccessId, z8_optional_wrap(true)); assert(tableRights() == "10000" && fieldRights() == "10");
+    P.m_setTableCreate(roleTableAccess, tableAccessId, z8_optional_wrap(true)); assert(tableRights() == "11100" && fieldRights() == "11");
+    P.m_setTableCopy(roleTableAccess, tableAccessId, z8_optional_wrap(true)); assert(tableRights() == "11110" && fieldRights() == "11");
+    P.m_setTableCreate(roleTableAccess, tableAccessId, z8_optional_wrap(false)); assert(tableRights() == "11000" && fieldRights() == "11");
+    P.m_setTableCopy(roleTableAccess, tableAccessId, z8_optional_wrap(true)); assert(tableRights() == "11110" && fieldRights() == "11");
+    P.m_setTableWrite(roleTableAccess, tableAccessId, z8_optional_wrap(false)); assert(tableRights() == "10000" && fieldRights() == "10");
+    P.m_setTableDestroy(roleTableAccess, tableAccessId, z8_optional_wrap(true)); assert(tableRights() == "10001" && fieldRights() == "10");
+    assert(db.execute(`SELECT count(*) FROM "z8_access"."SystemRoleFieldAccess" WHERE "RecordId" IN ('00000000-0000-0000-0000-000000000068', '00000000-0000-0000-0000-000000000069') AND "Read" = 1 AND "Write" = 1`).rows[0][0].text == "2");
+    db.beginTransaction(); P.m_setTableRead(roleTableAccess, tableAccessId, z8_optional_wrap(false));
+    assert(tableRights() == "00000" && fieldRights() == "00"); db.rollback();
+    assert(tableRights() == "10001" && fieldRights() == "10");
+    db.execute(`UPDATE "z8_access"."SystemRoleTableAccess" SET "Read" = 0, "Write" = 0, "Create" = 0, "Copy" = 0, "Destroy" = 0 WHERE "RecordId" = '00000000-0000-0000-0000-000000000063'`);
+    db.execute(`UPDATE "z8_access"."SystemRoleFieldAccess" SET "Read" = 0, "Write" = 0 WHERE "RecordId" = '00000000-0000-0000-0000-000000000065'`);
+    previousAccessRequest = z8_application_set_request(skipAccessEvents);
+    P.m_setTableWrite(P.m_roleTableAccess(), tableAccessId, z8_optional_wrap(true));
+    z8_application_set_request(previousAccessRequest);
+    assert(tableRights() == "01000" && fieldRights() == "00");
     z8_connection_set_current(savedAccessBackend);
     db.execute(`ALTER TABLE "z8_test"."StaticSample" DROP CONSTRAINT "StaticSample_pkey", ADD PRIMARY KEY ("Label")`);
     differences = z8_postgres_compare_table(expectedStatic, z8_postgres_describe_table(db, "z8_test"w, "StaticSample"w));

@@ -1,4 +1,32 @@
 private enum z8_role_table_access_name = "org.zenframework.z8.server.base.table.system.RoleTableAccess"w;
+void z8_role_table_access_before_update(Z8Object self, Z8Guid id) {
+    auto state = z8_role_access_state!(Z8RoleAccessKind.table)(self);
+    auto read = z8_nonnull(state.permissions[0]), write = z8_nonnull(state.permissions[1]);
+    auto create = z8_nonnull(state.permissions[2]), copy = z8_nonnull(state.permissions[3]), destroy = z8_nonnull(state.permissions[4]);
+    bool value(Z8Object field) { return z8_optional_require(z8_primary_cast!bool(z8_field_default_value(field))); }
+    void set(Z8Object field, bool next) { z8_field_set(field, z8_primary_box(next)); }
+    Z8Optional!bool fieldRead, fieldWrite;
+    if (z8_field_is_changed(read)) {
+        if (!value(read)) { set(write, false); set(create, false); set(copy, false); set(destroy, false); }
+        fieldRead = z8_optional_wrap(value(read)); fieldWrite = z8_optional_wrap(false);
+    } else if (z8_field_is_changed(write)) {
+        if (!value(write)) { set(create, false); set(copy, false); set(destroy, false); }
+        else set(read, true);
+        fieldRead = z8_optional_wrap(true); fieldWrite = z8_optional_wrap(value(write));
+    } else if (z8_field_is_changed(create)) {
+        if (!value(create)) set(copy, false);
+        else { set(read, true); set(write, true); fieldRead = z8_optional_wrap(true); fieldWrite = z8_optional_wrap(true); }
+    } else if (z8_field_is_changed(copy)) {
+        if (value(copy)) { set(read, true); set(write, true); set(create, true); fieldRead = z8_optional_wrap(true); fieldWrite = z8_optional_wrap(true); }
+    } else if (z8_field_is_changed(destroy) && value(destroy)) {
+        set(read, true); fieldRead = z8_optional_wrap(true);
+    }
+    if (fieldRead.present || fieldWrite.present) {
+        auto propagator = cast(IZ8RoleAccessPropagator)z8_query_executor(self);
+        if (propagator is null) throw new Exception("query executor cannot propagate role field access");
+        propagator.updateRoleFieldAccess(id, fieldRead, fieldWrite);
+    }
+}
 shared static this() {
     enum kind = Z8RoleAccessKind.table;
     z8_native_bind(z8_role_table_access_name ~ ".m_new"w, &z8_role_access_new!kind);

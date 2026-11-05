@@ -26,6 +26,10 @@ interface IZ8QueryExecutor {
 interface IZ8QueryCounter {
     long count(Z8Object query, Z8QueryReadRequest request);
 }
+// Optional host capability for RoleTableAccess's field-permission propagation.
+interface IZ8RoleAccessPropagator {
+    void updateRoleFieldAccess(Z8Guid recordId, Z8Optional!bool read, Z8Optional!bool write);
+}
 // Writer operations receive the affected fields; values are their defaults,
 // matching Insert/Update in Z8 even while a read cursor is attached.
 interface IZ8QueryWriter {
@@ -301,6 +305,7 @@ private long z8_query_update_id_run(Z8Object self, Z8Guid id, bool resetChanged)
     if (id !is null && id == z8_guid_zero()) return 0;
     if (id !is null) {
         z8_table_before_write(self, false);
+        if (z8_query_user_events_enabled() && z8_native_is_instance(z8_role_table_access_name, self)) z8_role_table_access_before_update(self, id);
         if (z8_query_user_events_enabled() && z8_native_is_instance(z8_role_field_access_name, self)) z8_role_field_access_before_update(self);
         if (z8_query_user_events_enabled()) self.z8_query_virtual_beforeUpdate(id);
         if (z8_query_user_events_enabled() && z8_native_is_instance(z8_users_name, self)) z8_users_before_write(self, id, false);
