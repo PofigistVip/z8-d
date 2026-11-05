@@ -75,7 +75,10 @@ class Checker {
                 ValueType.exceptionType].canFind(type);
     }
     private bool accessible(Program owner, bool isPublic, bool isProtected) {
-        return owner is currentProgram || isPublic || (isProtected && isAssignable(currentProgram, owner));
+        if (isPublic) return true;
+        for (auto context = currentProgram; context !is null; context = context.lexicalOwner)
+            if (owner is context || (isProtected && isAssignable(context, owner))) return true;
+        return false;
     }
     private Program resolveClass(Program owner, string name, Token site) {
         if (name.indexOf('.') >= 0) {
@@ -563,6 +566,17 @@ class Checker {
                 if (staticContext) fail("super in static context", e.token);
                 if (currentProgram.baseClass is null) fail("super requires a base class", e.token);
                 e.objectClass = currentProgram.baseClass;
+                return ValueType.selfType;
+            case ExprKind.containerRef:
+                if (staticContext) fail("container in static context", e.token);
+                auto containerOwner = currentProgram;
+                if (e.left !is null) {
+                    if (e.left.kind != ExprKind.containerRef || typeOf(e.left) != ValueType.selfType)
+                        fail("invalid container chain", e.token);
+                    containerOwner = e.left.objectClass;
+                }
+                if (containerOwner.lexicalOwner is null) fail("container requires an enclosing type", e.token);
+                e.objectClass = containerOwner.lexicalOwner;
                 return ValueType.selfType;
             case ExprKind.newSelf:
                 e.newHasContainer = !staticContext;

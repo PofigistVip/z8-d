@@ -439,7 +439,13 @@ class Parser {
                 auto access = new Expression(ExprKind.index, tokens[index - 1]);
                 access.left = result; access.right = expression(); expect("]"); result = access;
             } else {
-                expect("."); auto member = new Expression(ExprKind.field, identifier());
+                expect(".");
+                if (current.text == "container") {
+                    if (result.kind != ExprKind.containerRef) error("container can only follow container");
+                    auto parent = new Expression(ExprKind.containerRef, take());
+                    parent.left = result; result = parent; continue;
+                }
+                auto member = new Expression(ExprKind.field, identifier());
                 member.left = result;
                 if (!accept("(")) { result = member; continue; }
                 member.kind = ExprKind.memberCall;
@@ -463,6 +469,7 @@ class Parser {
         if (accept("(")) { auto result = expression(); expect(")"); return result; }
         if (accept("this")) return new Expression(ExprKind.selfRef, t);
         if (accept("super")) return new Expression(ExprKind.superRef, t);
+        if (accept("container")) return new Expression(ExprKind.containerRef, t);
         if (accept("null")) return new Expression(ExprKind.nullLiteral, t);
         if (accept("new")) return new Expression(ExprKind.newSelf, identifier());
         if (t.kind == TokenKind.integerLiteral) { take(); return new Expression(ExprKind.integer, t); }

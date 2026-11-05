@@ -85,6 +85,12 @@ class Z8Object {
     void z8_init_values() {}
     void z8_call_constructor() {}
 }
+T z8_get_container(T)(Z8Object value) if (is(T : Z8Object)) {
+    if (value is null || value.z8_container is null) throw new Exception("missing container");
+    auto container = cast(T)value.z8_container;
+    if (container is null) throw new Exception("invalid container type");
+    return container;
+}
 T z8_new(T)(Z8Object container = null) {
     auto value = new T();
     value.z8_set_container(container);

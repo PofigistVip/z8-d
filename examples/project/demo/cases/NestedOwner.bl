@@ -1,17 +1,19 @@
 public class NestedOwner {
+    private int offset = 7;
+    private int secret() { return 5; }
     public NestedBase item = class {
         public NestedBase inner = class {
-            public int value() { return super.value() + 20; }
+            public int value() { return container.container.offset + container.initial + 20; }
         };
-        public int value() { return super.value() + 10; }
-        public int nested() { return inner.value(); }
+        public int value() { return super.value() + container.offset; }
+        public int nested() { return inner.value() + container.secret(); }
     };
     public NestedBase plain;
     public static int run() {
         NestedOwner owner;
-        if (owner.item.value() != 13 || owner.plain.value() != 3) return 1;
+        if (owner.item.value() != 10 || owner.plain.value() != 3) return 1;
         NestedBase saved = owner.item;
-        if (saved.value() != 13 || saved.nested() != 23) return 2;
+        if (saved.value() != 10 || saved.nested() != 35) return 2;
         return 207;
     }
 }

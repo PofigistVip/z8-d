@@ -272,6 +272,8 @@ private string emitExprRaw(Expression e) {
         case ExprKind.variable: return e.isField ? (e.targetClass.length ? e.targetClass ~ ".f_" : "this.f_") ~ e.token.text : "v_" ~ e.token.text;
         case ExprKind.selfRef: return "this";
         case ExprKind.superRef: return "super";
+        case ExprKind.containerRef:
+            return "z8_get_container!(" ~ e.objectClass.emittedName ~ ")(" ~ (e.left is null ? "this" : emitExpr(e.left)) ~ ")";
         case ExprKind.newSelf: return "z8_new!(" ~ e.objectClass.emittedName ~ ")(" ~ (e.newHasContainer ? "this" : "") ~ ")";
         case ExprKind.field:
             if (e.nativeField.length) return "z8_nonnull(" ~ emitExpr(e.left) ~ ")." ~ e.nativeField;
