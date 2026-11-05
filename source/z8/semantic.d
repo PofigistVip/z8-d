@@ -1063,8 +1063,33 @@ class Checker {
                     }
                     fail("unsupported SQL integer method", e.token);
                 }
-                if (receiver == ValueType.sqlGeometryType && e.token.text == "intersects") {
-                    checkArguments(e, [ValueType.sqlGeometryType]); e.builtinCall = "z8_sql_geometry_intersects"; return ValueType.sqlBoolType;
+                if (receiver == ValueType.sqlGeometryType) {
+                    if (["x", "xMax", "xMin", "y", "yMax", "yMin", "length"].canFind(e.token.text)) {
+                        checkArguments(e, []); e.builtinCall = "z8_sql_geometry_" ~ e.token.text; return ValueType.sqlDecimalType;
+                    }
+                    if (e.token.text == "collectionSize") {
+                        checkArguments(e, []); e.builtinCall = "z8_sql_geometry_collectionSize"; return ValueType.sqlIntType;
+                    }
+                    if (["isEmpty", "isValid"].canFind(e.token.text)) {
+                        checkArguments(e, []); e.builtinCall = "z8_sql_geometry_" ~ e.token.text; return ValueType.sqlBoolType;
+                    }
+                    if (["strType", "asGeoJSON"].canFind(e.token.text)) {
+                        checkArguments(e, []); e.builtinCall = "z8_sql_geometry_" ~ e.token.text; return ValueType.sqlStringType;
+                    }
+                    if (["startPoint", "endPoint", "union", "centroid", "envelope", "homogenize", "makeValid"].canFind(e.token.text)) {
+                        checkArguments(e, []); e.builtinCall = "z8_sql_geometry_" ~ e.token.text; return ValueType.sqlGeometryType;
+                    }
+                    if (["intersects", "intersect", "split", "distance"].canFind(e.token.text)) {
+                        checkArguments(e, [ValueType.sqlGeometryType]); e.builtinCall = "z8_sql_geometry_" ~ e.token.text;
+                        return e.token.text == "intersects" ? ValueType.sqlBoolType : e.token.text == "distance" ? ValueType.sqlDecimalType : ValueType.sqlGeometryType;
+                    }
+                    if (["element", "extract"].canFind(e.token.text)) {
+                        checkArguments(e, [ValueType.sqlIntType]); e.builtinCall = "z8_sql_geometry_" ~ e.token.text; return ValueType.sqlGeometryType;
+                    }
+                    if (["interpolatePoint", "buffer"].canFind(e.token.text)) {
+                        checkArguments(e, [ValueType.sqlDecimalType]); e.builtinCall = "z8_sql_geometry_" ~ e.token.text; return ValueType.sqlGeometryType;
+                    }
+                    fail("unsupported SQL geometry method", e.token);
                 }
                 if (receiver == ValueType.sqlDateType) {
                     if (["toInt", "minute", "hour", "day", "month", "year"].canFind(e.token.text)) {

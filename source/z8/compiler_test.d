@@ -245,6 +245,10 @@ unittest {
     compile(q{class A { static sql_geometry f(geometry x) { sql_geometry y = x; return y; } }});
     compile(q{class A { static sql_geometry f() { return sql_geometry.point(1.5, 2.5, 4326); } }});
     compile(q{class A { static sql_bool f(sql_geometry x, sql_geometry y) { return x && y; } }});
+    compile(q{class A { static sql_geometry f(sql_geometry x, sql_geometry y) { return x.centroid().envelope().makeValid().split(y).element(1).buffer(2.0); } }});
+    compile(q{class A { static sql_decimal f(sql_geometry x, sql_geometry y) { return x.x() + x.yMax() + x.distance(y); } }});
+    compile(q{class A { static sql_bool f(sql_geometry x) { return x.isEmpty() || x.isValid(); } }});
+    compile(q{class A { static sql_string f(sql_geometry x) { return x.strType() + x.asGeoJSON(); } }});
     rejects(q{class A { static sql_binary f(binary x) { return x; } }});
     rejects(q{class A { static date f(sql_date x) { return x; } }});
     rejects(q{class A { static guid f(sql_guid x) { return x; } }});

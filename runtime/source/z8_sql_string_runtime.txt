@@ -1,4 +1,4 @@
-enum Z8SqlStringKind { constant, group, concat, lower, upper, trimLeft, trimRight, choose, replace, regReplace, substring, reverse, padLeft, padRight, quote, jsonString, jsonInt, fromBool, fromNumeric, fromGuid, fromDate, fromDatespan, fromBinary, fromGeometry }
+enum Z8SqlStringKind { constant, group, concat, lower, upper, trimLeft, trimRight, choose, replace, regReplace, substring, reverse, padLeft, padRight, quote, jsonString, jsonInt, fromBool, fromNumeric, fromGuid, fromDate, fromDatespan, fromBinary, fromGeometry, geometryFunction }
 class Z8SqlString {
     Z8SqlStringKind kind;
     wstring constant;
@@ -12,6 +12,7 @@ class Z8SqlString {
     Z8SqlDatespan spanOperand;
     Z8SqlBinary binaryOperand;
     Z8SqlGeometry geometryOperand;
+    wstring geometryFunction;
     this(Z8SqlStringKind kind, wstring constant = null, Z8SqlString left = null,
          Z8SqlString right = null, Z8SqlBool condition = null) {
         this.kind = kind; this.constant = constant; this.left = left; this.right = right; this.condition = condition;
@@ -256,5 +257,6 @@ wstring z8_sql_string_format(Z8SqlString value, Z8SqlVendor vendor = Z8SqlVendor
         case Z8SqlStringKind.fromGeometry:
             auto geometry = z8_sql_geometry_format(value.geometryOperand, vendor);
             return vendor == Z8SqlVendor.SqlServer ? "Cast("w ~ (geometry is null ? "null"w : geometry) ~ " as nvarchar(max))"w : geometry;
+        case Z8SqlStringKind.geometryFunction: return z8_sql_geometry_function(value.geometryFunction, value.geometryOperand, vendor);
     }
 }

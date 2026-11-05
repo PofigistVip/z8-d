@@ -104,6 +104,7 @@ public class SqlStringValues {
     public static sql_geometry emptyGeometry() { sql_geometry value; return value; }
     public static sql_string emptyGeometryText() { sql_geometry value; return value.toString(); }
     public static sql_bool emptyGeometryIntersects() { sql_geometry value; return value.intersects(value); }
+    public static sql_geometry geometryChain() { sql_geometry value = sqlGeometry(); return value.centroid().buffer(1.5).element(2); }
     public static int run() {
         sql_string value = concatenation();
         if (value == null) return 1;

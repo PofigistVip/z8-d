@@ -1,4 +1,4 @@
-enum Z8SqlGeometryKind { constant, group, choose, point }
+enum Z8SqlGeometryKind { constant, group, choose, point, unaryFunction, binaryFunction, intFunction, decimalFunction }
 class Z8SqlGeometry {
     Z8SqlGeometryKind kind;
     Z8Geometry constant;
@@ -6,6 +6,9 @@ class Z8SqlGeometry {
     Z8SqlBool condition;
     Z8SqlDecimal x, y;
     Z8SqlInt srs;
+    wstring functionName;
+    Z8SqlInt intArgument;
+    Z8SqlDecimal decimalArgument;
     this(Z8SqlGeometryKind kind, Z8Geometry constant = null, Z8SqlGeometry left = null,
          Z8SqlGeometry right = null, Z8SqlBool condition = null) {
         this.kind = kind; this.constant = constant; this.left = left; this.right = right; this.condition = condition;
@@ -26,6 +29,60 @@ Z8SqlBool z8_sql_geometry_compare(string op)(Z8SqlGeometry left, Z8SqlGeometry r
     result.geometryLeft = z8_nonnull(left); result.geometryRight = right; result.geometryOperator = op; return result;
 }
 Z8SqlBool z8_sql_geometry_intersects(Z8SqlGeometry left, Z8SqlGeometry right) { return z8_sql_geometry_compare!"&&"(left, right); }
+private wstring z8_sql_geometry_function(wstring name, Z8SqlGeometry left, Z8SqlVendor vendor, Z8SqlGeometry right = null, bool two = false) {
+    if (vendor != Z8SqlVendor.Postgres) throw new Exception("unsupported SQL database vendor");
+    return name ~ "("w ~ z8_sql_geometry_text(left, vendor) ~ (two ? ", "w ~ z8_sql_geometry_text(right, vendor) : ""w) ~ ")"w;
+}
+Z8SqlInt z8_sql_geometry_collectionSize(Z8SqlGeometry value) {
+    auto result = new Z8SqlInt(Z8SqlIntKind.geometryCount); result.geometryOperand = z8_nonnull(value); return result;
+}
+Z8SqlDecimal z8_sql_geometry_metric(wstring name)(Z8SqlGeometry value, Z8SqlGeometry right = null) {
+    auto result = new Z8SqlDecimal(Z8SqlDecimalKind.geometryFunction);
+    result.geometryLeft = z8_nonnull(value); result.geometryRight = right; result.geometryFunction = name; return result;
+}
+Z8SqlDecimal z8_sql_geometry_x(Z8SqlGeometry v) { return z8_sql_geometry_metric!"ST_X"w(v); }
+Z8SqlDecimal z8_sql_geometry_xMax(Z8SqlGeometry v) { return z8_sql_geometry_metric!"ST_XMax"w(v); }
+Z8SqlDecimal z8_sql_geometry_xMin(Z8SqlGeometry v) { return z8_sql_geometry_metric!"ST_XMin"w(v); }
+Z8SqlDecimal z8_sql_geometry_y(Z8SqlGeometry v) { return z8_sql_geometry_metric!"ST_Y"w(v); }
+Z8SqlDecimal z8_sql_geometry_yMax(Z8SqlGeometry v) { return z8_sql_geometry_metric!"ST_YMax"w(v); }
+Z8SqlDecimal z8_sql_geometry_yMin(Z8SqlGeometry v) { return z8_sql_geometry_metric!"ST_YMin"w(v); }
+Z8SqlDecimal z8_sql_geometry_length(Z8SqlGeometry v) { return z8_sql_geometry_metric!"ST_Length"w(v); }
+Z8SqlDecimal z8_sql_geometry_distance(Z8SqlGeometry v, Z8SqlGeometry right) { return z8_sql_geometry_metric!"ST_Distance"w(v, right); }
+Z8SqlBool z8_sql_geometry_predicate(wstring name)(Z8SqlGeometry value) {
+    auto result = new Z8SqlBool(Z8SqlBoolKind.geometryPredicate); result.geometryLeft = z8_nonnull(value); result.geometryFunction = name; return result;
+}
+Z8SqlBool z8_sql_geometry_isEmpty(Z8SqlGeometry v) { return z8_sql_geometry_predicate!"ST_IsEmpty"w(v); }
+Z8SqlBool z8_sql_geometry_isValid(Z8SqlGeometry v) { return z8_sql_geometry_predicate!"ST_IsValid"w(v); }
+Z8SqlString z8_sql_geometry_string(wstring name)(Z8SqlGeometry value) {
+    auto result = new Z8SqlString(Z8SqlStringKind.geometryFunction); result.geometryOperand = z8_nonnull(value); result.geometryFunction = name; return result;
+}
+Z8SqlString z8_sql_geometry_strType(Z8SqlGeometry v) { return z8_sql_geometry_string!"GeometryType"w(v); }
+Z8SqlString z8_sql_geometry_asGeoJSON(Z8SqlGeometry v) { return z8_sql_geometry_string!"ST_AsGeoJSON"w(v); }
+Z8SqlGeometry z8_sql_geometry_unary(wstring name)(Z8SqlGeometry value) {
+    auto result = new Z8SqlGeometry(Z8SqlGeometryKind.unaryFunction, null, z8_nonnull(value)); result.functionName = name; return result;
+}
+Z8SqlGeometry z8_sql_geometry_startPoint(Z8SqlGeometry v) { return z8_sql_geometry_unary!"ST_StartPoint"w(v); }
+Z8SqlGeometry z8_sql_geometry_endPoint(Z8SqlGeometry v) { return z8_sql_geometry_unary!"ST_EndPoint"w(v); }
+Z8SqlGeometry z8_sql_geometry_union(Z8SqlGeometry v) { return z8_sql_geometry_unary!"ST_UnaryUnion"w(v); }
+Z8SqlGeometry z8_sql_geometry_centroid(Z8SqlGeometry v) { return z8_sql_geometry_unary!"ST_Centroid"w(v); }
+Z8SqlGeometry z8_sql_geometry_envelope(Z8SqlGeometry v) { return z8_sql_geometry_unary!"ST_Envelope"w(v); }
+Z8SqlGeometry z8_sql_geometry_homogenize(Z8SqlGeometry v) { return z8_sql_geometry_unary!"ST_CollectionHomogenize"w(v); }
+Z8SqlGeometry z8_sql_geometry_makeValid(Z8SqlGeometry v) { return z8_sql_geometry_unary!"ST_MakeValid"w(v); }
+Z8SqlGeometry z8_sql_geometry_binary(wstring name)(Z8SqlGeometry value, Z8SqlGeometry other) {
+    auto result = new Z8SqlGeometry(Z8SqlGeometryKind.binaryFunction, null, z8_nonnull(value), other); result.functionName = name; return result;
+}
+Z8SqlGeometry z8_sql_geometry_split(Z8SqlGeometry v, Z8SqlGeometry right) { return z8_sql_geometry_binary!"ST_Split"w(v, right); }
+Z8SqlGeometry z8_sql_geometry_intersect(Z8SqlGeometry v, Z8SqlGeometry right) { return z8_sql_geometry_binary!"ST_Intersection"w(v, right); }
+Z8SqlGeometry z8_sql_geometry_integer(wstring name)(Z8SqlGeometry value, Z8SqlInt argument) {
+    auto result = new Z8SqlGeometry(Z8SqlGeometryKind.intFunction, null, z8_nonnull(value)); result.functionName = name; result.intArgument = argument; return result;
+}
+Z8SqlGeometry z8_sql_geometry_element(Z8SqlGeometry v, Z8SqlInt n) { return z8_sql_geometry_integer!"ST_GeometryN"w(v, n); }
+Z8SqlGeometry z8_sql_geometry_extract(Z8SqlGeometry v, Z8SqlInt n) { return z8_sql_geometry_integer!"ST_CollectionExtract"w(v, n); }
+Z8SqlGeometry z8_sql_geometry_decimal(wstring name)(Z8SqlGeometry value, Z8SqlDecimal argument) {
+    auto result = new Z8SqlGeometry(Z8SqlGeometryKind.decimalFunction, null, z8_nonnull(value)); result.functionName = name; result.decimalArgument = argument; return result;
+}
+Z8SqlGeometry z8_sql_geometry_interpolatePoint(Z8SqlGeometry v, Z8SqlDecimal n) { return z8_sql_geometry_decimal!"ST_Line_Interpolate_Point"w(v, n); }
+Z8SqlGeometry z8_sql_geometry_buffer(Z8SqlGeometry v, Z8SqlDecimal n) { return z8_sql_geometry_decimal!"ST_Buffer"w(v, n); }
 private wstring z8_sql_geometry_text(Z8SqlGeometry value, Z8SqlVendor vendor) {
     auto text = z8_sql_geometry_format(value, vendor);
     return text is null ? "null"w : text;
@@ -45,5 +102,14 @@ wstring z8_sql_geometry_format(Z8SqlGeometry value, Z8SqlVendor vendor = Z8SqlVe
         case Z8SqlGeometryKind.point:
             if (vendor != Z8SqlVendor.Postgres) throw new Exception("unsupported SQL database vendor");
             return "ST_SetSRID(ST_Point("w ~ z8_sql_decimal_format(value.x, vendor) ~ ", "w ~ z8_sql_decimal_format(value.y, vendor) ~ "), "w ~ z8_sql_int_format(value.srs, vendor) ~ ")"w;
+        case Z8SqlGeometryKind.unaryFunction: return z8_sql_geometry_function(value.functionName, value.left, vendor);
+        case Z8SqlGeometryKind.binaryFunction: return z8_sql_geometry_function(value.functionName, value.left, vendor, value.right, true);
+        case Z8SqlGeometryKind.intFunction:
+            if (vendor != Z8SqlVendor.Postgres) throw new Exception("unsupported SQL database vendor");
+            return value.functionName ~ "("w ~ z8_sql_geometry_text(value.left, vendor) ~ ", "w ~ z8_sql_int_format(value.intArgument, vendor) ~
+                (value.functionName == "ST_GeometryN"w ? " + 1)"w : ")"w);
+        case Z8SqlGeometryKind.decimalFunction:
+            if (vendor != Z8SqlVendor.Postgres) throw new Exception("unsupported SQL database vendor");
+            return value.functionName ~ "("w ~ z8_sql_geometry_text(value.left, vendor) ~ ", "w ~ z8_sql_decimal_format(value.decimalArgument, vendor) ~ ")"w;
     }
 }

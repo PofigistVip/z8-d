@@ -613,6 +613,32 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                     System.out.println("SQLGEOMBOOL:" + vendor.name() + ":" + logical + ":" + value.format(vendor, null, logical));
             System.out.println("SQLGEOMEMPTY:" + vendor.name() + ":" + demo.cases.SqlStringValues.z8_emptyGeometry().format(vendor, null));
             System.out.println("SQLGEOMEMPTY:" + vendor.name() + ":" + demo.cases.SqlStringValues.z8_emptyGeometryText().format(vendor, null));
+            org.zenframework.z8.server.types.sql.sql_geometry geo = demo.cases.SqlStringValues.z8_sqlGeometry();
+            for (org.zenframework.z8.server.types.sql.sql_geometry value : new org.zenframework.z8.server.types.sql.sql_geometry[] {
+                geo.z8_startPoint(), geo.z8_endPoint(), geo.z8_union(), geo.z8_centroid(), geo.z8_envelope(), geo.z8_homogenize(), geo.z8_makeValid(),
+                geo.z8_split(geo), geo.z8_intersect(geo), geo.z8_element(new org.zenframework.z8.server.types.sql.sql_integer(2)),
+                geo.z8_extract(new org.zenframework.z8.server.types.sql.sql_integer(2)),
+                geo.z8_interpolatePoint(new org.zenframework.z8.server.types.sql.sql_decimal(new org.zenframework.z8.server.types.decimal("0.5"))),
+                geo.z8_buffer(new org.zenframework.z8.server.types.sql.sql_decimal(new org.zenframework.z8.server.types.decimal("1.5"))), demo.cases.SqlStringValues.z8_geometryChain() }) {
+                try { System.out.println("SQLGEOMFUNC:" + vendor.name() + ":" + value.format(vendor, null)); }
+                catch (RuntimeException error) { System.out.println("SQLGEOMFUNC:" + vendor.name() + ":ERROR"); }
+            }
+            for (org.zenframework.z8.server.types.sql.sql_decimal value : new org.zenframework.z8.server.types.sql.sql_decimal[] {
+                geo.z8_x(), geo.z8_xMax(), geo.z8_xMin(), geo.z8_y(), geo.z8_yMax(), geo.z8_yMin(), geo.z8_length(), geo.z8_distance(geo) }) {
+                try { System.out.println("SQLGEOMMETRIC:" + vendor.name() + ":" + value.format(vendor, null)); }
+                catch (RuntimeException error) { System.out.println("SQLGEOMMETRIC:" + vendor.name() + ":ERROR"); }
+            }
+            for (org.zenframework.z8.server.types.sql.sql_bool value : new org.zenframework.z8.server.types.sql.sql_bool[] { geo.z8_isEmpty(), geo.z8_isValid() })
+                for (boolean logical : new boolean[] {false, true}) {
+                    try { System.out.println("SQLGEOMTEST:" + vendor.name() + ":" + logical + ":" + value.format(vendor, null, logical)); }
+                    catch (RuntimeException error) { System.out.println("SQLGEOMTEST:" + vendor.name() + ":" + logical + ":ERROR"); }
+                }
+            for (org.zenframework.z8.server.types.sql.sql_string value : new org.zenframework.z8.server.types.sql.sql_string[] { geo.z8_strType(), geo.z8_asGeoJSON() }) {
+                try { System.out.println("SQLGEOMTEXT:" + vendor.name() + ":" + value.format(vendor, null)); }
+                catch (RuntimeException error) { System.out.println("SQLGEOMTEXT:" + vendor.name() + ":ERROR"); }
+            }
+            try { System.out.println("SQLGEOMCOUNT:" + vendor.name() + ":" + geo.z8_collectionSize().format(vendor, null)); }
+            catch (RuntimeException error) { System.out.println("SQLGEOMCOUNT:" + vendor.name() + ":ERROR"); }
         }
         org.zenframework.z8.server.types.sql.sql_integer sharedSearch = demo.cases.SqlStringValues.z8_indexFrom();
         for (org.zenframework.z8.server.db.DatabaseVendor vendor : org.zenframework.z8.server.db.DatabaseVendor.values())
@@ -699,7 +725,9 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                         ("ExtractDatePart", "ExtractMinute", "ExtractHour", "ExtractDay", "ExtractMonth", "ExtractYear", "TruncDay", "TruncHour", "TruncMinute", "TruncSecond", "AddDay", "AddHour", "AddMinute", "AddSecond")]
         sql_sources += [server_source / "db" / "sql" / "functions" / "datespan" / (name + ".java") for name in
                         ("Days", "Hours", "Minutes", "Seconds", "TotalHours", "TotalMinutes", "TotalSeconds", "TruncHour", "TruncMinute", "TruncSecond", "AddDay", "AddHour", "AddMinute", "AddSecond")]
-        sql_sources += [server_source / "db" / "sql" / "functions" / "geometry" / "Point.java", server_source / "db" / "sql" / "expressions" / "Intersects.java"]
+        sql_sources += [server_source / "db" / "sql" / "functions" / "geometry" / (name + ".java") for name in
+                        ("Point", "CollectionSize", "X", "XMax", "XMin", "Y", "YMax", "YMin", "Length", "Element", "Split", "Extract", "GeometryType", "Intersection", "StartPoint", "EndPoint", "Union", "Centroid", "Envelope", "Homogenize", "InterpolatePoint", "Buffer", "IsEmpty", "IsValid", "MakeValid", "AsGeoJson")]
+        sql_sources += [server_source / "db" / "sql" / "expressions" / (name + ".java") for name in ("Intersects", "Distance")]
         sql_sources += [server_source / "db" / "sql" / "functions" / "string" / name for name in
                         ("Concat.java", "Lower.java", "Upper.java", "LTrim.java", "RTrim.java", "Length.java", "Quote.java",
                          "Like.java", "RegLike.java", "Replace.java", "RegReplace.java", "Substr.java", "Reverse.java", "LPad.java", "RPad.java",
@@ -1121,6 +1149,33 @@ void main() {
         auto emptyGeometryText = z8_sql_string_format(Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_emptyGeometryText(), dialect);
         writeln("SQLGEOMEMPTY:", vendor, ":", emptyGeometry is null ? "null" : z8_to_utf8(emptyGeometry));
         writeln("SQLGEOMEMPTY:", vendor, ":", emptyGeometryText is null ? "null" : z8_to_utf8(emptyGeometryText));
+        auto geo = Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_sqlGeometry();
+        auto half = z8_sql_decimal_const(z8_decimal_parse("0.5"w));
+        auto oneHalf = z8_sql_decimal_const(z8_decimal_parse("1.5"w));
+        foreach (value; [z8_sql_geometry_startPoint(geo), z8_sql_geometry_endPoint(geo), z8_sql_geometry_union(geo),
+                         z8_sql_geometry_centroid(geo), z8_sql_geometry_envelope(geo), z8_sql_geometry_homogenize(geo), z8_sql_geometry_makeValid(geo),
+                         z8_sql_geometry_split(geo, geo), z8_sql_geometry_intersect(geo, geo), z8_sql_geometry_element(geo, z8_sql_int_const(2)),
+                         z8_sql_geometry_extract(geo, z8_sql_int_const(2)), z8_sql_geometry_interpolatePoint(geo, half),
+                         z8_sql_geometry_buffer(geo, oneHalf), Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_geometryChain()]) {
+            try { writeln("SQLGEOMFUNC:", vendor, ":", z8_to_utf8(z8_sql_geometry_format(value, dialect))); }
+            catch (Exception error) { writeln("SQLGEOMFUNC:", vendor, ":ERROR"); }
+        }
+        foreach (value; [z8_sql_geometry_x(geo), z8_sql_geometry_xMax(geo), z8_sql_geometry_xMin(geo), z8_sql_geometry_y(geo),
+                         z8_sql_geometry_yMax(geo), z8_sql_geometry_yMin(geo), z8_sql_geometry_length(geo), z8_sql_geometry_distance(geo, geo)]) {
+            try { writeln("SQLGEOMMETRIC:", vendor, ":", z8_to_utf8(z8_sql_decimal_format(value, dialect))); }
+            catch (Exception error) { writeln("SQLGEOMMETRIC:", vendor, ":ERROR"); }
+        }
+        foreach (value; [z8_sql_geometry_isEmpty(geo), z8_sql_geometry_isValid(geo)])
+            foreach (logical; [false, true]) {
+                try { writeln("SQLGEOMTEST:", vendor, ":", logical, ":", z8_to_utf8(z8_sql_bool_format(value, logical, dialect))); }
+                catch (Exception error) { writeln("SQLGEOMTEST:", vendor, ":", logical, ":ERROR"); }
+            }
+        foreach (value; [z8_sql_geometry_strType(geo), z8_sql_geometry_asGeoJSON(geo)]) {
+            try { writeln("SQLGEOMTEXT:", vendor, ":", z8_to_utf8(z8_sql_string_format(value, dialect))); }
+            catch (Exception error) { writeln("SQLGEOMTEXT:", vendor, ":ERROR"); }
+        }
+        try { writeln("SQLGEOMCOUNT:", vendor, ":", z8_to_utf8(z8_sql_int_format(z8_sql_geometry_collectionSize(geo), dialect))); }
+        catch (Exception error) { writeln("SQLGEOMCOUNT:", vendor, ":ERROR"); }
     }
     auto sharedSearch = Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_indexFrom();
     foreach (vendorIndex, vendor; ["Oracle", "SqlServer", "Postgres", "H2"]) {
@@ -1136,12 +1191,12 @@ void main() {
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_lines = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:", "SQLSPAN:", "SQLSPANARITH:", "SQLSPANBOOL:", "SQLSPANPART:", "SQLSPANFUNC:", "SQLBINARY:", "SQLGEOM:", "SQLGEOMBOOL:", "SQLGEOMEMPTY:"))]
+        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:", "SQLSPAN:", "SQLSPANARITH:", "SQLSPANBOOL:", "SQLSPANPART:", "SQLSPANFUNC:", "SQLBINARY:", "SQLGEOM:", "SQLGEOMBOOL:", "SQLGEOMEMPTY:", "SQLGEOMFUNC:", "SQLGEOMMETRIC:", "SQLGEOMTEST:", "SQLGEOMTEXT:", "SQLGEOMCOUNT:"))]
         original_sql = [line for line in output.splitlines() if line.startswith("SQLBOOL:")]
         d_sql = [line for line in d_lines if line.startswith("SQLBOOL:")]
         if original_sql != d_sql or len(d_sql) != 40:
             raise SystemExit(f"SQL boolean formatting differs: original={original_sql!r}, D={d_sql!r}")
-        for prefix, count in (("SQLINT:", 36), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 44), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 60), ("SQLTEXTTEST:", 16), ("SQLGUID:", 8), ("SQLGUIDBOOL:", 8), ("SQLDATE:", 12), ("SQLDATETICKS:", 4), ("SQLDATEFUNC:", 36), ("SQLDATEPART:", 20), ("SQLDATECMP:", 336), ("SQLDATEBL:", 8), ("SQLSPAN:", 20), ("SQLSPANARITH:", 12), ("SQLSPANBOOL:", 8), ("SQLSPANPART:", 28), ("SQLSPANFUNC:", 28), ("SQLBINARY:", 4), ("SQLGEOM:", 12), ("SQLGEOMBOOL:", 24), ("SQLGEOMEMPTY:", 8)):
+        for prefix, count in (("SQLINT:", 36), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 44), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 60), ("SQLTEXTTEST:", 16), ("SQLGUID:", 8), ("SQLGUIDBOOL:", 8), ("SQLDATE:", 12), ("SQLDATETICKS:", 4), ("SQLDATEFUNC:", 36), ("SQLDATEPART:", 20), ("SQLDATECMP:", 336), ("SQLDATEBL:", 8), ("SQLSPAN:", 20), ("SQLSPANARITH:", 12), ("SQLSPANBOOL:", 8), ("SQLSPANPART:", 28), ("SQLSPANFUNC:", 28), ("SQLBINARY:", 4), ("SQLGEOM:", 12), ("SQLGEOMBOOL:", 24), ("SQLGEOMEMPTY:", 8), ("SQLGEOMFUNC:", 56), ("SQLGEOMMETRIC:", 32), ("SQLGEOMTEST:", 16), ("SQLGEOMTEXT:", 8), ("SQLGEOMCOUNT:", 4)):
             original_lines = [line for line in output.splitlines() if line.startswith(prefix)]
             d_formatted = [line for line in d_lines if line.startswith(prefix)]
             if original_lines != d_formatted or len(d_formatted) != count:
