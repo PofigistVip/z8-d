@@ -30,6 +30,51 @@ private Z8SqlBool z8_application_query_filter(Z8Object query, wstring json) {
     return z8_sql_bool_group(result);
 }
 
+// Follow the same first-Link path used by the PostgreSQL planner, checking
+// each table and link before exposing a field from a related query.
+private Z8Object[] z8_application_query_field_path(Z8Object root, Z8Object field, Z8Privileges privileges) {
+    enum queryName = "org.zenframework.z8.server.base.query.Query"w;
+    enum tableName = "org.zenframework.z8.server.base.table.Table"w;
+    enum linkName = "org.zenframework.z8.server.base.table.value.Link"w;
+    enum joinName = "org.zenframework.z8.server.base.table.value.Join"w;
+    if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
+        throw new Exception("computed fields are not supported by query read");
+    auto owner = z8_object_container(field);
+    while (owner !is null && !z8_native_is_instance(queryName, owner)) owner = z8_object_container(owner);
+    if (owner is null) throw new Exception("query field has no owner");
+    Z8Object[] path;
+    auto current = owner;
+    while (current !is root) {
+        path ~= current;
+        current = z8_object_container(current);
+        while (current !is null && !z8_native_is_instance(queryName, current)) current = z8_object_container(current);
+        if (current is null) throw new Exception("query field is not reachable through a link");
+    }
+    Z8Object[] links;
+    auto parent = root;
+    for (size_t remaining = path.length; remaining > 0; --remaining) {
+        auto target = path[remaining - 1];
+        if (!z8_native_is_instance(tableName, target)) throw new Exception("linked query must be a table");
+        Z8Object link;
+        foreach (candidate; z8_query_declared_fields(parent))
+            if ((z8_native_is_instance(linkName, candidate) || z8_native_is_instance(joinName, candidate)) && z8_link_query(candidate) is target) {
+                link = candidate; break;
+            }
+        if (link is null || z8_native_is_instance(joinName, link)) throw new Exception("linked query requires a direct Link");
+        auto parentKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, parent);
+        auto linkKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, link);
+        auto targetKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, target);
+        if (!privileges.getFieldAccess(parentKey, linkKey).read || !privileges.getTableAccess(targetKey).read)
+            throw new Exception("linked query access denied");
+        links ~= link;
+        parent = target;
+    }
+    bool declared;
+    foreach (candidate; z8_query_declared_fields(owner)) if (candidate is field) { declared = true; break; }
+    if (!declared) throw new Exception("query field is not declared by its owner");
+    return links;
+}
+
 // Shared by read and mutation responses; field selection is checked before a
 // mutation starts, so malformed response options cannot fail after commit.
 private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges privileges, Z8StringMap params, bool includeKeys = true) {
@@ -62,12 +107,16 @@ private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges priv
         bool duplicate;
         foreach (existing; selected) if (existing is field) { duplicate = true; break; }
         if (duplicate) continue;
+        auto path = z8_application_query_field_path(query, field, privileges);
         auto owner = field.z8_get_owner();
         auto tableKey = owner is null ? queryKey : z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, owner);
         auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
         if (field !is key && !privileges.getFieldAccess(tableKey, fieldKey).read) continue;
-        if (owner !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
-            throw new Exception("linked and computed fields are not supported by query read");
+        foreach (link; path) {
+            bool present;
+            foreach (existing; selected) if (existing is link) { present = true; break; }
+            if (!present) selected ~= link;
+        }
         selected ~= field;
     }
     return selected;

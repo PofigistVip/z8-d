@@ -66,6 +66,15 @@ public class InnerOrder extends Table {
     public IntExpression nameLength = customer.label.sql_string().length();
 }
 ''',
+        "HttpOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.StringField;
+[name "Orders"] public class HttpOrder extends Table {
+    [name "Title"] public StringField title;
+    public Customer customer; [name "CustomerId"] public Link customerId = customer;
+}
+''',
         "LeftOrder": '''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.StringField;
@@ -189,13 +198,16 @@ public class Probe {
 import z8.runtime;
 import z8.database.postgres;
 import z8.database.query;
+import z8.database.connection;
 import z8gen.p_Probe;
+import std.conv : to;
+import std.json : parseJSON;
 void main(string[] args) {
     alias P = Z8p_50726F6265;
     auto db = new Z8PostgresConnection(args[1]);
     db.execute(`CREATE TEMP TABLE "Cities" ("RecordId" uuid PRIMARY KEY, "Label" text)`);
     db.execute(`CREATE TEMP TABLE "Customers" ("RecordId" uuid PRIMARY KEY, "Label" text, "CityId" uuid)`);
-    db.execute(`CREATE TEMP TABLE "Orders" ("RecordId" uuid PRIMARY KEY, "Title" text, "CustomerId" uuid, "CityId" uuid)`);
+    db.execute(`CREATE TEMP TABLE "Orders" ("RecordId" uuid PRIMARY KEY, "Title" text, "CustomerId" uuid, "CityId" uuid, "Lock" bigint DEFAULT 0)`);
     db.execute(`CREATE TEMP TABLE "Nodes" ("RecordId" uuid PRIMARY KEY, "ParentId" uuid)`);
     db.execute(`INSERT INTO "Nodes" VALUES ('00000000-0000-0000-0000-000000000401','00000000-0000-0000-0000-000000000402'), ('00000000-0000-0000-0000-000000000402',NULL), ('00000000-0000-0000-0000-000000000403','00000000-0000-0000-0000-000000000401')`);
     db.execute(`INSERT INTO "Cities" VALUES ('00000000-0000-0000-0000-000000000101','Moscow')`);
@@ -247,6 +259,35 @@ void main(string[] args) {
     P.m_configureCycle(cyclic); bool cycleRejected;
     try { P.m_readCycle(cyclic); } catch (Z8PostgresException error) { cycleRejected = error.msg == "cyclic PostgreSQL join dependencies"; }
     assert(cycleRejected);
+    auto user = new Z8UserData(); user.id = z8_guid_create(1);
+    user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
+    auto session = new Z8ApplicationSession("join"w, user, user);
+    auto priorBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "pg_temp"w));
+    wstring requestFields(wstring fields) {
+        auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
+        request.parameters.z8_add("request"w, "HttpOrder"w); request.parameters.z8_add("action"w, "read"w); request.parameters.z8_add("fields"w, fields);
+        auto priorRequest = z8_application_set_request(request); scope(exit) z8_application_set_request(priorRequest);
+        z8_application_start_response(request, "HttpOrder"w); z8_application_dispatch_request();
+        z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
+    }
+    auto response = parseJSON(requestFields(`["title","customer.label","customer.city.label"]`w).to!string);
+    assert(response["data"].array.length == 1 && response["data"][0]["customer.label"].str == "Alice" && response["data"][0]["customer.city.label"].str == "Moscow");
+    assert(response["data"][0]["customerId"].str == "00000000-0000-0000-0000-000000000201");
+    assert(response["data"][0]["customer.cityId"].str == "00000000-0000-0000-0000-000000000101");
+    auto denied = Z8Access.init;
+    user.privileges.setTableAccess(z8_guid_create_name("Customers"w), denied);
+    bool blocked; try { requestFields(`["customer.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
+    user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
+    user.privileges.setFieldAccess(z8_guid_create_name("Orders.CustomerId"w), denied);
+    blocked = false; try { requestFields(`["customer.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
+    user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
+    user.privileges.setFieldAccess(z8_guid_create_name("Customers.CityId"w), denied);
+    blocked = false; try { requestFields(`["customer.city.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
+    user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
+    user.privileges.setFieldAccess(z8_guid_create_name("Customers.Label"w), denied);
+    response = parseJSON(requestFields(`["customer.label"]`w).to!string);
+    foreach (row; response["data"].array) assert("customer.label" !in row.object);
+    z8_connection_set_current(priorBackend);
     db.close();
 }
 ''', encoding="utf-8")

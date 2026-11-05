@@ -120,8 +120,11 @@ sum and average totals over readable fields. The filters and query scope still
 apply; grouped totals and linked HAVING filters are not yet supported.
 As in the Java `ReadAction`, a nonempty `recordId` list replaces the request
 filters and query scope; an empty list keeps the normal filters and scope.
-Linked and computed fields, other read options and custom request parameters
-are rejected. The host must open the application response before calling it.
+Direct Link paths may be selected when every intermediate link and target table
+is readable; the response includes the link fields. Linked filter, sort,
+group and context fields, custom Join paths, computed fields, other read
+options and custom request parameters are rejected. The host must open the
+application response before calling it.
 `z8_application_dispatch_request` selects this adapter for a table request;
 the CivetWeb host must explicitly call the dispatcher and install a backend for
 the worker thread. The separately supported write actions are described below.
