@@ -1,0 +1,29 @@
+// Native BL methods are bound explicitly by the embedding D application.
+private class Z8NativeBinding(R, Args...) {
+    alias Callback = R function(Args);
+    Callback callback;
+    this(Callback callback) { this.callback = callback; }
+}
+private __gshared Object[wstring] z8_native_bindings;
+private __gshared Object z8_native_monitor;
+shared static this() { z8_native_monitor = new Object(); }
+private wstring z8_native_binding_key(R, Args...)(wstring name) {
+    return name ~ "|"w ~ typeid(Z8NativeBinding!(R, Args)).name.to!wstring;
+}
+void z8_native_bind(R, Args...)(wstring name, R function(Args) callback) {
+    if (callback is null) throw new Exception("native binding callback is null");
+    auto key = z8_native_binding_key!(R, Args)(name);
+    synchronized (z8_native_monitor) z8_native_bindings[key] = new Z8NativeBinding!(R, Args)(callback);
+}
+void z8_native_clear_bindings() { synchronized (z8_native_monitor) z8_native_bindings.clear(); }
+R z8_native_call(R, Args...)(wstring name, Args args) {
+    auto key = z8_native_binding_key!(R, Args)(name);
+    Z8NativeBinding!(R, Args) binding;
+    synchronized (z8_native_monitor) {
+        auto found = key in z8_native_bindings;
+        if (found !is null) binding = cast(Z8NativeBinding!(R, Args))*found;
+    }
+    if (binding is null) throw new Exception("native binding not found: " ~ name.to!string);
+    static if (is(R == void)) binding.callback(args);
+    else return binding.callback(args);
+}

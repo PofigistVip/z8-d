@@ -241,23 +241,25 @@ class Parser {
             while (accept(".")) name ~= "." ~ identifier().text;
             expect(";"); result.imports ~= Import(name, start);
         }
-        bool nativeAttribute, isPublic;
+        bool isPublic;
         while (current.text == "[" || current.text == "public") {
             if (accept("public")) { if (isPublic) error("duplicate public modifier"); isPublic = true; continue; }
             auto attribute = parseAttribute(result.attributes);
-            if (attribute.name.text == "native") {
-                if (!attribute.hasValue || attribute.expression !is null || attribute.value.kind != TokenKind.stringLiteral) error("native attribute requires a string");
-                nativeAttribute = true;
-            } else {
-                if (attribute.name.text == "primary") error("primary type declarations are not supported yet");
-                checkSupportedAttribute(attribute);
-            }
+            if (["native", "primary"].canFind(attribute.name.text)) {
+                if (!attribute.hasValue || attribute.expression !is null || attribute.value.kind != TokenKind.stringLiteral)
+                    error(attribute.name.text ~ " attribute requires a string");
+                result.isNative = true;
+                if (attribute.name.text == "primary") result.isPrimary = true;
+                // Native takes precedence when both attributes are present.
+                if (attribute.name.text == "native" || !result.nativeName.length)
+                    result.nativeName = decodeStringLiteral(attribute.value.text);
+            } else checkSupportedAttribute(attribute);
             result.attributes ~= attribute;
         }
         result.isFinal = accept("final");
         result.isEnum = !result.isFinal && accept("enum");
         if (!result.isEnum) expect("class");
-        if (nativeAttribute && !result.isEnum) error("native classes are not supported");
+
         result.name = identifier();
         if (result.isEnum) {
             expect("{");
@@ -411,9 +413,14 @@ class Parser {
                 if (method.isStatic || method.returnType != ValueType.voidType || method.parameters.length)
                     throw new CompileException("constructor must be an instance void method without parameters", method.name.position);
             }
-            method.body = statement();
-            if (method.body.kind != StmtKind.block)
-                throw new CompileException("method body must be a block", method.body.token.position);
+            if (accept(";")) {
+                if (!result.isNative) error("method without a body requires a native type");
+                method.isNativeDeclaration = true;
+            } else {
+                method.body = statement();
+                if (method.body.kind != StmtKind.block)
+                    throw new CompileException("method body must be a block", method.body.token.position);
+            }
             result.methods ~= method;
         }
         expect("}");

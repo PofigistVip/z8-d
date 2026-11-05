@@ -164,6 +164,13 @@ private string emitWStringLiteral(const(wchar)[] value) {
     return `z8_string_new(` ~ literal ~ `"w)`;
 }
 
+private string emitRawWStringLiteral(const(wchar)[] value) {
+    auto result = emitWStringLiteral(value);
+    enum prefix = "z8_string_new(";
+    assert(result.startsWith(prefix) && result[$ - 1] == ')');
+    return result[prefix.length .. $ - 1];
+}
+
 private string emitAttributeValue(TypeAttribute attribute) {
     if (attribute.expression !is null) {
         auto value = emitExpr(attribute.expression);
@@ -963,17 +970,28 @@ package string emitPrograms(Program[] programs) {
                     (m.returnType == ValueType.voidType ? "" : "return ") ~ methodDName(m) ~ "(" ~ nativeArgs.join(", ") ~ "); }\n";
             }
             auto modifiers = m.isStatic ? "static " : m.overrides ? "override " : m.isVirtual ? "" : "final ";
-            ControlContext context;
-            context.enabled = needsControlLowering(m.body);
-            context.returnType = m.returnType;
-            context.returnClass = m.returnObjectClass;
-            context.returnKeyClasses = m.returnKeyObjectClasses;
-            auto body = emitStatement(m.body, context);
-            if (context.enabled) {
-                auto returnSignal = m.returnType == ValueType.voidType ? "Z8ReturnVoid" : "Z8Return!(" ~ dStorageType(m.returnType, m.returnObjectClass, m.returnKeyObjectClasses) ~ ")";
-                body = "{\ntry " ~ body ~ "catch (" ~ returnSignal ~ " z8_return) { " ~
-                    (m.returnType == ValueType.voidType ? "return;" : "return z8_return.value;") ~ " }\n" ~
-                    (m.returnType == ValueType.voidType ? "" : "assert(0, \"unreachable BL method exit\");\n") ~ "}\n";
+            string body;
+            if (program.isNative) {
+                string[] arguments;
+                if (!m.isStatic) arguments ~= "this";
+                foreach (p; m.parameters) arguments ~= "v_" ~ p.name.text;
+                auto binding = emitRawWStringLiteral(program.nativeName ~ "."w ~ methodDName(m).to!wstring);
+                auto call = "z8_native_call!(" ~ dStorageType(m.returnType, m.returnObjectClass, m.returnKeyObjectClasses) ~ ")(" ~ binding ~
+                    (arguments.length ? ", " ~ arguments.join(", ") : "") ~ ")";
+                body = "{\n" ~ (m.returnType == ValueType.voidType ? "" : "return ") ~ call ~ ";\n}\n";
+            } else {
+                ControlContext context;
+                context.enabled = needsControlLowering(m.body);
+                context.returnType = m.returnType;
+                context.returnClass = m.returnObjectClass;
+                context.returnKeyClasses = m.returnKeyObjectClasses;
+                body = emitStatement(m.body, context);
+                if (context.enabled) {
+                    auto returnSignal = m.returnType == ValueType.voidType ? "Z8ReturnVoid" : "Z8Return!(" ~ dStorageType(m.returnType, m.returnObjectClass, m.returnKeyObjectClasses) ~ ")";
+                    body = "{\ntry " ~ body ~ "catch (" ~ returnSignal ~ " z8_return) { " ~
+                        (m.returnType == ValueType.voidType ? "return;" : "return z8_return.value;") ~ " }\n" ~
+                        (m.returnType == ValueType.voidType ? "" : "assert(0, \"unreachable BL method exit\");\n") ~ "}\n";
+                }
             }
             if (m.isStatic) body = "{\nz8_ensure_static();\n" ~ body[1 .. $];
             result ~= modifiers ~ dStorageType(m.returnType, m.returnObjectClass, m.returnKeyObjectClasses) ~ " " ~ methodDName(m) ~ "(" ~ params.join(", ") ~ ")\n" ~ body;

@@ -1,0 +1,9 @@
+public class NativeConsumer {
+    public static int run() {
+        NativeMath object = new NativeMath;
+        NativeNumber number = new NativeNumber;
+        NativeMath.reset();
+        if (NativeMath.add("a", "b") != "ab") return 1;
+        return NativeMath.add(2, 3) + object.scale(4) + number.read() + object.ignored();
+    }
+}

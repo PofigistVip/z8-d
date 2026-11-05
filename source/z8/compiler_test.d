@@ -57,7 +57,7 @@ unittest {
     rejects(q{[name 7] class A {}});
     rejects(q{class A { [name "same"] A x; [name "same"] A y; }});
     rejects(q{class A { [name "same"] A x; A y; [name "same"] y; }});
-    rejects(q{[native "x"] class A {}});
+    compile(q{[native "x"] class A {}});
     compile(q{class A { [flag] A child; public [tag "value"] A nested = class {}; }});
     compile(q{class A { string text = "value"; [tag text + "!"] A child; }});
     rejects(q{[tag "a" + "b"] class A {}});
@@ -76,7 +76,7 @@ unittest {
     compile(q{class A { [native "impl"] [primary 1] A child; [native "impl"] void method() {} }});
     rejects(q{class A { [native] void method() {} }});
     rejects(q{class A { [primary "impl"] A child = class {}; }});
-    rejects(q{[primary "impl"] class A {}});
+    compile(q{[primary "impl"] class A {}});
     compile(q{class A { [name "same"] void a() {} [name "same"] void b() {} }});
     rejects(q{class A { [name "same"] A field; [name "same"] void method() {} }});
     rejects(q{class A { [tag value] void method(int value) {} }});

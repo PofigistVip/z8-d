@@ -241,6 +241,16 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         if reference_result.returncode == 0 or "reference type member" not in reference_result.stdout:
             raise SystemExit("Original Z8 did not reject a static reference map:\n" + reference_result.stdout)
     reference_map.unlink()
+    native_fixtures = []
+    for fixture in (root / "examples" / "native").glob("*.bl"):
+        destination = operator_source / fixture.name
+        shutil.copy2(fixture, destination)
+        native_fixtures.append(destination)
+    native_result = subprocess.run(operator_command, cwd=temp, capture_output=True, text=True, encoding="utf-8")
+    if native_result.returncode:
+        raise SystemExit("Original Z8 rejected native declarations:\n" + native_result.stdout + native_result.stderr)
+    for fixture in native_fixtures:
+        fixture.unlink()
     sql_map_probe = operator_source / "SqlMapConversion.bl"
     sql_map_probe.write_text('''import org.zenframework.z8.lang.sql.sql_int;
     public class SqlMapConversion { public static void run() { sql_int[string] values = {("x", 1)}; } }''', encoding="utf-8")

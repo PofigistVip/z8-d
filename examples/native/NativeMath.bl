@@ -1,0 +1,8 @@
+[native "example.NativeMath"]
+public class NativeMath {
+    public static int add(int left, int right);
+    public static string add(string left, string right);
+    public virtual int scale(int value);
+    public static void reset();
+    public int ignored() { return 99; }
+}

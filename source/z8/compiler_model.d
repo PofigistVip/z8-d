@@ -106,6 +106,7 @@ class Method {
     string operatorSymbol;
     bool isCastOperator;
     bool isPriorityOperator;
+    bool isNativeDeclaration;
 }
 class Field { ValueType type; Token name; TypeAttribute[] attributes; Expression initializer; bool isPublic, isProtected, isStatic, isAuto, isRecord, declaredFinal, userOperatorAssignment; string objectName; string[] keyObjectNames; Program objectClass; Program[] keyObjectClasses; Program owner, nestedClass; }
 struct TypeAttribute { Token name; Token value; Expression expression; ValueType expressionType; long capturedDateTicks; bool hasValue, dateTickCaptured; }
@@ -222,7 +223,8 @@ class Program {
     Capture[] captures;
     bool enclosingStatic;
     bool isFinal;
-    bool isEnum;
+    bool isEnum, isNative, isPrimary;
+    wstring nativeName;
     Token[] enumValues;
 }
 struct SourceUnit { string name, path, source; }

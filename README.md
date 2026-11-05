@@ -405,6 +405,17 @@ runtime D и отличается от Java.
 находится в [examples/math.bl](examples/math.bl). `&&` и `||` сохраняют короткое
 замыкание; деление и остаток учитывают крайний случай `long.min / -1`. Строки в D
 представлены `wstring` (UTF-16), включая сравнение по кодовым единицам Java.
+
+Объявления типов `[native "имя"]` и `[primary "имя"]` допускают методы без тела.
+Их реализации регистрируются отдельно в D через `z8_native_bind`: например,
+`z8_native_bind("example.NativeMath.m_add"w, &add)`. Имя включает значение атрибута
+и имя D-метода; сигнатура функции должна соответствовать сгенерированному методу,
+включая `this` первым аргументом для нестатического метода. Перегрузки связываются
+по сигнатуре; отсутствие реализации вызывает исключение. Пример находится в
+[examples/native](examples/native), проверка связывания — в
+[tests/native_bindings.py](tests/native_bindings.py). Это основа поддержки native:
+поля внешних типов и общая семантика пользовательских primary-типов ещё не перенесены.
+
 Поддерживаются конкатенация, сравнения, `length`, `isEmpty`, `compare`, `compareNoCase`, `startsWith`,
 `endsWith`, `indexOf`, `lastIndexOf`, `substring`, `charAt`, `trim`, `trimLeft`,
 `trimRight`, `left`, `right`, `insert`, `replace`, `padLeft`, `padRight`, методы смены

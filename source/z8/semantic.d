@@ -669,6 +669,7 @@ class Checker {
                     keyObjectVariables[p.name.text] = p.keyObjectClasses;
                 }
             }
+            if (m.isNativeDeclaration) continue;
             checkStatement(m.body);
             auto returns = analyzeControlFlow(m.body);
             if (returnType != ValueType.voidType && !returns) fail("method may finish without returning a value", m.name);
