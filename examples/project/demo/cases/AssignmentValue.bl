@@ -16,6 +16,8 @@ public class AssignmentValue {
         value = "abc";
         if (value.amount != 3) return 2;
         AssignmentHolder holder = new AssignmentHolder;
+        if (holder.preset.amount != 23 || holder.named.amount != 3) return 6;
+        if (holder.fromBase.amount != null || holder.fromLater.amount != null || holder.later != 33) return 7;
         effects = 0;
         receiver(holder).value = mark();
         if (holder.value.amount != 9 || effects != 12) return 3;

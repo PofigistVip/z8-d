@@ -1,3 +1,9 @@
 public class AssignmentHolder {
     public AssignmentValue value;
+    public AssignmentValue preset = 23;
+    public AssignmentValue named = "xyz";
+    public int base = 29;
+    public AssignmentValue fromBase = base;
+    public AssignmentValue fromLater = later;
+    public int later = 33;
 }

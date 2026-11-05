@@ -87,7 +87,7 @@ class Method {
     string operatorSymbol;
     bool isCastOperator;
 }
-class Field { ValueType type; Token name; Expression initializer; bool isPublic, isProtected, isStatic, isAuto, isRecord, declaredFinal; string objectName; Program objectClass; Program owner; }
+class Field { ValueType type; Token name; Expression initializer; bool isPublic, isProtected, isStatic, isAuto, isRecord, declaredFinal, userOperatorAssignment; string objectName; Program objectClass; Program owner; }
 struct Import { string name; Token token; }
 class Program {
     Token name;

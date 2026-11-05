@@ -574,15 +574,18 @@ package string emitPrograms(Program[] programs) {
             if (field.isStatic) hasStaticFields = true;
         }
         result ~= "override void z8_allocate_fields() {\nsuper.z8_allocate_fields();\n";
-        foreach (field; program.fields) if (!field.isStatic && field.initializer is null) {
+        foreach (field; program.fields) if (!field.isStatic && (field.initializer is null || field.userOperatorAssignment)) {
             auto initial = field.type == ValueType.intType ? "z8_optional_wrap(0L)" :
                 field.type == ValueType.boolType ? "z8_optional_wrap(false)" :
                 field.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(field.type, field.objectClass, true);
             result ~= "this.f_" ~ field.name.text ~ " = " ~ initial ~ ";\n";
         }
         result ~= "}\noverride void z8_init_references() {\n";
-        foreach (field; orderedReferenceFields(program))
-            result ~= "this.f_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
+        foreach (field; orderedReferenceFields(program)) {
+            if (field.userOperatorAssignment)
+                result ~= "z8_nonnull(this.f_" ~ field.name.text ~ ", -1).z8op_assign(" ~ emitExpr(field.initializer) ~ ");\n";
+            else result ~= "this.f_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
+        }
         result ~= "}\n";
         string autoInitializers;
         foreach (field; program.fields) if (!field.isStatic && field.type == ValueType.selfType) {

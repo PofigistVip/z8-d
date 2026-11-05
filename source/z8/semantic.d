@@ -411,8 +411,12 @@ class Checker {
             fieldInitialization = !field.isStatic;
             if (field.isStatic && field.initializer !is null && !isConstantInitializer(field.initializer))
                 fail("static field initializer must be a constant expression", field.name);
-            if (field.initializer !is null && !matchesInitializer(field.initializer, field.type, field.objectClass))
-                fail("field initializer type mismatch", field.name);
+            if (field.initializer !is null) {
+                auto direct = matchesInitializer(field.initializer, field.type, field.objectClass);
+                if (field.type == ValueType.selfType && !field.isStatic)
+                    field.userOperatorAssignment = useAssignmentOperator(field.objectClass, field.initializer, field.name, direct);
+                if (!direct && !field.userOperatorAssignment) fail("field initializer type mismatch", field.name);
+            }
         }
         fieldInitialization = false;
         foreach (m; program.methods) {
