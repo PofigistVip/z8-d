@@ -47,7 +47,7 @@ void z8_application_dispatch_query_read(wstring className) {
         auto name = parameterKeys.z8_get(i);
         if (name is null) throw new Exception("invalid query read parameter");
         if (name == "request"w || name == "session"w || name == "action"w || name == "fields"w || name == "start"w || name == "limit"w ||
-            name == "filter"w || name == "where"w || name == "quickFilter"w || name == "sort"w || name == "recordId"w) continue;
+            name == "filter"w || name == "where"w || name == "quickFilter"w || name == "sort"w || name == "recordId"w || name == "count"w) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported query read parameter: " ~ name.to!string);
     }
     auto query = z8_object_new_instance_native(z8_string_required(className));
@@ -160,7 +160,31 @@ void z8_application_dispatch_query_read(wstring className) {
         }
         read.where = z8_filter_combine(read.where, filter);
     }
-    z8_query_open(query, read);
+    bool prepared;
+    auto count = params.z8_get("count"w);
+    if (count !is null && z8_bool_parse(count)) {
+        auto counter = cast(IZ8QueryCounter)z8_query_executor(query);
+        if (counter is null) throw new Exception("query executor does not support count");
+        z8_query_prepare_read(query, read);
+        long total;
+        try { total = counter.count(query, read); }
+        catch (Throwable error) {
+            if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();
+            throw error;
+        }
+        z8_monitor_property(writer, "total"w, total);
+        if (!total || read.start <= total) {
+            if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();
+            return;
+        }
+        if (read.limit <= 0) {
+            if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();
+            throw new Exception("query count pagination requires a positive limit");
+        }
+        read.start = cast(int)(((total - 1) / read.limit) * read.limit);
+        prepared = true;
+    }
+    z8_query_open(query, read, true, prepared);
     scope(exit) z8_query_close(query);
     writer.start('[', "data"w);
     while (z8_optional_require(z8_query_next(query))) {

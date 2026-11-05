@@ -223,10 +223,10 @@ private IZ8QueryCursor z8_query_execute_read(Z8Object self, Z8QueryReadRequest r
     if (cursor is null) throw new Exception("query executor returned a null cursor");
     return cursor;
 }
-private void z8_query_open(Z8Object self, Z8QueryReadRequest request, bool useQueryLimit = true) {
+private void z8_query_open(Z8Object self, Z8QueryReadRequest request, bool useQueryLimit = true, bool prepared = false) {
     auto state = z8_query_state(self);
     if (z8_query_executor(self) is null) throw new Exception("query executor is not configured");
-    z8_query_prepare_read(self, request);
+    if (!prepared) z8_query_prepare_read(self, request);
     z8_query_close(self);
     if (useQueryLimit && request.limit < 0 && state.limit.present) request.limit = cast(int)state.limit.value;
     request.readLock = z8_query_read_lock(self);

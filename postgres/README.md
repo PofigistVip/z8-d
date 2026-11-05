@@ -102,6 +102,8 @@ includes the primary key. It supports `action=read`, a JSON `fields` array,
 non-negative `start` and `limit`, `recordId` (one GUID or a JSON array), JSON `sort`, and `filter`, `where` and
 `quickFilter` conditions. Sort and filter fields must be readable; malformed or empty filter
 expressions are rejected rather than ignored, while `[]` means no filter.
+With `count=true`, it returns `total`; if the requested offset is past the
+last record, it also returns the final page, matching Java `ReadAction`.
 As in the Java `ReadAction`, a nonempty `recordId` list replaces the request
 filters and query scope; an empty list keeps the normal filters and scope.
 Linked and computed fields, other read options and custom request parameters
