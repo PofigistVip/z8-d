@@ -19,6 +19,8 @@ class Z8File {
     Z8Date time;
     Z8Optional!long size;
     Z8StringMap details;
+    private bool hasUpload;
+    private ubyte[] upload;
     this() {
         id = z8_guid_zero(); user = z8_guid_zero();
         time = z8_date_now(); size = z8_optional_wrap(0L);
@@ -51,6 +53,15 @@ void z8_file_assign(Z8File value, wstring path) {
     value.name = z8_string_new(baseName(path.to!string).to!wstring);
 }
 Z8File z8_file_from_path(wstring path) { auto result = new Z8File(); z8_file_assign(result, path); return result; }
+// A request upload has a name and content but no filesystem path.
+Z8File z8_file_from_upload(wstring name, const(ubyte)[] contents) {
+    auto result = new Z8File();
+    result.name = z8_string_new(name);
+    result.size = z8_optional_wrap(cast(long)contents.length);
+    result.hasUpload = true;
+    result.upload = contents.dup;
+    return result;
+}
 wstring z8_file_path(Z8File value) { return z8_nonnull(value).path; }
 long z8_file_hashCode(Z8File value) { z8_nonnull(value); return value.id is null ? 0 : z8_guid_hash(value.id); }
 // JsonObject.quote in the Java runtime escapes only slashes following '<'
@@ -245,9 +256,11 @@ wstring z8_file_read(Z8File value) {
 }
 wstring z8_file_read(Z8File value, Z8Encoding encoding) {
     import std.file : read;
+    if (z8_nonnull(value).hasUpload) return z8_encoding_decode(value.upload, encoding);
     return z8_encoding_decode(cast(ubyte[])read(z8_file_system_path(value)), encoding);
 }
 Z8Binary z8_file_to_binary(Z8File value) {
+    if (z8_nonnull(value).hasUpload) return new Z8Binary(value.upload.dup);
     return z8_binary_from_file(z8_file_system_path(value));
 }
 Z8Date z8_file_lastModified(Z8File value) {
@@ -316,6 +329,7 @@ private File z8_file_open_output(Z8File value, bool append, out string path) {
         value.id = temporary.id; value.name = temporary.name; value.path = temporary.path;
         value.time = temporary.time; value.size = temporary.size; value.user = temporary.user;
         value.author = temporary.author; value.details = temporary.details;
+        value.hasUpload = false; value.upload = null;
         path = z8_file_system_path(value);
     } else path = z8_file_system_path(value);
     auto parent = dirName(path);
