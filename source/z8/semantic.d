@@ -22,6 +22,7 @@ class Checker {
     private Program returnObjectClass;
     private Program[] returnKeyObjectClasses;
     private size_t loopDepth;
+    private ValueType[Expression] binaryTypeCache;
     private void fail(string message, Token t) { throw new CompileException(message, t.position); }
     void bindBase(Program program, Program[string] programs) {
         currentProgram = program; allClasses = programs;
@@ -902,6 +903,23 @@ class Checker {
         }
     }
     private ValueType typeOf(Expression e, ValueType expected = ValueType.voidType) {
+        if (auto cached = e in binaryTypeCache) return *cached;
+        // Large left-associative chains otherwise recurse through typeOfRaw's
+        // large stack frame once per operator (notably generated SQL strings).
+        if (e.kind == ExprKind.binary) {
+            Expression[] chain;
+            for (auto node = e; node.kind == ExprKind.binary && !(node in binaryTypeCache); node = node.left)
+                chain ~= node;
+            if (chain.length > 1) {
+                scope (exit) foreach (node; chain) binaryTypeCache.remove(node);
+                foreach_reverse (node; chain)
+                    binaryTypeCache[node] = typeOfSingle(node, node is e ? expected : ValueType.voidType);
+                return binaryTypeCache[e];
+            }
+        }
+        return typeOfSingle(e, expected);
+    }
+    private ValueType typeOfSingle(Expression e, ValueType expected) {
         e.fieldInitialization = fieldInitialization;
         auto result = typeOfRaw(e, expected);
         if (e.parenthesisCount && result == ValueType.selfType && e.objectClass !is null)

@@ -210,7 +210,26 @@ unittest {
 private string dStorageType(ValueType type, Program objectClass = null, Program[] keyObjectClasses = null) {
     return type == ValueType.intType ? "Z8Optional!long" : type == ValueType.boolType ? "Z8Optional!bool" : type == ValueType.decimalType ? "Z8Optional!Z8Decimal" : dType(type, objectClass, keyObjectClasses);
 }
+// Cached only while walking one left-associated binary chain; D's module
+// globals are thread-local, and overrides used by argument staging take priority.
+private string[Expression] binaryEmissionCache;
 private string emitExpr(Expression e) {
+    if (!e.emittedOverride.length) {
+        if (auto cached = e in binaryEmissionCache) return *cached;
+        if (e.kind == ExprKind.binary) {
+            Expression[] chain;
+            for (auto node = e; node.kind == ExprKind.binary && !node.emittedOverride.length && !(node in binaryEmissionCache); node = node.left)
+                chain ~= node;
+            if (chain.length > 1) {
+                scope (exit) foreach (node; chain) binaryEmissionCache.remove(node);
+                foreach_reverse (node; chain) binaryEmissionCache[node] = emitExprSingle(node);
+                return binaryEmissionCache[e];
+            }
+        }
+    }
+    return emitExprSingle(e);
+}
+private string emitExprSingle(Expression e) {
     string value;
     bool deferArguments;
     if (!e.emittedOverride.length && e.kind == ExprKind.memberCall && !e.instanceCall && !e.targetClass.length)
