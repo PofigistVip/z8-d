@@ -85,4 +85,27 @@ void main() {
     subprocess.run(["dmd", str(autoload), *import_args(), str(runtime_lib), "-of=" + str(auto_exe)], cwd=temp, check=True)
     environment = dict(os.environ, Z8_NLS_FILES=os.pathsep.join((str(nls), str(override), str(override_be))))
     subprocess.run([str(auto_exe)], cwd=temp, env=environment, check=True)
+    # Auto-discovery follows the server's _<language>.nls / .xml naming rules.
+    resources = temp / "resources"
+    resources.mkdir()
+    (resources / "a_ru.nls").write_text('<properties><entry key="hello">Первый</entry></properties>', encoding="utf-8")
+    (resources / "b_ru.xml").write_text('<properties><entry key="hello">Русский</entry></properties>', encoding="utf-8")
+    (resources / "a_en.nls").write_text('<properties><entry key="hello">English</entry></properties>', encoding="utf-8")
+    (resources / "ignored.nls").write_text('not an XML file', encoding="utf-8")
+    discover = temp / "discover.d"
+    discover.write_text('''import z8.runtime;
+import std.conv : to;
+void main(string[] args) { assert(z8_string_new("$hello$"w) == args[1].to!wstring); }
+''', encoding="utf-8")
+    discover_exe = temp / ("discover.exe" if os.name == "nt" else "discover")
+    subprocess.run(["dmd", str(discover), *import_args(), str(runtime_lib), "-of=" + str(discover_exe)], cwd=temp, check=True)
+    environment = dict(os.environ)
+    for key in ("Z8_NLS_FILES", "Z8_NLS_DIR", "Z8_LANGUAGE"):
+        environment.pop(key, None)
+    subprocess.run([str(discover_exe), "Русский"], cwd=temp, env=environment, check=True)
+    environment["Z8_LANGUAGE"] = "en"
+    subprocess.run([str(discover_exe), "English"], cwd=temp, env=environment, check=True)
+    environment["Z8_NLS_DIR"] = str(resources)
+    environment["Z8_NLS_FILES"] = str(override_be)
+    subprocess.run([str(discover_exe), "Итог"], cwd=temp, env=environment, check=True)
 print("NLS resources match Java XML properties")

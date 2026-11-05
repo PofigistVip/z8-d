@@ -1,167 +1,6 @@
 // Java XML-properties resources used by Z8 .nls files.
-private class Z8NlsReader {
-    wstring text;
-    size_t position;
-    this(wstring input) { text = input; if (text.length && text[0] == 0xFEFF) ++position; }
-    bool starts(wstring value) { return position + value.length <= text.length && text[position .. position + value.length] == value; }
-    void expect(wstring value) {
-        if (!starts(value)) throw new Exception("expected " ~ value.to!string ~ " in NLS XML at " ~ position.to!string);
-        position += value.length;
-    }
-    void whitespace() { while (position < text.length && " \t\r\n"w.canFind(text[position])) ++position; }
-    void until(wstring end) {
-        while (position < text.length && !starts(end)) ++position;
-        expect(end);
-    }
-    void misc() {
-        for (;;) {
-            whitespace();
-            if (starts("<!--"w)) { position += 4; until("-->"w); }
-            else if (starts("<?"w)) { position += 2; until("?>"w); }
-            else if (starts("<!DOCTYPE"w)) {
-                position += 9;
-                wchar quote = 0;
-                int brackets;
-                while (position < text.length) {
-                    auto c = text[position++];
-                    if (quote) { if (c == quote) quote = 0; }
-                    else if (c == '\'' || c == '"') quote = c;
-                    else if (c == '[') ++brackets;
-                    else if (c == ']') --brackets;
-                    else if (c == '>' && !brackets) break;
-                }
-                if (position > text.length || text[position - 1] != '>') throw new Exception("invalid NLS DOCTYPE");
-            } else break;
-        }
-    }
-    wstring name() {
-        auto start = position;
-        while (position < text.length) {
-            auto c = text[position];
-            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == ':' || c == '.')) break;
-            ++position;
-        }
-        if (position == start) throw new Exception("invalid NLS XML name");
-        return text[start .. position];
-    }
-    wstring decode(wstring source) {
-        import std.utf : encode;
-        wchar[] result;
-        size_t i;
-        while (i < source.length) {
-            auto c = source[i++];
-            if (c != '&') { result ~= c; continue; }
-            auto start = i;
-            while (i < source.length && source[i] != ';') ++i;
-            if (i == source.length) throw new Exception("invalid NLS entity");
-            auto entity = source[start .. i++];
-            if (entity == "amp"w) result ~= '&';
-            else if (entity == "lt"w) result ~= '<';
-            else if (entity == "gt"w) result ~= '>';
-            else if (entity == "quot"w) result ~= '"';
-            else if (entity == "apos"w) result ~= '\'';
-            else if (entity.length > 1 && entity[0] == '#') {
-                size_t digit = 1;
-                uint base = 10, code;
-                if (digit < entity.length && entity[digit] == 'x') { base = 16; ++digit; }
-                if (digit == entity.length) throw new Exception("invalid NLS character reference");
-                for (; digit < entity.length; ++digit) {
-                    auto ch = entity[digit];
-                    int n = ch >= '0' && ch <= '9' ? ch - '0' : ch >= 'a' && ch <= 'f' ? ch - 'a' + 10 : ch >= 'A' && ch <= 'F' ? ch - 'A' + 10 : -1;
-                    if (n < 0 || n >= base || code > (0x10FFFFu - n) / base) throw new Exception("invalid NLS character reference");
-                    code = code * base + n;
-                }
-                if ((code < 0x20 && code != 9 && code != 10 && code != 13) || code > 0x10FFFF ||
-                    (code >= 0xD800 && code <= 0xDFFF) || code == 0xFFFE || code == 0xFFFF)
-                    throw new Exception("invalid NLS character reference");
-                encode(result, cast(dchar)code);
-            } else throw new Exception("unsupported NLS entity");
-        }
-        return result.idup;
-    }
-    wstring[wstring] startTag(wstring tag, out bool empty) {
-        expect("<"w);
-        if (name() != tag) throw new Exception("unexpected NLS element");
-        wstring[wstring] attributes;
-        for (;;) {
-            whitespace();
-            if (starts("/>"w)) { position += 2; empty = true; return attributes; }
-            if (starts(">"w)) { ++position; return attributes; }
-            auto key = name(); whitespace(); expect("="w); whitespace();
-            if (position >= text.length || (text[position] != '\'' && text[position] != '"')) throw new Exception("invalid NLS attribute");
-            auto quote = text[position++], begin = position;
-            while (position < text.length && text[position] != quote) ++position;
-            if (position == text.length || key in attributes) throw new Exception("invalid NLS attribute");
-            attributes[key] = decode(text[begin .. position]);
-            ++position;
-        }
-    }
-    wstring content(wstring tag) {
-        wstring value;
-        for (;;) {
-            auto begin = position;
-            while (position < text.length && text[position] != '<') ++position;
-            value ~= decode(text[begin .. position]);
-            if (starts("<!--"w)) { position += 4; until("-->"w); continue; }
-            if (starts("<![CDATA["w)) {
-                position += 9;
-                begin = position;
-                while (position < text.length && !starts("]]>"w)) ++position;
-                value ~= text[begin .. position]; expect("]]>"w);
-                continue;
-            }
-            expect("</"w);
-            if (name() != tag) throw new Exception("unexpected NLS end tag");
-            whitespace(); expect(">"w);
-            return value;
-        }
-    }
-    wstring[wstring] parse() {
-        misc();
-        bool empty;
-        startTag("properties"w, empty);
-        wstring[wstring] entries;
-        if (!empty) for (;;) {
-            misc();
-            if (starts("</"w)) { position += 2; if (name() != "properties"w) throw new Exception("invalid NLS root"); whitespace(); expect(">"w); break; }
-            if (starts("<comment"w)) { startTag("comment"w, empty); if (!empty) content("comment"w); }
-            else {
-                auto attributes = startTag("entry"w, empty);
-                auto key = "key"w in attributes;
-                if (key is null) throw new Exception("missing NLS key");
-                entries[*key] = empty ? ""w : content("entry"w);
-            }
-        }
-        misc();
-        if (position != text.length) throw new Exception("unexpected NLS content");
-        return entries;
-    }
-}
-
 size_t z8_string_load_nls(string path) {
-    import std.file : read;
-    import std.string : replace;
-    import std.utf : validate;
-    auto bytes = cast(const(ubyte)[])read(path);
-    bool little, utf16;
-    size_t start;
-    if (bytes.length >= 2) {
-        if (bytes[0] == 0xFF && bytes[1] == 0xFE) { utf16 = little = true; start = 2; }
-        else if (bytes[0] == 0xFE && bytes[1] == 0xFF) { utf16 = true; start = 2; }
-        else if (bytes[0] == 0 && bytes[1] == '<') utf16 = true;
-        else if (bytes[0] == '<' && bytes[1] == 0) { utf16 = little = true; }
-    }
-    wstring input;
-    if (utf16) {
-        if ((bytes.length - start) % 2) throw new Exception("invalid UTF-16 NLS file");
-        wchar[] units;
-        for (size_t i = start; i < bytes.length; i += 2)
-            units ~= cast(wchar)(little ? bytes[i] | (cast(uint)bytes[i + 1] << 8) : (cast(uint)bytes[i] << 8) | bytes[i + 1]);
-        input = units.idup;
-        validate(input);
-    } else input = (cast(string)bytes).to!wstring;
-    input = input.replace("\r\n"w, "\n"w).replace("\r"w, "\n"w);
-    auto entries = (new Z8NlsReader(input)).parse();
+    auto entries = z8_nls_read(path);
     foreach (key, value; entries) z8_string_set_resource(key, value);
     auto trueValue = "bool.true"w in entries, falseValue = "bool.false"w in entries;
     if (trueValue !is null || falseValue !is null)
@@ -170,10 +9,24 @@ size_t z8_string_load_nls(string path) {
     return entries.length;
 }
 
+// Match the server's language-specific bundle names, with deterministic ordering.
+size_t z8_string_load_nls_directory(string directory, string language) {
+    auto files = z8_nls_find_files(directory, language);
+    foreach (file; files) z8_string_load_nls(file);
+    return files.length;
+}
+
 shared static this() {
-    import std.path : pathSeparator;
+    import std.file : thisExePath;
+    import std.path : buildPath, dirName, pathSeparator;
     import std.process : environment;
     import std.string : split;
+    auto directories = environment.get("Z8_NLS_DIR", "");
+    auto language = environment.get("Z8_LANGUAGE", "ru");
+    if (directories.length) {
+        foreach (directory; directories.split(pathSeparator))
+            if (directory.length) z8_string_load_nls_directory(directory, language);
+    } else z8_string_load_nls_directory(buildPath(dirName(thisExePath()), "resources"), language);
     auto files = environment.get("Z8_NLS_FILES", "");
     foreach (path; files.split(pathSeparator)) if (path.length) z8_string_load_nls(path);
 }

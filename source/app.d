@@ -12,6 +12,7 @@ import std.json : JSONValue;
 import std.stdio : stderr, write, writeln;
 import z8.lexer;
 import z8.compiler : compile, compileSources, SourceUnit, GeneratedModule, CompileException;
+import z8.nls : checkResources;
 
 private SourceUnit[] readProject(string root) {
     root = absolutePath(root);
@@ -105,12 +106,24 @@ private int buildExecutable(GeneratedModule[] modules, string outputPath) {
 int main(string[] args) {
     bool valid = args.length == 3 && (args[1] == "lex" || args[1] == "compile") ||
                  args.length == 4 && args[1] == "project" ||
-                 args.length == 5 && args[1] == "build";
+                 args.length == 5 && (args[1] == "build" || args[1] == "check-resources");
     if (!valid) {
-        stderr.writeln("Usage: z8d <lex|compile> <file.bl> | z8d project <source-root> <output-dir> | z8d build <source-root> <class.method> <output>");
+        stderr.writeln("Usage: z8d <lex|compile> <file.bl> | z8d project <source-root> <output-dir> | z8d build <source-root> <class.method> <output> | z8d check-resources <source-root> <resources-dir> <language>");
         return 2;
     }
     try {
+        if (args[1] == "check-resources") {
+            auto units = readProject(args[2]);
+            compileSources(units);
+            size_t count;
+            auto missing = checkResources(units, args[3], args[4], count);
+            foreach (item; missing)
+                stderr.writefln("%s:%s:%s: missing resource '%s' for language '%s'", item.path,
+                    item.token.position.line + 1, item.token.position.column + 1, item.key.to!string, args[4]);
+            if (missing.length) return 1;
+            writeln("Checked resources for ", units.length, " BL files against ", count, " bundles");
+            return 0;
+        }
         if (args[1] == "compile") { write(compile(readText(args[2]))); return 0; }
         if (args[1] == "project") {
             auto modules = compileSources(readProject(args[2]));
