@@ -47,7 +47,7 @@ void z8_application_dispatch_query_read(wstring className) {
         auto name = parameterKeys.z8_get(i);
         if (name is null) throw new Exception("invalid query read parameter");
         if (name == "request"w || name == "session"w || name == "action"w || name == "fields"w || name == "start"w || name == "limit"w ||
-            name == "filter"w || name == "where"w || name == "quickFilter"w) continue;
+            name == "filter"w || name == "where"w || name == "quickFilter"w || name == "sort"w) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported query read parameter: " ~ name.to!string);
     }
     auto query = z8_object_new_instance_native(z8_string_required(className));
@@ -102,6 +102,30 @@ void z8_application_dispatch_query_read(wstring className) {
     if (!limit) limit = z8_query_limit(query);
     Z8QueryReadRequest read;
     read.fields = selected; read.start = cast(int)start; read.limit = cast(int)limit;
+    auto sorting = params.z8_get("sort"w);
+    if (sorting !is null && sorting.length) {
+        auto parsed = z8_json_parse(sorting.to!string);
+        if (parsed.type != JSONType.array) throw new Exception("query sort must be a JSON array");
+        foreach (item; parsed.array) {
+            if (item.type != JSONType.object) throw new Exception("invalid query sort entry");
+            auto property = "property" in item.object, direction = "direction" in item.object;
+            if (property is null || property.type != JSONType.string || !property.str.length ||
+                (direction !is null && direction.type != JSONType.string)) throw new Exception("invalid query sort entry");
+            auto field = z8_query_find_field_id(query, property.str.to!wstring);
+            auto order = direction is null ? "asc"w : z8_str_toLowerCase(direction.str.to!wstring);
+            z8_field_set_sort_direction(field, order);
+            bool exists;
+            foreach (existing; read.sortFields) if (existing is field) { exists = true; break; }
+            if (!exists) read.sortFields ~= field;
+        }
+    }
+    if (!read.sortFields.length) read.sortFields = z8_query_array(query, "sortFields"w);
+    foreach (field; read.sortFields) {
+        if (field.z8_get_owner() !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
+            throw new Exception("linked and computed sort fields are not supported");
+        auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
+        if (field !is key && !privileges.getFieldAccess(queryKey, fieldKey).read) throw new Exception("query sort field access denied");
+    }
     foreach (name; ["filter"w, "where"w, "quickFilter"w]) {
         auto json = params.z8_get(name);
         if (json is null || !json.length) continue;

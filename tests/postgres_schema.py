@@ -606,6 +606,23 @@ void main(string[] args) {
     queryUser.privileges.setRequestAccess(bootRequestKey, Z8Access.init);
     assert(rejectedRead("fields"w, `["title"]`w));
     queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
+    db.execute(`INSERT INTO "z8_bootstrap"."Sample;--" ("RecordId", "Title", "Amount") VALUES ('00000000-0000-0000-0000-00000000012E', 'Second', 10)`);
+    long sortedAmount(wstring sorting, wstring start = "0"w) {
+        auto sorted = new Z8ApplicationRequest(); sorted.session = querySession; sorted.monitor = new Z8RequestMonitor();
+        sorted.parameters.z8_add("action"w, "read"w); sorted.parameters.z8_add("fields"w, `["amount"]`w);
+        sorted.parameters.z8_add("sort"w, sorting); sorted.parameters.z8_add("start"w, start); sorted.parameters.z8_add("limit"w, "1"w);
+        z8_application_set_request(sorted); z8_application_start_response(sorted, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+        z8_application_finish_response(sorted, cast(Z8RequestMonitor)sorted.monitor);
+        return parseJSON(z8_application_response_text(sorted).to!string)["data"][0]["amount"].integer;
+    }
+    assert(sortedAmount(`[{"property":"amount"}]`w) == 10);
+    assert(sortedAmount(`[{"property":"amount","direction":"DESC"}]`w) == 42);
+    assert(sortedAmount(`[{"property":"amount","direction":"DESC"}]`w, "1"w) == 10);
+    assert(rejectedRead("sort"w, `[{"property":"amount","direction":"invalid"}]`w));
+    assert(rejectedRead("sort"w, `[{"property":"computed"}]`w));
+    queryUser.privileges.setFieldAccess(bootFieldKey, Z8Access.init);
+    assert(rejectedRead("sort"w, `[{"property":"title"}]`w));
+    queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
     z8_application_set_request(priorReadRequest); z8_connection_set_current(priorReadBackend);
     auto noRoles = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(999));
     assert(noRoles.roleIds.length == 0 && !noRoles.privileges.getTableAccess(bootTableKey).read && !noRoles.privileges.getRequestAccess(bootRequestKey).execute);

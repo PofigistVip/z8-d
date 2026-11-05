@@ -56,7 +56,7 @@ private interface IZ8FieldSlot {
     Z8Primary get();
     void put(Z8Primary value);
 }
-private interface IZ8FieldSortCell { wstring text(); }
+private interface IZ8FieldSortCell { wstring text(); void put(wstring direction); }
 private class Z8FieldSortCell(T) : IZ8FieldSortCell {
     T value;
     this() { value = T.e_Asc; }
@@ -65,6 +65,11 @@ private class Z8FieldSortCell(T) : IZ8FieldSortCell {
         if (value is T.e_Desc) return "desc"w;
         if (value is null) return "null"w;
         throw new Exception("invalid field sort direction");
+    }
+    void put(wstring direction) {
+        if (direction == "asc"w) value = T.e_Asc;
+        else if (direction == "desc"w) value = T.e_Desc;
+        else throw new Exception("invalid field sort direction");
     }
 }
 private interface IZ8FieldOrderCell { IZ8ObjectArrayView view(); }
@@ -83,6 +88,7 @@ class Z8FieldState {
     private IZ8FieldSlot slot;
     private IZ8FieldAggregationCell aggregationCell;
     private IZ8FieldSortCell sortCell;
+    private wstring initialSort = "asc"w;
     private IZ8FieldOrderCell orderCell;
     private IZ8FieldOrderCell usedFieldsCell, columnsCell;
     private Z8FieldAggregation initialAggregation;
@@ -127,7 +133,7 @@ ref T z8_field_sort_ref(T)(Z8Object self) {
     auto cell = cast(Z8FieldSortCell!T)state.sortCell;
     if (cell is null) {
         if (state.sortCell !is null) throw new Exception("incompatible sort direction enum");
-        cell = new Z8FieldSortCell!T(); state.sortCell = cell;
+        cell = new Z8FieldSortCell!T(); cell.put(state.initialSort); state.sortCell = cell;
     }
     return cell.value;
 }
@@ -232,8 +238,13 @@ Z8FieldIndexOptions z8_field_index_options(Z8Object self) {
         state.caseInsensitive.present && state.caseInsensitive.value);
 }
 wstring z8_field_sort_direction(Z8Object self) {
-    auto cell = z8_field_state(self).sortCell;
-    return cell is null ? "asc"w : cell.text();
+    auto state = z8_field_state(self);
+    return state.sortCell is null ? state.initialSort : state.sortCell.text();
+}
+void z8_field_set_sort_direction(Z8Object self, wstring direction) {
+    if (direction != "asc"w && direction != "desc"w) throw new Exception("invalid field sort direction");
+    auto state = z8_field_state(self);
+    if (state.sortCell is null) state.initialSort = direction; else state.sortCell.put(direction);
 }
 T z8_field_type(T)(Z8Object self) {
     switch (z8_field_type_name(self)) {
@@ -361,7 +372,7 @@ wstring z8_field_sql_format(Z8Object self, Z8SqlVendor vendor, bool booleanLogic
                 if (distinct && item != baseExpression) throw new Exception("distinct aggregate order field must match expression");
                 if (i) orderFields ~= ", "w;
                 auto orderState = z8_field_state(field);
-                orderFields ~= item ~ " "w ~ (orderState.sortCell is null ? "asc"w : orderState.sortCell.text());
+                orderFields ~= item ~ " "w ~ (orderState.sortCell is null ? orderState.initialSort : orderState.sortCell.text());
             }
             auto clause = " ORDER BY "w ~ orderFields;
             if (z8_sql_field_options.orderBy) {
