@@ -49,6 +49,23 @@ private interface IZ8FieldSlot {
     Z8Primary get();
     void put(Z8Primary value);
 }
+private interface IZ8FieldSortCell { wstring text(); }
+private class Z8FieldSortCell(T) : IZ8FieldSortCell {
+    T value;
+    this() { value = T.e_Asc; }
+    wstring text() {
+        if (value is T.e_Asc) return "asc"w;
+        if (value is T.e_Desc) return "desc"w;
+        if (value is null) return "null"w;
+        throw new Exception("invalid field sort direction");
+    }
+}
+private interface IZ8FieldOrderCell { IZ8ObjectArrayView view(); }
+private class Z8FieldOrderCell(T) : IZ8FieldOrderCell if (is(T : Z8Object)) {
+    Z8ObjectArray!T value;
+    this() { value = new Z8ObjectArray!T(); }
+    IZ8ObjectArrayView view() { return value; }
+}
 private class Z8FieldSlot(T, Base = T) : IZ8FieldSlot {
     T item;
     Z8Primary get() { return z8_primary_box(item); }
@@ -58,6 +75,8 @@ class Z8FieldState {
     private Z8Primary boxedValue;
     private IZ8FieldSlot slot;
     private IZ8FieldAggregationCell aggregationCell;
+    private IZ8FieldSortCell sortCell;
+    private IZ8FieldOrderCell orderCell;
     private Z8FieldAggregation initialAggregation;
     private Z8Primary originalValue;
     bool changed, wasNull = true;
@@ -89,6 +108,24 @@ class Z8FieldState {
 }
 private auto z8_field_metadata_address(string member)(Z8Object self) {
     return &__traits(getMember, z8_field_state(self), member);
+}
+ref T z8_field_sort_ref(T)(Z8Object self) {
+    auto state = z8_field_state(self);
+    auto cell = cast(Z8FieldSortCell!T)state.sortCell;
+    if (cell is null) {
+        if (state.sortCell !is null) throw new Exception("incompatible sort direction enum");
+        cell = new Z8FieldSortCell!T(); state.sortCell = cell;
+    }
+    return cell.value;
+}
+ref Z8ObjectArray!T z8_field_order_ref(T)(Z8Object self) if (is(T : Z8Object)) {
+    auto state = z8_field_state(self);
+    auto cell = cast(Z8FieldOrderCell!T)state.orderCell;
+    if (cell is null) {
+        if (state.orderCell !is null) throw new Exception("incompatible array order field type");
+        cell = new Z8FieldOrderCell!T(); state.orderCell = cell;
+    }
+    return cell.value;
 }
 ref T z8_field_aggregation_ref(T)(Z8Object self) {
     auto state = z8_field_state(self);
@@ -180,9 +217,50 @@ wstring z8_field_sql_format(Z8Object self, Z8SqlVendor vendor, bool booleanLogic
         return expression;
     auto isGuid = z8_native_is_instance("org.zenframework.z8.server.base.table.value.GuidField"w, self);
     auto isGeometry = z8_native_is_instance("org.zenframework.z8.server.base.table.value.GeometryField"w, self);
-    auto isText = z8_native_is_instance("org.zenframework.z8.server.base.table.value.TextField"w, self);
+    auto isText = z8_native_is_instance("org.zenframework.z8.server.base.table.value.TextField"w, self) ||
+        z8_native_is_instance("org.zenframework.z8.server.base.table.value.TextExpression"w, self);
     auto isFile = z8_native_is_instance("org.zenframework.z8.server.base.table.value.FileField"w, self);
     if (aggregation == Z8FieldAggregation.array || aggregation == Z8FieldAggregation.distinct) {
+        auto order = state.orderCell is null ? null : state.orderCell.view();
+        if (order !is null && order.z8_erased_data().z8_size()) {
+            if (isText && !isFile) {
+                if (vendor == Z8SqlVendor.Postgres) expression = "CONVERT_FROM("w ~ expression ~ ", 'UTF8')"w;
+                else if (vendor == Z8SqlVendor.Oracle) expression = "UTL_RAW.CAST_TO_NVARCHAR2("w ~ expression ~ ")"w;
+                else if (vendor == Z8SqlVendor.SqlServer) expression = "Cast("w ~ expression ~ " as nvarchar(max))"w;
+            }
+            auto baseExpression = expression;
+            auto distinct = aggregation == Z8FieldAggregation.distinct;
+            if (distinct) {
+                if (!z8_sql_field_options.orderBy && vendor == Z8SqlVendor.SqlServer)
+                    expression = "DISTINCT '\"' + "w ~ expression ~ " + '\"'"w;
+                else expression = "DISTINCT "w ~ expression;
+            }
+            wstring orderFields;
+            auto previous = z8_sql_field_options;
+            z8_sql_field_options.aggregation = false;
+            scope(exit) z8_sql_field_options = previous;
+            auto fields = order.z8_erased_data();
+            for (long i; i < fields.z8_size(); ++i) {
+                auto field = cast(Z8Object)fields.z8_get(i);
+                auto item = z8_field_sql_format(z8_nonnull(field), vendor);
+                if (distinct && item != baseExpression) throw new Exception("distinct aggregate order field must match expression");
+                if (i) orderFields ~= ", "w;
+                auto orderState = z8_field_state(field);
+                orderFields ~= item ~ " "w ~ (orderState.sortCell is null ? "asc"w : orderState.sortCell.text());
+            }
+            auto clause = " ORDER BY "w ~ orderFields;
+            if (z8_sql_field_options.orderBy) {
+                if (vendor == Z8SqlVendor.Postgres) return "array_agg("w ~ expression ~ clause ~ ")"w;
+                return (vendor == Z8SqlVendor.SqlServer ? "STRING_AGG("w : "LISTAGG("w) ~ expression ~ ", ',') WITHIN GROUP (ORDER BY "w ~ orderFields ~ ")"w;
+            }
+            if (vendor == Z8SqlVendor.Postgres) return "json_agg("w ~ expression ~ clause ~ ")"w;
+            if (vendor == Z8SqlVendor.Oracle || vendor == Z8SqlVendor.H2) return "JSON_ARRAYAGG("w ~ expression ~ clause ~ ")"w;
+            if (vendor == Z8SqlVendor.SqlServer) {
+                if (!distinct) expression = "'\"' + "w ~ expression ~ " + '\"'"w;
+                return "'[' + STRING_AGG("w ~ expression ~ ", ',') WITHIN GROUP (ORDER BY "w ~ orderFields ~ ") + ']'"w;
+            }
+            throw new Exception("unsupported SQL database vendor");
+        }
         if (vendor == Z8SqlVendor.Oracle) return "collect("w ~ expression ~ ")"w;
         if (vendor != Z8SqlVendor.Postgres) throw new Exception("unsupported SQL database vendor");
         if (isText && !isFile) expression = "CONVERT_FROM("w ~ expression ~ ", 'UTF8')"w;

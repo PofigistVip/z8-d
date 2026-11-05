@@ -35,6 +35,7 @@ import org.zenframework.z8.base.table.value.BinaryField;
 import org.zenframework.z8.base.table.value.GeometryField;
 import org.zenframework.z8.base.table.value.TextField;
 import org.zenframework.z8.base.table.value.FileField;
+import org.zenframework.z8.base.table.SortDirection;
 public class Probe {
     public static IntField number() { IntField value; return value; }
     public static StringField text() { StringField value; return value; }
@@ -62,6 +63,11 @@ public class Probe {
     public static sql_string fileSql(FileField value) { return value.sql_string(); }
     public static sql_bool inVector(Field value, primary[] values) { return value.inVector(values); }
     public static sql_bool notInVector(Field value, primary[] values) { return value.notInVector(values); }
+    public static void addOrder(Field target, Field order, bool descending) {
+        target.arrayOrderBy.add(order);
+        if (descending) order.sortDirection = SortDirection.Desc; else order.sortDirection = SortDirection.Asc;
+    }
+    public static void clearOrder(Field target) { target.arrayOrderBy.clear(); }
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -70,6 +76,7 @@ public class Probe {
 import org.zenframework.z8.server.base.table.value.*;
 import org.zenframework.z8.server.db.DatabaseVendor;
 import org.zenframework.z8.server.db.sql.*;
+import org.zenframework.z8.server.db.sql.functions.*;
 import org.zenframework.z8.server.types.sql.*;
 import org.zenframework.z8.server.types.*;
 import org.zenframework.z8.server.runtime.RCollection;
@@ -114,6 +121,27 @@ public class SqlFieldOracle {
                     }
             }
         }
+        Field[] targets = {number, longText, file}; Field sort = new IntegerField(null);
+        options.setFieldAlias(sort, "T.sort");
+        for (Field field : targets) options.setFieldAlias(field, "T.col");
+        for (boolean order : new boolean[] {false, true}) {
+            options.setOrderBy(order);
+            for (Aggregation aggregation : new Aggregation[] {Aggregation.Array, Aggregation.Distinct})
+                for (int i = 0; i < targets.length; i++) for (boolean same : new boolean[] {false, true})
+                    for (boolean desc : new boolean[] {false, true}) {
+                        Field target = targets[i]; target.aggregation = aggregation;
+                        Field sortField = same ? target : sort;
+                        sortField.sortDirection = desc ? SortDirection.Desc : SortDirection.Asc;
+                        for (DatabaseVendor vendor : new DatabaseVendor[] {DatabaseVendor.Oracle, DatabaseVendor.SqlServer, DatabaseVendor.Postgres, DatabaseVendor.H2}) {
+                            SqlToken token = new SqlStringToken("T.col", target.type());
+                            SqlToken aggregate = order ? new ArrayAgg(token, aggregation == Aggregation.Distinct, Arrays.asList(sortField)) :
+                                                         new JsonAgg(token, aggregation == Aggregation.Distinct, Arrays.asList(sortField));
+                            String result;
+                            try { result = aggregate.format(vendor, options); } catch (RuntimeException error) { result = "ERROR"; }
+                            System.out.println("O:" + order + ":" + aggregation.name() + ":" + i + ":" + same + ":" + desc + ":" + vendor + ":" + result);
+                        }
+                    }
+        }
     }
 }
 ''', encoding="utf-8")
@@ -121,7 +149,8 @@ public class SqlFieldOracle {
     aggregation_java = original / "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/Aggregation.java"
     functions_java = original / "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/db/sql/functions"
     subprocess.run(["javac", "-source", "8", "-target", "8", "-cp", cp, "-d", str(temp), str(aggregation_java),
-                    str(functions_java / "Array.java"), str(functions_java / "Distinct.java"), str(java)], check=True)
+                    str(functions_java / "Array.java"), str(functions_java / "Distinct.java"),
+                    *[str(functions_java / (name + ".java")) for name in ("Agg", "JsonAgg", "ArrayAgg", "JsonDistinct")], str(java)], check=True)
     expected = subprocess.check_output(["java", "-cp", str(temp) + os.pathsep + cp, "SqlFieldOracle"], text=True, encoding="utf-8").splitlines()
     harness = temp / "main.d"
     harness.write_text('''
@@ -195,6 +224,33 @@ void main() {
             }
         }
     }
+    auto sort = P.m_number(); z8_field_bind_sql(sort, null, null, "T.sort"w);
+    auto orderedTargets = [cast(Z8Object)number, cast(Z8Object)longText, cast(Z8Object)file];
+    foreach (order; [false, true]) {
+        z8_sql_set_field_options(Z8SqlFieldFormatOptions(true, order));
+        foreach (aggregation; [Z8FieldAggregation.array, Z8FieldAggregation.distinct])
+            foreach (i, target; orderedTargets) foreach (same; [false, true]) foreach (desc; [false, true]) {
+                z8_field_set_aggregation(target, aggregation);
+                // Exercise the BL properties and methods, including inherited views.
+                if (i == 0) { P.m_clearOrder(number); P.m_addOrder(number, same ? number : sort, desc); }
+                else if (i == 1) { P.m_clearOrder(longText); P.m_addOrder(longText, same ? longText : sort, desc); }
+                else { P.m_clearOrder(file); P.m_addOrder(file, same ? file : sort, desc); }
+                foreach (vendor; vendors) {
+                    string result;
+                    try { result = z8_field_sql_format(target, vendor).to!string; } catch (Exception) { result = "ERROR"; }
+                    writeln("O:", order, ":", aggregation == Z8FieldAggregation.array ? "Array" : "Distinct", ":", i, ":", same, ":", desc, ":", vendor, ":", result);
+                }
+            }
+    }
+    P.m_clearOrder(number); P.m_addOrder(number, number, false); P.m_addOrder(number, sort, true);
+    z8_field_set_aggregation(number, Z8FieldAggregation.array);
+    z8_field_set_aggregation(sort, Z8FieldAggregation.sum);
+    z8_sql_set_field_options(Z8SqlFieldFormatOptions(true, false));
+    assert(z8_field_sql_format(number, Z8SqlVendor.Postgres) == "json_agg(T.col ORDER BY T.col asc, T.sort desc)"w);
+    z8_field_set_aggregation(number, Z8FieldAggregation.distinct);
+    bool mismatched; try { z8_field_sql_format(number, Z8SqlVendor.Postgres); } catch (Exception) { mismatched = true; }
+    assert(mismatched && z8_field_sql_format(sort, Z8SqlVendor.Postgres) == "sum(T.sort)"w);
+    P.m_clearOrder(number);
     z8_field_set_aggregation(number, Z8FieldAggregation.sum);
     z8_sql_set_field_options(Z8SqlFieldFormatOptions(true, false));
     auto thread = new Thread({ assert(z8_sql_int_format(intSql) == "(T.col)"w); });

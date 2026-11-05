@@ -1006,6 +1006,14 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 field.name.text == "aggregation" && !field.isStatic && field.type == ValueType.enumType && field.objectClass !is null) {
                 result ~= "@property ref " ~ storageType ~ " f_aggregation() { return z8_field_aggregation_ref!(" ~
                     field.objectClass.emittedName ~ ")(this); }\n";
+            } else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.value.Field"w &&
+                field.name.text == "sortDirection" && !field.isStatic && field.type == ValueType.enumType && field.objectClass !is null) {
+                result ~= "@property ref " ~ storageType ~ " f_sortDirection() { return z8_field_sort_ref!(" ~
+                    field.objectClass.emittedName ~ ")(this); }\n";
+            } else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.value.Field"w &&
+                field.name.text == "arrayOrderBy" && !field.isStatic && field.type == ValueType.selfArray && field.objectClass !is null) {
+                result ~= "@property ref " ~ storageType ~ " f_arrayOrderBy() { return z8_field_order_ref!(" ~
+                    field.objectClass.emittedName ~ ")(this); }\n";
             } else if (program.isNative && program.nativeName == "org.zenframework.z8.server.runtime.OBJECT"w &&
                 field.name.text == "objects" && !field.isStatic && field.isAuto && field.objectClass !is null) {
                 result ~= "@property ref " ~ storageType ~ " f_objects() { return z8_object_members_field!(" ~
