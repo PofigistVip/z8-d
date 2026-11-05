@@ -252,11 +252,14 @@ wstring z8_field_sql_format(Z8Object self, Z8SqlVendor vendor, bool booleanLogic
     auto aggregation = state.aggregation;
     if (aggregation == Z8FieldAggregation.none || aggregation == Z8FieldAggregation.bitwiseOr || aggregation == Z8FieldAggregation.bitwiseAnd)
         return expression;
-    auto isGuid = z8_native_is_instance("org.zenframework.z8.server.base.table.value.GuidField"w, self);
-    auto isGeometry = z8_native_is_instance("org.zenframework.z8.server.base.table.value.GeometryField"w, self);
+    auto isGuid = z8_native_is_instance("org.zenframework.z8.server.base.table.value.GuidField"w, self) ||
+        z8_native_is_instance("org.zenframework.z8.server.base.table.value.GuidExpression"w, self);
+    auto isGeometry = z8_native_is_instance("org.zenframework.z8.server.base.table.value.GeometryField"w, self) ||
+        z8_native_is_instance("org.zenframework.z8.server.base.table.value.GeometryExpression"w, self);
     auto isText = z8_native_is_instance("org.zenframework.z8.server.base.table.value.TextField"w, self) ||
         z8_native_is_instance("org.zenframework.z8.server.base.table.value.TextExpression"w, self);
-    auto isFile = z8_native_is_instance("org.zenframework.z8.server.base.table.value.FileField"w, self);
+    auto isFile = z8_native_is_instance("org.zenframework.z8.server.base.table.value.FileField"w, self) ||
+        z8_native_is_instance("org.zenframework.z8.server.base.table.value.FileExpression"w, self);
     if (aggregation == Z8FieldAggregation.array || aggregation == Z8FieldAggregation.distinct) {
         auto order = state.orderCell is null ? null : state.orderCell.view();
         if (order !is null && order.z8_erased_data().z8_size()) {

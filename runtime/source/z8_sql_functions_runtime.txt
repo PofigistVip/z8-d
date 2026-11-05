@@ -28,6 +28,9 @@ private wstring z8_sql_functions_format(Z8SqlPrimary value, Z8SqlVendor vendor) 
         }
     }
     if (auto item = cast(Z8SqlDatespan)value) return z8_sql_datespan_format(item, vendor);
+    if (auto item = cast(Z8SqlBool)value) return z8_sql_bool_format(item, false, vendor);
+    if (auto item = cast(Z8SqlGeometry)value) return z8_sql_geometry_format(item, vendor);
+    if (auto item = cast(Z8SqlBinary)value) return z8_sql_binary_format(item, vendor);
     if (auto item = cast(Z8SqlDate)value) return z8_sql_date_format(item, vendor);
     if (auto item = cast(Z8SqlDecimal)value) return z8_sql_decimal_format(item, vendor);
     if (auto item = cast(Z8SqlGuid)value) return z8_sql_guid_format(item, vendor);

@@ -1,0 +1,68 @@
+// Typed Expression fields retain a lazily computed SQL token independently of
+// their default value. Cursor-backed values are supplied by the query adapter.
+private enum z8_expression_prefix = "org.zenframework.z8.server.base.table.value."w;
+
+private void z8_expression_new(string kind)(Z8Object self) {
+    Z8FieldState state;
+    static if (kind == "bool") {
+        state = new Z8FieldState(z8_primary_box(false), false);
+        state.aggregation = Z8FieldAggregation.max; state.width = z8_optional_wrap(5L);
+    } else static if (kind == "decimal") {
+        state = new Z8FieldState(z8_primary_box(z8_decimal_from_int(0)), false);
+        state.aggregation = Z8FieldAggregation.sum; state.format = "0,000.00"w;
+    } else static if (kind == "string") {
+        state = new Z8FieldState(z8_primary_box(""w), false); state.aggregation = Z8FieldAggregation.max;
+    } else static if (kind == "guid") {
+        state = new Z8FieldState(z8_primary_box(z8_guid_zero()), false); state.aggregation = Z8FieldAggregation.max;
+    } else static if (kind == "date") {
+        state = new Z8FieldState(z8_primary_box(z8_date_min), false); state.aggregation = Z8FieldAggregation.max;
+        state.format = z8_native_is_instance(z8_expression_prefix ~ "DateExpression"w, self) ? "d.m.Y"w : "d.m.Y H:i"w;
+    } else static if (kind == "datespan") {
+        state = new Z8FieldState(z8_primary_box(new Z8Datespan()), false);
+    } else static if (kind == "geometry") {
+        state = new Z8FieldState(z8_primary_box(new Z8Geometry()), false); state.aggregation = Z8FieldAggregation.array;
+    } else static assert(0, "unsupported expression kind");
+    z8_field_attach(self, state);
+}
+
+private S z8_expression_default(S, Base)(Z8Object self) {
+    auto value = z8_primary_cast!Base(z8_field_state(self).value);
+    static if (is(S == Z8SqlBool)) return z8_sql_bool_const(value);
+    else static if (is(S == Z8SqlDecimal)) return z8_sql_decimal_const(value);
+    else static if (is(S == Z8SqlString)) return z8_sql_string_const(value);
+    else static if (is(S == Z8SqlGuid)) return z8_sql_guid_const(value);
+    else static if (is(S == Z8SqlDate)) return z8_sql_date_const(value);
+    else static if (is(S == Z8SqlDatespan)) return z8_sql_datespan_const(value);
+    else static if (is(S == Z8SqlGeometry)) return z8_sql_geometry_const(value);
+    else static assert(0, "unsupported SQL expression type");
+}
+private void z8_expression_set(S)(Z8Object self, S expression) { z8_field_state(self).sqlExpression = expression; }
+private Z8Object z8_expression_assign(S)(Z8Object self, S expression) { z8_expression_set(self, expression); return self; }
+
+private void z8_register_expression(S, T, Base = T)(wstring name, wstring sqlCast,
+                                                     void function(Z8Object) create, S function(Z8Object) sql) {
+    z8_native_bind(name ~ ".m_new"w, create);
+    z8_native_bind(name ~ ".m_get"w, &z8_typed_field_get!(T, Base));
+    z8_native_bind(name ~ ".m_setDefault"w, &z8_typed_field_set_default!T);
+    z8_native_bind(name ~ ".m_expression"w, &z8_expression_default!(S, Base));
+    z8_native_bind(name ~ ".m_setExpression"w, &z8_expression_set!S);
+    z8_native_bind(name ~ ".z8op_assign"w, &z8_expression_assign!S);
+    z8_native_bind(name ~ ".z8cast_"w ~ sqlCast, sql);
+}
+
+void z8_bind_builtin_expressions() {
+    enum p = z8_expression_prefix;
+    z8_register_expression!(Z8SqlBool, Z8Optional!bool, bool)(p ~ "BoolExpression"w, "sql_bool"w, &z8_expression_new!"bool", &z8_bool_field_sql);
+    z8_register_expression!(Z8SqlDecimal, Z8Optional!Z8Decimal, Z8Decimal)(p ~ "DecimalExpression"w, "sql_decimal"w, &z8_expression_new!"decimal", &z8_decimal_field_sql);
+    foreach (name; ["StringExpression"w, "TextExpression"w, "FileExpression"w])
+        z8_register_expression!(Z8SqlString, wstring)(p ~ name, "sql_string"w, &z8_expression_new!"string", &z8_string_field_sql);
+    z8_register_expression!(Z8SqlGuid, Z8Guid)(p ~ "GuidExpression"w, "sql_guid"w, &z8_expression_new!"guid", &z8_guid_field_sql);
+    z8_register_expression!(Z8SqlDate, Z8Date)(p ~ "DatetimeExpression"w, "sql_date"w, &z8_expression_new!"date", &z8_datetime_field_sql);
+    z8_register_expression!(Z8SqlDatespan, Z8Datespan)(p ~ "DatespanExpression"w, "sql_datespan"w, &z8_expression_new!"datespan", &z8_datespan_field_sql);
+    z8_register_expression!(Z8SqlGeometry, Z8Geometry)(p ~ "GeometryExpression"w, "sql_geometry"w, &z8_expression_new!"geometry", &z8_geometry_field_sql);
+    z8_native_bind(p ~ "DatetimeExpression.z8op_assign"w, &z8_typed_field_assign!Z8Date);
+    z8_native_bind(p ~ "DatespanExpression.z8op_assign"w, &z8_typed_field_assign!Z8Datespan);
+    z8_native_bind_field(p ~ "GeometryExpression.f_srs"w, &z8_field_metadata_address!"srs");
+    z8_native_bind_field(p ~ "TextExpression.f_html"w, &z8_field_metadata_address!"html");
+}
+shared static this() { z8_bind_builtin_expressions(); }
