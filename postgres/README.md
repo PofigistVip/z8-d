@@ -65,6 +65,10 @@ read-only snapshot, not an automatic migration plan.
 `z8_postgres_compare_table` in `z8.database.compare` reports missing or extra
 columns, mismatched types and nullability, and primary-key differences. It does
 not yet compare defaults, indexes or foreign keys, and never changes the schema.
+`z8_postgres_plan_add_columns` in `z8.database.migration` returns SQL for
+missing non-primary columns with their BL defaults and nullability. The caller
+can review and execute the statements; other differences, indexes and foreign
+keys require separate handling.
 
 `Z8PostgresQueryExecutor` connects BL `Query` reads to PostgreSQL tables.
 Construct it with a connection, schema and root table name, then attach it to

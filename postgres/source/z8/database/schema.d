@@ -19,7 +19,7 @@ package string fieldType(Z8Object field) {
         default: throw new Z8PostgresException("unsupported PostgreSQL schema field type");
     }
 }
-private string fieldDefault(Z8Object field) {
+package string fieldDefault(Z8Object field) {
     auto kind = z8_field_type_id(field);
     // Z8 formats byte-backed defaults as SQL NULL in the PostgreSQL dialect.
     if (kind == "binary"w || kind == "text"w || kind == "file"w || kind == "attachments"w) return "NULL";

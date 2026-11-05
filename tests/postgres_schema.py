@@ -115,6 +115,7 @@ import z8.database.connection;
 import z8.database.schema;
 import z8.database.catalog;
 import z8.database.compare;
+import z8.database.migration;
 import z8gen.p_Probe;
 import std.algorithm.searching : canFind;
 void main(string[] args) {
@@ -243,6 +244,20 @@ void main(string[] args) {
         if (difference.kind == Z8SchemaDifferenceKind.nullability && difference.column == "Other") changedNullability = true;
     }
     assert(changedType && missingColumn && extraColumn && changedNullability && differences.length == 4);
+    auto additions = z8_postgres_plan_add_columns("z8_test"w, expectedStatic, z8_postgres_describe_table(db, "z8_test"w, "StaticSample"w));
+    assert(additions.length == 1 && additions[0] == `ALTER TABLE "z8_test"."StaticSample" ADD COLUMN "Counter" bigint DEFAULT 0`);
+    db.execute(additions[0]);
+    assert(db.execute(`SELECT count(*) FROM "z8_test"."StaticSample" WHERE "Counter" = 0`).rows[0][0].text == "3");
+    assert(z8_postgres_plan_add_columns("z8_test"w, expectedStatic, z8_postgres_describe_table(db, "z8_test"w, "StaticSample"w)).length == 0);
+    bool wrongSchema;
+    try { z8_postgres_plan_add_columns("other"w, expectedStatic, z8_postgres_describe_table(db, "z8_test"w, "StaticSample"w)); }
+    catch (Z8PostgresException) { wrongSchema = true; }
+    assert(wrongSchema);
+    auto noKey = new Z8PostgresTableDescription(); noKey.schema = "z8_test"; noKey.name = "StaticSample";
+    bool missingKeyRejected;
+    try { z8_postgres_plan_add_columns("z8_test"w, expectedStatic, noKey); }
+    catch (Z8PostgresException) { missingKeyRejected = true; }
+    assert(missingKeyRejected);
     db.execute(`ALTER TABLE "z8_test"."StaticSample" DROP CONSTRAINT "StaticSample_pkey", ADD PRIMARY KEY ("Label")`);
     differences = z8_postgres_compare_table(expectedStatic, z8_postgres_describe_table(db, "z8_test"w, "StaticSample"w));
     bool changedKey;
