@@ -192,6 +192,10 @@ wstring z8_application_error_response(wstring requestId, Z8RequestMonitor monito
 // Dispatch ordinary OBJECT responses; Query and job requests use other adapters.
 void z8_application_dispatch_object(wstring className,
         bool delegate(Z8ApplicationSession session, wstring className, wstring action) mayExecute) {
+    z8_application_dispatch_object_target(className, mayExecute, null);
+}
+private void z8_application_dispatch_object_target(wstring className,
+        bool delegate(Z8ApplicationSession session, wstring className, wstring action) mayExecute, Z8Object target) {
     auto request = z8_application_require_request();
     auto session = z8_nonnull(request.session);
     className = z8_string_required(className);
@@ -199,7 +203,7 @@ void z8_application_dispatch_object(wstring className,
     if (writer.scopes.length != 2) throw new Exception("response object is not open");
     auto action = request.parameters.z8_get("action"w);
     if (mayExecute is null || !mayExecute(session, className, action)) throw new Exception("request access denied");
-    auto target = z8_object_new_instance_native(className);
+    if (target is null) target = z8_object_new_instance_native(className);
     if (z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, target) ||
         z8_native_is_instance("org.zenframework.z8.server.base.Executable"w, target))
         throw new Exception("request target requires a specialized adapter");
@@ -228,6 +232,22 @@ void z8_application_dispatch_authorized_object(wstring className) {
     z8_application_dispatch_object(className, (Z8ApplicationSession session, wstring name, wstring action) {
         return z8_application_may_execute(session, name, action);
     });
+}
+// Dispatch a request using the session's snapshot without constructing the BL
+// class twice. The host still owns the active database connection.
+void z8_application_dispatch_request() {
+    auto request = z8_application_require_request();
+    auto className = z8_string_required(request.parameters.z8_get("request"w));
+    auto action = request.parameters.z8_get("action"w);
+    if (request.writer.scopes.length != 2) throw new Exception("response object is not open");
+    if (!z8_application_may_execute(request.session, className, action)) throw new Exception("request access denied");
+    auto target = z8_object_new_instance_native(className);
+    if (z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, target))
+        z8_application_dispatch_query_read_target(className, target);
+    else z8_application_dispatch_object_target(className,
+        (Z8ApplicationSession session, wstring name, wstring selectedAction) {
+            return z8_application_may_execute(session, name, selectedAction);
+        }, target);
 }
 private Z8ApplicationRequest z8_application_current_request;
 Z8ApplicationRequest z8_application_request() { return z8_application_current_request; }

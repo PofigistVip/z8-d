@@ -544,11 +544,12 @@ void main(string[] args) {
     auto queryUser = new Z8UserData(); queryUser.id = z8_guid_create(2); queryUser.privileges = adminPrivileges.privileges;
     auto querySession = new Z8ApplicationSession("query"w, queryUser, queryUser);
     auto readRequest = new Z8ApplicationRequest(); readRequest.session = querySession; readRequest.monitor = new Z8RequestMonitor();
+    readRequest.parameters.z8_add("request"w, "Sample"w); readRequest.parameters.z8_add("server"w, "shard"w); readRequest.parameters.z8_add("ip"w, "127.0.0.1"w);
     readRequest.parameters.z8_add("action"w, "read"w); readRequest.parameters.z8_add("fields"w, `["title",{"id":"amount"}]`w);
     readRequest.parameters.z8_add("limit"w, "1"w);
     auto priorReadRequest = z8_application_set_request(readRequest);
     auto priorReadBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "z8_bootstrap"w));
-    z8_application_start_response(readRequest, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+    z8_application_start_response(readRequest, "Sample"w); z8_application_dispatch_request();
     z8_application_finish_response(readRequest, cast(Z8RequestMonitor)readRequest.monitor);
     auto readJson = parseJSON(z8_application_response_text(readRequest).to!string);
     assert(readJson["data"].array.length == 1 && readJson["data"][0]["title"].str == "Visible" && readJson["data"][0]["amount"].integer == 42);

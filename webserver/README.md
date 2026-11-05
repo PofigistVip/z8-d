@@ -28,6 +28,15 @@ receives the session, class name, and action. For `action=content`, it invokes
 original Z8 binary content type (`application/xml`). Query and job requests
 need specialized adapters and are not handled by this function.
 
+Alternatively, a handler can call `z8_application_dispatch_request()` in
+application response mode. It resolves the `request` parameter, verifies the
+session user's request permission, and routes ordinary objects or the supported
+table `read` operations to the corresponding adapter. Before a table read, the
+host must install a database backend for the worker thread and restore the
+previous backend afterward. The authority is responsible for providing a
+current privilege snapshot. Executable jobs and other query actions still need
+adapters; selecting this handler is explicit rather than automatic.
+
 An optional `IZ8HttpAuthority` constructor argument connects a host authority
 to the transport. With an authority present, each request must have a session
 accepted by `authorize`; for `request=login`, the server also tries `login`

@@ -96,6 +96,11 @@ void main() {
     z8_application_dispatch_authorized_object("Child"w);
     z8_application_finish_response(authorized, cast(Z8RequestMonitor)authorized.monitor);
     assert(parseJSON(z8_application_response_text(authorized).to!string)["data"][0].str == "allowed");
+    auto unified = new Z8ApplicationRequest(); unified.session = request.session; unified.monitor = new Z8RequestMonitor();
+    unified.parameters.z8_add("request"w, "Child"w); unified.parameters.z8_add("data"w, `["unified"]`w);
+    z8_application_set_request(unified); z8_application_start_response(unified, "Child"w);
+    z8_application_dispatch_request(); z8_application_finish_response(unified, cast(Z8RequestMonitor)unified.monitor);
+    assert(parseJSON(z8_application_response_text(unified).to!string)["data"][0].str == "unified");
     z8_application_set_request(null);
 }
 ''', encoding="utf-8")

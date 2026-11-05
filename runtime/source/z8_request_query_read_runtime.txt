@@ -33,6 +33,9 @@ private Z8SqlBool z8_application_query_filter(Z8Object query, wstring json) {
 // Initial ReadAction adapter for table queries. Unsupported request options
 // are rejected rather than silently changing the requested result.
 void z8_application_dispatch_query_read(wstring className) {
+    z8_application_dispatch_query_read_target(className, null);
+}
+private void z8_application_dispatch_query_read_target(wstring className, Z8Object query) {
     import std.json : JSONType;
     auto request = z8_application_require_request();
     auto session = z8_nonnull(request.session);
@@ -46,11 +49,11 @@ void z8_application_dispatch_query_read(wstring className) {
     for (long i; i < parameterKeys.z8_size(); ++i) {
         auto name = parameterKeys.z8_get(i);
         if (name is null) throw new Exception("invalid query read parameter");
-        if (name == "request"w || name == "session"w || name == "action"w || name == "fields"w || name == "start"w || name == "limit"w ||
+        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "fields"w || name == "start"w || name == "limit"w ||
             name == "filter"w || name == "where"w || name == "quickFilter"w || name == "sort"w || name == "recordId"w || name == "count"w) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported query read parameter: " ~ name.to!string);
     }
-    auto query = z8_object_new_instance_native(z8_string_required(className));
+    if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
     if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, query))
         throw new Exception("query read requires a Table");
     auto privileges = z8_nonnull(session.user).privileges;

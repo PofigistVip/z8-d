@@ -107,9 +107,10 @@ last record, it also returns the final page, matching Java `ReadAction`.
 As in the Java `ReadAction`, a nonempty `recordId` list replaces the request
 filters and query scope; an empty list keeps the normal filters and scope.
 Linked and computed fields, other read options and custom request parameters
-are rejected. The host must
-open the application response before calling it; the CivetWeb transport does
-not select this adapter automatically. Other query actions are not implemented.
+are rejected. The host must open the application response before calling it.
+`z8_application_dispatch_request` selects this adapter for a table request;
+the CivetWeb host must explicitly call the dispatcher and install a backend for
+the worker thread. Other query actions are not implemented.
 The native `Users.onNew` defaults mirror the Java implementation, including its
 default password value and `changePassword` flag; explicitly supplied values
 are preserved even when user-level events are disabled. With user events enabled,

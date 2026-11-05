@@ -154,6 +154,8 @@ class Authority : IZ8HttpAuthority {
     }
     Z8ApplicationSession makeSession(wstring token, wstring login) {
         auto user = new Z8UserData(); user.id = z8_guid_create(42); user.login = login;
+        user.privileges = new Z8Privileges();
+        user.privileges.setRequestAccess(z8_guid_create_name("Endpoint"w), Z8Access(false, false, false, false, false, true));
         auto system = new Z8UserData(); system.id = z8_guid_create(1);
         return sessions.create(token, user, system, "default"w);
     }
@@ -173,6 +175,7 @@ void runRequest(Z8HttpRequest request) {
         z8_application_set_response_binary(z8_application_request(), binary);
         return;
     }
+    if (request.query.indexOf("unified=1") >= 0) { z8_application_dispatch_request(); return; }
     if (request.query.indexOf("dispatch=1") >= 0) {
         auto context = z8_application_request();
         z8_application_dispatch_object(context.parameters.z8_get("request"w),
@@ -298,6 +301,12 @@ void main(string[] args) {
         result = json.loads(body)
         assert status == 200 and result["success"] and result["data"] == [1, 2] and result["ui"] == "Grid", result
         assert result["info"]["messages"][0]["text"] == "loaded" and result["info"]["messages"][0]["source"] == "Endpoint", result
+        status, body = request("/request.json?request=Endpoint&session=valid&server=shard&unified=1", target=auth_port)
+        result = json.loads(body)
+        assert status == 200 and result["success"] and result["data"] == [1, 2], result
+        status, body = request("/request.json?request=Unauthorized&session=valid&server=shard&unified=1", target=auth_port)
+        result = json.loads(body)
+        assert status == 200 and not result["success"] and result["info"]["messages"][-1]["text"] == "request access denied", result
         status, body = request("/request.json?request=Unauthorized&session=valid&server=shard&dispatch=1", target=auth_port)
         result = json.loads(body)
         assert status == 200 and not result["success"] and result["info"]["messages"][-1]["text"] == "request access denied", result
