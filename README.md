@@ -85,6 +85,7 @@ python tests/nested_fields.py
 python tests/nested_packages.py
 python tests/member_initializers.py
 python tests/specialized_field_assignment.py path/to/original-z8
+python tests/static_member_initializers.py path/to/original-z8
 python tests/scalar_elvis.py path/to/original-z8
 python tests/scalar_new.py path/to/original-z8
 python tests/qualified_names.py

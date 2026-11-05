@@ -834,7 +834,7 @@ class Checker {
                 fail("duplicate field initialization", init.token);
             auto root = init.target;
             while (root.kind == ExprKind.field) root = root.left;
-            if (!root.isField || root.targetClass.length) fail("field initialization requires an instance field", init.token);
+            if (!root.isField) fail("field initialization requires a field", init.token);
             if (init.attributes.length) {
                 if (init.type != ValueType.selfType) fail("attributes require an object reference field", init.token);
                 // Attribute writes occur in constructor2, independently of the
