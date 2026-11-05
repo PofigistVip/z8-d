@@ -54,6 +54,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.sqlGuidType: return "Z8SqlGuid";
         case ValueType.sqlDateType: return "Z8SqlDate";
         case ValueType.sqlDatespanType: return "Z8SqlDatespan";
+        case ValueType.sqlBinaryType: return "Z8SqlBinary";
         case ValueType.guidType: return "Z8Guid";
         case ValueType.binaryType: return "Z8Binary";
         case ValueType.datespanType: return "Z8Datespan";
@@ -369,6 +370,7 @@ private string emitExprRaw(Expression e) {
             if (e.inferredType == ValueType.sqlGuidType) return "z8_sql_guid_const(z8_guid_zero())";
             if (e.inferredType == ValueType.sqlDateType) return "z8_sql_date_const(z8_date_now())";
             if (e.inferredType == ValueType.sqlDatespanType) return "z8_sql_datespan_const(new Z8Datespan())";
+            if (e.inferredType == ValueType.sqlBinaryType) return "new Z8SqlBinary()";
             return "z8_new!(" ~ e.objectClass.emittedName ~ ")(" ~ (e.newHasContainer ? "this" : "") ~ ")";
         case ExprKind.field:
             if (e.nativeField.length) return "z8_nonnull(" ~ emitExpr(e.left) ~ ")." ~ e.nativeField;
@@ -694,6 +696,7 @@ private string defaultValue(ValueType type, Program objectClass = null, bool has
     if (type == ValueType.sqlGuidType) return "z8_sql_guid_const(z8_guid_zero())";
     if (type == ValueType.sqlDateType) return "z8_sql_date_const(z8_date_now())";
     if (type == ValueType.sqlDatespanType) return "z8_sql_datespan_const(new Z8Datespan())";
+    if (type == ValueType.sqlBinaryType) return "new Z8SqlBinary()";
     if (type == ValueType.enumType) return "null";
     if (type == ValueType.primaryType) return "null";
     if (type == ValueType.guidType) return "z8_guid_zero()";

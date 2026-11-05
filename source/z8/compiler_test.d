@@ -241,6 +241,8 @@ unittest {
     compile(q{class A { static sql_bool f(sql_datespan x) { return x != x; } }});
     compile(q{class A { static sql_datespan f(sql_datespan x) { return x.truncHour().addDay(1).truncMinute().addSecond(2); } }});
     compile(q{class A { static sql_int f(sql_datespan x) { return x.days() + x.hours() + x.totalMinutes(); } }});
+    compile(q{class A { static sql_binary f() { sql_binary x; return x; } static sql_string g(sql_binary x) { return x.toString(); } }});
+    rejects(q{class A { static sql_binary f(binary x) { return x; } }});
     rejects(q{class A { static date f(sql_date x) { return x; } }});
     rejects(q{class A { static guid f(sql_guid x) { return x; } }});
     rejects(q{class A { static sql_string f(sql_string x) { return x.json(null); } }});

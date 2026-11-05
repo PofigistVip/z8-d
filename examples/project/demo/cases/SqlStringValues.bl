@@ -5,6 +5,7 @@ import org.zenframework.z8.lang.sql.sql_decimal;
 import org.zenframework.z8.lang.sql.sql_guid;
 import org.zenframework.z8.lang.sql.sql_date;
 import org.zenframework.z8.lang.sql.sql_datespan;
+import org.zenframework.z8.lang.sql.sql_binary;
 public class SqlStringValues {
     public static sql_string literal() { return "O'Reilly 😀"; }
     public static sql_string concatenation() { sql_string value = "alpha"; return (value + " β").toUpper(); }
@@ -91,6 +92,8 @@ public class SqlStringValues {
     public static sql_datespan spanAddHour() { sql_datespan value = sqlSpan(); return value.addHour(2); }
     public static sql_datespan spanAddMinute() { sql_datespan value = sqlSpan(); return value.addMinute(2); }
     public static sql_datespan spanAddSecond() { sql_datespan value = sqlSpan(); return value.addSecond(2); }
+    public static sql_binary sqlBinary() { sql_binary value; return value; }
+    public static sql_string binaryText() { sql_binary value = sqlBinary(); return value.toString(); }
     public static int run() {
         sql_string value = concatenation();
         if (value == null) return 1;

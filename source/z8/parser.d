@@ -98,6 +98,7 @@ class Parser {
             case "sql_guid": case "org.zenframework.z8.lang.sql.sql_guid": result = ValueType.sqlGuidType; break;
             case "sql_date": case "org.zenframework.z8.lang.sql.sql_date": result = ValueType.sqlDateType; break;
             case "sql_datespan": case "org.zenframework.z8.lang.sql.sql_datespan": result = ValueType.sqlDatespanType; break;
+            case "sql_binary": case "org.zenframework.z8.lang.sql.sql_binary": result = ValueType.sqlBinaryType; break;
             case "primary": result = ValueType.primaryType; break;
             default:
                 if (token.kind == TokenKind.identifier) { result = ValueType.selfType; parsedObjectName = token.text; }
