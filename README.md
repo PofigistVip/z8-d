@@ -58,6 +58,7 @@ python tests/priority_operator.py
 python tests/sql_bool.py
 python tests/sql_int.py
 python tests/sql_decimal.py
+python tests/sql_string.py
 python tests/compound_objects.py
 python tests/nested_fields.py
 python tests/nested_packages.py
@@ -246,6 +247,8 @@ framework по атрибутам пока не реализована.
 сравнения с `sql_int`, выбор через `IIF` и форматирование в SQL с учётом диалекта.
 Доступны методы `abs`, `exp`, `ln`, `power`, `round`, `truncate`, `sign`,
 `ceil`, `floor` и `isNaN`; ограничения диалектов повторяют исходный runtime.
+Для `sql_string` поддерживаются преобразование строки, конкатенация, сравнения,
+`IIF`, смена регистра, удаление пробелов по краям, длина и форматирование в SQL.
 Работа с полями и запросами, остальные SQL-типы и другие
 перегрузки пока не реализованы.
 Типы: `int` (64-битный знаковый), `decimal`, `bool`,

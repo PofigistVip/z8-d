@@ -94,6 +94,7 @@ class Parser {
             case "sql_bool": case "org.zenframework.z8.lang.sql.sql_bool": result = ValueType.sqlBoolType; break;
             case "sql_int": case "org.zenframework.z8.lang.sql.sql_int": result = ValueType.sqlIntType; break;
             case "sql_decimal": case "org.zenframework.z8.lang.sql.sql_decimal": result = ValueType.sqlDecimalType; break;
+            case "sql_string": case "org.zenframework.z8.lang.sql.sql_string": result = ValueType.sqlStringType; break;
             case "primary": result = ValueType.primaryType; break;
             default:
                 if (token.kind == TokenKind.identifier) { result = ValueType.selfType; parsedObjectName = token.text; }

@@ -1,0 +1,23 @@
+import org.zenframework.z8.lang.sql.sql_string;
+import org.zenframework.z8.lang.sql.sql_bool;
+import org.zenframework.z8.lang.sql.sql_int;
+public class SqlStringValues {
+    public static sql_string literal() { return "O'Reilly 😀"; }
+    public static sql_string concatenation() { sql_string value = "alpha"; return (value + " β").toUpper(); }
+    public static sql_string convertedLeft() { sql_string value = "tail"; return "head" + value; }
+    public static sql_string lower() { sql_string value = " ABC "; return value.toLower(); }
+    public static sql_string trimmed() { sql_string value = " ABC "; return value.trimAll(); }
+    public static sql_string choice() { sql_bool condition = true; return condition.IIF("yes", "no"); }
+    public static sql_int length() { sql_string value = "abc"; return value.length(); }
+    public static sql_bool compare() { sql_string value = "alpha"; return value >= "beta"; }
+    public static int run() {
+        sql_string value = concatenation();
+        if (value == null) return 1;
+        string missing = null;
+        try { sql_string invalid = missing; return 2; }
+        catch (exception error) {}
+        sql_string selected = choice();
+        sql_bool relation = compare();
+        return 241;
+    }
+}

@@ -214,6 +214,9 @@ unittest {
     compile(q{class A { static sql_decimal f(sql_decimal x) { return x.abs().round(2); } }});
     compile(q{class A { static sql_int f(sql_decimal x) { return x.ceil(); } }});
     compile(q{class A { static sql_bool f(sql_decimal x) { return x.isNaN(); } }});
+    compile(q{class A { static sql_string f(string x) { sql_string a = x; return a + "!"; } }});
+    compile(q{class A { static sql_int f(sql_string x) { return x.length(); } }});
+    rejects(q{class A { static void f() { sql_string a = "x"; string b = a; } }});
     rejects(q{class A { static void f() { sql_decimal d = 1.5; decimal x = d; } }});
     rejects(q{class A { static void f() { sql_bool a = true; if (a) {} } }});
     rejects(q{class A { static void f() { sql_bool a = true; bool b = a; } }});

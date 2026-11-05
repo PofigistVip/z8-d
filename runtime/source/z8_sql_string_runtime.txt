@@ -1,0 +1,76 @@
+enum Z8SqlStringKind { constant, group, concat, lower, upper, trimLeft, trimRight, choose }
+class Z8SqlString {
+    Z8SqlStringKind kind;
+    wstring constant;
+    Z8SqlString left, right;
+    Z8SqlBool condition;
+    this(Z8SqlStringKind kind, wstring constant = null, Z8SqlString left = null,
+         Z8SqlString right = null, Z8SqlBool condition = null) {
+        this.kind = kind; this.constant = constant; this.left = left; this.right = right; this.condition = condition;
+    }
+}
+Z8SqlString z8_sql_string_const(wstring value) { return new Z8SqlString(Z8SqlStringKind.constant, z8_string_required(value)); }
+Z8SqlString z8_sql_string_group(Z8SqlString value) { return new Z8SqlString(Z8SqlStringKind.group, null, z8_nonnull(value)); }
+Z8SqlString z8_sql_string_concat(Z8SqlString left, Z8SqlString right) { return new Z8SqlString(Z8SqlStringKind.concat, null, z8_nonnull(left), right); }
+Z8SqlString z8_sql_string_iif(Z8SqlBool condition, Z8SqlString yes, Z8SqlString no) {
+    return new Z8SqlString(Z8SqlStringKind.choose, null, yes, no, z8_nonnull(condition));
+}
+Z8SqlString z8_sql_string_unary(string op)(Z8SqlString value) {
+    static if (op == "toLower") enum kind = Z8SqlStringKind.lower;
+    else static if (op == "toUpper") enum kind = Z8SqlStringKind.upper;
+    else static if (op == "trimLeft") enum kind = Z8SqlStringKind.trimLeft;
+    else static if (op == "trimRight") enum kind = Z8SqlStringKind.trimRight;
+    else static assert(0, "unsupported SQL string method");
+    return new Z8SqlString(kind, null, z8_nonnull(value));
+}
+Z8SqlString z8_sql_string_toLower(Z8SqlString value) { return z8_sql_string_unary!"toLower"(value); }
+Z8SqlString z8_sql_string_toUpper(Z8SqlString value) { return z8_sql_string_unary!"toUpper"(value); }
+Z8SqlString z8_sql_string_trimLeft(Z8SqlString value) { return z8_sql_string_unary!"trimLeft"(value); }
+Z8SqlString z8_sql_string_trimRight(Z8SqlString value) { return z8_sql_string_unary!"trimRight"(value); }
+Z8SqlString z8_sql_string_trimAll(Z8SqlString value) { return z8_sql_string_trimRight(z8_sql_string_trimLeft(value)); }
+Z8SqlInt z8_sql_string_length(Z8SqlString value) {
+    auto result = new Z8SqlInt(Z8SqlIntKind.textLength);
+    result.textOperand = z8_nonnull(value);
+    return result;
+}
+Z8SqlBool z8_sql_string_compare(string op)(Z8SqlString left, Z8SqlString right) {
+    z8_nonnull(left);
+    static if (op == "==") enum kind = Z8SqlBoolKind.textEqual;
+    else static if (op == "!=") enum kind = Z8SqlBoolKind.textNotEqual;
+    else static if (op == "<") enum kind = Z8SqlBoolKind.textLess;
+    else static if (op == ">") enum kind = Z8SqlBoolKind.textGreater;
+    else static if (op == "<=") enum kind = Z8SqlBoolKind.textLessEqual;
+    else static if (op == ">=") enum kind = Z8SqlBoolKind.textGreaterEqual;
+    else static assert(0, "unsupported SQL string comparison");
+    auto result = new Z8SqlBool(kind);
+    result.textLeft = left; result.textRight = right;
+    return result;
+}
+private wstring z8_sql_string_as_text(Z8SqlString value, Z8SqlVendor vendor) {
+    auto text = z8_sql_string_format(value, vendor);
+    return vendor == Z8SqlVendor.SqlServer ? "Cast("w ~ text ~ " as nvarchar(max))"w : text;
+}
+wstring z8_sql_string_format(Z8SqlString value, Z8SqlVendor vendor = Z8SqlVendor.Postgres, bool logical = false) {
+    z8_nonnull(value);
+    final switch (value.kind) {
+        case Z8SqlStringKind.constant:
+            wstring escaped;
+            for (size_t i = 0; i < value.constant.length; ++i) {
+                escaped ~= value.constant[i];
+                if (value.constant[i] == '\'') escaped ~= '\'';
+            }
+            return (vendor == Z8SqlVendor.Oracle || vendor == Z8SqlVendor.SqlServer ? "N'"w : "'"w) ~ escaped ~ "'"w;
+        case Z8SqlStringKind.group: return "("w ~ z8_sql_string_format(value.left, vendor, logical) ~ ")"w;
+        case Z8SqlStringKind.concat:
+            if (vendor == Z8SqlVendor.H2) throw new Exception("unsupported SQL database vendor");
+            auto left = z8_sql_string_format(value.left, vendor), right = z8_sql_string_format(value.right, vendor);
+            if (vendor == Z8SqlVendor.SqlServer) return "("w ~ left ~ "+"w ~ right ~ ")"w;
+            return "Concat("w ~ left ~ ", "w ~ right ~ ")"w;
+        case Z8SqlStringKind.lower: return "LOWER("w ~ z8_sql_string_as_text(value.left, vendor) ~ ")"w;
+        case Z8SqlStringKind.upper: return "UPPER("w ~ z8_sql_string_as_text(value.left, vendor) ~ ")"w;
+        case Z8SqlStringKind.trimLeft: return "LTRIM("w ~ z8_sql_string_format(value.left, vendor) ~ ")"w;
+        case Z8SqlStringKind.trimRight: return "RTRIM("w ~ z8_sql_string_format(value.left, vendor) ~ ")"w;
+        case Z8SqlStringKind.choose:
+            return z8_sql_bool_case(z8_sql_bool_format(value.condition, true, vendor), z8_sql_string_format(value.left, vendor), z8_sql_string_format(value.right, vendor));
+    }
+}
