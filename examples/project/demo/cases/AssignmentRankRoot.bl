@@ -1,0 +1,4 @@
+public class AssignmentRankRoot {
+    public int amount;
+    public void operator = (AssignmentRankRoot value) { amount = 99; }
+}

@@ -1,0 +1,8 @@
+public class AssignmentAmbiguousOps {
+    static int effects;
+    public int amount;
+    public operator int() { effects += 1; return 1; }
+    public operator string() { effects += 10; return "x"; }
+    public void operator = (int value) { effects += 100; }
+    public void operator = (string value) { effects += 1000; }
+}

@@ -240,7 +240,8 @@ class Checker {
         return true;
     }
     // Z8 ranks direct casts ahead of conversions defined by an operator.
-    private Method selectOverload(Method first, Expression e, bool allowNoMatch = false, bool binaryOperator = false) {
+    private Method selectOverload(Method first, Expression e, bool allowNoMatch = false, bool binaryOperator = false,
+                                  int* selectedWeight = null, int* selectedDistance = null, bool* ambiguousResult = null) {
         ValueType[] actualTypes;
         foreach (arg; e.arguments) {
             if (arg.kind == ExprKind.arrayLiteral && !arg.typedInitializer) fail("array initializer requires a known target", arg.token);
@@ -307,7 +308,10 @@ class Checker {
             if (allowNoMatch) return null;
             fail("no matching method overload", e.token);
         }
-        if (ambiguous) fail("ambiguous method overload", e.token);
+        if (selectedWeight !is null) *selectedWeight = bestWeight;
+        if (selectedDistance !is null) *selectedDistance = bestDistance;
+        if (ambiguousResult !is null) *ambiguousResult = ambiguous;
+        else if (ambiguous) fail("ambiguous method overload", e.token);
         return best;
     }
     private bool supportsConvertedBinary(ValueType left, ValueType right, string op) {
@@ -1452,9 +1456,35 @@ class Checker {
         if (method is null) return false;
         auto call = new Expression(ExprKind.call, site);
         call.arguments = [value];
-        auto selected = selectOverload(method, call, true, true);
+        int operatorWeight, operatorDistance;
+        bool operatorAmbiguous;
+        auto selected = selectOverload(method, call, true, true, &operatorWeight, &operatorDistance, &operatorAmbiguous);
         if (selected is null) return false;
-        if (direct) fail("assignment with both direct and operator conversions is not supported yet", site);
+        if (direct) {
+            auto actual = typeOf(value);
+            int directWeight, directDistance;
+            if (actual == ValueType.selfType) {
+                if (isAssignable(value.objectClass, target))
+                    directDistance = inheritanceDistance(value.objectClass, target);
+                else {
+                    auto conversion = value.userConversion;
+                    assert(conversion !is null && conversion.returnObjectClass !is null);
+                    directWeight = 100;
+                    directDistance = inheritanceDistance(conversion.returnObjectClass, target);
+                }
+            } else assert(actual == ValueType.nullType);
+            if (directWeight < operatorWeight || (directWeight == operatorWeight && directDistance < operatorDistance))
+                return false;
+            if (directWeight == operatorWeight && directDistance == operatorDistance)
+                fail("ambiguous assignment", site);
+            // The direct candidate may have annotated the expression with a
+            // conversion that does not belong to the selected operator.
+            value.userConversion = null;
+            value.optionalRequired = false;
+            value.optionalWrap = false;
+            value.boxPrimary = false;
+        }
+        if (operatorAmbiguous) fail("ambiguous assignment operator", site);
         checkCall(selected, selected.owner, call);
         return true;
     }

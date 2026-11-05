@@ -1,0 +1,4 @@
+public class AssignmentRankSource {
+    static int conversions;
+    public operator AssignmentRankTarget() { conversions += 1; return new AssignmentRankTarget; }
+}

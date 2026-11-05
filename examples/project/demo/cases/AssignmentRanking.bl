@@ -1,0 +1,29 @@
+public class AssignmentRanking {
+    public static int run() {
+        AssignmentRankBase left;
+        AssignmentRankChild right;
+        left = right;
+        if (left.amount != 11 || (left instanceof AssignmentRankChild)) return 1;
+        AssignmentRankBase initialized = right;
+        if (initialized.amount != 11 || (initialized instanceof AssignmentRankChild)) return 2;
+        AssignmentRankLeaf first;
+        AssignmentRankLeaf second;
+        first = second;
+        second.amount = 25;
+        if (first.amount != 25) return 3;
+        AssignmentRankSource.conversions = 0;
+        AssignmentRankSource source;
+        AssignmentRankTarget destination;
+        destination = source;
+        if (destination.amount != 77 || AssignmentRankSource.conversions != 0) return 4;
+        AssignmentRankTarget newValue = source;
+        if (newValue.amount != 77 || AssignmentRankSource.conversions != 0) return 5;
+        AssignmentAmbiguousOps.effects = 0;
+        AssignmentAmbiguousOps a;
+        AssignmentAmbiguousOps b;
+        a = b;
+        b.amount = 33;
+        if (a.amount != 33 || AssignmentAmbiguousOps.effects != 0) return 6;
+        return 203;
+    }
+}

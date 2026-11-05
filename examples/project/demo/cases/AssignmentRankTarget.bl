@@ -1,0 +1,4 @@
+public class AssignmentRankTarget {
+    public int amount;
+    public void operator = (AssignmentRankSource value) { amount = 77; }
+}
