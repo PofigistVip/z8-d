@@ -12,7 +12,7 @@ class Parser {
     private Token[] tokens;
     private size_t index;
     private Program currentClass;
-    private string parsedObjectName;
+    private string parsedObjectName, parsedKeyObjectName;
     this(string source) {
         auto lexer = new Lexer(source);
         do { tokens ~= lexer.next(); } while (tokens[$-1].kind != TokenKind.endOfFile);
@@ -76,7 +76,7 @@ class Parser {
     private ValueType parseType() {
         ValueType result;
         auto token = current.kind == TokenKind.identifier ? qualifiedIdentifier() : take();
-        parsedObjectName = "";
+        parsedObjectName = ""; parsedKeyObjectName = "";
         switch (token.text) {
             case "void": result = ValueType.voidType; break;
             case "int": result = ValueType.intType; break;
@@ -114,6 +114,10 @@ class Parser {
                 if (result == ValueType.voidType) error("this array element type is not supported");
             } else {
                 auto key = accept("string") ? ValueType.stringType : accept("int") ? ValueType.intType : accept("guid") ? ValueType.guidType : accept("bool") ? ValueType.boolType : accept("decimal") ? ValueType.decimalType : accept("primary") ? ValueType.primaryType : accept("date") ? ValueType.dateType : accept("datespan") ? ValueType.datespanType : accept("binary") ? ValueType.binaryType : accept("geometry") ? ValueType.geometryType : accept("file") ? ValueType.fileType : ValueType.voidType;
+                if (key == ValueType.voidType && current.kind == TokenKind.identifier) {
+                    key = ValueType.selfType;
+                    parsedKeyObjectName = take().text;
+                }
                 result = mapType(result, key);
                 if (result == ValueType.voidType) error("unsupported map key or value type");
                 expect("]");
@@ -326,9 +330,9 @@ class Parser {
             if (isCastOperator || isPriorityOperator) name = take();
             auto typeToken = current;
             ValueType declaredType;
-            string declaredObjectName;
+            string declaredObjectName, declaredKeyObjectName;
             if (isPriorityOperator) { declaredType = ValueType.selfType; declaredObjectName = result.name.text; name.text = "operatorPriority"; }
-            else { declaredType = parseType(); declaredObjectName = parsedObjectName; }
+            else { declaredType = parseType(); declaredObjectName = parsedObjectName; declaredKeyObjectName = parsedKeyObjectName; }
             string operatorSymbol;
             if (isPriorityOperator) {
                 // The priority operator has the enclosing class as its result type.
@@ -347,7 +351,7 @@ class Parser {
             if (current.text != "(") {
                 if (operatorSymbol.length || isCastOperator) error("operator requires parameters");
                 if (isVirtual || declaredType == ValueType.voidType) error("this field type or modifier is not supported");
-                auto field = new Field; field.attributes = attributes; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.isProtected = isProtected; field.isStatic = isStatic; field.isAuto = isAuto; field.declaredFinal = declaredFinal; field.objectName = declaredObjectName; field.owner = result;
+                auto field = new Field; field.attributes = attributes; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.isProtected = isProtected; field.isStatic = isStatic; field.isAuto = isAuto; field.declaredFinal = declaredFinal; field.objectName = declaredObjectName; field.keyObjectName = declaredKeyObjectName; field.owner = result;
                 if (accept("=")) {
                     if (accept("class")) {
                         if (isStatic || declaredType != ValueType.selfType) error("nested specialization requires an instance object field");
@@ -371,10 +375,10 @@ class Parser {
             method.attributes = attributes;
             if (isVirtual && isStatic) error("a static method cannot be virtual");
             method.isPublic = isPublic; method.isProtected = isProtected; method.isStatic = isStatic; method.isVirtual = isVirtual; method.owner = result;
-            method.returnType = declaredType; method.returnObjectName = declaredObjectName; method.name = name; method.operatorSymbol = operatorSymbol; method.isCastOperator = isCastOperator; method.isPriorityOperator = isPriorityOperator; expect("(");
+            method.returnType = declaredType; method.returnObjectName = declaredObjectName; method.returnKeyObjectName = declaredKeyObjectName; method.name = name; method.operatorSymbol = operatorSymbol; method.isCastOperator = isCastOperator; method.isPriorityOperator = isPriorityOperator; expect("(");
             if (current.text != ")") {
                 do {
-                    Parameter p; p.declaredFinal = accept("final"); p.type = parseType(); p.objectName = parsedObjectName; p.name = identifier(); method.parameters ~= p;
+                    Parameter p; p.declaredFinal = accept("final"); p.type = parseType(); p.objectName = parsedObjectName; p.keyObjectName = parsedKeyObjectName; p.name = identifier(); method.parameters ~= p;
                 } while (accept(","));
             }
             expect(")");
@@ -457,7 +461,7 @@ class Parser {
                 s.kind = StmtKind.forEachStmt;
                 auto item = new Statement(StmtKind.variable, current);
                 item.declaredFinal = accept("final");
-                item.type = parseType(); item.objectName = parsedObjectName; item.token = identifier(); s.initial = item;
+                item.type = parseType(); item.objectName = parsedObjectName; item.keyObjectName = parsedKeyObjectName; item.token = identifier(); s.initial = item;
                 expect(":"); s.expression = expression(); expect(")"); s.children ~= statement(); return s;
             }
             if (current.text != ";") s.initial = simpleStatement(true);
@@ -476,7 +480,7 @@ class Parser {
             if (!allowDeclaration) error("variable declaration is not allowed here");
             auto s = new Statement(StmtKind.variable, t);
             s.declaredFinal = declaredFinal;
-            s.type = parseType(); s.objectName = parsedObjectName; s.token = identifier();
+            s.type = parseType(); s.objectName = parsedObjectName; s.keyObjectName = parsedKeyObjectName; s.token = identifier();
             if (accept("=")) {
                 if (accept("class")) {
                     if (s.type != ValueType.selfType) error("nested specialization requires an object variable");
@@ -614,10 +618,12 @@ class Parser {
         if (isTypedInitializerStart()) {
             auto declaredType = parseType();
             auto objectName = parsedObjectName;
+            auto keyObjectName = parsedKeyObjectName;
             auto result = initializer();
             result.typedInitializer = true;
             result.initializerType = declaredType;
             result.initializerObjectName = objectName;
+            result.initializerKeyObjectName = keyObjectName;
             return result;
         }
         if (accept("(")) {

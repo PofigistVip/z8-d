@@ -1,0 +1,63 @@
+// Generated BL object and enum keys compare by identity, like CLASS and enums.
+class Z8ObjectKeyMap(K, V) {
+    static assert(is(K == class));
+    static if (is(V == long) || is(V == bool) || is(V == Z8Decimal)) alias Element = Z8Optional!V;
+    else static if (is(V == wstring) || is(V == class)) alias Element = V;
+    else static assert(0, "unsupported object-key map value");
+    private struct Entry { K key; Element value; }
+    private Entry[size_t] entries;
+    private static size_t identity(K key) { return cast(size_t)cast(void*)key; }
+    private static bool valueEquals(Element left, Element right) {
+        static if (is(V == long) || is(V == bool) || is(V == Z8Decimal))
+            return left.present == right.present && (!left.present || left.value == right.value);
+        else static if (is(V == wstring)) return z8_string_equals(left, right);
+        else static if (is(V == Z8Primary)) return z8_primary_collection_equals(left, right);
+        else return left is right || (left !is null && right !is null && left == right);
+    }
+    long z8_size() { return cast(long)entries.length; }
+    bool z8_isEmpty() { return entries.length == 0; }
+    void z8_clear() { entries.clear(); }
+    bool z8_containsKey(K key) { return (identity(key) in entries) !is null; }
+    bool z8_containsValue(Element value) {
+        foreach (entry; entries) if (valueEquals(value, entry.value)) return true;
+        return false;
+    }
+    Element z8_add(K key, Element value) {
+        auto id = identity(key);
+        auto found = id in entries;
+        if (found !is null) { auto previous = found.value; found.value = value; return previous; }
+        entries[id] = Entry(key, value);
+        return Element.init;
+    }
+    void z8_add(Z8ObjectKeyMap!(K, V) other) {
+        z8_nonnull(other);
+        if (other is this) return;
+        foreach (entry; other.entries) z8_add(entry.key, entry.value);
+    }
+    Element z8_get(K key) { auto found = identity(key) in entries; return found is null ? Element.init : found.value; }
+    Element z8_remove(K key) {
+        auto id = identity(key);
+        auto found = id in entries;
+        if (found is null) return Element.init;
+        auto previous = found.value; entries.remove(id); return previous;
+    }
+    Z8Array!K z8_keys() {
+        auto result = new Z8Array!K();
+        foreach (entry; entries) result.z8_add(entry.key);
+        return result;
+    }
+    Z8Array!V z8_values() {
+        auto result = new Z8Array!V();
+        foreach (entry; entries) result.z8_add(entry.value);
+        return result;
+    }
+}
+Z8ObjectKeyMap!(K, V) z8_map_union(K, V)(Z8ObjectKeyMap!(K, V) left, Z8ObjectKeyMap!(K, V) right) {
+    auto result = new Z8ObjectKeyMap!(K, V)();
+    result.z8_add(z8_nonnull(left)); result.z8_add(z8_nonnull(right));
+    return result;
+}
+void z8_map_add_assign(K, V)(ref Z8ObjectKeyMap!(K, V) left, lazy Z8ObjectKeyMap!(K, V) previous, lazy Z8ObjectKeyMap!(K, V) right) {
+    auto oldValue = previous; auto newValue = right;
+    left = z8_map_union(oldValue, newValue);
+}

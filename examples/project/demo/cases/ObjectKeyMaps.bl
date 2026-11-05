@@ -1,0 +1,30 @@
+public class ObjectKeyMaps {
+    private ValueItem[KeyItem] member;
+    private static int[MapFlavor] staticEnums = {(MapFlavor.First, 7)};
+    private static ValueItem[KeyItem] pass(ValueItem[KeyItem] input) { try { return input; } finally {} }
+    public static int run() {
+        KeyItem first = new KeyItem;
+        KeyItem second = new KeyItem;
+        ValueItem value = new ValueItem;
+        int[KeyItem] integers = {(first, 4)};
+        if (integers[first] != 4 || integers.containsKey(second)) return 1;
+        integers.add(null, 6);
+        if (integers[null] != 6 || integers.keys().size() != 2) return 2;
+        ValueItem[KeyItem] values = {(first, value)};
+        ObjectKeyMaps owner = new ObjectKeyMaps;
+        owner.member.add(first, value);
+        if (owner.member[first].number != 11) return 9;
+        if (pass(values)[first].number != 11 || values.values().first().number != 11) return 3;
+        if (values.keys().first().number != 7 || !values.containsKey(first)) return 4;
+        ValueItem[][KeyItem] nested = {(first, {value})};
+        if (nested[first][0].number != 11 || nested.keys().first().number != 7) return 5;
+        int[MapFlavor] enumKeys = {(MapFlavor.Second, 9)};
+        if (enumKeys[MapFlavor.Second] != 9 || staticEnums[MapFlavor.First] != 7) return 6;
+        MapFlavor[KeyItem] enumValues = {(first, MapFlavor.First)};
+        if (enumValues[first] != MapFlavor.First || enumValues.keys().first().number != 7) return 7;
+        int[KeyItem] extra = {(first, 8)};
+        int[KeyItem] combined = integers + extra;
+        if (combined[first] != 8 || integers[first] != 4) return 8;
+        return 107;
+    }
+}
