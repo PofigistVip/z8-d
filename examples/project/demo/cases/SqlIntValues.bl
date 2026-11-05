@@ -1,0 +1,34 @@
+import org.zenframework.z8.lang.sql.sql_int;
+import org.zenframework.z8.lang.sql.sql_bool;
+public class SqlIntValues {
+    private static int calls;
+    private static int mark() { calls += 1; return 2; }
+    private static sql_int sqlMark() { calls += 10; return 1; }
+    public static sql_int expression() {
+        sql_int value = 5;
+        return (value + mark()) * (value - 1) / 2;
+    }
+    public static sql_bool compare() {
+        sql_int value = 5;
+        return (value + 2) >= 6;
+    }
+    public static sql_int remainder() { sql_int value = 7; return value % 3; }
+    public static sql_int bitwise() { sql_int value = 7; return (value & 3) | (value ^ 2); }
+    public static sql_int choice() { sql_bool condition = true; return condition.IIF(10, 20); }
+    public static sql_int functions() { sql_int value = -3; return (value.abs() + value.sign()).power(2); }
+    public static sql_int convertedLeft() { sql_int value = 4; return 2 + value; }
+    public static int run() {
+        calls = 0;
+        sql_int result = expression();
+        if (calls != 1) return 1;
+        sql_int missing = null;
+        if (missing != null || result == null) return 2;
+        int absent = null;
+        try { sql_int invalid = absent + sqlMark(); return 3; }
+        catch (exception error) {}
+        if (calls != 1) return 4;
+        sql_bool relation = compare();
+        sql_int selected = choice();
+        return 237;
+    }
+}

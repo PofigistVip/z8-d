@@ -1,0 +1,80 @@
+enum Z8SqlIntKind { constant, group, negate, add, subtract, multiply, divide, modulo, bitAnd, bitOr, bitXor, sign, abs, power, choose }
+class Z8SqlInt {
+    Z8SqlIntKind kind;
+    long constant;
+    Z8SqlInt left, right;
+    Z8SqlBool condition;
+    this(Z8SqlIntKind kind, long constant = 0, Z8SqlInt left = null, Z8SqlInt right = null, Z8SqlBool condition = null) {
+        this.kind = kind; this.constant = constant; this.left = left; this.right = right; this.condition = condition;
+    }
+}
+Z8SqlInt z8_sql_int_const(long value) { return new Z8SqlInt(Z8SqlIntKind.constant, value); }
+Z8SqlInt z8_sql_int_const(Z8Optional!long value) { return z8_sql_int_const(z8_optional_require(value)); }
+Z8SqlInt z8_sql_int_group(Z8SqlInt value) { return new Z8SqlInt(Z8SqlIntKind.group, 0, z8_nonnull(value)); }
+Z8SqlInt z8_sql_int_negate(Z8SqlInt value) { return new Z8SqlInt(Z8SqlIntKind.negate, 0, z8_nonnull(value)); }
+Z8SqlInt z8_sql_int_unary(string op)(Z8SqlInt value) {
+    static if (op == "sign") enum kind = Z8SqlIntKind.sign;
+    else static if (op == "abs") enum kind = Z8SqlIntKind.abs;
+    else static assert(0, "unsupported SQL integer method");
+    return new Z8SqlInt(kind, 0, z8_nonnull(value));
+}
+Z8SqlInt z8_sql_int_binary(string op)(Z8SqlInt left, Z8SqlInt right) {
+    z8_nonnull(left);
+    static if (op == "+") enum kind = Z8SqlIntKind.add;
+    else static if (op == "-") enum kind = Z8SqlIntKind.subtract;
+    else static if (op == "*") enum kind = Z8SqlIntKind.multiply;
+    else static if (op == "/") enum kind = Z8SqlIntKind.divide;
+    else static if (op == "%") enum kind = Z8SqlIntKind.modulo;
+    else static if (op == "&") enum kind = Z8SqlIntKind.bitAnd;
+    else static if (op == "|") enum kind = Z8SqlIntKind.bitOr;
+    else static if (op == "^") enum kind = Z8SqlIntKind.bitXor;
+    else static if (op == "power") enum kind = Z8SqlIntKind.power;
+    else static assert(0, "unsupported SQL integer operator");
+    return new Z8SqlInt(kind, 0, left, right);
+}
+Z8SqlBool z8_sql_int_compare(string op)(Z8SqlInt left, Z8SqlInt right) {
+    z8_nonnull(left);
+    static if (op == "==") enum kind = Z8SqlBoolKind.intEqual;
+    else static if (op == "!=") enum kind = Z8SqlBoolKind.intNotEqual;
+    else static if (op == "<") enum kind = Z8SqlBoolKind.intLess;
+    else static if (op == ">") enum kind = Z8SqlBoolKind.intGreater;
+    else static if (op == "<=") enum kind = Z8SqlBoolKind.intLessEqual;
+    else static if (op == ">=") enum kind = Z8SqlBoolKind.intGreaterEqual;
+    else static assert(0, "unsupported SQL integer comparison");
+    auto result = new Z8SqlBool(kind);
+    result.intLeft = left; result.intRight = right;
+    return result;
+}
+Z8SqlInt z8_sql_int_iif(Z8SqlBool condition, Z8SqlInt yes, Z8SqlInt no) {
+    return new Z8SqlInt(Z8SqlIntKind.choose, 0, yes, no, z8_nonnull(condition));
+}
+Z8SqlInt z8_sql_int_sign(Z8SqlInt value) { return z8_sql_int_unary!"sign"(value); }
+Z8SqlInt z8_sql_int_abs(Z8SqlInt value) { return z8_sql_int_unary!"abs"(value); }
+Z8SqlInt z8_sql_int_power(Z8SqlInt value, Z8SqlInt power) { return z8_sql_int_binary!"power"(value, power); }
+wstring z8_sql_int_format(Z8SqlInt value, Z8SqlVendor vendor = Z8SqlVendor.Postgres) {
+    z8_nonnull(value);
+    final switch (value.kind) {
+        case Z8SqlIntKind.constant: return value.constant.to!wstring;
+        case Z8SqlIntKind.group: return "("w ~ z8_sql_int_format(value.left, vendor) ~ ")"w;
+        case Z8SqlIntKind.negate: return "(-"w ~ z8_sql_int_format(value.left, vendor) ~ ")"w;
+        case Z8SqlIntKind.add: return z8_sql_int_format(value.left, vendor) ~ " + "w ~ z8_sql_int_format(value.right, vendor);
+        case Z8SqlIntKind.subtract: return z8_sql_int_format(value.left, vendor) ~ " - ("w ~ z8_sql_int_format(value.right, vendor) ~ ")"w;
+        case Z8SqlIntKind.multiply: return z8_sql_int_format(value.left, vendor) ~ "*"w ~ z8_sql_int_format(value.right, vendor);
+        case Z8SqlIntKind.divide: return "FLOOR("w ~ z8_sql_int_format(value.left, vendor) ~ "/"w ~ z8_sql_int_format(value.right, vendor) ~ ")"w;
+        case Z8SqlIntKind.modulo:
+            if (vendor == Z8SqlVendor.H2) throw new Exception("unsupported SQL database vendor");
+            auto left = z8_sql_int_format(value.left, vendor), right = z8_sql_int_format(value.right, vendor);
+            if (vendor == Z8SqlVendor.Oracle) return "MOD("w ~ left ~ ", "w ~ right ~ ")"w;
+            if (vendor == Z8SqlVendor.Postgres) return "mod("w ~ left ~ ", "w ~ right ~ ")"w;
+            if (vendor == Z8SqlVendor.SqlServer) return left ~ " % "w ~ right;
+            throw new Exception("unsupported SQL database vendor");
+        case Z8SqlIntKind.bitAnd: return "("w ~ z8_sql_int_format(value.left, vendor) ~ ") & ("w ~ z8_sql_int_format(value.right, vendor) ~ ")"w;
+        case Z8SqlIntKind.bitOr: return z8_sql_int_format(value.left, vendor) ~ " | "w ~ z8_sql_int_format(value.right, vendor);
+        case Z8SqlIntKind.bitXor: return "("w ~ z8_sql_int_format(value.left, vendor) ~ ") # ("w ~ z8_sql_int_format(value.right, vendor) ~ ")"w;
+        case Z8SqlIntKind.sign: return "SIGN("w ~ z8_sql_int_format(value.left, vendor) ~ ")"w;
+        case Z8SqlIntKind.abs: return "ABS("w ~ z8_sql_int_format(value.left, vendor) ~ ")"w;
+        case Z8SqlIntKind.power: return "POWER("w ~ z8_sql_int_format(value.left, vendor) ~ ", "w ~ z8_sql_int_format(value.right, vendor) ~ ")"w;
+        case Z8SqlIntKind.choose:
+            return z8_sql_bool_case(z8_sql_bool_format(value.condition, true, vendor), z8_sql_int_format(value.left, vendor), z8_sql_int_format(value.right, vendor));
+    }
+}

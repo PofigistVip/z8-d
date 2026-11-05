@@ -56,6 +56,7 @@ python tests/operator_distance.py
 python tests/assignment_operators.py
 python tests/priority_operator.py
 python tests/sql_bool.py
+python tests/sql_int.py
 python tests/compound_objects.py
 python tests/nested_fields.py
 python tests/nested_packages.py
@@ -235,8 +236,11 @@ framework по атрибутам пока не реализована.
 `||`, `==`, `!=` и `IIF` для логических аргументов строят дерево выражения.
 Операнды SQL-операторов вычисляются без короткого замыкания. Runtime-функция
 `z8_sql_bool_format` формирует SQL для поддержанных узлов с учётом логического
-контекста; её результат сверяется с четырьмя диалектами оригинала. Работа с
-полями и запросами, остальные SQL-типы и другие перегрузки пока не реализованы.
+контекста; её результат сверяется с четырьмя диалектами оригинала. Для `sql_int`
+поддерживаются преобразование из `int`, арифметика, побитовые операции `&`, `|`,
+`^`, сравнения, `sign`, `abs`, `power`, выбор через `IIF` и форматирование через
+`z8_sql_int_format`. Остаток для H2 отклоняется, как в текущем исходном runtime.
+Работа с полями и запросами, остальные SQL-типы и другие перегрузки пока не реализованы.
 Типы: `int` (64-битный знаковый), `decimal`, `bool`,
 `string`, `guid`, `binary`, `datespan`, `date`, `geometry`, `file`, `exception`, `primary`, `encoding`, одномерные и двумерные массивы этих типов,
 пользовательских классов и перечислений,

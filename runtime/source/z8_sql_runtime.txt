@@ -1,9 +1,11 @@
 // SQL values describe an expression tree; operators do not execute SQL.
-enum Z8SqlBoolKind { constant, group, not, and, or, equal, notEqual, choose }
+enum Z8SqlVendor { Oracle, SqlServer, Postgres, H2 }
+enum Z8SqlBoolKind { constant, group, not, and, or, equal, notEqual, choose, intEqual, intNotEqual, intLess, intGreater, intLessEqual, intGreaterEqual }
 class Z8SqlBool {
     Z8SqlBoolKind kind;
     bool constant;
     Z8SqlBool left, right, alternative;
+    Z8SqlInt intLeft, intRight;
     this(Z8SqlBoolKind kind, bool constant = false, Z8SqlBool left = null,
          Z8SqlBool right = null, Z8SqlBool alternative = null) {
         this.kind = kind; this.constant = constant;
@@ -31,11 +33,12 @@ Z8SqlBool z8_sql_bool_iif(Z8SqlBool condition, Z8SqlBool yes, Z8SqlBool no) {
     return new Z8SqlBool(Z8SqlBoolKind.choose, false, z8_nonnull(condition), yes, no);
 }
 
-private wstring z8_sql_bool_group_format(Z8SqlBool value, bool logical) {
+private wstring z8_sql_bool_group_format(Z8SqlBool value, bool logical, Z8SqlVendor vendor) {
     z8_nonnull(value);
-    auto text = z8_sql_bool_format(value, logical);
+    auto text = z8_sql_bool_format(value, logical, vendor);
     if ([Z8SqlBoolKind.constant, Z8SqlBoolKind.group, Z8SqlBoolKind.and,
-         Z8SqlBoolKind.equal, Z8SqlBoolKind.notEqual].canFind(value.kind)) return text;
+         Z8SqlBoolKind.equal, Z8SqlBoolKind.notEqual, Z8SqlBoolKind.intEqual, Z8SqlBoolKind.intNotEqual,
+         Z8SqlBoolKind.intLess, Z8SqlBoolKind.intGreater, Z8SqlBoolKind.intLessEqual, Z8SqlBoolKind.intGreaterEqual].canFind(value.kind)) return text;
     return "("w ~ text ~ ")"w;
 }
 private wstring z8_sql_bool_case(wstring condition, wstring yes, wstring no) {
@@ -43,27 +46,34 @@ private wstring z8_sql_bool_case(wstring condition, wstring yes, wstring no) {
 }
 // Boolean constants and these expression nodes have the same formatting in
 // all four supported Z8 database vendors. `logical` selects WHERE context.
-wstring z8_sql_bool_format(Z8SqlBool value, bool logical = false) {
+wstring z8_sql_bool_format(Z8SqlBool value, bool logical = false, Z8SqlVendor vendor = Z8SqlVendor.Postgres) {
     z8_nonnull(value);
     final switch (value.kind) {
         case Z8SqlBoolKind.constant:
             return (value.constant ? "1"w : "0"w) ~ (logical ? "=1"w : ""w);
-        case Z8SqlBoolKind.group: return z8_sql_bool_group_format(value.left, logical);
+        case Z8SqlBoolKind.group: return z8_sql_bool_group_format(value.left, logical, vendor);
         case Z8SqlBoolKind.not:
-            auto condition = "not("w ~ z8_sql_bool_format(value.left, true) ~ ")"w;
+            auto condition = "not("w ~ z8_sql_bool_format(value.left, true, vendor) ~ ")"w;
             return logical ? condition : z8_sql_bool_case(condition, "1"w, "0"w);
         case Z8SqlBoolKind.and:
-            auto condition = z8_sql_bool_group_format(value.left, true) ~ " AND "w ~
-                z8_sql_bool_group_format(value.right, true);
+            auto condition = z8_sql_bool_group_format(value.left, true, vendor) ~ " AND "w ~
+                z8_sql_bool_group_format(value.right, true, vendor);
             return logical ? condition : z8_sql_bool_case(condition, "1"w, "0"w);
         case Z8SqlBoolKind.or:
-            auto condition = z8_sql_bool_format(value.left, true) ~ " OR "w ~ z8_sql_bool_format(value.right, true);
+            auto condition = z8_sql_bool_format(value.left, true, vendor) ~ " OR "w ~ z8_sql_bool_format(value.right, true, vendor);
             return logical ? condition : z8_sql_bool_case(condition, "1"w, "0"w);
         case Z8SqlBoolKind.equal: case Z8SqlBoolKind.notEqual:
-            auto condition = z8_sql_bool_format(value.left) ~ (value.kind == Z8SqlBoolKind.equal ? "="w : "<>"w) ~ z8_sql_bool_format(value.right);
+            auto condition = z8_sql_bool_format(value.left, false, vendor) ~ (value.kind == Z8SqlBoolKind.equal ? "="w : "<>"w) ~ z8_sql_bool_format(value.right, false, vendor);
+            return logical ? condition : z8_sql_bool_case(condition, "1"w, "0"w);
+        case Z8SqlBoolKind.intEqual: case Z8SqlBoolKind.intNotEqual: case Z8SqlBoolKind.intLess:
+        case Z8SqlBoolKind.intGreater: case Z8SqlBoolKind.intLessEqual: case Z8SqlBoolKind.intGreaterEqual:
+            auto op = value.kind == Z8SqlBoolKind.intEqual ? "="w : value.kind == Z8SqlBoolKind.intNotEqual ? "<>"w :
+                value.kind == Z8SqlBoolKind.intLess ? "<"w : value.kind == Z8SqlBoolKind.intGreater ? ">"w :
+                value.kind == Z8SqlBoolKind.intLessEqual ? "<="w : ">="w;
+            auto condition = z8_sql_int_format(value.intLeft, vendor) ~ op ~ z8_sql_int_format(value.intRight, vendor);
             return logical ? condition : z8_sql_bool_case(condition, "1"w, "0"w);
         case Z8SqlBoolKind.choose:
-            auto text = z8_sql_bool_case(z8_sql_bool_format(value.left, true), z8_sql_bool_format(value.right), z8_sql_bool_format(value.alternative));
+            auto text = z8_sql_bool_case(z8_sql_bool_format(value.left, true, vendor), z8_sql_bool_format(value.right, false, vendor), z8_sql_bool_format(value.alternative, false, vendor));
             return logical ? "("w ~ text ~ ")=1"w : text;
     }
 }

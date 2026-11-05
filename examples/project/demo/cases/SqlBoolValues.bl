@@ -41,6 +41,9 @@ public class SqlBoolValues {
         sql_bool other = new sql_bool;
         sql_bool combined = !other || choice;
         if (calls != 1) return 2;
+        bool nativeFalse = false;
+        sql_bool eager = nativeFalse && mark();
+        if (calls != 2) return 6;
         calls = 0;
         bool missing = null;
         try { sql_bool invalid = receiver().IIF(missing, late()); return 3; }

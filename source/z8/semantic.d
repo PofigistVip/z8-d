@@ -197,6 +197,10 @@ class Checker {
             e.convertToSqlBool = true;
             return true;
         }
+        if (expected == ValueType.sqlIntType && (actual == ValueType.intType || actual == ValueType.optionalInt)) {
+            e.convertToSqlInt = true;
+            return true;
+        }
         if (actual == ValueType.selfType) {
             if (expected == ValueType.selfType && isAssignable(e.objectClass, expectedClass)) return true;
             auto conversion = findConversion(e.objectClass, expected, expectedClass);
@@ -337,6 +341,7 @@ class Checker {
                 else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
                 else if (actual == ValueType.intType && p.type == ValueType.dateType) weight += 100;
                 else if (actual == ValueType.boolType && p.type == ValueType.sqlBoolType) weight += 100;
+                else if (actual == ValueType.intType && p.type == ValueType.sqlIntType) weight += 100;
                 else if (p.type == ValueType.binaryType && [ValueType.stringType, ValueType.nullableString, ValueType.fileType].canFind(actual)) weight += 100;
                 else if ([ValueType.fileType, ValueType.exceptionType].canFind(p.type) && [ValueType.stringType, ValueType.nullableString].canFind(actual)) weight += 100;
                 else if (p.type == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType, ValueType.dateType, ValueType.fileType].canFind(actual)) { if (binaryOperator) ++distance; }
@@ -403,6 +408,7 @@ class Checker {
         foreach (item; program.imports) {
             if (item.name == "org.zenframework.z8.lang.encoding") continue;
             if (item.name == "org.zenframework.z8.lang.sql.sql_bool") continue;
+            if (item.name == "org.zenframework.z8.lang.sql.sql_int") continue;
             if (item.name == "org.zenframework.z8.lang.Math") { importedMath = true; continue; }
             auto found = item.name in allPrograms;
             if (found is null) fail("unresolved import '" ~ item.name ~ "'", item.token);
@@ -610,6 +616,7 @@ class Checker {
         if (e.parenthesisCount && result == ValueType.selfType && e.objectClass !is null)
             e.priorityMethod = lookupUnaryOperator(e.objectClass, "operatorPriority");
         if (e.parenthesisCount && result == ValueType.sqlBoolType) e.sqlBoolPriority = true;
+        if (e.parenthesisCount && result == ValueType.sqlIntType) e.sqlIntPriority = true;
         if (result == ValueType.stringType && (e.kind == ExprKind.memberCall || e.kind == ExprKind.binary))
             e.nonNullStringResult = true;
         return result;
@@ -713,6 +720,7 @@ class Checker {
                 return ValueType.selfType;
             case ExprKind.newSelf:
                 if (e.token.text == "sql_bool") { e.inferredType = ValueType.sqlBoolType; return ValueType.sqlBoolType; }
+                if (e.token.text == "sql_int") { e.inferredType = ValueType.sqlIntType; return ValueType.sqlIntType; }
                 e.newHasContainer = !staticContext;
                 e.objectClass = resolveClass(currentProgram, e.token.text, e.token);
                 if (e.objectClass.isEnum) fail("cannot instantiate an enum", e.token);
@@ -961,10 +969,26 @@ class Checker {
                 auto receiver = typeOf(e.left);
                 if (receiver == ValueType.sqlBoolType) {
                     if (e.token.text == "IIF") {
-                        checkArguments(e, [ValueType.sqlBoolType, ValueType.sqlBoolType]);
-                        e.builtinCall = "z8_sql_bool_iif"; return ValueType.sqlBoolType;
+                        if (e.arguments.length != 2) fail("incorrect argument count", e.token);
+                        auto first = typeOf(e.arguments[0]), second = typeOf(e.arguments[1]);
+                        if (first == ValueType.nullType && second == ValueType.nullType)
+                            fail("ambiguous SQL IIF overload", e.token);
+                        bool intChoice = [ValueType.sqlIntType, ValueType.intType, ValueType.optionalInt].canFind(first) ||
+                            [ValueType.sqlIntType, ValueType.intType, ValueType.optionalInt].canFind(second);
+                        auto type = intChoice ? ValueType.sqlIntType : ValueType.sqlBoolType;
+                        checkArguments(e, [type, type]);
+                        e.builtinCall = intChoice ? "z8_sql_int_iif" : "z8_sql_bool_iif"; return type;
                     }
                     fail("unsupported SQL boolean method", e.token);
+                }
+                if (receiver == ValueType.sqlIntType) {
+                    if (["sign", "abs"].canFind(e.token.text)) {
+                        checkArguments(e, []); e.builtinCall = "z8_sql_int_" ~ e.token.text; return ValueType.sqlIntType;
+                    }
+                    if (e.token.text == "power") {
+                        checkArguments(e, [ValueType.sqlIntType]); e.builtinCall = "z8_sql_int_power"; return ValueType.sqlIntType;
+                    }
+                    fail("unsupported SQL integer method", e.token);
                 }
                 if (receiver == ValueType.optionalInt) {
                     e.optionalIntReceiver = true;
@@ -1346,6 +1370,7 @@ class Checker {
                     case "exception": targetType = ValueType.exceptionType; break;
                     case "encoding": targetType = ValueType.encodingType; break;
                     case "sql_bool": targetType = ValueType.sqlBoolType; break;
+                    case "sql_int": targetType = ValueType.sqlIntType; break;
                     case "primary": targetType = ValueType.primaryType; break;
                     default: targetType = ValueType.voidType; break;
                 }
@@ -1353,7 +1378,7 @@ class Checker {
                     e.exceptionInstanceOf = true;
                     return ValueType.boolType;
                 }
-                if (targetType != ValueType.voidType && targetType != ValueType.exceptionType && targetType != ValueType.encodingType && targetType != ValueType.sqlBoolType && sourceType == ValueType.primaryType) {
+                if (targetType != ValueType.voidType && targetType != ValueType.exceptionType && targetType != ValueType.encodingType && targetType != ValueType.sqlBoolType && targetType != ValueType.sqlIntType && sourceType == ValueType.primaryType) {
                     e.castType = targetType; e.primaryInstanceOf = true;
                     return ValueType.boolType;
                 }
@@ -1361,11 +1386,11 @@ class Checker {
                     sourceType == ValueType.nullableString ? ValueType.stringType : sourceType;
                 bool scalar = [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType,
                     ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType,
-                    ValueType.dateType, ValueType.fileType, ValueType.encodingType, ValueType.sqlBoolType].canFind(baseSource);
+                    ValueType.dateType, ValueType.fileType, ValueType.encodingType, ValueType.sqlBoolType, ValueType.sqlIntType].canFind(baseSource);
                 if (targetType != ValueType.voidType) {
                     if (sourceType == ValueType.voidType) fail("instanceof requires a value", e.token);
                     e.inferredType = sourceType;
-                    e.falseInstanceOf = !scalar || (targetType == ValueType.primaryType && [ValueType.encodingType, ValueType.sqlBoolType].canFind(baseSource)) || (targetType != ValueType.primaryType && targetType != baseSource);
+                    e.falseInstanceOf = !scalar || (targetType == ValueType.primaryType && [ValueType.encodingType, ValueType.sqlBoolType, ValueType.sqlIntType].canFind(baseSource)) || (targetType != ValueType.primaryType && targetType != baseSource);
                     e.scalarInstanceOf = !e.falseInstanceOf;
                     return ValueType.boolType;
                 }
@@ -1391,6 +1416,7 @@ class Checker {
             case ExprKind.unary:
                 auto operand = typeOf(e.left);
                 if (operand == ValueType.sqlBoolType && e.token.text == "!") { e.sqlBoolOperator = true; return ValueType.sqlBoolType; }
+                if (operand == ValueType.sqlIntType && e.token.text == "-") { e.sqlIntOperator = true; return ValueType.sqlIntType; }
                 if (operand == ValueType.selfType && ["!", "~", "-"].canFind(e.token.text)) {
                     auto method = lookupUnaryOperator(e.left.objectClass, "operator" ~ e.token.text);
                     if (method is null) {
@@ -1425,10 +1451,23 @@ class Checker {
                 fail("invalid unary operand", e.token); assert(0);
             case ExprKind.binary:
                 auto left = typeOf(e.left), right = typeOf(e.right), op = e.token.text;
+                if ([ValueType.boolType, ValueType.optionalBool].canFind(left) && right == ValueType.sqlBoolType) {
+                    matches(e.left, ValueType.sqlBoolType); left = ValueType.sqlBoolType;
+                }
+                if ([ValueType.intType, ValueType.optionalInt].canFind(left) && right == ValueType.sqlIntType) {
+                    matches(e.left, ValueType.sqlIntType); left = ValueType.sqlIntType;
+                }
                 if (left == ValueType.sqlBoolType && right != ValueType.nullType) {
                     if (!["&&", "||", "==", "!="].canFind(op) || !matches(e.right, ValueType.sqlBoolType))
                         fail("invalid SQL boolean operands", e.token);
                     e.sqlBoolOperator = true; return ValueType.sqlBoolType;
+                }
+                if (left == ValueType.sqlIntType && right != ValueType.nullType) {
+                    if (!["+", "-", "*", "/", "%", "&", "|", "^", "==", "!=", "<", ">", "<=", ">="].canFind(op) || !matches(e.right, ValueType.sqlIntType))
+                        fail("invalid SQL integer operands", e.token);
+                    e.sqlIntOperator = true;
+                    e.sqlIntComparison = ["==", "!=", "<", ">", "<=", ">="].canFind(op);
+                    return e.sqlIntComparison ? ValueType.sqlBoolType : ValueType.sqlIntType;
                 }
                 if (left == ValueType.selfType && right != ValueType.nullType) {
                     auto method = lookupMethod(e.left.objectClass, "operator" ~ op);
@@ -1783,6 +1822,7 @@ class Checker {
                 if (s.expression !is null && returnType == ValueType.selfType)
                     s.priorityMethod = lookupUnaryOperator(returnObjectClass, "operatorPriority");
                 if (s.expression !is null && returnType == ValueType.sqlBoolType) s.sqlBoolReturnPriority = true;
+                if (s.expression !is null && returnType == ValueType.sqlIntType) s.sqlIntReturnPriority = true;
                 return true;
             case StmtKind.ifStmt:
                 if (!matches(s.expression, ValueType.boolType)) fail("if condition must be bool", s.token);
