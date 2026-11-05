@@ -1,0 +1,15 @@
+import org.zenframework.z8.lang.encoding;
+
+public class PrimaryConversion {
+    public operator primary() { return 42; }
+    public operator encoding() { return encoding.UTF8; }
+
+    public static int run() {
+        PrimaryConversion value;
+        primary number = value;
+        encoding charset = value;
+        if ((int)number != 42 || charset != encoding.UTF8) return 1;
+        if ((int)(primary)value != 42 || (encoding)value != encoding.UTF8) return 2;
+        return 277;
+    }
+}

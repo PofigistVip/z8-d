@@ -260,6 +260,8 @@ unittest {
     compile(q{class A { static sql_primary[string] f(sql_int x) { sql_primary[string] a = {("x", x)}; return a; } }});
     compile(q{class A { public operator sql_int() { return 42; } static sql_int f(A x) { return x; } }});
     compile(q{class A { public operator exception() { return "error"; } static void f(A x) { throw x; } }});
+    compile(q{class A { public operator primary() { return 42; } static primary f(A x) { return x; } }});
+    compile(q{class A { public operator encoding() { return encoding.UTF8; } static encoding f(A x) { return x; } }});
     compile(q{class A { static sql_int[guid] f(sql_int x, guid y) { sql_int[guid] a = {(y, x)}; return a; } }});
     rejects(q{class A { static sql_int[string] f() { sql_int[string] a = {("x", 1)}; return a; } }});
     rejects(q{class A { static sql_binary f(binary x) { return x; } }});
