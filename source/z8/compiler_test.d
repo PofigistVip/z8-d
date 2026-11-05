@@ -72,7 +72,10 @@ unittest {
     rejects(q{class A { [flag] int x; }});
     rejects(q{class A { [flag] A[] x; }});
     rejects(q{class A { [flag] [flag] A x; }});
-    rejects(q{class A { [flag] void method() {} }});
+    compile(q{class A { [flag] void method() {} }});
+    compile(q{class A { [name "same"] void a() {} [name "same"] void b() {} }});
+    rejects(q{class A { [name "same"] A field; [name "same"] void method() {} }});
+    rejects(q{class A { [tag value] void method(int value) {} }});
     compile(q{class A { A x; [flag] x; }});
     compile(q{class A { A x; [flag] x = class {}; }});
     rejects(q{class A { int x; [flag] x; }});

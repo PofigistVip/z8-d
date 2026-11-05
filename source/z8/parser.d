@@ -358,10 +358,10 @@ class Parser {
                 }
                 expect(";"); result.fields ~= field; continue;
             }
-            if (attributes.length) error("method attributes are not supported yet");
             if (isAuto) error("auto cannot be applied to a method");
             if (declaredFinal) error("final methods are not supported by BL");
             auto method = new Method;
+            method.attributes = attributes;
             if (isVirtual && isStatic) error("a static method cannot be virtual");
             method.isPublic = isPublic; method.isProtected = isProtected; method.isStatic = isStatic; method.isVirtual = isVirtual; method.owner = result;
             method.returnType = declaredType; method.returnObjectName = declaredObjectName; method.name = name; method.operatorSymbol = operatorSymbol; method.isCastOperator = isCastOperator; expect("(");

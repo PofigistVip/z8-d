@@ -79,6 +79,7 @@ class Method {
     ValueType returnType;
     Token name;
     Parameter[] parameters;
+    TypeAttribute[] attributes;
     Statement body;
     bool isPublic, isProtected;
     bool isStatic;

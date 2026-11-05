@@ -158,6 +158,7 @@ class Checker {
         }
         foreach (field; program.fields) checkMember(field.attributes, field, null);
         foreach (init; program.memberInitializers) checkMember(init.attributes, null, init);
+        foreach (method; program.methods) checkMember(method.attributes, null, null);
     }
     void prepareDeclarations(Program program, Program[string] programs) {
         currentProgram = program; allClasses = programs;
@@ -541,7 +542,10 @@ class Checker {
         }
         fieldInitialization = false;
         foreach (m; program.methods) {
-            variables = null; objectVariables = null; returnType = m.returnType; loopDepth = 0; finallyDepth = 0; staticContext = m.isStatic;
+            variables = null; objectVariables = null; staticContext = false;
+            // Z8 checks method attributes before opening the parameter scope.
+            checkAttributeExpressions(m.attributes);
+            returnType = m.returnType; loopDepth = 0; finallyDepth = 0; staticContext = m.isStatic;
             m.returnObjectClass = hasObjectClass(m.returnType) ? resolveClass(program, m.returnObjectName, m.name) : null;
             returnObjectClass = m.returnObjectClass;
             foreach (ref p; m.parameters) {

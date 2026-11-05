@@ -1,7 +1,9 @@
 public class MixedOverloads {
     static int effects;
+    static int attributeCalls;
+    public static int attributeEffect() { attributeCalls += 1; return attributeCalls; }
     static int field;
-    public static int choose(int value) { return value + 10; }
+    [name "MethodNote"] [ignored attributeEffect()] public static int choose(int value) { return value + 10; }
     public int choose(string value) { return value.length() + 20; }
     public static void add(int value) { effects += value; }
     public void add(string value) { effects += value.length(); }
@@ -9,6 +11,7 @@ public class MixedOverloads {
     public int invoke() { return choose(1) + choose("abc"); }
     public static int run() {
         effects = 0;
+        if (attributeCalls != 0) return 9;
         MixedOverloads obj = new MixedOverloads;
         if (obj.choose("ab") != 22 || MixedOverloads.choose(3) != 13 || obj.invoke() != 34) return 1;
         if (receiver().choose(3) != 13 || effects != 1) return 2;
