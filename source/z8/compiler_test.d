@@ -14,6 +14,9 @@ unittest {
     compile(q{class A { bool operator !() { return true; } static bool f() { A a; return !a; } }});
     compile(q{class A { virtual int f() { return 1; } A child = class { int f() { return 2; } }; }});
     compile(q{class A { A child; child = class {}; }});
+    compile(q{class A { int x; x = 1; int y = x + 1; }});
+    rejects(q{class A { int x = 1; x = 2; }});
+    rejects(q{class A { int x; x = 1; x = 2; }});
     compile(q{class A { A child; child.child = class {}; }});
     rejects(q{class A { A child; child.missing = class {}; }});
     rejects(q{class A { missing = class {}; }});

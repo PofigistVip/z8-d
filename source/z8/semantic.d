@@ -451,6 +451,31 @@ class Checker {
                 if (!direct && !field.userOperatorAssignment) fail("field initializer type mismatch", field.name);
             }
         }
+        string memberPath(Expression target) {
+            return target.kind == ExprKind.variable ? target.token.text : memberPath(target.left) ~ "." ~ target.token.text;
+        }
+        void setTargetStage(Expression target) {
+            if (target is null) return;
+            target.fieldInitialization = false;
+            setTargetStage(target.left);
+        }
+        string[] initializedMembers;
+        foreach (init; program.memberInitializers) {
+            auto name = memberPath(init.target);
+            if (initializedMembers.canFind(name)) fail("duplicate field initialization", init.token);
+            initializedMembers ~= name;
+            if (init.target.kind == ExprKind.variable)
+                foreach (field; program.fields)
+                    if (field.name.text == name && (field.initializer !is null || field.nestedClass !is null))
+                        fail("duplicate field initialization", init.token);
+            staticContext = false; fieldInitialization = true;
+            checkStatement(init);
+            auto root = init.target;
+            while (root.kind == ExprKind.field) root = root.left;
+            if (!root.isField || root.targetClass.length) fail("field initialization requires an instance field", init.token);
+            if (init.type == ValueType.selfType) fail("reference field initialization is not supported yet", init.token);
+            setTargetStage(init.target);
+        }
         fieldInitialization = false;
         foreach (m; program.methods) {
             variables = null; objectVariables = null; returnType = m.returnType; loopDepth = 0; finallyDepth = 0; staticContext = m.isStatic;

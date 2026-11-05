@@ -49,6 +49,12 @@ class Parser {
         return i;
     }
     // A for-each initializer is a declarator, including optional final and array types.
+    private bool isMemberInitializationStart() {
+        if (current.kind != TokenKind.identifier) return false;
+        size_t i = 1;
+        while (look(i).text == "." && look(i + 1).kind == TokenKind.identifier) i += 2;
+        return ["=", "+="].canFind(look(i).text);
+    }
     private bool isMemberSpecializationStart() {
         if (current.kind != TokenKind.identifier) return false;
         size_t i = 1;
@@ -217,6 +223,18 @@ class Parser {
                 }
                 parseClassBody(owner);
                 expect(";"); continue;
+            }
+            if (isMemberInitializationStart()) {
+                if (hasAccess || isStatic || isVirtual || isAuto) error("modifiers cannot be applied to a field initialization");
+                auto name = identifier();
+                auto target = new Expression(ExprKind.variable, name);
+                while (accept(".")) {
+                    auto member = new Expression(ExprKind.field, identifier());
+                    member.left = target; target = member;
+                }
+                auto init = new Statement(StmtKind.assignment, name);
+                init.target = target; init.assignmentOperator = take().text; init.expression = initializer();
+                expect(";"); result.memberInitializers ~= init; continue;
             }
             if (accept("records")) { parseRecords(result); continue; }
             auto declaredFinal = accept("final");

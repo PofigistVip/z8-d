@@ -1,0 +1,4 @@
+public class BodyInitBase {
+    public int number;
+    public NestedBase child;
+}

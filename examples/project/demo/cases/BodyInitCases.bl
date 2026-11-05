@@ -1,0 +1,23 @@
+public class BodyInitCases extends BodyInitBase {
+    number = 5;
+    int after = number + 3;
+    child.initial = after;
+    public int prior;
+    prior = later;
+    public int later = 20;
+    public int counter;
+    counter += 4;
+    public NestedBase item = class {
+        int bonus;
+        bonus = 7;
+        public int value() { return super.value() + bonus; }
+    };
+    public static int run() {
+        BodyInitCases value;
+        if (value.number != 5) return 1;
+        if (value.after != 3) return 3;
+        if (value.child.initial != 3) return 4;
+        if (value.counter != 4 || value.item.value() != 10 || value.prior != 20) return 2;
+        return 219;
+    }
+}

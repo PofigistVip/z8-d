@@ -622,12 +622,16 @@ package string emitPrograms(Program[] programs) {
         if (autoInitializers.length)
             result ~= "override void z8_init_members() {\nsuper.z8_init_members();\n" ~ autoInitializers ~ "}\n";
         result ~= "override void z8_init_values() {\nsuper.z8_init_values();\n";
-        foreach (field; program.fields) if (!field.isStatic) {
+        // TypeBody.rearrangeMembers puts declarations before standalone member initializers.
+        foreach (field; program.fields) {
+            if (field.isStatic) continue;
             if (field.type == ValueType.selfType)
                 result ~= "if (this.f_" ~ field.name.text ~ " is null) throw new Exception(\"null object field initializer\");\n";
             else if (field.initializer !is null)
                 result ~= "this.f_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
         }
+        foreach (init; program.memberInitializers)
+            result ~= emitSimple(init) ~ ";\n";
         result ~= "}\n";
         foreach (method; program.methods) if (method.name.text == "constructor") {
             result ~= "override void z8_call_constructor() { this.m_constructor(); }\n";

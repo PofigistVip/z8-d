@@ -94,6 +94,7 @@ class Program {
     Token name;
     Method[] methods;
     Field[] fields;
+    Statement[] memberInitializers;
     Import[] imports;
     string qualifiedName, sourceName, emittedName;
     string baseName;
