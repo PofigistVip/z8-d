@@ -34,9 +34,9 @@ private string dType(ValueType type, Program objectClass = null, Program keyObje
     if (isSqlArray(type)) return "Z8Array!(" ~ dType(elementType(type)) ~ ")";
     if (isMap(type)) {
         auto key = mapKeyType(type), value = mapValueType(type);
-        if (type == ValueType.stringMap) return "Z8StringMap";
-        if (type == ValueType.primaryStringMap) return "Z8PrimaryMap";
-        if (type == ValueType.intStringMap) return "Z8StringIntMap";
+        if (value == ValueType.stringType && key == ValueType.stringType) return "Z8StringMap";
+        if (value == ValueType.primaryType && key == ValueType.stringType) return "Z8PrimaryMap";
+        if (value == ValueType.intType && key == ValueType.stringType) return "Z8StringIntMap";
         if (hasMapKeyClass(type)) return "Z8ObjectKeyMap!(" ~ dType(key, keyObjectClass) ~ ", " ~ dType(value, objectClass) ~ ")";
         if ([ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(key))
             return "Z8ReferenceKeyMap!(" ~ dType(key) ~ ", " ~ dType(value, objectClass) ~ ")";

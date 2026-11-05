@@ -938,7 +938,7 @@ class Checker {
                         case "name": case "path": case "author": return ValueType.nullableString;
                         case "time": return ValueType.dateType;
                         case "size": return ValueType.optionalInt;
-                        case "details": return ValueType.stringMap;
+                        case "details": return mapType(ValueType.stringType, ValueType.stringType);
                         default: fail("unknown file field", e.token);
                     }
                 }
