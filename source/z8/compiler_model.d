@@ -99,9 +99,12 @@ package wstring attributeLiteralValue(TypeAttribute attribute) {
     assert(attribute.value.kind == TokenKind.integerLiteral);
     auto spelling = attribute.value.text.replace(" ", "").replace("\t", "");
     long value;
-    if (spelling.length > 2 && spelling[0] == '0' && (spelling[1] == 'x' || spelling[1] == 'X'))
-        value = cast(long)spelling[2 .. $].to!ulong(16);
-    else value = spelling.to!long;
+    bool negative = spelling.length && spelling[0] == '-';
+    auto magnitude = negative ? spelling[1 .. $] : spelling;
+    if (magnitude.length > 2 && magnitude[0] == '0' && (magnitude[1] == 'x' || magnitude[1] == 'X')) {
+        value = cast(long)magnitude[2 .. $].to!ulong(16);
+        if (negative) value = -value;
+    } else value = spelling.to!long;
     return (value.to!string ~ "L").to!wstring;
 }
 struct Import { string name; Token token; }

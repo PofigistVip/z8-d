@@ -16,7 +16,8 @@ unittest {
     rejects(q{final public class A {}});
     rejects(q{[request "true"] class A {}});
     rejects(q{[native true] enum A {}});
-    compile(q{[request true] [flag false] [count 0x10] class A {}});
+    compile(q{[request true] [flag false] [count 0x10] [negative -7] class A {}});
+    rejects(q{[flag -true] class A {}});
     rejects(q{[request 1] class A {}});
     compile(q{[job "*/15 0 1-31 1,3,5 1-5"] class A {}});
     compile(q{[job ""] class A {}});

@@ -255,6 +255,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             !"новое 😀".equals(metadata.getAttribute("sharedTag")) ||
             !"".equals(metadata.getAttribute("flag")) || !"false".equals(metadata.getAttribute("request")) ||
             !"true".equals(metadata.getAttribute("boolTag")) || !"16L".equals(metadata.getAttribute("count")) ||
+            !"-16L".equals(metadata.getAttribute("negative")) ||
             metadata.getAttribute("absent") != null)
             throw new AssertionError("type attribute metadata differs");
         if (metadata.get().annotated != metadata.get().replacement ||
@@ -263,6 +264,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             !"существующее".equals(metadata.get().annotated.getAttribute("initTag")) ||
             !"Second Field".equals(metadata.get().annotated.getAttribute("name")) ||
             !"false".equals(metadata.get().annotated.getAttribute("enabled")) ||
+            !"-7L".equals(metadata.get().annotated.getAttribute("delta")) ||
             !"7L".equals(metadata.get().annotated.getAttribute("count")) ||
             !"*/15 0 1-31 1,3,5 1-5".equals(metadata.get().annotated.getAttribute("job")) ||
             !"true".equals(metadata.get().annotated.getAttribute("selected")) ||
@@ -440,6 +442,7 @@ void main() {
     assert(metadata.z8_get_attribute("request"w) == "false"w);
     assert(metadata.z8_get_attribute("boolTag"w) == "true"w);
     assert(metadata.z8_get_attribute("count"w) == "16L"w);
+    assert(metadata.z8_get_attribute("negative"w) == "-16L"w);
     assert(metadata.z8_get_attribute("absent"w) is null);
     z8_nonnull(metadata);
     assert(metadata.f_annotated is metadata.f_replacement);
@@ -448,6 +451,7 @@ void main() {
     assert(metadata.f_annotated.z8_get_attribute("initTag"w) == "существующее"w);
     assert(metadata.f_annotated.z8_get_attribute("name"w) == "Second Field"w);
     assert(metadata.f_annotated.z8_get_attribute("enabled"w) == "false"w);
+    assert(metadata.f_annotated.z8_get_attribute("delta"w) == "-7L"w);
     assert(metadata.f_annotated.z8_get_attribute("count"w) == "7L"w);
     assert(metadata.f_annotated.z8_get_attribute("job"w) == "*/15 0 1-31 1,3,5 1-5"w);
     assert(metadata.f_annotated.z8_get_attribute("selected"w) == "true"w);
