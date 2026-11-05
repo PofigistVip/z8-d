@@ -20,6 +20,17 @@ open object. Handler failures produce the Z8 error envelope and HTTP 200, as
 in `RequestDispatcher`. This mode does not yet implement authorization, request
 routing, retries, or the rest of the application-server protocol.
 
+An optional `IZ8HttpAuthority` constructor argument connects a host authority
+to the transport. With an authority present, each request must have a session
+accepted by `authorize`; for `request=login`, the server also tries `login`
+using the supplied credentials when no session was accepted. Denied requests
+receive the Z8 error envelope with HTTP 401. The authority supplies the
+`Z8ApplicationSession` used by `Application.user()` and related methods. With
+no authority, the host handler is responsible for access control. Providers
+must handle concurrent calls and decide how to synchronize session state.
+`remoteAddress` is the connection peer; `forwardedAddress` exposes the raw
+`X-Real-IP` header for deployments where the host explicitly trusts its proxy.
+
 The host owns the server and must call `stop()` from outside a request handler.
 Callbacks may run concurrently and must synchronize their own shared state.
 `Z8HttpRequest` exposes the HTTP method, decoded path, raw query, content type,

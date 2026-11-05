@@ -19,11 +19,15 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     (source / "Application.bl").write_text('''
 [native "org.zenframework.z8.server.base.application.Application"] public class Application {
     public static string[string] requestParameters(); public static file[] requestFiles(); public static JsonWriter responseWriter();
+    public static User user(); public static guid userId();
     public static void redirect(string url);
     public static void info(string text); public static void warning(string text); public static void error(string text);
     public static void logInfo(string text); public static void logWarning(string text); public static void logError(string text);
     public static void print(file value);
 }
+''', encoding="utf-8")
+    (source / "User.bl").write_text('''
+[native "org.zenframework.z8.server.base.security.User"] public class User { public string login; }
 ''', encoding="utf-8")
     (source / "JsonWriter.bl").write_text('''
 [native "org.zenframework.z8.server.base.json.JsonWriter"] public class JsonWriter {
@@ -40,6 +44,11 @@ public class Probe {
         if (p.containsKey("mode") && p["mode"] == "protocol") {
             Application.info("notice");
             Application.responseWriter().writeProperty("answer", 42);
+            return;
+        }
+        if (p.containsKey("mode") && p["mode"] == "auth") {
+            Application.responseWriter().writeProperty("login", Application.user().login)
+                .writeProperty("userId", Application.userId());
             return;
         }
         if (p.containsKey("mode") && p["mode"] == "unbalanced") {
@@ -71,6 +80,7 @@ public class Probe {
         if not language.is_dir(): raise SystemExit("Original BL standard library not found")
         (source / "Application.bl").unlink()
         (source / "JsonWriter.bl").unlink()
+        (source / "User.bl").unlink()
         shutil.copytree(language, source, dirs_exist_ok=True)
         probe = source / "Probe.bl"
         probe.write_text("import org.zenframework.z8.base.application.Application;\nimport org.zenframework.z8.base.json.JsonWriter;\n" +
@@ -88,6 +98,20 @@ import z8gen.p_Probe;
 import std.stdio : writeln, stdout, readln;
 import core.memory : GC;
 import std.string : indexOf;
+class Authority : IZ8HttpAuthority {
+    Z8ApplicationSession makeSession(wstring login) {
+        auto user = new Z8UserData(); user.id = z8_guid_create(42); user.login = login;
+        auto system = new Z8UserData(); system.id = z8_guid_create(1);
+        return new Z8ApplicationSession("valid"w, user, system);
+    }
+    Z8ApplicationSession authorize(Z8HttpRequest request, wstring id, wstring serverId) {
+        if (request.remoteAddress != "127.0.0.1") return null;
+        return id == "valid"w && serverId == "shard"w ? makeSession("session-user"w) : null;
+    }
+    Z8ApplicationSession login(Z8HttpRequest request, wstring login, wstring password) {
+        return login == "alice"w && password == "secret"w ? makeSession(login) : null;
+    }
+}
 void runRequest(Z8HttpRequest request) {
     if (request.query.indexOf("collect=1") >= 0) GC.collect();
     Z8p_50726F6265.m_run();
@@ -103,9 +127,11 @@ void runRequest(Z8HttpRequest request) {
 void main() {
     auto server = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048);
     auto protocol = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048, Z8ResponseMode.application, "server-1"w);
+    auto auth = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048, Z8ResponseMode.application, "server-1"w, new Authority());
     scope(exit) server.stop();
     scope(exit) protocol.stop();
-    writeln(server.port(), " ", protocol.port()); stdout.flush();
+    scope(exit) auth.stop();
+    writeln(server.port(), " ", protocol.port(), " ", auth.port()); stdout.flush();
     readln();
     server.stop(); server.stop();
     bool stopped; try { server.port(); } catch (Exception) { stopped = true; }
@@ -127,8 +153,8 @@ void main() {
     try:
         line = process.stdout.readline().strip()
         ports = line.split()
-        if len(ports) != 2 or not all(p.isdigit() for p in ports): raise RuntimeError("Server did not start: " + line + process.stderr.read())
-        port, protocol_port = map(int, ports)
+        if len(ports) != 3 or not all(p.isdigit() for p in ports): raise RuntimeError("Server did not start: " + line + process.stderr.read())
+        port, protocol_port, auth_port = map(int, ports)
         def request(path, body=None, headers=None, target=None):
             conn = http.client.HTTPConnection("127.0.0.1", target or port, timeout=10)
             try:
@@ -180,6 +206,25 @@ void main() {
         result = json.loads(body)
         assert status == 200 and result["request"] is None and result["success"] is False, result
         assert result["info"]["messages"][-1]["text"] == "unbalanced response writer", result
+        status, body = request("/api?mode=auth&request=read", target=auth_port)
+        result = json.loads(body)
+        assert status == 401 and result["status"] == 401 and result["success"] is False and result["data"] == [], result
+        assert result["info"]["messages"][0]["type"] == "error", result
+        status, body = request("/api?mode=auth&request=read&session=invalid&server=shard", target=auth_port)
+        assert status == 401, (status, body)
+        status, body = request("/api?mode=auth&request=read&session=valid&server=other", target=auth_port)
+        assert status == 401, (status, body)
+        status, body = request("/api?mode=auth&request=read&session=valid&server=shard", target=auth_port)
+        result = json.loads(body)
+        assert status == 200 and result["success"] and result["login"] == "session-user", result
+        status, body = request("/api?mode=auth&request=login&login=alice&password=wrong", target=auth_port)
+        assert status == 401, (status, body)
+        status, body = request("/api?mode=auth&request=login&login=alice&password=secret", target=auth_port)
+        result = json.loads(body)
+        assert status == 200 and result["success"] and result["login"] == "alice", result
+        status, body = request("/api?mode=auth&request=login&session=invalid&login=alice&password=secret", target=auth_port)
+        result = json.loads(body)
+        assert status == 200 and result["login"] == "alice", result
         status, body = request("/api?name=after&value=error")
         assert status == 200 and json.loads(body)["name"] == "after", (status, body)
         status, body = request("/api?name=x", "x" * 2049)

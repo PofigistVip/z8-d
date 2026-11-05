@@ -5,7 +5,7 @@ import core.internal.gc.proxy : gc_getProxy;
 import core.thread : Thread, thread_attachThis, thread_detachThis;
 import std.algorithm : min;
 import std.conv : to;
-import std.json : JSONValue;
+import std.json : JSONValue, parseJSON;
 import std.string : fromStringz, toStringz, indexOf, startsWith, toLower, split;
 import z8.runtime;
 
@@ -47,7 +47,7 @@ extern(C) {
 }
 
 class Z8HttpRequest {
-    string method, path, query, contentType, remoteAddress;
+    string method, path, query, contentType, remoteAddress, host, forwardedAddress;
     ubyte[] body;
     Z8RequestMonitor monitor;
 }
@@ -226,18 +226,28 @@ private ubyte[] readBody(MgConnection* connection, long length, bool chunked, si
 }
 
 enum Z8ResponseMode { raw, application }
+// A host-provided authority decides whether credentials or a session are valid.
+// Implementations must support concurrent calls; returning null denies access.
+interface IZ8HttpAuthority {
+    Z8ApplicationSession authorize(Z8HttpRequest request, wstring sessionId, wstring serverId);
+    Z8ApplicationSession login(Z8HttpRequest request, wstring login, wstring password);
+}
 class Z8CivetServer {
     private MgContext* context;
     private void delegate(Z8HttpRequest request) handler;
     private size_t bodyLimit;
     private Z8ResponseMode responseMode;
     private wstring serverId;
+    private IZ8HttpAuthority authority;
+    private wstring accessDeniedMessage;
 
     this(string listening, void delegate(Z8HttpRequest request) handler, size_t bodyLimit = 1024 * 1024,
-         Z8ResponseMode responseMode = Z8ResponseMode.raw, wstring serverId = null) {
+         Z8ResponseMode responseMode = Z8ResponseMode.raw, wstring serverId = null,
+         IZ8HttpAuthority authority = null, wstring accessDeniedMessage = "Incorrect login or password"w) {
         if (handler is null) throw new Exception("HTTP request handler is required");
         if (!bodyLimit) throw new Exception("HTTP body limit must be positive");
         this.handler = handler; this.bodyLimit = bodyLimit; this.responseMode = responseMode; this.serverId = serverId;
+        this.authority = authority; this.accessDeniedMessage = accessDeniedMessage;
         const(char)*[7] options = ["listening_ports\0".ptr, listening.toStringz,
             "num_threads\0".ptr, "4\0".ptr, "enable_keep_alive\0".ptr, "no\0".ptr, null];
         GC.setAttr(cast(void*)this, GC.BlkAttr.NO_MOVE);
@@ -267,6 +277,8 @@ class Z8CivetServer {
             request.method = cString(info.requestMethod); request.path = cString(info.localUri);
             request.query = cString(info.queryString); request.remoteAddress = cString(info.remoteAddress.ptr);
             request.contentType = cString(mg_get_header(connection, "Content-Type\0".ptr));
+            request.host = cString(mg_get_header(connection, "Host\0".ptr));
+            request.forwardedAddress = cString(mg_get_header(connection, "X-Real-IP\0".ptr));
             auto transfer = cString(mg_get_header(connection, "Transfer-Encoding\0".ptr)).toLower();
             request.body = readBody(connection, info.contentLength, transfer == "chunked", bodyLimit);
             auto type = request.contentType.toLower();
@@ -280,6 +292,25 @@ class Z8CivetServer {
             }
             application.parameters.z8_add("ip"w, request.remoteAddress.to!wstring);
             auto requestId = application.parameters.z8_get("request"w);
+            if (authority !is null) {
+                auto sessionId = application.parameters.z8_get("session"w);
+                if (sessionId !is null)
+                    application.session = authority.authorize(request, sessionId, application.parameters.z8_get("server"w));
+                if (application.session is null && requestId == "login"w) {
+                    auto login = application.parameters.z8_get("login"w);
+                    auto password = application.parameters.z8_get("password"w);
+                    if (login !is null) application.session = authority.login(request, login, password is null ? ""w : password);
+                }
+                if (application.session is null) {
+                    auto monitor = new Z8RequestMonitor();
+                    monitor.message(Z8MonitorLevel.error, accessDeniedMessage);
+                    JSONValue[string] denied;
+                    denied["request"] = JSONValue.init; denied["success"] = JSONValue(false);
+                    denied["status"] = JSONValue(401); denied["info"] = parseJSON(monitor.infoJson().to!string);
+                    denied["data"] = JSONValue(cast(JSONValue[])[]);
+                    return respond(connection, 401, "Unauthorized", JSONValue(denied).toString());
+                }
+            }
             auto previous = z8_application_set_request(application);
             scope (exit) z8_application_set_request(previous);
             if (responseMode == Z8ResponseMode.application) z8_application_start_response(application, requestId);
