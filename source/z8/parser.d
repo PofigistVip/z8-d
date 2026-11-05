@@ -115,6 +115,24 @@ class Parser {
                 if (result == ValueType.voidType) error("this array element type is not supported");
             } else {
                 auto key = accept("string") ? ValueType.stringType : accept("int") ? ValueType.intType : accept("guid") ? ValueType.guidType : accept("bool") ? ValueType.boolType : accept("decimal") ? ValueType.decimalType : accept("primary") ? ValueType.primaryType : accept("date") ? ValueType.dateType : accept("datespan") ? ValueType.datespanType : accept("binary") ? ValueType.binaryType : accept("geometry") ? ValueType.geometryType : accept("file") ? ValueType.fileType : ValueType.voidType;
+                if (key == ValueType.voidType) {
+                    switch (current.text) {
+                        case "exception": key = ValueType.exceptionType; break;
+                        case "encoding": key = ValueType.encodingType; break;
+                        case "sql_bool": key = ValueType.sqlBoolType; break;
+                        case "sql_int": key = ValueType.sqlIntType; break;
+                        case "sql_decimal": key = ValueType.sqlDecimalType; break;
+                        case "sql_string": key = ValueType.sqlStringType; break;
+                        case "sql_guid": key = ValueType.sqlGuidType; break;
+                        case "sql_date": key = ValueType.sqlDateType; break;
+                        case "sql_datespan": key = ValueType.sqlDatespanType; break;
+                        case "sql_binary": key = ValueType.sqlBinaryType; break;
+                        case "sql_geometry": key = ValueType.sqlGeometryType; break;
+                        case "sql_primary": key = ValueType.sqlPrimaryType; break;
+                        default: break;
+                    }
+                    if (key != ValueType.voidType) take();
+                }
                 if (key == ValueType.voidType && current.kind == TokenKind.identifier) {
                     key = ValueType.selfType;
                     parsedKeyObjectNames ~= take().text;

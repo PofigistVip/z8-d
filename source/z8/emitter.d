@@ -39,7 +39,8 @@ private string dType(ValueType type, Program objectClass = null, Program[] keyOb
         if (value == ValueType.primaryType && key == ValueType.stringType) return "Z8PrimaryMap";
         if (value == ValueType.intType && key == ValueType.stringType) return "Z8StringIntMap";
         auto innerKeys = innerMapKeyClasses(type, keyObjectClasses);
-        if ([ValueType.selfType, ValueType.enumType].canFind(key)) return "Z8ObjectKeyMap!(" ~ dType(key, outerMapKeyClass(type, keyObjectClasses)) ~ ", " ~ dType(value, objectClass, innerKeys) ~ ")";
+        if ([ValueType.selfType, ValueType.enumType, ValueType.exceptionType, ValueType.encodingType].canFind(key) || isSqlType(key))
+            return "Z8ObjectKeyMap!(" ~ dType(key, outerMapKeyClass(type, keyObjectClasses)) ~ ", " ~ dType(value, objectClass, innerKeys) ~ ")";
         if ([ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(key))
             return "Z8ReferenceKeyMap!(" ~ dType(key) ~ ", " ~ dType(value, objectClass, innerKeys) ~ ")";
         auto templateName = key == ValueType.primaryType ? "Z8PrimaryKeyMap" :

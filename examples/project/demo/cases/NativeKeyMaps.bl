@@ -1,0 +1,46 @@
+import org.zenframework.z8.lang.encoding;
+import org.zenframework.z8.lang.sql.sql_primary;
+import org.zenframework.z8.lang.sql.sql_int;
+import org.zenframework.z8.lang.sql.sql_bool;
+import org.zenframework.z8.lang.sql.sql_decimal;
+import org.zenframework.z8.lang.sql.sql_string;
+import org.zenframework.z8.lang.sql.sql_guid;
+import org.zenframework.z8.lang.sql.sql_date;
+import org.zenframework.z8.lang.sql.sql_datespan;
+import org.zenframework.z8.lang.sql.sql_binary;
+import org.zenframework.z8.lang.sql.sql_geometry;
+public class NativeKeyMaps {
+    public static int run() {
+        exception error = "problem";
+        string[exception] problems = {(error, "found")};
+        if (problems[error] != "found" || problems.keys().first().getMessage() != "problem") return 1;
+        string[encoding] encodings = {(encoding.UTF8, "utf8")};
+        if (encodings[encoding.UTF8] != "utf8" || encodings.keys().first() != encoding.UTF8) return 2;
+        sql_bool flag = true;
+        sql_int number = 3;
+        sql_decimal amount = 1.5;
+        sql_string text = "key";
+        sql_guid id = '00000000-0000-0000-0000-000000000001';
+        sql_date day = '01/01/2024';
+        sql_datespan span = '1 02:03:04';
+        sql_binary bytes;
+        sql_geometry shape;
+        string[sql_bool] flags = {(flag, "bool")};
+        string[sql_int] numbers = {(number, "int")};
+        string[sql_decimal] amounts = {(amount, "decimal")};
+        string[sql_string] texts = {(text, "string")};
+        string[sql_guid] ids = {(id, "guid")};
+        string[sql_date] days = {(day, "date")};
+        string[sql_datespan] spans = {(span, "span")};
+        string[sql_binary] binaries = {(bytes, "binary")};
+        string[sql_geometry] geometries = {(shape, "geometry")};
+        string[sql_primary] mixed = {(number, "number"), (flag, "flag")};
+        if (flags[flag] != "bool" || numbers[number] != "int" || amounts[amount] != "decimal") return 3;
+        if (texts[text] != "string" || ids[id] != "guid" || days[day] != "date" || spans[span] != "span") return 4;
+        if (binaries[bytes] != "binary" || geometries[shape] != "geometry" || mixed[number] != "number" || mixed[flag] != "flag") return 5;
+        if (numbers.keys().size() != 1 || mixed.values().size() != 2) return 6;
+        numbers.add(null, "null");
+        if (numbers[null] != "null" || !numbers.containsKey(null)) return 7;
+        return 129;
+    }
+}

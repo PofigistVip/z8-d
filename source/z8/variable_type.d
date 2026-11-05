@@ -138,7 +138,10 @@ private enum ValueType[] mapKeyTypes = [
     ValueType.selfType, ValueType.enumType, ValueType.dateType, ValueType.datespanType,
     ValueType.binaryType, ValueType.geometryType, ValueType.fileType, ValueType.primaryType,
     ValueType.stringType, ValueType.intType, ValueType.guidType, ValueType.boolType,
-    ValueType.decimalType,
+    ValueType.decimalType, ValueType.exceptionType, ValueType.encodingType,
+    ValueType.sqlBoolType, ValueType.sqlIntType, ValueType.sqlDecimalType, ValueType.sqlStringType,
+    ValueType.sqlGuidType, ValueType.sqlDateType, ValueType.sqlDatespanType, ValueType.sqlBinaryType,
+    ValueType.sqlGeometryType, ValueType.sqlPrimaryType,
 ];
 private struct DynamicMapType { ValueType value, key; }
 private __gshared DynamicMapType[] dynamicMapTypes;
@@ -210,7 +213,7 @@ unittest {
     assert(cast(uint)ValueType.optionalDecimal < cast(uint)ValueType.mapStart);
     assert(cast(uint)ValueType.mapStart + mapValueTypes.length * mapKeyTypes.length < cast(uint)ValueType.dynamicMapStart);
     assert(!isMap(ValueType.intType));
-    assert(mapType(ValueType.intType, ValueType.exceptionType) == ValueType.voidType);
+    assert(mapType(ValueType.intType, ValueType.ftsType) == ValueType.voidType);
     auto nestedMap = arrayOf(arrayOf(mapType(ValueType.selfType, ValueType.enumType)));
     assert(isDynamicArray(nestedMap) && hasObjectClass(nestedMap) && hasMapKeyClass(nestedMap));
     assert(mapKeyType(elementType(elementType(nestedMap))) == ValueType.enumType);
