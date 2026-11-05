@@ -263,9 +263,13 @@ void main(string[] args) {
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     auto session = new Z8ApplicationSession("join"w, user, user);
     auto priorBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "pg_temp"w));
-    wstring requestFields(wstring fields) {
+    wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, "HttpOrder"w); request.parameters.z8_add("action"w, "read"w); request.parameters.z8_add("fields"w, fields);
+        if (filter !is null) request.parameters.z8_add("filter"w, filter);
+        if (sort !is null) request.parameters.z8_add("sort"w, sort);
+        if (lookup !is null) request.parameters.z8_add("lookup"w, lookup);
+        if (lookupFields !is null) request.parameters.z8_add("lookupFields"w, lookupFields);
         auto priorRequest = z8_application_set_request(request); scope(exit) z8_application_set_request(priorRequest);
         z8_application_start_response(request, "HttpOrder"w); z8_application_dispatch_request();
         z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
@@ -274,6 +278,12 @@ void main(string[] args) {
     assert(response["data"].array.length == 1 && response["data"][0]["customer.label"].str == "Alice" && response["data"][0]["customer.city.label"].str == "Moscow");
     assert(response["data"][0]["customerId"].str == "00000000-0000-0000-0000-000000000201");
     assert(response["data"][0]["customer.cityId"].str == "00000000-0000-0000-0000-000000000101");
+    response = parseJSON(requestFields(`["title"]`w, `{"property":"customer.label","value":"alice"}`w).to!string);
+    assert(response["data"].array.length == 1 && response["data"][0]["title"].str == "First");
+    response = parseJSON(requestFields(`["title"]`w, null, `[{"property":"customer.label","direction":"DESC"}]`w).to!string);
+    assert(response["data"].array.length == 2 && response["data"][0]["title"].str == "Second");
+    response = parseJSON(requestFields(`["title"]`w, null, null, "ob"w, `["customer.label"]`w).to!string);
+    assert(response["data"].array.length == 1 && response["data"][0]["title"].str == "Second");
     auto denied = Z8Access.init;
     user.privileges.setTableAccess(z8_guid_create_name("Customers"w), denied);
     bool blocked; try { requestFields(`["customer.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
@@ -287,6 +297,9 @@ void main(string[] args) {
     user.privileges.setFieldAccess(z8_guid_create_name("Customers.Label"w), denied);
     response = parseJSON(requestFields(`["customer.label"]`w).to!string);
     foreach (row; response["data"].array) assert("customer.label" !in row.object);
+    blocked = false; try { requestFields(`["title"]`w, `{"property":"customer.label","value":"alice"}`w); } catch (Exception) { blocked = true; } assert(blocked);
+    blocked = false; try { requestFields(`["title"]`w, null, `[{"property":"customer.label"}]`w); } catch (Exception) { blocked = true; } assert(blocked);
+    blocked = false; try { requestFields(`["title"]`w, null, null, "alice"w, `["customer.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
     z8_connection_set_current(priorBackend);
     db.close();
 }

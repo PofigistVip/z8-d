@@ -74,6 +74,14 @@ private Z8Object[] z8_application_query_field_path(Z8Object root, Z8Object field
     if (!declared) throw new Exception("query field is not declared by its owner");
     return links;
 }
+private bool z8_application_query_field_readable(Z8Object root, Z8Object field, Z8Privileges privileges) {
+    z8_application_query_field_path(root, field, privileges);
+    if (field is z8_query_primary_key(root)) return true;
+    auto owner = z8_nonnull(field.z8_get_owner());
+    auto ownerKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, owner);
+    auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
+    return privileges.getFieldAccess(ownerKey, fieldKey).read;
+}
 
 // Shared by read and mutation responses; field selection is checked before a
 // mutation starts, so malformed response options cannot fail after commit.
@@ -290,10 +298,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     }
     read.sortFields = groupOrder;
     foreach (field; read.sortFields) {
-        if (field.z8_get_owner() !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
-            throw new Exception("linked and computed sort fields are not supported");
-        auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
-        if (field !is key && !privileges.getFieldAccess(queryKey, fieldKey).read) throw new Exception("query sort field access denied");
+        if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("query sort field access denied");
     }
     auto lookupFields = params.z8_get("lookupFields"w), lookup = params.z8_get("lookup"w);
     if (!read.byRecordIds && lookupFields !is null && lookupFields.length) {
@@ -304,10 +309,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
             if (item.type != JSONType.string || !item.str.length) throw new Exception("invalid query lookup field");
             if (lookup is null || !lookup.length) continue;
             auto field = z8_query_find_field_id(query, item.str.to!wstring);
-            if (field.z8_get_owner() !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
-                throw new Exception("linked and computed lookup fields are not supported");
-            auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
-            if (field !is key && !privileges.getFieldAccess(queryKey, fieldKey).read) throw new Exception("query lookup field access denied");
+            if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("query lookup field access denied");
             auto type = z8_field_type_id(field);
             if (type != "string"w && type != "text"w && type != "file"w && type != "attachments"w) continue;
             auto column = type == "string"w ? z8_string_field_sql(field) : z8_text_field_sql(field);
@@ -352,10 +354,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         auto filter = z8_application_query_filter(query, json);
         if (filter is null) continue; // An explicit empty array means no filter.
         foreach (field; z8_sql_collect_fields(filter)) {
-            if (field.z8_get_owner() !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
-                throw new Exception("linked and computed filter fields are not supported");
-            auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
-            if (field !is key && !privileges.getFieldAccess(queryKey, fieldKey).read) throw new Exception("query filter field access denied");
+            if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("query filter field access denied");
         }
         read.where = z8_filter_combine(read.where, filter);
     }

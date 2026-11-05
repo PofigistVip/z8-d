@@ -107,7 +107,7 @@ last record, it also returns the final page, matching Java `ReadAction`.
 The optional `values` object (or the first object of an array) initializes
 readable direct scalar fields before `onReadAction` and `beforeRead` run.
 `lookup` and `lookupFields` support case-insensitive matching across readable
-direct text fields; multiple fields are combined with OR.
+text fields; multiple fields are combined with OR.
 An active JSON `period` filters a readable direct `period` date field between
 the optional inclusive `start` and `finish` boundaries.
 BL-defined direct `groupBy` fields and JSON `having` conditions are supported;
@@ -120,9 +120,10 @@ sum and average totals over readable fields. The filters and query scope still
 apply; grouped totals and linked HAVING filters are not yet supported.
 As in the Java `ReadAction`, a nonempty `recordId` list replaces the request
 filters and query scope; an empty list keeps the normal filters and scope.
-Direct Link paths may be selected when every intermediate link and target table
-is readable; the response includes the link fields. Linked filter, sort,
-group and context fields, custom Join paths, computed fields, other read
+Direct Link paths may be selected, filtered, searched and sorted when every
+intermediate link and target table is readable; selected linked fields include
+their link fields in the response. Linked SQL-group, HAVING and context fields, custom
+Join paths, computed fields, other read
 options and custom request parameters are rejected. The host must open the
 application response before calling it.
 `z8_application_dispatch_request` selects this adapter for a table request;
