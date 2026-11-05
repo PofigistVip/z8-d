@@ -470,24 +470,52 @@ private string emitExprRaw(Expression e) {
             return "z8_elvis!(" ~ dType(e.inferredType, e.objectClass) ~ ")(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
     }
 }
-private string emitStatement(Statement s) {
+private struct ControlContext {
+    bool enabled;
+    ValueType returnType;
+    Program returnClass;
+    size_t[] loops;
+}
+
+private bool needsControlLowering(Statement s) {
+    if (s.kind == StmtKind.tryStmt && s.hasFinally) return true;
+    foreach (child; s.children) if (needsControlLowering(child)) return true;
+    return false;
+}
+
+private string emitLoopBody(Statement loop, ControlContext context) {
+    if (!context.enabled) return emitStatement(loop.children[0], context);
+    auto id = loop.token.position.offset.to!string;
+    auto nested = context;
+    nested.loops = context.loops ~ loop.token.position.offset;
+    auto signal = "z8_loop_signal_" ~ id;
+    return "try " ~ emitStatement(loop.children[0], nested) ~
+        "catch (Z8LoopControl " ~ signal ~ ") {\n" ~
+        "if (" ~ signal ~ ".loopId != " ~ id ~ ") throw " ~ signal ~ ";\n" ~
+        "if (" ~ signal ~ ".continuing) continue;\nbreak;\n}\n";
+}
+
+private string emitStatement(Statement s, ControlContext context = ControlContext.init) {
     final switch (s.kind) {
         case StmtKind.block:
-            string result = "{\n"; foreach (child; s.children) result ~= emitStatement(child); return result ~ "}\n";
+            string result = "{\n"; foreach (child; s.children) result ~= emitStatement(child, context); return result ~ "}\n";
         case StmtKind.variable:
         case StmtKind.assignment:
         case StmtKind.expressionStmt: return emitSimple(s) ~ ";\n";
-        case StmtKind.returnStmt: return "return" ~ (s.expression is null ? "" : " " ~ emitExpr(s.expression)) ~ ";\n";
+        case StmtKind.returnStmt:
+            if (context.enabled) return s.expression is null ? "throw new Z8ReturnVoid();\n" :
+                "throw new Z8Return!(" ~ dStorageType(context.returnType, context.returnClass) ~ ")(" ~ emitExpr(s.expression) ~ ");\n";
+            return "return" ~ (s.expression is null ? "" : " " ~ emitExpr(s.expression)) ~ ";\n";
         case StmtKind.ifStmt:
-            auto result = "if (" ~ emitExpr(s.expression) ~ ") {\n" ~ emitStatement(s.children[0]) ~ "}\n";
-            if (s.children.length == 2) result ~= "else {\n" ~ emitStatement(s.children[1]) ~ "}\n";
+            auto result = "if (" ~ emitExpr(s.expression) ~ ") {\n" ~ emitStatement(s.children[0], context) ~ "}\n";
+            if (s.children.length == 2) result ~= "else {\n" ~ emitStatement(s.children[1], context) ~ "}\n";
             return result;
         case StmtKind.whileStmt:
-            return "while (" ~ emitExpr(s.expression) ~ ") {\n" ~ emitStatement(s.children[0]) ~ "}\n";
+            return "while (" ~ emitExpr(s.expression) ~ ") {\n" ~ emitLoopBody(s, context) ~ "}\n";
         case StmtKind.doWhileStmt:
-            return "do {\n" ~ emitStatement(s.children[0]) ~ "} while (" ~ emitExpr(s.expression) ~ ");\n";
+            return "do {\n" ~ emitLoopBody(s, context) ~ "} while (" ~ emitExpr(s.expression) ~ ");\n";
         case StmtKind.forStmt:
-            return "for (" ~ (s.initial is null ? "" : emitSimple(s.initial)) ~ "; " ~ emitExpr(s.expression) ~ "; " ~ emitSimple(s.step) ~ ") {\n" ~ emitStatement(s.children[0]) ~ "}\n";
+            return "for (" ~ (s.initial is null ? "" : emitSimple(s.initial)) ~ "; " ~ emitExpr(s.expression) ~ "; " ~ emitSimple(s.step) ~ ") {\n" ~ emitLoopBody(s, context) ~ "}\n";
         case StmtKind.forEachStmt:
             auto suffix = s.token.position.offset.to!string;
             auto iter = "z8_iter_" ~ suffix, versionName = "z8_version_" ~ suffix, indexName = "z8_index_" ~ suffix;
@@ -495,20 +523,27 @@ private string emitStatement(Statement s) {
                 "for (long " ~ indexName ~ " = 0; " ~ indexName ~ " != " ~ iter ~ ".z8_size(); ++" ~ indexName ~ ") {\n" ~
                 "if (" ~ versionName ~ " != " ~ iter ~ ".z8_version) throw new Exception(\"array modified during iteration\");\n" ~
                 dStorageType(s.initial.type, s.initial.objectClass) ~ " v_" ~ s.initial.token.text ~ " = " ~ iter ~ ".z8_get(" ~ indexName ~ ");\n" ~
-                emitStatement(s.children[0]) ~ "}\n}\n";
-        case StmtKind.breakStmt: return "break;\n";
-        case StmtKind.continueStmt: return "continue;\n";
+                emitLoopBody(s, context) ~ "}\n}\n";
+        case StmtKind.breakStmt: case StmtKind.continueStmt:
+            if (context.enabled) return "throw new Z8LoopControl(" ~ context.loops[$-1].to!string ~ ", " ~ (s.kind == StmtKind.continueStmt ? "true" : "false") ~ ");\n";
+            return s.kind == StmtKind.breakStmt ? "break;\n" : "continue;\n";
         case StmtKind.throwStmt:
             return "throw " ~ (s.type == ValueType.stringType ? "new Z8Exception(z8_to_utf8(" ~ emitExpr(s.expression) ~ "))" : "z8_nonnull(" ~ emitExpr(s.expression) ~ ")") ~ ";\n";
         case StmtKind.tryStmt:
-            auto result = "try " ~ emitStatement(s.children[0]);
+            auto result = (context.enabled && s.hasFinally && !s.hasCatch ? "" : "try ") ~ emitStatement(s.children[0], context);
             if (s.hasCatch) {
                 auto caught = "z8_caught_" ~ s.token.position.offset.to!string;
                 result ~= "catch (Throwable " ~ caught ~ ") {\n" ~
+                    (context.enabled ? "if (cast(Z8ControlFlow)" ~ caught ~ " !is null) throw " ~ caught ~ ";\n" : "") ~
                     "Throwable v_" ~ s.catchName.text ~ " = new Z8Exception(" ~ caught ~ ".msg, " ~ caught ~ ");\n" ~
-                    emitStatement(s.children[1]) ~ "}\n";
+                    emitStatement(s.children[1], context) ~ "}\n";
             }
-            if (s.hasFinally) result ~= "finally " ~ emitStatement(s.children[$-1]);
+            if (s.hasFinally && context.enabled) {
+                auto suffix = s.token.position.offset.to!string;
+                auto pending = "z8_pending_" ~ suffix, caught = "z8_finally_caught_" ~ suffix;
+                result = "{\nThrowable " ~ pending ~ ";\ntry {\n" ~ result ~ "} catch (Throwable " ~ caught ~ ") { " ~ pending ~ " = " ~ caught ~ "; }\n" ~
+                    emitStatement(s.children[$-1], context) ~ "if (" ~ pending ~ " !is null) throw " ~ pending ~ ";\n}\n";
+            } else if (s.hasFinally) result ~= "finally " ~ emitStatement(s.children[$-1], context);
             return result;
     }
 }
@@ -766,7 +801,17 @@ package string emitPrograms(Program[] programs) {
                     (m.returnType == ValueType.voidType ? "" : "return ") ~ methodDName(m) ~ "(" ~ nativeArgs.join(", ") ~ "); }\n";
             }
             auto modifiers = m.isStatic ? "static " : m.overrides ? "override " : m.isVirtual ? "" : "final ";
-            auto body = emitStatement(m.body);
+            ControlContext context;
+            context.enabled = needsControlLowering(m.body);
+            context.returnType = m.returnType;
+            context.returnClass = m.returnObjectClass;
+            auto body = emitStatement(m.body, context);
+            if (context.enabled) {
+                auto returnSignal = m.returnType == ValueType.voidType ? "Z8ReturnVoid" : "Z8Return!(" ~ dStorageType(m.returnType, m.returnObjectClass) ~ ")";
+                body = "{\ntry " ~ body ~ "catch (" ~ returnSignal ~ " z8_return) { " ~
+                    (m.returnType == ValueType.voidType ? "return;" : "return z8_return.value;") ~ " }\n" ~
+                    (m.returnType == ValueType.voidType ? "" : "assert(0, \"unreachable BL method exit\");\n") ~ "}\n";
+            }
             if (m.isStatic) body = "{\nz8_ensure_static();\n" ~ body[1 .. $];
             result ~= modifiers ~ dStorageType(m.returnType, m.returnObjectClass) ~ " " ~ methodDName(m) ~ "(" ~ params.join(", ") ~ ")\n" ~ body;
         }

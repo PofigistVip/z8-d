@@ -1,0 +1,87 @@
+public class FinallyControl {
+    private static int state;
+
+    private static int overrideReturn() {
+        try { return 1; } finally { return 2; }
+    }
+    private static int suppressException() {
+        try { throw "failure"; } finally { return 3; }
+    }
+    private static int nestedReturn() {
+        try { try { return 1; } finally { return 2; } } finally { return 4; }
+    }
+    private static int skipCatch() {
+        try { try { return 5; } finally { if (state != 0) return 8; } }
+        catch (exception error) { return 9; }
+    }
+    private static void returnVoid() {
+        try { state = 1; return; } finally { state = 2; return; }
+    }
+    private static int loops() {
+        int total = 0;
+        for (int i = 0; i < 5; i += 1) {
+            try { if (i == 0) continue; total += 10; }
+            finally { total += 1; if (i == 2) break; }
+        }
+        return total;
+    }
+    private static int continueOverrides() {
+        int total = 0;
+        for (int i = 0; i < 3; i += 1) {
+            try {
+                if (i == 0) return 44;
+                if (i == 1) throw "ignored";
+                total += 1;
+            } finally {
+                if (i < 2) continue;
+                total += 10;
+            }
+        }
+        return total;
+    }
+    private static int nestedLoops() {
+        int total = 0;
+        for (int i = 0; i < 2; i += 1) {
+            for (int j = 0; j < 3; j += 1) {
+                try { if (j == 0) continue; total += 1; }
+                finally { if (j == 1) break; }
+            }
+            total += 10;
+        }
+        return total;
+    }
+    private static int thrownFinally() {
+        try {
+            try { return 1; }
+            finally { if (state != 0) return 2; throw "replacement"; }
+        } catch (exception error) {
+            if (error.getMessage() == "replacement") return 6;
+            return 7;
+        }
+    }
+    private static int replaceException() {
+        try { try { throw "first"; } finally { throw "second"; } }
+        catch (exception error) { if (error.getMessage() == "second") return 12; return 13; }
+    }
+    private static string returnText() {
+        try { return "original"; } finally { return "replaced"; }
+    }
+    private static int iterate() {
+        int total = 0;
+        int[] items = {1, 2, 3};
+        for (int item : items) {
+            try { if (item == 1) continue; total += item; }
+            finally { if (item == 2) continue; total += 10; }
+        }
+        return total;
+    }
+    public static int run() {
+        if (overrideReturn() != 2 || suppressException() != 3 || nestedReturn() != 4) return 1;
+        if (skipCatch() != 5 || loops() != 23 || continueOverrides() != 11 || nestedLoops() != 22) return 2;
+        if (thrownFinally() != 6 || replaceException() != 12) return 4;
+        if (returnText() != "replaced" || iterate() != 25) return 5;
+        returnVoid();
+        if (state != 2) return 3;
+        return 231;
+    }
+}

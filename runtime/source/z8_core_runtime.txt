@@ -5,6 +5,18 @@ private import std.algorithm : canFind;
 class Z8Exception : Exception {
     this(string message, Throwable cause = null) { super(message, cause); }
 }
+// Internal control transfers are caught only by generated methods and loops.
+class Z8ControlFlow : Exception { this() { super("BL control transfer"); } }
+class Z8Return(T) : Z8ControlFlow {
+    T value;
+    this(T value) { super(); this.value = value; }
+}
+class Z8ReturnVoid : Z8ControlFlow {}
+class Z8LoopControl : Z8ControlFlow {
+    size_t loopId;
+    bool continuing;
+    this(size_t loopId, bool continuing) { super(); this.loopId = loopId; this.continuing = continuing; }
+}
 wstring z8_exception_to_java_string(Throwable value) {
     if (value is null) throw new Exception("null exception");
     auto name = cast(Z8Exception)value !is null ? "org.zenframework.z8.server.types.exception"w : "java.lang.Throwable"w;

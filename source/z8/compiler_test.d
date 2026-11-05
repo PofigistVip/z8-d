@@ -557,7 +557,7 @@ unittest {
     rejects("class A { static void f() { throw 1; } }");
     rejects("class A { static void f() { try {} } }");
     rejects("class A { static void f() { try {} catch (int e) {} } }");
-    rejects("class A { static void f() { try {} finally { return; } } }");
+    compile("class A { static void f() { try {} finally { return; } } }");
     rejects("class A { static int f() { try { return 1; } catch (exception e) {} } }");
     rejects("class A { static void f() { try {} catch (exception e) {} e.getMessage(); } }");
     rejects("class A { static int f() { return 1.0; } }");

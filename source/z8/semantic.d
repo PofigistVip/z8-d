@@ -20,7 +20,6 @@ class Checker {
     private ValueType returnType;
     private Program returnObjectClass;
     private size_t loopDepth;
-    private size_t finallyDepth;
     private void fail(string message, Token t) { throw new CompileException(message, t.position); }
     void bindBase(Program program, Program[string] programs) {
         currentProgram = program; allClasses = programs;
@@ -526,7 +525,7 @@ class Checker {
             variables = null; objectVariables = null; staticContext = false;
             // Z8 checks method attributes before opening the parameter scope.
             checkAttributeExpressions(m.attributes);
-            returnType = m.returnType; loopDepth = 0; finallyDepth = 0; staticContext = m.isStatic;
+            returnType = m.returnType; loopDepth = 0; staticContext = m.isStatic;
             m.returnObjectClass = hasObjectClass(m.returnType) ? resolveClass(program, m.returnObjectName, m.name) : null;
             returnObjectClass = m.returnObjectClass;
             foreach (ref p; m.parameters) {
@@ -1755,7 +1754,6 @@ class Checker {
                     fail("string query cannot be used as a statement", s.token);
                 return false;
             case StmtKind.returnStmt:
-                if (finallyDepth) fail("return inside finally is not supported", s.token);
                 if (s.expression is null) { if (returnType != ValueType.voidType) fail("return value required", s.token); }
                 else if (returnType == ValueType.voidType || !matchesStored(s.expression, returnType, returnObjectClass)) fail("return type mismatch", s.token);
                 return true;
@@ -1792,7 +1790,6 @@ class Checker {
             case StmtKind.breakStmt:
             case StmtKind.continueStmt:
                 if (loopDepth == 0) fail(s.token.text ~ " outside loop", s.token);
-                if (finallyDepth) fail(s.token.text ~ " inside finally is not supported", s.token);
                 return false;
             case StmtKind.throwStmt:
                 s.type = typeOf(s.expression);
@@ -1812,7 +1809,7 @@ class Checker {
                 }
                 variables = old.dup; objectVariables = oldObjects.dup;
                 if (s.hasFinally) {
-                    ++finallyDepth; finallyReturns = checkStatement(s.children[$-1]); --finallyDepth;
+                    finallyReturns = checkStatement(s.children[$-1]);
                 }
                 variables = old; objectVariables = oldObjects;
                 return (tryReturns && catchReturns) || finallyReturns;
