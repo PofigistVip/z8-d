@@ -49,6 +49,21 @@ void main() {
     values.z8_clear();
     assert(strings.z8_isEmpty());
     assert(z8_primary_array_view(cast(Z8Array!wstring)null) is null);
+    auto first = z8_guid_create(1), second = z8_guid_create(2);
+    auto ids = new Z8Array!Z8Guid([first, second]);
+    auto primaryIds = z8_primary_array_view(ids);
+    primaryIds.z8_set(0, z8_primary_box(second)); ids.z8_set(1, first);
+    assert(ids.z8_get(0) is second && z8_primary_cast!Z8Guid(primaryIds.z8_get(1)) is first);
+    primaryIds.z8_add(null); assert(ids.z8_get(2) is null);
+    ids.z8_set(2, z8_guid_create(-1));
+    primaryIds.z8_add(z8_primary_box("wrong"w));
+    invalid = false; try { ids.z8_get(3); } catch (Exception) { invalid = true; }
+    assert(invalid); primaryIds.z8_removeAt(3);
+    ids.z8_sort();
+    assert(ids.z8_first().minorBits == ulong.max && ids.z8_last().minorBits == 2);
+    assert(primaryIds.opEquals(ids) && ids.opEquals(primaryIds));
+    auto unshared = new Z8Array!Z8Guid([second, first]);
+    unshared.z8_sort(); assert(unshared.z8_first() is first && unshared.z8_last() is second);
 }
 ''', encoding="utf-8")
     executable = temp / ("primary-array-views.exe" if os.name == "nt" else "primary-array-views")
@@ -65,6 +80,19 @@ public class Probe {
     public static primary[] asPrimary(string[] values) { return values; }
     public static primary[] choice(bool first, primary[] left, string[] right) { return first ? left : right; }
     public static int count(string[] values) { int result = 0; for (primary part : values) { result += 1; } return result; }
+    public static int guidCount(guid[] values) { int result = 0; for (primary part : values) { result += 1; } return result; }
+    public static int guidRun() {
+        guid[] ids = {guid.create(1), guid.create(2)};
+        primary[] values = ids;
+        values.set(0, guid.create(9)); ids[1] = guid.create(8);
+        if (ids[0].minor() != 9 || ((guid) values[1]).minor() != 8) return 1;
+        values.add("wrong");
+        try { guid wrong = ids[2]; return 2; } catch (exception expected) {}
+        values.set(2, guid.create(3)); values.add(null); ids[3] = guid.create(4);
+        if (ids[2].minor() != 3 || ((guid) values[3]).minor() != 4) return 3;
+        if (guidCount(ids) != 4 || Input.size(ids) != 4) return 4;
+        return 0;
+    }
     public static int run() {
         string[] words = {"one", "two"};
         primary[] values = words;
@@ -93,10 +121,11 @@ Z8Optional!long count(Z8Array!Z8Primary values) { return z8_optional_wrap(z8_non
 void main() {
     z8_native_bind("example.Input.m_size"w, &count);
     assert(z8_optional_require(Z8p_50726F6265.m_run()) == 0);
+    assert(z8_optional_require(Z8p_50726F6265.m_guidRun()) == 0);
 }
 ''', encoding="utf-8")
     executable = temp / ("primary-array-bl.exe" if os.name == "nt" else "primary-array-bl")
     subprocess.run(["dmd", "-I" + str(generated), *import_args(), *map(str, generated.rglob("*.d")),
                     str(harness), str(runtime), "-of=" + str(executable)], cwd=temp, check=True)
     subprocess.run([str(executable)], cwd=temp, check=True)
-print("String and primary array views share storage")
+print("String, GUID and primary array views share storage")
