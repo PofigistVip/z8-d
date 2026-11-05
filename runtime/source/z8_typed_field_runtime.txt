@@ -18,6 +18,7 @@ private void z8_integer_field_new(Z8Object self) {
 }
 private void z8_string_field_new(Z8Object self) {
     auto state = new Z8FieldState(z8_primary_box(""w)); state.aggregation = Z8FieldAggregation.max;
+    state.fts = new Z8Fts();
     if (z8_native_is_instance(z8_string_field_name, self)) state.length = z8_optional_wrap(30L);
     state.useSlot!wstring(); z8_field_attach(self, state);
 }
@@ -130,6 +131,8 @@ void z8_bind_builtin_typed_fields() {
     z8_native_bind(z8_integer_expression_name ~ ".z8op_assign"w, &z8_integer_expression_assign);
     z8_native_bind(z8_integer_expression_name ~ ".z8cast_sql_int"w, &z8_integer_field_sql);
     z8_native_bind_field(z8_string_field_name ~ ".f_length"w, &z8_field_metadata_address!"length");
+    z8_native_bind_field(z8_string_field_name ~ ".f_fts"w, &z8_field_metadata_address!"fts");
+    z8_native_bind_field(z8_text_field_name ~ ".f_fts"w, &z8_field_metadata_address!"fts");
     z8_native_bind_field(z8_decimal_field_name ~ ".f_precision"w, &z8_field_metadata_address!"precision");
     z8_native_bind_field(z8_decimal_field_name ~ ".f_scale"w, &z8_field_metadata_address!"scale");
     z8_native_bind_field(z8_geometry_field_name ~ ".f_srs"w, &z8_field_metadata_address!"srs");

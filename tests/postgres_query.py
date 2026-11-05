@@ -66,6 +66,7 @@ public class Quiet extends Plain {
 import org.zenframework.z8.base.table.value.Field;
 import org.zenframework.z8.base.table.SortDirection;
 import org.zenframework.z8.base.table.value.Aggregation;
+import org.zenframework.z8.base.fts.FtsQueryType;
 public class Probe {
     public static Sales make() { Sales table; return table; }
     public static Plain makePlain() { Plain table; return table; }
@@ -102,10 +103,12 @@ public class Probe {
         table.setWhere(filters);
     }
     public static void jsonNot(Sales table) { table.setWhere("{logical:'not',expressions:[{property:'" + table.amount.id() + "',operator:'gt',value:'10'}]}"); }
-    public static void jsonUnsupported(Sales table) { table.setWhere("{property:'" + table.title.id() + "',operator:'isSimilarTo',value:'hello'}"); }
+    public static void jsonUnsupported(Sales table) { table.setWhere("{property:'" + table.info.id() + "',operator:'isSimilarTo',value:'hello'}"); }
     public static void jsonTitle(Sales table, string op, string value) { table.setWhere("{property:'" + table.title.id() + "',operator:'" + op + "',value:'" + value + "'}"); }
     public static void jsonInfo(Sales table, string op, string value) { table.setWhere("{property:'" + table.info.id() + "',operator:'" + op + "',value:'" + value + "'}"); }
     public static void jsonId(Sales table, string op, string value) { table.setWhere("{property:'" + table.recordId.id() + "',operator:'" + op + "',value:'" + value + "'}"); }
+    public static void ftsPlain(Sales table) { table.title.fts.configuration = "simple"; table.title.fts.queryType = FtsQueryType.Plain; }
+    public static void ftsPhrase(Sales table) { table.title.fts.queryType = FtsQueryType.Phrase; }
     public static void jsonDate(Sales table, string op, string value) { table.setWhere("{property:'" + table.instant.id() + "',operator:'" + op + "',value:'" + value + "'}"); }
     public static void jsonCalendar(Sales table, string op, string value) { table.setWhere("{property:'" + table.calendarDate.id() + "',operator:'" + op + "',value:'" + value + "'}"); }
     public static void dateBl(Sales table, date value) { table.setWhere(table.instant == value); }
@@ -247,6 +250,11 @@ void main(string[] args) {
     P.m_jsonTitle(table, "contains"w, "   "w); assert(z8_optional_require(P.m_count(table)) == 7);
     P.m_jsonInfo(table, "contains"w, "quick FOX"w); assert(z8_optional_require(P.m_count(table)) == 1);
     P.m_jsonId(table, "endsWith"w, "0005"w); assert(z8_optional_require(P.m_count(table)) == 1);
+    P.m_ftsPlain(table);
+    P.m_jsonTitle(table, "isSimilarTo"w, "hello world"w); assert(z8_optional_require(P.m_count(table)) == 2);
+    P.m_jsonTitle(table, "isNotSimilarTo"w, "hello world"w); assert(z8_optional_require(P.m_count(table)) == 3);
+    P.m_ftsPhrase(table);
+    P.m_jsonTitle(table, "isSimilarTo"w, "hello world"w); assert(z8_optional_require(P.m_count(table)) == 1);
     P.m_jsonReset(table); db.execute("ROLLBACK");
     db.execute("BEGIN");
     db.execute(`INSERT INTO "Sales""Quote" ("RecordId","Amount","When","DateOnly") VALUES ('00000000-0000-0000-0000-000000000032',100,1234,1234), ('00000000-0000-0000-0000-000000000033',100,1235,1235)`);

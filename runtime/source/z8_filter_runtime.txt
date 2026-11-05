@@ -109,6 +109,14 @@ private Z8SqlBool z8_filter_compare(Z8Object field, wstring operation, wstring[]
         bool number = operation == "istrue"w ? true : operation == "isfalse"w ? false : z8_bool_parse(value);
         return z8_sql_bool_binary!"=="(z8_bool_field_sql(field), z8_sql_bool_const(number));
     }
+    if (operation == "issimilarto"w || operation == "isnotsimilarto"w) {
+        enum prefix = "org.zenframework.z8.server.base.table.value."w;
+        if (!z8_native_is_instance(prefix ~ "StringField"w, field) && !z8_native_is_instance(prefix ~ "StringExpression"w, field))
+            throw new Exception("full-text JSON filter requires a string field or expression");
+        if (value is null) throw new Exception("full-text JSON filter requires a value");
+        auto result = z8_sql_string_ftsLike(z8_string_field_sql(field), z8_sql_string_const(value), z8_nonnull(z8_field_state(field).fts));
+        return operation == "isnotsimilarto"w ? z8_sql_bool_not(result) : result;
+    }
     if ((type == "date"w || type == "datetime"w) && ["yesterday"w, "today"w, "tomorrow"w,
         "lastweek"w, "thisweek"w, "nextweek"w, "lastmonth"w, "thismonth"w, "nextmonth"w,
         "lastyear"w, "thisyear"w, "nextyear"w, "lastdays"w, "nextdays"w, "lasthours"w, "nexthours"w].canFind(operation))

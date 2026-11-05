@@ -11,7 +11,7 @@ private void z8_expression_new(string kind)(Z8Object self) {
         state = new Z8FieldState(z8_primary_box(z8_decimal_from_int(0)), false);
         state.aggregation = Z8FieldAggregation.sum; state.format = "0,000.00"w;
     } else static if (kind == "string") {
-        state = new Z8FieldState(z8_primary_box(""w), false); state.aggregation = Z8FieldAggregation.max;
+        state = new Z8FieldState(z8_primary_box(""w), false); state.aggregation = Z8FieldAggregation.max; state.fts = new Z8Fts();
     } else static if (kind == "guid") {
         state = new Z8FieldState(z8_primary_box(z8_guid_zero()), false); state.aggregation = Z8FieldAggregation.max;
     } else static if (kind == "date") {
@@ -65,5 +65,7 @@ void z8_bind_builtin_expressions() {
     z8_native_bind(p ~ "DatespanExpression.z8op_assign"w, &z8_typed_field_assign!Z8Datespan);
     z8_native_bind_field(p ~ "GeometryExpression.f_srs"w, &z8_field_metadata_address!"srs");
     z8_native_bind_field(p ~ "TextExpression.f_html"w, &z8_field_metadata_address!"html");
+    z8_native_bind_field(p ~ "StringExpression.f_fts"w, &z8_field_metadata_address!"fts");
+    z8_native_bind_field(p ~ "TextExpression.f_fts"w, &z8_field_metadata_address!"fts");
 }
 shared static this() { z8_bind_builtin_expressions(); }

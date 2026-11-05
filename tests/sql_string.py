@@ -51,6 +51,9 @@ void main() {
     z8_sql_fts_configuration = null;
     assert(z8_sql_bool_format(match) == "plainto_tsquery('russian', 'слово') @@ to_tsvector('russian', 'текст')"w);
     assert(z8_sql_decimal_format(rank) == "ts_rank(to_tsvector('russian', 'текст'), plainto_tsquery('russian', 'слово'), 0)"w);
+    auto custom = new Z8Fts(); custom.configuration = "a'b"w;
+    auto escaped = z8_sql_string_ftsLike(z8_sql_string_const("text"w), z8_sql_string_const("word"w), custom);
+    assert(z8_sql_bool_format(escaped) == "plainto_tsquery('a''b', 'word') @@ to_tsvector('a''b', 'text')"w);
 }
 ''', encoding="utf-8")
     executable = temp / ("sql-string.exe" if os.name == "nt" else "sql-string")
