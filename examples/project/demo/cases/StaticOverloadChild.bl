@@ -1,6 +1,7 @@
 public class StaticOverloadChild extends StaticOverloadBase {
     public static int select(string value) { return value.length() + 30; }
     public int blend(string value) { return value.length() + 70; }
+    public int staticFieldThroughSuper() { super.shared = 7; return super.shared; }
     public int inheritedCalls() { return blend(1) + blend(true) + blend("x"); }
     public static int same(int value) { return value + 40; }
     public static int run() {
@@ -10,6 +11,7 @@ public class StaticOverloadChild extends StaticOverloadBase {
         StaticOverloadChild instance = new StaticOverloadChild;
         if (instance.blend(1) != 51 || instance.blend(true) != 60 || instance.blend("x") != 71) return 4;
         if (instance.inheritedCalls() != 182 || StaticOverloadChild.blend(2) != 52) return 5;
+        if (instance.staticFieldThroughSuper() != 7 || instance.shared != 7) return 6;
         return 163;
     }
 }

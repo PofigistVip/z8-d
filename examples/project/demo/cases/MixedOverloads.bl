@@ -1,5 +1,6 @@
 public class MixedOverloads {
     static int effects;
+    static int field;
     public static int choose(int value) { return value + 10; }
     public int choose(string value) { return value.length() + 20; }
     public static void add(int value) { effects += value; }
@@ -16,6 +17,12 @@ public class MixedOverloads {
         if (effects != 9) return 3;
         MixedOverloads missing = null;
         try { missing.choose(1); return 4; } catch (exception expected) {}
+        obj.field = 10;
+        if (receiver().field != 10 || effects != 10) return 5;
+        receiver().field += 2;
+        if (field != 12 || effects != 12) return 6;
+        try { int ignored = missing.field; return 7; } catch (exception expectedField) {}
+        try { missing.field = 5; return 8; } catch (exception expectedAssignment) {}
         return 165;
     }
 }

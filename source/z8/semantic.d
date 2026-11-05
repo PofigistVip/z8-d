@@ -728,8 +728,11 @@ class Checker {
                 if (receiverType != ValueType.selfType) fail("field access requires an object", e.token);
                 auto field = lookupField(e.left.objectClass, e.token.text);
                 if (field is null) fail("unknown field '" ~ e.token.text ~ "'", e.token);
-                if (field.isStatic) fail("static field access through an instance is not supported", e.token);
                 if (!accessible(field.owner, field.isPublic, field.isProtected)) fail("field is not accessible", e.token);
+                if (field.isStatic) {
+                    e.targetClass = field.owner.emittedName;
+                    e.staticInstanceField = e.left.kind != ExprKind.superRef;
+                }
                 if (hasObjectClass(field.type))
                     e.objectClass = field.objectClass !is null ? field.objectClass : resolveClass(field.owner, field.objectName, field.name);
                 return field.type == ValueType.stringType ? ValueType.nullableString : storedValueType(field.type);

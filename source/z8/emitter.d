@@ -279,6 +279,8 @@ private string emitExprRaw(Expression e) {
             if (e.nativeField.length) return "z8_nonnull(" ~ emitExpr(e.left) ~ ")." ~ e.nativeField;
             if (e.binaryNameField) return "z8_nonnull(" ~ emitExpr(e.left) ~ ").name";
             if (e.enumConstant) return e.targetClass ~ ".e_" ~ e.token.text;
+            if (e.staticInstanceField)
+                return "z8_static_field(" ~ emitReceiver(e.left) ~ ", " ~ e.targetClass ~ ".f_" ~ e.token.text ~ ")";
             return (e.targetClass.length ? e.targetClass : emitReceiver(e.left)) ~ ".f_" ~ e.token.text;
         case ExprKind.call:
             string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
