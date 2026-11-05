@@ -27,6 +27,8 @@ private Z8Object[] z8_object_members(Z8Object self) {
     for (long i; i < items.z8_size(); ++i) result ~= z8_nonnull(cast(Z8Object)items.z8_get(i));
     return result;
 }
+// Inspect an existing containment path without initializing the parent object.
+Z8Object z8_object_container(Z8Object self) { return self is null ? null : self.z8_container; }
 private void z8_object_constructor(Z8Object self) { }
 private Z8Object z8_object_default_data(Z8Object self, Z8StringMap parameters) { z8_nonnull(self); return null; }
 private Z8Binary z8_object_default_content(Z8Object self, Z8StringMap parameters, Z8Array!Z8File files) { z8_nonnull(self); return null; }

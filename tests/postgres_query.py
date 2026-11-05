@@ -419,7 +419,7 @@ void main(string[] args) {
     exe = temp / ("postgres-query.exe" if os.name == "nt" else "postgres-query")
     command = ["dmd", "-I" + str(generated), "-I" + str(root / "postgres/source"), *import_args(),
                *map(str, generated.rglob("*.d")), str(root / "postgres/source/z8/database/postgres.d"),
-               str(root / "postgres/source/z8/database/query.d"), str(harness), str(runtime)]
+               str(root / "postgres/source/z8/database/query.d"), str(root / "postgres/source/z8/database/plan.d"), str(harness), str(runtime)]
     command += [str(bin_dir.parent / "lib/libpq.lib")] if os.name == "nt" else ["-L-lpq"]
     subprocess.run([*command, "-of=" + str(exe)], cwd=temp, check=True)
     with temporary_postgres(bin_dir) as (connection, environment):

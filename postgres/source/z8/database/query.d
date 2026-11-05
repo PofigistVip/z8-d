@@ -1,15 +1,9 @@
 module z8.database.query;
 
 import std.conv : to;
-import std.string : replace;
 import z8.runtime;
 import z8.database.postgres;
-
-private string quoteIdentifier(wstring value) {
-    if (value is null || !value.length) throw new Z8PostgresException("empty PostgreSQL identifier");
-    foreach (c; value) if (c == 0) throw new Z8PostgresException("PostgreSQL identifier contains a NUL byte");
-    return `"` ~ value.to!string.replace(`"`, `""`) ~ `"`;
-}
+import z8.database.plan;
 private Z8Object[] uniqueFields(Z8Object[] fields) {
     Z8Object[] result;
     foreach (field; fields) {
@@ -197,23 +191,25 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
     }
     long count(Z8Object query, Z8QueryReadRequest request) {
         if (!request.disableGrouping && z8_query_array(query, "aggregateBy"w).length) throw new Z8PostgresException("PostgreSQL aggregateBy links are not implemented");
-        auto declared = z8_query_declared_fields(query);
-        foreach (field; declared) {
-            auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, field);
-            z8_field_bind_sql(field, "t"w, name);
-        }
         auto groups = request.disableGrouping ? null : request.groupFields.length ? request.groupFields : z8_query_array(query, "groupBy"w);
-        foreach (field; groups) if (!containsField(declared, field)) throw new Z8PostgresException("PostgreSQL group field belongs to another query");
+        auto plan = new Z8PostgresQueryPlan(query, schema, table);
+        foreach (field; groups) plan.includeField(field);
+        foreach (condition; [request.where, request.queryWhere, request.queryScope, request.having, request.queryHaving]) plan.includeExpression(condition);
+        plan.finish(!request.byRecordId);
         auto previous = z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
         scope(exit) z8_sql_set_field_options(previous);
         string sql = groups.length ? "SELECT count(*) FROM (SELECT 1" : "SELECT count(0)";
-        sql ~= " FROM " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(table) ~ " AS t";
+        sql ~= " FROM " ~ plan.fromClause();
         string[] filters;
-        foreach (condition; [request.where, request.queryWhere, request.queryScope])
+        foreach (condition; [request.where, request.queryWhere, request.queryScope] ~ plan.where)
             if (condition !is null) filters ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
         auto key = z8_query_primary_key(query);
-        if (!groups.length && key !is null)
-            filters ~= "(" ~ z8_field_sql_format(key, Z8SqlVendor.Postgres).to!string ~ " <> '00000000-0000-0000-0000-000000000000'::uuid)";
+        if (!groups.length && key !is null) {
+            auto column = z8_field_sql_format(key, Z8SqlVendor.Postgres).to!string;
+            auto rightKeys = plan.rightJoinKeys();
+            filters ~= "(" ~ column ~ " <> '00000000-0000-0000-0000-000000000000'::uuid" ~ (rightKeys.length ? " OR " ~ column ~ " IS NULL" : "") ~ ")";
+            foreach (rightKey; rightKeys) filters ~= "(" ~ z8_field_sql_format(rightKey, Z8SqlVendor.Postgres).to!string ~ " <> '00000000-0000-0000-0000-000000000000'::uuid)";
+        }
         if (filters.length) {
             sql ~= " WHERE ";
             foreach (index, filter; filters) { if (index) sql ~= " AND "; sql ~= filter; }
@@ -223,7 +219,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             foreach (index, field; groups) { if (index) sql ~= ", "; sql ~= z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string; }
             z8_sql_set_field_options(Z8SqlFieldFormatOptions(true, false));
             string[] having;
-            foreach (condition; [request.having, request.queryHaving])
+            foreach (condition; [request.having, request.queryHaving] ~ plan.having)
                 if (!trivialTrue(condition)) having ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
             if (having.length) {
                 sql ~= " HAVING ";
@@ -243,11 +239,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         if (!request.disableGrouping && !grouped && (!trivialTrue(request.having) || !trivialTrue(request.queryHaving)))
             throw new Z8PostgresException("PostgreSQL HAVING filters require grouped query support");
         if (request.start < 0) throw new Z8PostgresException("negative PostgreSQL query offset");
-        auto declared = z8_query_declared_fields(query);
-        foreach (field; declared) {
-            auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, field);
-            z8_field_bind_sql(field, "t"w, name);
-        }
+        auto plan = new Z8PostgresQueryPlan(query, schema, table);
         auto requested = request.fields;
         if (!requested.length) {
             foreach (name; ["controls"w, "names"w, "columns"w, "extraFields"w])
@@ -259,7 +251,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         }
         Z8Object[] selected;
         foreach (field; requested) foreach (dependency; z8_field_fields(field)) {
-            if (!containsField(declared, dependency)) throw new Z8PostgresException("PostgreSQL query links are not implemented");
+            plan.includeField(dependency);
             selected ~= dependency;
         }
         auto key = z8_query_primary_key(query);
@@ -272,8 +264,12 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                 z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field)) projected ~= field;
             selected = projected;
         }
-        foreach (field; request.sortFields) if (!containsField(declared, field)) throw new Z8PostgresException("PostgreSQL sort field belongs to another query");
-        foreach (field; groups) if (!containsField(declared, field)) throw new Z8PostgresException("PostgreSQL group field belongs to another query");
+        foreach (field; request.sortFields) plan.includeField(field);
+        foreach (field; groups) plan.includeField(field);
+        foreach (condition; [request.where, request.queryWhere, request.queryScope, request.having, request.queryHaving]) plan.includeExpression(condition);
+        plan.finish(!request.byRecordId);
+        if (!request.disableGrouping && !grouped && plan.having.length)
+            throw new Z8PostgresException("PostgreSQL HAVING filters require grouped query support");
         auto previous = z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
         scope(exit) z8_sql_set_field_options(previous);
         string sql = "SELECT ";
@@ -292,13 +288,18 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                 expression = "convert_from(" ~ expression ~ ", 'UTF8')";
             sql ~= expression ~ " AS " ~ quoteIdentifier(("z8_" ~ index.to!string).to!wstring);
         }
-        sql ~= " FROM " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(table) ~ " AS t";
+        z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
+        sql ~= " FROM " ~ plan.fromClause();
         string[] filters;
         z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
-        foreach (condition; [request.where, request.queryWhere, request.queryScope])
+        foreach (condition; [request.where, request.queryWhere, request.queryScope] ~ plan.where)
             if (condition !is null) filters ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
-        if (!grouped && key !is null)
-            filters ~= "(" ~ z8_field_sql_format(key, Z8SqlVendor.Postgres).to!string ~ " <> '00000000-0000-0000-0000-000000000000'::uuid)";
+        if (!grouped && key !is null) {
+            auto column = z8_field_sql_format(key, Z8SqlVendor.Postgres).to!string;
+            auto rightKeys = plan.rightJoinKeys();
+            filters ~= "(" ~ column ~ " <> '00000000-0000-0000-0000-000000000000'::uuid" ~ (rightKeys.length ? " OR " ~ column ~ " IS NULL" : "") ~ ")";
+            foreach (rightKey; rightKeys) filters ~= "(" ~ z8_field_sql_format(rightKey, Z8SqlVendor.Postgres).to!string ~ " <> '00000000-0000-0000-0000-000000000000'::uuid)";
+        }
         Z8PostgresParameter[] parameters;
         if (request.byRecordId) {
             if (key is null) throw new Z8PostgresException("record lookup requires a primary key");
@@ -317,7 +318,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             }
             z8_sql_set_field_options(Z8SqlFieldFormatOptions(true, false));
             string[] having;
-            foreach (condition; [request.having, request.queryHaving])
+            foreach (condition; [request.having, request.queryHaving] ~ plan.having)
                 if (!trivialTrue(condition)) having ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
             if (having.length) {
                 sql ~= " HAVING ";

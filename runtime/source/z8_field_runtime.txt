@@ -162,6 +162,29 @@ Z8Object[] z8_field_fields(Z8Object self) {
     if (state.valueFrom !is null) add(state.valueFrom);
     return result;
 }
+// SQL planners also need dependencies of computed fields and ordered arrays.
+Z8Object[] z8_field_query_dependencies(Z8Object self) {
+    auto result = z8_field_fields(self);
+    auto state = z8_field_state(self);
+    void add(Z8Object field) {
+        if (field is null) return;
+        foreach (existing; result) if (existing is field) return;
+        result ~= field;
+    }
+    if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, self)) {
+        if (state.resolvingExpression) throw new Exception("recursive SQL field expression");
+        state.resolvingExpression = true;
+        scope(exit) state.resolvingExpression = false;
+        if (state.sqlExpression is null) state.sqlExpression = z8_nonnull(self.z8_field_virtual_expression());
+        foreach (field; z8_sql_collect_fields(state.sqlExpression)) add(field);
+    }
+    auto order = state.orderCell is null ? null : state.orderCell.view();
+    if (order !is null) {
+        auto fields = order.z8_erased_data();
+        for (long i; i < fields.z8_size(); ++i) add(cast(Z8Object)fields.z8_get(i));
+    }
+    return result;
+}
 ref T z8_field_aggregation_ref(T)(Z8Object self) {
     auto state = z8_field_state(self);
     auto cell = cast(Z8FieldAggregationCell!T)state.aggregationCell;
