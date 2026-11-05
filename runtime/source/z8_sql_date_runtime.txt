@@ -1,10 +1,11 @@
-enum Z8SqlDateKind { constant, group, choose, fromString }
+enum Z8SqlDateKind { constant, group, choose, fromString, truncDay, truncHour, truncMinute, truncSecond, addDay, addHour, addMinute, addSecond }
 class Z8SqlDate {
     Z8SqlDateKind kind;
     Z8Date constant;
     Z8SqlDate left, right;
     Z8SqlBool condition;
     Z8SqlString textOperand;
+    Z8SqlInt quantity;
     this(Z8SqlDateKind kind, Z8Date constant = null, Z8SqlDate left = null,
          Z8SqlDate right = null, Z8SqlBool condition = null) {
         this.kind = kind; this.constant = constant; this.left = left; this.right = right; this.condition = condition;
@@ -23,6 +24,27 @@ Z8SqlInt z8_sql_date_toInt(Z8SqlDate value) {
     auto result = new Z8SqlInt(Z8SqlIntKind.dateToInt);
     result.dateOperand = z8_nonnull(value); return result;
 }
+Z8SqlInt z8_sql_date_part(string part)(Z8SqlDate value) {
+    auto result = new Z8SqlInt(Z8SqlIntKind.datePart);
+    result.dateOperand = z8_nonnull(value); result.datePart = part.to!wstring; return result;
+}
+Z8SqlInt z8_sql_date_minute(Z8SqlDate value) { return z8_sql_date_part!"minute"(value); }
+Z8SqlInt z8_sql_date_hour(Z8SqlDate value) { return z8_sql_date_part!"hour"(value); }
+Z8SqlInt z8_sql_date_day(Z8SqlDate value) { return z8_sql_date_part!"day"(value); }
+Z8SqlInt z8_sql_date_month(Z8SqlDate value) { return z8_sql_date_part!"month"(value); }
+Z8SqlInt z8_sql_date_year(Z8SqlDate value) { return z8_sql_date_part!"year"(value); }
+Z8SqlDate z8_sql_date_unary(Z8SqlDateKind kind)(Z8SqlDate value) { return new Z8SqlDate(kind, null, z8_nonnull(value)); }
+Z8SqlDate z8_sql_date_truncDay(Z8SqlDate value) { return z8_sql_date_unary!(Z8SqlDateKind.truncDay)(value); }
+Z8SqlDate z8_sql_date_truncHour(Z8SqlDate value) { return z8_sql_date_unary!(Z8SqlDateKind.truncHour)(value); }
+Z8SqlDate z8_sql_date_truncMinute(Z8SqlDate value) { return z8_sql_date_unary!(Z8SqlDateKind.truncMinute)(value); }
+Z8SqlDate z8_sql_date_truncSecond(Z8SqlDate value) { return z8_sql_date_unary!(Z8SqlDateKind.truncSecond)(value); }
+Z8SqlDate z8_sql_date_add(Z8SqlDateKind kind)(Z8SqlDate value, Z8SqlInt quantity) {
+    auto result = new Z8SqlDate(kind, null, z8_nonnull(value)); result.quantity = quantity; return result;
+}
+Z8SqlDate z8_sql_date_addDay(Z8SqlDate value, Z8SqlInt quantity) { return z8_sql_date_add!(Z8SqlDateKind.addDay)(value, quantity); }
+Z8SqlDate z8_sql_date_addHour(Z8SqlDate value, Z8SqlInt quantity) { return z8_sql_date_add!(Z8SqlDateKind.addHour)(value, quantity); }
+Z8SqlDate z8_sql_date_addMinute(Z8SqlDate value, Z8SqlInt quantity) { return z8_sql_date_add!(Z8SqlDateKind.addMinute)(value, quantity); }
+Z8SqlDate z8_sql_date_addSecond(Z8SqlDate value, Z8SqlInt quantity) { return z8_sql_date_add!(Z8SqlDateKind.addSecond)(value, quantity); }
 wstring z8_sql_date_format(Z8SqlDate value, Z8SqlVendor vendor = Z8SqlVendor.Postgres) {
     z8_nonnull(value);
     final switch (value.kind) {
@@ -36,5 +58,22 @@ wstring z8_sql_date_format(Z8SqlDate value, Z8SqlVendor vendor = Z8SqlVendor.Pos
             if (vendor == Z8SqlVendor.Postgres) return text ~ "::timestamp with time zone"w;
             if (vendor == Z8SqlVendor.SqlServer) return "CONVERT([datetime],"w ~ text ~ ",(103))"w;
             throw new Exception("unsupported SQL database vendor");
+        case Z8SqlDateKind.truncDay:
+            if (value.left.kind == Z8SqlDateKind.constant) {
+                auto date = z8_nonnull(value.left.constant);
+                auto truncated = z8_date_truncDay(date);
+                date.value = truncated.value;
+                return z8_sql_date_format(value.left, vendor);
+            }
+            auto dayText = z8_sql_date_format(value.left, vendor);
+            return "("w ~ dayText ~ " - MOD("w ~ dayText ~ " + (10800000), 86400000))"w;
+        case Z8SqlDateKind.truncHour: case Z8SqlDateKind.truncMinute: case Z8SqlDateKind.truncSecond:
+            auto text = z8_sql_date_format(value.left, vendor);
+            auto unit = value.kind == Z8SqlDateKind.truncHour ? "3600000"w : value.kind == Z8SqlDateKind.truncMinute ? "60000"w : "1000"w;
+            return "("w ~ text ~ " - MOD("w ~ text ~ ", "w ~ unit ~ "))"w;
+        case Z8SqlDateKind.addDay: case Z8SqlDateKind.addHour: case Z8SqlDateKind.addMinute: case Z8SqlDateKind.addSecond:
+            auto text = z8_sql_date_format(value.left, vendor), quantity = z8_sql_int_format(value.quantity, vendor);
+            auto unit = value.kind == Z8SqlDateKind.addDay ? " 86400000"w : value.kind == Z8SqlDateKind.addHour ? "3600000"w : value.kind == Z8SqlDateKind.addMinute ? "60000"w : " 1000"w;
+            return "("w ~ text ~ " + "w ~ quantity ~ " *"w ~ unit ~ (vendor == Z8SqlVendor.Postgres ? "::bigint"w : ""w) ~ ")"w;
     }
 }

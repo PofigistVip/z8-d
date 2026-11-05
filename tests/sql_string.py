@@ -33,6 +33,13 @@ void main() {
     auto comparison = Cases.m_compare().left;
     assert(comparison.kind == Z8SqlBoolKind.textGreaterEqual);
     assert(z8_sql_string_format(Cases.m_literal(), Z8SqlVendor.Postgres) == "('O''Reilly 😀')"w);
+    auto instant = z8_date_from_ticks(100000000);
+    auto date = z8_sql_date_const(instant);
+    auto truncated = z8_sql_date_truncDay(date);
+    assert(z8_date_ticks(instant) == 100000000);
+    auto first = z8_sql_date_format(truncated);
+    assert(z8_date_ticks(instant) != 100000000);
+    assert(z8_sql_date_format(truncated) == first);
 }
 ''', encoding="utf-8")
     executable = temp / ("sql-string.exe" if os.name == "nt" else "sql-string")

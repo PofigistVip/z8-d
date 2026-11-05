@@ -549,6 +549,17 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             }
             try { System.out.println("SQLDATETICKS:" + vendor.name() + ":" + demo.cases.SqlStringValues.z8_dateTicks().format(vendor, null)); }
             catch (RuntimeException error) { System.out.println("SQLDATETICKS:" + vendor.name() + ":ERROR"); }
+            for (org.zenframework.z8.server.types.sql.sql_date value : new org.zenframework.z8.server.types.sql.sql_date[] {
+                demo.cases.SqlStringValues.z8_dateTruncDay(), demo.cases.SqlStringValues.z8_dateTruncGroupedDay(),
+                demo.cases.SqlStringValues.z8_dateTruncHour(), demo.cases.SqlStringValues.z8_dateTruncMinute(), demo.cases.SqlStringValues.z8_dateTruncSecond(),
+                demo.cases.SqlStringValues.z8_dateAddDay(), demo.cases.SqlStringValues.z8_dateAddHour(), demo.cases.SqlStringValues.z8_dateAddMinute(), demo.cases.SqlStringValues.z8_dateAddSecond() })
+                System.out.println("SQLDATEFUNC:" + vendor.name() + ":" + value.format(vendor, null));
+            for (org.zenframework.z8.server.types.sql.sql_integer value : new org.zenframework.z8.server.types.sql.sql_integer[] {
+                demo.cases.SqlStringValues.z8_dateMinute(), demo.cases.SqlStringValues.z8_dateHour(), demo.cases.SqlStringValues.z8_dateDay(),
+                demo.cases.SqlStringValues.z8_dateMonth(), demo.cases.SqlStringValues.z8_dateYear() }) {
+                try { System.out.println("SQLDATEPART:" + vendor.name() + ":" + value.format(vendor, null)); }
+                catch (RuntimeException error) { System.out.println("SQLDATEPART:" + vendor.name() + ":ERROR"); }
+            }
         }
         org.zenframework.z8.server.types.sql.sql_integer sharedSearch = demo.cases.SqlStringValues.z8_indexFrom();
         for (org.zenframework.z8.server.db.DatabaseVendor vendor : org.zenframework.z8.server.db.DatabaseVendor.values())
@@ -631,6 +642,8 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         sql_sources += [server_source / "db" / "sql" / "functions" / "numeric" / name for name in
                         ("Floor.java", "Mod.java", "Sign.java", "Abs.java", "Power.java", "IsNaN.java", "Ceil.java", "Exp.java", "Ln.java", "Round.java", "Truncate.java")]
         sql_sources += [server_source / "db" / "sql" / "functions" / "conversion" / name for name in ("IntToDecimal.java", "ToDecimal.java", "ToString.java", "StringToInt.java", "IsIntString.java", "IsNumericString.java", "GuidToString.java", "DateToString.java", "DateToInt.java", "ToDate.java")]
+        sql_sources += [server_source / "db" / "sql" / "functions" / "date" / (name + ".java") for name in
+                        ("ExtractDatePart", "ExtractMinute", "ExtractHour", "ExtractDay", "ExtractMonth", "ExtractYear", "TruncDay", "TruncHour", "TruncMinute", "TruncSecond", "AddDay", "AddHour", "AddMinute", "AddSecond")]
         sql_sources += [server_source / "db" / "sql" / "functions" / "string" / name for name in
                         ("Concat.java", "Lower.java", "Upper.java", "LTrim.java", "RTrim.java", "Length.java", "Quote.java",
                          "Like.java", "RegLike.java", "Replace.java", "RegReplace.java", "Substr.java", "Reverse.java", "LPad.java", "RPad.java",
@@ -964,6 +977,24 @@ void main() {
         }
         try { writeln("SQLDATETICKS:", vendor, ":", z8_to_utf8(z8_sql_int_format(Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_dateTicks(), dialect))); }
         catch (Exception error) { writeln("SQLDATETICKS:", vendor, ":ERROR"); }
+        foreach (value; [Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_dateTruncDay(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_dateTruncGroupedDay(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_dateTruncHour(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_dateTruncMinute(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_dateTruncSecond(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_dateAddDay(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_dateAddHour(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_dateAddMinute(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_dateAddSecond()])
+            writeln("SQLDATEFUNC:", vendor, ":", z8_to_utf8(z8_sql_date_format(value, dialect)));
+        foreach (value; [Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_dateMinute(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_dateHour(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_dateDay(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_dateMonth(),
+                        Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_dateYear()]) {
+            try { writeln("SQLDATEPART:", vendor, ":", z8_to_utf8(z8_sql_int_format(value, dialect))); }
+            catch (Exception error) { writeln("SQLDATEPART:", vendor, ":ERROR"); }
+        }
     }
     auto sharedSearch = Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_indexFrom();
     foreach (vendorIndex, vendor; ["Oracle", "SqlServer", "Postgres", "H2"]) {
@@ -979,12 +1010,12 @@ void main() {
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_lines = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:"))]
+        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:"))]
         original_sql = [line for line in output.splitlines() if line.startswith("SQLBOOL:")]
         d_sql = [line for line in d_lines if line.startswith("SQLBOOL:")]
         if original_sql != d_sql or len(d_sql) != 40:
             raise SystemExit(f"SQL boolean formatting differs: original={original_sql!r}, D={d_sql!r}")
-        for prefix, count in (("SQLINT:", 36), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 44), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 48), ("SQLTEXTTEST:", 16), ("SQLGUID:", 8), ("SQLGUIDBOOL:", 8), ("SQLDATE:", 12), ("SQLDATETICKS:", 4)):
+        for prefix, count in (("SQLINT:", 36), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 44), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 48), ("SQLTEXTTEST:", 16), ("SQLGUID:", 8), ("SQLGUIDBOOL:", 8), ("SQLDATE:", 12), ("SQLDATETICKS:", 4), ("SQLDATEFUNC:", 36), ("SQLDATEPART:", 20)):
             original_lines = [line for line in output.splitlines() if line.startswith(prefix)]
             d_formatted = [line for line in d_lines if line.startswith(prefix)]
             if original_lines != d_formatted or len(d_formatted) != count:

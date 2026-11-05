@@ -232,6 +232,8 @@ unittest {
     compile(q{class A { static sql_date f(date x, sql_bool test) { sql_date a = x; return test.IIF(a, x); } }});
     compile(q{class A { static sql_string f(sql_date x) { return x.toString(); } static sql_int g(sql_date x) { return x.toInt(); } }});
     compile(q{class A { static sql_date f(sql_string x) { return x.toDate(); } }});
+    compile(q{class A { static sql_date f(sql_date x) { return x.truncDay().addHour(1).truncMinute().addSecond(2); } }});
+    compile(q{class A { static sql_int f(sql_date x) { return x.year() + x.month() + x.day() + x.hour() + x.minute(); } }});
     rejects(q{class A { static date f(sql_date x) { return x; } }});
     rejects(q{class A { static guid f(sql_guid x) { return x; } }});
     rejects(q{class A { static sql_string f(sql_string x) { return x.json(null); } }});

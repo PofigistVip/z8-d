@@ -1038,8 +1038,17 @@ class Checker {
                     }
                     fail("unsupported SQL integer method", e.token);
                 }
-                if (receiver == ValueType.sqlDateType && e.token.text == "toInt") {
-                    checkArguments(e, []); e.builtinCall = "z8_sql_date_toInt"; return ValueType.sqlIntType;
+                if (receiver == ValueType.sqlDateType) {
+                    if (["toInt", "minute", "hour", "day", "month", "year"].canFind(e.token.text)) {
+                        checkArguments(e, []); e.builtinCall = "z8_sql_date_" ~ e.token.text; return ValueType.sqlIntType;
+                    }
+                    if (["truncDay", "truncHour", "truncMinute", "truncSecond"].canFind(e.token.text)) {
+                        checkArguments(e, []); e.builtinCall = "z8_sql_date_" ~ e.token.text; return ValueType.sqlDateType;
+                    }
+                    if (["addDay", "addHour", "addMinute", "addSecond"].canFind(e.token.text)) {
+                        checkArguments(e, [ValueType.sqlIntType]); e.builtinCall = "z8_sql_date_" ~ e.token.text; return ValueType.sqlDateType;
+                    }
+                    fail("unsupported SQL date method", e.token);
                 }
                 if (receiver == ValueType.sqlDecimalType) {
                     if (["abs", "exp", "ln"].canFind(e.token.text)) {

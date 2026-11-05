@@ -51,6 +51,20 @@ public class SqlStringValues {
     public static sql_date parsedDate() { sql_string value = "01.01.2020"; return value.toDate(); }
     public static sql_int dateTicks() { sql_date value = sqlDate(); return value.toInt(); }
     public static sql_string dateText() { sql_date value = sqlDate(); return value.toString(); }
+    public static sql_int dateMinute() { sql_date value = sqlDate(); return value.minute(); }
+    public static sql_int dateHour() { sql_date value = sqlDate(); return value.hour(); }
+    public static sql_int dateDay() { sql_date value = sqlDate(); return value.day(); }
+    public static sql_int dateMonth() { sql_date value = sqlDate(); return value.month(); }
+    public static sql_int dateYear() { sql_date value = sqlDate(); return value.year(); }
+    public static sql_date dateTruncDay() { date time = 100000000; sql_date value = time; return value.truncDay(); }
+    public static sql_date dateTruncGroupedDay() { sql_date value = sqlDate(); return value.truncDay(); }
+    public static sql_date dateTruncHour() { sql_date value = sqlDate(); return value.truncHour(); }
+    public static sql_date dateTruncMinute() { sql_date value = sqlDate(); return value.truncMinute(); }
+    public static sql_date dateTruncSecond() { sql_date value = sqlDate(); return value.truncSecond(); }
+    public static sql_date dateAddDay() { sql_date value = sqlDate(); return value.addDay(2); }
+    public static sql_date dateAddHour() { sql_date value = sqlDate(); return value.addHour(2); }
+    public static sql_date dateAddMinute() { sql_date value = sqlDate(); return value.addMinute(2); }
+    public static sql_date dateAddSecond() { sql_date value = sqlDate(); return value.addSecond(2); }
     public static int run() {
         sql_string value = concatenation();
         if (value == null) return 1;
