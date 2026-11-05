@@ -487,7 +487,9 @@ runtime D и отличается от Java.
 GUID- и date-значений. Методы `set`, `put` и `remove` работают с `null`,
 строками, числами, логическими значениями, GUID, датами и интервалами.
 Порядок ключей при выводе и получении имён может отличаться от Java; вложенные объекты и массивы через
-эти методы, а также остальные методы JSON ещё не перенесены.
+эти методы ещё не перенесены. Для `JsonArray` поддержаны разбор, вывод и
+присваивание JSON-строки, чтение элементов и преобразование в массивы базовых
+типов; изменение элементов и вложенные объекты пока не реализованы.
 Смена регистра в `Base34.decode` использует Unicode D и может
 отличаться от Java для отдельных локалей. Остальные методы этих проверяемых
 классов этим не реализуются. Строки для хеша
@@ -498,7 +500,8 @@ GUID- и date-значений. Методы `set`, `put` и `remove` работ
 методы `LoginParameters` — `z8_bind_builtin_login_parameters()`, `Cron` —
 `z8_bind_builtin_cron()`, методы `Sql` — `z8_bind_builtin_sql_functions()`,
 конструктор `Object` — `z8_bind_builtin_object()`, а доступные методы
-`JsonObject` — `z8_bind_builtin_json_object()`.
+`JsonObject` — `z8_bind_builtin_json_object()`, `JsonArray` —
+`z8_bind_builtin_json_array()`.
 
 Поддерживаются конкатенация, сравнения, `length`, `isEmpty`, `compare`, `compareNoCase`, `startsWith`,
 `endsWith`, `indexOf`, `lastIndexOf`, `substring`, `charAt`, `trim`, `trimLeft`,

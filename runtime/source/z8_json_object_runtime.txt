@@ -119,7 +119,7 @@ private wstring z8_json_object_to_string(Z8Object self) {
 private wstring z8_json_value_text(JSONValue value) {
     final switch (value.type) {
         case JSONType.null_: return ""w;
-        case JSONType.string: return value.str.to!wstring;
+        case JSONType.string: return value.str.length ? value.str.to!wstring : " "w[0 .. 0];
         case JSONType.integer: return value.integer.to!wstring;
         case JSONType.uinteger: return value.uinteger.to!wstring;
         case JSONType.float_: return z8_java_double_string(value.floating).to!wstring;
@@ -199,13 +199,8 @@ private Z8Optional!long z8_json_object_get_int(Z8Object self, wstring name) {
         default: throw new Exception("invalid JSON integer");
     }
 }
-private Z8Optional!Z8Decimal z8_json_object_get_decimal(Z8Object self, wstring name) {
+private Z8Decimal z8_json_value_decimal(JSONValue value) {
     import std.string : strip;
-    auto state = z8_json_object_state(self);
-    auto decimalValue = z8_string_required(name).to!string in state.decimals;
-    if (decimalValue !is null)
-        return z8_optional_wrap(z8_math_result(z8_literal_parse_double(z8_json_bigdecimal_text(*decimalValue))));
-    auto value = z8_json_object_get(self, name);
     double number;
     switch (value.type) {
         case JSONType.integer: number = cast(double)value.integer; break;
@@ -214,7 +209,14 @@ private Z8Optional!Z8Decimal z8_json_object_get_decimal(Z8Object self, wstring n
         case JSONType.string: number = z8_literal_parse_double(value.str.strip()); break;
         default: throw new Exception("invalid JSON decimal");
     }
-    return z8_optional_wrap(z8_math_result(number));
+    return z8_math_result(number);
+}
+private Z8Optional!Z8Decimal z8_json_object_get_decimal(Z8Object self, wstring name) {
+    auto state = z8_json_object_state(self);
+    auto decimalValue = z8_string_required(name).to!string in state.decimals;
+    if (decimalValue !is null)
+        return z8_optional_wrap(z8_math_result(z8_literal_parse_double(z8_json_bigdecimal_text(*decimalValue))));
+    return z8_optional_wrap(z8_json_value_decimal(z8_json_object_get(self, name)));
 }
 private Z8Guid z8_json_object_get_guid(Z8Object self, wstring name) {
     auto state = z8_json_object_state(self);
