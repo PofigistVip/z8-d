@@ -11,10 +11,12 @@ private enum z8_geometry_field_name = "org.zenframework.z8.server.base.table.val
 private enum z8_text_field_name = "org.zenframework.z8.server.base.table.value.TextField"w;
 
 private void z8_integer_field_new(Z8Object self) {
-    auto state = new Z8FieldState(z8_primary_box(0L)); state.useSlot!(Z8Optional!long, long)(); z8_field_attach(self, state);
+    auto state = new Z8FieldState(z8_primary_box(0L)); state.aggregation = Z8FieldAggregation.sum;
+    state.useSlot!(Z8Optional!long, long)(); z8_field_attach(self, state);
 }
 private void z8_string_field_new(Z8Object self) {
-    auto state = new Z8FieldState(z8_primary_box(""w)); state.useSlot!wstring(); z8_field_attach(self, state);
+    auto state = new Z8FieldState(z8_primary_box(""w)); state.aggregation = Z8FieldAggregation.max;
+    state.useSlot!wstring(); z8_field_attach(self, state);
 }
 private Z8Optional!long* z8_integer_field_default_address(Z8Object self) {
     return &z8_field_state(self).useSlot!(Z8Optional!long, long)().item;
@@ -29,16 +31,20 @@ private void z8_string_field_set_default(Z8Object self, wstring value) { z8_fiel
 private Z8Object z8_integer_field_assign(Z8Object self, Z8Optional!long value) { z8_field_set(self, z8_primary_box(value)); return self; }
 private Z8Object z8_string_field_assign(Z8Object self, wstring value) { z8_field_set(self, z8_primary_box(value)); return self; }
 private void z8_bool_field_new(Z8Object self) {
-    auto state = new Z8FieldState(z8_primary_box(false)); state.useSlot!(Z8Optional!bool, bool)(); z8_field_attach(self, state);
+    auto state = new Z8FieldState(z8_primary_box(false)); state.aggregation = Z8FieldAggregation.max;
+    state.useSlot!(Z8Optional!bool, bool)(); z8_field_attach(self, state);
 }
 private void z8_decimal_field_new(Z8Object self) {
-    auto state = new Z8FieldState(z8_primary_box(z8_decimal_from_int(0))); state.useSlot!(Z8Optional!Z8Decimal, Z8Decimal)(); z8_field_attach(self, state);
+    auto state = new Z8FieldState(z8_primary_box(z8_decimal_from_int(0))); state.aggregation = Z8FieldAggregation.sum;
+    state.useSlot!(Z8Optional!Z8Decimal, Z8Decimal)(); z8_field_attach(self, state);
 }
 private void z8_guid_field_new(Z8Object self) {
-    auto state = new Z8FieldState(z8_primary_box(z8_guid_zero())); state.useSlot!Z8Guid(); z8_field_attach(self, state);
+    auto state = new Z8FieldState(z8_primary_box(z8_guid_zero())); state.aggregation = Z8FieldAggregation.max;
+    state.useSlot!Z8Guid(); z8_field_attach(self, state);
 }
 private void z8_datetime_field_new(Z8Object self) {
-    auto state = new Z8FieldState(z8_primary_box(z8_date_min)); state.useSlot!Z8Date(); z8_field_attach(self, state);
+    auto state = new Z8FieldState(z8_primary_box(z8_date_min)); state.aggregation = Z8FieldAggregation.max;
+    state.useSlot!Z8Date(); z8_field_attach(self, state);
 }
 private void z8_datespan_field_new(Z8Object self) {
     auto state = new Z8FieldState(z8_primary_box(new Z8Datespan())); state.useSlot!Z8Datespan(); z8_field_attach(self, state);
@@ -47,7 +53,8 @@ private void z8_binary_field_new(Z8Object self) {
     auto state = new Z8FieldState(z8_primary_box(new Z8Binary())); state.useSlot!Z8Binary(); z8_field_attach(self, state);
 }
 private void z8_geometry_field_new(Z8Object self) {
-    auto state = new Z8FieldState(z8_primary_box(new Z8Geometry())); state.useSlot!Z8Geometry(); z8_field_attach(self, state);
+    auto state = new Z8FieldState(z8_primary_box(new Z8Geometry())); state.aggregation = Z8FieldAggregation.array;
+    state.useSlot!Z8Geometry(); z8_field_attach(self, state);
 }
 private T* z8_typed_field_default_address(T, Base = T)(Z8Object self) {
     return &z8_field_state(self).useSlot!(T, Base)().item;

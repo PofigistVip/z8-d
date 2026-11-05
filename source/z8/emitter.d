@@ -1002,7 +1002,11 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
             result ~= dStorageType(capture.type, capture.objectClass, capture.keyObjectClasses) ~ " z8_capture_" ~ capture.name ~ ";\n";
         foreach (field; program.fields) {
             auto storageType = dStorageType(field.type, field.objectClass, field.keyObjectClasses);
-            if (program.isNative && program.nativeName == "org.zenframework.z8.server.runtime.OBJECT"w &&
+            if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.value.Field"w &&
+                field.name.text == "aggregation" && !field.isStatic && field.type == ValueType.enumType && field.objectClass !is null) {
+                result ~= "@property ref " ~ storageType ~ " f_aggregation() { return z8_field_aggregation_ref!(" ~
+                    field.objectClass.emittedName ~ ")(this); }\n";
+            } else if (program.isNative && program.nativeName == "org.zenframework.z8.server.runtime.OBJECT"w &&
                 field.name.text == "objects" && !field.isStatic && field.isAuto && field.objectClass !is null) {
                 result ~= "@property ref " ~ storageType ~ " f_objects() { return z8_object_members_field!(" ~
                     field.objectClass.emittedName ~ ")(this); }\n";

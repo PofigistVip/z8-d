@@ -14,10 +14,16 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     temp = Path(directory)
     source, generated = temp / "bl", temp / "generated"
     source.mkdir()
+    (source / "Aggregation.bl").write_text('''
+[native "org.zenframework.z8.server.base.table.value.Aggregation"] public enum Aggregation {
+    None, Sum, Max, Min, Average, Count, Array, Distinct, Concat, BitwiseOr, BitwiseAnd
+}
+''', encoding="utf-8")
     (source / "Object.bl").write_text('[native "org.zenframework.z8.server.runtime.OBJECT"] public class Object {}', encoding="utf-8")
     (source / "Field.bl").write_text('''
 [native "org.zenframework.z8.server.base.table.value.Field"] public class Field extends Object {
     public primary primary(); public int int(); public string string(); public bool bool(); public decimal decimal(); public guid guid();
+    public Aggregation aggregation = Aggregation.None;
     public bool isChanged(); public bool wasNull();
 }
 ''', encoding="utf-8")
@@ -45,8 +51,11 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     (source / "Probe.bl").write_text('''
 public class Probe {
     public static IntField make() { IntField field; field.defaultValue = 4; return field; }
+    public static bool maxAggregation(IntField field) { return field.aggregation == Aggregation.Max; }
     public static bool run() {
         IntField number;
+        if (number.aggregation != Aggregation.Sum) return false;
+        number.aggregation = Aggregation.Min; if (number.aggregation != Aggregation.Min) return false;
         if (number.get() != 0 || number.defaultValue != 0 || number.isChanged() || !number.wasNull()) return false;
         number.defaultValue = 4;
         if (number.getDefault() != 4 || number.int() != 4 || number.isChanged()) return false;
@@ -55,6 +64,7 @@ public class Probe {
         number.setDefault(11);
         if (number.get() != 11 || !number.isChanged()) return false;
         StringField text;
+        if (text.aggregation != Aggregation.Max) return false;
         if (text.get() != "" || text.defaultValue != "" || text.isChanged()) return false;
         text.defaultValue = "start";
         if (text.getDefault() != "start" || text.string() != "start") return false;
@@ -83,11 +93,11 @@ public class Probe {
     if len(sys.argv) == 2:
         language = Path(sys.argv[1]).resolve() / "org.zenframework.z8.lang/src/bl"
         if not language.is_dir(): raise SystemExit("Original BL standard library not found")
-        for name in ("Object", "Field", "IntField", "StringField", "BoolField", "DecimalField", "GuidField"): (source / (name + ".bl")).unlink()
+        for name in ("Object", "Aggregation", "Field", "IntField", "StringField", "BoolField", "DecimalField", "GuidField"): (source / (name + ".bl")).unlink()
         shutil.copytree(language, source, dirs_exist_ok=True)
         for name in ("Custom", "CustomBool", "Probe"):
             path = source / (name + ".bl")
-            path.write_text("import org.zenframework.z8.base.table.value.IntField;\nimport org.zenframework.z8.base.table.value.StringField;\nimport org.zenframework.z8.base.table.value.BoolField;\nimport org.zenframework.z8.base.table.value.DecimalField;\nimport org.zenframework.z8.base.table.value.GuidField;\n" + path.read_text(encoding="utf-8"), encoding="utf-8")
+            path.write_text("import org.zenframework.z8.base.table.value.Aggregation;\nimport org.zenframework.z8.base.table.value.IntField;\nimport org.zenframework.z8.base.table.value.StringField;\nimport org.zenframework.z8.base.table.value.BoolField;\nimport org.zenframework.z8.base.table.value.DecimalField;\nimport org.zenframework.z8.base.table.value.GuidField;\n" + path.read_text(encoding="utf-8"), encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "main.d"
     harness.write_text('''
@@ -97,6 +107,9 @@ void main() {
     alias P = Z8p_50726F6265;
     assert(z8_optional_require(P.m_run()));
     auto field = P.m_make();
+    assert(z8_field_aggregation(field) == Z8FieldAggregation.sum);
+    z8_field_set_aggregation(field, Z8FieldAggregation.max);
+    assert(z8_optional_require(P.m_maxAggregation(field)));
     z8_field_set(field, z8_primary_box(9L));
     z8_field_set_default(field, z8_primary_box(11L));
     z8_field_reset(field);
