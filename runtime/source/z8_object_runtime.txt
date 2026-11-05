@@ -1,6 +1,32 @@
 // OBJECT.z8_constructor is an empty virtual hook in the original runtime.
 private void z8_object_constructor(Z8Object self) { }
+private wstring z8_object_get_attribute(Z8Object self, wstring name) {
+    return z8_string_new(z8_string_or_empty(z8_nonnull(self).z8_get_attribute(z8_string_required(name))));
+}
+private void z8_object_set_attribute(Z8Object self, wstring name, Z8Primary value) {
+    auto key = z8_string_required(name);
+    auto text = z8_string_required(z8_primary_to_string(value));
+    z8_nonnull(self).z8_set_attribute(key, z8_string_new(text));
+}
+private wstring z8_object_display_name(Z8Object self) {
+    return z8_object_get_attribute(self, "displayName"w);
+}
+private void z8_object_set_display_name(Z8Object self, wstring value) {
+    z8_nonnull(self).z8_set_attribute("displayName"w, z8_string_new(z8_string_required(value)));
+}
+private Z8Optional!bool z8_object_equal(Z8Object self, Z8Object other) {
+    return z8_optional_wrap(z8_nonnull(self) is z8_nonnull(other));
+}
+private Z8Optional!bool z8_object_not_equal(Z8Object self, Z8Object other) {
+    return z8_optional_wrap(z8_nonnull(self) !is z8_nonnull(other));
+}
 void z8_bind_builtin_object() {
     z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_constructor"w, &z8_object_constructor);
+    z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_getAttribute"w, &z8_object_get_attribute);
+    z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_setAttribute"w, &z8_object_set_attribute);
+    z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_displayName"w, &z8_object_display_name);
+    z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_setDisplayName"w, &z8_object_set_display_name);
+    z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.z8op_equal"w, &z8_object_equal);
+    z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.z8op_not_equal"w, &z8_object_not_equal);
 }
 shared static this() { z8_bind_builtin_object(); }
