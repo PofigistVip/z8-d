@@ -531,7 +531,9 @@ GUID- и date-значений. Методы `set`, `put` и `remove` работ
 `trigram`, `caseInsensitive`, `totals`, `aggregation`, а также `length` у
 `StringField`, `precision` и `scale` у `DecimalField`, `srs` у `GeometryField`,
 `html` и `singleLine` у `TextField`. Методы `getType` и `getTypeName` определяют
-типы реализованных полей и стандартных выражений. Для этих типов
+типы реализованных полей и стандартных выражений. Связи `valueFrom`, `valueFor`,
+`usedFields` и `columns` доступны из BL, а `z8_field_fields` собирает зависимости
+поля для хоста. Для этих типов
 доступны SQL-ссылки и `sqlIsNull`: хост задаёт
 алиас через `z8_field_bind_sql`. Для SQL-агрегации, включая сортировку внутри
 массива через `arrayOrderBy` и `sortDirection`, хост включает параметры через `z8_sql_set_field_options` и после

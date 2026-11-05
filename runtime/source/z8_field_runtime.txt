@@ -77,12 +77,14 @@ class Z8FieldState {
     private IZ8FieldAggregationCell aggregationCell;
     private IZ8FieldSortCell sortCell;
     private IZ8FieldOrderCell orderCell;
+    private IZ8FieldOrderCell usedFieldsCell, columnsCell;
     private Z8FieldAggregation initialAggregation;
     private Z8Primary originalValue;
     bool changed, wasNull = true;
     wstring format;
     Z8Optional!long width, length, precision, scale, srs;
     Z8Optional!bool indexed, unique, trigram, caseInsensitive, totals, html, singleLine;
+    Z8Object valueFrom, valueFor;
     wstring sqlOwnerAlias, sqlColumnName, sqlExpressionAlias;
     this(Z8Primary initial = null, bool wasNull = true) {
         value = initial; this.wasNull = wasNull;
@@ -118,14 +120,36 @@ ref T z8_field_sort_ref(T)(Z8Object self) {
     }
     return cell.value;
 }
-ref Z8ObjectArray!T z8_field_order_ref(T)(Z8Object self) if (is(T : Z8Object)) {
+ref Z8ObjectArray!T z8_field_array_ref(T, string name)(Z8Object self) if (is(T : Z8Object)) {
     auto state = z8_field_state(self);
-    auto cell = cast(Z8FieldOrderCell!T)state.orderCell;
+    IZ8FieldOrderCell* cellSlot;
+    static if (name == "arrayOrderBy") cellSlot = &state.orderCell;
+    else static if (name == "usedFields") cellSlot = &state.usedFieldsCell;
+    else static if (name == "columns") cellSlot = &state.columnsCell;
+    else static assert(0, "unknown field array");
+    auto cell = cast(Z8FieldOrderCell!T)*cellSlot;
     if (cell is null) {
-        if (state.orderCell !is null) throw new Exception("incompatible array order field type");
-        cell = new Z8FieldOrderCell!T(); state.orderCell = cell;
+        if (*cellSlot !is null) throw new Exception("incompatible field array type");
+        cell = new Z8FieldOrderCell!T(); *cellSlot = cell;
     }
     return cell.value;
+}
+// Java Field.fields() returns the field itself, usedFields, and valueFrom in
+// insertion order without duplicates. Columns are presentation metadata.
+Z8Object[] z8_field_fields(Z8Object self) {
+    auto state = z8_field_state(self);
+    Z8Object[] result = [self];
+    void add(Z8Object item) {
+        foreach (existing; result) if (existing is item) return;
+        result ~= item;
+    }
+    auto used = state.usedFieldsCell is null ? null : state.usedFieldsCell.view();
+    if (used !is null) {
+        auto items = used.z8_erased_data();
+        for (long i; i < items.z8_size(); ++i) add(z8_nonnull(cast(Z8Object)items.z8_get(i)));
+    }
+    if (state.valueFrom !is null) add(state.valueFrom);
+    return result;
 }
 ref T z8_field_aggregation_ref(T)(Z8Object self) {
     auto state = z8_field_state(self);
@@ -325,6 +349,8 @@ void z8_bind_builtin_field() {
     z8_native_bind_field(prefix ~ "f_trigram"w, &z8_field_metadata_address!"trigram");
     z8_native_bind_field(prefix ~ "f_caseInsensitive"w, &z8_field_metadata_address!"caseInsensitive");
     z8_native_bind_field(prefix ~ "f_totals"w, &z8_field_metadata_address!"totals");
+    z8_native_bind_field(prefix ~ "f_valueFrom"w, &z8_field_metadata_address!"valueFrom");
+    z8_native_bind_field(prefix ~ "f_valueFor"w, &z8_field_metadata_address!"valueFor");
     z8_native_bind(prefix ~ "m_primary"w, &z8_field_primary);
     z8_native_bind(prefix ~ "m_binary"w, &z8_field_cast!Z8Binary);
     z8_native_bind(prefix ~ "m_bool"w, &z8_field_cast!bool);

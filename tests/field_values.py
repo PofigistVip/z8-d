@@ -14,9 +14,10 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     temp = Path(directory)
     source, generated = temp / "bl", temp / "generated"
     source.mkdir()
-    (source / "Object.bl").write_text('[native "org.zenframework.z8.server.runtime.OBJECT"] public class Object { virtual public string toString(); }', encoding="utf-8")
+    (source / "Object.bl").write_text('[native "org.zenframework.z8.server.runtime.OBJECT"] public class Object { virtual public string toString(); public bool operator == (Object object); public bool operator != (Object object); }', encoding="utf-8")
     (source / "Field.bl").write_text('''
 [native "org.zenframework.z8.server.base.table.value.Field"] public class Field extends Object {
+    public Field valueFrom; public Field valueFor; public Field[] usedFields; public Field[] columns;
     public primary primary(); public int int(); public string string(); public bool bool(); public guid guid();
     public bool isChanged(); public bool wasNull();
 }
@@ -33,6 +34,15 @@ public class Probe {
         return value.int() == 42 && value.primary().toString() == "42" && value.toString() == "42" && !value.isChanged() && value.wasNull();
     }
     public static bool changed(Field value) { return value.string() == "new" && value.isChanged() && !value.wasNull(); }
+    public static Field links(Field value) {
+        Field first; Field second;
+        if (value.valueFrom != null || value.valueFor != null || value.usedFields.size() != 0 || value.columns.size() != 0) return null;
+        value.valueFrom = second; value.valueFor = first;
+        value.usedFields.add(first); value.usedFields.add(value); value.usedFields.add(first);
+        value.columns.add(second);
+        if (value.valueFrom != second || value.valueFor != first || value.usedFields.size() != 3 || value.columns[0] != second) return null;
+        return first;
+    }
     public static string json(Field value) {
         JsonWriter writer; writer.startObject().writeProperty(value).finishObject(); return writer.toString();
     }
@@ -54,6 +64,10 @@ void main() {
     alias P = Z8p_50726F6265;
     auto field = P.m_create(); field.z8_set_container(new Z8Object()); field.z8_set_index("amount"w);
     auto state = new Z8FieldState(z8_primary_box(42L)); z8_field_attach(field, state);
+    auto first = P.m_links(field); assert(first !is null);
+    auto related = z8_field_fields(field);
+    assert(related.length == 3 && related[0] is field && related[1] is first && related[2] is state.valueFrom);
+    assert(state.valueFor is first);
     assert(z8_optional_require(P.m_original(field)));
     assert(P.m_json(field) == `{"amount":42}`w);
     z8_field_set(field, z8_primary_box("new"w)); state.wasNull = false;
