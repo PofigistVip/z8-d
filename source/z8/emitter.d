@@ -1085,6 +1085,17 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
         }
         if (autoInitializers.length)
             result ~= "override void z8_init_members() {\nsuper.z8_init_members();\n" ~ autoInitializers ~ "}\n";
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.Table"w) {
+            bool hasMembers;
+            for (auto base = program.baseClass; base !is null; base = base.baseClass)
+                foreach (field; base.fields) if (field.name.text == "objects" && field.isAuto) hasMembers = true;
+            if (hasMembers) {
+                result ~= "override void z8_init_members() {\nsuper.z8_init_members();\n";
+                foreach (name; ["recordId", "createdAt", "modifiedAt", "createdBy", "modifiedBy", "lock"])
+                    result ~= "this.f_objects().z8_add(this.f_" ~ name ~ "());\n";
+                result ~= "}\n";
+            }
+        }
         result ~= "override void z8_init_values() {\nsuper.z8_init_values();\n";
         // TypeBody.rearrangeMembers puts declarations before standalone member initializers.
         foreach (field; program.fields) {

@@ -1,0 +1,50 @@
+// Native Table owns the six system fields that are not declared in a
+// generated subclass. Their names and member order match Table.java.
+private enum z8_table_name = "org.zenframework.z8.server.base.table.Table"w;
+private class Z8TableState {
+    Z8Object recordId, createdAt, modifiedAt, createdBy, modifiedBy, lock;
+}
+private Z8Object z8_table_system_field(Z8Object self, wstring nativeName, wstring index, wstring name) {
+    auto value = z8_native_new(nativeName);
+    value.z8_set_container(self); value.z8_set_index(index); value.z8_set_attribute("name"w, name);
+    return value;
+}
+private void z8_table_new(Z8Object self) {
+    enum p = "org.zenframework.z8.server.base.table.value."w;
+    auto state = new Z8TableState();
+    state.recordId = z8_table_system_field(self, p ~ "GuidField"w, "recordId"w, "RecordId"w);
+    state.createdAt = z8_table_system_field(self, p ~ "DatetimeField"w, "createdAt"w, "CreatedAt"w);
+    state.modifiedAt = z8_table_system_field(self, p ~ "DatetimeField"w, "modifiedAt"w, "ModifiedAt"w);
+    state.createdBy = z8_table_system_field(self, p ~ "GuidField"w, "createdBy"w, "CreatedBy"w);
+    state.modifiedBy = z8_table_system_field(self, p ~ "GuidField"w, "modifiedBy"w, "ModifiedBy"w);
+    state.lock = z8_table_system_field(self, p ~ "IntegerField"w, "lock"w, "Lock"w);
+    state.recordId.z8_set_attribute("primaryKey"w, ""w);
+    state.lock.z8_set_attribute("lockKey"w, ""w);
+    self.z8_set_native_state(z8_table_name, state);
+}
+private auto z8_table_field_address(string member)(Z8Object self) {
+    if (self is null) throw new Exception("null Table object");
+    auto state = cast(Z8TableState)self.z8_get_native_state(z8_table_name);
+    if (state is null) throw new Exception("Table fields are not initialized");
+    return &__traits(getMember, state, member);
+}
+Z8Object z8_query_primary_key(Z8Object self) {
+    z8_query_state(self);
+    auto state = cast(Z8TableState)self.z8_get_native_state(z8_table_name);
+    return state is null ? null : state.recordId;
+}
+private Z8Guid z8_query_record_id(Z8Object self) {
+    return z8_primary_cast!Z8Guid(z8_field_primary(z8_nonnull(z8_query_primary_key(self))));
+}
+void z8_bind_builtin_table() {
+    enum p = z8_table_name ~ "."w;
+    z8_native_bind(p ~ "m_new"w, &z8_table_new);
+    z8_native_bind_field(p ~ "f_recordId"w, &z8_table_field_address!"recordId");
+    z8_native_bind_field(p ~ "f_createdAt"w, &z8_table_field_address!"createdAt");
+    z8_native_bind_field(p ~ "f_modifiedAt"w, &z8_table_field_address!"modifiedAt");
+    z8_native_bind_field(p ~ "f_createdBy"w, &z8_table_field_address!"createdBy");
+    z8_native_bind_field(p ~ "f_modifiedBy"w, &z8_table_field_address!"modifiedBy");
+    z8_native_bind_field(p ~ "f_lock"w, &z8_table_field_address!"lock");
+    z8_native_bind(z8_query_name ~ ".m_recordId"w, &z8_query_record_id);
+}
+shared static this() { z8_bind_builtin_table(); }
