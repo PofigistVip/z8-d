@@ -549,9 +549,10 @@ void z8_bind_builtin_query() {
     z8_native_bind(p ~ "m_having"w, &z8_query_default_filter);
     z8_native_bind(p ~ "m_scope"w, &z8_query_default_filter);
     z8_native_bind(p ~ "m_onNew"w, &z8_query_default_event);
+    z8_native_bind(p ~ "m_onReadAction"w, &z8_query_default_event);
     z8_native_bind(p ~ "m_beforeRead"w, &z8_query_default_event);
     z8_native_bind(p ~ "m_afterRead"w, &z8_query_default_event);
-    foreach (name; ["onCopy"w, "beforeCreate"w, "afterCreate"w, "beforeUpdate"w, "afterUpdate"w, "beforeDestroy"w, "afterDestroy"w])
+    foreach (name; ["onCopy"w, "onCopyAction"w, "onCreateAction"w, "onUpdateAction"w, "onDestroyAction"w, "beforeCreate"w, "afterCreate"w, "beforeUpdate"w, "afterUpdate"w, "beforeDestroy"w, "afterDestroy"w])
         z8_native_bind(p ~ "m_"w ~ name, &z8_query_default_record_event);
     z8_native_bind(p ~ "m_setWhere"w, &z8_query_set_where);
     z8_native_bind(p ~ "m_setWhere"w, &z8_query_set_where_json);

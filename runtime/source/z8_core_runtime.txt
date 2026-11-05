@@ -121,6 +121,11 @@ class Z8Object {
     Z8SqlBool z8_query_virtual_having() { return z8_sql_bool_const(true); }
     Z8SqlBool z8_query_virtual_scope() { return z8_sql_bool_const(true); }
     void z8_query_virtual_onNew() {}
+    void z8_query_virtual_onReadAction() {}
+    void z8_query_virtual_onCopyAction(Z8Guid id) {}
+    void z8_query_virtual_onCreateAction(Z8Guid id) {}
+    void z8_query_virtual_onUpdateAction(Z8Guid id) {}
+    void z8_query_virtual_onDestroyAction(Z8Guid id) {}
     void z8_query_virtual_onCopy(Z8Guid id) {}
     void z8_query_virtual_beforeRead() {}
     void z8_query_virtual_afterRead() {}

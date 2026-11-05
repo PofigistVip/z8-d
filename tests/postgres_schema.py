@@ -32,6 +32,7 @@ import org.zenframework.z8.base.table.value.DatespanField;
 import org.zenframework.z8.base.table.value.TextField;
 import org.zenframework.z8.base.table.value.BinaryField;
 import org.zenframework.z8.base.table.value.IntExpression;
+import org.zenframework.z8.base.application.Application;
 [name "Sample;--"] public class Sample extends Table {
     [name "Title"] public StringField title; title.defaultValue = "O'Reilly 😀";
     [name "Amount"] public IntField amount; amount.defaultValue = 7;
@@ -43,7 +44,16 @@ import org.zenframework.z8.base.table.value.IntExpression;
     [name "Details"] public TextField details;
     [name "Blob"] public BinaryField blob;
     public IntExpression computed;
+    public string actionEvents = "";
+    public string getActionEvents() { return actionEvents; }
+    virtual protected void onCopyAction(guid id) { actionEvents = "C"; }
+    virtual protected void onCreateAction(guid id) { actionEvents += "N"; }
+    virtual protected void onUpdateAction(guid id) { actionEvents += "U"; }
+    virtual protected void onDestroyAction(guid id) { actionEvents += "D"; }
     virtual protected sql_bool scope() { return amount >= 0; }
+    virtual protected void onReadAction() {
+        if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-hook") addWhere(amount >= 40);
+    }
 }
 ''', encoding="utf-8")
     (source / "GeoSample.bl").write_text('''
@@ -202,6 +212,10 @@ void main(string[] args) {
     }
     db.execute("CREATE TEMP TABLE init_temp (id integer)");
     auto table = P.m_make();
+    auto eventTarget = P.m_make();
+    eventTarget.z8_query_virtual_onCopyAction(z8_guid_create(1)); eventTarget.z8_query_virtual_onCreateAction(z8_guid_create(1));
+    eventTarget.z8_query_virtual_onUpdateAction(z8_guid_create(1)); eventTarget.z8_query_virtual_onDestroyAction(z8_guid_create(1));
+    assert(eventTarget.m_getActionEvents() == "CNUD"w);
     assert(P.m_fieldKey(table) == z8_guid_create_name("Sample;--.Title"w));
     auto registry = new Z8RuntimeRegistry(); registry.registerTable(table); registry.registerTable(P.m_make());
     registry.registerTable(P.m_indexes()); registry.registerRequest(table);
@@ -660,6 +674,12 @@ void main(string[] args) {
     z8_application_finish_response(countRequest, cast(Z8RequestMonitor)countRequest.monitor);
     countJson = parseJSON(z8_application_response_text(countRequest).to!string);
     assert(countJson["total"].integer == 2 && countJson["data"].array.length == 1 && countJson["data"][0]["amount"].integer == 42);
+    auto hooked = new Z8ApplicationRequest(); hooked.session = querySession; hooked.monitor = new Z8RequestMonitor();
+    hooked.parameters.z8_add("action"w, "read"w); hooked.parameters.z8_add("fields"w, `["amount"]`w); hooked.parameters.z8_add("session"w, "with-hook"w);
+    z8_application_set_request(hooked); z8_application_start_response(hooked, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+    z8_application_finish_response(hooked, cast(Z8RequestMonitor)hooked.monitor);
+    auto hookedJson = parseJSON(z8_application_response_text(hooked).to!string);
+    assert(hookedJson["data"].array.length == 1 && hookedJson["data"][0]["amount"].integer == 42);
     assert(rejectedRead("recordId"w, `["invalid"]`w));
     queryUser.privileges.setFieldAccess(bootFieldKey, Z8Access.init);
     assert(rejectedRead("sort"w, `[{"property":"title"}]`w));

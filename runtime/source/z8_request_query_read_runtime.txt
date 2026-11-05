@@ -61,6 +61,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     if (privileges is null || !privileges.getTableAccess(queryKey).read) throw new Exception("query read access denied");
     auto key = z8_query_primary_key(query);
     if (key is null) throw new Exception("query has no primary key");
+    if (z8_query_user_events_enabled()) query.z8_query_virtual_onReadAction();
     Z8Object[] requested;
     auto fields = params.z8_get("fields"w);
     if (fields !is null && fields.length) {
