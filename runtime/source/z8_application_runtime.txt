@@ -30,6 +30,53 @@ class Z8RequestMonitor : IZ8ApplicationMonitor {
     Z8MonitorEntry[] logs() { return logEntries.dup; }
     Z8File[] files() { return printedFiles.dup; }
     bool hasErrors() { return logHasErrors; }
+    wstring infoJson(wstring server = null) { return z8_monitor_info_json(messageEntries, printedFiles, server); }
+}
+private void z8_monitor_property(T)(Z8JsonWriterState writer, wstring key, T value) {
+    writer.property(key);
+    z8_json_writer_primary(writer, z8_primary_box(value));
+}
+// Matches JsonWriter.writeInfo(messages, files, server) from the original Z8.
+wstring z8_monitor_info_json(Z8MonitorEntry[] messages, Z8File[] files, wstring server = null) {
+    auto writer = new Z8JsonWriterState();
+    writer.start('{');
+    writer.start('[', "messages"w);
+    foreach (entry; messages) {
+        writer.start('{');
+        z8_monitor_property(writer, "text"w, entry.text);
+        z8_monitor_property(writer, "source"w, entry.source);
+        z8_monitor_property(writer, "time"w, entry.time);
+        wstring level;
+        final switch (entry.level) {
+            case Z8MonitorLevel.info: level = "info"w; break;
+            case Z8MonitorLevel.warning: level = "warning"w; break;
+            case Z8MonitorLevel.error: level = "error"w; break;
+        }
+        z8_monitor_property(writer, "type"w, level);
+        writer.finish('}');
+    }
+    writer.finish(']');
+    writer.start('[', "files"w);
+    foreach (file; files) {
+        z8_nonnull(file);
+        writer.start('{');
+        z8_monitor_property(writer, "name"w, file.name);
+        z8_monitor_property(writer, "time"w, file.time);
+        z8_monitor_property(writer, "size"w, file.size);
+        z8_monitor_property(writer, "path"w, file.path);
+        z8_monitor_property(writer, "id"w, file.id);
+        z8_monitor_property(writer, "user"w, file.user);
+        z8_monitor_property(writer, "author"w, file.author);
+        writer.start('{', "details"w);
+        auto details = z8_nonnull(file.details);
+        if (details.hasNullKey) throw new Exception("null file detail key");
+        foreach (key; details.insertionKeys) z8_monitor_property(writer, key, details.entries[key]);
+        writer.finish('}'); writer.finish('}');
+    }
+    writer.finish(']');
+    if (files.length) z8_monitor_property(writer, "server"w, server);
+    writer.finish('}');
+    return writer.stream;
 }
 class Z8Redirect : Z8Exception {
     wstring location;
