@@ -1756,9 +1756,9 @@ class Checker {
                         e.builtinCall = e.token.text == "toString" ? "z8_user_primary_string" : "z8_user_primary_hash";
                         return e.token.text == "toString" ? ValueType.stringType : ValueType.intType;
                     }
-                    if (target is null && extendsBuiltinException(owner) && ["getMessage", "getStackTrace"].canFind(e.token.text)) {
+                    if (target is null && extendsBuiltinException(owner) && ["string", "getMessage", "getStackTrace"].canFind(e.token.text)) {
                         checkArguments(e, []);
-                        e.builtinCall = e.token.text == "getMessage" ? "z8_exception_object_message" : "z8_exception_object_stacktrace";
+                        e.builtinCall = e.token.text == "getStackTrace" ? "z8_exception_object_stacktrace" : "z8_exception_object_message";
                         return ValueType.stringType;
                     }
                     if (target is null) fail("unknown method '" ~ e.token.text ~ "'", e.token);
@@ -1835,7 +1835,7 @@ class Checker {
                     if (e.token.text == "toString") return ValueType.stringType;
                 } else if (receiver == ValueType.exceptionType) {
                     if (e.arguments.length != 0) fail("incorrect argument count", e.token);
-                    if (e.token.text == "getMessage" || e.token.text == "getStackTrace") return ValueType.stringType;
+                    if (["string", "getMessage", "getStackTrace"].canFind(e.token.text)) return ValueType.stringType;
                 } else if (receiver == ValueType.decimalType) {
                     if (e.token.text == "toString") { checkArguments(e, []); return ValueType.stringType; }
                     if (["abs", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "toRadians", "toDegrees", "exp", "ln", "log10", "sqrt", "cbrt"].canFind(e.token.text)) {
