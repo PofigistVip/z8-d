@@ -1,4 +1,9 @@
 // Native BL methods are bound explicitly by the embedding D application.
+private import std.meta : staticMap;
+private template Z8NativeErased(T) {
+    static if (is(T : Z8Object)) alias Z8NativeErased = Z8Object;
+    else alias Z8NativeErased = T;
+}
 private class Z8NativeBinding(R, Args...) {
     alias Callback = R function(Args);
     Callback callback;
@@ -9,6 +14,13 @@ private __gshared Object z8_native_monitor;
 shared static this() { z8_native_monitor = new Object(); }
 private wstring z8_native_binding_key(R, Args...)(wstring name) {
     return name ~ "|"w ~ typeid(Z8NativeBinding!(R, Args)).name.to!wstring;
+}
+private Z8NativeBinding!(R, Args) z8_native_find(R, Args...)(wstring name) {
+    auto key = z8_native_binding_key!(R, Args)(name);
+    synchronized (z8_native_monitor) {
+        auto found = key in z8_native_bindings;
+        return found is null ? null : cast(Z8NativeBinding!(R, Args))*found;
+    }
 }
 void z8_native_bind(R, Args...)(wstring name, R function(Args) callback) {
     if (callback is null) throw new Exception("native binding callback is null");
@@ -26,36 +38,43 @@ ref T z8_native_field(T, Args...)(wstring name, Args args) {
 }
 // A native value may use Java's default identity equality when no override is supplied.
 bool z8_native_try_call(R, Args...)(wstring name, out R result, Args args) if (!is(R == void)) {
-    auto key = z8_native_binding_key!(R, Args)(name);
-    Z8NativeBinding!(R, Args) binding;
-    synchronized (z8_native_monitor) {
-        auto found = key in z8_native_bindings;
-        if (found !is null) binding = cast(Z8NativeBinding!(R, Args))*found;
+    auto binding = z8_native_find!(R, Args)(name);
+    if (binding !is null) {
+        result = binding.callback(args);
+        return true;
     }
-    if (binding is null) return false;
-    result = binding.callback(args);
+    alias ErasedR = Z8NativeErased!R;
+    alias ErasedArgs = staticMap!(Z8NativeErased, Args);
+    auto erased = z8_native_find!(ErasedR, ErasedArgs)(name);
+    if (erased is null) return false;
+    static if (is(R : Z8Object)) {
+        auto value = erased.callback(args);
+        result = cast(R)value;
+        if (value !is null && result is null) throw new Exception("invalid native return type: " ~ name.to!string);
+    } else result = erased.callback(args);
     return true;
 }
 bool z8_native_try_call_void(Args...)(wstring name, Args args) {
-    auto key = z8_native_binding_key!(void, Args)(name);
-    Z8NativeBinding!(void, Args) binding;
-    synchronized (z8_native_monitor) {
-        auto found = key in z8_native_bindings;
-        if (found !is null) binding = cast(Z8NativeBinding!(void, Args))*found;
+    auto binding = z8_native_find!(void, Args)(name);
+    if (binding !is null) {
+        binding.callback(args);
+        return true;
     }
-    if (binding is null) return false;
-    binding.callback(args);
+    alias ErasedArgs = staticMap!(Z8NativeErased, Args);
+    auto erased = z8_native_find!(void, ErasedArgs)(name);
+    if (erased is null) return false;
+    erased.callback(args);
     return true;
 }
 void z8_native_clear_bindings() { synchronized (z8_native_monitor) z8_native_bindings.clear(); }
 R z8_native_call(R, Args...)(wstring name, Args args) {
-    auto key = z8_native_binding_key!(R, Args)(name);
-    Z8NativeBinding!(R, Args) binding;
-    synchronized (z8_native_monitor) {
-        auto found = key in z8_native_bindings;
-        if (found !is null) binding = cast(Z8NativeBinding!(R, Args))*found;
+    static if (is(R == void)) {
+        if (!z8_native_try_call_void(name, args))
+            throw new Exception("native binding not found: " ~ name.to!string);
+    } else {
+        R result;
+        if (!z8_native_try_call!R(name, result, args))
+            throw new Exception("native binding not found: " ~ name.to!string);
+        return result;
     }
-    if (binding is null) throw new Exception("native binding not found: " ~ name.to!string);
-    static if (is(R == void)) binding.callback(args);
-    else return binding.callback(args);
 }

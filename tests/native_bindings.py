@@ -10,6 +10,30 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     shutil.copytree(root / "examples" / "native", source)
     generated = temp / "generated"
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
+    # The adapter is compiled separately and has no dependency on generated modules.
+    adapter = temp / "adapter.d"
+    adapter.write_text('''module adapter;
+import z8.runtime;
+__gshared int constructed, cleared;
+void onNew(Z8Object self) { assert(self !is null); ++constructed; }
+Z8Optional!long get(Z8Object self) { return z8_optional_wrap(21L); }
+Z8Object echo(Z8Object self, Z8Object value) { return value; }
+Z8Object invalid(Z8Object self) { return new Z8Object(); }
+Z8Optional!long inspect(Z8Object value) { return z8_optional_wrap(value is null ? 0L : 7L); }
+void clear(Z8Object self) { ++cleared; }
+bool valueEquals(Z8Object self, Z8Object other) { return other !is null && self.classinfo is other.classinfo; }
+void bindGeneric() {
+    z8_native_bind("example.GenericNative.m_new"w, &onNew);
+    z8_native_bind("example.GenericNative.m_get"w, &get);
+    z8_native_bind("example.GenericNative.m_echo"w, &echo);
+    z8_native_bind("example.GenericNative.m_invalid"w, &invalid);
+    z8_native_bind("example.GenericNative.m_inspect"w, &inspect);
+    z8_native_bind("example.GenericNative.m_clear"w, &clear);
+    z8_native_bind("example.NativeNumber.m_equals"w, &valueEquals);
+}
+''', encoding="utf-8")
+    adapter_object = temp / ("adapter.obj" if os.name == "nt" else "adapter.o")
+    subprocess.run(["dmd", "-c", *import_args(), str(adapter), "-of=" + str(adapter_object)], check=True)
     harness = temp / "main.d"
     harness.write_text('''import z8.runtime;
 import z8gen.p_NativeMath;
@@ -17,9 +41,12 @@ import z8gen.p_NativeNumber;
 import z8gen.p_NativeConsumer;
 import z8gen.p_EagerUser;
 import z8gen.p_EagerHolder;
+import z8gen.p_GenericNative;
+import adapter;
 alias Math = Z8p_4E61746976654D617468;
 alias Number = Z8p_4E61746976654E756D626572;
 alias Consumer = Z8p_4E6174697665436F6E73756D6572;
+alias Generic = Z8p_47656E657269634E6174697665;
 Z8Optional!long add(Z8Optional!long a, Z8Optional!long b) { return z8_optional_wrap(z8_optional_require(a) + z8_optional_require(b)); }
 wstring addText(wstring a, wstring b) { return a ~ b; }
 Z8Optional!long scale(Math self, Z8Optional!long value) { return z8_optional_wrap(z8_optional_require(value) * 3); }
@@ -27,7 +54,6 @@ Z8Optional!long read(Number self) { return z8_optional_wrap(9L); }
 Z8Optional!long convertNumber(Number self) { return z8_optional_wrap(2L); }
 wstring numberText(Number self) { return "native:9"w; }
 Z8Optional!long numberHash(Number self) { return z8_optional_wrap(37L); }
-bool numberEquals(Number self, Z8Object other) { return cast(Number)other !is null; }
 Z8Optional!long ignored(Math self) { return z8_optional_wrap(10L); }
 __gshared Z8Optional!long nativeFactor, nativeTotal;
 __gshared int numberConstructs, mathConstructs;
@@ -37,6 +63,7 @@ Z8Optional!long* factor(Math self) { assert(self !is null); return &nativeFactor
 Z8Optional!long* total() { return &nativeTotal; }
 Z8Optional!long* badField() { return null; }
 void reset() {}
+Z8Optional!long exactGet(Generic self) { return z8_optional_wrap(22L); }
 void main() {
     bool missing;
     try { Consumer.m_run(); } catch (Exception e) { missing = e.msg.indexOf("native binding not found") >= 0; }
@@ -46,6 +73,7 @@ void main() {
     try { z8_native_field!(Z8Optional!long)("example.bad.f_field"w) = z8_optional_wrap(1L); }
     catch (Exception e) { badPointer = e.msg.indexOf("native field binding returned null") >= 0; }
     assert(badPointer);
+    bindGeneric();
     nativeFactor = z8_optional_wrap(3L);
     nativeTotal = z8_optional_wrap(7L);
     z8_native_bind("example.NativeMath.m_add"w, &add);
@@ -56,7 +84,6 @@ void main() {
     z8_native_bind("example.NativeNumber.z8cast_int"w, &convertNumber);
     z8_native_bind("example.NativeNumber.m_toString"w, &numberText);
     z8_native_bind("example.NativeNumber.m_hashCode"w, &numberHash);
-    z8_native_bind("example.NativeNumber.m_equals"w, &numberEquals);
     z8_native_bind("example.NativeNumber.m_new"w, &constructNumber);
     z8_native_bind("example.NativeMath.m_new"w, &constructMath);
     z8_native_bind("example.NativeMath.m_ignored"w, &ignored);
@@ -82,12 +109,25 @@ void main() {
         try { z8_get_container!Holder(value); } catch (Exception) { hasNoContainer = true; }
         assert(hasNoContainer);
     }
+    auto generic = z8_new!Generic();
+    assert(z8_optional_require(z8_nonnull(generic).m_get()) == 21 && constructed == 1);
+    assert(z8_nonnull(generic).m_echo(generic) is generic);
+    assert(z8_nonnull(generic).m_echo(null) is null);
+    assert(z8_optional_require(Generic.m_inspect(generic)) == 7);
+    assert(z8_optional_require(Generic.m_inspect(null)) == 0);
+    z8_nonnull(generic).m_clear();
+    assert(cleared == 1);
+    bool invalidReturn;
+    try { z8_nonnull(generic).m_invalid(); } catch (Exception e) { invalidReturn = e.msg.indexOf("invalid native return type") >= 0; }
+    assert(invalidReturn);
+    z8_native_bind("example.GenericNative.m_get"w, &exactGet);
+    assert(z8_optional_require(z8_nonnull(generic).m_get()) == 22);
     z8_native_clear_bindings();
 }
 '''.replace('import z8.runtime;', 'import z8.runtime;\nimport std.string : indexOf;'), encoding="utf-8")
     executable = temp / ("native.exe" if os.name == "nt" else "native")
     modules = [str(p) for p in generated.rglob("*.d")]
-    subprocess.run(["dmd", "-I" + str(generated), *import_args(), *modules, str(harness), str(runtime), "-of=" + str(executable)], check=True)
+    subprocess.run(["dmd", "-I" + str(generated), "-I" + str(temp), *import_args(), *modules, str(harness), str(adapter_object), str(runtime), "-of=" + str(executable)], check=True)
     subprocess.run([str(executable)], check=True)
     (source / "Bad.bl").write_text("class Bad { public void f(); }", encoding="utf-8")
     result = subprocess.run([str(compiler), "project", str(source), str(temp / "bad")], capture_output=True, text=True)
