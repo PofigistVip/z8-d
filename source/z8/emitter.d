@@ -269,7 +269,7 @@ private string emitExprRaw(Expression e) {
                 elements ~= (e.inferredType == ValueType.selfArray || e.inferredType == ValueType.enumArray) ? "cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(element) ~ ")" : emitExpr(element);
             return "new " ~ dType(e.inferredType, e.objectClass) ~ "(" ~ (elements.length ? "[" ~ elements.join(", ") ~ "]" ~ ([ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(e.inferredType) ? ", true" : "") : "") ~ ")";
         case ExprKind.mapEntry: assert(0, "map entries are emitted by their initializer");
-        case ExprKind.variable: return e.isField ? (e.targetClass.length ? e.targetClass ~ ".f_" : "this.f_") ~ e.token.text : "v_" ~ e.token.text;
+        case ExprKind.variable: return e.isCapture ? "this.z8_capture_" ~ e.token.text : e.isField ? (e.targetClass.length ? e.targetClass ~ ".f_" : "this.f_") ~ e.token.text : "v_" ~ e.token.text;
         case ExprKind.selfRef: return "this";
         case ExprKind.superRef: return "super";
         case ExprKind.containerRef:
@@ -469,6 +469,16 @@ private string emitStatement(Statement s) {
     }
 }
 private string emitSimple(Statement s) {
+    if (s.kind == StmtKind.variable && s.nestedClass !is null) {
+        auto temporary = "z8_nested_" ~ s.token.position.offset.to!string;
+        auto creation = "z8_new!(" ~ s.nestedClass.emittedName ~ ")(" ~ (s.hasContainer ? "this" : "") ~ ")";
+        if (!s.nestedClass.captures.length)
+            return dStorageType(s.type, s.objectClass) ~ " v_" ~ s.token.text ~ " = " ~ creation;
+        auto result = dStorageType(s.type, s.objectClass) ~ " v_" ~ s.token.text ~ " = (() { auto " ~ temporary ~ " = " ~ creation ~ "; ";
+        foreach (capture; s.nestedClass.captures)
+            result ~= temporary ~ ".z8_capture_" ~ capture.name ~ " = v_" ~ capture.name ~ "; ";
+        return result ~ "return " ~ temporary ~ "; })()";
+    }
     if (s.kind == StmtKind.variable && s.userOperatorAssignment) {
         auto temporary = "z8_initial_" ~ s.token.position.offset.to!string;
         return dStorageType(s.type, s.objectClass) ~ " v_" ~ s.token.text ~ " = (() { auto " ~ temporary ~ " = " ~
@@ -572,6 +582,8 @@ package string emitPrograms(Program[] programs) {
         }
         result ~= "class " ~ program.emittedName ~ " : " ~ (program.baseClass is null ? "Z8Object" : program.baseClass.emittedName) ~ " {\n";
         result ~= "alias Z8Self = " ~ program.emittedName ~ ";\n";
+        foreach (capture; program.captures)
+            result ~= dStorageType(capture.type, capture.objectClass) ~ " z8_capture_" ~ capture.name ~ ";\n";
         bool hasStaticFields;
         foreach (field; program.fields) {
             result ~= (field.isStatic ? "__gshared " : "") ~ dStorageType(field.type, field.objectClass) ~ " f_" ~ field.name.text ~ ";\n";

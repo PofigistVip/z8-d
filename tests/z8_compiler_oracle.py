@@ -186,6 +186,18 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     tie_result = subprocess.run(operator_command, cwd=temp, capture_output=True, text=True, encoding="utf-8")
     if tie_result.returncode == 0 or "ambiguous" not in tie_result.stdout:
         raise SystemExit("Original Z8 did not reject an equally ranked assignment:\n" + tie_result.stdout)
+    tie.unlink()
+    shutil.copy2(root / "examples" / "project" / "demo" / "cases" / "NestedBase.bl", operator_source)
+    static_nested = operator_source / "StaticNestedInit.bl"
+    static_nested.write_text('''public class StaticNestedInit {
+        public static int run() {
+            NestedBase value = class { int number = 100; public int value() { return number; } };
+            return value.value();
+        }
+    }''', encoding="utf-8")
+    static_result = subprocess.run(operator_command, cwd=temp, capture_output=True, text=True, encoding="utf-8")
+    if static_result.returncode == 0 or "Cannot make a static reference" not in static_result.stdout:
+        raise SystemExit("Original Z8 did not reject an initialized field in a static local specialization:\n" + static_result.stdout)
     print("Original Z8 accepted binary operators and rejected ambiguous conversions; direct execution is checked in D")
     if os.environ.get("Z8_ORACLE_INSPECT"):
         for file in generated:
@@ -237,6 +249,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         System.out.println("RESULT:" + demo.cases.NullableObjectField.z8_run().get());
         System.out.println("RESULT:" + demo.cases.LifecycleCases.z8_run().get());
         System.out.println("RESULT:" + demo.cases.LifecyclePhases.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.NestedLocalCases.z8_run().get());
         System.out.println("RESULT:" + demo.cases.NestedOwner.z8_run().get());
         System.out.println("RESULT:" + demo.cases.AssignmentRanking.z8_run().get());
         System.out.println("RESULT:" + demo.cases.AssignmentValue.z8_run().get());
@@ -393,6 +406,7 @@ void main() {
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4E756C6C61626C654F626A6563744669656C64.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4C6966656379636C654361736573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4C6966656379636C65506861736573.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4E65737465644C6F63616C4361736573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4E65737465644F776E6572.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E41737369676E6D656E7452616E6B696E67.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E41737369676E6D656E7456616C7565.m_run()));
@@ -440,8 +454,8 @@ void main() {
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_results = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        if original_results[-41:-13] != ["207", "203", "201", "197", "195", "193", "185", "187", "189", "181", "183", "179", "177", "171", "169", "167", "165", "163", "159", "155", "153", "151", "149", "167", "171", "251", "28", "241"]:
-            raise SystemExit(f"Language fixtures failed in original Z8: {original_results[-41:-13]}")
+        if original_results[-42:-13] != ["209", "207", "203", "201", "197", "195", "193", "185", "187", "189", "181", "183", "179", "177", "171", "169", "167", "165", "163", "159", "155", "153", "151", "149", "167", "171", "251", "28", "241"]:
+            raise SystemExit(f"Language fixtures failed in original Z8: {original_results[-42:-13]}")
         if original_results[-13:] != ["173", "179", "181", "191", "193", "197", "199", "211", "223", "227", "229", "233", "239"]:
             raise SystemExit(f"Basic types fixture failed in original Z8: {original_results[-13:]}")
         if original_results != d_results:

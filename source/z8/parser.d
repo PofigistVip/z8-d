@@ -8,6 +8,7 @@ import z8.lexer;
 class Parser {
     private Token[] tokens;
     private size_t index;
+    private Program currentClass;
     private string parsedObjectName;
     this(string source) {
         auto lexer = new Lexer(source);
@@ -175,6 +176,8 @@ class Parser {
     }
     // Shared by top-level types and, subsequently, nested specializations.
     private void parseClassBody(Program result) {
+        auto enclosing = currentClass;
+        currentClass = result;
         expect("{");
         while (current.text != "}") {
             if (current.kind == TokenKind.endOfFile) error("expected '}'");
@@ -254,6 +257,7 @@ class Parser {
             result.methods ~= method;
         }
         expect("}");
+        currentClass = enclosing;
     }
     private Statement statement() {
         auto t = current;
@@ -336,7 +340,18 @@ class Parser {
             auto s = new Statement(StmtKind.variable, t);
             s.declaredFinal = declaredFinal;
             s.type = parseType(); s.objectName = parsedObjectName; s.token = identifier();
-            if (accept("=")) s.expression = initializer();
+            if (accept("=")) {
+                if (accept("class")) {
+                    if (s.type != ValueType.selfType) error("nested specialization requires an object variable");
+                    auto nested = new Program;
+                    nested.name = s.token; nested.name.text = "__nested_" ~ s.token.position.offset.to!string;
+                    nested.baseName = s.objectName; nested.baseToken = s.token;
+                    nested.lexicalOwner = currentClass; nested.imports = currentClass.imports.dup;
+                    parseClassBody(nested);
+                    s.nestedClass = nested;
+                    currentClass.nestedPrograms ~= nested;
+                } else s.expression = initializer();
+            }
             return s;
         }
         if (declaredFinal) error("final must precede a variable declaration");

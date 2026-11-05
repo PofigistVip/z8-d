@@ -15,6 +15,7 @@ unittest {
     compile(q{class A { virtual int f() { return 1; } A child = class { int f() { return 2; } }; }});
     rejects(q{class A { int f() { return container.x; } }});
     rejects(q{class A { A child = class { int f() { return container.container.x; } }; }});
+    rejects(q{class A { static void f() { A child = class { int x = 1; }; } }});
     rejects(q{class A { int child = class {}; }});
     rejects(q{class A { A child = class { static int f() { return 1; } }; }});
     rejects(q{class A { static int f() { return +null; } }});

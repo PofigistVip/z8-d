@@ -25,7 +25,7 @@ class Expression {
     Expression[] arguments;
     ValueType inferredType;
     string targetClass;
-    bool isField, instanceCall, staticInstanceCall, fieldInitialization, newHasContainer;
+    bool isField, isCapture, instanceCall, staticInstanceCall, fieldInitialization, newHasContainer;
     bool binaryNameField;
     string nativeField;
     bool makeFile, makeException, convertToDate;
@@ -69,7 +69,7 @@ class Statement {
     bool declaredFinal, catchDeclaredFinal;
     bool filePathAssignment, dateTickAssignment, userOperatorAssignment, userCompoundAssignment;
     string objectName;
-    Program objectClass;
+    Program objectClass, nestedClass;
     this(StmtKind kind, Token token) { this.kind = kind; this.token = token; }
 }
 struct Parameter { ValueType type; Token name; string objectName; Program objectClass; bool declaredFinal; }
@@ -89,6 +89,7 @@ class Method {
 }
 class Field { ValueType type; Token name; Expression initializer; bool isPublic, isProtected, isStatic, isAuto, isRecord, declaredFinal, userOperatorAssignment; string objectName; Program objectClass; Program owner, nestedClass; }
 struct Import { string name; Token token; }
+struct Capture { string name; ValueType type; Program objectClass; }
 class Program {
     Token name;
     Method[] methods;
@@ -100,6 +101,8 @@ class Program {
     Program baseClass;
     Program lexicalOwner;
     Program[] nestedPrograms;
+    Capture[] captures;
+    bool enclosingStatic;
     bool isFinal;
     bool isEnum;
     Token[] enumValues;

@@ -1,6 +1,6 @@
 module z8.semantic;
 
-import std.algorithm : canFind;
+import std.algorithm : canFind, sort;
 import std.conv : to;
 import std.string : lastIndexOf, indexOf, icmp;
 import z8.compiler_model;
@@ -73,6 +73,11 @@ class Checker {
         return [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.guidType,
                 ValueType.datespanType, ValueType.dateType, ValueType.geometryType, ValueType.fileType,
                 ValueType.exceptionType].canFind(type);
+    }
+    private bool isLexicallyBound(string name) {
+        if (name in variables || name in fields) return true;
+        foreach (capture; currentProgram.captures) if (capture.name == name) return true;
+        return false;
     }
     private bool accessible(Program owner, bool isPublic, bool isProtected) {
         if (isPublic) return true;
@@ -419,6 +424,8 @@ class Checker {
             if (field.isStatic && field.initializer !is null && !isConstantInitializer(field.initializer))
                 fail("static field initializer must be a constant expression", field.name);
             if (field.initializer !is null) {
+                if (program.enclosingStatic && !field.isStatic)
+                    fail("instance field initializer in a static local specialization", field.name);
                 auto direct = matchesInitializer(field.initializer, field.type, field.objectClass);
                 if (field.type == ValueType.selfType && !field.isStatic)
                     field.userOperatorAssignment = useAssignmentOperator(field.objectClass, field.initializer, field.name, direct);
@@ -548,7 +555,14 @@ class Checker {
                 auto variable = e.token.text in variables;
                 if (variable is null) {
                     auto field = e.token.text in fields;
-                    if (field is null) fail("unknown variable '" ~ e.token.text ~ "'", e.token);
+                    if (field is null) {
+                        foreach (capture; currentProgram.captures) if (capture.name == e.token.text) {
+                            e.isCapture = true;
+                            e.objectClass = capture.objectClass;
+                            return capture.type == ValueType.stringType ? ValueType.nullableString : storedValueType(capture.type);
+                        }
+                        fail("unknown variable '" ~ e.token.text ~ "'", e.token);
+                    }
                     if (!accessible((*field).owner, (*field).isPublic, (*field).isProtected)) fail("field is not accessible", e.token);
                     if (staticContext && !(*field).isStatic) fail("instance field in static context", e.token);
                     e.isField = true;
@@ -584,7 +598,7 @@ class Checker {
                 if (e.objectClass.isEnum) fail("cannot instantiate an enum", e.token);
                 return ValueType.selfType;
             case ExprKind.field:
-                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields)) {
+                if (e.left.kind == ExprKind.variable && !isLexicallyBound(e.left.token.text)) {
                     if (e.left.token.text == "int" && ["Min", "Max"].canFind(e.token.text)) {
                         e.emittedOverride = "z8_int_" ~ e.token.text; return ValueType.optionalInt;
                     }
@@ -681,7 +695,7 @@ class Checker {
                 return checkCall(selected, selected.owner, e);
             case ExprKind.memberCall:
                 if (e.left.kind == ExprKind.variable && e.left.token.text == "Math" && importedMath &&
-                    !(e.left.token.text in variables) && !(e.left.token.text in fields)) {
+                    !isLexicallyBound(e.left.token.text)) {
                     if (e.token.text == "random") {
                         checkArguments(e, []); e.builtinCall = "z8_math_random"; return ValueType.decimalType;
                     }
@@ -704,7 +718,7 @@ class Checker {
                     }
                     fail("unsupported Math method", e.token);
                 }
-                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "string") {
+                if (e.left.kind == ExprKind.variable && !isLexicallyBound(e.left.token.text) && e.left.token.text == "string") {
                     if (e.token.text == "replicate") {
                         checkArguments(e, [ValueType.stringType, ValueType.intType]); e.builtinCall = "z8_string_replicate"; return ValueType.stringType;
                     }
@@ -716,7 +730,7 @@ class Checker {
                     }
                     fail("unsupported static string method", e.token);
                 }
-                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "file") {
+                if (e.left.kind == ExprKind.variable && !isLexicallyBound(e.left.token.text) && e.left.token.text == "file") {
                     if (e.token.text == "createTempFile") {
                         checkArguments(e, [ValueType.stringType, ValueType.stringType]); e.builtinCall = "z8_file_createTempFile"; return ValueType.fileType;
                     }
@@ -729,13 +743,13 @@ class Checker {
                     if (!["name", "baseName", "extension"].canFind(e.token.text)) fail("unsupported static file method", e.token);
                     checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_file_" ~ e.token.text; return ValueType.stringType;
                 }
-                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "binary") {
+                if (e.left.kind == ExprKind.variable && !isLexicallyBound(e.left.token.text) && e.left.token.text == "binary") {
                     if (e.token.text != "zip" || e.arguments.length != 1) fail("unsupported static binary method", e.token);
                     auto source = typeOf(e.arguments[0]);
                     auto expectedSource = source == ValueType.fileType ? ValueType.fileType : ValueType.binaryArray;
                     checkArguments(e, [expectedSource]); e.builtinCall = "z8_binary_zip"; return ValueType.binaryType;
                 }
-                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "geometry") {
+                if (e.left.kind == ExprKind.variable && !isLexicallyBound(e.left.token.text) && e.left.token.text == "geometry") {
                     if (e.token.text == "fromHexString") {
                         checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_geometry_fromHexString"; return ValueType.geometryType;
                     }
@@ -760,7 +774,7 @@ class Checker {
                     }
                     fail("unsupported static geometry method", e.token);
                 }
-                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "date") {
+                if (e.left.kind == ExprKind.variable && !isLexicallyBound(e.left.token.text) && e.left.token.text == "date") {
                     if (["now", "today", "tomorrow", "yesterday"].canFind(e.token.text)) {
                         checkArguments(e, []); e.builtinCall = "z8_date_" ~ e.token.text; return ValueType.dateType;
                     }
@@ -775,11 +789,11 @@ class Checker {
                     }
                     fail("unsupported static date method", e.token);
                 }
-                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "datespan") {
+                if (e.left.kind == ExprKind.variable && !isLexicallyBound(e.left.token.text) && e.left.token.text == "datespan") {
                     if (e.token.text != "parse") fail("unsupported static datespan method", e.token);
                     checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_datespan_parse"; return ValueType.datespanType;
                 }
-                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) && e.left.token.text == "guid") {
+                if (e.left.kind == ExprKind.variable && !isLexicallyBound(e.left.token.text) && e.left.token.text == "guid") {
                     if (e.token.text == "parse") {
                         checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_guid_parse"; return ValueType.guidType;
                     }
@@ -795,7 +809,7 @@ class Checker {
                     }
                     fail("unsupported static guid method", e.token);
                 }
-                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields) &&
+                if (e.left.kind == ExprKind.variable && !isLexicallyBound(e.left.token.text) &&
                     (e.left.token.text == "int" || e.left.token.text == "decimal" || e.left.token.text == "bool")) {
                     if (e.token.text != "parse") fail("unsupported static type method", e.token);
                     if (e.left.token.text == "bool") {
@@ -810,7 +824,7 @@ class Checker {
                     if (typeOf(e.arguments[0]) == ValueType.nullableString) e.arguments[0].nullableStringMode = NullableStringMode.none;
                     e.builtinCall = "z8_int_parse_optional"; return ValueType.optionalInt;
                 }
-                if (e.left.kind == ExprKind.variable && !(e.left.token.text in variables) && !(e.left.token.text in fields)) {
+                if (e.left.kind == ExprKind.variable && !isLexicallyBound(e.left.token.text)) {
                     auto owner = e.left.token.text in visibleClasses;
                     if (owner is null) fail("unknown class or variable '" ~ e.left.token.text ~ "'", e.left.token);
                     auto target = lookupMethod(*owner, e.token.text);
@@ -1516,6 +1530,14 @@ class Checker {
                 if (s.type == ValueType.primaryType && s.expression is null && !allowUninitializedEnum) fail("primary variables require an initializer", s.token);
                 if (s.type == ValueType.voidType) fail("variable cannot be void", s.token);
                 if (hasObjectClass(s.type)) s.objectClass = resolveClass(currentProgram, s.objectName, s.token);
+                if (s.nestedClass !is null) {
+                    s.nestedClass.enclosingStatic = staticContext;
+                    auto names = variables.keys;
+                    sort(names);
+                    s.nestedClass.captures = null;
+                    foreach (name; names)
+                        s.nestedClass.captures ~= Capture(name, variables[name], name in objectVariables ? objectVariables[name] : null);
+                }
                 if (s.expression !is null) {
                     auto direct = matchesInitializer(s.expression, s.type, s.objectClass);
                     if (s.type == ValueType.selfType)

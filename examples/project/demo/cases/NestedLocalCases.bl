@@ -1,0 +1,86 @@
+public class NestedLocalCases {
+    private int offset = 7;
+    public int exercise(int parameter) {
+        int number = 3;
+        int[] values = {4};
+        NestedBase item = class {
+            public int value() { return number + values[0] + values.size() + parameter + container.offset; }
+        };
+        number = 10;
+        parameter = 20;
+        values.set(0, 9);
+        return item.value();
+    }
+    public static int staticCase() {
+        int number = 3;
+        NestedBase item = class { public int value() { return number; } };
+        number = 9;
+        return item.value();
+    }
+    public static int loopCase() {
+        NestedBase[] items = {};
+        for (int index = 0; index < 3; index += 1) {
+            NestedBase item = class { public int value() { return index; } };
+            items.add(item);
+        }
+        return items[0].value() * 100 + items[1].value() * 10 + items[2].value();
+    }
+    public static int noCaptureCase() {
+        NestedBase item = class { public int value() { return 5; } };
+        return item.value();
+    }
+    public static int staticShadowCase() {
+        int number = 3;
+        NestedBase item = class {
+            int number;
+            public int value() { return number; }
+        };
+        return item.value();
+    }
+    public static int staticContainerCase() {
+        NestedBase item = class { public int value() { return container.offset; } };
+        try { return item.value(); } catch (exception expected) { return 11; }
+    }
+    public static int referenceCase() {
+        bool flag = null;
+        string text = null;
+        NestedBase base;
+        NestedBase original = base;
+        NestedBase item = class {
+            public int value() {
+                if (flag != null || text != null) return 1;
+                return base.initial + base.value();
+            }
+        };
+        flag = true;
+        text = "changed";
+        base = new NestedBase;
+        original.initial = 22;
+        return item.value();
+    }
+    public int captureFieldCase() {
+        int number = 4;
+        NestedBase item = class {
+            int snapshot = number;
+            public int value() { return snapshot; }
+        };
+        number = 9;
+        return item.value();
+    }
+    public int shadowCase() {
+        int number = 3;
+        NestedBase item = class {
+            int number = 100;
+            public int value() { return number; }
+        };
+        return item.value();
+    }
+    public static int run() {
+        NestedLocalCases sample;
+        if (sample.exercise(4) != 24 || staticCase() != 3) return 1;
+        if (loopCase() != 12 || sample.shadowCase() != 100) return 2;
+        if (staticShadowCase() != 0 || staticContainerCase() != 11 || noCaptureCase() != 5) return 3;
+        if (sample.captureFieldCase() != 4 || referenceCase() != 44) return 4;
+        return 209;
+    }
+}
