@@ -154,7 +154,7 @@ class Parser {
         foreach (old; previous)
             if (old.name.text == attribute.name.text) throw new CompileException("duplicate attribute", attribute.name.position);
         if (current.text != "]") {
-            bool literal = [TokenKind.stringLiteral, TokenKind.booleanLiteral, TokenKind.integerLiteral, TokenKind.decimalLiteral].canFind(current.kind) && look(1).text == "]";
+            bool literal = [TokenKind.stringLiteral, TokenKind.booleanLiteral, TokenKind.integerLiteral, TokenKind.decimalLiteral, TokenKind.guidLiteral, TokenKind.binaryLiteral].canFind(current.kind) && look(1).text == "]";
             bool negative = current.text == "-" && [TokenKind.integerLiteral, TokenKind.decimalLiteral].canFind(look(1).kind) && look(2).text == "]";
             attribute.hasValue = true;
             if (literal || negative) {

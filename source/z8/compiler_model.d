@@ -2,7 +2,8 @@ module z8.compiler_model;
 
 import std.algorithm : canFind;
 import std.conv : to;
-import std.string : replace, indexOf;
+import std.string : replace, indexOf, split, strip;
+import std.uni : toLower;
 import std.math : isFinite, abs;
 import z8.lexer : Position, Token, TokenKind, decodeStringLiteral;
 
@@ -140,6 +141,25 @@ package wstring attributeLiteralValue(TypeAttribute attribute) {
     assert(attribute.expression is null);
     if (attribute.value.kind == TokenKind.stringLiteral) return decodeStringLiteral(attribute.value.text);
     if (attribute.value.kind == TokenKind.booleanLiteral) return attribute.value.text.to!wstring;
+    if (attribute.value.kind == TokenKind.guidLiteral) {
+        auto uuid = attribute.value.text[1 .. $ - 1].toLower;
+        auto digits = uuid.replace("-", "");
+        auto high = cast(long)digits[0 .. 16].to!ulong(16);
+        auto low = cast(long)digits[16 .. 32].to!ulong(16);
+        return ("/* " ~ uuid ~ " */" ~ high.to!string ~ "L, " ~ low.to!string ~ "L").to!wstring;
+    }
+    if (attribute.value.kind == TokenKind.binaryLiteral) {
+        auto text = attribute.value.text[1 .. $ - 1];
+        string result = "new byte[] {";
+        foreach (i, part; text.split(',')) {
+            auto number = part.strip;
+            auto value = number.length > 2 && number[0] == '0' && (number[1] == 'x' || number[1] == 'X') ?
+                number[2 .. $].to!uint(16) : number.to!uint;
+            if (i) result ~= ", ";
+            result ~= (value < 128 ? cast(int)value : cast(int)value - 256).to!string;
+        }
+        return (result ~ "}").to!wstring;
+    }
     if (attribute.value.kind == TokenKind.decimalLiteral)
         return canonicalDecimalLiteral(attribute.value).to!wstring;
     assert(attribute.value.kind == TokenKind.integerLiteral);

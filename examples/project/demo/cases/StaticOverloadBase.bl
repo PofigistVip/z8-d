@@ -1,3 +1,5 @@
+[guidConstant '00112233-4455-6677-8899-AABBCCDDEEFF']
+[binaryConstant '0, 0xFF, 128']
 [typeCount StaticState.count]
 [typeText StaticState.label]
 [typeFlag StaticState.flag]
