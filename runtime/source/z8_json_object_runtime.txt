@@ -3,6 +3,7 @@ private enum z8_json_object_name = "org.zenframework.z8.server.base.json.parser.
 private class Z8JsonObjectState {
     JSONValue value;
     Z8Decimal[string] decimals;
+    Object[string] children;
     this(JSONValue value) { this.value = value; }
 }
 private JSONValue z8_json_empty_object() {
@@ -35,9 +36,9 @@ private Z8Object z8_json_object_parse(wstring source) {
     return result;
 }
 private void z8_json_object_assign(Z8Object self, wstring source) {
-    auto state = z8_json_object_state(self);
-    state.value = z8_json_object_read(source);
-    state.decimals = null;
+    z8_json_object_state(self);
+    auto value = z8_json_object_read(source);
+    self.z8_set_native_state(z8_json_object_name, new Z8JsonObjectState(value));
 }
 private JSONValue z8_json_object_get(Z8Object self, wstring name) {
     auto state = z8_json_object_state(self);
@@ -103,18 +104,21 @@ private wstring z8_json_render(JSONValue value) {
             return result ~ "}"w;
     }
 }
-private wstring z8_json_object_to_string(Z8Object self) {
-    auto state = z8_json_object_state(self);
+private wstring z8_json_object_render_state(Z8JsonObjectState state) {
     wstring result = "{"w;
     bool first = true;
     foreach (key, value; state.value.object) {
         if (!first) result ~= ","w;
         first = false;
         auto decimalValue = key in state.decimals;
+        auto child = key in state.children;
         result ~= z8_json_quote(key.to!wstring) ~ ":"w ~
-            (decimalValue is null ? z8_json_render(value) : z8_json_number_text(z8_json_bigdecimal_text(*decimalValue)).to!wstring);
+            (child !is null ? z8_json_render_state(*child) : decimalValue is null ? z8_json_render(value) : z8_json_number_text(z8_json_bigdecimal_text(*decimalValue)).to!wstring);
     }
-    return z8_string_new(result ~ "}"w);
+    return result ~ "}"w;
+}
+private wstring z8_json_object_to_string(Z8Object self) {
+    return z8_string_new(z8_json_object_render_state(z8_json_object_state(self)));
 }
 private wstring z8_json_value_text(JSONValue value) {
     final switch (value.type) {
@@ -130,7 +134,10 @@ private wstring z8_json_value_text(JSONValue value) {
 }
 private wstring z8_json_object_get_string(Z8Object self, wstring name) {
     auto state = z8_json_object_state(self);
-    auto decimalValue = z8_string_required(name).to!string in state.decimals;
+    auto key = z8_string_required(name).to!string;
+    auto child = key in state.children;
+    if (child !is null) return z8_string_new(z8_json_render_state(*child));
+    auto decimalValue = key in state.decimals;
     if (decimalValue !is null) return z8_string_new(z8_json_bigdecimal_text(*decimalValue).to!wstring);
     return z8_string_new(z8_json_value_text(z8_json_object_get(self, name)));
 }
@@ -260,6 +267,7 @@ private Z8Object z8_json_object_set_primary(Z8Object self, wstring name, Z8Prima
     auto key = z8_string_required(name).to!string;
     auto converted = z8_json_from_primary(value);
     state.decimals.remove(key);
+    state.children.remove(key);
     if (converted.hasDecimal) state.decimals[key] = converted.decimalValue;
     state.value.object[key] = converted.value;
     return self;
@@ -268,7 +276,32 @@ private Z8Object z8_json_object_remove(Z8Object self, wstring name) {
     auto state = z8_json_object_state(self);
     auto key = z8_string_required(name).to!string;
     state.decimals.remove(key);
+    state.children.remove(key);
     state.value.object.remove(key);
+    return self;
+}
+private Z8Object z8_json_object_get_nested(Z8Object self, wstring name, JSONType expected) {
+    auto state = z8_json_object_state(self);
+    auto key = z8_string_required(name).to!string;
+    auto value = key in state.value.object;
+    if (value is null || value.type == JSONType.null_) return null;
+    if (value.type != expected) throw new Exception("invalid nested JSON value");
+    auto child = key in state.children;
+    if (child is null) {
+        state.children[key] = z8_json_new_state(*value);
+        child = key in state.children;
+    }
+    return z8_json_wrap_state(*child);
+}
+private Z8Object z8_json_object_get_array(Z8Object self, wstring name) { return z8_json_object_get_nested(self, name, JSONType.array); }
+private Z8Object z8_json_object_get_object(Z8Object self, wstring name) { return z8_json_object_get_nested(self, name, JSONType.object); }
+private Z8Object z8_json_object_set_nested(Z8Object self, wstring name, Z8Object value) {
+    auto state = z8_json_object_state(self);
+    auto key = z8_string_required(name).to!string;
+    auto child = z8_json_state_from_object(value);
+    state.value.object[key] = z8_json_state_value(child);
+    state.decimals.remove(key);
+    state.children[key] = child;
     return self;
 }
 void z8_bind_builtin_json_object() {
@@ -286,6 +319,10 @@ void z8_bind_builtin_json_object() {
     z8_native_bind(prefix ~ "m_getDecimal"w, &z8_json_object_get_decimal);
     z8_native_bind(prefix ~ "m_getGuid"w, &z8_json_object_get_guid);
     z8_native_bind(prefix ~ "m_getDate"w, &z8_json_object_get_date);
+    z8_native_bind(prefix ~ "m_getJsonArray"w, &z8_json_object_get_array);
+    z8_native_bind(prefix ~ "m_getJsonObject"w, &z8_json_object_get_object);
+    z8_native_bind(prefix ~ "m_set"w, &z8_json_object_set_nested);
+    z8_native_bind(prefix ~ "m_put"w, &z8_json_object_set_nested);
     z8_native_bind(prefix ~ "m_set"w, &z8_json_object_set_primary);
     z8_native_bind(prefix ~ "m_put"w, &z8_json_object_set_primary);
     z8_native_bind(prefix ~ "m_remove"w, &z8_json_object_remove);

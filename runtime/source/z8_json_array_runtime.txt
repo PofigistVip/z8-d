@@ -3,6 +3,7 @@ private enum z8_json_array_name = "org.zenframework.z8.server.base.json.parser.J
 private class Z8JsonArrayState {
     JSONValue value;
     Z8Decimal[size_t] decimals;
+    Object[size_t] children;
     this(JSONValue value) { this.value = value; }
 }
 private JSONValue z8_json_empty_array() { return JSONValue(cast(JSONValue[])null); }
@@ -32,9 +33,9 @@ private Z8Object z8_json_array_parse(wstring source) {
     return result;
 }
 private void z8_json_array_assign(Z8Object self, wstring source) {
-    auto state = z8_json_array_state(self);
-    state.value = z8_json_array_read(source);
-    state.decimals = null;
+    z8_json_array_state(self);
+    auto value = z8_json_array_read(source);
+    self.z8_set_native_state(z8_json_array_name, new Z8JsonArrayState(value));
 }
 private size_t z8_json_array_position(Z8JsonArrayState state, Z8Optional!long index, bool insertion = false) {
     auto position = cast(int)z8_optional_require(index);
@@ -48,6 +49,8 @@ private JSONValue z8_json_array_get(Z8Object self, Z8Optional!long index) {
     return state.value.array[z8_json_array_position(state, index)];
 }
 private wstring z8_json_array_text_at(Z8JsonArrayState state, size_t position) {
+    auto child = position in state.children;
+    if (child !is null) return z8_json_render_state(*child);
     auto decimalValue = position in state.decimals;
     return decimalValue is null ? z8_json_value_text(state.value.array[position]) : z8_json_bigdecimal_text(*decimalValue).to!wstring;
 }
@@ -57,15 +60,18 @@ private Z8Optional!long z8_json_array_size(Z8Object self) {
 private Z8Optional!bool z8_json_array_empty(Z8Object self) {
     return z8_optional_wrap(z8_json_array_state(self).value.array.length == 0);
 }
-private wstring z8_json_array_string(Z8Object self) {
-    auto state = z8_json_array_state(self);
+private wstring z8_json_array_render_state(Z8JsonArrayState state) {
     wstring result = "["w;
     foreach (position, value; state.value.array) {
         if (position) result ~= ","w;
         auto decimalValue = position in state.decimals;
-        result ~= decimalValue is null ? z8_json_render(value) : z8_json_number_text(z8_json_bigdecimal_text(*decimalValue)).to!wstring;
+        auto child = position in state.children;
+        result ~= child !is null ? z8_json_render_state(*child) : decimalValue is null ? z8_json_render(value) : z8_json_number_text(z8_json_bigdecimal_text(*decimalValue)).to!wstring;
     }
-    return z8_string_new(result ~ "]"w);
+    return result ~ "]"w;
+}
+private wstring z8_json_array_string(Z8Object self) {
+    return z8_string_new(z8_json_array_render_state(z8_json_array_state(self)));
 }
 private wstring z8_json_array_get_string(Z8Object self, Z8Optional!long index) {
     auto state = z8_json_array_state(self);
@@ -161,6 +167,9 @@ private void z8_json_array_insert_value(Z8JsonArrayState state, size_t position,
     foreach (index, number; state.decimals) shifted[index >= position ? index + 1 : index] = number;
     if (value.hasDecimal) shifted[position] = value.decimalValue;
     state.decimals = shifted;
+    Object[size_t] children;
+    foreach (index, child; state.children) children[index >= position ? index + 1 : index] = child;
+    state.children = children;
 }
 private Z8Object z8_json_array_add_primary(Z8Object self, Z8Primary value) {
     auto state = z8_json_array_state(self);
@@ -183,6 +192,9 @@ private Z8Object z8_json_array_remove(Z8Object self, Z8Optional!long index) {
     Z8Decimal[size_t] shifted;
     foreach (key, value; state.decimals) if (key != position) shifted[key > position ? key - 1 : key] = value;
     state.decimals = shifted;
+    Object[size_t] children;
+    foreach (key, child; state.children) if (key != position) children[key > position ? key - 1 : key] = child;
+    state.children = children;
     return self;
 }
 private Z8JsonArrayState z8_json_array_from_values(Z8Array!Z8Primary values) {
@@ -195,10 +207,9 @@ private Z8JsonArrayState z8_json_array_from_values(Z8Array!Z8Primary values) {
     return state;
 }
 private void z8_json_array_assign_values(Z8Object self, Z8Array!Z8Primary values) {
-    auto state = z8_json_array_state(self);
+    z8_json_array_state(self);
     auto replacement = z8_json_array_from_values(values);
-    state.value = replacement.value;
-    state.decimals = replacement.decimals;
+    self.z8_set_native_state(z8_json_array_name, replacement);
 }
 private Z8Object z8_json_array_from_array(Z8Array!Z8Primary values) {
     if (values is null) return null;
@@ -209,12 +220,75 @@ private Z8Object z8_json_array_from_array(Z8Array!Z8Primary values) {
 }
 private Z8Object z8_json_array_add_array(Z8Object self, Z8Object other) {
     auto left = z8_json_array_state(self), right = z8_json_array_state(other);
+    foreach (index, value; left.value.array)
+        if ((value.type == JSONType.array || value.type == JSONType.object) && (index in left.children) is null)
+            left.children[index] = z8_json_new_state(value);
+    foreach (index, value; right.value.array)
+        if ((value.type == JSONType.array || value.type == JSONType.object) && (index in right.children) is null)
+            right.children[index] = z8_json_new_state(value);
     auto state = new Z8JsonArrayState(JSONValue(left.value.array ~ right.value.array));
     foreach (index, number; left.decimals) state.decimals[index] = number;
     foreach (index, number; right.decimals) state.decimals[left.value.array.length + index] = number;
+    foreach (index, child; left.children) state.children[index] = child;
+    foreach (index, child; right.children) state.children[left.value.array.length + index] = child;
     auto result = z8_native_new(z8_json_array_name);
     z8_nonnull(result).z8_set_native_state(z8_json_array_name, state);
     return result;
+}
+private Object z8_json_new_state(JSONValue value) {
+    if (value.type == JSONType.array) return new Z8JsonArrayState(value);
+    if (value.type == JSONType.object) return new Z8JsonObjectState(value);
+    throw new Exception("invalid nested JSON value");
+}
+private JSONValue z8_json_state_value(Object state) {
+    if (auto array = cast(Z8JsonArrayState)state) return array.value;
+    if (auto object = cast(Z8JsonObjectState)state) return object.value;
+    throw new Exception("invalid JSON state");
+}
+private wstring z8_json_render_state(Object state) {
+    if (auto array = cast(Z8JsonArrayState)state) return z8_json_array_render_state(array);
+    if (auto object = cast(Z8JsonObjectState)state) return z8_json_object_render_state(object);
+    throw new Exception("invalid JSON state");
+}
+private Object z8_json_state_from_object(Z8Object value) {
+    value = z8_nonnull(value);
+    if (z8_native_is_instance(z8_json_array_name, value)) return z8_json_array_state(value);
+    if (z8_native_is_instance(z8_json_object_name, value)) return z8_json_object_state(value);
+    throw new Exception("invalid JSON object");
+}
+private Z8Object z8_json_wrap_state(Object state) {
+    auto name = cast(Z8JsonArrayState)state !is null ? z8_json_array_name : z8_json_object_name;
+    auto result = z8_native_new(name);
+    z8_nonnull(result).z8_set_native_state(name, state);
+    return result;
+}
+private Z8Object z8_json_array_get_nested(Z8Object self, Z8Optional!long index, JSONType expected) {
+    auto state = z8_json_array_state(self);
+    auto position = z8_json_array_position(state, index);
+    auto value = state.value.array[position];
+    if (value.type != expected) throw new Exception("invalid nested JSON value");
+    auto child = position in state.children;
+    if (child is null) {
+        state.children[position] = z8_json_new_state(value);
+        child = position in state.children;
+    }
+    return z8_json_wrap_state(*child);
+}
+private Z8Object z8_json_array_get_array(Z8Object self, Z8Optional!long index) { return z8_json_array_get_nested(self, index, JSONType.array); }
+private Z8Object z8_json_array_get_object(Z8Object self, Z8Optional!long index) { return z8_json_array_get_nested(self, index, JSONType.object); }
+private Z8Object z8_json_array_insert_nested(Z8Object self, Z8Optional!long index, Z8Object value) {
+    auto state = z8_json_array_state(self);
+    auto child = z8_json_state_from_object(value);
+    auto position = z8_json_array_position(state, index, true);
+    Z8JsonPrimaryValue converted;
+    converted.value = z8_json_state_value(child);
+    z8_json_array_insert_value(state, position, converted);
+    state.children[position] = child;
+    return self;
+}
+private Z8Object z8_json_array_add_nested(Z8Object self, Z8Object value) {
+    auto state = z8_json_array_state(self);
+    return z8_json_array_insert_nested(self, z8_optional_wrap(cast(long)state.value.array.length), value);
 }
 void z8_bind_builtin_json_array() {
     enum prefix = z8_json_array_name ~ "."w;
@@ -233,6 +307,8 @@ void z8_bind_builtin_json_array() {
     z8_native_bind(prefix ~ "m_getInt"w, &z8_json_array_get_int);
     z8_native_bind(prefix ~ "m_getDecimal"w, &z8_json_array_get_decimal);
     z8_native_bind(prefix ~ "m_getGuid"w, &z8_json_array_get_guid);
+    z8_native_bind(prefix ~ "m_getJsonArray"w, &z8_json_array_get_array);
+    z8_native_bind(prefix ~ "m_getJsonObject"w, &z8_json_array_get_object);
     z8_native_bind(prefix ~ "m_toIntArray"w, &z8_json_array_to_ints);
     z8_native_bind(prefix ~ "m_toStringArray"w, &z8_json_array_to_strings);
     z8_native_bind(prefix ~ "m_toBoolArray"w, &z8_json_array_to_bools);
@@ -243,5 +319,8 @@ void z8_bind_builtin_json_array() {
     z8_native_bind(prefix ~ "m_insert"w, &z8_json_array_insert_primary);
     z8_native_bind(prefix ~ "m_put"w, &z8_json_array_insert_primary);
     z8_native_bind(prefix ~ "m_remove"w, &z8_json_array_remove);
+    z8_native_bind(prefix ~ "m_add"w, &z8_json_array_add_nested);
+    z8_native_bind(prefix ~ "m_insert"w, &z8_json_array_insert_nested);
+    z8_native_bind(prefix ~ "m_put"w, &z8_json_array_insert_nested);
 }
 shared static this() { z8_bind_builtin_json_array(); }

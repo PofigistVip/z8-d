@@ -30,6 +30,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     shutil.copytree(language, source)
     (source / "Probe.bl").write_text("""
 import org.zenframework.z8.base.json.JsonArray;
+import org.zenframework.z8.base.json.JsonObject;
 public class Probe {
     public static JsonArray parse(string text) { return JsonArray.parse(text); }
     public static void assign(JsonArray array, string text) { array = text; }
@@ -53,6 +54,22 @@ public class Probe {
     public static JsonArray from(primary[] values) { return JsonArray.fromArray(values); }
     public static void assignValues(JsonArray array, primary[] values) { array = values; }
     public static JsonArray concat(JsonArray left, JsonArray right) { return left + right; }
+    public static JsonObject parseObject(string text) { return JsonObject.parse(text); }
+    public static JsonArray objectArray(JsonObject object, string key) { return object.getJsonArray(key); }
+    public static JsonObject objectObject(JsonObject object, string key) { return object.getJsonObject(key); }
+    public static JsonObject arrayObject(JsonArray array, int index) { return array.getJsonObject(index); }
+    public static JsonArray arrayArray(JsonArray array, int index) { return array.getJsonArray(index); }
+    public static void objectPut(JsonObject object, string key, primary value) { object.set(key, value); }
+    public static void setArray(JsonObject object, string key, JsonArray value) { object.set(key, value); }
+    public static void setObject(JsonObject object, string key, JsonObject value) { object.set(key, value); }
+    public static void addArray(JsonArray array, JsonArray value) { array.add(value); }
+    public static void addObject(JsonArray array, JsonObject value) { array.add(value); }
+    public static void insertObject(JsonArray array, int index, JsonObject value) { array.insert(index, value); }
+    public static void putArray(JsonArray array, int index, JsonArray value) { array.put(index, value); }
+    public static void putObject(JsonObject object, string key, JsonObject value) { object.put(key, value); }
+    public static string objectRender(JsonObject object) { return (string)object; }
+    public static string objectText(JsonObject object, string key) { return object.getString(key); }
+    public static void assignObject(JsonObject object, string text) { object = text; }
     public static string render(JsonArray array) { return (string)array; }
     public static string display(JsonArray array) { return array.toString(); }
 }
@@ -128,6 +145,40 @@ class JsonArrayOracle {
         System.out.println("assigned:" + from.string().get());
         from.operatorAssign((org.zenframework.z8.server.runtime.RCollection)null);
         System.out.println("empty:" + from.string().get() + ":" + (JsonArray.z8_fromArray(null) == null));
+        org.zenframework.z8.server.base.json.parser.JsonObject rootObject = org.zenframework.z8.server.base.json.parser.JsonObject.z8_parse(new string("{a:[{v:1}]}")).get();
+        JsonArray nestedArray = rootObject.z8_getJsonArray(new string("a")).get();
+        org.zenframework.z8.server.base.json.parser.JsonObject nestedObject = nestedArray.z8_getJsonObject(new integer(0)).get();
+        nestedObject.z8_set(new string("v"), new decimal("1.2500"));
+        nestedArray.z8_add(new integer(2));
+        System.out.println("nested:" + rootObject.string().get() + ":" + rootObject.z8_getString(new string("a")).get() + ":" + nestedArray.z8_getString(new integer(0)).get());
+        nestedObject.operatorAssign(new string("{v:9}"));
+        nestedArray.operatorAssign(new string("[7]"));
+        System.out.println("detached:" + rootObject.string().get() + ":" + nestedArray.string().get() + ":" + nestedObject.string().get());
+        JsonArray.CLASS<JsonArray> insertedArray = JsonArray.z8_parse(new string("[3]"));
+        org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> insertedObject = org.zenframework.z8.server.base.json.parser.JsonObject.z8_parse(new string("{x:4}"));
+        JsonArray.CLASS<JsonArray> containerClass = JsonArray.z8_parse(new string("[]"));
+        JsonArray container = containerClass.get();
+        container.z8_add(insertedArray); container.z8_insert(new integer(0), insertedObject);
+        insertedArray.get().z8_add(new integer(5)); insertedObject.get().z8_set(new string("x"), new integer(6));
+        System.out.println("inserted:" + container.string().get());
+        org.zenframework.z8.server.base.json.parser.JsonObject holder = org.zenframework.z8.server.base.json.parser.JsonObject.z8_parse(new string("{}")).get();
+        holder.z8_set(new string("a"), containerClass);
+        container.z8_remove(new integer(0));
+        System.out.println("holder:" + holder.string().get());
+        JsonArray.CLASS<JsonArray> sourceClass = JsonArray.z8_parse(new string("[[1]]"));
+        JsonArray sourceArray = sourceClass.get();
+        JsonArray merged = sourceArray.operatorAdd(JsonArray.z8_parse(new string("[]"))).get();
+        sourceArray.z8_getJsonArray(new integer(0)).get().z8_add(new integer(2));
+        System.out.println("shared:" + merged.string().get());
+        org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> outerClass = org.zenframework.z8.server.base.json.parser.JsonObject.z8_parse(new string("{}"));
+        outerClass.get().z8_put(new string("o"), insertedObject);
+        insertedObject.get().z8_set(new string("x"), new integer(8));
+        System.out.println("object:" + outerClass.get().z8_getJsonObject(new string("o")).get().string().get());
+        container.z8_put(new integer(0), insertedArray);
+        insertedArray.get().z8_add(new integer(9));
+        System.out.println("shift:" + container.string().get() + ":" + container.z8_getJsonArray(new integer(1)).get().string().get());
+        System.out.println("missing:" + (outerClass.get().z8_getJsonObject(new string("absent")) == null));
+        try { container.z8_getJsonObject(new integer(0)); System.out.println("bad"); } catch (RuntimeException expected) { System.out.println("type:error"); }
         for (String input : new String[] {"", "1,2", " [1,2]", "[1,]", "[1,,2]", "[1", "{x:1}"}) {
             try { System.out.println("p:" + parse(input).string().get()); } catch (RuntimeException expected) { System.out.println("p:error"); }
         }
@@ -226,6 +277,31 @@ void main() {
     writeln("assigned:", P.m_render(from).to!string);
     P.m_assignValues(from, null);
     writeln("empty:", P.m_render(from).to!string, ":", P.m_from(null) is null);
+    auto rootObject = P.m_parseObject("{a:[{v:1}]}"w);
+    auto nestedArray = P.m_objectArray(rootObject, "a"w);
+    auto nestedObject = P.m_arrayObject(nestedArray, 0);
+    P.m_objectPut(nestedObject, "v"w, z8_primary_box(z8_decimal_parse("1.2500"w)));
+    P.m_add(nestedArray, z8_primary_box(2L));
+    writeln("nested:", P.m_objectRender(rootObject).to!string, ":", P.m_objectText(rootObject, "a"w).to!string, ":", P.m_text(nestedArray, 0).to!string);
+    P.m_assignObject(nestedObject, "{v:9}"w); P.m_assign(nestedArray, "[7]"w);
+    writeln("detached:", P.m_objectRender(rootObject).to!string, ":", P.m_render(nestedArray).to!string, ":", P.m_objectRender(nestedObject).to!string);
+    auto insertedArray = P.m_parse("[3]"w); auto insertedObject = P.m_parseObject("{x:4}"w);
+    auto container = P.m_parse("[]"w);
+    P.m_addArray(container, insertedArray); P.m_insertObject(container, 0, insertedObject);
+    P.m_add(insertedArray, z8_primary_box(5L)); P.m_objectPut(insertedObject, "x"w, z8_primary_box(6L));
+    writeln("inserted:", P.m_render(container).to!string);
+    auto holder = P.m_parseObject("{}"w); P.m_setArray(holder, "a"w, container); P.m_remove(container, 0);
+    writeln("holder:", P.m_objectRender(holder).to!string);
+    auto sourceArray = P.m_parse("[[1]]"w); auto merged = P.m_concat(sourceArray, P.m_parse("[]"w));
+    P.m_add(P.m_arrayArray(sourceArray, 0), z8_primary_box(2L));
+    writeln("shared:", P.m_render(merged).to!string);
+    auto outer = P.m_parseObject("{}"w); P.m_putObject(outer, "o"w, insertedObject);
+    P.m_objectPut(insertedObject, "x"w, z8_primary_box(8L));
+    writeln("object:", P.m_objectRender(P.m_objectObject(outer, "o"w)).to!string);
+    P.m_putArray(container, 0, insertedArray); P.m_add(insertedArray, z8_primary_box(9L));
+    writeln("shift:", P.m_render(container).to!string, ":", P.m_render(P.m_arrayArray(container, 1)).to!string);
+    writeln("missing:", P.m_objectObject(outer, "absent"w) is null);
+    try { P.m_arrayObject(container, 0); writeln("bad"); } catch (Exception) { writeln("type:error"); }
     foreach (input; [""w, "1,2"w, " [1,2]"w, "[1,]"w, "[1,,2]"w, "[1"w, "{x:1}"w]) {
         try { writeln("p:", P.m_render(P.m_parse(input)).to!string); } catch (Exception) { writeln("p:error"); }
     }
@@ -244,4 +320,4 @@ void main() {
     actual = subprocess.check_output([str(executable)], cwd=temp, text=True, encoding="utf-8").splitlines()
     if actual != expected:
         raise SystemExit(f"JsonArray differs:\nJava={expected!r}\nD={actual!r}")
-print("JsonArray parsing, access, mutation and array conversion match Java")
+print("JsonArray parsing, mutation, conversions and nested references match Java")
