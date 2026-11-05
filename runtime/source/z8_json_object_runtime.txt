@@ -2,6 +2,7 @@
 private enum z8_json_object_name = "org.zenframework.z8.server.base.json.parser.JsonObject"w;
 private class Z8JsonObjectState {
     JSONValue value;
+    Z8Decimal[string] decimals;
     this(JSONValue value) { this.value = value; }
 }
 private JSONValue z8_json_empty_object() {
@@ -34,7 +35,9 @@ private Z8Object z8_json_object_parse(wstring source) {
     return result;
 }
 private void z8_json_object_assign(Z8Object self, wstring source) {
-    z8_json_object_state(self).value = z8_json_object_read(source);
+    auto state = z8_json_object_state(self);
+    state.value = z8_json_object_read(source);
+    state.decimals = null;
 }
 private JSONValue z8_json_object_get(Z8Object self, wstring name) {
     auto state = z8_json_object_state(self);
@@ -54,7 +57,35 @@ private wstring z8_json_value_text(JSONValue value) {
     }
 }
 private wstring z8_json_object_get_string(Z8Object self, wstring name) {
+    auto state = z8_json_object_state(self);
+    auto decimalValue = z8_string_required(name).to!string in state.decimals;
+    if (decimalValue !is null) return z8_string_new(z8_json_bigdecimal_text(*decimalValue).to!wstring);
     return z8_string_new(z8_json_value_text(z8_json_object_get(self, name)));
+}
+// BigDecimal.toString uses scientific notation when its adjusted exponent
+// is below -6 or its scale is negative; toPlainString is used otherwise.
+private string z8_json_bigdecimal_text(Z8Decimal value) {
+    auto digits = value.coefficient.to!string;
+    string sign;
+    if (digits.length && digits[0] == '-') { sign = "-"; digits = digits[1 .. $]; }
+    auto exponent = cast(long)digits.length - 1 - value.scale;
+    if (value.scale >= 0 && exponent >= -6) return value.z8_string().to!string;
+    auto mantissa = digits[0 .. 1] ~ (digits.length > 1 ? "." ~ digits[1 .. $] : "");
+    return sign ~ mantissa ~ "E" ~ (exponent >= 0 ? "+" : "") ~ exponent.to!string;
+}
+private long z8_json_bigdecimal_long(Z8Decimal value) {
+    auto number = value.coefficient;
+    if (value.scale > 0) {
+        if (cast(long)value.scale >= cast(long)z8_precision(number)) return 0;
+        number /= z8_pow10(cast(uint)value.scale);
+    } else if (value.scale < 0) {
+        if (value.scale <= -64) return 0;
+        number *= z8_pow10(cast(uint)-value.scale);
+    }
+    auto modulus = BigInt("18446744073709551616");
+    number %= modulus;
+    if (number < 0) number += modulus;
+    return cast(long)number.to!string.to!ulong;
 }
 private Z8Optional!bool z8_json_object_has(Z8Object self, wstring name) {
     auto state = z8_json_object_state(self);
@@ -76,6 +107,9 @@ private Z8Optional!bool z8_json_object_get_bool(Z8Object self, wstring name) {
 }
 private Z8Optional!long z8_json_object_get_int(Z8Object self, wstring name) {
     import std.math : isNaN;
+    auto state = z8_json_object_state(self);
+    auto decimalValue = z8_string_required(name).to!string in state.decimals;
+    if (decimalValue !is null) return z8_optional_wrap(z8_json_bigdecimal_long(*decimalValue));
     auto value = z8_json_object_get(self, name);
     switch (value.type) {
         case JSONType.integer: return z8_optional_wrap(value.integer);
@@ -95,6 +129,10 @@ private Z8Optional!long z8_json_object_get_int(Z8Object self, wstring name) {
 }
 private Z8Optional!Z8Decimal z8_json_object_get_decimal(Z8Object self, wstring name) {
     import std.string : strip;
+    auto state = z8_json_object_state(self);
+    auto decimalValue = z8_string_required(name).to!string in state.decimals;
+    if (decimalValue !is null)
+        return z8_optional_wrap(z8_math_result(z8_literal_parse_double(z8_json_bigdecimal_text(*decimalValue))));
     auto value = z8_json_object_get(self, name);
     double number;
     switch (value.type) {
@@ -107,11 +145,49 @@ private Z8Optional!Z8Decimal z8_json_object_get_decimal(Z8Object self, wstring n
     return z8_optional_wrap(z8_math_result(number));
 }
 private Z8Guid z8_json_object_get_guid(Z8Object self, wstring name) {
+    auto state = z8_json_object_state(self);
+    auto decimalValue = z8_string_required(name).to!string in state.decimals;
+    if (decimalValue !is null) return z8_guid_parse(z8_json_bigdecimal_text(*decimalValue).to!wstring);
     auto value = z8_json_object_get(self, name);
     return value.type == JSONType.null_ ? null : z8_guid_parse(z8_json_value_text(value));
 }
 private Z8Date z8_json_object_get_date(Z8Object self, wstring name) {
     return z8_date_parse(z8_json_object_get_string(self, name));
+}
+private Z8Object z8_json_object_set_primary(Z8Object self, wstring name, Z8Primary value) {
+    auto state = z8_json_object_state(self);
+    auto key = z8_string_required(name).to!string;
+    JSONValue converted;
+    bool decimalValue;
+    if (value !is null) final switch (value.kind) {
+        case Z8PrimaryKind.integer: converted = JSONValue(value.integerValue); break;
+        case Z8PrimaryKind.boolean: converted = JSONValue(value.booleanValue); break;
+        case Z8PrimaryKind.text: converted = JSONValue(z8_string_or_empty(value.textValue).to!string); break;
+        case Z8PrimaryKind.guid: converted = JSONValue(z8_guid_to_string(value.guidValue).to!string); break;
+        case Z8PrimaryKind.datespan: converted = JSONValue(z8_datespan_milliseconds(value.datespanValue)); break;
+        case Z8PrimaryKind.date:
+            auto ticks = z8_date_ticks(value.dateValue);
+            converted = JSONValue((ticks == z8_date_ticks(z8_date_min) || ticks == z8_date_ticks(z8_date_max) ?
+                                   ""w : z8_date_toString(value.dateValue)).to!string);
+            break;
+        case Z8PrimaryKind.decimal:
+            if (!value.decimalValue.nan) { converted = JSONValue(0L); decimalValue = true; }
+            break;
+        case Z8PrimaryKind.binary: throw new Exception("binary JSON value is unsupported");
+        case Z8PrimaryKind.geometry: case Z8PrimaryKind.file: case Z8PrimaryKind.user:
+            throw new Exception("JSON value type is not supported yet");
+    }
+    state.decimals.remove(key);
+    if (decimalValue) state.decimals[key] = value.decimalValue;
+    state.value.object[key] = converted;
+    return self;
+}
+private Z8Object z8_json_object_remove(Z8Object self, wstring name) {
+    auto state = z8_json_object_state(self);
+    auto key = z8_string_required(name).to!string;
+    state.decimals.remove(key);
+    state.value.object.remove(key);
+    return self;
 }
 void z8_bind_builtin_json_object() {
     enum prefix = z8_json_object_name ~ "."w;
@@ -126,5 +202,8 @@ void z8_bind_builtin_json_object() {
     z8_native_bind(prefix ~ "m_getDecimal"w, &z8_json_object_get_decimal);
     z8_native_bind(prefix ~ "m_getGuid"w, &z8_json_object_get_guid);
     z8_native_bind(prefix ~ "m_getDate"w, &z8_json_object_get_date);
+    z8_native_bind(prefix ~ "m_set"w, &z8_json_object_set_primary);
+    z8_native_bind(prefix ~ "m_put"w, &z8_json_object_set_primary);
+    z8_native_bind(prefix ~ "m_remove"w, &z8_json_object_remove);
 }
 shared static this() { z8_bind_builtin_json_object(); }

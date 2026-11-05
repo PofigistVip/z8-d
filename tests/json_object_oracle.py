@@ -42,6 +42,9 @@ public class Probe {
     public static guid id(JsonObject object, string name) { return object.getGuid(name); }
     public static date day(JsonObject object, string name) { return object.getDate(name); }
     public static string[] names(JsonObject object) { return object.getNames(); }
+    public static JsonObject put(JsonObject object, string name, primary entry) { return object.set(name, entry); }
+    public static JsonObject putLegacy(JsonObject object, string name, primary entry) { return object.put(name, entry); }
+    public static JsonObject remove(JsonObject object, string name) { return object.remove(name); }
 }
 """, encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -76,6 +79,30 @@ class JsonObjectOracle {
         try { value.z8_getBool(new string("missing")); System.out.println("bad"); } catch (RuntimeException expected) { System.out.println("error"); }
         try { value.z8_getInt(new string("flag")); System.out.println("bad"); } catch (RuntimeException expected) { System.out.println("error"); }
         try { value.z8_getInt(new string("suffix")); System.out.println("bad"); } catch (RuntimeException expected) { System.out.println("error"); }
+        value.z8_set(new string("storedInt"), new org.zenframework.z8.server.types.integer(43));
+        value.z8_put(new string("legacy"), new org.zenframework.z8.server.types.integer(19));
+        System.out.println(value.z8_getInt(new string("legacy")).get());
+        value.z8_set(new string("storedBool"), new org.zenframework.z8.server.types.bool(false));
+        value.z8_set(new string("storedText"), new string("hello"));
+        value.z8_set(new string("storedGuid"), new org.zenframework.z8.server.types.guid("00112233-4455-6677-8899-aabbccddeeff"));
+        value.z8_set(new string("storedSpan"), new org.zenframework.z8.server.types.datespan(12345));
+        value.z8_set(new string("storedDate"), new org.zenframework.z8.server.types.date(0L));
+        value.z8_set(new string("storedMin"), org.zenframework.z8.server.types.date.Min);
+        value.z8_set(new string("storedNaN"), org.zenframework.z8.server.types.decimal.NaN);
+        value.z8_set(new string("storedNull"), (org.zenframework.z8.server.types.primary)null);
+        for (String key : new String[] {"storedInt", "storedBool", "storedText", "storedGuid", "storedSpan", "storedDate", "storedMin", "storedNaN", "storedNull"})
+            System.out.println(value.z8_has(new string(key)).get() + ":" + value.z8_getString(new string(key)).get());
+        for (String input : new String[] {"12345678901234567890.2500", "1E+3", "1E-7", "-18446744073709551617.99"}) {
+            value.z8_set(new string("decimal"), new org.zenframework.z8.server.types.decimal(input));
+            System.out.println(value.z8_getString(new string("decimal")).get() + ":" + value.z8_getInt(new string("decimal")).get());
+            System.out.println(value.z8_getDecimal(new string("decimal")).toString() + ":" + value.z8_getBool(new string("decimal")).get());
+        }
+        try { value.z8_set(new string("decimal"), new org.zenframework.z8.server.types.binary()); System.out.println("bad"); }
+        catch (RuntimeException expected) { System.out.println(value.z8_getString(new string("decimal")).get()); }
+        value.z8_set(new string("decimal"), new org.zenframework.z8.server.types.integer(7));
+        System.out.println(value.z8_getString(new string("decimal")).get());
+        value.z8_remove(new string("decimal"));
+        System.out.println(value.z8_has(new string("decimal")).get());
         value.operatorAssign(new string(""));
         System.out.println(value.z8_isEmpty().get());
         System.out.println(JsonObject.z8_parse(null) == null);
@@ -92,6 +119,7 @@ class JsonObjectOracle {
         server_source / "base/json/parser/JsonObject.java",
         server_source / "base/json/parser/JsonArray.java",
         server_source / "types/date.java",
+        server_source / "types/decimal.java",
     ]
     subprocess.run(["javac", "-source", "8", "-target", "8", "-cp", classpath, "-d", str(temp),
                     *map(str, current_sources)], cwd=temp, check=True)
@@ -130,6 +158,30 @@ void main() {
     try { P.m_flag(value, "missing"w); writeln("bad"); } catch (Exception) { writeln("error"); }
     try { P.m_integer(value, "flag"w); writeln("bad"); } catch (Exception) { writeln("error"); }
     try { P.m_integer(value, "suffix"w); writeln("bad"); } catch (Exception) { writeln("error"); }
+    assert(P.m_put(value, "storedInt"w, z8_primary_box(43L)) is value);
+    assert(P.m_putLegacy(value, "legacy"w, z8_primary_box(19L)) is value);
+    writeln(z8_optional_require(P.m_integer(value, "legacy"w)));
+    P.m_put(value, "storedBool"w, z8_primary_box(false));
+    P.m_put(value, "storedText"w, z8_primary_box("hello"w));
+    P.m_put(value, "storedGuid"w, z8_primary_box(z8_guid_literal("00112233-4455-6677-8899-aabbccddeeff")));
+    P.m_put(value, "storedSpan"w, z8_primary_box(new Z8Datespan(12345)));
+    P.m_put(value, "storedDate"w, z8_primary_box(z8_date_from_ticks(0)));
+    P.m_put(value, "storedMin"w, z8_primary_box(z8_date_min));
+    P.m_put(value, "storedNaN"w, z8_primary_box(z8_decimal_nan()));
+    P.m_put(value, "storedNull"w, null);
+    foreach (key; ["storedInt"w, "storedBool"w, "storedText"w, "storedGuid"w, "storedSpan"w, "storedDate"w, "storedMin"w, "storedNaN"w, "storedNull"w])
+        writeln(z8_optional_require(P.m_has(value, key)), ":", P.m_text(value, key).to!string);
+    foreach (input; ["12345678901234567890.2500"w, "1E+3"w, "1E-7"w, "-18446744073709551617.99"w]) {
+        P.m_put(value, "decimal"w, z8_primary_box(z8_decimal_parse(input)));
+        writeln(P.m_text(value, "decimal"w).to!string, ":", z8_optional_require(P.m_integer(value, "decimal"w)));
+        writeln(z8_optional_require(P.m_decimalValue(value, "decimal"w)).z8_string(), ":", z8_optional_require(P.m_flag(value, "decimal"w)));
+    }
+    try { P.m_put(value, "decimal"w, z8_primary_box(new Z8Binary())); writeln("bad"); }
+    catch (Exception) { writeln(P.m_text(value, "decimal"w).to!string); }
+    P.m_put(value, "decimal"w, z8_primary_box(7L));
+    writeln(P.m_text(value, "decimal"w).to!string);
+    assert(P.m_remove(value, "decimal"w) is value);
+    writeln(z8_optional_require(P.m_has(value, "decimal"w)));
     P.m_assign(value, ""w);
     writeln(z8_optional_require(P.m_empty(value)));
     writeln(P.m_parse(null) is null);
