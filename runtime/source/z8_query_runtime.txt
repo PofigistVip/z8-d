@@ -23,6 +23,9 @@ interface IZ8QueryCursor : IZ8FieldCursor {
 interface IZ8QueryExecutor {
     IZ8QueryCursor read(Z8Object query, Z8QueryReadRequest request);
 }
+interface IZ8QueryCounter {
+    long count(Z8Object query, Z8QueryReadRequest request);
+}
 private interface IZ8QueryLockCell { Z8QueryReadLock get(); }
 private class Z8QueryLockCell(T) : IZ8QueryLockCell {
     T value;
@@ -175,6 +178,16 @@ private Z8Optional!bool z8_query_next(Z8Object self) {
     if (!hasNext) z8_query_close(self);
     return z8_optional_wrap(hasNext);
 }
+private Z8Optional!long z8_query_count_where(Z8Object self, Z8SqlBool where) {
+    auto state = z8_query_state(self);
+    auto counter = cast(IZ8QueryCounter)state.executor;
+    if (counter is null) throw new Exception("query executor does not support count");
+    Z8QueryReadRequest request;
+    request.where = where; request.queryWhere = z8_query_where(self);
+    request.queryHaving = z8_query_having(self); request.queryScope = z8_query_scope(self);
+    return z8_optional_wrap(cast(long)cast(int)counter.count(self, request));
+}
+private Z8Optional!long z8_query_count(Z8Object self) { return z8_query_count_where(self, null); }
 private void z8_query_read_request(Z8Object self, Z8ObjectArray!Z8Object fields, Z8ObjectArray!Z8Object sort,
                                    Z8SqlBool where, Z8Optional!long start, Z8Optional!long limit) {
     Z8QueryReadRequest request;
@@ -318,6 +331,8 @@ void z8_bind_builtin_query() {
     z8_native_bind(p ~ "m_group"w, &z8_query_group_sort_having);
     z8_native_bind(p ~ "m_group"w, &z8_query_group_request);
     z8_native_bind(p ~ "m_next"w, &z8_query_next);
+    z8_native_bind(p ~ "m_count"w, &z8_query_count);
+    z8_native_bind(p ~ "m_count"w, &z8_query_count_where);
     z8_native_bind(p ~ "m_close"w, &z8_query_close);
 }
 shared static this() { z8_bind_builtin_query(); }

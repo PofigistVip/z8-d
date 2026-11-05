@@ -62,6 +62,8 @@ public class Probe {
         Field[] fields = {}; table.read(fields);
     }
     public static bool record(Sales table, guid id) { Field[] fields = {table.amount}; return table.readRecord(id, fields); }
+    public static int count(Sales table) { return table.count(); }
+    public static int countWhere(Sales table) { return table.count(table.amount > 10); }
     public static bool next(Sales table) { return table.next(); }
     public static void close(Sales table) { table.close(); }
     public static bool firstRow(Sales table) {
@@ -115,6 +117,8 @@ void main(string[] args) {
     z8_query_set_executor(table, new Z8PostgresQueryExecutor(db, "pg_temp"w, `Sales"Quote`w));
     P.m_read(table);
     assert(z8_optional_require(P.m_next(table)) && z8_optional_require(P.m_firstRow(table)));
+    assert(z8_optional_require(P.m_count(table)) == 2 && z8_optional_require(P.m_countWhere(table)) == 1);
+    assert(z8_optional_require(P.m_firstRow(table)));
     assert(z8_optional_require(P.m_next(table)) && z8_optional_require(P.m_secondRow(table)));
     assert(!z8_optional_require(P.m_next(table)));
     P.m_page(table); assert(z8_optional_require(P.m_next(table)) && z8_optional_require(P.m_amount(table)) == 10);
@@ -142,6 +146,7 @@ void main(string[] args) {
     }
     assert(groups == 2 && sum == 35);
     P.m_groupConfigured(table); groups = 0; sum = 0;
+    assert(z8_optional_require(P.m_count(table)) == 2);
     while (z8_optional_require(P.m_next(table))) { sum += z8_optional_require(P.m_amount(table)); ++groups; }
     assert(groups == 2 && sum == 35);
     db.close();

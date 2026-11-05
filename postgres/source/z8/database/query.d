@@ -83,13 +83,51 @@ private class Z8PostgresRows : IZ8QueryCursor {
 
 // Executes the single-table subset of Query. Links and nested form controls
 // require query planning that is not yet available.
-class Z8PostgresQueryExecutor : IZ8QueryExecutor {
+class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter {
     private Z8PostgresConnection connection;
     private wstring schema, table;
     this(Z8PostgresConnection connection, wstring schema, wstring table) {
         if (connection is null) throw new Z8PostgresException("PostgreSQL connection is null");
         quoteIdentifier(schema); quoteIdentifier(table);
         this.connection = connection; this.schema = schema.idup; this.table = table.idup;
+    }
+    long count(Z8Object query, Z8QueryReadRequest request) {
+        if (z8_query_array(query, "aggregateBy"w).length) throw new Z8PostgresException("PostgreSQL aggregateBy links are not implemented");
+        auto declared = z8_query_declared_fields(query);
+        foreach (field; declared) {
+            auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, field);
+            z8_field_bind_sql(field, "t"w, name);
+        }
+        auto groups = request.groupFields.length ? request.groupFields : z8_query_array(query, "groupBy"w);
+        foreach (field; groups) if (!containsField(declared, field)) throw new Z8PostgresException("PostgreSQL group field belongs to another query");
+        auto previous = z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
+        scope(exit) z8_sql_set_field_options(previous);
+        string sql = groups.length ? "SELECT count(*) FROM (SELECT 1" : "SELECT count(0)";
+        sql ~= " FROM " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(table) ~ " AS t";
+        string[] filters;
+        foreach (condition; [request.where, request.queryWhere, request.queryScope])
+            if (condition !is null) filters ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
+        if (filters.length) {
+            sql ~= " WHERE ";
+            foreach (index, filter; filters) { if (index) sql ~= " AND "; sql ~= filter; }
+        }
+        if (groups.length) {
+            sql ~= " GROUP BY ";
+            foreach (index, field; groups) { if (index) sql ~= ", "; sql ~= z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string; }
+            z8_sql_set_field_options(Z8SqlFieldFormatOptions(true, false));
+            string[] having;
+            foreach (condition; [request.having, request.queryHaving])
+                if (!trivialTrue(condition)) having ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
+            if (having.length) {
+                sql ~= " HAVING ";
+                foreach (index, condition; having) { if (index) sql ~= " AND "; sql ~= condition; }
+            }
+            sql ~= ") AS z8_count";
+        }
+        auto result = connection.execute(sql);
+        if (result.rows.length != 1 || result.rows[0].length != 1 || result.rows[0][0].isNull)
+            throw new Z8PostgresException("invalid PostgreSQL count result");
+        return result.rows[0][0].text.to!long;
     }
     IZ8QueryCursor read(Z8Object query, Z8QueryReadRequest request) {
         if (z8_query_array(query, "aggregateBy"w).length) throw new Z8PostgresException("PostgreSQL aggregateBy links are not implemented");
