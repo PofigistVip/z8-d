@@ -37,6 +37,16 @@ serves static assets from that directory and dispatches the request path to BL.
 Directory listings and server-side includes are disabled, and common servlet
 and repository metadata paths are hidden. Use a dedicated public asset directory:
 CivetWeb may follow filesystem links, so its contents and links must be trusted.
+To prepare the framework client from a checkout of the original Z8 sources:
+
+```sh
+python webserver/prepare_client.py path/to/original-z8 path/to/empty-public-dir
+```
+
+The script follows the original Gradle `.buildorder` lists and copies the
+framework JavaScript, CSS, fonts and images. It fills in the original HTML
+template with `revolt`, the bundle name. Application-specific client files and
+server endpoints still need to be supplied by the application.
 
 The host owns the server and must call `stop()` from outside a request handler.
 Callbacks may run concurrently and must synchronize their own shared state.

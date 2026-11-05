@@ -24,6 +24,14 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     (public / ".env").write_text("secret", encoding="utf-8")
     (public / "empty").mkdir()
     (temp / "outside.txt").write_text("outside secret", encoding="utf-8")
+    original_client = None
+    if len(sys.argv) == 2:
+        sys.path.insert(0, str(root / "webserver"))
+        from prepare_client import assemble
+        client = temp / "client"
+        assemble(sys.argv[1], client)
+        original_client = (client / "revolt.js").read_bytes()
+        (public / "revolt.js").write_bytes(original_client)
     source, generated = temp / "bl", temp / "generated"
     source.mkdir()
     (source / "Application.bl").write_text('''
@@ -255,6 +263,9 @@ void main(string[] args) {
         assert status == 200 and kind.startswith("text/html") and data.decode("utf-8") == "<html>Привет</html>", (status, kind, data)
         status, kind, data = asset("/app.js")
         assert status == 200 and b"answer = 42" in data, (status, kind, data)
+        if original_client is not None:
+            status, kind, data = asset("/revolt.js")
+            assert status == 200 and data == original_client, (status, kind, len(data))
         status, kind, data = asset("/app.js", "HEAD")
         assert status == 200 and data == b"", (status, kind, data)
         status, kind, data = asset("/test.shtml")
