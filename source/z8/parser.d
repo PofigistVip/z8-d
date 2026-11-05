@@ -351,13 +351,19 @@ class Parser {
             }
             if (accept("records")) { if (attributes.length) error("record block attributes are not supported yet"); parseRecords(result); continue; }
             auto declaredFinal = accept("final");
-            bool isCastOperator = current.text == "operator";
+            bool isPriorityOperator = current.text == "operator" && look(1).text == "(";
+            bool isCastOperator = current.text == "operator" && !isPriorityOperator;
             Token name;
-            if (isCastOperator) name = take();
+            if (isCastOperator || isPriorityOperator) name = take();
             auto typeToken = current;
-            auto declaredType = parseType(); auto declaredObjectName = parsedObjectName;
+            ValueType declaredType;
+            string declaredObjectName;
+            if (isPriorityOperator) { declaredType = ValueType.selfType; declaredObjectName = result.name.text; name.text = "operatorPriority"; }
+            else { declaredType = parseType(); declaredObjectName = parsedObjectName; }
             string operatorSymbol;
-            if (isCastOperator) {
+            if (isPriorityOperator) {
+                // The priority operator has the enclosing class as its result type.
+            } else if (isCastOperator) {
                 if (![ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.dateType, ValueType.geometryType, ValueType.fileType, ValueType.selfType].canFind(declaredType))
                     error("unsupported conversion operator target");
                 if (declaredType == ValueType.selfType && declaredObjectName != typeToken.text)
@@ -398,7 +404,7 @@ class Parser {
             method.attributes = attributes;
             if (isVirtual && isStatic) error("a static method cannot be virtual");
             method.isPublic = isPublic; method.isProtected = isProtected; method.isStatic = isStatic; method.isVirtual = isVirtual; method.owner = result;
-            method.returnType = declaredType; method.returnObjectName = declaredObjectName; method.name = name; method.operatorSymbol = operatorSymbol; method.isCastOperator = isCastOperator; expect("(");
+            method.returnType = declaredType; method.returnObjectName = declaredObjectName; method.name = name; method.operatorSymbol = operatorSymbol; method.isCastOperator = isCastOperator; method.isPriorityOperator = isPriorityOperator; expect("(");
             if (current.text != ")") {
                 do {
                     Parameter p; p.declaredFinal = accept("final"); p.type = parseType(); p.objectName = parsedObjectName; p.name = identifier(); method.parameters ~= p;
@@ -407,6 +413,8 @@ class Parser {
             expect(")");
             if (isCastOperator && (method.parameters.length || method.isStatic))
                 error("only instance conversion operators without parameters are supported");
+            if (isPriorityOperator && (method.parameters.length || method.isStatic))
+                error("only instance priority operators without parameters are supported");
             if (method.operatorSymbol.length && (method.parameters.length > 1 || method.isStatic))
                 error("only instance operators with at most one parameter are supported");
             if (method.name.text == "constructor") {
@@ -647,7 +655,12 @@ class Parser {
             result.initializerObjectName = objectName;
             return result;
         }
-        if (accept("(")) { auto result = expression(); expect(")"); return result; }
+        if (accept("(")) {
+            auto result = expression(); expect(")");
+            if (result.parenthesisCount == 0 && result.kind == ExprKind.conditional) result.firstParenthesisIsConditional = true;
+            ++result.parenthesisCount;
+            return result;
+        }
         if (accept("this")) return new Expression(ExprKind.selfRef, t);
         if (accept("super")) return new Expression(ExprKind.superRef, t);
         if (accept("container")) return new Expression(ExprKind.containerRef, t);

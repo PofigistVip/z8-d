@@ -1,0 +1,3 @@
+public class PriorityValue {
+    public operator() { throw "priority"; }
+}

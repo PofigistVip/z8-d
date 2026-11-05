@@ -601,6 +601,8 @@ class Checker {
     private ValueType typeOf(Expression e, ValueType expected = ValueType.voidType) {
         e.fieldInitialization = fieldInitialization;
         auto result = typeOfRaw(e, expected);
+        if (e.parenthesisCount && result == ValueType.selfType && e.objectClass !is null)
+            e.priorityMethod = lookupUnaryOperator(e.objectClass, "operatorPriority");
         if (result == ValueType.stringType && (e.kind == ExprKind.memberCall || e.kind == ExprKind.binary))
             e.nonNullStringResult = true;
         return result;
@@ -1756,6 +1758,8 @@ class Checker {
             case StmtKind.returnStmt:
                 if (s.expression is null) { if (returnType != ValueType.voidType) fail("return value required", s.token); }
                 else if (returnType == ValueType.voidType || !matchesStored(s.expression, returnType, returnObjectClass)) fail("return type mismatch", s.token);
+                if (s.expression !is null && returnType == ValueType.selfType)
+                    s.priorityMethod = lookupUnaryOperator(returnObjectClass, "operatorPriority");
                 return true;
             case StmtKind.ifStmt:
                 if (!matches(s.expression, ValueType.boolType)) fail("if condition must be bool", s.token);

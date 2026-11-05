@@ -1,0 +1,21 @@
+public class PriorityCases {
+    private static int finalized;
+    private static PriorityValue result() { PriorityValue value; return value; }
+    private static PriorityValue resultFinally() {
+        try { PriorityValue value; return value; } finally { finalized = 1; }
+    }
+    public static int run() {
+        PriorityValue value;
+        PriorityValue plain = (true ? value : value);
+        try { PriorityValue grouped = (value); return 1; }
+        catch (exception error) { if (error.getMessage() != "priority") return 2; }
+        try { PriorityValue nested = ((true ? value : value)); return 3; }
+        catch (exception error) { if (error.getMessage() != "priority") return 4; }
+        try { PriorityValue returned = result(); return 5; }
+        catch (exception error) { if (error.getMessage() != "priority") return 6; }
+        try { PriorityValue returned = resultFinally(); return 7; }
+        catch (exception error) { if (error.getMessage() != "priority") return 8; }
+        if (finalized != 1) return 9;
+        return 219;
+    }
+}

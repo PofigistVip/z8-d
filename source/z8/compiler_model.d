@@ -33,6 +33,9 @@ class Expression {
     bool dateBinary, fileBinary;
     bool primaryCast, primaryInstanceOf, objectInstanceOf, scalarInstanceOf, falseInstanceOf, exceptionInstanceOf;
     bool typedInitializer;
+    size_t parenthesisCount;
+    bool firstParenthesisIsConditional;
+    Method priorityMethod;
     ValueType initializerType;
     string initializerObjectName;
     bool promoteToDecimal;
@@ -72,6 +75,7 @@ class Statement {
     bool filePathAssignment, dateTickAssignment, userOperatorAssignment, userCompoundAssignment, isMemberInitializer;
     string objectName;
     Program objectClass, nestedClass;
+    Method priorityMethod;
     this(StmtKind kind, Token token) { this.kind = kind; this.token = token; }
 }
 struct Parameter { ValueType type; Token name; string objectName; Program objectClass; bool declaredFinal; }
@@ -89,6 +93,7 @@ class Method {
     bool isVirtual, overrides;
     string operatorSymbol;
     bool isCastOperator;
+    bool isPriorityOperator;
 }
 class Field { ValueType type; Token name; TypeAttribute[] attributes; Expression initializer; bool isPublic, isProtected, isStatic, isAuto, isRecord, declaredFinal, userOperatorAssignment; string objectName; Program objectClass; Program owner, nestedClass; }
 struct TypeAttribute { Token name; Token value; Expression expression; ValueType expressionType; long capturedDateTicks; bool hasValue, dateTickCaptured; }

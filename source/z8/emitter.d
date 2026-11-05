@@ -232,6 +232,10 @@ private string emitExpr(Expression e) {
           "z8_guid_to_string", "z8_primary_to_string", "z8_geometry_to_string", "z8_geometry_toGeoJson",
           "z8_date_toString", "z8_date_toIsoString", "z8_datespan_to_string"].canFind(e.builtinCall)))
         value = "z8_string_new(" ~ value ~ ")";
+    if (!e.emittedOverride.length && e.priorityMethod !is null) {
+        auto count = e.parenthesisCount - (e.firstParenthesisIsConditional ? 1 : 0);
+        foreach (_; 0 .. count) value = "z8_nonnull(" ~ value ~ ")." ~ methodDName(e.priorityMethod) ~ "()";
+    }
     if (e.userConversion !is null) value = "z8_nonnull(" ~ value ~ ")." ~ methodDName(e.userConversion) ~ "()";
     if (e.nonNullStringResult) value = "z8_string_or_empty(" ~ value ~ ")";
     if (e.optionalRequired) value = "z8_optional_require(" ~ value ~ ")";
@@ -503,9 +507,11 @@ private string emitStatement(Statement s, ControlContext context = ControlContex
         case StmtKind.assignment:
         case StmtKind.expressionStmt: return emitSimple(s) ~ ";\n";
         case StmtKind.returnStmt:
+            auto returned = s.expression is null ? "" : emitExpr(s.expression);
+            if (s.priorityMethod !is null) returned = "z8_nonnull(" ~ returned ~ ")." ~ methodDName(s.priorityMethod) ~ "()";
             if (context.enabled) return s.expression is null ? "throw new Z8ReturnVoid();\n" :
-                "throw new Z8Return!(" ~ dStorageType(context.returnType, context.returnClass) ~ ")(" ~ emitExpr(s.expression) ~ ");\n";
-            return "return" ~ (s.expression is null ? "" : " " ~ emitExpr(s.expression)) ~ ";\n";
+                "throw new Z8Return!(" ~ dStorageType(context.returnType, context.returnClass) ~ ")(" ~ returned ~ ");\n";
+            return "return" ~ (s.expression is null ? "" : " " ~ returned) ~ ";\n";
         case StmtKind.ifStmt:
             auto result = "if (" ~ emitExpr(s.expression) ~ ") {\n" ~ emitStatement(s.children[0], context) ~ "}\n";
             if (s.children.length == 2) result ~= "else {\n" ~ emitStatement(s.children[1], context) ~ "}\n";

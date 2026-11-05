@@ -198,7 +198,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     operator_source.mkdir(parents=True)
     shutil.copy2(root / "examples" / "operators" / "BinaryOperators.bl", operator_source)
     shutil.copy2(root / "examples" / "operators" / "BinaryConversionFallback.bl", operator_source)
-    for name in ("OperatorRoot", "OperatorMiddle", "OperatorLeaf", "OperatorDistance", "CompoundObject", "CompoundAccumulator", "CompoundObjectHolder", "CompoundObjectCases", "CompoundMember", "ProbeEnum", "ProbeOther", "ProbeA", "ProbeB", "EnumInstanceOf"):
+    for name in ("OperatorRoot", "OperatorMiddle", "OperatorLeaf", "OperatorDistance", "CompoundObject", "CompoundAccumulator", "CompoundObjectHolder", "CompoundObjectCases", "CompoundMember", "ProbeEnum", "ProbeOther", "ProbeA", "ProbeB", "EnumInstanceOf", "PriorityValue", "PriorityCases"):
         shutil.copy2(root / "examples" / "operators" / (name + ".bl"), operator_source)
     operator_command = ["java", "-cp", str(classes) + os.pathsep + classpath,
                         "org.zenframework.z8.compiler.cmd.Main", str(operator_project),
@@ -212,6 +212,9 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     enum_java = (operator_project / "out" / "EnumInstanceOf.java").read_text(encoding="utf-8")
     if "instanceof ProbeEnum.CLASS" not in enum_java:
         raise SystemExit("Original Java backend no longer emits the expected enum CLASS reference")
+    priority_java = (operator_project / "out" / "PriorityCases.java").read_text(encoding="utf-8")
+    if ".operatorPriority()" not in priority_java:
+        raise SystemExit("Original Java backend no longer emits priority operator calls")
     ambiguous_operator = operator_source / "AmbiguousConversion.bl"
     ambiguous_operator.write_text('''public class AmbiguousConversion {
         public operator int() { return 1; }
