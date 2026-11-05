@@ -441,6 +441,10 @@ private string emitExprRaw(Expression e) {
         case ExprKind.containerRef:
             return "z8_get_container!(" ~ e.objectClass.emittedName ~ ")(" ~ (e.left is null ? "this" : emitExpr(e.left)) ~ ")";
         case ExprKind.newSelf:
+            if (e.inferredType == ValueType.intType) return "0L";
+            if ([ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.guidType, ValueType.binaryType,
+                 ValueType.datespanType, ValueType.dateType, ValueType.geometryType, ValueType.fileType, ValueType.exceptionType].canFind(e.inferredType))
+                return defaultValue(e.inferredType);
             if (e.inferredType == ValueType.ftsType) return "new Z8Fts()";
             if (e.inferredType == ValueType.sqlBoolType) return "z8_sql_bool_const(false)";
             if (e.inferredType == ValueType.sqlIntType) return "z8_sql_int_const(0L)";

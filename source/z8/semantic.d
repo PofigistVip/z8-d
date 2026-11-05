@@ -1093,6 +1093,20 @@ class Checker {
                 e.objectClass = containerOwner.lexicalOwner;
                 return ValueType.selfType;
             case ExprKind.newSelf:
+                switch (e.token.text) {
+                    case "int": e.inferredType = ValueType.intType; return e.inferredType;
+                    case "bool": e.inferredType = ValueType.boolType; return e.inferredType;
+                    case "decimal": e.inferredType = ValueType.decimalType; return e.inferredType;
+                    case "string": e.inferredType = ValueType.stringType; return e.inferredType;
+                    case "guid": e.inferredType = ValueType.guidType; return e.inferredType;
+                    case "binary": e.inferredType = ValueType.binaryType; return e.inferredType;
+                    case "datespan": e.inferredType = ValueType.datespanType; return e.inferredType;
+                    case "date": e.inferredType = ValueType.dateType; return e.inferredType;
+                    case "geometry": e.inferredType = ValueType.geometryType; return e.inferredType;
+                    case "file": e.inferredType = ValueType.fileType; return e.inferredType;
+                    case "exception": e.inferredType = ValueType.exceptionType; return e.inferredType;
+                    default: break;
+                }
                 if (e.token.text == "Fts") { e.inferredType = ValueType.ftsType; return ValueType.ftsType; }
                 if (e.token.text == "sql_bool") { e.inferredType = ValueType.sqlBoolType; return ValueType.sqlBoolType; }
                 if (e.token.text == "sql_int") { e.inferredType = ValueType.sqlIntType; return ValueType.sqlIntType; }
