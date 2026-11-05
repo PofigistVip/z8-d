@@ -6,7 +6,7 @@ class Z8SqlDecimal : Z8SqlNumeric {
     Z8SqlBool condition;
     Z8SqlString textOperand;
     Z8SqlString textQuery;
-    wstring ftsConfiguration;
+    Z8Fts ftsConfig;
     Z8SqlGeometry geometryLeft, geometryRight;
     wstring geometryFunction;
     this(Z8SqlDecimalKind kind, Z8Decimal constant = Z8Decimal.init,
@@ -127,8 +127,20 @@ wstring z8_sql_decimal_format(Z8SqlDecimal value, Z8SqlVendor vendor = Z8SqlVend
             return z8_sql_geometry_function(value.geometryFunction, value.geometryLeft, vendor, value.geometryRight, value.geometryFunction == "ST_Distance"w);
         case Z8SqlDecimalKind.textFtsRank:
             if (vendor != Z8SqlVendor.Postgres) throw new Exception("unsupported SQL database vendor");
-            return "ts_rank("w ~ z8_sql_fts_vector(value.textOperand, value.ftsConfiguration, vendor) ~ ", "w ~
-                z8_sql_fts_query(value.textQuery, value.ftsConfiguration, vendor) ~ ", 0)"w;
+            auto config = z8_nonnull(value.ftsConfig);
+            auto rank = z8_optional_require(config.coatingDensity) ? "ts_rank_cd("w : "ts_rank("w;
+            wstring weights;
+            if (config.weight !is null && !config.weight.z8_isEmpty()) {
+                weights = "{"w;
+                foreach (i; 0 .. config.weight.z8_size()) {
+                    if (i) weights ~= ", "w;
+                    auto weight = config.weight.z8_get(i);
+                    weights ~= !weight.present ? "null"w : weight.value.z8_string();
+                }
+                weights ~= "}, "w;
+            }
+            return rank ~ weights ~ z8_sql_fts_vector(value.textOperand, config, vendor) ~ ", "w ~
+                z8_sql_fts_query(value.textQuery, config, vendor) ~ ", "w ~ z8_optional_require(config.normalization).to!wstring ~ ")"w;
         case Z8SqlDecimalKind.abs: return "ABS("w ~ z8_nonnull(value.left).z8_format(vendor) ~ ")"w;
         case Z8SqlDecimalKind.exp: return "EXP("w ~ z8_nonnull(value.left).z8_format(vendor) ~ ")"w;
         case Z8SqlDecimalKind.ln:

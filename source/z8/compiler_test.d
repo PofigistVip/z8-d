@@ -221,6 +221,7 @@ unittest {
     compile(q{class A { static sql_int f(sql_string x) { return x.indexOf("a", 1); } }});
     compile(q{class A { static sql_bool f(sql_string x) { return x.contains("a"); } }});
     compile(q{class A { static sql_bool f(sql_string x) { return x.ftsLike("a"); } static sql_decimal g(sql_string x) { return x.ftsRank("a"); } }});
+    compile(q{class A { static sql_bool f(sql_string x) { Fts config; config.configuration = "english"; config.queryType = FtsQueryType.Phrase; return x.ftsLike("a", config); } }});
     compile(q{class A { static sql_int f(sql_string x) { return x.toInt(); } }});
     compile(q{class A { static sql_decimal f(sql_string x) { return x.toDecimal(); } }});
     compile(q{class A { static sql_bool f(sql_string x) { return x.isInt() || x.isNumeric(); } }});

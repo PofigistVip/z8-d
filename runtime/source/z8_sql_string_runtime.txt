@@ -107,19 +107,45 @@ Z8SqlBool z8_sql_string_regLike(Z8SqlString value, Z8SqlString pattern) {
 // Matches the default Fts configuration; the host can set the server option
 // before constructing expressions, just as Z8 does at Fts initialization.
 __gshared wstring z8_sql_fts_configuration;
+class Z8FtsQueryType { int id; this(int id) { this.id = id; } }
+__gshared Z8FtsQueryType z8_fts_query_Query, z8_fts_query_Plain, z8_fts_query_Phrase;
+shared static this() {
+    z8_fts_query_Query = new Z8FtsQueryType(0); z8_fts_query_Plain = new Z8FtsQueryType(1); z8_fts_query_Phrase = new Z8FtsQueryType(2);
+}
+class Z8Fts {
+    wstring configuration;
+    Z8FtsQueryType queryType;
+    Z8Array!Z8Decimal weight;
+    Z8Optional!long normalization;
+    Z8Optional!bool coatingDensity;
+    this() {
+        configuration = z8_sql_fts_configuration; queryType = z8_fts_query_Plain;
+        normalization = z8_optional_wrap(0L); coatingDensity = z8_optional_wrap(false);
+    }
+}
 Z8SqlBool z8_sql_string_ftsLike(Z8SqlString value, Z8SqlString query) {
+    return z8_sql_string_ftsLike(value, query, new Z8Fts());
+}
+Z8SqlBool z8_sql_string_ftsLike(Z8SqlString value, Z8SqlString query, Z8Fts config) {
     auto result = new Z8SqlBool(Z8SqlBoolKind.textFtsLike);
-    result.textLeft = z8_nonnull(value); result.textRight = query; result.ftsConfiguration = z8_sql_fts_configuration; return result;
+    result.textLeft = z8_nonnull(value); result.textRight = query; result.ftsConfig = z8_nonnull(config); return result;
 }
 Z8SqlDecimal z8_sql_string_ftsRank(Z8SqlString value, Z8SqlString query) {
-    auto result = new Z8SqlDecimal(Z8SqlDecimalKind.textFtsRank);
-    result.textOperand = z8_nonnull(value); result.textQuery = query; result.ftsConfiguration = z8_sql_fts_configuration; return result;
+    return z8_sql_string_ftsRank(value, query, new Z8Fts());
 }
-private wstring z8_sql_fts_vector(Z8SqlString value, wstring configuration, Z8SqlVendor vendor) {
+Z8SqlDecimal z8_sql_string_ftsRank(Z8SqlString value, Z8SqlString query, Z8Fts config) {
+    auto result = new Z8SqlDecimal(Z8SqlDecimalKind.textFtsRank);
+    result.textOperand = z8_nonnull(value); result.textQuery = query; result.ftsConfig = z8_nonnull(config); return result;
+}
+private wstring z8_sql_fts_vector(Z8SqlString value, Z8Fts config, Z8SqlVendor vendor) {
+    auto configuration = z8_nonnull(config).configuration;
     return "to_tsvector("w ~ (configuration is null ? ""w : "'"w ~ configuration ~ "', "w) ~ z8_sql_string_as_text(value, vendor) ~ ")"w;
 }
-private wstring z8_sql_fts_query(Z8SqlString value, wstring configuration, Z8SqlVendor vendor) {
-    return "plainto_tsquery("w ~ (configuration is null ? ""w : "'"w ~ configuration ~ "', "w) ~ z8_sql_string_as_text(value, vendor) ~ ")"w;
+private wstring z8_sql_fts_query(Z8SqlString value, Z8Fts config, Z8SqlVendor vendor) {
+    auto configuration = z8_nonnull(config).configuration;
+    auto query = z8_nonnull(config.queryType);
+    auto prefix = query.id == 1 ? "plain"w : query.id == 2 ? "phrase"w : ""w;
+    return prefix ~ "to_tsquery("w ~ (configuration is null ? ""w : "'"w ~ configuration ~ "', "w) ~ z8_sql_string_as_text(value, vendor) ~ ")"w;
 }
 Z8SqlInt z8_sql_string_length(Z8SqlString value) {
     auto result = new Z8SqlInt(Z8SqlIntKind.textLength);

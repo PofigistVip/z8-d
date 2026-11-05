@@ -91,6 +91,8 @@ class Parser {
             case "file": result = ValueType.fileType; break;
             case "exception": result = ValueType.exceptionType; break;
             case "encoding": result = ValueType.encodingType; break;
+            case "Fts": case "org.zenframework.z8.base.fts.Fts": result = ValueType.ftsType; break;
+            case "FtsQueryType": case "org.zenframework.z8.base.fts.FtsQueryType": result = ValueType.ftsQueryType; break;
             case "sql_bool": case "org.zenframework.z8.lang.sql.sql_bool": result = ValueType.sqlBoolType; break;
             case "sql_int": case "org.zenframework.z8.lang.sql.sql_int": result = ValueType.sqlIntType; break;
             case "sql_decimal": case "org.zenframework.z8.lang.sql.sql_decimal": result = ValueType.sqlDecimalType; break;

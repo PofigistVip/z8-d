@@ -57,6 +57,8 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.sqlBinaryType: return "Z8SqlBinary";
         case ValueType.sqlGeometryType: return "Z8SqlGeometry";
         case ValueType.sqlPrimaryType: return "Z8SqlPrimary";
+        case ValueType.ftsType: return "Z8Fts";
+        case ValueType.ftsQueryType: return "Z8FtsQueryType";
         case ValueType.guidType: return "Z8Guid";
         case ValueType.binaryType: return "Z8Binary";
         case ValueType.datespanType: return "Z8Datespan";
@@ -370,6 +372,7 @@ private string emitExprRaw(Expression e) {
         case ExprKind.containerRef:
             return "z8_get_container!(" ~ e.objectClass.emittedName ~ ")(" ~ (e.left is null ? "this" : emitExpr(e.left)) ~ ")";
         case ExprKind.newSelf:
+            if (e.inferredType == ValueType.ftsType) return "new Z8Fts()";
             if (e.inferredType == ValueType.sqlBoolType) return "z8_sql_bool_const(false)";
             if (e.inferredType == ValueType.sqlIntType) return "z8_sql_int_const(0L)";
             if (e.inferredType == ValueType.sqlDecimalType) return "z8_sql_decimal_const(z8_decimal_from_int(0))";
@@ -713,6 +716,8 @@ private string defaultValue(ValueType type, Program objectClass = null, bool has
     if (type == ValueType.sqlBinaryType) return "new Z8SqlBinary()";
     if (type == ValueType.sqlGeometryType) return "z8_sql_geometry_const(new Z8Geometry())";
     if (type == ValueType.sqlPrimaryType) return "new Z8SqlPrimary()";
+    if (type == ValueType.ftsType) return "new Z8Fts()";
+    if (type == ValueType.ftsQueryType) return "null";
     if (type == ValueType.enumType) return "null";
     if (type == ValueType.primaryType) return "null";
     if (type == ValueType.guidType) return "z8_guid_zero()";

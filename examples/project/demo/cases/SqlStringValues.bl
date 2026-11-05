@@ -8,6 +8,8 @@ import org.zenframework.z8.lang.sql.sql_datespan;
 import org.zenframework.z8.lang.sql.sql_binary;
 import org.zenframework.z8.lang.sql.sql_geometry;
 import org.zenframework.z8.lang.sql.sql_primary;
+import org.zenframework.z8.base.fts.Fts;
+import org.zenframework.z8.base.fts.FtsQueryType;
 public class SqlStringValues {
     public static sql_string literal() { return "O'Reilly 😀"; }
     public static sql_string concatenation() { sql_string value = "alpha"; return (value + " β").toUpper(); }
@@ -26,6 +28,25 @@ public class SqlStringValues {
     public static sql_bool regLike() { sql_string value = "abc"; return value.regLike("a.*"); }
     public static sql_bool ftsLike() { sql_string value = "quick brown fox"; return value.ftsLike("fox"); }
     public static sql_decimal ftsRank() { sql_string value = "quick brown fox"; return value.ftsRank("fox"); }
+    public static sql_bool configuredFtsLike() {
+        Fts config;
+        config.configuration = "english";
+        sql_string value = "quick brown fox";
+        sql_bool result = value.ftsLike("fox", config);
+        config.queryType = FtsQueryType.Phrase;
+        return result;
+    }
+    public static sql_decimal configuredFtsRank() {
+        Fts config;
+        config.configuration = "english";
+        config.queryType = FtsQueryType.Query;
+        config.normalization = Fts.NormLen + Fts.NormUniqueWords;
+        config.coatingDensity = true;
+        decimal[] weights = {0.1, 0.2, 0.3, 0.4};
+        config.weight = weights;
+        sql_string value = "quick brown fox";
+        return value.ftsRank("fox", config);
+    }
     public static sql_int findIndex() { sql_string value = "abcabc"; return value.indexOf("bc"); }
     public static sql_int indexFrom() { sql_string value = "abcabc"; return value.indexOf("bc", 2); }
     public static sql_int patternIndex() { sql_string value = "abcabc"; return value.patIndexOf("b%"); }

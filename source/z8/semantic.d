@@ -453,6 +453,7 @@ class Checker {
             if (item.name == "org.zenframework.z8.lang.sql.sql_binary") continue;
             if (item.name == "org.zenframework.z8.lang.sql.sql_geometry") continue;
             if (item.name == "org.zenframework.z8.lang.sql.sql_primary") continue;
+            if (item.name == "org.zenframework.z8.base.fts.Fts" || item.name == "org.zenframework.z8.base.fts.FtsQueryType") continue;
             if (item.name == "org.zenframework.z8.lang.Math") { importedMath = true; continue; }
             auto found = item.name in allPrograms;
             if (found is null) fail("unresolved import '" ~ item.name ~ "'", item.token);
@@ -769,6 +770,7 @@ class Checker {
                 e.objectClass = containerOwner.lexicalOwner;
                 return ValueType.selfType;
             case ExprKind.newSelf:
+                if (e.token.text == "Fts") { e.inferredType = ValueType.ftsType; return ValueType.ftsType; }
                 if (e.token.text == "sql_bool") { e.inferredType = ValueType.sqlBoolType; return ValueType.sqlBoolType; }
                 if (e.token.text == "sql_int") { e.inferredType = ValueType.sqlIntType; return ValueType.sqlIntType; }
                 if (e.token.text == "sql_decimal") { e.inferredType = ValueType.sqlDecimalType; return ValueType.sqlDecimalType; }
@@ -800,6 +802,18 @@ class Checker {
                     }
                     if (e.left.token.text == "guid" && e.token.text == "Null") {
                         e.emittedOverride = "z8_guid_zero()"; return ValueType.guidType;
+                    }
+                    if (e.left.token.text == "FtsQueryType") {
+                        if (!["Query", "Plain", "Phrase"].canFind(e.token.text)) fail("unknown Fts query type", e.token);
+                        e.emittedOverride = "z8_fts_query_" ~ e.token.text; e.enumConstant = true; return ValueType.ftsQueryType;
+                    }
+                    if (e.left.token.text == "Fts") {
+                        auto names = ["NormDefault", "NormLenLog", "NormLen", "NormHarmonic", "NormUniqueWords", "NormUniqueWordsLog", "NormDivSelf"];
+                        auto values = [0, 1, 2, 4, 8, 16, 32];
+                        foreach (i, name; names) if (e.token.text == name) {
+                            e.emittedOverride = "z8_optional_wrap(" ~ values[i].to!string ~ "L)"; e.enumConstant = true; return ValueType.optionalInt;
+                        }
+                        fail("unknown Fts constant", e.token);
                     }
                     if (e.left.token.text == "Math" && importedMath) {
                         if (e.token.text != "PI") fail("unknown Math field", e.token);
@@ -849,6 +863,17 @@ class Checker {
                     return staticField.type == ValueType.stringType ? ValueType.nullableString : storedValueType(staticField.type);
                 }
                 auto receiverType = typeOf(e.left);
+                if (receiverType == ValueType.ftsType) {
+                    e.nativeField = e.token.text;
+                    switch (e.token.text) {
+                        case "configuration": return ValueType.nullableString;
+                        case "queryType": return ValueType.ftsQueryType;
+                        case "weight": return ValueType.decimalArray;
+                        case "normalization": return ValueType.optionalInt;
+                        case "coatingDensity": return ValueType.optionalBool;
+                        default: fail("unknown Fts field", e.token);
+                    }
+                }
                 if (receiverType == ValueType.binaryType && e.token.text == "name") {
                     e.binaryNameField = true; return ValueType.nullableString;
                 }
@@ -1190,7 +1215,8 @@ class Checker {
                         e.builtinCall = "z8_sql_string_patIndexOf"; return ValueType.sqlIntType;
                     }
                     if (["ftsLike", "ftsRank"].canFind(e.token.text)) {
-                        checkArguments(e, [ValueType.sqlStringType]); e.builtinCall = "z8_sql_string_" ~ e.token.text;
+                        checkArguments(e, e.arguments.length == 2 ? [ValueType.sqlStringType, ValueType.ftsType] : [ValueType.sqlStringType]);
+                        e.builtinCall = "z8_sql_string_" ~ e.token.text;
                         return e.token.text == "ftsLike" ? ValueType.sqlBoolType : ValueType.sqlDecimalType;
                     }
                     fail("unsupported SQL string method", e.token);

@@ -508,11 +508,15 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                     catch (RuntimeException error) { System.out.println("SQLSTRINGBOOL:" + vendor.name() + ":" + logical + ":ERROR"); }
                 }
             for (boolean logical : new boolean[] {false, true}) {
-                try { System.out.println("SQLFTSBOOL:" + vendor.name() + ":" + logical + ":" + demo.cases.SqlStringValues.z8_ftsLike().format(vendor, null, logical)); }
-                catch (RuntimeException error) { System.out.println("SQLFTSBOOL:" + vendor.name() + ":" + logical + ":ERROR"); }
+                for (org.zenframework.z8.server.types.sql.sql_bool value : new org.zenframework.z8.server.types.sql.sql_bool[] {demo.cases.SqlStringValues.z8_ftsLike(), demo.cases.SqlStringValues.z8_configuredFtsLike()}) {
+                    try { System.out.println("SQLFTSBOOL:" + vendor.name() + ":" + logical + ":" + value.format(vendor, null, logical)); }
+                    catch (RuntimeException error) { System.out.println("SQLFTSBOOL:" + vendor.name() + ":" + logical + ":ERROR"); }
+                }
             }
-            try { System.out.println("SQLFTSRANK:" + vendor.name() + ":" + demo.cases.SqlStringValues.z8_ftsRank().format(vendor, null)); }
-            catch (RuntimeException error) { System.out.println("SQLFTSRANK:" + vendor.name() + ":ERROR"); }
+            for (org.zenframework.z8.server.types.sql.sql_decimal value : new org.zenframework.z8.server.types.sql.sql_decimal[] {demo.cases.SqlStringValues.z8_ftsRank(), demo.cases.SqlStringValues.z8_configuredFtsRank()}) {
+                try { System.out.println("SQLFTSRANK:" + vendor.name() + ":" + value.format(vendor, null)); }
+                catch (RuntimeException error) { System.out.println("SQLFTSRANK:" + vendor.name() + ":ERROR"); }
+            }
             org.zenframework.z8.server.types.sql.sql_integer[] stringSearches = {
                 demo.cases.SqlStringValues.z8_findIndex(), demo.cases.SqlStringValues.z8_indexFrom(), demo.cases.SqlStringValues.z8_patternIndex()
             };
@@ -1022,11 +1026,15 @@ void main() {
                 catch (Exception error) { writeln("SQLSTRINGBOOL:", vendor, ":", logical, ":ERROR"); }
             }
         foreach (logical; [false, true]) {
-            try { writeln("SQLFTSBOOL:", vendor, ":", logical, ":", z8_to_utf8(z8_sql_bool_format(Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_ftsLike(), logical, dialect))); }
-            catch (Exception error) { writeln("SQLFTSBOOL:", vendor, ":", logical, ":ERROR"); }
+            foreach (value; [Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_ftsLike(), Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_configuredFtsLike()]) {
+                try { writeln("SQLFTSBOOL:", vendor, ":", logical, ":", z8_to_utf8(z8_sql_bool_format(value, logical, dialect))); }
+                catch (Exception error) { writeln("SQLFTSBOOL:", vendor, ":", logical, ":ERROR"); }
+            }
         }
-        try { writeln("SQLFTSRANK:", vendor, ":", z8_to_utf8(z8_sql_decimal_format(Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_ftsRank(), dialect))); }
-        catch (Exception error) { writeln("SQLFTSRANK:", vendor, ":ERROR"); }
+        foreach (value; [Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_ftsRank(), Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_configuredFtsRank()]) {
+            try { writeln("SQLFTSRANK:", vendor, ":", z8_to_utf8(z8_sql_decimal_format(value, dialect))); }
+            catch (Exception error) { writeln("SQLFTSRANK:", vendor, ":ERROR"); }
+        }
         auto stringSearches = [Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_findIndex(),
             Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_indexFrom(),
             Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_patternIndex()];
@@ -1212,7 +1220,7 @@ void main() {
         d_sql = [line for line in d_lines if line.startswith("SQLBOOL:")]
         if original_sql != d_sql or len(d_sql) != 40:
             raise SystemExit(f"SQL boolean formatting differs: original={original_sql!r}, D={d_sql!r}")
-        for prefix, count in (("SQLINT:", 36), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 44), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 60), ("SQLTEXTTEST:", 16), ("SQLGUID:", 8), ("SQLGUIDBOOL:", 8), ("SQLDATE:", 12), ("SQLDATETICKS:", 4), ("SQLDATEFUNC:", 36), ("SQLDATEPART:", 20), ("SQLDATECMP:", 336), ("SQLDATEBL:", 8), ("SQLSPAN:", 20), ("SQLSPANARITH:", 12), ("SQLSPANBOOL:", 8), ("SQLSPANPART:", 28), ("SQLSPANFUNC:", 28), ("SQLBINARY:", 4), ("SQLGEOM:", 12), ("SQLGEOMBOOL:", 24), ("SQLGEOMEMPTY:", 8), ("SQLGEOMFUNC:", 56), ("SQLGEOMMETRIC:", 32), ("SQLGEOMTEST:", 16), ("SQLGEOMTEXT:", 8), ("SQLGEOMCOUNT:", 4), ("SQLPRIMARY:", 4), ("SQLPRIMARYCHECK:", 4), ("SQLFTSBOOL:", 8), ("SQLFTSRANK:", 4)):
+        for prefix, count in (("SQLINT:", 36), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 44), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 60), ("SQLTEXTTEST:", 16), ("SQLGUID:", 8), ("SQLGUIDBOOL:", 8), ("SQLDATE:", 12), ("SQLDATETICKS:", 4), ("SQLDATEFUNC:", 36), ("SQLDATEPART:", 20), ("SQLDATECMP:", 336), ("SQLDATEBL:", 8), ("SQLSPAN:", 20), ("SQLSPANARITH:", 12), ("SQLSPANBOOL:", 8), ("SQLSPANPART:", 28), ("SQLSPANFUNC:", 28), ("SQLBINARY:", 4), ("SQLGEOM:", 12), ("SQLGEOMBOOL:", 24), ("SQLGEOMEMPTY:", 8), ("SQLGEOMFUNC:", 56), ("SQLGEOMMETRIC:", 32), ("SQLGEOMTEST:", 16), ("SQLGEOMTEXT:", 8), ("SQLGEOMCOUNT:", 4), ("SQLPRIMARY:", 4), ("SQLPRIMARYCHECK:", 4), ("SQLFTSBOOL:", 16), ("SQLFTSRANK:", 8)):
             original_lines = [line for line in output.splitlines() if line.startswith(prefix)]
             d_formatted = [line for line in d_lines if line.startswith(prefix)]
             if original_lines != d_formatted or len(d_formatted) != count:

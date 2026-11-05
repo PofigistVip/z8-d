@@ -31,7 +31,7 @@ class Z8SqlBool : Z8SqlPrimary {
     Z8SqlGeometry geometryLeft, geometryRight;
     string geometryOperator;
     wstring geometryFunction;
-    wstring ftsConfiguration;
+    Z8Fts ftsConfig;
     this(Z8SqlBoolKind kind, bool constant = false, Z8SqlBool left = null,
          Z8SqlBool right = null, Z8SqlBool alternative = null) {
         this.kind = kind; this.constant = constant;
@@ -133,7 +133,7 @@ wstring z8_sql_bool_format(Z8SqlBool value, bool logical = false, Z8SqlVendor ve
             return z8_sql_string_format(value.textLeft, vendor) ~ " ~ "w ~ z8_sql_string_format(value.textRight, vendor);
         case Z8SqlBoolKind.textFtsLike:
             if (vendor != Z8SqlVendor.Postgres) throw new Exception("unsupported SQL database vendor");
-            return z8_sql_fts_query(value.textRight, value.ftsConfiguration, vendor) ~ " @@ "w ~ z8_sql_fts_vector(value.textLeft, value.ftsConfiguration, vendor);
+            return z8_sql_fts_query(value.textRight, value.ftsConfig, vendor) ~ " @@ "w ~ z8_sql_fts_vector(value.textLeft, value.ftsConfig, vendor);
         case Z8SqlBoolKind.textIsEmpty:
             auto first = "("w ~ z8_sql_string_format(value.textLeft, vendor) ~ ")"w;
             auto second = "("w ~ z8_sql_string_format(value.textLeft, vendor) ~ ")"w;
