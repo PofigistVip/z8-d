@@ -74,6 +74,14 @@ existing field and request records; deleting a role removes those access rows.
 Without a registry these role lifecycle operations do not run. The metadata
 tables and their referenced records must already exist, and callers should use
 a transaction to group the role and access-row changes.
+
+`z8_postgres_bootstrap` in `z8.database.bootstrap` initializes a new schema's
+supplied tables, zero-GUID rows, built-in records, registered metadata, initial
+access rows, indexes and foreign keys in one transaction. The caller must
+provide the complete table list and registry, create the schema and extensions
+first, and call it outside an existing transaction. Like the Java schema
+generator it suppresses user-level events during initialization; an existing
+request's event level is restored afterward. Existing tables are not migrated.
 `UserRoles` provides links to users and roles, built-in administrator
 assignments, a read-only flag based on the current user and protection against
 removing the built-in assignments. The flag is metadata; general access

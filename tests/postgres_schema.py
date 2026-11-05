@@ -168,6 +168,7 @@ import z8.database.catalog;
 import z8.database.compare;
 import z8.database.migration;
 import z8.database.metadata;
+import z8.database.bootstrap;
 import z8gen.p_Probe;
 import std.algorithm.searching : canFind;
 import std.conv : to;
@@ -507,6 +508,44 @@ void main(string[] args) {
     bool rolesUnavailable;
     try { z8_postgres_apply_static_records(db, "z8_security"w, P.m_roles()); } catch (Z8PostgresException) { rolesUnavailable = true; }
     assert(rolesUnavailable);
+    auto bootstrapRegistry = new Z8RuntimeRegistry(); auto bootstrapSample = P.m_make();
+    bootstrapRegistry.registerTable(bootstrapSample); bootstrapRegistry.registerRequest(bootstrapSample);
+    Z8Object[] bootstrapTables = [P.m_userRoles(), P.m_roles(), P.m_users(), P.m_sequences(), P.m_systemTables(), P.m_systemFields(),
+        P.m_systemRequests(), P.m_roleTableAccess(), P.m_roleFieldAccess(), P.m_roleRequestAccess(), bootstrapSample, P.m_target()];
+    db.execute(`CREATE SCHEMA "z8_bootstrap"`);
+    auto bootstrapUser = new Z8UserData(); bootstrapUser.id = z8_guid_create(777); bootstrapUser.administrator = true;
+    auto bootstrapRequest = new Z8ApplicationRequest(); bootstrapRequest.session = new Z8ApplicationSession("bootstrap"w, bootstrapUser, bootstrapUser);
+    bootstrapRequest.setEventsLevel(Z8EventsLevel.user);
+    auto savedBootstrapRequest = z8_application_set_request(bootstrapRequest);
+    z8_postgres_bootstrap(db, "z8_bootstrap"w, bootstrapTables, bootstrapRegistry);
+    assert(z8_application_request() is bootstrapRequest && bootstrapRequest.eventsLevel() == Z8EventsLevel.user);
+    z8_application_set_request(savedBootstrapRequest);
+    auto initialUsers = db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemUsers" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`);
+    assert(initialUsers.rows[0][0].text == "2");
+    assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemRoles" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`).rows[0][0].text == "3");
+    assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemUserRoles" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`).rows[0][0].text == "2");
+    assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemRoleTableAccess" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`).rows[0][0].text == "3");
+    assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemRoleRequestAccess" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`).rows[0][0].text == "3");
+    assert(db.execute(`SELECT "Read"::text || "Write"::text || "Create"::text || "Copy"::text || "Destroy"::text FROM "z8_bootstrap"."SystemRoleTableAccess" WHERE "Role" = 'DC08CA72-C668-412F-91B7-022F1C82AC09'`).rows[0][0].text == "11111");
+    assert(db.execute(`SELECT "Read"::text || "Write"::text FROM "z8_bootstrap"."SystemRoleTableAccess" WHERE "Role" = '421A8413-A8EC-4DAB-9235-9A5FF83341C5'`).rows[0][0].text == "10");
+    assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemRoleFieldAccess" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`).rows[0][0].text == "45");
+    assert(db.execute(`SELECT "Execute" FROM "z8_bootstrap"."SystemRoleRequestAccess" WHERE "Role" = 'DC08CA72-C668-412F-91B7-022F1C82AC09'`).rows[0][0].text == "1");
+    assert(db.execute(`SELECT "CreatedBy" FROM "z8_bootstrap"."SystemUsers" WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`).rows[0][0].text == "00000000-0000-0000-0000-000000000309");
+    assert(db.execute(`SELECT "Label" FROM "z8_bootstrap"."Target;--" WHERE "RecordId" = '00000000-0000-0000-0000-000000000000'`).rows[0][0].text == "");
+    db.execute(`CREATE SCHEMA "z8_bootfail"`);
+    Z8Object[] failingBootstrapTables = [P.m_userRoles(), P.m_roles(), P.m_users(), P.m_sequences(), P.m_systemTables(), P.m_systemFields(),
+        P.m_systemRequests(), P.m_roleTableAccess(), P.m_roleFieldAccess(), P.m_roleRequestAccess(), P.m_references()];
+    bool bootstrapRolledBack;
+    try { z8_postgres_bootstrap(db, "z8_bootfail"w, failingBootstrapTables, bootstrapRegistry); }
+    catch (Z8PostgresException) { bootstrapRolledBack = true; }
+    assert(bootstrapRolledBack && !db.inTransaction() && z8_application_request() is null);
+    assert(db.execute(`SELECT to_regclass('"z8_bootfail"."SystemRoles"') IS NULL`).rows[0][0].text == "t");
+    savedBootstrapRequest = z8_application_set_request(bootstrapRequest);
+    bool duplicateBootstrap;
+    try { z8_postgres_bootstrap(db, "z8_bootfail"w, [P.m_make(), P.m_make()], bootstrapRegistry); }
+    catch (Z8PostgresException) { duplicateBootstrap = true; }
+    assert(duplicateBootstrap && bootstrapRequest.eventsLevel() == Z8EventsLevel.user && z8_application_request() is bootstrapRequest);
+    z8_application_set_request(savedBootstrapRequest);
     auto securityRoles = P.m_roles(); db.execute(z8_postgres_create_table_sql("z8_security"w, securityRoles));
     z8_postgres_ensure_null_record(db, "z8_security"w, securityRoles);
     db.execute(`INSERT INTO "z8_security"."SystemRoles" ("RecordId", "Name") VALUES ('DC08CA72-C668-412F-91B7-022F1C82AC09', 'Administrator')`);
