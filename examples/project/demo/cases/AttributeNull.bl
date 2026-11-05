@@ -1,0 +1,4 @@
+public class AttributeNull {
+    public string value = null;
+    [tag value] public AttributeNull nested;
+}

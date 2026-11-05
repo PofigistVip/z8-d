@@ -161,6 +161,8 @@ class Checker {
     }
     void prepareDeclarations(Program program, Program[string] programs) {
         currentProgram = program; allClasses = programs;
+        foreach (attribute; program.attributes)
+            if (attribute.expression !is null) fail("type attribute expressions are not supported yet", attribute.name);
         checkAttributeNameConflicts(program, programs);
         foreach (field; program.fields) {
             field.type = resolveDeclaredType(field.type, program, field.objectName, field.name);
@@ -485,6 +487,10 @@ class Checker {
                     field.userOperatorAssignment = useAssignmentOperator(field.objectClass, field.initializer, field.name, direct);
                 if (!direct && !field.userOperatorAssignment) fail("field initializer type mismatch", field.name);
             }
+            if (field.attributes.length) {
+                fieldInitialization = false;
+                checkAttributeExpressions(field.attributes);
+            }
         }
         string memberPath(Expression target) {
             return target.kind == ExprKind.variable ? target.token.text : memberPath(target.left) ~ "." ~ target.token.text;
@@ -520,6 +526,7 @@ class Checker {
                 init.attributeTarget = copyQualifiedTarget(init.target);
                 fieldInitialization = false;
                 typeOf(init.attributeTarget);
+                checkAttributeExpressions(init.attributes);
                 fieldInitialization = true;
             }
             setTargetStage(init.target, init.type == ValueType.selfType);
@@ -541,6 +548,13 @@ class Checker {
             checkStatement(m.body);
             auto returns = analyzeControlFlow(m.body);
             if (returnType != ValueType.voidType && !returns) fail("method may finish without returning a value", m.name);
+        }
+    }
+    private void checkAttributeExpressions(TypeAttribute[] attributes) {
+        foreach (attribute; attributes) if (attribute.expression !is null) {
+            auto actual = typeOf(attribute.expression);
+            if (actual != ValueType.stringType && actual != ValueType.nullableString)
+                fail("only string attribute expressions are supported", attribute.name);
         }
     }
     // Follow the original compiler's return and reachability traversal. In

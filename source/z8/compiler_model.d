@@ -89,7 +89,7 @@ class Method {
     bool isCastOperator;
 }
 class Field { ValueType type; Token name; TypeAttribute[] attributes; Expression initializer; bool isPublic, isProtected, isStatic, isAuto, isRecord, declaredFinal, userOperatorAssignment; string objectName; Program objectClass; Program owner, nestedClass; }
-struct TypeAttribute { Token name; Token value; bool hasValue; }
+struct TypeAttribute { Token name; Token value; Expression expression; bool hasValue; }
 // Match the original lexer and BigDecimal.toString, including preserved scale
 // and its scientific notation for an adjusted exponent below -6.
 package string canonicalDecimalLiteral(Token token) {
@@ -137,6 +137,7 @@ package string canonicalDecimalLiteral(Token token) {
 // integer suffix. This spelling is also used to compare [name] values.
 package wstring attributeLiteralValue(TypeAttribute attribute) {
     if (!attribute.hasValue) return ""w;
+    assert(attribute.expression is null);
     if (attribute.value.kind == TokenKind.stringLiteral) return decodeStringLiteral(attribute.value.text);
     if (attribute.value.kind == TokenKind.booleanLiteral) return attribute.value.text.to!wstring;
     if (attribute.value.kind == TokenKind.decimalLiteral)

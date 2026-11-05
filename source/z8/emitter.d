@@ -118,6 +118,8 @@ private string emitWStringLiteral(const(wchar)[] value) {
 }
 
 private string emitAttributeValue(TypeAttribute attribute) {
+    if (attribute.expression !is null)
+        return "z8_string_new(z8_string_required(" ~ emitExpr(attribute.expression) ~ "))";
     return emitWStringLiteral(attributeLiteralValue(attribute));
 }
 

@@ -154,16 +154,18 @@ class Parser {
         foreach (old; previous)
             if (old.name.text == attribute.name.text) throw new CompileException("duplicate attribute", attribute.name.position);
         if (current.text != "]") {
-            auto sign = current;
-            bool negative = accept("-");
-            if (![TokenKind.stringLiteral, TokenKind.booleanLiteral, TokenKind.integerLiteral, TokenKind.decimalLiteral].canFind(current.kind) ||
-                (negative && current.kind != TokenKind.integerLiteral && current.kind != TokenKind.decimalLiteral))
-                error("only string, boolean and numeric literal attributes are supported");
-            attribute.hasValue = true; attribute.value = take();
-            if (negative) {
-                attribute.value.text = "-" ~ attribute.value.text;
-                attribute.value.position = sign.position;
-            }
+            bool literal = [TokenKind.stringLiteral, TokenKind.booleanLiteral, TokenKind.integerLiteral, TokenKind.decimalLiteral].canFind(current.kind) && look(1).text == "]";
+            bool negative = current.text == "-" && [TokenKind.integerLiteral, TokenKind.decimalLiteral].canFind(look(1).kind) && look(2).text == "]";
+            attribute.hasValue = true;
+            if (literal || negative) {
+                auto sign = current;
+                if (negative) take();
+                attribute.value = take();
+                if (negative) {
+                    attribute.value.text = "-" ~ attribute.value.text;
+                    attribute.value.position = sign.position;
+                }
+            } else attribute.expression = expression();
         }
         expect("]");
         return attribute;
@@ -172,6 +174,7 @@ class Parser {
         if (attribute.name.text == "primary")
             throw new CompileException("this attribute is not supported yet", attribute.name.position);
         if (attribute.name.text == "name" && attribute.hasValue) {
+            if (attribute.expression !is null) throw new CompileException("name attribute requires a constant", attribute.name.position);
             auto value = attributeLiteralValue(attribute);
             if (attribute.value.kind == TokenKind.stringLiteral && value.length > 2 && value[0] == '$' && value[$-1] == '$')
                 throw new CompileException("name attribute cannot be a resource key", attribute.value.position);
@@ -188,11 +191,11 @@ class Parser {
                     throw new CompileException("name attribute has an illegal character", attribute.value.position);
             }
         }
-        if (attribute.name.text == "request" && attribute.hasValue && attribute.value.kind != TokenKind.booleanLiteral)
+        if (attribute.name.text == "request" && attribute.hasValue && (attribute.expression !is null || attribute.value.kind != TokenKind.booleanLiteral))
             throw new CompileException("request attribute requires a boolean literal", attribute.value.position);
         if (attribute.name.text == "job" && attribute.hasValue) {
-            if (attribute.value.kind != TokenKind.stringLiteral)
-                throw new CompileException("job attribute requires a string literal", attribute.value.position);
+            if (attribute.expression !is null || attribute.value.kind != TokenKind.stringLiteral)
+                throw new CompileException("job attribute requires a string literal", attribute.name.position);
             auto cron = decodeStringLiteral(attribute.value.text).to!string;
             enum column = `((\*|[0-9]{1,2}(-[0-9]{1,2})?)(/[0-9]{1,2})?(,(\*|[0-9]{1,2}(-[0-9]{1,2})?)(/[0-9]{1,2})?)*)`;
             enum space = `[ \t\r\n\f\x0b]+`;
@@ -214,7 +217,7 @@ class Parser {
             if (accept("public")) { if (isPublic) error("duplicate public modifier"); isPublic = true; continue; }
             auto attribute = parseAttribute(result.attributes);
             if (attribute.name.text == "native") {
-                if (!attribute.hasValue || attribute.value.kind != TokenKind.stringLiteral) error("native attribute requires a string");
+                if (!attribute.hasValue || attribute.expression !is null || attribute.value.kind != TokenKind.stringLiteral) error("native attribute requires a string");
                 nativeAttribute = true;
             } else checkSupportedAttribute(attribute);
             result.attributes ~= attribute;

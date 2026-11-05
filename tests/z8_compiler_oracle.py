@@ -265,6 +265,10 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             !"от родителя".equals(metadata.get().annotated.getAttribute("fieldTag")) ||
             !"специализация".equals(metadata.get().specialized.getAttribute("fieldTag")) ||
             !"существующее".equals(metadata.get().annotated.getAttribute("initTag")) ||
+            !"исходное".equals(metadata.get().annotated.getAttribute("textValue")) ||
+            !"исходное".equals(metadata.get().annotated.getAttribute("methodValue")) ||
+            metadata.get().attributeCalls.get() != 1 ||
+            !"исходное значение".equals(metadata.get().annotated.getAttribute("joinedValue")) ||
             !"Second Field".equals(metadata.get().annotated.getAttribute("name")) ||
             !"false".equals(metadata.get().annotated.getAttribute("enabled")) ||
             !"-7L".equals(metadata.get().annotated.getAttribute("delta")) ||
@@ -275,6 +279,10 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             !"вложенное".equals(metadata.get().annotated.get().annotated.getAttribute("chainTag")) ||
             !"специализация поля".equals(metadata.get().ownSpecial.getAttribute("specialTag")))
             throw new AssertionError("field attribute metadata differs");
+        try {
+            new demo.cases.AttributeNull.CLASS<>(null).get();
+            throw new AssertionError("null string attribute accepted");
+        } catch (NullPointerException expectedNullAttribute) { }
         System.out.println("RESULT:" + demo.Main.z8_run().get());
         System.out.println("RESULT:" + demo.cases.Arithmetic.z8_run().get());
         System.out.println("RESULT:" + demo.cases.Text.z8_run().get());
@@ -458,6 +466,10 @@ void main() {
     assert(metadata.f_annotated.z8_get_attribute("fieldTag"w) == "от родителя"w);
     assert(metadata.f_specialized.z8_get_attribute("fieldTag"w) == "специализация"w);
     assert(metadata.f_annotated.z8_get_attribute("initTag"w) == "существующее"w);
+    assert(metadata.f_annotated.z8_get_attribute("textValue"w) == "исходное"w);
+    assert(metadata.f_annotated.z8_get_attribute("methodValue"w) == "исходное"w);
+    assert(z8_optional_require(metadata.f_attributeCalls) == 1);
+    assert(metadata.f_annotated.z8_get_attribute("joinedValue"w) == "исходное значение"w);
     assert(metadata.f_annotated.z8_get_attribute("name"w) == "Second Field"w);
     assert(metadata.f_annotated.z8_get_attribute("enabled"w) == "false"w);
     assert(metadata.f_annotated.z8_get_attribute("delta"w) == "-7L"w);
@@ -467,6 +479,10 @@ void main() {
     assert(metadata.f_annotated.z8_get_attribute("selected"w) == "true"w);
     assert(z8_nonnull(metadata.f_annotated).f_annotated.z8_get_attribute("chainTag"w) == "вложенное"w);
     assert(metadata.f_ownSpecial.z8_get_attribute("specialTag"w) == "специализация поля"w);
+    bool nullAttributeRejected;
+    try { z8_nonnull(z8_new!Z8p_64656D6F2E63617365732E4174747269627574654E756C6C()); }
+    catch (Exception) { nullAttributeRejected = true; }
+    assert(nullAttributeRejected);
     writeln(z8_optional_require(Z8p_64656D6F2E4D61696E.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E41726974686D65746963.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E54657874.m_run()));
