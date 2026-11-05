@@ -325,6 +325,7 @@ private Z8Optional!long z8_query_destroy_id(Z8Object self, Z8Guid id) {
     if (id !is null && id == z8_guid_zero()) return z8_optional_wrap(0L);
     if (z8_query_user_events_enabled()) self.z8_query_virtual_beforeDestroy(id);
     if (z8_native_is_instance(z8_users_name, self)) z8_users_before_destroy(id);
+    if (z8_native_is_instance(z8_user_roles_name, self)) z8_user_roles_before_destroy(id);
     if (z8_query_user_events_enabled() && z8_native_is_instance(z8_roles_name, self)) z8_roles_before_destroy(id);
     auto result = writer.destroy(self, id);
     if (z8_query_user_events_enabled()) self.z8_query_virtual_afterDestroy(id);

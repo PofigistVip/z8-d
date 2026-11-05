@@ -65,6 +65,10 @@ permissions consistent during user-level updates. `RoleTableAccess` also
 normalizes table permissions and propagates read/write changes to matching field
 access rows using the same database connection. Role-change notifications and
 the remaining authorization lifecycle are not yet implemented.
+`UserRoles` provides links to users and roles, built-in administrator
+assignments, a read-only flag based on the current user and protection against
+removing the built-in assignments. The flag is metadata; general access
+enforcement is not yet implemented.
 The native `Users.onNew` defaults mirror the Java implementation, including its
 default password value and `changePassword` flag; explicitly supplied values
 are preserved even when user-level events are disabled. With user events enabled,

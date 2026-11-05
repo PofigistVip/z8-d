@@ -1,0 +1,51 @@
+// Native UserRoles.java fields and built-in user-to-administrator-role links.
+private enum z8_user_roles_name = "org.zenframework.z8.server.base.table.system.UserRoles"w;
+private class Z8UserRolesState { Z8Object users, roles, user, role; }
+private __gshared Z8Guid z8_user_roles_system, z8_user_roles_administrator;
+private void z8_user_roles_new(Z8Object self) {
+    enum link = "org.zenframework.z8.server.base.table.value.Link"w;
+    auto state = new Z8UserRolesState();
+    state.users = z8_native_new(z8_users_name); state.users.z8_set_container(self); state.users.z8_set_index("users"w);
+    state.roles = z8_native_new(z8_roles_name); state.roles.z8_set_container(self); state.roles.z8_set_index("roles"w);
+    state.user = z8_table_system_field(self, link, "user"w, "User"w);
+    state.role = z8_table_system_field(self, link, "role"w, "Role"w);
+    self.z8_set_native_state(z8_user_roles_name, state);
+}
+private Z8UserRolesState z8_user_roles_state(Z8Object self) {
+    auto state = cast(Z8UserRolesState)z8_nonnull(self, -1).z8_get_native_state(z8_user_roles_name);
+    if (state is null) throw new Exception("UserRoles members are not initialized");
+    return state;
+}
+private Z8Object* z8_user_roles_address(string member)(Z8Object self) { return &__traits(getMember, z8_user_roles_state(self), member); }
+void z8_user_roles_configure(Z8Object self) {
+    auto state = z8_user_roles_state(self);
+    z8_link_assign(z8_nonnull(state.user), z8_nonnull(state.users));
+    z8_link_assign(z8_nonnull(state.role), z8_nonnull(state.roles));
+    auto request = z8_application_request();
+    if (request !is null && request.session !is null && request.session.user !is null)
+        z8_query_state(self).readOnly = z8_optional_wrap(!request.session.user.administrator);
+}
+void z8_user_roles_initialize_static_records(Z8Object self) {
+    auto state = z8_user_roles_state(self);
+    auto table = cast(Z8TableState)self.z8_get_native_state(z8_table_name);
+    if (table is null) throw new Exception("Table fields are not initialized");
+    self.z8_add_static_record(z8_user_roles_administrator, [
+        Z8StaticRecordValue(state.user, z8_primary_box(z8_user_administrator)),
+        Z8StaticRecordValue(state.role, z8_primary_box(z8_role_administrator)),
+        Z8StaticRecordValue(table.lock, z8_primary_box(1L))]);
+    self.z8_add_static_record(z8_user_roles_system, [
+        Z8StaticRecordValue(state.user, z8_primary_box(z8_user_system)),
+        Z8StaticRecordValue(state.role, z8_primary_box(z8_role_administrator)),
+        Z8StaticRecordValue(table.lock, z8_primary_box(1L))]);
+}
+void z8_user_roles_before_destroy(Z8Guid id) {
+    if (id !is null && (id == z8_user_roles_administrator || id == z8_user_roles_system))
+        throw new Exception("Builtin user's roles can not be removed.");
+}
+shared static this() {
+    z8_user_roles_system = z8_guid_literal("DAD7CCDE-51D8-4B24-884D-3F7C2C13F9EC");
+    z8_user_roles_administrator = z8_guid_literal("8D05DB1E-1A17-4E19-949C-F2894920261E");
+    z8_native_bind(z8_user_roles_name ~ ".m_new"w, &z8_user_roles_new);
+    static foreach (name; ["users", "roles", "user", "role"])
+        z8_native_bind_field(z8_user_roles_name ~ ".f_"w ~ name.to!wstring, &z8_user_roles_address!name);
+}

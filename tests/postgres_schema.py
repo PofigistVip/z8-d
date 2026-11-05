@@ -105,6 +105,7 @@ import org.zenframework.z8.base.table.system.Fields;
 import org.zenframework.z8.base.table.system.RoleTableAccess;
 import org.zenframework.z8.base.table.system.RoleFieldAccess;
 import org.zenframework.z8.base.table.system.RoleRequestAccess;
+import org.zenframework.z8.base.table.system.UserRoles;
 import org.zenframework.z8.base.table.value.Field;
 public class Probe {
     public static Sample make() { Sample value; return value; }
@@ -122,6 +123,8 @@ public class Probe {
     public static RoleTableAccess roleTableAccess() { RoleTableAccess value; return value; }
     public static RoleFieldAccess roleFieldAccess() { RoleFieldAccess value; return value; }
     public static RoleRequestAccess roleRequestAccess() { RoleRequestAccess value; return value; }
+    public static UserRoles userRoles() { UserRoles value; return value; }
+    public static void deleteUserRole(UserRoles value, guid id) { value.destroy(id); }
     public static string accessRoleName(RoleTableAccess value) { Field[] fields = {value.roles.name}; value.read(fields); if (value.next()) return value.roles.name.get(); return "missing"; }
     public static void setFieldRead(RoleFieldAccess value, guid id, bool flag) { value.read = flag; value.update(id); }
     public static void setFieldWrite(RoleFieldAccess value, guid id, bool flag) { value.write = flag; value.update(id); }
@@ -459,6 +462,30 @@ void main(string[] args) {
     bool rolesUnavailable;
     try { z8_postgres_apply_static_records(db, "z8_security"w, P.m_roles()); } catch (Z8PostgresException) { rolesUnavailable = true; }
     assert(rolesUnavailable);
+    auto securityRoles = P.m_roles(); db.execute(z8_postgres_create_table_sql("z8_security"w, securityRoles));
+    z8_postgres_ensure_null_record(db, "z8_security"w, securityRoles);
+    db.execute(`INSERT INTO "z8_security"."SystemRoles" ("RecordId", "Name") VALUES ('DC08CA72-C668-412F-91B7-022F1C82AC09', 'Administrator')`);
+    auto userRoles = P.m_userRoles();
+    assert(z8_postgres_create_foreign_keys_sql("z8_security"w, userRoles).length == 2);
+    z8_postgres_create_tables(db, "z8_security"w, [userRoles]);
+    auto assignments = db.execute(`SELECT "User"::text, "Role"::text, "Lock" FROM "z8_security"."SystemUserRoles" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000' ORDER BY "User"`);
+    assert(assignments.rows.length == 2 && assignments.rows[0][0].text == "00000000-0000-0000-0000-000000000001" && assignments.rows[1][0].text == "00000000-0000-0000-0000-000000000002");
+    assert(assignments.rows[0][1].text == "dc08ca72-c668-412f-91b7-022f1c82ac09" && assignments.rows[0][2].text == "1" && assignments.rows[1][2].text == "1");
+    auto securityBackend = new Z8PostgresDatabase(db, "z8_security"w); auto savedSecurityBackend = z8_connection_set_current(securityBackend);
+    auto disabledEvents = new Z8ApplicationRequest(); disabledEvents.setEventsLevel(Z8EventsLevel.none);
+    auto securityRequest = z8_application_set_request(disabledEvents);
+    bool builtinAssignmentProtected;
+    try { P.m_deleteUserRole(userRoles, z8_guid_literal("8D05DB1E-1A17-4E19-949C-F2894920261E")); } catch (Exception) { builtinAssignmentProtected = true; }
+    assert(builtinAssignmentProtected); z8_application_set_request(securityRequest); z8_connection_set_current(savedSecurityBackend);
+    auto principal = new Z8UserData(); auto session = new Z8ApplicationSession("test"w, principal, principal);
+    auto accessRequest = new Z8ApplicationRequest(); accessRequest.session = session;
+    securityRequest = z8_application_set_request(accessRequest);
+    auto readonlyRoles = P.m_userRoles();
+    auto readonly = z8_native_field!(Z8Optional!bool)("org.zenframework.z8.server.base.query.Query.f_readOnly"w, readonlyRoles);
+    assert(z8_optional_require(readonly));
+    principal.administrator = true; auto writableRoles = P.m_userRoles();
+    readonly = z8_native_field!(Z8Optional!bool)("org.zenframework.z8.server.base.query.Query.f_readOnly"w, writableRoles);
+    assert(!z8_optional_require(readonly)); z8_application_set_request(securityRequest);
     auto systemTables = P.m_systemTables(); auto systemRequests = P.m_systemRequests();
     auto tablesDDL = z8_postgres_create_table_sql("z8_security"w, systemTables);
     auto requestsDDL = z8_postgres_create_table_sql("z8_security"w, systemRequests);
