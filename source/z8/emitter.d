@@ -563,7 +563,7 @@ private ReferenceInitialization[] orderedReferences(Program program) {
             if (!field.isStatic && field.type == ValueType.selfType && field.initializer !is null)
                 own ~= ReferenceInitialization(field.name.text, field.initializer, field, null);
         foreach (init; current.memberInitializers)
-            if (init.type == ValueType.selfType)
+            if (init.expression !is null && init.type == ValueType.selfType)
                 own ~= ReferenceInitialization(qualifiedFieldName(init.target), init.expression, null, init);
         foreach (initializer; own) {
             auto value = initializer.value;
@@ -659,7 +659,7 @@ package string emitPrograms(Program[] programs) {
                 result ~= "this.f_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
         }
         foreach (init; program.memberInitializers)
-            if (init.type != ValueType.selfType) result ~= emitSimple(init) ~ ";\n";
+            if (init.expression !is null && init.type != ValueType.selfType) result ~= emitSimple(init) ~ ";\n";
         result ~= "}\n";
         foreach (method; program.methods) if (method.name.text == "constructor") {
             result ~= "override void z8_call_constructor() { this.m_constructor(); }\n";

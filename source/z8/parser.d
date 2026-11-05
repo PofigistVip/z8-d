@@ -53,7 +53,7 @@ class Parser {
         if (current.kind != TokenKind.identifier) return false;
         size_t i = 1;
         while (look(i).text == "." && look(i + 1).kind == TokenKind.identifier) i += 2;
-        return ["=", "+="].canFind(look(i).text);
+        return ["=", "+=", ";"].canFind(look(i).text);
     }
     private bool isMemberSpecializationStart() {
         if (current.kind != TokenKind.identifier) return false;
@@ -233,7 +233,8 @@ class Parser {
                     member.left = target; target = member;
                 }
                 auto init = new Statement(StmtKind.assignment, name);
-                init.target = target; init.assignmentOperator = take().text; init.expression = initializer();
+                init.target = target;
+                if (current.text != ";") { init.assignmentOperator = take().text; init.expression = initializer(); }
                 expect(";"); result.memberInitializers ~= init; continue;
             }
             if (accept("records")) { parseRecords(result); continue; }

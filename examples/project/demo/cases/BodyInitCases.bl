@@ -7,6 +7,9 @@ public class BodyInitCases extends BodyInitBase {
     public int later = 20;
     public int counter;
     counter += 4;
+    public int untouched;
+    untouched;
+    child;
     public NestedBase item = class {
         int bonus;
         bonus = 7;

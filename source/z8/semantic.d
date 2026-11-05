@@ -470,7 +470,11 @@ class Checker {
                     if (field.name.text == name && (field.initializer !is null || field.nestedClass !is null))
                         fail("duplicate field initialization", init.token);
             staticContext = false; fieldInitialization = true;
-            checkStatement(init);
+            if (init.expression is null) {
+                init.type = typeOf(init.target);
+                if (isOptionalPrimitive(init.type)) init.type = optionalBaseType(init.type);
+                if (init.type == ValueType.nullableString) init.type = ValueType.stringType;
+            } else checkStatement(init);
             auto root = init.target;
             while (root.kind == ExprKind.field) root = root.left;
             if (!root.isField || root.targetClass.length) fail("field initialization requires an instance field", init.token);
