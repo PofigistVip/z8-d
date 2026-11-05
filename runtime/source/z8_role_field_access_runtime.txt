@@ -1,4 +1,14 @@
 private enum z8_role_field_access_name = "org.zenframework.z8.server.base.table.system.RoleFieldAccess"w;
+void z8_role_field_access_before_update(Z8Object self) {
+    auto state = z8_role_access_state!(Z8RoleAccessKind.field)(self);
+    auto read = z8_nonnull(state.permissions[0]), write = z8_nonnull(state.permissions[1]);
+    if (z8_field_is_changed(read)) {
+        if (!z8_optional_require(z8_primary_cast!bool(z8_field_default_value(read))))
+            z8_field_set(write, z8_primary_box(false));
+    } else if (z8_field_is_changed(write) && z8_optional_require(z8_primary_cast!bool(z8_field_default_value(write)))) {
+        z8_field_set(read, z8_primary_box(true));
+    }
+}
 shared static this() {
     enum kind = Z8RoleAccessKind.field;
     z8_native_bind(z8_role_field_access_name ~ ".m_new"w, &z8_role_access_new!kind);

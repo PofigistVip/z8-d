@@ -60,8 +60,9 @@ Physical fields of the system `Tables`, `Fields` and `Requests` metadata tables
 are available, including the `Fields` link to `Tables`. Registry-based localized
 display values remain unimplemented.
 The native `RoleTableAccess`, `RoleFieldAccess` and `RoleRequestAccess` fields
-and their table links are available; their update hooks and authorization
-lifecycle are not yet implemented.
+and their table links are available. `RoleFieldAccess` keeps read and write
+permissions consistent during user-level updates; the remaining authorization
+hooks and lifecycle are not yet implemented.
 The native `Users.onNew` defaults mirror the Java implementation, including its
 default password value and `changePassword` flag; explicitly supplied values
 are preserved even when user-level events are disabled. With user events enabled,
