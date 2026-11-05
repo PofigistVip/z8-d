@@ -1,0 +1,53 @@
+// The host supplies a request for the current thread; response wrappers share
+// the request's writer, as ApplicationServer.getRequest() does in Z8.
+class Z8ApplicationRequest {
+    Z8StringMap parameters;
+    Z8Array!Z8File files;
+    private Z8JsonWriterState writer;
+    this() {
+        parameters = new Z8StringMap();
+        files = new Z8Array!Z8File();
+        writer = new Z8JsonWriterState();
+    }
+}
+// The server can obtain the accumulated response without a generated BL type.
+wstring z8_application_response_text(Z8ApplicationRequest request) {
+    return z8_nonnull(request).writer.stream;
+}
+private Z8ApplicationRequest z8_application_current_request;
+Z8ApplicationRequest z8_application_request() { return z8_application_current_request; }
+// Returns the previous context so nested host operations can restore it.
+Z8ApplicationRequest z8_application_set_request(Z8ApplicationRequest value) {
+    auto previous = z8_application_current_request;
+    z8_application_current_request = value;
+    return previous;
+}
+private Z8ApplicationRequest z8_application_require_request() {
+    auto value = z8_application_current_request;
+    if (value is null) throw new Exception("no active application request");
+    return value;
+}
+private Z8Optional!bool z8_application_is_request() { return z8_optional_wrap(z8_application_current_request !is null); }
+private Z8Optional!long z8_application_current_time() {
+    return z8_optional_wrap((Clock.currTime(UTC()) - SysTime.fromUnixTime(0, UTC())).total!"msecs");
+}
+private Z8StringMap z8_application_request_parameters() { return z8_nonnull(z8_application_require_request().parameters); }
+private Z8Array!Z8File z8_application_request_files() {
+    auto source = z8_nonnull(z8_application_require_request().files);
+    auto result = new Z8Array!Z8File(); result.z8_addAll(source); return result;
+}
+private Z8Object z8_application_response_writer() {
+    auto request = z8_application_require_request();
+    auto wrapper = z8_native_new(z8_json_writer_name);
+    z8_nonnull(wrapper).z8_set_native_state(z8_json_writer_name, request.writer);
+    return wrapper;
+}
+void z8_bind_builtin_application_request() {
+    enum prefix = "org.zenframework.z8.server.base.application.Application."w;
+    z8_native_bind(prefix ~ "m_isRequest"w, &z8_application_is_request);
+    z8_native_bind(prefix ~ "m_currentTimeMillis"w, &z8_application_current_time);
+    z8_native_bind(prefix ~ "m_requestParameters"w, &z8_application_request_parameters);
+    z8_native_bind(prefix ~ "m_requestFiles"w, &z8_application_request_files);
+    z8_native_bind(prefix ~ "m_responseWriter"w, &z8_application_response_writer);
+}
+shared static this() { z8_bind_builtin_application_request(); }

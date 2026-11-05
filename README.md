@@ -64,6 +64,7 @@ python tests/primary_user_conversions.py path/to/original-z8
 python tests/array_join_primary.py path/to/original-z8
 python tests/object_array_join.py path/to/original-z8
 python tests/json_writer_oracle.py path/to/original-z8
+python tests/application_request.py path/to/original-z8
 python tests/guid_string_comparisons.py path/to/original-z8
 python tests/long_expression_chains.py
 python tests/long_generated_paths.py
@@ -520,6 +521,12 @@ GUID- и date-значений. Методы `set`, `put` и `remove` работ
 базовых значений, массивов `primary`, `JsonObject`, `JsonArray` и вывод строки.
 Запись `Field` использует native-привязки `OBJECT.m_id` и `Field.m_primary`;
 реализация самих полей и запросов базы данных ещё необходима.
+Для `Application` реализованы `isRequest`, `currentTimeMillis`, `requestParameters`,
+`requestFiles` и `responseWriter`. Сервер создаёт `Z8ApplicationRequest`, заполняет
+`parameters` и `files`, устанавливает его через `z8_application_set_request` и
+после обработки восстанавливает возвращённый предыдущий контекст. Контекст
+локален для потока; `z8_application_response_text` возвращает накопленный ответ.
+Подключение этого интерфейса к CivetWeb ещё предстоит реализовать.
 Для `JsonPath` поддержаны создание, присваивание, разбор частей, получение
 родительского пути и выполнение пути по JSON с типизированным чтением и
 значениями по умолчанию.
@@ -540,7 +547,8 @@ GUID- и date-значений. Методы `set`, `put` и `remove` работ
 конструктор `Object` — `z8_bind_builtin_object()`, а доступные методы
 `JsonObject` — `z8_bind_builtin_json_object()`, `JsonArray` —
 `z8_bind_builtin_json_array()`, `JsonPath` — `z8_bind_builtin_json_path()`,
-`JsonWriter` — `z8_bind_builtin_json_writer()`.
+`JsonWriter` — `z8_bind_builtin_json_writer()`, запрос `Application` —
+`z8_bind_builtin_application_request()`.
 
 Поддерживаются конкатенация, сравнения, `length`, `isEmpty`, `compare`, `compareNoCase`, `startsWith`,
 `endsWith`, `indexOf`, `lastIndexOf`, `substring`, `charAt`, `trim`, `trimLeft`,
