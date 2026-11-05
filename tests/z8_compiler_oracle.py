@@ -430,7 +430,8 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             org.zenframework.z8.server.types.sql.sql_integer[] integers = {
                 demo.cases.SqlIntValues.z8_expression(), demo.cases.SqlIntValues.z8_remainder(),
                 demo.cases.SqlIntValues.z8_bitwise(), demo.cases.SqlIntValues.z8_choice(),
-                demo.cases.SqlIntValues.z8_functions(), demo.cases.SqlIntValues.z8_convertedLeft()
+                demo.cases.SqlIntValues.z8_functions(), demo.cases.SqlIntValues.z8_convertedLeft(),
+                demo.cases.SqlIntValues.z8_invert(), demo.cases.SqlIntValues.z8_invertTwice()
             };
             for (org.zenframework.z8.server.types.sql.sql_integer value : integers) {
                 try { System.out.println("SQLINT:" + vendor.name() + ":" + value.format(vendor, null)); }
@@ -509,7 +510,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         sql_sources = [server_source / "types" / "sql" / name for name in ("sql_primary.java", "sql_bool.java", "sql_integer.java")]
         sql_sources += [server_source / "db" / "sql" / "SqlConst.java"]
         sql_sources += [server_source / "db" / "sql" / "expressions" / name for name in
-                        ("Operation.java", "Add.java", "Mul.java", "Group.java", "And.java", "Or.java", "Rel.java", "Unary.java", "Bitwise.java")]
+                        ("Operation.java", "Add.java", "Mul.java", "Group.java", "And.java", "Or.java", "Rel.java", "Unary.java", "UnaryNot.java", "Bitwise.java")]
         sql_sources += [server_source / "db" / "sql" / "functions" / name for name in ("If.java", "CaseToken.java")]
         sql_sources += [server_source / "db" / "sql" / "functions" / "numeric" / name for name in
                         ("Floor.java", "Mod.java", "Sign.java", "Abs.java", "Power.java")]
@@ -706,7 +707,9 @@ void main() {
             Z8p_64656D6F2E63617365732E53716C496E7456616C756573.m_bitwise(),
             Z8p_64656D6F2E63617365732E53716C496E7456616C756573.m_choice(),
             Z8p_64656D6F2E63617365732E53716C496E7456616C756573.m_functions(),
-            Z8p_64656D6F2E63617365732E53716C496E7456616C756573.m_convertedLeft()];
+            Z8p_64656D6F2E63617365732E53716C496E7456616C756573.m_convertedLeft(),
+            Z8p_64656D6F2E63617365732E53716C496E7456616C756573.m_invert(),
+            Z8p_64656D6F2E63617365732E53716C496E7456616C756573.m_invertTwice()];
         foreach (value; integers) {
             try { writeln("SQLINT:", vendor, ":", z8_to_utf8(z8_sql_int_format(value, dialect))); }
             catch (Exception error) { writeln("SQLINT:", vendor, ":ERROR"); }
@@ -725,7 +728,7 @@ void main() {
         d_sql = [line for line in d_lines if line.startswith("SQLBOOL:")]
         if original_sql != d_sql or len(d_sql) != 40:
             raise SystemExit(f"SQL boolean formatting differs: original={original_sql!r}, D={d_sql!r}")
-        for prefix, count in (("SQLINT:", 24), ("SQLINTBOOL:", 8)):
+        for prefix, count in (("SQLINT:", 32), ("SQLINTBOOL:", 8)):
             original_lines = [line for line in output.splitlines() if line.startswith(prefix)]
             d_formatted = [line for line in d_lines if line.startswith(prefix)]
             if original_lines != d_formatted or len(d_formatted) != count:

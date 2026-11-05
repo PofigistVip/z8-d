@@ -433,7 +433,7 @@ private string emitExprRaw(Expression e) {
             return "(cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ") !is null)";
         case ExprKind.unary:
             if (e.sqlBoolOperator) return "z8_sql_bool_not(" ~ emitExpr(e.left) ~ ")";
-            if (e.sqlIntOperator) return "z8_sql_int_negate(" ~ emitExpr(e.left) ~ ")";
+            if (e.sqlIntOperator) return (e.token.text == "~" ? "z8_sql_int_bit_not(" : "z8_sql_int_negate(") ~ emitExpr(e.left) ~ ")";
             if (e.userUnaryOperator) return emitReceiver(e.left) ~ "." ~ operatorDName(e.token.text) ~ "()";
             if (e.optionalDecimalUnary) return "(" ~ e.token.text ~ "z8_optional_require(" ~ emitExpr(e.left) ~ "))";
             if (e.optionalBoolUnary) return "(!z8_optional_require(" ~ emitExpr(e.left) ~ "))";

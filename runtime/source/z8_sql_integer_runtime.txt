@@ -1,4 +1,4 @@
-enum Z8SqlIntKind { constant, group, negate, add, subtract, multiply, divide, modulo, bitAnd, bitOr, bitXor, sign, abs, power, choose }
+enum Z8SqlIntKind { constant, group, negate, bitNot, add, subtract, multiply, divide, modulo, bitAnd, bitOr, bitXor, sign, abs, power, choose }
 class Z8SqlInt {
     Z8SqlIntKind kind;
     long constant;
@@ -12,6 +12,7 @@ Z8SqlInt z8_sql_int_const(long value) { return new Z8SqlInt(Z8SqlIntKind.constan
 Z8SqlInt z8_sql_int_const(Z8Optional!long value) { return z8_sql_int_const(z8_optional_require(value)); }
 Z8SqlInt z8_sql_int_group(Z8SqlInt value) { return new Z8SqlInt(Z8SqlIntKind.group, 0, z8_nonnull(value)); }
 Z8SqlInt z8_sql_int_negate(Z8SqlInt value) { return new Z8SqlInt(Z8SqlIntKind.negate, 0, z8_nonnull(value)); }
+Z8SqlInt z8_sql_int_bit_not(Z8SqlInt value) { return new Z8SqlInt(Z8SqlIntKind.bitNot, 0, z8_nonnull(value)); }
 Z8SqlInt z8_sql_int_unary(string op)(Z8SqlInt value) {
     static if (op == "sign") enum kind = Z8SqlIntKind.sign;
     else static if (op == "abs") enum kind = Z8SqlIntKind.abs;
@@ -51,12 +52,15 @@ Z8SqlInt z8_sql_int_iif(Z8SqlBool condition, Z8SqlInt yes, Z8SqlInt no) {
 Z8SqlInt z8_sql_int_sign(Z8SqlInt value) { return z8_sql_int_unary!"sign"(value); }
 Z8SqlInt z8_sql_int_abs(Z8SqlInt value) { return z8_sql_int_unary!"abs"(value); }
 Z8SqlInt z8_sql_int_power(Z8SqlInt value, Z8SqlInt power) { return z8_sql_int_binary!"power"(value, power); }
-wstring z8_sql_int_format(Z8SqlInt value, Z8SqlVendor vendor = Z8SqlVendor.Postgres) {
+wstring z8_sql_int_format(Z8SqlInt value, Z8SqlVendor vendor = Z8SqlVendor.Postgres, bool logical = false) {
     z8_nonnull(value);
     final switch (value.kind) {
         case Z8SqlIntKind.constant: return value.constant.to!wstring;
-        case Z8SqlIntKind.group: return "("w ~ z8_sql_int_format(value.left, vendor) ~ ")"w;
+        case Z8SqlIntKind.group: return "("w ~ z8_sql_int_format(value.left, vendor, logical) ~ ")"w;
         case Z8SqlIntKind.negate: return "(-"w ~ z8_sql_int_format(value.left, vendor) ~ ")"w;
+        case Z8SqlIntKind.bitNot:
+            auto condition = "not("w ~ z8_sql_int_format(value.left, vendor, true) ~ ")"w;
+            return logical ? condition : z8_sql_bool_case(condition, "1"w, "0"w);
         case Z8SqlIntKind.add: return z8_sql_int_format(value.left, vendor) ~ " + "w ~ z8_sql_int_format(value.right, vendor);
         case Z8SqlIntKind.subtract: return z8_sql_int_format(value.left, vendor) ~ " - ("w ~ z8_sql_int_format(value.right, vendor) ~ ")"w;
         case Z8SqlIntKind.multiply: return z8_sql_int_format(value.left, vendor) ~ "*"w ~ z8_sql_int_format(value.right, vendor);
