@@ -187,6 +187,25 @@ void main(string[] args) {
     z8_postgres_apply_static_records(db, "pg_temp"w, statics);
     seeded = db.execute(`SELECT "Label", "Counter", "Other" FROM "StaticSample" ORDER BY "RecordId"`);
     assert(seeded.rows.length == 2 && seeded.rows[0][0].text == "Seed" && seeded.rows[0][1].text == "55" && seeded.rows[0][2].text == "Preserved");
+    db.execute(`CREATE SCHEMA "z8_test"`);
+    z8_postgres_create_tables(db, "z8_test"w, [P.m_references(), P.m_target(), P.m_statics()]);
+    assert(db.execute(`SELECT count(*) FROM "z8_test"."Source"`).rows[0][0].text == "1");
+    assert(db.execute(`SELECT count(*) FROM "z8_test"."StaticSample"`).rows[0][0].text == "3");
+    db.execute(`INSERT INTO "z8_test"."Source" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000041')`);
+    bool missingReference;
+    try { db.execute(`INSERT INTO "z8_test"."Source" ("RecordId", "TargetId") VALUES ('00000000-0000-0000-0000-000000000042', '00000000-0000-0000-0000-000000000099')`); }
+    catch (Z8PostgresException) { missingReference = true; }
+    assert(missingReference);
+    db.execute(`CREATE SCHEMA "z8_rollback"`);
+    bool rolledBack;
+    try { z8_postgres_create_tables(db, "z8_rollback"w, [P.m_references()]); }
+    catch (Z8PostgresException) { rolledBack = true; }
+    assert(rolledBack && db.execute(`SELECT to_regclass('"z8_rollback"."Source"') IS NULL`).rows[0][0].text == "t");
+    assert(!db.inTransaction());
+    db.beginTransaction(); bool nestedRejected;
+    try { z8_postgres_create_tables(db, "z8_test"w, [P.m_statics()]); }
+    catch (Z8PostgresException) { nestedRejected = true; }
+    assert(nestedRejected && db.inTransaction()); db.rollback();
     db.execute(ddl);
     db.execute(`INSERT INTO "Sample;--" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000001')`);
     auto row = db.execute(`SELECT "Title","Amount","Flag","Price","Reference","Moment","Duration","Details","Blob" FROM "Sample;--"`);

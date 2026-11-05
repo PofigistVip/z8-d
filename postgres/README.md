@@ -50,8 +50,12 @@ schema generation. The schema lifecycle does not yet call it automatically.
 table events; it expects a clean table instance and leaves transaction control
 to the caller. Built-in Users and Roles tables are rejected until their special
 rules for preserving credentials and permissions are implemented.
-Existing-table migration and the original schema lifecycle are not yet
-implemented.
+`z8_postgres_create_tables` runs these operations, index creation and foreign
+keys in phases inside one transaction for a new set of tables. The schema and
+required extensions must already exist. It rejects an existing transaction and
+does not migrate existing tables. Database changes roll back on failure; side
+effects performed by BL event handlers outside the database do not. The full
+original schema lifecycle is not yet implemented.
 
 `Z8PostgresQueryExecutor` connects BL `Query` reads to PostgreSQL tables.
 Construct it with a connection, schema and root table name, then attach it to

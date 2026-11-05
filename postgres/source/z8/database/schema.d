@@ -185,3 +185,36 @@ void z8_postgres_apply_static_records(Z8PostgresConnection connection, wstring s
             z8_native_call!Z8Guid("org.zenframework.z8.server.base.query.Query.m_create"w, table, record.key);
     }
 }
+
+// Create a new set of tables atomically. Existing schemas are not migrated.
+// Each phase runs for all tables before foreign keys are installed, permitting
+// mutually referencing tables and their zero-GUID records.
+void z8_postgres_create_tables(Z8PostgresConnection connection, wstring schema, Z8Object[] tables) {
+    if (connection is null || connection.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
+    if (connection.inTransaction()) throw new Z8PostgresException("schema creation requires its own transaction");
+    string[] definitions, indexes, foreignKeys;
+    wstring[] names;
+    foreach (table; tables) {
+        if (z8_native_is_instance("org.zenframework.z8.server.base.table.system.Users"w, table) ||
+            z8_native_is_instance("org.zenframework.z8.server.base.table.system.Roles"w, table))
+            throw new Z8PostgresException("static security records require protected-field handling");
+        definitions ~= z8_postgres_create_table_sql(schema, table);
+        auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, table);
+        foreach (existing; names) if (existing == name) throw new Z8PostgresException("duplicate PostgreSQL table name");
+        names ~= name;
+        indexes ~= z8_postgres_create_indexes_sql(schema, table);
+        foreignKeys ~= z8_postgres_create_foreign_keys_sql(schema, table);
+    }
+    connection.beginTransaction();
+    try {
+        foreach (sql; definitions) connection.execute(sql);
+        foreach (table; tables) z8_postgres_ensure_null_record(connection, schema, table);
+        foreach (table; tables) z8_postgres_apply_static_records(connection, schema, table);
+        foreach (sql; indexes) connection.execute(sql);
+        foreach (sql; foreignKeys) connection.execute(sql);
+        connection.commit();
+    } catch (Throwable failure) {
+        try { connection.rollback(); } catch (Throwable ignored) { }
+        throw failure;
+    }
+}
