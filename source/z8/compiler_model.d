@@ -27,7 +27,7 @@ class Expression {
     bool isField, isCapture, instanceCall, staticInstanceCall, staticInstanceField, fieldInitialization, earlyFieldInitialization, newHasContainer;
     bool binaryNameField;
     string nativeField;
-    bool makeFile, makeException, convertToDate, convertToSqlBool, convertToSqlInt, convertToSqlDecimal, convertSqlIntToDecimal, convertToSqlString, convertToSqlGuid;
+    bool makeFile, makeException, convertExceptionObject, convertToDate, convertToSqlBool, convertToSqlInt, convertToSqlDecimal, convertSqlIntToDecimal, convertToSqlString, convertToSqlGuid;
     bool sqlBoolOperator, sqlBoolPriority, sqlIntOperator, sqlIntComparison, sqlIntPriority, sqlDecimalOperator, sqlDecimalComparison, sqlDecimalPriority, sqlStringOperator, sqlStringComparison, sqlStringPriority;
     bool sqlGuidOperator, sqlGuidPriority;
     bool convertToSqlDate, sqlDatePriority, sqlDateOperator;
@@ -35,7 +35,7 @@ class Expression {
     bool convertToSqlGeometry, sqlGeometryPriority, sqlGeometryOperator;
     bool sqlPrimaryCast, sqlPrimaryInstanceOf;
     bool dateBinary, fileBinary;
-    bool primaryCast, primaryInstanceOf, objectInstanceOf, scalarInstanceOf, falseInstanceOf, exceptionInstanceOf;
+    bool primaryCast, primaryInstanceOf, objectInstanceOf, scalarInstanceOf, falseInstanceOf, exceptionInstanceOf, exceptionObjectCast, exceptionObjectInstanceOf;
     bool typedInitializer;
     size_t parenthesisCount;
     bool firstParenthesisIsConditional;
@@ -218,6 +218,7 @@ class Program {
     Token baseToken;
     Program baseClass;
     bool baseIsPrimary;
+    bool baseIsException;
     Program lexicalOwner;
     Program[] nestedPrograms, memberSpecializations;
     Token specializedName;
@@ -233,6 +234,11 @@ class Program {
 package bool extendsBuiltinPrimary(Program program) {
     for (auto current = program; current !is null; current = current.baseClass)
         if (current.baseIsPrimary) return true;
+    return false;
+}
+package bool extendsBuiltinException(Program program) {
+    for (auto current = program; current !is null; current = current.baseClass)
+        if (current.baseIsException) return true;
     return false;
 }
 // Z8 treats attributed primary types and their descendants as values even

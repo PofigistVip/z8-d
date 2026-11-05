@@ -46,6 +46,8 @@ class Checker {
             if (program.baseClass is null) program.baseClass = resolveClass(field.owner, field.objectName, field.name);
         } else if (program.baseName == "primary" || program.baseName == "org.zenframework.z8.lang.primary") {
             program.baseIsPrimary = true;
+        } else if (program.baseName == "exception" || program.baseName == "org.zenframework.z8.lang.exception") {
+            program.baseIsException = true;
         } else if (program.baseName.length) program.baseClass = resolveClass(program, program.baseName, program.baseToken);
         if (program.baseClass !is null) {
             if (program.baseClass.isEnum) fail("cannot extend an enum", program.baseToken);
@@ -298,6 +300,10 @@ class Checker {
 
         if (actual == ValueType.selfType) {
             if (expected == ValueType.selfType && isAssignable(e.objectClass, expectedClass)) return true;
+            if (expected == ValueType.exceptionType && extendsBuiltinException(e.objectClass)) {
+                e.convertExceptionObject = true;
+                return true;
+            }
             auto conversion = findConversion(e.objectClass, expected, expectedClass);
             if (conversion !is null) {
                 e.userConversion = conversion;
@@ -463,6 +469,7 @@ class Checker {
                 else if (p.type == ValueType.sqlPrimaryType && isSqlType(actual)) ++weight;
                 else if (p.type == ValueType.binaryType && [ValueType.stringType, ValueType.nullableString, ValueType.fileType].canFind(actual)) weight += 100;
                 else if ([ValueType.fileType, ValueType.exceptionType].canFind(p.type) && [ValueType.stringType, ValueType.nullableString].canFind(actual)) weight += 100;
+                else if (p.type == ValueType.exceptionType && actual == ValueType.selfType && extendsBuiltinException(e.arguments[i].objectClass)) ++weight;
                 else if (p.type == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType, ValueType.dateType, ValueType.fileType].canFind(actual)) { if (binaryOperator) ++distance; }
                 else if (p.type == ValueType.stringType && [ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual)) weight += 100;
                 else if (p.type == ValueType.stringType && actual == ValueType.guidType) weight += 100;
@@ -1637,6 +1644,11 @@ class Checker {
                         e.builtinCall = e.token.text == "toString" ? "z8_user_primary_string" : "z8_user_primary_hash";
                         return e.token.text == "toString" ? ValueType.stringType : ValueType.intType;
                     }
+                    if (target is null && extendsBuiltinException(owner) && ["getMessage", "getStackTrace"].canFind(e.token.text)) {
+                        checkArguments(e, []);
+                        e.builtinCall = e.token.text == "getMessage" ? "z8_exception_object_message" : "z8_exception_object_stacktrace";
+                        return ValueType.stringType;
+                    }
                     if (target is null) fail("unknown method '" ~ e.token.text ~ "'", e.token);
                     target = selectOverload(target, e);
                     if (!accessible(target.owner, target.isPublic, target.isProtected)) fail("method is not accessible", e.token);
@@ -1855,6 +1867,11 @@ class Checker {
                         e.objectClass = target;
                         return ValueType.selfType;
                     }
+                    if (typeOf(e.left) == ValueType.exceptionType && extendsBuiltinException(target)) {
+                        e.exceptionObjectCast = true;
+                        e.objectClass = target;
+                        return ValueType.selfType;
+                    }
                     if (typeOf(e.left) != ValueType.selfType) fail("unsupported object cast", e.token);
                     if (!isAssignable(e.left.objectClass, target)) {
                         auto conversion = findConversion(e.left.objectClass, ValueType.selfType, target);
@@ -1903,6 +1920,11 @@ class Checker {
                     e.exceptionInstanceOf = true;
                     return ValueType.boolType;
                 }
+                if (targetType == ValueType.exceptionType && sourceType == ValueType.selfType && extendsBuiltinException(e.left.objectClass)) {
+                    e.inferredType = sourceType;
+                    e.scalarInstanceOf = true;
+                    return ValueType.boolType;
+                }
                 if (isSqlType(sourceType) && isSqlType(targetType) && (sourceType == ValueType.sqlPrimaryType || targetType == ValueType.sqlPrimaryType)) {
                     e.sqlPrimaryInstanceOf = true; e.castType = targetType; return ValueType.boolType;
                 }
@@ -1928,6 +1950,11 @@ class Checker {
                     return ValueType.boolType;
                 }
                 auto target = resolveClass(currentProgram, e.token.text, e.token);
+                if (sourceType == ValueType.exceptionType && extendsBuiltinException(target)) {
+                    e.objectClass = target;
+                    e.exceptionObjectInstanceOf = true;
+                    return ValueType.boolType;
+                }
                 if (sourceType == ValueType.primaryType && extendsBuiltinPrimary(target)) {
                     e.castType = ValueType.selfType;
                     e.objectClass = target;

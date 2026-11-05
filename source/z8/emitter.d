@@ -229,7 +229,7 @@ private string emitExpr(Expression e) {
         ValueType[] savedBinaryConversions;
         ValueType[] savedStringConversions;
         bool[] savedPromotions;
-        bool[] savedFileConversions, savedExceptionConversions, savedDateConversions, savedSqlBoolConversions, savedSqlIntConversions, savedSqlDecimalConversions, savedSqlIntDecimalConversions, savedSqlStringConversions;
+        bool[] savedFileConversions, savedExceptionConversions, savedExceptionObjectConversions, savedDateConversions, savedSqlBoolConversions, savedSqlIntConversions, savedSqlDecimalConversions, savedSqlIntDecimalConversions, savedSqlStringConversions;
         Method[] savedUserConversions;
         ValueType[] savedCollectionTypes;
         Program[] savedCollectionClasses;
@@ -243,6 +243,7 @@ private string emitExpr(Expression e) {
             savedBinaryConversions ~= argument.convertToBinary;
             savedFileConversions ~= argument.makeFile;
             savedExceptionConversions ~= argument.makeException;
+            savedExceptionObjectConversions ~= argument.convertExceptionObject;
             savedDateConversions ~= argument.convertToDate;
             savedSqlBoolConversions ~= argument.convertToSqlBool;
             savedSqlIntConversions ~= argument.convertToSqlInt;
@@ -258,7 +259,7 @@ private string emitExpr(Expression e) {
             argument.optionalRequired = required; argument.promoteToDecimal = required && promote;
             argument.convertToString = required ? convert : ValueType.voidType;
             argument.convertToBinary = ValueType.voidType;
-            argument.makeFile = false; argument.makeException = false;
+            argument.makeFile = false; argument.makeException = false; argument.convertExceptionObject = false;
             argument.convertToDate = required ? savedDateConversions[$ - 1] : false;
             argument.convertToSqlBool = required && savedSqlBoolConversions[$ - 1];
             argument.convertToSqlInt = required && savedSqlIntConversions[$ - 1];
@@ -280,6 +281,7 @@ private string emitExpr(Expression e) {
             argument.promoteToDecimal = savedPromotions[i]; argument.convertToString = savedStringConversions[i];
             argument.convertToBinary = savedBinaryConversions[i];
             argument.makeFile = savedFileConversions[i]; argument.makeException = savedExceptionConversions[i];
+            argument.convertExceptionObject = savedExceptionObjectConversions[i];
             argument.convertToDate = savedDateConversions[i];
             argument.convertToSqlBool = savedSqlBoolConversions[i];
             argument.convertToSqlInt = savedSqlIntConversions[i];
@@ -358,6 +360,7 @@ private string emitExpr(Expression e) {
     if (e.boxPrimary) value = "z8_primary_box(" ~ value ~ ")";
     if (e.makeFile) value = "z8_file_from_path(" ~ value ~ ")";
     if (e.makeException) value = "new Z8Exception(z8_to_utf8(z8_string_required(" ~ value ~ ")))";
+    if (e.convertExceptionObject) value = "z8_exception_from_object(" ~ value ~ ")";
     if (e.convertToDate) value = "z8_date_from_ticks(" ~ value ~ ")";
     if (e.convertToBinary == ValueType.fileType) return "z8_file_to_binary(" ~ value ~ ")";
     if (e.convertToBinary == ValueType.stringType || e.convertToBinary == ValueType.nullableString) return "z8_binary_from_string(" ~ value ~ ")";
@@ -447,6 +450,7 @@ private string emitExprRaw(Expression e) {
                     return e.builtinCall ~ "(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
                 if (e.builtinCall == "z8_primary_to_string" || e.builtinCall == "z8_primary_hash" || e.builtinCall == "z8_primary_hash_value" ||
                     e.builtinCall == "z8_user_primary_string" || e.builtinCall == "z8_user_primary_hash" ||
+                    e.builtinCall == "z8_exception_object_message" || e.builtinCall == "z8_exception_object_stacktrace" ||
                     ["z8_guid_to_string", "z8_guid_hash", "z8_guid_major", "z8_guid_minor", "z8_guid_components"].canFind(e.builtinCall))
                     return e.builtinCall ~ "(" ~ emitExpr(e.left) ~ ")";
                 return e.builtinCall ~ "(" ~ args.join(", ") ~ ")";
@@ -519,10 +523,12 @@ private string emitExprRaw(Expression e) {
             if (isMap(e.inferredType)) return "z8_invoke!\"z8_get\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             return "z8_array_at(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
         case ExprKind.castExpr:
+            if (e.exceptionObjectCast) return "z8_exception_cast_object!(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")";
             if (e.primaryCast) return "z8_primary_cast!(" ~ dType(e.castType, e.objectClass) ~ ")(" ~ emitExpr(e.left) ~ ")";
             if (e.sqlPrimaryCast) return "z8_cast!(" ~ dType(e.castType) ~ ")(" ~ emitExpr(e.left) ~ ")";
             return e.castType == ValueType.selfType ? "z8_cast!(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")" : emitExpr(e.left);
         case ExprKind.instanceOf:
+            if (e.exceptionObjectInstanceOf) return "z8_exception_is_object!(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")";
             if (e.sqlPrimaryInstanceOf) return "(cast(" ~ dType(e.castType) ~ ")(" ~ emitExpr(e.left) ~ ") !is null)";
             if (e.exceptionInstanceOf) return "(cast(Z8Exception)(" ~ emitExpr(e.left) ~ ") !is null)";
             if (e.falseInstanceOf) {
@@ -858,7 +864,7 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
             result ~= "}\n";
             continue;
         }
-        result ~= "class " ~ program.emittedName ~ " : " ~ (program.baseClass is null ? "Z8Object" : program.baseClass.emittedName) ~ " {\n";
+        result ~= "class " ~ program.emittedName ~ " : " ~ (program.baseClass is null ? (program.baseIsException ? "Z8ExceptionObject" : "Z8Object") : program.baseClass.emittedName) ~ " {\n";
         result ~= "alias Z8Self = " ~ program.emittedName ~ ";\n";
         if (program.isNative) {
             auto nativeName = emitRawWStringLiteral(program.nativeName);

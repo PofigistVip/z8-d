@@ -56,6 +56,7 @@ python tests/unary_operators.py
 python tests/binary_operators.py
 python tests/cast_operators.py
 python tests/cast_container.py
+python tests/exception_subclasses.py
 python tests/object_conversion.py
 python tests/value_conversion_operators.py
 python tests/operator_distance.py
@@ -498,6 +499,11 @@ GUID- и date-значений. Методы `set`, `put` и `remove` работ
 Для `JsonPath` поддержаны создание, присваивание, разбор частей, получение
 родительского пути и выполнение пути по JSON с типизированным чтением и
 значениями по умолчанию.
+Классы могут наследоваться от встроенного `exception`: поддерживаются получение
+сообщения, передача и присваивание как `exception`, `throw`, проверка типа и
+обратное приведение. Native-реализация задаёт сообщение через
+`Z8ExceptionObject.z8_set_exception_message`. Обработчик `catch` пока принимает
+только встроенный тип `exception`.
 Смена регистра в `Base34.decode` использует Unicode D и может
 отличаться от Java для отдельных локалей. Остальные методы этих проверяемых
 классов этим не реализуются. Строки для хеша

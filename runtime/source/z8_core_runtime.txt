@@ -3,7 +3,8 @@ private import std.conv : to;
 private import std.algorithm : canFind;
 // Distinguish BL exceptions from native/runtime failures caught as Throwable.
 class Z8Exception : Exception {
-    this(string message, Throwable cause = null) { super(message, cause); }
+    private Z8ExceptionObject z8_source;
+    this(string message, Throwable cause = null, Z8ExceptionObject source = null) { super(message, cause); z8_source = source; }
 }
 // Internal control transfers are caught only by generated methods and loops.
 class Z8ControlFlow : Exception { this() { super("BL control transfer"); } }
@@ -155,6 +156,34 @@ class Z8Object {
     void z8_init_values() {}
     void z8_call_constructor() {}
 }
+// BL exception subclasses still participate in generated-object initialization;
+// the paired Throwable is used when a value crosses the exception boundary.
+class Z8ExceptionObject : Z8Object {
+    private Z8Exception z8_exception_value;
+    void z8_set_exception_message(wstring message) {
+        z8_exception_value = new Z8Exception(z8_to_utf8(message), null, this);
+    }
+    Z8Exception z8_as_exception() {
+        if (z8_exception_value is null) z8_exception_value = new Z8Exception(null, null, this);
+        return z8_exception_value;
+    }
+}
+Z8Exception z8_exception_from_object(Z8ExceptionObject value) {
+    return value is null ? null : value.z8_as_exception();
+}
+bool z8_exception_is_object(T : Z8ExceptionObject)(Throwable value) {
+    auto error = cast(Z8Exception)value;
+    return error !is null && cast(T)error.z8_source !is null;
+}
+T z8_exception_cast_object(T : Z8ExceptionObject)(Throwable value) {
+    if (value is null) return null;
+    auto error = cast(Z8Exception)value;
+    auto result = error is null ? null : cast(T)error.z8_source;
+    if (result is null) throw new Exception("invalid exception object cast");
+    return result;
+}
+wstring z8_exception_object_message(Z8ExceptionObject value) { return z8_message(z8_nonnull(value).z8_as_exception()); }
+wstring z8_exception_object_stacktrace(Z8ExceptionObject value) { return z8_stacktrace(z8_nonnull(value).z8_as_exception()); }
 // CLASS.getAttribute reads the reference metadata without advancing its stage.
 wstring z8_attribute_from(Z8Object value, wstring name) {
     if (value is null) throw new Exception("null reference");
