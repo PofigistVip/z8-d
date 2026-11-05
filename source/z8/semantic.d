@@ -108,6 +108,10 @@ class Checker {
         return *found;
     }
     private ValueType resolveDeclaredType(ValueType type, Program owner, string objectName, Token site) {
+        if (isMap(type) && mapValueType(type) == ValueType.selfType) {
+            auto target = resolveClass(owner, objectName, site);
+            return target.isEnum ? mapType(ValueType.enumType, mapKeyType(type)) : type;
+        }
         if (type != ValueType.selfType && type != ValueType.selfArray && type != ValueType.selfMatrix) return type;
         auto target = resolveClass(owner, objectName, site);
         if (!target.isEnum) return type;
@@ -721,12 +725,18 @@ class Checker {
                             if (valueType == ValueType.decimalType &&
                                 ![ValueType.decimalType, ValueType.optionalDecimal].canFind(typeOf(entry.right)))
                                 fail("map value type mismatch", entry.right.token);
+                            if ([ValueType.selfType, ValueType.enumType].canFind(valueType)) {
+                                auto actualValue = typeOf(entry.right);
+                                if (actualValue != valueType || (valueType == ValueType.selfType ?
+                                    !isAssignable(entry.right.objectClass, e.objectClass) : entry.right.objectClass !is e.objectClass))
+                                    fail("map value type mismatch", entry.right.token);
+                            }
                             if (isSqlType(valueType)) {
                                 auto actualValue = typeOf(entry.right);
                                 if (actualValue != valueType && !(valueType == ValueType.sqlPrimaryType && isSqlType(actualValue)))
                                     fail("map value type mismatch", entry.right.token);
                             }
-                            if (!matchesStored(entry.right, valueType)) fail("map value type mismatch", entry.right.token);
+                            if (!matchesStored(entry.right, valueType, e.objectClass)) fail("map value type mismatch", entry.right.token);
                         }
                     }
                     e.inferredType = expected; return expected;
@@ -1472,19 +1482,26 @@ class Checker {
                     }
                 } else if (isMap(receiver)) {
                     auto mapValue = mapValueType(receiver);
+                    if (hasObjectClass(receiver)) e.objectClass = e.left.objectClass;
                     switch (e.token.text) {
                         case "size": case "isEmpty": case "clear":
                             checkArguments(e, []);
                             return e.token.text == "size" ? ValueType.intType : e.token.text == "isEmpty" ? ValueType.boolType : ValueType.voidType;
                         case "containsKey": checkStoredArguments(e, [mapKeyType(receiver)]); return ValueType.boolType;
-                        case "containsValue": checkStoredArguments(e, [mapValue]); return ValueType.boolType;
+                        case "containsValue":
+                            if (e.arguments.length != 1 || !matchesStored(e.arguments[0], mapValue, e.left.objectClass)) fail("argument type mismatch", e.token);
+                            return ValueType.boolType;
                         case "get":
                             checkStoredArguments(e, [mapKeyType(receiver)]); return mapValueReadType(receiver);
                         case "remove":
                             checkStoredArguments(e, [mapKeyType(receiver)]); return mapValueReadType(receiver);
                         case "add":
-                            if (e.arguments.length == 1) { checkArguments(e, [receiver]); return ValueType.voidType; }
-                            checkStoredArguments(e, [mapKeyType(receiver), mapValue]); return mapValueReadType(receiver);
+                            if (e.arguments.length == 1) {
+                                if (!matches(e.arguments[0], receiver, e.left.objectClass)) fail("argument type mismatch", e.token);
+                                return ValueType.voidType;
+                            }
+                            if (e.arguments.length != 2 || !matchesStored(e.arguments[0], mapKeyType(receiver)) || !matchesStored(e.arguments[1], mapValue, e.left.objectClass)) fail("argument type mismatch", e.token);
+                            return mapValueReadType(receiver);
                         case "keys": checkArguments(e, []); return mapKeyArrayType(receiver);
                         case "values": checkArguments(e, []); return mapValueArrayType(receiver);
                         default: break;
@@ -1554,6 +1571,7 @@ class Checker {
                 if (isMap(array)) {
                     if (!matchesStored(e.right, mapKeyType(array))) fail("map key type mismatch", e.token);
                     e.inferredType = array;
+                    if (hasObjectClass(array)) e.objectClass = e.left.objectClass;
                     return mapValueReadType(array);
                 }
                 if (!isArray(array)) fail("indexing requires an array", e.token);
@@ -1886,6 +1904,9 @@ class Checker {
                     e.emittedOperator = op == "==" ? "is" : "!is"; return ValueType.boolType;
                 }
                 if (isMap(left) && left == right && op == "+") {
+                    if (hasObjectClass(left) && e.left.objectClass !is e.right.objectClass)
+                        fail("map value type mismatch", e.token);
+                    e.objectClass = e.left.objectClass;
                     e.inferredType = left;
                     return left;
                 }

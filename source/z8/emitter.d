@@ -40,7 +40,7 @@ private string dType(ValueType type, Program objectClass = null) {
         auto templateName = key == ValueType.stringType ? "Z8StringValueMap" :
             key == ValueType.intType ? "Z8IntMap" : key == ValueType.boolType ? "Z8BoolMap" :
             key == ValueType.decimalType ? "Z8DecimalMap" : "Z8GuidMap";
-        return templateName ~ "!" ~ dType(value);
+        return templateName ~ "!(" ~ dType(value, objectClass) ~ ")";
     }
     switch (type) {
         case ValueType.intType: return "long"; case ValueType.boolType: return "bool";
@@ -355,10 +355,10 @@ private string emitExprRaw(Expression e) {
                 string body = "(() {\n";
                 foreach (i, entry; e.arguments)
                     body ~= dStorageType(mapKeyType(e.inferredType)) ~ " z8_key_" ~ i.to!string ~ " = " ~ emitExpr(entry.left) ~ ";\n";
-                auto valueType = dStorageType(mapValueType(e.inferredType));
+                auto valueType = dStorageType(mapValueType(e.inferredType), e.objectClass);
                 foreach (i, entry; e.arguments)
                     body ~= valueType ~ " z8_value_" ~ i.to!string ~ " = " ~ emitExpr(entry.right) ~ ";\n";
-                body ~= "auto z8_result = new " ~ dType(e.inferredType) ~ "();\n";
+                body ~= "auto z8_result = new " ~ dType(e.inferredType, e.objectClass) ~ "();\n";
                 foreach (i, entry; e.arguments)
                     body ~= "z8_result.z8_add(z8_key_" ~ i.to!string ~ ", z8_value_" ~ i.to!string ~ ");\n";
                 return body ~ "return z8_result;\n})()";
@@ -443,7 +443,7 @@ private string emitExprRaw(Expression e) {
             if (isMap(e.inferredType)) {
                 if (e.token.text == "add" && e.arguments.length == 2 &&
                     e.arguments[0].kind == ExprKind.nullLiteral && e.arguments[1].kind == ExprKind.nullLiteral)
-                    return "z8_map_add_null_pair!(" ~ dStorageType(mapValueType(e.inferredType)) ~ ")(" ~ emitExpr(e.left) ~ ")";
+                    return "z8_map_add_null_pair!(" ~ dStorageType(mapValueType(e.inferredType), e.objectClass) ~ ")(" ~ emitExpr(e.left) ~ ")";
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);
                 return "z8_invoke!\"z8_" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ (args.length ? ", " ~ args.join(", ") : "") ~ ")";
             }
@@ -730,7 +730,7 @@ private string defaultValue(ValueType type, Program objectClass = null, bool has
     if (type == ValueType.fileType) return "new Z8File()";
     if (type == ValueType.decimalType) return "z8_decimal_from_int(0)";
     if (type == ValueType.selfType) return "z8_new!(" ~ dType(type, objectClass) ~ ")(" ~ (hasContainer ? "this" : "") ~ ")";
-    if (isMap(type)) return "new " ~ dType(type) ~ "()";
+    if (isMap(type)) return "new " ~ dType(type, objectClass) ~ "()";
     if (isArray(type)) return "new " ~ dType(type, objectClass) ~ "()";
     if (type == ValueType.intType) return "0";
     if (type == ValueType.stringType) return `z8_string_new(""w)`;

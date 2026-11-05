@@ -1,0 +1,34 @@
+public class ObjectMaps {
+    public int value = 17;
+
+    private static ObjectMaps[string] make(ObjectMaps item) {
+        ObjectMaps[string] result = {("first", item)};
+        return result;
+    }
+    public static int run() {
+        ObjectMaps item = new ObjectMaps;
+        ObjectMaps[string] names = make(item);
+        if (names["first"].value != 17 || names.get("first").value != 17) return 1;
+        names.add("empty", null);
+        if (!names.containsValue(item) || names["empty"] != null) return 2;
+        ObjectMaps[string] extra = {("second", item)};
+        ObjectMaps[string] combined = names + extra;
+        if (combined["second"].value != 17 || combined.size() != 3) return 7;
+        ObjectMaps[] values = names.values();
+        if (values.size() != 2 || !values.contains(item)) return 3;
+        ObjectMaps[int] numbers = {(1, item)};
+        ObjectMaps[guid] ids = {('00000000-0000-0000-0000-000000000001', item)};
+        ObjectMaps[bool] flags = {(true, item)};
+        decimal amount = 1.5;
+        ObjectMaps[decimal] amounts = {(amount, item)};
+        if (numbers[1].value != 17 || ids.values().first().value != 17 || flags[true].value != 17 || amounts[amount].value != 17) return 4;
+        MapFlavor[string] enums = {("one", MapFlavor.First)};
+        MapFlavor[int] enumsByInt = {(2, MapFlavor.Second)};
+        MapFlavor[guid] enumsByGuid = {('00000000-0000-0000-0000-000000000001', MapFlavor.First)};
+        MapFlavor[bool] enumsByBool = {(true, MapFlavor.First)};
+        MapFlavor[decimal] enumsByDecimal = {(amount, MapFlavor.Second)};
+        if (enums["one"] != MapFlavor.First || enumsByInt[2] != MapFlavor.Second || enumsByGuid.values().first() != MapFlavor.First || enumsByBool[true] != MapFlavor.First || enumsByDecimal[amount] != MapFlavor.Second) return 5;
+        if (!enums.values().contains(MapFlavor.First) || enums.remove("one") != MapFlavor.First) return 6;
+        return 83;
+    }
+}
