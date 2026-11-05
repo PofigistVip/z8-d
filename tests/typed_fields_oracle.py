@@ -33,6 +33,12 @@ public class TypedOracle {
         text.defaultValue = new string("start"); show(text);
         text.set(new string("changed")); show(text);
         text.setDefault(new string("replacement")); show(text); text.reset(); show(text);
+        BoolField flag = new BoolField(null); show(flag); flag.defaultValue = new bool(true); show(flag);
+        flag.set(new bool(false)); show(flag); flag.reset(); show(flag);
+        DecimalField amount = new DecimalField(null); show(amount); amount.defaultValue = new decimal(12); show(amount);
+        amount.set(new decimal(7)); show(amount); amount.reset(); show(amount);
+        GuidField id = new GuidField(null); show(id); id.defaultValue = guid.create(1); show(id);
+        id.set(guid.create(2)); show(id); id.reset(); show(id);
     }
 }
 ''', encoding="utf-8")
@@ -46,9 +52,15 @@ import std.stdio : writeln;
 class Field : Z8Object {}
 class IntegerField : Field {}
 class StringField : Field {}
+class BoolField : Field {}
+class DecimalField : Field {}
+class GuidField : Field {}
 Z8Object makeField() { return new Field(); }
 Z8Object makeInt() { return new IntegerField(); }
 Z8Object makeText() { return new StringField(); }
+Z8Object makeBool() { return new BoolField(); }
+Z8Object makeDecimal() { return new DecimalField(); }
+Z8Object makeGuid() { return new GuidField(); }
 void show(Z8Object f) {
     auto p = z8_native_call!Z8Primary("org.zenframework.z8.server.base.table.value.Field.m_primary"w, f);
     auto changed = z8_native_call!(Z8Optional!bool)("org.zenframework.z8.server.base.table.value.Field.m_isChanged"w, f);
@@ -60,6 +72,9 @@ void main() {
     z8_native_register_factory(prefix ~ "Field"w, typeid(Field), &makeField);
     z8_native_register_factory(prefix ~ "IntegerField"w, typeid(IntegerField), &makeInt);
     z8_native_register_factory(prefix ~ "StringField"w, typeid(StringField), &makeText);
+    z8_native_register_factory(prefix ~ "BoolField"w, typeid(BoolField), &makeBool);
+    z8_native_register_factory(prefix ~ "DecimalField"w, typeid(DecimalField), &makeDecimal);
+    z8_native_register_factory(prefix ~ "GuidField"w, typeid(GuidField), &makeGuid);
     auto number = makeInt(); z8_native_call!void(prefix ~ "IntegerField.m_new"w, number); show(number);
     z8_native_field!(Z8Optional!long)(prefix ~ "IntegerField.f_defaultValue"w, number) = z8_optional_wrap(4L); show(number);
     z8_field_set(number, z8_primary_box(7L)); show(number);
@@ -68,10 +83,19 @@ void main() {
     z8_native_field!wstring(prefix ~ "StringField.f_defaultValue"w, text) = "start"w; show(text);
     z8_field_set(text, z8_primary_box("changed"w)); show(text);
     z8_field_set_default(text, z8_primary_box("replacement"w)); show(text); z8_field_reset(text); show(text);
+    auto flag = makeBool(); z8_native_call!void(prefix ~ "BoolField.m_new"w, flag); show(flag);
+    z8_native_field!(Z8Optional!bool)(prefix ~ "BoolField.f_defaultValue"w, flag) = z8_optional_wrap(true); show(flag);
+    z8_field_set(flag, z8_primary_box(false)); show(flag); z8_field_reset(flag); show(flag);
+    auto amount = makeDecimal(); z8_native_call!void(prefix ~ "DecimalField.m_new"w, amount); show(amount);
+    z8_native_field!(Z8Optional!Z8Decimal)(prefix ~ "DecimalField.f_defaultValue"w, amount) = z8_optional_wrap(z8_decimal_from_int(12)); show(amount);
+    z8_field_set(amount, z8_primary_box(z8_decimal_from_int(7))); show(amount); z8_field_reset(amount); show(amount);
+    auto id = makeGuid(); z8_native_call!void(prefix ~ "GuidField.m_new"w, id); show(id);
+    z8_native_field!Z8Guid(prefix ~ "GuidField.f_defaultValue"w, id) = z8_guid_create(1); show(id);
+    z8_field_set(id, z8_primary_box(z8_guid_create(2))); show(id); z8_field_reset(id); show(id);
 }
 ''', encoding="utf-8")
     exe = temp / ("typed.exe" if os.name == "nt" else "typed")
     subprocess.run(["dmd", *import_args(), str(source), str(runtime), "-of=" + str(exe)], check=True)
     actual = subprocess.check_output([str(exe)], text=True, encoding="utf-8").splitlines()
     if actual != expected: raise SystemExit(f"Typed fields differ:\nD: {actual}\nJava: {expected}")
-print("Integer and string field values match Java Z8")
+print("Integer, string, boolean, decimal and GUID field values match Java Z8")

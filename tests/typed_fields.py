@@ -17,7 +17,8 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     (source / "Object.bl").write_text('[native "org.zenframework.z8.server.runtime.OBJECT"] public class Object {}', encoding="utf-8")
     (source / "Field.bl").write_text('''
 [native "org.zenframework.z8.server.base.table.value.Field"] public class Field extends Object {
-    public primary primary(); public int int(); public string string(); public bool isChanged(); public bool wasNull();
+    public primary primary(); public int int(); public string string(); public bool bool(); public decimal decimal(); public guid guid();
+    public bool isChanged(); public bool wasNull();
 }
 ''', encoding="utf-8")
     (source / "IntField.bl").write_text('''
@@ -32,7 +33,15 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     virtual public string get(); public StringField operator = (string value);
 }
 ''', encoding="utf-8")
+    for name, kind, native in (("BoolField", "bool", "BoolField"), ("DecimalField", "decimal", "DecimalField"), ("GuidField", "guid", "GuidField")):
+        (source / (name + ".bl")).write_text(f'''
+[native "org.zenframework.z8.server.base.table.value.{native}"] public class {name} extends Field {{
+    public {kind} defaultValue; virtual public {kind} getDefault(); public void setDefault({kind} value);
+    virtual public {kind} get(); public {name} operator = ({kind} value);
+}}
+''', encoding="utf-8")
     (source / "Custom.bl").write_text('public class Custom extends IntField { virtual public int get() { return 99; } }', encoding="utf-8")
+    (source / "CustomBool.bl").write_text('public class CustomBool extends BoolField { virtual public bool get() { return true; } }', encoding="utf-8")
     (source / "Probe.bl").write_text('''
 public class Probe {
     public static IntField make() { IntField field; field.defaultValue = 4; return field; }
@@ -53,6 +62,19 @@ public class Probe {
         if (text.get() != "changed" || text.defaultValue != "changed" || !text.isChanged()) return false;
         text.setDefault("replacement");
         if (text.get() != "replacement" || !text.isChanged()) return false;
+        BoolField flag;
+        if (flag.get() || flag.defaultValue || flag.isChanged()) return false;
+        flag.defaultValue = true; if (!flag.getDefault() || !flag.bool()) return false;
+        flag = false; if (flag.get() || !flag.isChanged()) return false;
+        DecimalField amount;
+        if (amount.get() != decimal.parse("0")) return false;
+        amount.defaultValue = 12.5; if (amount.decimal() != 12.5) return false;
+        amount = 7.25; if (amount.get() != 7.25 || !amount.isChanged()) return false;
+        GuidField id;
+        if (id.get() != guid.Null) return false;
+        id.defaultValue = guid.create(1); if (id.guid() != guid.create(1)) return false;
+        id = guid.create(2); if (id.get() != guid.create(2) || !id.isChanged()) return false;
+        CustomBool customBool; if (!customBool.bool() || customBool.primary().toString() != "true") return false;
         Custom custom;
         return custom.get() == 99 && custom.int() == 99 && custom.primary().toString() == "99";
     }
@@ -61,11 +83,11 @@ public class Probe {
     if len(sys.argv) == 2:
         language = Path(sys.argv[1]).resolve() / "org.zenframework.z8.lang/src/bl"
         if not language.is_dir(): raise SystemExit("Original BL standard library not found")
-        for name in ("Object", "Field", "IntField", "StringField"): (source / (name + ".bl")).unlink()
+        for name in ("Object", "Field", "IntField", "StringField", "BoolField", "DecimalField", "GuidField"): (source / (name + ".bl")).unlink()
         shutil.copytree(language, source, dirs_exist_ok=True)
-        for name in ("Custom", "Probe"):
+        for name in ("Custom", "CustomBool", "Probe"):
             path = source / (name + ".bl")
-            path.write_text("import org.zenframework.z8.base.table.value.IntField;\nimport org.zenframework.z8.base.table.value.StringField;\n" + path.read_text(encoding="utf-8"), encoding="utf-8")
+            path.write_text("import org.zenframework.z8.base.table.value.IntField;\nimport org.zenframework.z8.base.table.value.StringField;\nimport org.zenframework.z8.base.table.value.BoolField;\nimport org.zenframework.z8.base.table.value.DecimalField;\nimport org.zenframework.z8.base.table.value.GuidField;\n" + path.read_text(encoding="utf-8"), encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "main.d"
     harness.write_text('''
@@ -86,4 +108,4 @@ void main() {
     subprocess.run(["dmd", "-I" + str(generated), *import_args(), *map(str, generated.rglob("*.d")),
                     str(harness), str(runtime), "-of=" + str(exe)], cwd=temp, check=True)
     subprocess.run([str(exe)], cwd=temp, check=True)
-print("Integer and string field values, defaults and overrides verified")
+print("Integer, string, boolean, decimal and GUID field values verified")

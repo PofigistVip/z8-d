@@ -939,11 +939,15 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
         bool isTypedFieldSubclass;
         for (auto base = program.baseClass; base !is null; base = base.baseClass)
             if (base.isNative && (base.nativeName == "org.zenframework.z8.server.base.table.value.IntegerField"w ||
-                                  base.nativeName == "org.zenframework.z8.server.base.table.value.StringField"w))
+                                  base.nativeName == "org.zenframework.z8.server.base.table.value.StringField"w ||
+                                  base.nativeName == "org.zenframework.z8.server.base.table.value.BoolField"w ||
+                                  base.nativeName == "org.zenframework.z8.server.base.table.value.DecimalField"w ||
+                                  base.nativeName == "org.zenframework.z8.server.base.table.value.GuidField"w))
                 isTypedFieldSubclass = true;
         if (isTypedFieldSubclass && !program.isNative) foreach (method; program.methods)
             if (method.overrides && !method.isStatic && method.name.text == "get" && !method.parameters.length &&
-                (method.returnType == ValueType.intType || method.returnType == ValueType.stringType)) {
+                (method.returnType == ValueType.intType || method.returnType == ValueType.stringType ||
+                 method.returnType == ValueType.boolType || method.returnType == ValueType.decimalType || method.returnType == ValueType.guidType)) {
                 result ~= "override Z8Primary z8_field_virtual_get() { return z8_primary_box(this.m_get()); }\n";
                 break;
             }

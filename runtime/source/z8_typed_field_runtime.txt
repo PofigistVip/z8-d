@@ -1,18 +1,21 @@
 // Basic value operations of IntegerField and StringField without a DB cursor.
 private enum z8_integer_field_name = "org.zenframework.z8.server.base.table.value.IntegerField"w;
 private enum z8_string_field_name = "org.zenframework.z8.server.base.table.value.StringField"w;
+private enum z8_bool_field_name = "org.zenframework.z8.server.base.table.value.BoolField"w;
+private enum z8_decimal_field_name = "org.zenframework.z8.server.base.table.value.DecimalField"w;
+private enum z8_guid_field_name = "org.zenframework.z8.server.base.table.value.GuidField"w;
 
 private void z8_integer_field_new(Z8Object self) {
-    auto state = new Z8FieldState(z8_primary_box(0L)); state.useInteger(); z8_field_attach(self, state);
+    auto state = new Z8FieldState(z8_primary_box(0L)); state.useSlot!(Z8Optional!long, long)(); z8_field_attach(self, state);
 }
 private void z8_string_field_new(Z8Object self) {
-    auto state = new Z8FieldState(z8_primary_box(""w)); state.useText(); z8_field_attach(self, state);
+    auto state = new Z8FieldState(z8_primary_box(""w)); state.useSlot!wstring(); z8_field_attach(self, state);
 }
 private Z8Optional!long* z8_integer_field_default_address(Z8Object self) {
-    auto state = z8_field_state(self); state.useInteger(); return &state.integerValue;
+    return &z8_field_state(self).useSlot!(Z8Optional!long, long)().item;
 }
 private wstring* z8_string_field_default_address(Z8Object self) {
-    auto state = z8_field_state(self); state.useText(); return &state.textValue;
+    return &z8_field_state(self).useSlot!wstring().item;
 }
 private Z8Optional!long z8_integer_field_get(Z8Object self) { return z8_primary_cast!long(z8_field_state(self).value); }
 private wstring z8_string_field_get(Z8Object self) { return z8_primary_cast!wstring(z8_field_state(self).value); }
@@ -20,6 +23,29 @@ private void z8_integer_field_set_default(Z8Object self, Z8Optional!long value) 
 private void z8_string_field_set_default(Z8Object self, wstring value) { z8_field_set_default(self, z8_primary_box(value)); }
 private Z8Object z8_integer_field_assign(Z8Object self, Z8Optional!long value) { z8_field_set(self, z8_primary_box(value)); return self; }
 private Z8Object z8_string_field_assign(Z8Object self, wstring value) { z8_field_set(self, z8_primary_box(value)); return self; }
+private void z8_bool_field_new(Z8Object self) {
+    auto state = new Z8FieldState(z8_primary_box(false)); state.useSlot!(Z8Optional!bool, bool)(); z8_field_attach(self, state);
+}
+private void z8_decimal_field_new(Z8Object self) {
+    auto state = new Z8FieldState(z8_primary_box(z8_decimal_from_int(0))); state.useSlot!(Z8Optional!Z8Decimal, Z8Decimal)(); z8_field_attach(self, state);
+}
+private void z8_guid_field_new(Z8Object self) {
+    auto state = new Z8FieldState(z8_primary_box(z8_guid_zero())); state.useSlot!Z8Guid(); z8_field_attach(self, state);
+}
+private T* z8_typed_field_default_address(T, Base = T)(Z8Object self) {
+    return &z8_field_state(self).useSlot!(T, Base)().item;
+}
+private T z8_typed_field_get(T, Base = T)(Z8Object self) { return z8_primary_cast!Base(z8_field_state(self).value); }
+private void z8_typed_field_set_default(T)(Z8Object self, T value) { z8_field_set_default(self, z8_primary_box(value)); }
+private Z8Object z8_typed_field_assign(T)(Z8Object self, T value) { z8_field_set(self, z8_primary_box(value)); return self; }
+private void z8_register_value_field(T, Base = T)(wstring name, void function(Z8Object) create) {
+    z8_native_bind(name ~ ".m_new"w, create);
+    z8_native_bind_field(name ~ ".f_defaultValue"w, &z8_typed_field_default_address!(T, Base));
+    z8_native_bind(name ~ ".m_get"w, &z8_typed_field_get!(T, Base));
+    z8_native_bind(name ~ ".m_getDefault"w, &z8_typed_field_get!(T, Base));
+    z8_native_bind(name ~ ".m_setDefault"w, &z8_typed_field_set_default!T);
+    z8_native_bind(name ~ ".z8op_assign"w, &z8_typed_field_assign!T);
+}
 
 void z8_bind_builtin_typed_fields() {
     z8_native_bind(z8_integer_field_name ~ ".m_new"w, &z8_integer_field_new);
@@ -34,5 +60,8 @@ void z8_bind_builtin_typed_fields() {
     z8_native_bind(z8_string_field_name ~ ".m_getDefault"w, &z8_string_field_get);
     z8_native_bind(z8_string_field_name ~ ".m_setDefault"w, &z8_string_field_set_default);
     z8_native_bind(z8_string_field_name ~ ".z8op_assign"w, &z8_string_field_assign);
+    z8_register_value_field!(Z8Optional!bool, bool)(z8_bool_field_name, &z8_bool_field_new);
+    z8_register_value_field!(Z8Optional!Z8Decimal, Z8Decimal)(z8_decimal_field_name, &z8_decimal_field_new);
+    z8_register_value_field!Z8Guid(z8_guid_field_name, &z8_guid_field_new);
 }
 shared static this() { z8_bind_builtin_typed_fields(); }

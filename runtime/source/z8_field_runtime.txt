@@ -1,38 +1,30 @@
 // Host-populated values for the shared native Field interface. Database
 // cursors, typed field constructors and SQL expressions are separate adapters.
 private enum z8_field_name = "org.zenframework.z8.server.base.table.value.Field"w;
+private interface IZ8FieldSlot {
+    Z8Primary get();
+    void put(Z8Primary value);
+}
+private class Z8FieldSlot(T, Base = T) : IZ8FieldSlot {
+    T item;
+    Z8Primary get() { return z8_primary_box(item); }
+    void put(Z8Primary value) { item = z8_primary_cast!Base(value); }
+}
 class Z8FieldState {
-    private enum Storage { boxed, integer, text }
-    private Storage storage;
     private Z8Primary boxedValue;
-    private Z8Optional!long integerValue;
-    private wstring textValue;
+    private IZ8FieldSlot slot;
     private Z8Primary originalValue;
     bool changed, wasNull = true;
     this(Z8Primary initial = null, bool wasNull = true) { value = initial; this.wasNull = wasNull; }
-    @property Z8Primary value() {
-        final switch (storage) {
-            case Storage.boxed: return boxedValue;
-            case Storage.integer: return z8_primary_box(integerValue);
-            case Storage.text: return z8_primary_box(textValue);
-        }
-    }
-    @property void value(Z8Primary item) {
-        final switch (storage) {
-            case Storage.boxed: boxedValue = item; break;
-            case Storage.integer: integerValue = z8_primary_cast!long(item); break;
-            case Storage.text: textValue = z8_primary_cast!wstring(item); break;
-        }
-    }
-    void useInteger() {
-        if (storage == Storage.integer) return;
-        auto item = value; auto converted = z8_primary_cast!long(item);
-        storage = Storage.integer; integerValue = converted; boxedValue = null;
-    }
-    void useText() {
-        if (storage == Storage.text) return;
-        auto item = value; auto converted = z8_primary_cast!wstring(item);
-        storage = Storage.text; textValue = converted; boxedValue = null;
+    @property Z8Primary value() { return slot is null ? boxedValue : slot.get(); }
+    @property void value(Z8Primary item) { if (slot is null) boxedValue = item; else slot.put(item); }
+    private Z8FieldSlot!(T, Base) useSlot(T, Base = T)() {
+        auto typed = cast(Z8FieldSlot!(T, Base))slot;
+        if (typed !is null) return typed;
+        auto previous = value;
+        typed = new Z8FieldSlot!(T, Base)(); typed.put(previous);
+        slot = typed; boxedValue = null;
+        return typed;
     }
 }
 private Z8FieldState z8_field_state(Z8Object self) {
