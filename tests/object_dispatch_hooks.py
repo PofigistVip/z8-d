@@ -82,6 +82,20 @@ void main() {
     z8_application_dispatch_object("Child"w, (Z8ApplicationSession session, wstring name, wstring action) { return action == "content"w; });
     assert(z8_application_has_binary_response(binaryRequest));
     assert(cast(string)z8_application_response_binary(binaryRequest).data == "payload");
+    auto authorized = new Z8ApplicationRequest(); authorized.session = request.session;
+    authorized.parameters.z8_add("data"w, `["allowed"]`w); authorized.monitor = new Z8RequestMonitor();
+    z8_application_set_request(authorized); z8_application_start_response(authorized, "Child"w);
+    assert(!z8_application_may_execute(null, "Child"w, null));
+    denied = false; try { z8_application_dispatch_authorized_object("Child"w); } catch (Exception) { denied = true; }
+    assert(denied);
+    user.privileges = new Z8Privileges(Z8Access(false, false, false, false, false, true));
+    user.privileges.setRequestAccess(z8_guid_create_name("Child"w), Z8Access.init);
+    denied = false; try { z8_application_dispatch_authorized_object("Child"w); } catch (Exception) { denied = true; }
+    assert(denied);
+    user.privileges.setRequestAccess(z8_guid_create_name("Child"w), Z8Access(false, false, false, false, false, true));
+    z8_application_dispatch_authorized_object("Child"w);
+    z8_application_finish_response(authorized, cast(Z8RequestMonitor)authorized.monitor);
+    assert(parseJSON(z8_application_response_text(authorized).to!string)["data"][0].str == "allowed");
     z8_application_set_request(null);
 }
 ''', encoding="utf-8")

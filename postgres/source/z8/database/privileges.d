@@ -63,3 +63,9 @@ Z8LoadedPrivileges z8_postgres_load_privileges(Z8PostgresConnection db, wstring 
     }
     return result;
 }
+// Replace the user's snapshot only after every database query succeeds.
+void z8_postgres_refresh_user_privileges(Z8PostgresConnection db, wstring schema, Z8UserData user) {
+    if (user is null) throw new Z8PostgresException("user is required");
+    auto loaded = z8_postgres_load_privileges(db, schema, user.id);
+    user.roles = loaded.roleIds; user.privileges = loaded.privileges;
+}

@@ -218,6 +218,17 @@ void z8_application_dispatch_object(wstring className,
     }
     z8_monitor_property(writer, "ui"w, target.z8_get_attribute("ui"w));
 }
+// The original RequestDispatcher checks request classIdKey before creating
+// the target. A missing session or privilege snapshot denies access.
+bool z8_application_may_execute(Z8ApplicationSession session, wstring className, wstring action) {
+    if (session is null || session.user is null || session.user.privileges is null || className is null || !className.length) return false;
+    return session.user.privileges.getRequestAccess(z8_guid_create_name(className)).execute;
+}
+void z8_application_dispatch_authorized_object(wstring className) {
+    z8_application_dispatch_object(className, (Z8ApplicationSession session, wstring name, wstring action) {
+        return z8_application_may_execute(session, name, action);
+    });
+}
 private Z8ApplicationRequest z8_application_current_request;
 Z8ApplicationRequest z8_application_request() { return z8_application_current_request; }
 // Returns the previous context so nested host operations can restore it.

@@ -5,6 +5,7 @@ class Z8UserData {
     wstring login, firstName, middleName, lastName, description, phone, email;
     Z8PrimaryMap parameters;
     Z8Guid[] roles;
+    Z8Privileges privileges;
     bool administrator, builtinAdministrator, builtinSystem;
     // Java's User.initialize populates public fields only for users with roles.
     bool hasRoles = true;

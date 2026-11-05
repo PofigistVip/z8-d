@@ -550,6 +550,16 @@ void main(string[] args) {
     assert(combined.privileges.getTableAccess(bootTableKey).read && combined.privileges.getTableAccess(bootTableKey).write);
     assert(!combined.privileges.getFieldAccess(bootTableKey, bootFieldKey).read && !combined.privileges.getFieldAccess(bootTableKey, bootFieldKey).write);
     assert(combined.privileges.getRequestAccess(bootRequestKey).execute);
+    auto refreshed = new Z8UserData(); refreshed.id = z8_guid_create(222);
+    z8_postgres_refresh_user_privileges(db, "z8_bootstrap"w, refreshed);
+    assert(refreshed.roles.length == 2 && refreshed.privileges.getRequestAccess(bootRequestKey).execute);
+    auto refreshedSession = new Z8ApplicationSession("privileges"w, refreshed, refreshed);
+    assert(z8_application_may_execute(refreshedSession, "Sample"w, null));
+    assert(!z8_application_may_execute(refreshedSession, "Unknown"w, null));
+    auto previousPrivileges = refreshed.privileges; auto previousRoles = refreshed.roles.dup;
+    bool refreshFailed;
+    try { z8_postgres_refresh_user_privileges(db, "missing_schema"w, refreshed); } catch (Z8PostgresException) { refreshFailed = true; }
+    assert(refreshFailed && refreshed.privileges is previousPrivileges && refreshed.roles == previousRoles);
     db.execute(`UPDATE "z8_bootstrap"."SystemRoleTableAccess" SET "Read" = 0, "Write" = 0 WHERE "Role" IN ('421A8413-A8EC-4DAB-9235-9A5FF83341C5', 'BE41CEB5-02DF-44EE-885F-B82DDEDCAA08')`);
     db.execute(`UPDATE "z8_bootstrap"."SystemRoleFieldAccess" SET "Read" = 1, "Write" = 1 WHERE "Field" = $1::uuid AND "Role" IN ('421A8413-A8EC-4DAB-9235-9A5FF83341C5', 'BE41CEB5-02DF-44EE-885F-B82DDEDCAA08')`, [Z8PostgresParameter.value(z8_guid_to_string(bootFieldKey).to!string)]);
     combined = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(222));

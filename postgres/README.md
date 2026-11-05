@@ -89,8 +89,11 @@ enforcement is not yet implemented.
 `z8_postgres_load_privileges` in `z8.database.privileges` loads a user's roles
 and effective table, field and request permissions. It combines grants across
 roles, falls back to their default permissions and intersects field access
-with table access. It returns a snapshot for the host; request authorization
-and refreshing that snapshot after changes remain separate work.
+with table access. `z8_postgres_refresh_user_privileges` installs the snapshot
+on a host user only after a successful load. The host can pass that user to
+`z8_application_dispatch_authorized_object`, which checks request execution
+permission before dispatch. Refresh after changes and authorization of query
+and job adapters remain separate work.
 The native `Users.onNew` defaults mirror the Java implementation, including its
 default password value and `changePassword` flag; explicitly supplied values
 are preserved even when user-level events are disabled. With user events enabled,
