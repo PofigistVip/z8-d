@@ -143,6 +143,7 @@ public class Probe {
     public static void banUser(Users value, guid id, bool banned) { value.banned = banned; value.update(id); }
     public static void deleteUser(Users value, guid id) { value.destroy(id); }
     public static void deleteRole(Roles value, guid id) { value.destroy(id); }
+    public static void createRole(Roles value, guid id) { value.name = "Custom"; value.create(id); }
     public static guid administratorRole() { return Roles.Administrator; }
     public static guid userRole() { return Roles.User; }
     public static guid guestRole() { return Roles.Guest; }
@@ -167,6 +168,7 @@ import z8.database.compare;
 import z8.database.migration;
 import z8gen.p_Probe;
 import std.algorithm.searching : canFind;
+import std.conv : to;
 void main(string[] args) {
     alias P = Z8p_50726F6265;
     auto db = new Z8PostgresConnection(args[1]);
@@ -593,6 +595,35 @@ void main(string[] args) {
     P.m_setTableWrite(P.m_roleTableAccess(), tableAccessId, z8_optional_wrap(true));
     z8_application_set_request(previousAccessRequest);
     assert(tableRights() == "01000" && fieldRights() == "00");
+    auto roleRegistry = new Z8RuntimeRegistry(); roleRegistry.registerTable(P.m_make()); roleRegistry.registerTable(P.m_indexes());
+    foreach (key; roleRegistry.tableKeys())
+        db.execute(`INSERT INTO "z8_access"."SystemTables" ("RecordId", "Name") VALUES ($1::uuid, 'Registered')`, [Z8PostgresParameter.value(z8_guid_to_string(key).to!string)]);
+    db.execute(`INSERT INTO "z8_access"."SystemRequests" ("RecordId", "Name") VALUES ('00000000-0000-0000-0000-00000000006A', 'Request')`);
+    auto lifecycleBackend = new Z8PostgresDatabase(db, "z8_access"w, roleRegistry);
+    z8_connection_set_current(lifecycleBackend);
+    auto roleId = z8_guid_create(111);
+    db.beginTransaction(); P.m_createRole(P.m_roles(), roleId);
+    auto createdAccessCounts = db.execute(`SELECT (SELECT count(*) FROM "z8_access"."SystemRoleTableAccess" WHERE "Role" = '00000000-0000-0000-0000-00000000006F'), (SELECT count(*) FROM "z8_access"."SystemRoleFieldAccess" WHERE "Role" = '00000000-0000-0000-0000-00000000006F'), (SELECT count(*) FROM "z8_access"."SystemRoleRequestAccess" WHERE "Role" = '00000000-0000-0000-0000-00000000006F')`);
+    assert(createdAccessCounts.rows[0][0].text == "2" && createdAccessCounts.rows[0][1].text == "2" && createdAccessCounts.rows[0][2].text == "1");
+    db.rollback();
+    assert(db.execute(`SELECT count(*) FROM "z8_access"."SystemRoleTableAccess" WHERE "Role" = '00000000-0000-0000-0000-00000000006F'`).rows[0][0].text == "0");
+    P.m_createRole(P.m_roles(), roleId);
+    P.m_deleteRole(P.m_roles(), roleId);
+    createdAccessCounts = db.execute(`SELECT (SELECT count(*) FROM "z8_access"."SystemRoleTableAccess" WHERE "Role" = '00000000-0000-0000-0000-00000000006F'), (SELECT count(*) FROM "z8_access"."SystemRoleFieldAccess" WHERE "Role" = '00000000-0000-0000-0000-00000000006F'), (SELECT count(*) FROM "z8_access"."SystemRoleRequestAccess" WHERE "Role" = '00000000-0000-0000-0000-00000000006F')`);
+    assert(createdAccessCounts.rows[0][0].text == "0" && createdAccessCounts.rows[0][1].text == "0" && createdAccessCounts.rows[0][2].text == "0");
+    auto missingRegistry = new Z8RuntimeRegistry(); missingRegistry.registerTable(P.m_geo());
+    z8_connection_set_current(new Z8PostgresDatabase(db, "z8_access"w, missingRegistry));
+    db.beginTransaction(); bool missingRegisteredTable;
+    try { P.m_createRole(P.m_roles(), z8_guid_create(112)); } catch (Z8PostgresException) { missingRegisteredTable = true; }
+    assert(missingRegisteredTable); db.rollback();
+    assert(db.execute(`SELECT count(*) FROM "z8_access"."SystemRoles" WHERE "RecordId" = '00000000-0000-0000-0000-000000000070'`).rows[0][0].text == "0");
+    z8_connection_set_current(lifecycleBackend);
+    previousAccessRequest = z8_application_set_request(skipAccessEvents);
+    P.m_createRole(P.m_roles(), z8_guid_create(113));
+    z8_application_set_request(previousAccessRequest);
+    assert(db.execute(`SELECT count(*) FROM "z8_access"."SystemRoleTableAccess" WHERE "Role" = '00000000-0000-0000-0000-000000000071'`).rows[0][0].text == "0");
+    P.m_deleteRole(P.m_roles(), z8_guid_create(113));
+    z8_connection_set_current(accessBackend);
     z8_connection_set_current(savedAccessBackend);
     db.execute(`ALTER TABLE "z8_test"."StaticSample" DROP CONSTRAINT "StaticSample_pkey", ADD PRIMARY KEY ("Label")`);
     differences = z8_postgres_compare_table(expectedStatic, z8_postgres_describe_table(db, "z8_test"w, "StaticSample"w));

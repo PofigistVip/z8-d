@@ -138,13 +138,48 @@ private class Z8PostgresRows : IZ8QueryCursor {
 }
 
 // Executes queries and their required linked-table plans.
-class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWriter, IZ8RoleAccessPropagator {
+class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWriter, IZ8RoleAccessPropagator, IZ8RoleLifecycle {
     private Z8PostgresConnection connection;
     private wstring schema, table;
-    this(Z8PostgresConnection connection, wstring schema, wstring table) {
+    private Z8RuntimeRegistry registry;
+    this(Z8PostgresConnection connection, wstring schema, wstring table, Z8RuntimeRegistry registry = null) {
         if (connection is null) throw new Z8PostgresException("PostgreSQL connection is null");
         quoteIdentifier(schema); quoteIdentifier(table);
-        this.connection = connection; this.schema = schema.idup; this.table = table.idup;
+        this.connection = connection; this.schema = schema.idup; this.table = table.idup; this.registry = registry;
+    }
+    private void createRoleAccess(wstring nativeName, wstring tableName, wstring targetIndex, Z8Guid roleId, Z8Guid targetId) {
+        auto access = z8_native_new(nativeName); access.z8_ensure();
+        Z8Object role, target;
+        foreach (field; z8_query_declared_fields(access, true)) {
+            if (field.z8_index() == "role"w) role = field;
+            if (field.z8_index() == targetIndex) target = field;
+        }
+        if (role is null || target is null) throw new Z8PostgresException("role access fields are missing");
+        z8_field_set(role, z8_primary_box(roleId)); z8_field_set(target, z8_primary_box(targetId));
+        z8_query_set_executor(access, new Z8PostgresQueryExecutor(connection, schema, tableName, registry));
+        z8_native_call!Z8Guid("org.zenframework.z8.server.base.query.Query.m_create"w, access, z8_guid_create_random());
+    }
+    void roleCreated(Z8Guid recordId) {
+        if (registry is null) return;
+        if (recordId is null) throw new Z8PostgresException("role has no GUID");
+        foreach (key; registry.tableKeys())
+            createRoleAccess("org.zenframework.z8.server.base.table.system.RoleTableAccess"w, "SystemRoleTableAccess"w, "table"w, recordId, key);
+        auto namespaceName = quoteIdentifier(schema);
+        auto fields = connection.execute("SELECT \"RecordId\"::text FROM " ~ namespaceName ~ `."SystemFields" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'::uuid`);
+        foreach (row; fields.rows)
+            createRoleAccess("org.zenframework.z8.server.base.table.system.RoleFieldAccess"w, "SystemRoleFieldAccess"w, "field"w, recordId, z8_guid_literal(row[0].text));
+        auto requests = connection.execute("SELECT \"RecordId\"::text FROM " ~ namespaceName ~ `."SystemRequests" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'::uuid`);
+        foreach (row; requests.rows)
+            createRoleAccess("org.zenframework.z8.server.base.table.system.RoleRequestAccess"w, "SystemRoleRequestAccess"w, "request"w, recordId, z8_guid_literal(row[0].text));
+    }
+    void roleDestroying(Z8Guid recordId) {
+        if (registry is null) return;
+        if (recordId is null) throw new Z8PostgresException("role has no GUID");
+        auto namespaceName = quoteIdentifier(schema);
+        auto parameter = Z8PostgresParameter.value(z8_guid_to_string(recordId).to!string);
+        foreach (name; ["SystemRoleFieldAccess"w, "SystemRoleTableAccess"w, "SystemRoleRequestAccess"w])
+            connection.execute("DELETE FROM " ~ namespaceName ~ "." ~ quoteIdentifier(name) ~
+                ` WHERE "Role" = $1::uuid AND "RecordId" <> '00000000-0000-0000-0000-000000000000'::uuid`, [parameter]);
     }
     void updateRoleFieldAccess(Z8Guid recordId, Z8Optional!bool read, Z8Optional!bool write) {
         if (recordId is null) throw new Z8PostgresException("role access record has no GUID");

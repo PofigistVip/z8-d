@@ -10,10 +10,11 @@ import z8.database.plan : quoteIdentifier;
 class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection {
     private Z8PostgresConnection connection;
     private wstring schema;
-    this(Z8PostgresConnection connection, wstring schema) {
+    private Z8RuntimeRegistry registry;
+    this(Z8PostgresConnection connection, wstring schema, Z8RuntimeRegistry registry = null) {
         if (connection is null || connection.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
         if (schema is null || !schema.length) throw new Z8PostgresException("empty PostgreSQL schema");
-        this.connection = connection; this.schema = schema.idup;
+        this.connection = connection; this.schema = schema.idup; this.registry = registry;
     }
     void beginTransaction() { connection.beginTransaction(); }
     void commit() { connection.commit(); }
@@ -85,6 +86,6 @@ class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection {
     }
     IZ8QueryExecutor queryExecutor(Z8Object query) {
         auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, query);
-        return new Z8PostgresQueryExecutor(connection, schema, name);
+        return new Z8PostgresQueryExecutor(connection, schema, name, registry);
     }
 }

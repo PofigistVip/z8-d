@@ -64,7 +64,13 @@ and their table links are available. `RoleFieldAccess` keeps read and write
 permissions consistent during user-level updates. `RoleTableAccess` also
 normalizes table permissions and propagates read/write changes to matching field
 access rows using the same database connection. Role-change notifications and
-the remaining authorization lifecycle are not yet implemented.
+the remaining authorization lifecycle are not yet implemented. When a
+`Z8RuntimeRegistry` is supplied as the third argument to `Z8PostgresDatabase`,
+creating a role also creates access rows for its registered table keys and the
+existing field and request records; deleting a role removes those access rows.
+Without a registry these role lifecycle operations do not run. The metadata
+tables and their referenced records must already exist, and callers should use
+a transaction to group the role and access-row changes.
 `UserRoles` provides links to users and roles, built-in administrator
 assignments, a read-only flag based on the current user and protection against
 removing the built-in assignments. The flag is metadata; general access
