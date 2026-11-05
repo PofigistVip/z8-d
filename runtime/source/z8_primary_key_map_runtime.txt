@@ -12,7 +12,20 @@ class Z8PrimaryKeyMap(V) {
         return h ^ (h >> 16);
     }
     private static bool keyEquals(Z8Primary left, Z8Primary right) {
-        return left is right || (left !is null && right !is null && left == right);
+        if (left is right) return true;
+        if (left is null || right is null || left.kind != right.kind) return false;
+        // Boxing creates a fresh Z8Primary wrapper: preserve Java's identity
+        // fast path for reference-backed values before calling equals.
+        final switch (left.kind) {
+            case Z8PrimaryKind.guid: if (left.guidValue is right.guidValue) return true; break;
+            case Z8PrimaryKind.binary: if (left.binaryValue is right.binaryValue) return true; break;
+            case Z8PrimaryKind.datespan: if (left.datespanValue is right.datespanValue) return true; break;
+            case Z8PrimaryKind.geometry: if (left.geometryValue is right.geometryValue) return true; break;
+            case Z8PrimaryKind.date: if (left.dateValue is right.dateValue) return true; break;
+            case Z8PrimaryKind.file: if (left.fileValue is right.fileValue) return true; break;
+            case Z8PrimaryKind.integer: case Z8PrimaryKind.boolean: case Z8PrimaryKind.decimal: case Z8PrimaryKind.text: break;
+        }
+        return left == right;
     }
     private static bool valueEquals(Element left, Element right) {
         static if (is(V == long) || is(V == bool) || is(V == Z8Decimal))

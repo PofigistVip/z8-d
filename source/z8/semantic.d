@@ -714,6 +714,8 @@ class Checker {
                         if (entry.kind != ExprKind.mapEntry) fail("map initializer requires key-value pairs", entry.token);
                         if (entry.left.kind == ExprKind.nullLiteral || entry.right.kind == ExprKind.nullLiteral)
                             fail("null literal is not supported in a map initializer pair", entry.token);
+                        if ([ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(keyType) && typeOf(entry.left) != keyType)
+                            fail("map key type mismatch", entry.left.token);
                         if (keyType == ValueType.stringType) {
                             if (![ValueType.stringType, ValueType.nullableString].canFind(typeOf(entry.left)))
                                 fail("map key type mismatch", entry.left.token);

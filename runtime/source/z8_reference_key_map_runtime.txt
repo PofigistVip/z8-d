@@ -1,0 +1,32 @@
+// Reference primary keys share the original key object with the backing map.
+class Z8ReferenceKeyMap(K, V) {
+    static assert(is(K == Z8Date) || is(K == Z8Datespan) || is(K == Z8Binary) || is(K == Z8Geometry) || is(K == Z8File));
+    alias Element = Z8PrimaryKeyMap!V.Element;
+    private Z8PrimaryKeyMap!V entries;
+    this() { entries = new Z8PrimaryKeyMap!V(); }
+    long z8_size() { return entries.z8_size(); }
+    bool z8_isEmpty() { return entries.z8_isEmpty(); }
+    void z8_clear() { entries.z8_clear(); }
+    bool z8_containsKey(K key) { return entries.z8_containsKey(z8_primary_box(key)); }
+    bool z8_containsValue(Element value) { return entries.z8_containsValue(value); }
+    Element z8_get(K key) { return entries.z8_get(z8_primary_box(key)); }
+    Element z8_add(K key, Element value) { return entries.z8_add(z8_primary_box(key), value); }
+    void z8_add(Z8ReferenceKeyMap!(K, V) other) { entries.z8_add(z8_nonnull(other).entries); }
+    Element z8_remove(K key) { return entries.z8_remove(z8_primary_box(key)); }
+    Z8Array!K z8_keys() {
+        auto result = new Z8Array!K();
+        auto keys = entries.z8_keys();
+        for (long i; i < keys.z8_size(); ++i) result.z8_add(z8_primary_cast!K(keys.z8_get(i)));
+        return result;
+    }
+    Z8Array!V z8_values() { return entries.z8_values(); }
+}
+Z8ReferenceKeyMap!(K, V) z8_map_union(K, V)(Z8ReferenceKeyMap!(K, V) left, Z8ReferenceKeyMap!(K, V) right) {
+    auto result = new Z8ReferenceKeyMap!(K, V)();
+    result.z8_add(z8_nonnull(left)); result.z8_add(z8_nonnull(right));
+    return result;
+}
+void z8_map_add_assign(K, V)(ref Z8ReferenceKeyMap!(K, V) left, lazy Z8ReferenceKeyMap!(K, V) previous, lazy Z8ReferenceKeyMap!(K, V) right) {
+    auto oldValue = previous; auto newValue = right;
+    left = z8_map_union(oldValue, newValue);
+}

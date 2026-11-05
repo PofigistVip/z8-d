@@ -1,0 +1,32 @@
+public class ReferenceKeyMaps {
+    public static int run() {
+        date day = '29/02/2024';
+        datespan span = '1 02:03:04';
+        binary bytes = '1, 2';
+        geometry shape;
+        file path = "test.txt";
+        string[date] dates = {(day, "date")};
+        string[datespan] durations = {(span, "span")};
+        string[binary] binaries = {(bytes, "binary")};
+        string[geometry] geometries = {(shape, "geometry")};
+        string[file] files = {(path, "file")};
+        if (!dates.containsKey('29/02/2024')) return 11;
+        if (!durations.containsKey('1 02:03:04')) return 12;
+        if (!binaries.containsKey(bytes)) return 13;
+        if (!geometries.containsKey(shape)) return 14;
+        if (!files.containsKey(path)) return 15;
+        if (dates['29/02/2024'] != "date" || durations['1 02:03:04'] != "span") return 1;
+        if (binaries[bytes] != "binary" || geometries[shape] != "geometry" || files[path] != "file") return 2;
+        if (dates.keys().first() != day || durations.keys().first() != span || binaries.keys().size() != 1) return 3;
+        dates.add(null, "null");
+        if (!dates.containsKey(null) || dates[null] != "null" || dates.remove(null) != "null") return 4;
+        string[date] extra = {(day, "new")};
+        string[date] combined = dates + extra;
+        if (combined[day] != "new" || dates[day] != "date") return 5;
+        date mutableKey = '01/01/2024';
+        string[date] mutableValues = {(mutableKey, "old")};
+        mutableKey = 0;
+        if (mutableValues.containsKey(mutableKey) || mutableValues.size() != 1) return 6;
+        return 101;
+    }
+}
