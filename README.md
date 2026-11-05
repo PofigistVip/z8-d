@@ -524,6 +524,11 @@ GUID- и date-значений. Методы `set`, `put` и `remove` работ
 реализация самих полей и запросов базы данных ещё необходима.
 Для `Application` реализованы `isRequest`, `currentTimeMillis`, `requestParameters`,
 `requestFiles`, `responseWriter`, сообщения, журнал, печать файлов и перенаправление.
+Также доступны `isMultitenant`, `maxUploadSize`, `maxDownloadSize` и
+`supportedFileTypes`. Хост может задать их значения через `Z8ApplicationConfig`
+и `z8_application_configure`; начальные значения соответствуют `ServerConfig` Z8.
+Ограничения из этой конфигурации и максимальный размер тела HTTP-запроса в
+CivetWeb настраиваются отдельно.
 Сервер создаёт `Z8ApplicationRequest`, заполняет `parameters`, `files` и при
 необходимости `monitor` (интерфейс `IZ8ApplicationMonitor`), устанавливает контекст
 через `z8_application_set_request` и после обработки восстанавливает возвращённый

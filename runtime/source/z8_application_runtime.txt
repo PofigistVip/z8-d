@@ -1,4 +1,35 @@
 enum Z8MonitorLevel { info, warning, error }
+// ServerConfig values used by native Application methods. Extensions are kept
+// in their original categories and returned in Java's order, after the PDF type.
+class Z8ApplicationConfig {
+    bool multitenant;
+    int uploadMaxMiB = 5, downloadMaxMiB = 1;
+    wstring[] textExtensions = ["txt"w, "xml"w];
+    wstring[] imageExtensions = ["tif"w, "tiff"w, "jpg"w, "jpeg"w, "gif"w, "png"w, "bmp"w];
+    wstring[] emailExtensions = ["eml"w, "mime"w];
+    wstring[] officeExtensions = ["doc"w, "docx"w, "rtf"w, "xls"w, "xlsx"w, "ppt"w, "pptx"w,
+        "odt"w, "odp"w, "ods"w, "odf"w, "odg"w, "wpd"w, "sxw"w, "sxi"w, "sxc"w, "sxd"w, "stw"w, "vsd"w];
+    Z8ApplicationConfig copy() {
+        auto result = new Z8ApplicationConfig();
+        result.multitenant = multitenant; result.uploadMaxMiB = uploadMaxMiB; result.downloadMaxMiB = downloadMaxMiB;
+        result.textExtensions = textExtensions.dup; result.imageExtensions = imageExtensions.dup;
+        result.emailExtensions = emailExtensions.dup; result.officeExtensions = officeExtensions.dup;
+        return result;
+    }
+}
+private __gshared Z8ApplicationConfig z8_application_config;
+private __gshared Object z8_application_config_lock;
+shared static this() {
+    z8_application_config_lock = new Object();
+    z8_application_config = new Z8ApplicationConfig();
+}
+void z8_application_configure(Z8ApplicationConfig config) {
+    auto snapshot = z8_nonnull(config).copy();
+    synchronized (z8_application_config_lock) z8_application_config = snapshot;
+}
+Z8ApplicationConfig z8_application_configuration() {
+    synchronized (z8_application_config_lock) return z8_application_config.copy();
+}
 // The embedding server chooses how messages, log events and files are stored.
 interface IZ8ApplicationMonitor {
     void message(Z8MonitorLevel level, wstring text);
@@ -141,6 +172,21 @@ private Z8ApplicationRequest z8_application_require_request() {
     return value;
 }
 private Z8Optional!bool z8_application_is_request() { return z8_optional_wrap(z8_application_current_request !is null); }
+private Z8Optional!bool z8_application_is_multitenant() { return z8_optional_wrap(z8_application_configuration().multitenant); }
+private Z8Optional!long z8_application_max_upload() {
+    return z8_optional_wrap(cast(long)cast(int)(z8_application_configuration().uploadMaxMiB * 1_048_576));
+}
+private Z8Optional!long z8_application_max_download() {
+    return z8_optional_wrap(cast(long)cast(int)(z8_application_configuration().downloadMaxMiB * 1_048_576));
+}
+private Z8Array!wstring z8_application_supported_file_types() {
+    auto config = z8_application_configuration();
+    auto result = new Z8Array!wstring();
+    result.z8_add("pdf"w);
+    foreach (extensions; [config.textExtensions, config.imageExtensions, config.emailExtensions, config.officeExtensions])
+        foreach (extension; extensions) result.z8_add(z8_string_new(extension));
+    return result;
+}
 private Z8Optional!long z8_application_current_time() {
     return z8_optional_wrap((Clock.currTime(UTC()) - SysTime.fromUnixTime(0, UTC())).total!"msecs");
 }
@@ -171,6 +217,10 @@ private void z8_application_redirect(wstring location) { throw new Z8Redirect(z8
 void z8_bind_builtin_application_request() {
     enum prefix = "org.zenframework.z8.server.base.application.Application."w;
     z8_native_bind(prefix ~ "m_isRequest"w, &z8_application_is_request);
+    z8_native_bind(prefix ~ "m_isMultitenant"w, &z8_application_is_multitenant);
+    z8_native_bind(prefix ~ "m_maxUploadSize"w, &z8_application_max_upload);
+    z8_native_bind(prefix ~ "m_maxDownloadSize"w, &z8_application_max_download);
+    z8_native_bind(prefix ~ "m_supportedFileTypes"w, &z8_application_supported_file_types);
     z8_native_bind(prefix ~ "m_currentTimeMillis"w, &z8_application_current_time);
     z8_native_bind(prefix ~ "m_requestParameters"w, &z8_application_request_parameters);
     z8_native_bind(prefix ~ "m_requestFiles"w, &z8_application_request_files);
