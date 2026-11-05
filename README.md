@@ -73,6 +73,7 @@ python tests/static_initialization.py
 python tests/decimal_oracle.py
 python tests/decimal_literal_precision.py
 python tests/bl_standard_probes.py path/to/bl-standard
+python tests/bl_standard_runtime_probes.py path/to/bl-standard
 python tests/string_oracle.py
 python tests/lexer_oracle.py path/to/original-z8 --corpus
 python tests/z8_compiler_oracle.py path/to/original-z8
