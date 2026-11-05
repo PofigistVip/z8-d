@@ -1516,6 +1516,16 @@ class Checker {
                 if (variableType == ValueType.nullableString) variableType = ValueType.stringType;
                 if (isOptionalPrimitive(variableType)) variableType = optionalBaseType(variableType);
                 if (s.target.enumConstant) fail("enum constants cannot be assigned", s.token);
+                if (variableType == ValueType.selfType && s.assignmentOperator != "=") {
+                    auto token = s.token;
+                    token.text = s.assignmentOperator[0 .. $ - 1];
+                    auto binary = new Expression(ExprKind.binary, token);
+                    binary.left = s.target; binary.right = s.expression;
+                    s.expression = binary;
+                    s.assignmentOperator = "=";
+                    s.userCompoundAssignment = true;
+                    return checkStatement(s);
+                }
                 if (variableType == ValueType.selfType && s.assignmentOperator == "=" &&
                     lookupMethod(s.target.objectClass, "operator=") !is null && useAssignmentOperator(s.target.objectClass, s.expression, s.token,
                                           matchesStored(s.expression, variableType, s.target.objectClass))) {

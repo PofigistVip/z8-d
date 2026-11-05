@@ -95,6 +95,9 @@ T z8_nonnull(T)(T value, int requested = 1) {
     static if (is(T : Z8Object)) value.z8_ensure(requested);
     return value;
 }
+void z8_object_assign(T)(ref T target, lazy T value) if (is(T : Z8Object)) {
+    target = value;
+}
 T z8_elvis(T)(T value, lazy T fallback) { return value !is null ? value : fallback; }
 struct Z8Optional(T) {
     bool present; T value;

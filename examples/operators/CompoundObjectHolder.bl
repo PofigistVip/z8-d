@@ -1,0 +1,4 @@
+public class CompoundObjectHolder {
+    public CompoundObject item;
+    public CompoundAccumulator accumulator;
+}

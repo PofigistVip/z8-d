@@ -1,0 +1,29 @@
+public class CompoundObjectCases {
+    static int effects;
+    public static CompoundObjectHolder receiver(CompoundObjectHolder value) { effects = effects * 10 + 1; return value; }
+    public static int mark() { effects = effects * 10 + 2; return 3; }
+    public static int run() {
+        CompoundObject item;
+        item.amount = 4;
+        item += 2;
+        if (item.amount != 6) return 1;
+        CompoundAccumulator accumulator;
+        accumulator.amount = 5;
+        accumulator += 2;
+        if (accumulator.amount != 7) return 2;
+        CompoundObjectHolder holder;
+        holder.item.amount = 10;
+        effects = 0;
+        receiver(holder).item += mark();
+        if (holder.item.amount != 13 || effects != 112) return 3;
+        holder.accumulator.amount = 20;
+        effects = 0;
+        receiver(holder).accumulator += mark();
+        if (holder.accumulator.amount != 23 || effects != 112) return 4;
+        CompoundObject missing = null;
+        effects = 0;
+        try { missing += mark(); return 5; } catch (exception expected) {}
+        if (effects != 0) return 6;
+        return 205;
+    }
+}

@@ -1,0 +1,8 @@
+public class CompoundObject {
+    public int amount;
+    public CompoundObject operator + (int value) {
+        CompoundObject result;
+        result.amount = amount + value;
+        return result;
+    }
+}

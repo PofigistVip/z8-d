@@ -480,6 +480,8 @@ private string emitSimple(Statement s) {
     assert(s.kind == StmtKind.assignment);
     if (s.userOperatorAssignment)
         return emitReceiver(s.target) ~ ".z8op_assign(" ~ emitExpr(s.expression) ~ ")";
+    if (s.userCompoundAssignment)
+        return "z8_object_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.filePathAssignment) return "z8_file_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.dateTickAssignment) return "z8_date_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.target.kind == ExprKind.index && isMap(s.target.inferredType))

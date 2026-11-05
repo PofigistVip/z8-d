@@ -67,7 +67,7 @@ class Statement {
     Token catchName;
     bool hasCatch, hasFinally, hasContainer;
     bool declaredFinal, catchDeclaredFinal;
-    bool filePathAssignment, dateTickAssignment, userOperatorAssignment;
+    bool filePathAssignment, dateTickAssignment, userOperatorAssignment, userCompoundAssignment;
     string objectName;
     Program objectClass;
     this(StmtKind kind, Token token) { this.kind = kind; this.token = token; }

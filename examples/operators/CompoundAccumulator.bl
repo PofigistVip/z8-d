@@ -1,0 +1,5 @@
+public class CompoundAccumulator {
+    public int amount;
+    public int operator + (int value) { return amount + value; }
+    public void operator = (int value) { amount = value; }
+}
