@@ -114,6 +114,9 @@ class Z8Object {
     Z8Binary z8_object_process_content(Z8StringMap parameters, Z8Array!Z8File files) { return null; }
     Z8Primary z8_field_virtual_get() { return z8_field_current(this); }
     Z8SqlPrimary z8_field_virtual_expression() { throw new Exception("unsupported SQL field expression"); }
+    Z8SqlBool z8_query_virtual_where() { return z8_sql_bool_const(true); }
+    Z8SqlBool z8_query_virtual_having() { return z8_sql_bool_const(true); }
+    Z8SqlBool z8_query_virtual_scope() { return z8_sql_bool_const(true); }
 
     // Primary subclasses may provide the Java value's polymorphic operations.
     wstring z8_user_primary_string_impl() { return toString().to!wstring; }

@@ -965,6 +965,11 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 break;
             }
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.query.Query"w) {
+            foreach (method; program.methods) if (["where", "having", "scope"].canFind(method.name.text) &&
+                method.returnType == ValueType.sqlBoolType && !method.parameters.length)
+                result ~= "override Z8SqlBool z8_query_virtual_" ~ method.name.text ~ "() { return this.m_" ~ method.name.text ~ "(); }\n";
+        }
         if (extendsBuiltinPrimary(program)) {
             if (program.isNative) {
                 auto stringBinding = emitRawWStringLiteral(program.nativeName ~ ".m_toString"w);

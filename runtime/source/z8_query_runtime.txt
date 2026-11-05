@@ -6,6 +6,8 @@ enum Z8QueryReadLock { none, update, share, updateNoWait, shareNoWait }
 struct Z8QueryReadRequest {
     Z8Object[] fields, sortFields, groupFields;
     Z8SqlBool where, having;
+    // The executor must combine these query filters with where/having.
+    Z8SqlBool queryWhere, queryHaving, queryScope;
     int start, limit = -1;
     Z8Guid recordId;
     bool byRecordId;
@@ -38,6 +40,7 @@ class Z8QueryState {
     Z8Optional!long priority, limit, colCount;
     Z8Optional!bool readOnly, totals;
     Z8Object period;
+    Z8SqlBool where, having;
     IZ8QueryExecutor executor;
     private IZ8QueryCursor cursor;
     private Z8Object[] cursorFields;
@@ -104,6 +107,23 @@ long z8_query_limit(Z8Object self) {
     return value.present ? cast(int)value.value : 200;
 }
 void z8_query_set_executor(Z8Object self, IZ8QueryExecutor executor) { z8_query_state(self).executor = executor; }
+private Z8SqlBool z8_query_default_filter(Z8Object self) { z8_nonnull(self); return z8_sql_bool_const(true); }
+Z8SqlBool z8_query_where(Z8Object self) {
+    auto state = z8_query_state(self);
+    return state.where is null ? self.z8_query_virtual_where() : state.where;
+}
+Z8SqlBool z8_query_having(Z8Object self) {
+    auto state = z8_query_state(self);
+    return state.having is null ? self.z8_query_virtual_having() : state.having;
+}
+Z8SqlBool z8_query_scope(Z8Object self) { return z8_nonnull(self).z8_query_virtual_scope(); }
+private void z8_query_set_where(Z8Object self, Z8SqlBool value) { z8_query_state(self).where = value; }
+private void z8_query_add_where(Z8Object self, Z8SqlBool value) {
+    if (value !is null) z8_query_state(self).where = z8_sql_bool_binary!"&&"(z8_query_where(self), value);
+}
+private void z8_query_add_having(Z8Object self, Z8SqlBool value) {
+    if (value !is null) z8_query_state(self).having = z8_sql_bool_binary!"&&"(z8_query_having(self), value);
+}
 private Z8Object[] z8_query_read_fields(Z8ObjectArray!Z8Object value) {
     if (value is null) return null;
     Z8Object[] result;
@@ -129,6 +149,10 @@ private void z8_query_close(Z8Object self) {
 private void z8_query_open(Z8Object self, Z8QueryReadRequest request, bool useQueryLimit = true) {
     auto state = z8_query_state(self);
     if (state.executor is null) throw new Exception("query executor is not configured");
+    if (!request.byRecordId) {
+        request.queryWhere = z8_query_where(self); request.queryHaving = z8_query_having(self);
+        request.queryScope = z8_query_scope(self);
+    }
     z8_query_close(self);
     if (useQueryLimit && request.limit < 0 && state.limit.present) request.limit = cast(int)state.limit.value;
     request.readLock = z8_query_read_lock(self);
@@ -262,6 +286,12 @@ void z8_bind_builtin_query() {
     z8_native_bind(p ~ "m_getFieldById"w, &z8_query_find_direct!"id");
     z8_native_bind(p ~ "m_getFieldByName"w, &z8_query_find_direct!"name");
     z8_native_bind(p ~ "m_findFieldById"w, &z8_query_find_field_id);
+    z8_native_bind(p ~ "m_where"w, &z8_query_default_filter);
+    z8_native_bind(p ~ "m_having"w, &z8_query_default_filter);
+    z8_native_bind(p ~ "m_scope"w, &z8_query_default_filter);
+    z8_native_bind(p ~ "m_setWhere"w, &z8_query_set_where);
+    z8_native_bind(p ~ "m_addWhere"w, &z8_query_add_where);
+    z8_native_bind(p ~ "m_addHaving"w, &z8_query_add_having);
     z8_native_bind(p ~ "m_read"w, &z8_query_read_1);
     z8_native_bind(p ~ "m_read"w, &z8_query_read_where);
     z8_native_bind(p ~ "m_read"w, &z8_query_read_sort);

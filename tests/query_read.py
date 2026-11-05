@@ -22,7 +22,12 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
 import org.zenframework.z8.base.query.Query;
 import org.zenframework.z8.base.table.value.IntField;
 import org.zenframework.z8.base.table.value.StringField;
-public class Report extends Query { public IntField amount; public StringField title; }
+public class Report extends Query {
+    public IntField amount; public StringField title;
+    virtual protected sql_bool where() { return amount > 1; }
+    virtual protected sql_bool having() { return amount < 100; }
+    virtual protected sql_bool scope() { return amount > 0; }
+}
 ''', encoding="utf-8")
     (source / "Probe.bl").write_text('''
 import org.zenframework.z8.base.table.value.Field;
@@ -49,6 +54,9 @@ public class Probe {
     public static void groupSortHaving(Report query) { Field[] fields = {query.amount}; query.group(fields, fields, fields, query.amount > 3, query.amount < 50); }
     public static void groupPaged(Report query) { Field[] fields = {query.amount}; query.group(fields, fields, fields, query.amount > 3, query.amount < 50, 4, 6); }
     public static int[] groupValues(Report query) { query.amount.aggregation = Aggregation.Array; return query.amount.array(); }
+    public static void setFilter(Report query) { query.setWhere(query.amount > 5); }
+    public static void addFilter(Report query) { query.addWhere(query.amount < 50); query.addHaving(query.amount > 2); }
+    public static void resetFilter(Report query) { sql_bool empty = null; query.setWhere(empty); }
     public static bool next(Report query) { return query.next(); }
     public static void close(Report query) { query.close(); }
     public static int amount(Report query) { return query.amount.get(); }
@@ -60,6 +68,7 @@ public class Probe {
     harness.write_text('''
 import z8.runtime;
 import z8gen.p_Probe;
+import std.algorithm.searching : canFind;
 class Rows : IZ8QueryCursor {
     Z8Object amount, title;
     Z8Object[] selected;
@@ -97,10 +106,15 @@ class Executor : IZ8QueryExecutor {
 void main() {
     alias P = Z8p_50726F6265;
     auto query = P.m_make(); z8_nonnull(query);
+    z8_field_bind_sql(query.f_amount, null, null, "T.amount"w);
     bool missing; try { P.m_all(query); } catch (Exception) { missing = true; } assert(missing);
     auto executor = new Executor(query.f_amount, query.f_title); z8_query_set_executor(query, executor);
     P.m_all(query);
     assert(executor.last.fields.length == 2 && executor.last.limit == 7 && executor.last.start == 0);
+    assert(executor.last.queryWhere !is null && executor.last.queryHaving !is null && executor.last.queryScope !is null);
+    assert(z8_sql_bool_format(executor.last.queryWhere, true).canFind(">1"w));
+    assert(z8_sql_bool_format(executor.last.queryHaving, true).canFind("<100"w));
+    assert(z8_sql_bool_format(executor.last.queryScope, true).canFind(">0"w));
     assert(z8_optional_require(P.m_next(query)) && z8_optional_require(P.m_amount(query)) == 10 && P.m_title(query) == "first"w);
     assert(z8_optional_require(P.m_next(query)) && z8_optional_require(P.m_amount(query)) == 20);
     assert(!z8_optional_require(P.m_next(query)) && executor.cursor.closed);
@@ -128,7 +142,11 @@ void main() {
     assert(z8_optional_require(P.m_firstSort(query)) && executor.last.sortFields.length == 1 && executor.last.where is null);
     assert(z8_optional_require(P.m_firstSortWhere(query)) && executor.last.sortFields.length == 1 && executor.last.where !is null);
     assert(z8_optional_require(P.m_record(query, z8_guid_create(5))) && executor.last.byRecordId && executor.last.recordId == z8_guid_create(5) && executor.last.limit == -1);
-    assert(z8_optional_require(P.m_record(query, null)) && !executor.last.byRecordId);
+    assert(executor.last.queryWhere is null && executor.last.queryScope is null && executor.last.queryHaving is null);
+    assert(z8_optional_require(P.m_record(query, null)) && !executor.last.byRecordId && executor.last.queryScope !is null);
+    P.m_setFilter(query); P.m_addFilter(query); P.m_all(query);
+    assert(executor.last.queryWhere.kind == Z8SqlBoolKind.and && executor.last.queryHaving.kind == Z8SqlBoolKind.and);
+    P.m_resetFilter(query); P.m_all(query); assert(executor.last.queryWhere.kind != Z8SqlBoolKind.and);
     P.m_groupOne(query); assert(executor.last.groupFields.length == 1 && executor.last.fields.length == 0 && executor.last.limit == 7);
     P.m_groupWhere(query); assert(executor.last.where !is null && executor.last.fields.length == 0);
     P.m_groupFields(query); assert(executor.last.fields.length == 1 && executor.last.where is null);
