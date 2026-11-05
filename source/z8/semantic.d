@@ -594,7 +594,7 @@ class Checker {
             methods[m.name.text] = m;
             ownOverloads[m.name.text] ~= m;
         }
-        if (extendsBuiltinPrimary(program) && !program.isNative) {
+        if (isPrimaryClass(program) && !program.isNative) {
             bool hasAssignment;
             foreach (method; program.methods)
                 if (method.operatorSymbol == "=" && method.parameters.length == 1 &&
@@ -998,6 +998,10 @@ class Checker {
                     if (!staticField.isStatic) fail("instance field cannot be accessed on a class", e.token);
                     if (!accessible(staticField.owner, staticField.isPublic, staticField.isProtected)) fail("field is not accessible", e.token);
                     e.targetClass = staticField.owner.emittedName;
+                    if (hasObjectClass(staticField.type))
+                        e.objectClass = staticField.objectClass !is null ? staticField.objectClass : resolveClass(staticField.owner, staticField.objectName, staticField.name);
+                    if (hasMapKeyClass(staticField.type))
+                        e.keyObjectClasses = staticField.keyObjectClasses.length ? staticField.keyObjectClasses : resolveKeyClasses(staticField.owner, staticField.keyObjectNames, staticField.name);
                     return staticField.type == ValueType.stringType ? ValueType.nullableString : storedValueType(staticField.type);
                 }
                 auto receiverType = typeOf(e.left);

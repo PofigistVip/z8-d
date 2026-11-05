@@ -102,6 +102,7 @@ class Z8Object {
     // Primary subclasses may provide the Java value's polymorphic operations.
     wstring z8_user_primary_string_impl() { return toString().to!wstring; }
     long z8_user_primary_hash_impl() { return cast(long)cast(int)toHash(); }
+    bool z8_user_primary_equals_impl(Z8Object other) { return this is other || (other !is null && opEquals(other)); }
 
     void z8_init_type_attributes() {}
     final void z8_set_attribute(wstring key, wstring value) { z8_attributes[key] = value; }

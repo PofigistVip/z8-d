@@ -12,7 +12,8 @@ class Z8PrimaryKeyMap(V) {
         return h ^ (h >> 16);
     }
     private static bool keyEquals(Z8Primary left, Z8Primary right) {
-        return z8_primary_collection_equals(left, right);
+        // HashMap compares the lookup key against the key already stored.
+        return z8_primary_collection_equals(right, left);
     }
     private static bool valueEquals(Element left, Element right) {
         static if (is(V == long) || is(V == bool) || is(V == Z8Decimal))

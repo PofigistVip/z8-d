@@ -1,6 +1,6 @@
 // Reference primary keys share the original key object with the backing map.
 class Z8ReferenceKeyMap(K, V) {
-    static assert(is(K == Z8Date) || is(K == Z8Datespan) || is(K == Z8Binary) || is(K == Z8Geometry) || is(K == Z8File));
+    static assert(is(K == Z8Date) || is(K == Z8Datespan) || is(K == Z8Binary) || is(K == Z8Geometry) || is(K == Z8File) || is(K : Z8Object));
     alias Element = Z8PrimaryKeyMap!V.Element;
     private Z8PrimaryKeyMap!V entries;
     this() { entries = new Z8PrimaryKeyMap!V(); }
@@ -17,8 +17,8 @@ class Z8ReferenceKeyMap(K, V) {
     Element z8_add(K key, Element value) { return entries.z8_add(z8_primary_box(key), value); }
     void z8_add(Z8ReferenceKeyMap!(K, V) other) { entries.z8_add(z8_nonnull(other).entries); }
     Element z8_remove(K key) { return entries.z8_remove(z8_primary_box(key)); }
-    Z8Array!K z8_keys() {
-        auto result = new Z8Array!K();
+    Z8ValueArray!K z8_keys() {
+        auto result = new Z8ValueArray!K();
         auto keys = entries.z8_keys();
         for (long i; i < keys.z8_size(); ++i) result.z8_add(z8_primary_cast!K(keys.z8_get(i)));
         return result;

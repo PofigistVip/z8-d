@@ -267,6 +267,12 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     if native_result.returncode == 0 or "Attributes can only be applied to variables of a reference type" not in native_result.stdout:
         raise SystemExit("Original Z8 did not reject attributes on a primary field:\n" + native_result.stdout)
     bad_primary_attribute.unlink()
+    bad_primary_child = operator_source / "BadPrimaryChild.bl"
+    bad_primary_child.write_text('public class BadPrimaryChild extends NativeMarker {}', encoding="utf-8")
+    native_result = subprocess.run(operator_command, cwd=temp, capture_output=True, text=True, encoding="utf-8")
+    if native_result.returncode == 0 or "must implement operator=" not in native_result.stdout:
+        raise SystemExit("Original Z8 did not reject a primary subclass without assignment:\n" + native_result.stdout)
+    bad_primary_child.unlink()
     for fixture in native_fixtures:
         fixture.unlink()
     sql_map_probe = operator_source / "SqlMapConversion.bl"

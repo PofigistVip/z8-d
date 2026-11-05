@@ -25,6 +25,7 @@ Z8Optional!long read(Number self) { return z8_optional_wrap(9L); }
 Z8Optional!long convertNumber(Number self) { return z8_optional_wrap(2L); }
 wstring numberText(Number self) { return "native:9"w; }
 Z8Optional!long numberHash(Number self) { return z8_optional_wrap(37L); }
+bool numberEquals(Number self, Z8Object other) { return cast(Number)other !is null; }
 Z8Optional!long ignored(Math self) { return z8_optional_wrap(10L); }
 __gshared Z8Optional!long nativeFactor, nativeTotal;
 Z8Optional!long* factor(Math self) { assert(self !is null); return &nativeFactor; }
@@ -50,6 +51,7 @@ void main() {
     z8_native_bind("example.NativeNumber.z8cast_int"w, &convertNumber);
     z8_native_bind("example.NativeNumber.m_toString"w, &numberText);
     z8_native_bind("example.NativeNumber.m_hashCode"w, &numberHash);
+    z8_native_bind("example.NativeNumber.m_equals"w, &numberEquals);
     z8_native_bind("example.NativeMath.m_ignored"w, &ignored);
     bool missingField;
     try { Consumer.m_run(); } catch (Exception e) { missingField = e.msg.indexOf("example.NativeMath.f_factor") >= 0; }
@@ -116,4 +118,8 @@ void main() { assert(z8_optional_require(Z8p_476F6F6455736572.m_run()) == 31); }
     result = subprocess.run([str(compiler), "project", str(source), str(temp / "bad-attribute")], capture_output=True, text=True)
     if result.returncode == 0 or "attributes require an object reference field" not in result.stderr:
         raise SystemExit("Attributes were accepted on a primary field")
+    (source / "Bad.bl").write_text("class Bad extends NativeMarker {}", encoding="utf-8")
+    result = subprocess.run([str(compiler), "project", str(source), str(temp / "bad-marker-child")], capture_output=True, text=True)
+    if result.returncode == 0 or "must implement assignment from itself" not in result.stderr:
+        raise SystemExit("A non-native subclass of a primary-attributed type lacked an assignment operator")
 print("Native and primary declarations bound through the separate runtime")

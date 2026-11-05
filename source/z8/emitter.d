@@ -45,7 +45,9 @@ private string dType(ValueType type, Program objectClass = null, Program[] keyOb
         auto storedKey = keyObject ? "Z8Object" : keyType;
         auto storedValue = valueObject ? "Object" : valueType;
         string storage;
-        if ([ValueType.selfType, ValueType.enumType, ValueType.exceptionType, ValueType.encodingType].canFind(key) || isSqlType(key))
+        if (key == ValueType.selfType)
+            storage = "Z8ReferenceKeyMap!(" ~ storedKey ~ ", " ~ storedValue ~ ")";
+        else if ([ValueType.enumType, ValueType.exceptionType, ValueType.encodingType].canFind(key) || isSqlType(key))
             storage = "Z8ObjectKeyMap!(" ~ storedKey ~ ", " ~ storedValue ~ ")";
         else if ([ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(key))
             storage = "Z8ReferenceKeyMap!(" ~ storedKey ~ ", " ~ storedValue ~ ")";
@@ -860,6 +862,18 @@ package string emitPrograms(Program[] programs) {
                 auto hashBinding = emitRawWStringLiteral(program.nativeName ~ ".m_hashCode"w);
                 result ~= "override wstring z8_user_primary_string_impl() { return z8_native_call!(wstring)(" ~ stringBinding ~ ", this); }\n";
                 result ~= "override long z8_user_primary_hash_impl() { return cast(int)z8_optional_require(z8_native_call!(Z8Optional!long)(" ~ hashBinding ~ ", this)); }\n";
+            }
+        }
+        if (program.isNative && isPrimaryClass(program)) {
+            auto equalsBinding = emitRawWStringLiteral(program.nativeName ~ ".m_equals"w);
+            result ~= "override bool z8_user_primary_equals_impl(Z8Object other) { bool value; " ~
+                "if (z8_native_try_call!(bool)(" ~ equalsBinding ~ ", value, this, other)) return value; " ~
+                "return super.z8_user_primary_equals_impl(other); }\n";
+            if (!extendsBuiltinPrimary(program)) {
+                auto hashBinding = emitRawWStringLiteral(program.nativeName ~ ".m_hashCode"w);
+                result ~= "override long z8_user_primary_hash_impl() { Z8Optional!long value; " ~
+                    "if (z8_native_try_call!(Z8Optional!long)(" ~ hashBinding ~ ", value, this)) return cast(int)z8_optional_require(value); " ~
+                    "return super.z8_user_primary_hash_impl(); }\n";
             }
         }
         if (program.attributes.length) {

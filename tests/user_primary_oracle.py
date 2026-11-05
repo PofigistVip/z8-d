@@ -26,6 +26,7 @@ class UserPrimaryOracle {
         public int compareTo(primary value) { return this == value ? 0 : 1; }
         public String toString() { return "native:9"; }
         public int hashCode() { return 37; }
+        public boolean equals(Object other) { return other instanceof Number; }
     }
     public static void main(String[] args) {
         Number number = new Number();
@@ -40,6 +41,10 @@ class UserPrimaryOracle {
         HashMap<primary, Long> values = new HashMap<primary, Long>();
         values.put(boxed, 4L);
         System.out.println(values.get(number));
+        System.out.println(values.get(new Number()));
+        HashMap<Number, Long> typed = new HashMap<Number, Long>();
+        typed.put(number, 5L);
+        System.out.println(typed.get(new Number()));
     }
 }
 '''.replace('new integer(1) instanceof Number', '((primary)new integer(1)) instanceof Number'), encoding="utf-8")
@@ -51,6 +56,7 @@ import std.stdio : writeln;
 class Number : Z8Object {
     override wstring z8_user_primary_string_impl() { return "native:9"w; }
     override long z8_user_primary_hash_impl() { return 37; }
+    override bool z8_user_primary_equals_impl(Z8Object other) { return cast(Number)other !is null; }
 }
 void main() {
     auto number = new Number();
@@ -65,6 +71,10 @@ void main() {
     auto values = new Z8PrimaryKeyMap!long();
     values.z8_add(boxed, z8_optional_wrap(4L));
     writeln(z8_optional_require(values.z8_get(z8_primary_box(number))));
+    writeln(z8_optional_require(values.z8_get(z8_primary_box(new Number()))));
+    auto typed = new Z8ReferenceKeyMap!(Z8Object, long)();
+    typed.z8_add(number, z8_optional_wrap(5L));
+    writeln(z8_optional_require(typed.z8_get(new Number())));
 }
 ''', encoding="utf-8")
     binary = temp / ("oracle.exe" if os.name == "nt" else "oracle")

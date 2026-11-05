@@ -29,7 +29,7 @@ class Z8Primary {
             case Z8PrimaryKind.geometry: return z8_geometry_equals(geometryValue, right.geometryValue);
             case Z8PrimaryKind.date: return z8_date_binary!"=="(dateValue, right.dateValue);
             case Z8PrimaryKind.file: return fileValue == right.fileValue;
-            case Z8PrimaryKind.user: return userValue is right.userValue || (userValue !is null && userValue == right.userValue);
+            case Z8PrimaryKind.user: return userValue is right.userValue || (userValue !is null && userValue.z8_user_primary_equals_impl(right.userValue));
         }
     }
 }
