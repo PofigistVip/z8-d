@@ -239,6 +239,17 @@ class Z8Array(T) {
         return result;
     }
     wstring z8_join(wstring separator = ""w) {
+        static if (is(T == Z8Guid) || is(T == Z8Binary) || is(T == Z8Datespan) || is(T == Z8Date) ||
+                   is(T == Z8Geometry) || is(T == Z8File) || is(T == Z8Primary)) {
+            wstring primaryJoined;
+            foreach (i; 0 .. z8_size()) {
+                if (i) primaryJoined ~= z8_string_required(separator);
+                auto item = z8_get(i);
+                static if (is(T == Z8Primary)) primaryJoined ~= z8_primary_to_string(item);
+                else primaryJoined ~= z8_primary_to_string(z8_primary_box(item));
+            }
+            return primaryJoined;
+        }
         static if (isPrimitive) if (primaryData !is null) {
             wstring result;
             foreach (i; 0 .. z8_size()) {
