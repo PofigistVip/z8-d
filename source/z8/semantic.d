@@ -108,6 +108,8 @@ class Checker {
         return *found;
     }
     private ValueType resolveDeclaredType(ValueType type, Program owner, string objectName, string keyObjectName, Token site) {
+        if (isDynamicArray(type))
+            return arrayOf(resolveDeclaredType(elementType(type), owner, objectName, keyObjectName, site));
         if (isMap(type)) {
             auto value = mapValueType(type), key = mapKeyType(type);
             if ([ValueType.selfType, ValueType.selfArray].canFind(value)) {
@@ -164,8 +166,7 @@ class Checker {
                 fail("attributes require an object reference field", field.name);
             if (field.isAuto && (field.isStatic || field.type != ValueType.selfArray))
                 fail("auto requires an instance array of object references", field.name);
-            if (field.isStatic && ([ValueType.selfType, ValueType.selfArray, ValueType.selfMatrix].canFind(field.type) ||
-                (isMap(field.type) && ([ValueType.selfType, ValueType.selfArray].canFind(mapValueType(field.type)) || mapKeyType(field.type) == ValueType.selfType))))
+            if (field.isStatic && containsUserReference(field.type))
                 fail("static reference fields are not allowed", field.name);
             if (field.type == ValueType.primaryType && field.initializer is null)
                 fail("primary fields require an initializer", field.name);
@@ -777,7 +778,7 @@ class Checker {
                 }
                 if (!isArray(expected)) fail("array initializer requires an array type", e.token);
                 foreach (element; e.arguments)
-                    if (!matchesStored(element, elementType(expected), e.objectClass)) fail("array element type mismatch", element.token);
+                    if (!matchesStored(element, elementType(expected), e.objectClass, e.keyObjectClass)) fail("array element type mismatch", element.token);
                 e.inferredType = expected; return expected;
             case ExprKind.mapEntry: fail("key-value pair requires a map initializer", e.token); assert(0);
             case ExprKind.variable:
@@ -1548,6 +1549,7 @@ class Checker {
                 } else if (isArray(receiver)) {
                     if (isReferenceArray(receiver)) {
                         e.objectClass = e.left.objectClass;
+                        e.keyObjectClass = e.left.keyObjectClass;
                         if (!["size", "isEmpty", "clear", "first", "last", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
                             fail("this method is not yet supported for object arrays", e.token);
                     }
@@ -1568,9 +1570,9 @@ class Checker {
                             return receiver == ValueType.stringArray ? ValueType.nullableString : storedValueType(elementType(receiver));
                         case "add":
                             if (e.arguments.length == 1) {
-                                if (!matchesStored(e.arguments[0], elementType(receiver), e.left.objectClass)) fail("add requires an element of the array type", e.token);
+                                if (!matchesStored(e.arguments[0], elementType(receiver), e.left.objectClass, e.left.keyObjectClass)) fail("add requires an element of the array type", e.token);
                             } else if (e.arguments.length == 2) {
-                                if (!matches(e.arguments[0], ValueType.intType) || !matchesStored(e.arguments[1], elementType(receiver), e.left.objectClass))
+                                if (!matches(e.arguments[0], ValueType.intType) || !matchesStored(e.arguments[1], elementType(receiver), e.left.objectClass, e.left.keyObjectClass))
                                     fail("add requires an int index and an element of the array type", e.token);
                             } else fail("incorrect argument count", e.token);
                             return receiver;
@@ -1578,7 +1580,7 @@ class Checker {
                             if (e.arguments.length == 1) {
                                 if (!matches(e.arguments[0], receiver, e.left.objectClass, e.left.keyObjectClass)) fail("addAll requires an array of the same type", e.token);
                             } else if (e.arguments.length == 2) {
-                                if (!matches(e.arguments[0], ValueType.intType) || !matches(e.arguments[1], receiver, e.left.objectClass)) fail("addAll requires an int index and an array of the same type", e.token);
+                                if (!matches(e.arguments[0], ValueType.intType) || !matches(e.arguments[1], receiver, e.left.objectClass, e.left.keyObjectClass)) fail("addAll requires an int index and an array of the same type", e.token);
                             } else fail("incorrect argument count", e.token);
                             return ValueType.voidType;
                         case "isSubsetOf":
@@ -1589,17 +1591,17 @@ class Checker {
                             auto argType = typeOf(e.arguments[0]);
                             if (argType == receiver) {
                                 if (!matches(e.arguments[0], receiver, e.left.objectClass, e.left.keyObjectClass)) fail("removeAll requires an array of the same type", e.token);
-                            } else if (!matchesStored(e.arguments[0], elementType(receiver), e.left.objectClass)) fail("removeAll requires an element or array of the same type", e.token);
+                            } else if (!matchesStored(e.arguments[0], elementType(receiver), e.left.objectClass, e.left.keyObjectClass)) fail("removeAll requires an element or array of the same type", e.token);
                             return receiver;
                         case "contains": case "indexOf": case "remove":
-                            if (e.arguments.length != 1 || !matchesStored(e.arguments[0], elementType(receiver), e.left.objectClass)) fail("method requires an element of the array type", e.token);
+                            if (e.arguments.length != 1 || !matchesStored(e.arguments[0], elementType(receiver), e.left.objectClass, e.left.keyObjectClass)) fail("method requires an element of the array type", e.token);
                             return e.token.text == "indexOf" ? ValueType.intType : ValueType.boolType;
                         case "removeAt":
                             if (e.arguments.length != 1 || !matches(e.arguments[0], ValueType.intType)) fail("removeAt requires an int index", e.token);
                             return receiver == ValueType.stringArray ? ValueType.nullableString : storedValueType(elementType(receiver));
                         case "set":
                             if (e.arguments.length != 2 || !matches(e.arguments[0], ValueType.intType) ||
-                                !matchesStored(e.arguments[1], elementType(receiver), e.left.objectClass)) fail("set requires an int index and an element of the array type", e.token);
+                                !matchesStored(e.arguments[1], elementType(receiver), e.left.objectClass, e.left.keyObjectClass)) fail("set requires an int index and an element of the array type", e.token);
                             return ValueType.voidType;
                         default: break;
                     }
@@ -1616,6 +1618,7 @@ class Checker {
                 if (!isArray(array)) fail("indexing requires an array", e.token);
                 if (!matches(e.right, ValueType.intType)) fail("array index must be int", e.token);
                 if (hasObjectClass(array)) e.objectClass = e.left.objectClass;
+                if (hasMapKeyClass(array)) e.keyObjectClass = e.left.keyObjectClass;
                 e.inferredType = array;
                 return array == ValueType.stringArray ? ValueType.nullableString : storedValueType(elementType(array));
             case ExprKind.castExpr:
@@ -1952,6 +1955,9 @@ class Checker {
                     return left;
                 }
                 if (isArray(left) && left == right && op == "+") {
+                    if (hasMapKeyClass(left) && e.left.keyObjectClass !is e.right.keyObjectClass)
+                        fail("array map key type mismatch", e.token);
+                    e.keyObjectClass = e.left.keyObjectClass;
                     if (hasObjectClass(left) && e.left.objectClass !is e.right.objectClass)
                         fail("array element type mismatch", e.token);
                     e.inferredType = left;
@@ -2248,7 +2254,8 @@ class Checker {
                 if (!isArray(array) || elementType(array) != s.initial.type) fail("foreach element type mismatch", s.token);
                 if (array == ValueType.selfArray && !isAssignable(s.expression.objectClass, s.initial.objectClass)) fail("foreach element type mismatch", s.token);
                 if (array == ValueType.enumArray && s.expression.objectClass !is s.initial.objectClass) fail("foreach element type mismatch", s.token);
-                if ((array == ValueType.selfMatrix || array == ValueType.enumMatrix) && s.expression.objectClass !is s.initial.objectClass) fail("foreach element type mismatch", s.token);
+                if ((array == ValueType.selfMatrix || array == ValueType.enumMatrix || (isDynamicArray(array) && hasObjectClass(array))) && s.expression.objectClass !is s.initial.objectClass) fail("foreach element type mismatch", s.token);
+                if (hasMapKeyClass(array) && s.expression.keyObjectClass !is s.initial.keyObjectClass) fail("foreach element type mismatch", s.token);
                 ++loopDepth; checkStatement(s.children[0]); --loopDepth;
                 variables = old; objectVariables = oldObjects; keyObjectVariables = oldKeyObjects; return false;
             case StmtKind.breakStmt:

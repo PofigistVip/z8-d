@@ -31,6 +31,7 @@ private string methodDName(Method method) {
 }
 
 private string dType(ValueType type, Program objectClass = null, Program keyObjectClass = null) {
+    if (isDynamicArray(type)) return "Z8Array!(" ~ dType(elementType(type), objectClass, keyObjectClass) ~ ")";
     if (isSqlArray(type)) return "Z8Array!(" ~ dType(elementType(type)) ~ ")";
     if (isMap(type)) {
         auto key = mapKeyType(type), value = mapValueType(type);
@@ -735,7 +736,7 @@ private string defaultValue(ValueType type, Program objectClass = null, bool has
     if (type == ValueType.decimalType) return "z8_decimal_from_int(0)";
     if (type == ValueType.selfType) return "z8_new!(" ~ dType(type, objectClass) ~ ")(" ~ (hasContainer ? "this" : "") ~ ")";
     if (isMap(type)) return "new " ~ dType(type, objectClass, keyObjectClass) ~ "()";
-    if (isArray(type)) return "new " ~ dType(type, objectClass) ~ "()";
+    if (isArray(type)) return "new " ~ dType(type, objectClass, keyObjectClass) ~ "()";
     if (type == ValueType.intType) return "0";
     if (type == ValueType.stringType) return `z8_string_new(""w)`;
     assert(type == ValueType.boolType); return "false";

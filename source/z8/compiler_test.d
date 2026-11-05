@@ -608,7 +608,7 @@ unittest {
     rejects("class A { static int f() { return {}; } }");
     rejects("class A { static void f() { int x = 1; x[0] = 2; } }");
     rejects("class A { static void f() { int[] x; bool y = x == x; } }");
-    rejects("class A { static void f() { int[][][] x; } }");
+    compile("class A { static void f() { int[][][] x; } }");
     rejects("class A { static void f() { int[] bad; string[] x = {\"ok\", bad}; } }");
     rejects("class A { static int[] f() { return {1, false}; } }");
     rejects("class A { static int f(int[] x) { return 1; } static int g() { return f({1}); } }");

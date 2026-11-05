@@ -1,0 +1,23 @@
+public class DeepArrays {
+    private static int count(string[int][] input) { return input.size(); }
+    public static int run() {
+        int[][][] cube = {{{1, 2}}, {{3}}};
+        int[][][][] hyper = {cube};
+        if (cube[0][0][1] != 2 || hyper[0][1][0][0] != 3) return 1;
+        int[][] rows = cube.first();
+        if (rows[0][0] != 1) return 2;
+        string[int][] maps = {{(1, "one")}, {(2, "two")}};
+        if (count(maps) != 2 || maps[1][2] != "two") return 3;
+        maps.add(string[int] {(3, "three")});
+        int seen = 0;
+        for (string[int] item : maps) seen += item.size();
+        if (seen != 3 || maps.last()[3] != "three") return 4;
+        KeyItem key = new KeyItem;
+        ValueItem value = new ValueItem;
+        ValueItem[KeyItem][] objects = {{(key, value)}};
+        if (objects[0][key].number != 11 || objects.first().keys().first().number != 7) return 5;
+        ValueItem[KeyItem][][] nested = {objects};
+        if (nested[0][0][key].number != 11) return 6;
+        return 111;
+    }
+}

@@ -20,7 +20,8 @@ enum ValueType : uint {
     fileMatrix, exceptionArray, exceptionMatrix, encodingArray, encodingMatrix, primaryArray,
     primaryMatrix, selfArray, selfMatrix, nullType, nullableString, enumType,
     enumArray, enumMatrix, optionalInt, optionalBool, optionalDecimal,
-    mapStart = 65536
+    mapStart = 65536,
+    dynamicArrayStep = 1 << 20
 }
 
 private struct SqlArrayDescriptor { ValueType element, array, matrix; }
@@ -59,6 +60,11 @@ unittest {
         assert(isArray(d.array) && isArray(d.matrix));
     }
 }
+// Additional sequence dimensions retain the complete inner type, including
+// a map's key. The low bits hold the inner type and high bits its depth.
+package bool isDynamicArray(ValueType type) {
+    return cast(uint)type >= cast(uint)ValueType.dynamicArrayStep;
+}
 // Add one sequence dimension, preserving its element type.
 package ValueType arrayOf(ValueType type) {
     if (type == ValueType.intType) return ValueType.intArray;
@@ -95,12 +101,14 @@ package ValueType arrayOf(ValueType type) {
         if (type == d.element) return d.array;
         if (type == d.array) return d.matrix;
     }
+    if ((isArray(type) || isMap(type)) && cast(uint)type <= uint.max - cast(uint)ValueType.dynamicArrayStep)
+        return cast(ValueType)(cast(uint)type + cast(uint)ValueType.dynamicArrayStep);
     return ValueType.voidType;
 }
 package bool isArray(ValueType type) {
-    return isSqlArray(type) || [ValueType.intArray, ValueType.intMatrix, ValueType.decimalArray, ValueType.decimalMatrix, ValueType.boolArray, ValueType.boolMatrix, ValueType.stringArray, ValueType.stringMatrix, ValueType.guidArray, ValueType.guidMatrix, ValueType.binaryArray, ValueType.binaryMatrix, ValueType.datespanArray, ValueType.datespanMatrix, ValueType.dateArray, ValueType.dateMatrix, ValueType.geometryArray, ValueType.geometryMatrix, ValueType.fileArray, ValueType.fileMatrix, ValueType.exceptionArray, ValueType.exceptionMatrix, ValueType.encodingArray, ValueType.encodingMatrix, ValueType.primaryArray, ValueType.primaryMatrix, ValueType.selfArray, ValueType.selfMatrix, ValueType.enumArray, ValueType.enumMatrix].canFind(type);
+    return isDynamicArray(type) || isSqlArray(type) || [ValueType.intArray, ValueType.intMatrix, ValueType.decimalArray, ValueType.decimalMatrix, ValueType.boolArray, ValueType.boolMatrix, ValueType.stringArray, ValueType.stringMatrix, ValueType.guidArray, ValueType.guidMatrix, ValueType.binaryArray, ValueType.binaryMatrix, ValueType.datespanArray, ValueType.datespanMatrix, ValueType.dateArray, ValueType.dateMatrix, ValueType.geometryArray, ValueType.geometryMatrix, ValueType.fileArray, ValueType.fileMatrix, ValueType.exceptionArray, ValueType.exceptionMatrix, ValueType.encodingArray, ValueType.encodingMatrix, ValueType.primaryArray, ValueType.primaryMatrix, ValueType.selfArray, ValueType.selfMatrix, ValueType.enumArray, ValueType.enumMatrix].canFind(type);
 }
-package bool isReferenceArray(ValueType type) { return isSqlArray(type) || [ValueType.selfArray, ValueType.enumArray, ValueType.primaryArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.encodingArray, ValueType.intMatrix, ValueType.decimalMatrix, ValueType.boolMatrix, ValueType.stringMatrix, ValueType.guidMatrix, ValueType.binaryMatrix, ValueType.datespanMatrix, ValueType.dateMatrix, ValueType.geometryMatrix, ValueType.fileMatrix, ValueType.exceptionMatrix, ValueType.encodingMatrix, ValueType.primaryMatrix, ValueType.selfMatrix, ValueType.enumMatrix].canFind(type); }
+package bool isReferenceArray(ValueType type) { return isDynamicArray(type) || isSqlArray(type) || [ValueType.selfArray, ValueType.enumArray, ValueType.primaryArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.encodingArray, ValueType.intMatrix, ValueType.decimalMatrix, ValueType.boolMatrix, ValueType.stringMatrix, ValueType.guidMatrix, ValueType.binaryMatrix, ValueType.datespanMatrix, ValueType.dateMatrix, ValueType.geometryMatrix, ValueType.fileMatrix, ValueType.exceptionMatrix, ValueType.encodingMatrix, ValueType.primaryMatrix, ValueType.selfMatrix, ValueType.enumMatrix].canFind(type); }
 // A map is identified by its value and key type, mirroring VariableType in Z8.
 // Its encoded value is kept outside the range of named scalar and array types.
 private enum ValueType[] mapValueTypes = [
@@ -129,6 +137,7 @@ package bool isMap(ValueType type) {
     return id >= cast(uint)ValueType.mapStart && id < cast(uint)ValueType.mapStart + mapValueTypes.length * mapKeyTypes.length;
 }
 package bool hasMapKeyClass(ValueType type) {
+    if (isDynamicArray(type)) return hasMapKeyClass(elementType(type));
     return isMap(type) && [ValueType.selfType, ValueType.enumType].canFind(mapKeyType(type));
 }
 package ValueType mapKeyType(ValueType type) {
@@ -158,6 +167,11 @@ unittest {
     assert(cast(uint)ValueType.optionalDecimal < cast(uint)ValueType.mapStart);
     assert(!isMap(ValueType.intType));
     assert(mapType(ValueType.intType, ValueType.exceptionType) == ValueType.voidType);
+    auto nestedMap = arrayOf(arrayOf(mapType(ValueType.selfType, ValueType.enumType)));
+    assert(isDynamicArray(nestedMap) && hasObjectClass(nestedMap) && hasMapKeyClass(nestedMap));
+    assert(mapKeyType(elementType(elementType(nestedMap))) == ValueType.enumType);
+    auto cube = arrayOf(ValueType.intMatrix);
+    assert(isArray(cube) && elementType(cube) == ValueType.intMatrix);
 }
 package ValueType mapKeyArrayType(ValueType type) {
     auto result = arrayOf(mapKeyType(type));
@@ -173,7 +187,12 @@ package ValueType mapValueReadType(ValueType type) {
     auto value = mapValueType(type);
     return value == ValueType.stringType ? ValueType.nullableString : storedValueType(value);
 }
-package bool hasObjectClass(ValueType type) { return (isMap(type) && hasObjectClass(mapValueType(type))) || type == ValueType.selfType || type == ValueType.selfArray || type == ValueType.selfMatrix || type == ValueType.enumType || type == ValueType.enumArray || type == ValueType.enumMatrix; }
+package bool hasObjectClass(ValueType type) { return (isDynamicArray(type) && hasObjectClass(elementType(type))) || (isMap(type) && hasObjectClass(mapValueType(type))) || type == ValueType.selfType || type == ValueType.selfArray || type == ValueType.selfMatrix || type == ValueType.enumType || type == ValueType.enumArray || type == ValueType.enumMatrix; }
+package bool containsUserReference(ValueType type) {
+    if (isDynamicArray(type)) return containsUserReference(elementType(type));
+    if (isMap(type)) return mapKeyType(type) == ValueType.selfType || containsUserReference(mapValueType(type));
+    return [ValueType.selfType, ValueType.selfArray, ValueType.selfMatrix].canFind(type);
+}
 package bool isSqlType(ValueType type) { return [ValueType.sqlPrimaryType, ValueType.sqlBoolType, ValueType.sqlIntType, ValueType.sqlDecimalType, ValueType.sqlStringType, ValueType.sqlGuidType, ValueType.sqlDateType, ValueType.sqlDatespanType, ValueType.sqlBinaryType, ValueType.sqlGeometryType].canFind(type); }
 package bool isNullableReference(ValueType type) { return isSqlType(type) || type == ValueType.ftsType || type == ValueType.ftsQueryType || type == ValueType.selfType || type == ValueType.enumType || type == ValueType.exceptionType || type == ValueType.encodingType || type == ValueType.primaryType || type == ValueType.guidType || type == ValueType.binaryType || type == ValueType.datespanType || type == ValueType.dateType || type == ValueType.geometryType || type == ValueType.fileType || isMap(type) || type == ValueType.nullableString || type == ValueType.stringType || isArray(type); }
 package ValueType storedValueType(ValueType type) {
@@ -220,6 +239,7 @@ package bool safeDecimalLiteral(string text) {
     } catch (Exception) { return false; }
 }
 package ValueType elementType(ValueType type) {
+    if (isDynamicArray(type)) return cast(ValueType)(cast(uint)type - cast(uint)ValueType.dynamicArrayStep);
     if (isSqlArray(type)) return sqlArrayElement(type);
     switch (type) {
         case ValueType.intArray: return ValueType.intType;
