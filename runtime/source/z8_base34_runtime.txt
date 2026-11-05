@@ -1,0 +1,51 @@
+// Native Base34 implementation, following the original Java integer rules.
+private enum wstring z8_base34_digits = "123456789ABCDEFGHIJKLMNPQRSTUVWXYZ"w;
+
+private wstring z8_base34_encode(Z8Optional!long value) {
+    auto number = cast(int)z8_optional_require(value);
+    if (number < 0) throw new Exception("Base34.encode(number): number < 0");
+    if (number == 0) return "1"w;
+    wchar[] result;
+    while (number != 0) {
+        auto remainder = number % 34;
+        result ~= z8_base34_digits[remainder];
+        number = (number - remainder) / 34;
+    }
+    import std.algorithm.mutation : reverse;
+    result.reverse();
+    return result.idup;
+}
+
+private Z8Optional!long z8_base34_decode(wstring value) {
+    import std.math : pow;
+    value = z8_string_required(value);
+    if (!value.length) throw new Exception("Base34.decode(base34): base34 is empty");
+    auto text = z8_str_toUpperCase(value);
+    uint result;
+    foreach (position; 0 .. text.length) {
+        auto character = text[text.length - position - 1];
+        int digit = -1;
+        foreach (i, wchar candidate; z8_base34_digits)
+            if (candidate == character) { digit = cast(int)i; break; }
+        if (digit < 0) throw new Exception("Base34.decode - unacceptable symbol");
+        // Math.round(Math.pow(...)) saturates at long.max, then Java int wraps.
+        auto power = pow(34.0, cast(double)position);
+        auto factor = power >= 9223372036854775808.0 ? cast(ulong)long.max : cast(ulong)power;
+        result += cast(uint)(cast(ulong)digit * factor);
+    }
+    return z8_optional_wrap(cast(long)cast(int)result);
+}
+
+private wstring z8_base34_random() {
+    import std.random : uniform01;
+    import std.math : floor;
+    auto value = cast(long)floor(1499368991.0 * uniform01!double + 0.5) + 45435424L;
+    return z8_base34_encode(z8_optional_wrap(value));
+}
+
+void z8_bind_builtin_base34() {
+    z8_native_bind("org.zenframework.z8.server.crypto.Base34.m_encode"w, &z8_base34_encode);
+    z8_native_bind("org.zenframework.z8.server.crypto.Base34.m_decode"w, &z8_base34_decode);
+    z8_native_bind("org.zenframework.z8.server.crypto.Base34.m_random"w, &z8_base34_random);
+}
+shared static this() { z8_bind_builtin_base34(); }

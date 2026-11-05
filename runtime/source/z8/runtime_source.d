@@ -1,7 +1,7 @@
 module z8.runtime_source;
 
 // The runtime fragments share one module and are compiled into the runtime library.
-package enum string runtimeSource = import("z8_core_runtime.txt") ~ import("z8_native_runtime.txt") ~ import("z8_crypto_runtime.txt") ~ import("z8_recordlock_runtime.txt") ~
+package enum string runtimeSource = import("z8_core_runtime.txt") ~ import("z8_native_runtime.txt") ~ import("z8_crypto_runtime.txt") ~ import("z8_base34_runtime.txt") ~ import("z8_recordlock_runtime.txt") ~
     import("z8_map_runtime.txt") ~ import("z8_array_runtime.txt") ~ import("z8_object_array_runtime.txt") ~ import("z8_nested_array_runtime.txt") ~ import("z8_int_map_runtime.txt") ~ import("z8_string_value_map_runtime.txt") ~ import("z8_guid_map_runtime.txt") ~ "\n" ~
     import("z8_decimal_runtime.txt") ~ "\n" ~ import("z8_string_runtime.txt") ~ "\n" ~
     import("z8_nls_parser.txt") ~ "\n" ~ import("z8_nls_runtime.txt") ~ "\n" ~
