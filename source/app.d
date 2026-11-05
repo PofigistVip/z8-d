@@ -1,6 +1,6 @@
 module app;
 
-import std.file : readText, dirEntries, SpanMode, tempDir, mkdir, mkdirRecurse, exists, remove, rmdirRecurse, thisExePath, writeFile = write;
+import std.file : readText, dirEntries, SpanMode, tempDir, mkdir, mkdirRecurse, exists, remove, copy, rmdirRecurse, thisExePath, writeFile = write;
 import std.conv : to;
 import std.algorithm : sort, canFind;
 import std.array : join;
@@ -15,7 +15,7 @@ import z8.compiler : compile, compileSources, SourceUnit, GeneratedModule, Compi
 import z8.nls : checkResources;
 
 private SourceUnit[] readProject(string root) {
-    root = absolutePath(root);
+    root = fileSystemPath(absolutePath(root));
     string[] paths;
     foreach (entry; dirEntries(root, SpanMode.depth))
         if (entry.isFile && extension(entry.name) == ".bl") paths ~= entry.name;
@@ -36,14 +36,26 @@ private string runtimeRoot() {
     return root;
 }
 
+// Windows APIs require the extended-length prefix even when each individual
+// path component is valid but the complete generated path exceeds MAX_PATH.
+private string fileSystemPath(string path) {
+    version (Windows) {
+        auto value = absolutePath(path).replace("/", "\\");
+        if (value.startsWith(`\\?\`)) return value;
+        if (value.startsWith(`\\`)) return `\\?\UNC\` ~ value[2 .. $];
+        return `\\?\` ~ value;
+    } else return path;
+}
+
 private string[] writeModules(GeneratedModule[] modules, string outputRoot) {
     auto root = absolutePath(outputRoot);
     string[] files;
     foreach (module_; modules) {
         auto path = buildPath(root, module_.relativePath);
-        mkdirRecurse(dirName(path));
-        writeFile(path, module_.source);
-        files ~= path;
+        auto ioPath = fileSystemPath(path);
+        mkdirRecurse(dirName(ioPath));
+        writeFile(ioPath, module_.source);
+        files ~= ioPath;
     }
     return files;
 }
@@ -53,8 +65,8 @@ private void cleanupBuild(string directory, string tempRoot, string library) {
         if (library.length)
             foreach (path; [library, library ~ ".tmp"]) if (exists(path)) remove(path);
         // The directory is freshly created below the system temp root by this run.
-        if (dirName(directory) == tempRoot && baseName(directory).startsWith("z8d-") && exists(directory))
-            rmdirRecurse(directory);
+        if (dirName(directory) == tempRoot && baseName(directory).startsWith("z8d-") && exists(fileSystemPath(directory)))
+            rmdirRecurse(fileSystemPath(directory));
     } catch (Exception) { }
 }
 
@@ -91,15 +103,19 @@ private int buildExecutable(GeneratedModule[] modules, string outputPath) {
         if (builtRuntime.status != 0) { stderr.write(builtRuntime.output); return 1; }
     }
     auto generatedRoot = buildPath(temporary, "generated");
+    auto target = absolutePath(outputPath);
+    auto linkerOutput = target;
+    version (Windows) if (target.length >= 240) linkerOutput = buildPath(temporary, "z8d-output.exe");
     auto arguments = writeModules(modules, generatedRoot);
     arguments ~= ["-I" ~ generatedRoot, "-I" ~ runtime, "-J" ~ runtime,
-                  "-oq", library, "-od=" ~ temporary, "-of=" ~ absolutePath(outputPath)];
+                  "-oq", library, "-od=" ~ temporary, "-of=" ~ linkerOutput];
     string[] quoted;
     foreach (argument; arguments) quoted ~= responseArgument(argument);
     auto response = buildPath(temporary, "dmd.rsp");
     writeFile(response, quoted.join("\n") ~ "\n");
     auto result = execute(["dmd", "@" ~ response]);
     if (result.status != 0) { stderr.write(result.output); return 1; }
+    if (linkerOutput != target) copy(fileSystemPath(linkerOutput), fileSystemPath(target));
     return 0;
 }
 
@@ -124,7 +140,7 @@ int main(string[] args) {
             writeln("Checked resources for ", units.length, " BL files against ", count, " bundles");
             return 0;
         }
-        if (args[1] == "compile") { write(compile(readText(args[2]))); return 0; }
+        if (args[1] == "compile") { write(compile(readText(fileSystemPath(args[2])))); return 0; }
         if (args[1] == "project") {
             auto modules = compileSources(readProject(args[2]));
             writeModules(modules, args[3]);
@@ -132,7 +148,7 @@ int main(string[] args) {
             return 0;
         }
         if (args[1] == "build") return buildExecutable(compileSources(readProject(args[2]), args[3]), args[4]);
-        auto lexer = new Lexer(readText(args[2]));
+        auto lexer = new Lexer(readText(fileSystemPath(args[2])));
         while (true) {
             auto t = lexer.next();
             if (t.kind == TokenKind.endOfFile) break;

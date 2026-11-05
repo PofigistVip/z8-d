@@ -65,6 +65,7 @@ python tests/array_join_primary.py path/to/original-z8
 python tests/object_array_join.py path/to/original-z8
 python tests/guid_string_comparisons.py path/to/original-z8
 python tests/long_expression_chains.py
+python tests/long_generated_paths.py
 python tests/file_named_conversions.py
 python tests/object_conversion.py
 python tests/value_conversion_operators.py
