@@ -478,7 +478,7 @@ unittest {
     rejects("class A { static void f() { int[] x; bool[] y; x = x ?: y; } }");
     compile("class A { static string f() { string[string] x; return x.get(\"a\") ?: x.get(\"b\"); } }");
     rejects("class A { static A[] x; }");
-    rejects("class A { static string[string] x; }");
+    compile("class A { static string[string] x; }");
     rejects("class A { static void f() { geometry[string] x; } }");
     rejects("class A { static void f() { string[string] x; x[\"a\"] += \"b\"; } }");
     rejects("class A { static void f() { string[string] x; int[] key; x.add(key, \"b\"); } }");

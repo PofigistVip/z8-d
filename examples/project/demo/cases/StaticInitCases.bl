@@ -1,5 +1,10 @@
 public class StaticInitCases {
+    private static string[int] entries;
+    private static string[string] labels = {("initial", "ready")};
     public static int run() {
+        if (!entries.isEmpty() || labels.get("initial") != "ready") return 12;
+        entries.add(1, "one");
+        if (entries.get(1) != "one") return 13;
         if (StaticInitTracker.calls != 0) return 1;
         if (StaticInitTarget.first != 1) return 2;
         if (StaticInitTarget.later != 0 || StaticInitTarget.second != 7) return 3;
