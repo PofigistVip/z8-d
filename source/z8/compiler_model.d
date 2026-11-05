@@ -141,6 +141,15 @@ package wstring attributeLiteralValue(TypeAttribute attribute) {
     assert(attribute.expression is null);
     if (attribute.value.kind == TokenKind.stringLiteral) return decodeStringLiteral(attribute.value.text);
     if (attribute.value.kind == TokenKind.booleanLiteral) return attribute.value.text.to!wstring;
+    if (attribute.value.kind == TokenKind.datespanLiteral) {
+        auto parts = attribute.value.text[1 .. $ - 1].strip.split();
+        auto clock = parts[1].split(":");
+        auto days = parts[0].to!uint;
+        // The compiler's Datespan uses int arithmetic before widening to long.
+        uint ticks = days * 86_400_000u + clock[0].to!uint * 3_600_000u +
+            clock[1].to!uint * 60_000u + clock[2].to!uint * 1_000u;
+        return (cast(int)ticks).to!string.to!wstring ~ "L"w;
+    }
     if (attribute.value.kind == TokenKind.guidLiteral) {
         auto uuid = attribute.value.text[1 .. $ - 1].toLower;
         auto digits = uuid.replace("-", "");

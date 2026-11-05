@@ -158,8 +158,11 @@ class Lexer {
                 return finish(TokenKind.dateLiteral, start);
         }
         auto span = matchFirst(value, regex(`^\s*([0-9]+)\s+([0-9]{1,2}):([0-9]{1,2}):([0-9]{1,2})\s*$`));
-        if (!span.empty && span[2].to!int < 24 && span[3].to!int < 60 && span[4].to!int < 60)
+        if (!span.empty && span[2].to!int < 24 && span[3].to!int < 60 && span[4].to!int < 60) {
+            try { auto days = span[1].to!int; }
+            catch (Exception) { fail("datespan days out of range", start); }
             return finish(TokenKind.datespanLiteral, start);
+        }
         auto time = matchFirst(value, regex(`^\s*([0-9]{1,2}):([0-9]{1,2}):([0-9]{1,2})\s*$`));
         if (!time.empty && time[1].to!int < 24 && time[2].to!int < 60 && time[3].to!int < 60)
             return finish(TokenKind.dateLiteral, start);

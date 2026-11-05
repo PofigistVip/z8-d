@@ -1,3 +1,4 @@
+[spanConstant '25 00:00:00']
 [guidConstant '00112233-4455-6677-8899-AABBCCDDEEFF']
 [binaryConstant '0, 0xFF, 128']
 [typeCount StaticState.count]

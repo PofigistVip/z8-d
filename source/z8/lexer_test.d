@@ -43,6 +43,6 @@ unittest {
     assert(tokens[2].kind == TokenKind.datespanLiteral);
     assert(tokens[3].kind == TokenKind.guidLiteral);
     assert(tokens[4].kind == TokenKind.binaryLiteral);
-    rejects("'29/02/2023'"); rejects("'256'"); rejects("\"bad\\q\"");
+    rejects("'29/02/2023'"); rejects("'256'"); rejects("'2147483648 00:00:00'"); rejects("\"bad\\q\"");
     rejects("/* unclosed"); rejects("class\0x"); rejects("switch");
 }

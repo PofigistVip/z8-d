@@ -250,7 +250,8 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     public static void main(String[] args) throws Exception {
         org.zenframework.z8.server.config.ServerConfig.load(args[0]);
         demo.cases.StaticOverloadChild.CLASS<?> metadata = new demo.cases.StaticOverloadChild.CLASS<>(null);
-        if (!"/* 00112233-4455-6677-8899-aabbccddeeff */4822678189205111L, -8603657889541918977L".equals(metadata.getAttribute("guidConstant")) ||
+        if (!"-2134967296L".equals(metadata.getAttribute("spanConstant")) ||
+            !"/* 00112233-4455-6677-8899-aabbccddeeff */4822678189205111L, -8603657889541918977L".equals(metadata.getAttribute("guidConstant")) ||
             !"new byte[] {0, -1, -128}".equals(metadata.getAttribute("binaryConstant")) ||
             !"2".equals(metadata.getAttribute("typeCount")) ||
             !"статическое значение".equals(metadata.getAttribute("typeText")) ||
@@ -474,6 +475,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
 import std.stdio : writeln;
 void main() {
     auto metadata = z8_new!Z8p_64656D6F2E63617365732E5374617469634F7665726C6F61644368696C64();
+    assert(metadata.z8_get_attribute("spanConstant"w) == "-2134967296L"w);
     assert(metadata.z8_get_attribute("guidConstant"w) == "/* 00112233-4455-6677-8899-aabbccddeeff */4822678189205111L, -8603657889541918977L"w);
     assert(metadata.z8_get_attribute("binaryConstant"w) == "new byte[] {0, -1, -128}"w);
     assert(metadata.z8_get_attribute("typeCount"w) == "2"w);

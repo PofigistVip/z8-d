@@ -15,9 +15,11 @@ Z8Datespan z8_datespan_literal(string text) {
     if (parts.length != 2) throw new Exception("invalid datespan literal");
     auto clock = parts[1].split(":");
     if (clock.length != 3) throw new Exception("invalid datespan literal");
-    auto days = parts[0].to!int;
-    return new Z8Datespan(cast(long)days * z8_day + clock[0].to!int * z8_hour +
-        clock[1].to!int * z8_minute + clock[2].to!int * z8_second);
+    auto days = parts[0].to!uint;
+    // The original compiler's Datespan token widens only after int arithmetic.
+    uint ticks = days * 86_400_000u + clock[0].to!uint * 3_600_000u +
+        clock[1].to!uint * 60_000u + clock[2].to!uint * 1_000u;
+    return new Z8Datespan(cast(int)ticks);
 }
 Z8Datespan z8_datespan_parse(wstring input) {
     auto text = z8_string_required(input);

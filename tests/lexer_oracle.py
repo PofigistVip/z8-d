@@ -66,7 +66,9 @@ with tempfile.TemporaryDirectory() as temporary:
             kind, offset, length, row, column, encoded = line.split("\t")
             expected.append(dict(kind=kind, offset=int(offset), length=int(length), line=int(row),
                                  column=int(column), text=base64.b64decode(encoded).decode("utf-8")))
-        actual = [json.loads(line) for line in d.stdout.splitlines()]
+        # JSON may contain U+2028/U+2029 inside a token; splitlines() treats
+        # these valid characters as record separators.
+        actual = [json.loads(line) for line in d.stdout.split("\n") if line]
         if len(actual) != len(expected):
             raise AssertionError(f"{file}: token counts differ: D={len(actual)}, Java={len(expected)}")
         for index, (left, right) in enumerate(zip(actual, expected)):
