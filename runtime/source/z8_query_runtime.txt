@@ -156,18 +156,31 @@ private void z8_query_close(Z8Object self) {
     }
     cursor.close();
 }
-private void z8_query_open(Z8Object self, Z8QueryReadRequest request, bool useQueryLimit = true) {
-    auto state = z8_query_state(self);
-    if (state.executor is null) throw new Exception("query executor is not configured");
+private void z8_query_prepare_read(Z8Object self, ref Z8QueryReadRequest request) {
+    if (z8_query_user_events_enabled()) self.z8_query_virtual_beforeRead();
     if (!request.byRecordId) {
         request.queryWhere = z8_query_where(self); request.queryHaving = z8_query_having(self);
         request.queryScope = z8_query_scope(self);
     }
+}
+private IZ8QueryCursor z8_query_execute_read(Z8Object self, Z8QueryReadRequest request) {
+    auto executor = z8_query_state(self).executor;
+    if (executor is null) throw new Exception("query executor is not configured");
+    IZ8QueryCursor cursor;
+    scope(failure) if (cursor !is null) cursor.close();
+    try { cursor = executor.read(self, request); }
+    finally { if (z8_query_user_events_enabled()) self.z8_query_virtual_afterRead(); }
+    if (cursor is null) throw new Exception("query executor returned a null cursor");
+    return cursor;
+}
+private void z8_query_open(Z8Object self, Z8QueryReadRequest request, bool useQueryLimit = true) {
+    auto state = z8_query_state(self);
+    if (state.executor is null) throw new Exception("query executor is not configured");
+    z8_query_prepare_read(self, request);
     z8_query_close(self);
     if (useQueryLimit && request.limit < 0 && state.limit.present) request.limit = cast(int)state.limit.value;
     request.readLock = z8_query_read_lock(self);
-    auto cursor = state.executor.read(self, request);
-    if (cursor is null) throw new Exception("query executor returned a null cursor");
+    auto cursor = z8_query_execute_read(self, request);
     scope(failure) cursor.close();
     auto fields = cursor.fields().dup;
     Z8FieldState[] fieldStates;
@@ -190,9 +203,11 @@ private Z8Optional!long z8_query_count_where(Z8Object self, Z8SqlBool where) {
     auto counter = cast(IZ8QueryCounter)state.executor;
     if (counter is null) throw new Exception("query executor does not support count");
     Z8QueryReadRequest request;
-    request.where = where; request.queryWhere = z8_query_where(self);
-    request.queryHaving = z8_query_having(self); request.queryScope = z8_query_scope(self);
-    return z8_optional_wrap(cast(long)cast(int)counter.count(self, request));
+    request.where = where; z8_query_prepare_read(self, request);
+    long result;
+    try { result = counter.count(self, request); }
+    finally { if (z8_query_user_events_enabled()) self.z8_query_virtual_afterRead(); }
+    return z8_optional_wrap(cast(long)cast(int)result);
 }
 private Z8Optional!long z8_query_count(Z8Object self) { return z8_query_count_where(self, null); }
 private IZ8QueryWriter z8_query_writer(Z8Object self) {
@@ -288,13 +303,9 @@ private Z8Primary[] z8_query_copy_values(Z8Object self, Z8Object[] fields, Z8Gui
     if (queryState.executor is null) throw new Exception("query executor is not configured");
     Z8QueryReadRequest request;
     request.fields = fields; request.recordId = id; request.byRecordId = id !is null;
-    if (!request.byRecordId) {
-        request.queryWhere = z8_query_where(self); request.queryHaving = z8_query_having(self);
-        request.queryScope = z8_query_scope(self);
-    }
+    z8_query_prepare_read(self, request);
     request.readLock = z8_query_read_lock(self);
-    auto cursor = queryState.executor.read(self, request);
-    if (cursor is null) throw new Exception("query executor returned a null cursor");
+    auto cursor = z8_query_execute_read(self, request);
     scope(exit) cursor.close();
     struct SavedField { Z8FieldState state; IZ8FieldCursor cursor; bool changed, wasNull; }
     SavedField[] saved;
@@ -362,12 +373,8 @@ private Z8Optional!bool z8_query_has_record_id(Z8Object self, Z8Guid id) {
     Z8QueryReadRequest request;
     request.fields = [z8_nonnull(z8_query_primary_key(self))];
     request.recordId = id; request.byRecordId = id !is null; request.readLock = z8_query_read_lock(self);
-    if (!request.byRecordId) {
-        request.queryWhere = z8_query_where(self); request.queryHaving = z8_query_having(self);
-        request.queryScope = z8_query_scope(self);
-    }
-    auto cursor = state.executor.read(self, request);
-    if (cursor is null) throw new Exception("query executor returned a null cursor");
+    z8_query_prepare_read(self, request);
+    auto cursor = z8_query_execute_read(self, request);
     scope(exit) cursor.close();
     return z8_optional_wrap(cursor.next());
 }
@@ -475,6 +482,8 @@ void z8_bind_builtin_query() {
     z8_native_bind(p ~ "m_having"w, &z8_query_default_filter);
     z8_native_bind(p ~ "m_scope"w, &z8_query_default_filter);
     z8_native_bind(p ~ "m_onNew"w, &z8_query_default_event);
+    z8_native_bind(p ~ "m_beforeRead"w, &z8_query_default_event);
+    z8_native_bind(p ~ "m_afterRead"w, &z8_query_default_event);
     foreach (name; ["onCopy"w, "beforeCreate"w, "afterCreate"w, "beforeUpdate"w, "afterUpdate"w, "beforeDestroy"w, "afterDestroy"w])
         z8_native_bind(p ~ "m_"w ~ name, &z8_query_default_record_event);
     z8_native_bind(p ~ "m_setWhere"w, &z8_query_set_where);

@@ -24,6 +24,9 @@ import org.zenframework.z8.base.table.value.IntField;
 import org.zenframework.z8.base.table.value.StringField;
 public class Report extends Query {
     public IntField amount; public StringField title;
+    public string readEvents = ""; public bool filterFromHook = false;
+    virtual protected void beforeRead() { readEvents += "B"; if (filterFromHook) setWhere(amount > 9); }
+    virtual protected void afterRead() { readEvents += "A"; }
     virtual protected sql_bool where() { return amount > 1; }
     virtual protected sql_bool having() { return amount < 100; }
     virtual protected sql_bool scope() { return amount > 0; }
@@ -59,6 +62,10 @@ public class Probe {
     public static void resetFilter(Report query) { sql_bool empty = null; query.setWhere(empty); }
     public static bool next(Report query) { return query.next(); }
     public static void close(Report query) { query.close(); }
+    public static int count(Report query) { return query.count(); }
+    public static string events(Report query) { return query.readEvents; }
+    public static void clearEvents(Report query) { query.readEvents = ""; }
+    public static void enableHookFilter(Report query) { query.filterFromHook = true; }
     public static int amount(Report query) { return query.amount.get(); }
     public static string title(Report query) { return query.title.get(); }
 }
@@ -88,7 +95,7 @@ class Rows : IZ8QueryCursor {
         throw new Exception("unknown field");
     }
 }
-class Executor : IZ8QueryExecutor {
+class Executor : IZ8QueryExecutor, IZ8QueryCounter {
     Z8Object amount, title;
     Z8QueryReadRequest last;
     Rows cursor;
@@ -102,6 +109,7 @@ class Executor : IZ8QueryExecutor {
         cursor = new Rows(amount, title, selected); cursor.grouped = request.groupFields.length != 0; if (empty) cursor.count = 0;
         return cursor;
     }
+    long count(Z8Object query, Z8QueryReadRequest request) { last = request; if (fail) throw new Exception("counter failure"); return 2; }
 }
 void main() {
     alias P = Z8p_50726F6265;
@@ -159,6 +167,20 @@ void main() {
     assert(z8_optional_require(P.m_next(query)));
     auto grouped = P.m_groupValues(query); assert(grouped.z8_size() == 2 && grouped.z8_get(0) == 10 && grouped.z8_get(1) == 20);
     P.m_close(query);
+    P.m_clearEvents(query); P.m_enableHookFilter(query); P.m_all(query);
+    assert(P.m_events(query) == "BA"w && z8_sql_bool_format(executor.last.queryWhere, true).canFind(">9"w));
+    auto retained = executor.cursor;
+    assert(z8_optional_require(P.m_count(query)) == 2 && P.m_events(query) == "BABA"w && !retained.closed);
+    executor.fail = true;
+    bool countFailed; try { P.m_count(query); } catch (Exception) { countFailed = true; }
+    assert(countFailed && P.m_events(query) == "BABABA"w && !retained.closed);
+    bool readFailed; try { P.m_all(query); } catch (Exception) { readFailed = true; }
+    assert(readFailed && P.m_events(query) == "BABABABA"w && retained.closed);
+    executor.fail = false;
+    auto request = new Z8ApplicationRequest(); request.setEventsLevel(Z8EventsLevel.system);
+    auto previous = z8_application_set_request(request);
+    P.m_all(query); assert(z8_optional_require(P.m_count(query)) == 2 && P.m_events(query) == "BABABABA"w);
+    P.m_close(query); z8_application_set_request(previous);
 }
 ''', encoding="utf-8")
     exe = temp / ("query-read.exe" if os.name == "nt" else "query-read")

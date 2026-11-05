@@ -970,8 +970,8 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 method.returnType == ValueType.sqlBoolType && !method.parameters.length)
                 result ~= "override Z8SqlBool z8_query_virtual_" ~ method.name.text ~ "() { return this.m_" ~ method.name.text ~ "(); }\n";
             foreach (method; program.methods) if (method.returnType == ValueType.voidType) {
-                if (method.name.text == "onNew" && !method.parameters.length)
-                    result ~= "override void z8_query_virtual_onNew() { this.m_onNew(); }\n";
+                if (["onNew", "beforeRead", "afterRead"].canFind(method.name.text) && !method.parameters.length)
+                    result ~= "override void z8_query_virtual_" ~ method.name.text ~ "() { this.m_" ~ method.name.text ~ "(); }\n";
                 if (["onCopy", "beforeCreate", "afterCreate", "beforeUpdate", "afterUpdate", "beforeDestroy", "afterDestroy"].canFind(method.name.text) &&
                     method.parameters.length == 1 && method.parameters[0].type == ValueType.guidType)
                     result ~= "override void z8_query_virtual_" ~ method.name.text ~ "(Z8Guid id) { this.m_" ~ method.name.text ~ "(id); }\n";
