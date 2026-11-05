@@ -9,9 +9,12 @@ class Z8CovariantMap(K, V, M, bool keyObject, bool valueObject) {
     private this(M sharedData) { data = sharedData; }
     private static Element checkedValue(typeof(M.init.z8_get(Key.init)) value) {
         static if (valueObject) {
-            auto result = cast(V)value;
-            if (value !is null && result is null) throw new Exception("invalid map value cast");
-            return result;
+            static if (is(V : IZ8ObjectArrayView)) return z8_object_collection_view!V(value);
+            else {
+                auto result = cast(V)value;
+                if (value !is null && result is null) throw new Exception("invalid map value cast");
+                return result;
+            }
         } else return value;
     }
     override bool opEquals(Object other) {
@@ -33,7 +36,8 @@ class Z8CovariantMap(K, V, M, bool keyObject, bool valueObject) {
         else return data.z8_keys();
     }
     Z8ValueArray!V z8_values() {
-        static if (valueObject) return new Z8ObjectArray!V(data.z8_values());
+        static if (valueObject && is(V : IZ8ObjectArrayView)) return Z8NestedObjectArray!V.z8_from_data(data.z8_values());
+        else static if (valueObject) return new Z8ObjectArray!V(data.z8_values());
         else return data.z8_values();
     }
 }

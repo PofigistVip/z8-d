@@ -23,6 +23,12 @@ with tempfile.TemporaryDirectory() as directory:
             try { CovariantChild removed = children.remove("bad"); return 2; }
             catch (exception expected) {}
             if (children.size() != 1) return 3;
+            CovariantChild[][string] childRows = {("first", {new CovariantChild})};
+            CovariantBase[][string] baseRows = childRows;
+            // The original BL compiler accepts this, but its Java backend does not compile it.
+            for (CovariantBase[] row : baseRows.values()) row.add(new CovariantBase);
+            try { CovariantChild invalid = childRows["first"][1]; return 4; }
+            catch (exception expectedRow) {}
             return 137;
         }
     }""", encoding="utf-8")
@@ -34,6 +40,8 @@ with tempfile.TemporaryDirectory() as directory:
     for body in (
         "CovariantBase[string] a; CovariantChild[string] b; b = a;",
         "int[CovariantBase] a; int[CovariantChild] b; b = a;",
+        "CovariantBase[][string] a; CovariantChild[][string] b; b = a;",
+        "CovariantBase[][CovariantBase] a; CovariantChild[][CovariantChild] b; b = a;",
     ):
         bad.write_text("public class BadCovariantMaps { public static void run() { " + body + " } }", encoding="utf-8")
         failure = subprocess.run([str(compiler), "project", str(temp), str(temp / "out")], capture_output=True, text=True)

@@ -41,7 +41,7 @@ private string dType(ValueType type, Program objectClass = null, Program[] keyOb
         auto innerKeys = innerMapKeyClasses(type, keyObjectClasses);
         auto keyType = dType(key, outerMapKeyClass(type, keyObjectClasses));
         auto valueType = dType(value, objectClass, innerKeys);
-        bool keyObject = key == ValueType.selfType, valueObject = value == ValueType.selfType;
+        bool keyObject = key == ValueType.selfType, valueObject = value == ValueType.selfType || isObjectArrayTree(value);
         auto storedKey = keyObject ? "Z8Object" : keyType;
         auto storedValue = valueObject ? "Object" : valueType;
         string storage;
@@ -341,7 +341,7 @@ private string emitExpr(Expression e) {
         auto type = e.mapConversionType;
         auto key = e.mapConversionKeyClass !is null ? e.mapConversionKeyClass.emittedName :
             dType(mapKeyType(type), outerMapKeyClass(type, e.keyObjectClasses));
-        auto mapped = e.mapConversionValueClass !is null ? e.mapConversionValueClass.emittedName :
+        auto mapped = e.mapConversionValueClass !is null ? dType(mapValueType(type), e.mapConversionValueClass, innerMapKeyClasses(type, e.keyObjectClasses)) :
             dType(mapValueType(type), e.objectClass, innerMapKeyClasses(type, e.keyObjectClasses));
         value = "z8_covariant_map_view!(" ~ key ~ ", " ~ mapped ~ ")(" ~ value ~ ")";
     }

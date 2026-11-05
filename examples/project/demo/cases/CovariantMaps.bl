@@ -1,6 +1,8 @@
 public class CovariantMaps {
     private static int size(CovariantBase[string] values) { return values.size(); }
     private static CovariantBase[string] widen(CovariantChild[string] values) { return values; }
+    private static int rowCount(CovariantBase[][string] values) { return values.size(); }
+    private static CovariantBase[][string] widenRows(CovariantChild[][string] values) { return values; }
     public static int run() {
         CovariantChild child = new CovariantChild;
         CovariantChild[string] children = {("first", child)};
@@ -21,6 +23,35 @@ public class CovariantMaps {
         widePairs.add(child, other);
         try { CovariantBase invalid = pairs[child]; return 6; } catch (exception expectedValue) {}
         if (widePairs[child].value != 11 || pairs.size() != 1) return 7;
+        CovariantChild[][string] childRows = {("first", {child})};
+        CovariantBase[][string] baseRows = childRows;
+        if (rowCount(childRows) != 1 || widenRows(childRows)["first"][0].value != 11) return 8;
+        baseRows["first"].add(other);
+        if (childRows["first"].size() != 2) return 9;
+        try { CovariantChild invalid = childRows["first"][1]; return 10; } catch (exception expectedNested) {}
+        baseRows["first"].removeAt(1);
+        CovariantBase[] second = {other};
+        baseRows.add("second", second);
+        if (childRows.size() != 2) return 11;
+        try { CovariantChild invalid = childRows["second"][0]; return 12; } catch (exception expectedRow) {}
+        childRows.remove("second");
+        CovariantBase[][] rowValues = baseRows.values();
+        rowValues[0].add(other);
+        if (childRows["first"].size() != 2) return 13;
+        try { CovariantChild invalid = childRows["first"][1]; return 14; } catch (exception expectedValues) {}
+        CovariantChild[][][string] childMatrices = {("matrix", {{child}})};
+        CovariantBase[][][string] baseMatrices = childMatrices;
+        baseMatrices["matrix"][0].add(other);
+        if (childMatrices["matrix"][0].size() != 2) return 15;
+        try { CovariantChild invalid = childMatrices["matrix"][0][1]; return 16; } catch (exception expectedMatrix) {}
+        CovariantBase[][][] values = baseMatrices.values();
+        if (values.size() != 1 || values[0][0].size() != 2) return 17;
+        CovariantChild[][CovariantChild] keyedRows = {(child, {child})};
+        CovariantBase[][CovariantBase] wideKeyedRows = keyedRows;
+        wideKeyedRows.add(other, second);
+        if (keyedRows.size() != 2 || wideKeyedRows[other][0].value != 11) return 18;
+        try { for (CovariantChild key : keyedRows.keys()) { int seen = key.value; } return 19; }
+        catch (exception expectedNestedKey) {}
         return 135;
     }
 }

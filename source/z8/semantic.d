@@ -212,7 +212,7 @@ class Checker {
     // direct object value while retaining exact types in nested dimensions.
     private bool covariantMapMatches(Expression e, ValueType type, Program expectedClass, Program[] expectedKeyClasses) {
         if (hasObjectClass(type)) {
-            if (mapValueType(type) == ValueType.selfType) {
+            if (mapValueType(type) == ValueType.selfType || isObjectArrayTree(mapValueType(type))) {
                 if (!isAssignable(e.objectClass, expectedClass)) return false;
             } else if (e.objectClass !is expectedClass) return false;
         }
@@ -266,7 +266,7 @@ class Checker {
         }
         if (expected == ValueType.sqlPrimaryType && isSqlType(actual)) return true;
         if (isMap(expected) && actual == expected && covariantMapMatches(e, expected, expectedClass, expectedKeyClasses)) {
-            if (mapValueType(expected) == ValueType.selfType && e.objectClass !is expectedClass)
+            if ((mapValueType(expected) == ValueType.selfType || isObjectArrayTree(mapValueType(expected))) && e.objectClass !is expectedClass)
                 e.mapConversionValueClass = expectedClass;
             if (mapKeyType(expected) == ValueType.selfType && outerMapKeyClass(expected, e.keyObjectClasses) !is outerMapKeyClass(expected, expectedKeyClasses))
                 e.mapConversionKeyClass = outerMapKeyClass(expected, expectedKeyClasses);
