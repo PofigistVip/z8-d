@@ -111,7 +111,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         if (name is null) throw new Exception("invalid query read parameter");
         if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "fields"w || name == "start"w || name == "limit"w ||
             name == "filter"w || name == "where"w || name == "quickFilter"w || name == "sort"w || name == "recordId"w || name == "count"w || name == "values"w ||
-            name == "lookup"w || name == "lookupFields"w) continue;
+            name == "lookup"w || name == "lookupFields"w || name == "period"w) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported query read parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
@@ -214,6 +214,33 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
             match = z8_filter_combine(match, z8_sql_string_like(z8_sql_string_toLower(column), pattern), true);
         }
         if (match !is null) read.where = z8_filter_combine(read.where, z8_sql_bool_group(match));
+    }
+    auto period = params.z8_get("period"w);
+    if (!read.byRecordIds && period !is null && period.length) {
+        auto parsed = z8_json_parse(period.to!string);
+        if (parsed.type != JSONType.object) throw new Exception("query period must be an object");
+        auto active = "active" in parsed.object;
+        if (active !is null && z8_bool_parse(z8_json_value_text(*active))) {
+            auto field = z8_query_state(query).period;
+            if (field is null || field.z8_get_owner() !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
+                throw new Exception("query period requires a direct date field");
+            auto type = z8_field_type_id(field);
+            if (type != "date"w && type != "datetime"w) throw new Exception("query period requires a date field");
+            auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
+            if (!privileges.getFieldAccess(queryKey, fieldKey).read) throw new Exception("query period field access denied");
+            auto column = z8_datetime_field_sql(field);
+            auto startDate = "start" in parsed.object, finishDate = "finish" in parsed.object;
+            if (startDate !is null && startDate.type != JSONType.null_) {
+                auto boundary = z8_date_parse(z8_json_value_text(*startDate));
+                if (z8_date_ticks(boundary) != z8_date_ticks(z8_date_min))
+                    read.where = z8_filter_combine(read.where, z8_sql_date_compare!">="(column, z8_sql_date_const(boundary)));
+            }
+            if (finishDate !is null && finishDate.type != JSONType.null_) {
+                auto finish = z8_date_parse(z8_json_value_text(*finishDate));
+                if (z8_date_ticks(finish) != z8_date_ticks(z8_date_max))
+                    read.where = z8_filter_combine(read.where, z8_sql_date_compare!"<="(column, z8_sql_date_const(finish)));
+            }
+        }
     }
     foreach (name; ["filter"w, "where"w, "quickFilter"w]) {
         // ReadAction in the original Z8 uses the record IDs instead of the

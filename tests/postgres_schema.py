@@ -40,6 +40,7 @@ import org.zenframework.z8.base.application.Application;
     [name "Price"] public DecimalField price; price.defaultValue = 12.50;
     [name "Reference"] public GuidField reference;
     [name "Moment"] public DatetimeField moment;
+    period = moment;
     [name "Duration"] public DatespanField duration;
     [name "Details"] public TextField details;
     [name "Blob"] public BinaryField blob;
@@ -556,7 +557,7 @@ void main(string[] args) {
     assert(adminPrivileges.roleIds.length == 1 && adminPrivileges.privileges.getDefaultAccess().execute);
     assert(adminPrivileges.privileges.getTableAccess(bootTableKey).write && adminPrivileges.privileges.getFieldAccess(bootTableKey, bootFieldKey).read);
     assert(adminPrivileges.privileges.getRequestAccess(bootRequestKey).execute);
-    db.execute(`INSERT INTO "z8_bootstrap"."Sample;--" ("RecordId", "Title", "Amount") VALUES ('00000000-0000-0000-0000-00000000012D', 'Visible', 42)`);
+    db.execute(`INSERT INTO "z8_bootstrap"."Sample;--" ("RecordId", "Title", "Amount", "Moment") VALUES ('00000000-0000-0000-0000-00000000012D', 'Visible', 42, 1000)`);
     auto queryUser = new Z8UserData(); queryUser.id = z8_guid_create(2); queryUser.privileges = adminPrivileges.privileges;
     auto querySession = new Z8ApplicationSession("query"w, queryUser, queryUser);
     auto readRequest = new Z8ApplicationRequest(); readRequest.session = querySession; readRequest.monitor = new Z8RequestMonitor();
@@ -628,6 +629,21 @@ void main(string[] args) {
     }
     assert(lookup(`["title","details"]`w, "VIS"w) == 1);
     assert(lookup(`["title","details"]`w, "absent"w) == 0);
+    long periodRows(wstring period) {
+        auto request = new Z8ApplicationRequest(); request.session = querySession; request.monitor = new Z8RequestMonitor();
+        request.parameters.z8_add("action"w, "read"w); request.parameters.z8_add("fields"w, `["amount"]`w); request.parameters.z8_add("period"w, period);
+        z8_application_set_request(request); z8_application_start_response(request, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+        z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor);
+        return cast(long)parseJSON(z8_application_response_text(request).to!string)["data"].array.length;
+    }
+    assert(periodRows(`{"active":true,"start":"1000","finish":"1000"}`w) == 1);
+    assert(periodRows(`{"active":true,"start":"1001"}`w) == 0);
+    assert(periodRows(`{"active":false,"start":"1001"}`w) == 1);
+    queryUser.privileges.setFieldAccess(z8_guid_create_name("Sample;--.Moment"w), Z8Access.init);
+    bool periodDenied;
+    try { periodRows(`{"active":true,"start":"1000"}`w); } catch (Exception) { periodDenied = true; }
+    assert(periodDenied);
+    queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
     queryUser.privileges.setFieldAccess(bootFieldKey, Z8Access.init);
     assert(rejectedRead("filter"w, `{"property":"title","value":"Visible"}`w));
     bool lookupDenied;

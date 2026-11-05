@@ -108,6 +108,8 @@ The optional `values` object (or the first object of an array) initializes
 readable direct scalar fields before `onReadAction` and `beforeRead` run.
 `lookup` and `lookupFields` support case-insensitive matching across readable
 direct text fields; multiple fields are combined with OR.
+An active JSON `period` filters a readable direct `period` date field between
+the optional inclusive `start` and `finish` boundaries.
 As in the Java `ReadAction`, a nonempty `recordId` list replaces the request
 filters and query scope; an empty list keeps the normal filters and scope.
 Linked and computed fields, other read options and custom request parameters
