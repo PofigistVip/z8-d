@@ -1,0 +1,38 @@
+// Native implementations for the original Z8 crypto declarations.
+private wstring z8_crypto_hex(ubyte[] digest) {
+    import std.conv : to;
+    enum digits = "0123456789abcdef";
+    char[] text;
+    foreach (value; digest) { text ~= digits[value >> 4]; text ~= digits[value & 15]; }
+    // Java's BigInteger conversion removes leading zeroes, then pads to 32 digits.
+    size_t first;
+    while (text.length - first > 32 && text[first] == '0') ++first;
+    return text[first .. $].to!wstring;
+}
+
+private wstring z8_crypto_md5(wstring value) {
+    import std.conv : to;
+    import std.digest.md : md5Of;
+    auto digest = md5Of(z8_string_required(value).to!string);
+    return z8_crypto_hex(digest[]);
+}
+private wstring z8_crypto_sha1(wstring value) {
+    import std.conv : to;
+    import std.digest.sha : sha1Of;
+    auto digest = sha1Of(z8_string_required(value).to!string);
+    return z8_crypto_hex(digest[]);
+}
+private wstring z8_crypto_sha256(wstring value) {
+    import std.conv : to;
+    import std.digest.sha : sha256Of;
+    auto digest = sha256Of(z8_string_required(value).to!string);
+    return z8_crypto_hex(digest[]);
+}
+
+void z8_bind_builtin_crypto() {
+    z8_native_bind("org.zenframework.z8.server.crypto.MD5.m_hex"w, &z8_crypto_md5);
+    z8_native_bind("org.zenframework.z8.server.crypto.Digest.m_md5"w, &z8_crypto_md5);
+    z8_native_bind("org.zenframework.z8.server.crypto.Digest.m_sha1"w, &z8_crypto_sha1);
+    z8_native_bind("org.zenframework.z8.server.crypto.Digest.m_sha256"w, &z8_crypto_sha256);
+}
+shared static this() { z8_bind_builtin_crypto(); }
