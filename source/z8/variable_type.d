@@ -109,10 +109,10 @@ package ValueType arrayOf(ValueType type) {
 package bool isArray(ValueType type) {
     return isDynamicArray(type) || isSqlArray(type) || [ValueType.intArray, ValueType.intMatrix, ValueType.decimalArray, ValueType.decimalMatrix, ValueType.boolArray, ValueType.boolMatrix, ValueType.stringArray, ValueType.stringMatrix, ValueType.guidArray, ValueType.guidMatrix, ValueType.binaryArray, ValueType.binaryMatrix, ValueType.datespanArray, ValueType.datespanMatrix, ValueType.dateArray, ValueType.dateMatrix, ValueType.geometryArray, ValueType.geometryMatrix, ValueType.fileArray, ValueType.fileMatrix, ValueType.exceptionArray, ValueType.exceptionMatrix, ValueType.encodingArray, ValueType.encodingMatrix, ValueType.primaryArray, ValueType.primaryMatrix, ValueType.selfArray, ValueType.selfMatrix, ValueType.enumArray, ValueType.enumMatrix].canFind(type);
 }
-// Array dimensions around a user object, with no intervening map keys.
-package bool isObjectArrayTree(ValueType type) {
-    if (!isArray(type)) return false;
-    while (isArray(type)) type = elementType(type);
+// Whether a nested collection can be widened through a user class or key.
+package bool hasCovariantObjects(ValueType type) {
+    if (isArray(type)) return hasCovariantObjects(elementType(type));
+    if (isMap(type)) return mapKeyType(type) == ValueType.selfType || hasCovariantObjects(mapValueType(type));
     return type == ValueType.selfType;
 }
 package bool isReferenceArray(ValueType type) { return isDynamicArray(type) || isSqlArray(type) || [ValueType.selfArray, ValueType.enumArray, ValueType.primaryArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.encodingArray, ValueType.intMatrix, ValueType.decimalMatrix, ValueType.boolMatrix, ValueType.stringMatrix, ValueType.guidMatrix, ValueType.binaryMatrix, ValueType.datespanMatrix, ValueType.dateMatrix, ValueType.geometryMatrix, ValueType.fileMatrix, ValueType.exceptionMatrix, ValueType.encodingMatrix, ValueType.primaryMatrix, ValueType.selfMatrix, ValueType.enumMatrix].canFind(type); }

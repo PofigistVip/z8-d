@@ -52,6 +52,7 @@ public class CovariantMaps {
         if (keyedRows.size() != 2 || wideKeyedRows[other][0].value != 11) return 18;
         try { for (CovariantChild key : keyedRows.keys()) { int seen = key.value; } return 19; }
         catch (exception expectedNestedKey) {}
+        if (CovariantNestedMaps.run() != 143) return 20;
         return 135;
     }
 }

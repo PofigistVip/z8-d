@@ -1,11 +1,17 @@
 // Nested object arrays use the same erased collection storage as RCollection.
-class Z8NestedObjectArray(T) : IZ8ObjectArrayView if (is(T : IZ8ObjectArrayView)) {
+class Z8NestedObjectArray(T) : IZ8ObjectArrayView if (is(T : IZ8CollectionView)) {
     private Z8Array!Object data;
     this() { data = new Z8Array!Object(); }
     this(T[] values) { this(); foreach (value; values) data.z8_add(value); }
     private this(Z8Array!Object sharedData) { data = sharedData; }
     static Z8NestedObjectArray!T z8_from_data(Z8Array!Object data) { return new Z8NestedObjectArray!T(data); }
+    static Z8NestedObjectArray!T z8_from_storage(Object storage) {
+        auto data = cast(Z8Array!Object)storage;
+        if (data is null) throw new Exception("invalid array storage");
+        return z8_from_data(data);
+    }
     Z8Array!Object z8_erased_data() { return data; }
+    Object z8_erased_storage() { return data; }
     @property size_t z8_version() { return data.z8_version; }
     override bool opEquals(Object other) {
         if (this is other) return true;

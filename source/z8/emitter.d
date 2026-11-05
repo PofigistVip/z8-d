@@ -41,7 +41,7 @@ private string dType(ValueType type, Program objectClass = null, Program[] keyOb
         auto innerKeys = innerMapKeyClasses(type, keyObjectClasses);
         auto keyType = dType(key, outerMapKeyClass(type, keyObjectClasses));
         auto valueType = dType(value, objectClass, innerKeys);
-        bool keyObject = key == ValueType.selfType, valueObject = value == ValueType.selfType || isObjectArrayTree(value);
+        bool keyObject = key == ValueType.selfType, valueObject = hasCovariantObjects(value);
         auto storedKey = keyObject ? "Z8Object" : keyType;
         auto storedValue = valueObject ? "Object" : valueType;
         string storage;
@@ -229,13 +229,15 @@ private string emitExpr(Expression e) {
         bool[] savedPromotions;
         bool[] savedFileConversions, savedExceptionConversions, savedDateConversions, savedSqlBoolConversions, savedSqlIntConversions, savedSqlDecimalConversions, savedSqlIntDecimalConversions, savedSqlStringConversions;
         Method[] savedUserConversions;
-        Program[] savedArrayConversions, savedMapKeyConversions, savedMapValueConversions;
+        ValueType[] savedCollectionTypes;
+        Program[] savedCollectionClasses;
+        Program[][] savedCollectionKeys;
         foreach (i, argument; e.arguments) {
             savedOverrides ~= argument.emittedOverride;
             savedUserConversions ~= argument.userConversion;
-            savedArrayConversions ~= argument.arrayConversionClass;
-            savedMapKeyConversions ~= argument.mapConversionKeyClass;
-            savedMapValueConversions ~= argument.mapConversionValueClass;
+            savedCollectionTypes ~= argument.collectionConversionType;
+            savedCollectionClasses ~= argument.collectionConversionClass;
+            savedCollectionKeys ~= [argument.collectionConversionKeyClasses];
             savedBinaryConversions ~= argument.convertToBinary;
             savedFileConversions ~= argument.makeFile;
             savedExceptionConversions ~= argument.makeException;
@@ -263,18 +265,16 @@ private string emitExpr(Expression e) {
             argument.convertToSqlString = required && savedSqlStringConversions[$ - 1];
             argument.emittedOverride = name;
             argument.userConversion = null;
-            argument.arrayConversionClass = null;
-            argument.mapConversionKeyClass = null;
-            argument.mapConversionValueClass = null;
+            argument.collectionConversionType = ValueType.voidType;
         }
         value ~= "return " ~ emitExprRaw(e) ~ "; })()";
         if (!e.builtinCall.length) e.left.emittedOverride = savedReceiver;
         foreach (i, argument; e.arguments) {
             argument.emittedOverride = savedOverrides[i];
             argument.userConversion = savedUserConversions[i];
-            argument.arrayConversionClass = savedArrayConversions[i];
-            argument.mapConversionKeyClass = savedMapKeyConversions[i];
-            argument.mapConversionValueClass = savedMapValueConversions[i];
+            argument.collectionConversionType = savedCollectionTypes[i];
+            argument.collectionConversionClass = savedCollectionClasses[i];
+            argument.collectionConversionKeyClasses = savedCollectionKeys[i];
             argument.promoteToDecimal = savedPromotions[i]; argument.convertToString = savedStringConversions[i];
             argument.convertToBinary = savedBinaryConversions[i];
             argument.makeFile = savedFileConversions[i]; argument.makeException = savedExceptionConversions[i];
@@ -332,19 +332,8 @@ private string emitExpr(Expression e) {
         auto count = e.parenthesisCount - (e.firstParenthesisIsConditional ? 1 : 0);
         foreach (_; 0 .. count) value = "z8_sql_geometry_group(" ~ value ~ ")";
     }
-    if (e.arrayConversionClass !is null) {
-        if (e.arrayConversionType == ValueType.selfArray)
-            value = "z8_object_array_view!(" ~ e.arrayConversionClass.emittedName ~ ")(" ~ value ~ ")";
-        else value = "z8_object_collection_view!(" ~ dType(e.arrayConversionType, e.arrayConversionClass) ~ ")(" ~ value ~ ")";
-    }
-    if (e.mapConversionKeyClass !is null || e.mapConversionValueClass !is null) {
-        auto type = e.mapConversionType;
-        auto key = e.mapConversionKeyClass !is null ? e.mapConversionKeyClass.emittedName :
-            dType(mapKeyType(type), outerMapKeyClass(type, e.keyObjectClasses));
-        auto mapped = e.mapConversionValueClass !is null ? dType(mapValueType(type), e.mapConversionValueClass, innerMapKeyClasses(type, e.keyObjectClasses)) :
-            dType(mapValueType(type), e.objectClass, innerMapKeyClasses(type, e.keyObjectClasses));
-        value = "z8_covariant_map_view!(" ~ key ~ ", " ~ mapped ~ ")(" ~ value ~ ")";
-    }
+    if (e.collectionConversionType != ValueType.voidType)
+        value = "z8_object_collection_view!(" ~ dType(e.collectionConversionType, e.collectionConversionClass, e.collectionConversionKeyClasses) ~ ")(" ~ value ~ ")";
 
     if (e.userConversion !is null) value = "z8_nonnull(" ~ value ~ ")." ~ methodDName(e.userConversion) ~ "()";
     if (e.nonNullStringResult) value = "z8_string_or_empty(" ~ value ~ ")";

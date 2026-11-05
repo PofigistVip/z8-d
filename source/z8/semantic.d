@@ -207,21 +207,22 @@ class Checker {
             }
         return best;
     }
-    // The original VariableType permits a direct inheritance cast for the
-    // value and for each key; this view currently handles the outer key and
-    // direct object value while retaining exact types in nested dimensions.
-    private bool covariantMapMatches(Expression e, ValueType type, Program expectedClass, Program[] expectedKeyClasses) {
-        if (hasObjectClass(type)) {
-            if (mapValueType(type) == ValueType.selfType || isObjectArrayTree(mapValueType(type))) {
-                if (!isAssignable(e.objectClass, expectedClass)) return false;
-            } else if (e.objectClass !is expectedClass) return false;
+    // VariableType.getCastTo checks the value and each key independently.
+    private bool covariantCollectionMatches(ValueType type, Program actualClass, Program[] actualKeys,
+                                            Program expectedClass, Program[] expectedKeys) {
+        if (isArray(type))
+            return covariantCollectionMatches(elementType(type), actualClass, actualKeys, expectedClass, expectedKeys);
+        if (isMap(type)) {
+            auto key = mapKeyType(type);
+            if (key == ValueType.selfType) {
+                if (!isAssignable(outerMapKeyClass(type, actualKeys), outerMapKeyClass(type, expectedKeys))) return false;
+            } else if (key == ValueType.enumType && outerMapKeyClass(type, actualKeys) !is outerMapKeyClass(type, expectedKeys)) return false;
+            return covariantCollectionMatches(mapValueType(type), actualClass, innerMapKeyClasses(type, actualKeys),
+                                              expectedClass, innerMapKeyClasses(type, expectedKeys));
         }
-        if (hasMapKeyClass(type)) {
-            if (mapKeyType(type) == ValueType.selfType) {
-                if (innerMapKeyClasses(type, e.keyObjectClasses) != innerMapKeyClasses(type, expectedKeyClasses) ||
-                    !isAssignable(outerMapKeyClass(type, e.keyObjectClasses), outerMapKeyClass(type, expectedKeyClasses))) return false;
-            } else if (e.keyObjectClasses != expectedKeyClasses) return false;
-        }
+        if (actualKeys.length || expectedKeys.length) return false;
+        if (type == ValueType.selfType) return isAssignable(actualClass, expectedClass);
+        if (type == ValueType.enumType) return actualClass is expectedClass;
         return true;
     }
     private bool matches(Expression e, ValueType expected, Program expectedClass = null, Program[] expectedKeyClasses = null) {
@@ -265,17 +266,13 @@ class Checker {
             return true;
         }
         if (expected == ValueType.sqlPrimaryType && isSqlType(actual)) return true;
-        if (isMap(expected) && actual == expected && covariantMapMatches(e, expected, expectedClass, expectedKeyClasses)) {
-            if ((mapValueType(expected) == ValueType.selfType || isObjectArrayTree(mapValueType(expected))) && e.objectClass !is expectedClass)
-                e.mapConversionValueClass = expectedClass;
-            if (mapKeyType(expected) == ValueType.selfType && outerMapKeyClass(expected, e.keyObjectClasses) !is outerMapKeyClass(expected, expectedKeyClasses))
-                e.mapConversionKeyClass = outerMapKeyClass(expected, expectedKeyClasses);
-            if (e.mapConversionKeyClass !is null || e.mapConversionValueClass !is null) e.mapConversionType = actual;
-            return true;
-        }
-        if (actual == expected && isObjectArrayTree(expected) &&
-            isAssignable(e.objectClass, expectedClass)) {
-            if (e.objectClass !is expectedClass) { e.arrayConversionClass = expectedClass; e.arrayConversionType = expected; }
+        if ((isArray(expected) || isMap(expected)) && actual == expected &&
+            covariantCollectionMatches(expected, e.objectClass, e.keyObjectClasses, expectedClass, expectedKeyClasses)) {
+            if (e.objectClass !is expectedClass || e.keyObjectClasses != expectedKeyClasses) {
+                e.collectionConversionType = expected;
+                e.collectionConversionClass = expectedClass;
+                e.collectionConversionKeyClasses = expectedKeyClasses;
+            } else e.collectionConversionType = ValueType.voidType;
             return true;
         }
 
@@ -418,15 +415,14 @@ class Checker {
                             }
                         }
                     }
-                    if (isMap(actual)) {
+                    if (isMap(actual) || isArray(actual)) {
                         auto parameterClass = hasObjectClass(actual) ? resolveClass(candidate.owner, p.objectName, p.name) : null;
                         auto parameterKeys = hasMapKeyClass(actual) ? resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name) : null;
-                        if (!covariantMapMatches(e.arguments[i], actual, parameterClass, parameterKeys)) applicable = false;
+                        if (!covariantCollectionMatches(actual, e.arguments[i].objectClass, e.arguments[i].keyObjectClasses, parameterClass, parameterKeys)) applicable = false;
                     } else {
                         if (actual != ValueType.selfType && hasObjectClass(actual)) {
                             auto parameterClass = resolveClass(candidate.owner, p.objectName, p.name);
-                            if (isObjectArrayTree(actual) ? !isAssignable(e.arguments[i].objectClass, parameterClass) : e.arguments[i].objectClass !is parameterClass)
-                                applicable = false;
+                            if (e.arguments[i].objectClass !is parameterClass) applicable = false;
                         }
                         if (hasMapKeyClass(actual) && e.arguments[i].keyObjectClasses != resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name)) applicable = false;
                     }
@@ -2306,16 +2302,7 @@ class Checker {
                 auto array = typeOf(s.expression);
                 checkStatement(s.initial, true);
                 if (!isArray(array) || elementType(array) != s.initial.type) fail("foreach element type mismatch", s.token);
-                if (isObjectArrayTree(array)) {
-                    if (!isAssignable(s.expression.objectClass, s.initial.objectClass)) fail("foreach element type mismatch", s.token);
-                    if (array != ValueType.selfArray && s.expression.objectClass !is s.initial.objectClass) {
-                        s.expression.arrayConversionClass = s.initial.objectClass;
-                        s.expression.arrayConversionType = array;
-                    }
-                }
-                if (array == ValueType.enumArray && s.expression.objectClass !is s.initial.objectClass) fail("foreach element type mismatch", s.token);
-                if ((array == ValueType.enumMatrix || (isDynamicArray(array) && hasObjectClass(array) && !isObjectArrayTree(array))) && s.expression.objectClass !is s.initial.objectClass) fail("foreach element type mismatch", s.token);
-                if (hasMapKeyClass(array) && s.expression.keyObjectClasses != s.initial.keyObjectClasses) fail("foreach element type mismatch", s.token);
+                if (!matches(s.expression, array, s.initial.objectClass, s.initial.keyObjectClasses)) fail("foreach element type mismatch", s.token);
                 ++loopDepth; checkStatement(s.children[0]); --loopDepth;
                 variables = old; objectVariables = oldObjects; keyObjectVariables = oldKeyObjects; return false;
             case StmtKind.breakStmt:

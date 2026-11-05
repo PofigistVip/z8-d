@@ -1,22 +1,26 @@
 // Views of object collections retain shared storage across BL inheritance casts.
 template Z8ValueArray(T) {
     static if (is(T : Z8Object)) alias Z8ValueArray = Z8ObjectArray!T;
-    else static if (is(T : IZ8ObjectArrayView)) alias Z8ValueArray = Z8NestedObjectArray!T;
+    else static if (is(T : IZ8CollectionView)) alias Z8ValueArray = Z8NestedObjectArray!T;
     else alias Z8ValueArray = Z8Array!T;
 }
 
+// Collection views expose the original backing store, including maps in arrays.
+interface IZ8CollectionView {
+    Object z8_erased_storage();
+}
 // All typed views expose their shared storage, including nested dimensions.
-interface IZ8ObjectArrayView {
+interface IZ8ObjectArrayView : IZ8CollectionView {
     Z8Array!Object z8_erased_data();
 }
 
-T z8_object_collection_view(T)(Object value) if (is(T : IZ8ObjectArrayView)) {
+T z8_object_collection_view(T)(Object value) if (is(T : IZ8CollectionView)) {
     if (value is null) return null;
     auto exact = cast(T)value;
     if (exact !is null) return exact;
-    auto view = cast(IZ8ObjectArrayView)value;
-    if (view is null) throw new Exception("invalid object array element cast");
-    return T.z8_from_data(view.z8_erased_data());
+    auto view = cast(IZ8CollectionView)value;
+    if (view is null) throw new Exception("invalid collection cast");
+    return T.z8_from_storage(view.z8_erased_storage());
 }
 
 private ref T z8_object_array_slot(T)(ref Object item) {
@@ -29,7 +33,13 @@ class Z8ObjectArray(T) : IZ8ObjectArrayView if (is(T : Z8Object)) {
     this(T[] values) { this(); foreach (value; values) data.z8_add(value); }
     private this(Z8Array!Object sharedData) { data = sharedData; }
     static Z8ObjectArray!T z8_from_data(Z8Array!Object data) { return new Z8ObjectArray!T(data); }
+    static Z8ObjectArray!T z8_from_storage(Object storage) {
+        auto data = cast(Z8Array!Object)storage;
+        if (data is null) throw new Exception("invalid array storage");
+        return z8_from_data(data);
+    }
     Z8Array!Object z8_erased_data() { return data; }
+    Object z8_erased_storage() { return data; }
     @property size_t z8_version() { return data.z8_version; }
     override bool opEquals(Object other) {
         if (this is other) return true;

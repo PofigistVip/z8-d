@@ -1,0 +1,41 @@
+public class CovariantNestedMaps {
+    private static int countKeys(int[CovariantBase][string] values) { return values.size(); }
+    private static CovariantBase[CovariantBase][] widen(CovariantChild[CovariantChild][] values) { return values; }
+    public static int run() {
+        CovariantChild child = new CovariantChild;
+        CovariantBase base = new CovariantBase;
+        CovariantChild[int][string] narrowValues = {("group", {(1, child)})};
+        CovariantBase[int][string] wideValues = narrowValues;
+        wideValues["group"].add(2, base);
+        if (narrowValues["group"].size() != 2) return 1;
+        try { CovariantChild invalid = narrowValues["group"][2]; return 2; }
+        catch (exception expectedValue) {}
+
+        int[CovariantChild][string] narrowKeys = {("group", {(child, 5)})};
+        int[CovariantBase][string] wideKeys = narrowKeys;
+        wideKeys["group"].add(base, 8);
+        if (narrowKeys["group"].size() != 2 || wideKeys["group"][base] != 8 || countKeys(narrowKeys) != 1) return 3;
+        try { for (CovariantChild key : narrowKeys["group"].keys()) { int seen = key.value; } return 4; }
+        catch (exception expectedKey) {}
+
+        CovariantChild[CovariantChild][] narrowList = {{(child, child)}};
+        CovariantBase[CovariantBase][] wideList = narrowList;
+        wideList[0].add(base, base);
+        if (narrowList[0].size() != 2 || widen(narrowList)[0].size() != 2) return 5;
+        try { for (CovariantChild key : narrowList[0].keys()) { int seen = key.value; } return 6; }
+        catch (exception expectedListKey) {}
+        wideList[0].add(child, base);
+        try { CovariantChild invalid = narrowList[0][child]; return 7; }
+        catch (exception expectedListValue) {}
+        for (CovariantBase[CovariantBase] row : narrowList) row.add(child, child);
+        if (narrowList[0][child].extra != 7) return 10;
+
+        CovariantChild[CovariantChild][][string] nested = {("group", {{(child, child)}})};
+        CovariantBase[CovariantBase][][string] wide = nested;
+        wide["group"][0].add(child, base);
+        try { CovariantChild invalid = nested["group"][0][child]; return 8; }
+        catch (exception expectedDeepValue) {}
+        if (nested["group"].size() != 1 || wide["group"][0].size() != 1) return 9;
+        return 143;
+    }
+}

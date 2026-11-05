@@ -5,7 +5,7 @@ compiler = root / ("z8d.exe" if os.name == "nt" else "z8d")
 fixtures = root / "examples" / "project" / "demo" / "cases"
 with tempfile.TemporaryDirectory() as directory:
     temp = Path(directory)
-    for name in ("CovariantMaps.bl", "CovariantBase.bl", "CovariantChild.bl"):
+    for name in ("CovariantMaps.bl", "CovariantNestedMaps.bl", "CovariantBase.bl", "CovariantChild.bl"):
         shutil.copy2(fixtures / name, temp / name)
     executable = temp / ("covariant_maps.exe" if os.name == "nt" else "covariant_maps")
     subprocess.run([str(compiler), "build", str(temp), "CovariantMaps.run", str(executable)], check=True)
@@ -42,6 +42,9 @@ with tempfile.TemporaryDirectory() as directory:
         "int[CovariantBase] a; int[CovariantChild] b; b = a;",
         "CovariantBase[][string] a; CovariantChild[][string] b; b = a;",
         "CovariantBase[][CovariantBase] a; CovariantChild[][CovariantChild] b; b = a;",
+        "CovariantBase[int][string] a; CovariantChild[int][string] b; b = a;",
+        "int[CovariantBase][string] a; int[CovariantChild][string] b; b = a;",
+        "CovariantBase[CovariantBase][] a; CovariantChild[CovariantChild][] b; b = a;",
     ):
         bad.write_text("public class BadCovariantMaps { public static void run() { " + body + " } }", encoding="utf-8")
         failure = subprocess.run([str(compiler), "project", str(temp), str(temp / "out")], capture_output=True, text=True)
