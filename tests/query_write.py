@@ -18,11 +18,19 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     temp = Path(directory)
     source, generated = temp / "bl", temp / "generated"
     shutil.copytree(language, source)
+    (source / "DefaultAmount.bl").write_text('''
+import org.zenframework.z8.base.table.value.IntField;
+public class DefaultAmount extends IntField {
+    public int calls = 0;
+    virtual public int getDefault() { calls += 1; return 42; }
+}
+''', encoding="utf-8")
     (source / "Report.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.IntField;
 public class Report extends Table {
     public IntField amount;
+    public DefaultAmount other;
     public string events = "";
     virtual protected void onNew() { events += "N"; amount = 5; }
     virtual protected void beforeCreate(guid id) { events += "C"; amount = 6; }
@@ -41,6 +49,8 @@ public class Probe {
     public static int update(Report table, guid id) { return table.update(id); }
     public static int destroy(Report table, guid id) { return table.destroy(id); }
     public static void set(Report table, int value) { table.amount = value; }
+    public static void setOther(Report table, int value) { table.other = value; }
+    public static int defaultCalls(Report table) { return table.other.calls; }
     public static int get(Report table) { return table.amount.get(); }
     public static string events(Report table) { return table.events; }
 }
@@ -51,15 +61,16 @@ public class Probe {
 import z8.runtime;
 import z8gen.p_Probe;
 class Writer : IZ8QueryExecutor, IZ8QueryWriter {
-    Z8Object amount, key;
-    long inserted, updated, deleted, lastAmount;
+    Z8Object amount, other, key;
+    long inserted, updated, deleted, lastAmount, lastOther;
     Z8Guid lastId;
     bool fail;
-    this(Z8Object amount, Z8Object key) { this.amount = amount; this.key = key; }
+    this(Z8Object amount, Z8Object other, Z8Object key) { this.amount = amount; this.other = other; this.key = key; }
     IZ8QueryCursor read(Z8Object query, Z8QueryReadRequest request) { return null; }
     void insert(Z8Object query, Z8Object[] fields) {
-        ++inserted; assert(fields.length == 7);
+        ++inserted; assert(fields.length == 8);
         lastAmount = z8_optional_require(z8_primary_cast!long(z8_field_default_value(amount)));
+        lastOther = z8_optional_require(z8_primary_cast!long(z8_field_default_value(other)));
         lastId = z8_primary_cast!Z8Guid(z8_field_default_value(key));
         if (fail) throw new Exception("write failure");
     }
@@ -74,9 +85,10 @@ class Writer : IZ8QueryExecutor, IZ8QueryWriter {
 void main() {
     alias P = Z8p_50726F6265;
     auto table = P.m_make(); z8_nonnull(table);
-    auto writer = new Writer(table.f_amount, table.f_recordId()); z8_query_set_executor(table, writer);
+    auto writer = new Writer(table.f_amount, table.f_other, table.f_recordId()); z8_query_set_executor(table, writer);
     assert(P.m_create(table, z8_guid_create(9)) == z8_guid_create(9));
     assert(P.m_events(table) == "NCA"w && writer.inserted == 1 && writer.lastAmount == 6 && writer.lastId == z8_guid_create(9));
+    assert(writer.lastOther == 42 && z8_optional_require(P.m_defaultCalls(table)) == 1 && !z8_field_is_changed(table.f_other));
     assert(z8_optional_require(P.m_get(table)) == 0 && !z8_field_is_changed(table.f_amount));
     P.m_set(table, z8_optional_wrap(31L));
     assert(z8_optional_require(P.m_update(table, z8_guid_create(9))) == 1 && writer.lastAmount == 31);
@@ -92,6 +104,14 @@ void main() {
     assert(failed && P.m_events(table) == "NCAUVUVDENC"w && z8_field_is_changed(table.f_amount));
     z8_field_reset(table.f_amount); z8_field_reset(table.f_recordId()); writer.fail = false;
     auto random = P.m_createRandom(table); assert(random !is null && random != z8_guid_zero());
+    auto calls = z8_optional_require(P.m_defaultCalls(table));
+    P.m_setOther(table, z8_optional_wrap(55L)); P.m_create(table, z8_guid_create(11));
+    assert(writer.lastOther == 55 && z8_optional_require(P.m_defaultCalls(table)) == calls);
+    auto request = new Z8ApplicationRequest(); request.setEventsLevel(Z8EventsLevel.none);
+    auto previous = z8_application_set_request(request);
+    P.m_create(table, z8_guid_create(12));
+    assert(writer.lastOther == 0 && z8_optional_require(P.m_defaultCalls(table)) == calls);
+    z8_application_set_request(previous);
 }
 ''', encoding="utf-8")
     exe = temp / ("query-write.exe" if os.name == "nt" else "query-write")

@@ -959,6 +959,15 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 result ~= "override Z8Primary z8_field_virtual_get() { return z8_primary_box(this.m_get()); }\n";
                 break;
             }
+        if (isTypedFieldSubclass && !program.isNative) foreach (method; program.methods)
+            if (method.overrides && !method.isStatic && method.name.text == "getDefault" && !method.parameters.length &&
+                (method.returnType == ValueType.intType || method.returnType == ValueType.stringType ||
+                 method.returnType == ValueType.boolType || method.returnType == ValueType.decimalType || method.returnType == ValueType.guidType ||
+                 method.returnType == ValueType.dateType || method.returnType == ValueType.datespanType || method.returnType == ValueType.binaryType ||
+                 method.returnType == ValueType.geometryType)) {
+                result ~= "override Z8Primary z8_field_virtual_default() { return z8_primary_box(this.m_getDefault()); }\n";
+                break;
+            }
         if (program.isNative && isTypedFieldSubclass) {
             foreach (method; program.methods) if (method.name.text == "expression" && isSqlType(method.returnType) && !method.parameters.length) {
                 result ~= "override Z8SqlPrimary z8_field_virtual_expression() { return this.m_expression(); }\n";

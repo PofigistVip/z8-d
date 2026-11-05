@@ -261,6 +261,16 @@ private bool z8_query_user_events_enabled() {
     auto request = z8_application_request();
     return request is null || request.eventsEnabled(Z8EventsLevel.user);
 }
+private void z8_query_on_new(Z8Object self) {
+    if (z8_query_user_events_enabled()) self.z8_query_virtual_onNew();
+    if (!z8_query_user_events_enabled()) return;
+    foreach (field; z8_query_declared_fields(self, true)) {
+        if (z8_field_is_changed(field)) continue;
+        auto value = field.z8_field_virtual_default();
+        if (value !is null && !z8_primary_collection_equals(value, z8_field_default_value(field)))
+            z8_field_set(field, value);
+    }
+}
 private Z8Guid z8_query_insert_id(Z8Object self, Z8Guid id) {
     auto writer = z8_query_writer(self);
     auto fields = z8_query_declared_fields(self, true);
@@ -275,7 +285,7 @@ private Z8Guid z8_query_insert_id(Z8Object self, Z8Guid id) {
     return result;
 }
 private Z8Guid z8_query_create_id(Z8Object self, Z8Guid id) {
-    if (z8_query_user_events_enabled()) self.z8_query_virtual_onNew();
+    z8_query_on_new(self);
     return z8_query_insert_id(self, id);
 }
 private Z8Guid z8_query_create(Z8Object self) { return z8_query_create_id(self, z8_guid_create_random()); }
@@ -353,7 +363,7 @@ private Z8Guid z8_query_copy(Z8Object self, Z8Guid id) {
     auto fields = z8_query_declared_fields(self, true);
     bool[] changed;
     foreach (field; fields) changed ~= z8_field_is_changed(field);
-    if (z8_query_user_events_enabled()) self.z8_query_virtual_onNew();
+    z8_query_on_new(self);
     bool found;
     auto values = z8_query_copy_values(self, fields, id, found);
     if (found) foreach (index, field; fields) {

@@ -52,7 +52,8 @@ public class Sales extends Table {
 ''', encoding="utf-8")
     (source / "Plain.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
-public class Plain extends Table {}
+import org.zenframework.z8.base.table.value.NowField;
+public class Plain extends Table { [name "When"] public NowField moment; }
 ''', encoding="utf-8")
     (source / "Quiet.bl").write_text('''
 public class Quiet extends Plain {
@@ -263,11 +264,15 @@ void main(string[] args) {
     z8_query_set_executor(plain, new Z8PostgresQueryExecutor(db, "pg_temp"w, `Sales"Quote`w));
     z8_query_set_executor(quiet, new Z8PostgresQueryExecutor(db, "pg_temp"w, `Sales"Quote`w));
     P.m_createPlain(plain, z8_guid_create(45)); P.m_createPlain(quiet, z8_guid_create(46));
-    auto inherited = db.execute(`SELECT "RecordId", "CreatedBy" FROM "Sales""Quote" WHERE "RecordId" IN ('00000000-0000-0000-0000-00000000002d','00000000-0000-0000-0000-00000000002e') ORDER BY "RecordId"`);
+    auto inherited = db.execute(`SELECT "RecordId", "CreatedBy", "When" FROM "Sales""Quote" WHERE "RecordId" IN ('00000000-0000-0000-0000-00000000002d','00000000-0000-0000-0000-00000000002e') ORDER BY "RecordId"`);
     assert(inherited.rows[0][1].text == "00000000-0000-0000-0000-000000000066");
     assert(inherited.rows[1][1].text == "00000000-0000-0000-0000-000000000066");
+    assert(inherited.rows[0][2].text.to!long >= beforeAudit && inherited.rows[1][2].text.to!long >= beforeAudit);
     auto eventsBeforeSuppression = P.m_events(table);
     request.setEventsLevel(Z8EventsLevel.system); P.m_prepareCreate(table); P.m_create(table, z8_guid_create(47));
+    P.m_createPlain(plain, z8_guid_create(48));
+    auto defaultSuppressed = db.execute(`SELECT "When" FROM "Sales""Quote" WHERE "RecordId"='00000000-0000-0000-0000-000000000030'`);
+    assert(defaultSuppressed.rows[0][0].text.to!long < beforeAudit);
     auto systemOnly = db.execute(`SELECT "CreatedBy" FROM "Sales""Quote" WHERE "RecordId"='00000000-0000-0000-0000-00000000002f'`);
     assert(systemOnly.rows[0][0].text == "00000000-0000-0000-0000-000000000066" && P.m_events(table) == eventsBeforeSuppression);
     request.setEventsLevel(Z8EventsLevel.none); P.m_prepareCreate(table); P.m_create(table, z8_guid_create(44));
