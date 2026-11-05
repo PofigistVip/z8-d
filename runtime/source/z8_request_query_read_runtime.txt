@@ -146,7 +146,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
                     throw new Exception("linked and computed context fields are not supported");
                 auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
                 if (field !is key && !privileges.getFieldAccess(queryKey, fieldKey).read) throw new Exception("query context field access denied");
-                z8_application_query_set_value(field, value);
+                if (z8_field_type_id(field) != "binary"w) z8_application_query_set_value(field, value);
             }
         }
     }

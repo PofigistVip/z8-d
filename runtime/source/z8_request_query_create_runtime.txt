@@ -49,7 +49,7 @@ private void z8_application_dispatch_query_create_target(wstring className, Z8Ob
             if (field is key) continue;
             if (field.z8_get_owner() !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
                 throw new Exception("linked and computed fields are not supported by query create");
-            z8_application_query_set_value(field, value);
+            z8_application_query_set_value(field, value, true);
         }
         z8_field_set(key, z8_primary_box(id));
         if (z8_query_user_events_enabled()) query.z8_query_virtual_onCreateAction(id);

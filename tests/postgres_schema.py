@@ -800,6 +800,13 @@ void main(string[] args) {
     auto scalars = db.execute(`SELECT "Flag", "Price", "Reference", "Moment", "Duration", convert_from("Details", 'UTF8') FROM "z8_bootstrap"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-00000000012D'`);
     assert(scalars.rows[0][0].text == "0" && scalars.rows[0][1].text == "17.25" && scalars.rows[0][2].text == "00000000-0000-0000-0000-000000000063");
     assert(scalars.rows[0][3].text.to!long == z8_date_ticks(z8_date_parse("2024-01-02T03:04:05Z"w)) && scalars.rows[0][4].text == "3723000" && scalars.rows[0][5].text == "Данные");
+    auto upload = new Z8ApplicationRequest(); upload.session = querySession; upload.monitor = new Z8RequestMonitor();
+    upload.parameters.z8_add("request"w, "Sample"w); upload.parameters.z8_add("action"w, "update"w);
+    upload.parameters.z8_add("fields"w, `["title"]`w); upload.parameters.z8_add("data"w, `[{"recordId":"00000000-0000-0000-0000-00000000012D","blob":0}]`w);
+    upload.files.z8_add(z8_file_from_upload("data.bin"w, cast(const(ubyte)[])[0, 255, 65]));
+    z8_application_set_request(upload); z8_application_start_response(upload, "Sample"w); z8_application_dispatch_request();
+    assert(db.execute(`SELECT encode("Blob", 'hex') FROM "z8_bootstrap"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-00000000012D'`).rows[0][0].text == "00ff41");
+    assert(!update(`[{"recordId":"00000000-0000-0000-0000-00000000012D","blob":0}]`w, updateResult));
     assert(!update(`[{"recordId":"00000000-0000-0000-0000-00000000012D","amount":55},{"recordId":"00000000-0000-0000-0000-00000000012E","amount":"invalid"}]`w, updateResult));
     assert(db.execute(`SELECT "Amount" FROM "z8_bootstrap"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-00000000012D'`).rows[0][0].text == "44");
     queryUser.privileges.setFieldAccess(bootFieldKey, Z8Access(true, false, false, false, false, false));
@@ -819,6 +826,12 @@ void main(string[] args) {
     auto createdJson = parseJSON(createResult.to!string);
     assert(createdJson["data"].array.length == 1 && createdJson["data"][0]["recordId"].str == "00000000-0000-0000-0000-000000000133");
     assert(createdJson["data"][0]["title"].str == "Created" && createdJson["data"][0]["amount"].integer == 88);
+    auto createUpload = new Z8ApplicationRequest(); createUpload.session = querySession; createUpload.monitor = new Z8RequestMonitor();
+    createUpload.parameters.z8_add("request"w, "Sample"w); createUpload.parameters.z8_add("action"w, "create"w); createUpload.parameters.z8_add("fields"w, `["title"]`w);
+    createUpload.parameters.z8_add("data"w, `[{"recordId":"00000000-0000-0000-0000-000000000135","title":"Upload","blob":0}]`w);
+    createUpload.files.z8_add(z8_file_from_upload("data.bin"w, cast(const(ubyte)[])[7, 8, 255]));
+    z8_application_set_request(createUpload); z8_application_start_response(createUpload, "Sample"w); z8_application_dispatch_request();
+    assert(db.execute(`SELECT encode("Blob", 'hex') FROM "z8_bootstrap"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-000000000135'`).rows[0][0].text == "0708ff");
     assert(!create(`[{"recordId":"00000000-0000-0000-0000-000000000134","title":"Rollback"},{"recordId":"00000000-0000-0000-0000-000000000133"}]`w, createResult));
     assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-000000000134'`).rows[0][0].text == "0");
     queryUser.privileges.setTableAccess(bootTableKey, Z8Access(true, false, false, false, false, true));

@@ -32,9 +32,11 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.IntField;
 import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.table.value.BinaryField;
 public class Sample extends Table {
     [name "Title"] public StringField title;
     [name "Amount"] public IntField amount;
+    [name "Blob"] public BinaryField blob;
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -66,7 +68,7 @@ class Authority : IZ8HttpAuthority {
 void main(string[] args) {
     databaseInfo = args[1];
     auto setup = new Z8PostgresConnection(databaseInfo);
-    setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
+    setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Blob" bytea, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     setup.execute(`INSERT INTO "Sample" ("RecordId", "Title", "Amount") VALUES ('00000000-0000-0000-0000-000000000001', 'First', 5), ('00000000-0000-0000-0000-000000000002', 'Second', 10)`);
     setup.close();
     auto server = new Z8CivetServer("127.0.0.1:0", (Z8HttpRequest request) {
@@ -77,7 +79,10 @@ void main(string[] args) {
         z8_application_dispatch_request();
     }, 2048, Z8ResponseMode.application, "test"w, new Authority(), "Denied"w, null, "/request.json");
     scope(exit) server.stop();
-    writeln(server.port()); stdout.flush(); readln();
+    writeln(server.port()); stdout.flush(); readln(); server.stop();
+    auto verify = new Z8PostgresConnection(databaseInfo);
+    auto row = verify.execute(`SELECT encode("Blob", 'hex') FROM "Sample" WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
+    assert(row.rows.length == 1 && row.rows[0][0].text == "00ff4100"); verify.close();
 }
 ''', encoding="utf-8")
     exe = temp / ("postgres-http.exe" if os.name == "nt" else "postgres-http")
@@ -143,6 +148,23 @@ void main(string[] args) {
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(action="update", data=change)
             assert result["success"] and result["data"][0]["title"] == "Updated" and result["data"][0]["amount"] == 12, result
+            parts = {"request": "Sample", "session": "full", "server": "test", "action": "update",
+                     "fields": '["title","amount"]',
+                     "data": '[{"recordId":"00000000-0000-0000-0000-000000000002","blob":0}]'}
+            boundary = "z8-upload"
+            body = b""
+            for key, value in parts.items():
+                body += (f'--{boundary}\r\nContent-Disposition: form-data; name="{key}"\r\n\r\n{value}\r\n').encode()
+            body += (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="data.bin"\r\n'
+                     'Content-Type: application/octet-stream\r\n\r\n').encode() + bytes([0, 255, 65, 0]) + b"\r\n"
+            body += f"--{boundary}--\r\n".encode()
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            try:
+                conn.request("POST", "/request.json", body, {"Content-Type": f"multipart/form-data; boundary={boundary}"})
+                response = conn.getresponse(); result = json.loads(response.read())
+                assert response.status == 200 and result["success"], result
+            finally:
+                conn.close()
             data = '["00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000003","00000000-0000-0000-0000-000000000004"]'
             result = request(session="limited", action="destroy", data=data)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result

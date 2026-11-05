@@ -1,13 +1,19 @@
-// QueryUtils.setFieldValue for the scalar field types currently supported by
-// the PostgreSQL writer. File uploads and geometry require separate adapters.
-private void z8_application_query_set_value(Z8Object field, JSONValue value) {
+// QueryUtils.setFieldValue for the PostgreSQL writer, including uploaded
+// binary content; geometry requires a separate adapter.
+private void z8_application_query_set_value(Z8Object field, JSONValue value, bool acceptBinary = false) {
     if (value.type == JSONType.array || value.type == JSONType.object) throw new Exception("invalid query field value");
     auto type = z8_field_type_id(field);
     auto text = z8_json_value_text(value);
     Z8Primary boxed;
-    if (type == "string"w || type == "text"w) boxed = z8_primary_box(text);
-    else if (type == "binary"w || type == "geometry"w || type == "file"w || type == "attachments"w)
-        throw new Exception("unsupported query write field type");
+    if (type == "string"w || type == "text"w || type == "file"w || type == "attachments"w) boxed = z8_primary_box(text);
+    else if (type == "binary"w) {
+        if (!acceptBinary) throw new Exception("binary value requires a file upload");
+        auto index = z8_int_parse(text);
+        auto files = z8_nonnull(z8_application_require_request().files);
+        if (index < 0 || index >= files.z8_size()) throw new Exception("invalid uploaded file index");
+        boxed = z8_primary_box(z8_file_to_binary(z8_nonnull(files.z8_get(index))));
+    }
+    else if (type == "geometry"w) throw new Exception("unsupported query write field type");
     else if (!text.length) boxed = z8_field_default_value(field);
     else switch (type) {
         case "int"w: boxed = z8_primary_box(z8_int_parse(text)); break;
@@ -85,7 +91,7 @@ private void z8_application_dispatch_query_update_target(wstring className, Z8Ob
                 throw new Exception("linked and computed fields are not supported by query update");
             auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
             if (!privileges.getFieldAccess(queryKey, fieldKey).write) throw new Exception("query update field access denied");
-            z8_application_query_set_value(field, value);
+            z8_application_query_set_value(field, value, true);
         }
         if (z8_query_user_events_enabled()) query.z8_query_virtual_onUpdateAction(id);
         z8_query_update_id(query, id);

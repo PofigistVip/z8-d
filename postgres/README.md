@@ -136,8 +136,10 @@ containing the primary key and fields to change. It requires table and field
 write access, runs the BL update hooks in a transaction, and returns the
 readable requested fields of the affected records after commit. String, text,
 integer, decimal, boolean, GUID, date, datetime and datespan values are
-supported by both write actions. Linked or computed fields, files, binary and
-geometry uploads, and additional write options are rejected.
+supported by both write actions. File and attachment field values are stored
+as text metadata; binary fields accept an index into the request's uploaded
+files. Linked or computed fields, geometry uploads and additional write options
+are rejected. Persisting attachment files separately is not implemented.
 The direct-table `copy` action accepts source GUIDs in `recordId` and one
 override object per source in `data`. It requires copy access and write access
 to every primary field, invokes the BL copy hooks, and returns the copied
