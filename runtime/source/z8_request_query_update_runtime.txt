@@ -7,7 +7,7 @@ private void z8_application_query_set_value(Z8Object field, JSONValue value) {
     Z8Primary boxed;
     if (type == "string"w || type == "text"w) boxed = z8_primary_box(text);
     else if (type == "binary"w || type == "geometry"w || type == "file"w || type == "attachments"w)
-        throw new Exception("unsupported query update field type");
+        throw new Exception("unsupported query write field type");
     else if (!text.length) boxed = z8_field_default_value(field);
     else switch (type) {
         case "int"w: boxed = z8_primary_box(z8_int_parse(text)); break;
@@ -16,9 +16,24 @@ private void z8_application_query_set_value(Z8Object field, JSONValue value) {
         case "guid"w: boxed = z8_primary_box(z8_guid_parse(text)); break;
         case "date"w: case "datetime"w: boxed = z8_primary_box(z8_date_parse(text)); break;
         case "datespan"w: boxed = z8_primary_box(z8_datespan_parse(text)); break;
-        default: throw new Exception("unsupported query update field type");
+        default: throw new Exception("unsupported query write field type");
     }
     z8_field_set(field, boxed);
+}
+
+private void z8_application_query_write_affected(Z8Object query, Z8Object[] selected, Z8Guid[] ids, Z8JsonWriterState writer) {
+    auto key = z8_nonnull(z8_query_primary_key(query));
+    foreach (field; z8_query_declared_fields(query, true)) z8_field_reset(field);
+    auto filter = new Z8SqlBool(Z8SqlBoolKind.inVector);
+    filter.vectorValue = new Z8SqlFieldToken(key);
+    foreach (id; ids) filter.vectorItems ~= new Z8SqlBoxedConstant(z8_primary_box(id));
+    Z8QueryReadRequest read;
+    read.fields = selected; read.where = filter; read.byRecordIds = true;
+    z8_query_prepare_read(query, read);
+    read.queryScope = z8_query_scope(query);
+    z8_query_open(query, read, true, true);
+    scope(exit) z8_query_close(query);
+    z8_application_query_write_rows(query, writer, selected);
 }
 
 void z8_application_dispatch_query_update(wstring className) {
@@ -76,15 +91,5 @@ private void z8_application_dispatch_query_update_target(wstring className, Z8Ob
         ids ~= id;
     }
     connection.commit();
-    foreach (field; z8_query_declared_fields(query, true)) z8_field_reset(field);
-    auto filter = new Z8SqlBool(Z8SqlBoolKind.inVector);
-    filter.vectorValue = new Z8SqlFieldToken(key);
-    foreach (id; ids) filter.vectorItems ~= new Z8SqlBoxedConstant(z8_primary_box(id));
-    Z8QueryReadRequest read;
-    read.fields = selected; read.where = filter; read.byRecordIds = true;
-    z8_query_prepare_read(query, read);
-    read.queryScope = z8_query_scope(query);
-    z8_query_open(query, read, true, true);
-    scope(exit) z8_query_close(query);
-    z8_application_query_write_rows(query, request.writer, selected);
+    z8_application_query_write_affected(query, selected, ids, request.writer);
 }

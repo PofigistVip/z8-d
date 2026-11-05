@@ -245,6 +245,7 @@ void z8_application_dispatch_request() {
     if (z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, target)) {
         if (action == "destroy"w) z8_application_dispatch_query_destroy_target(className, target);
         else if (action == "update"w) z8_application_dispatch_query_update_target(className, target);
+        else if (action == "create"w) z8_application_dispatch_query_create_target(className, target);
         else z8_application_dispatch_query_read_target(className, target);
     }
     else z8_application_dispatch_object_target(className,

@@ -47,7 +47,7 @@ import org.zenframework.z8.base.application.Application;
     public string actionEvents = "";
     public string getActionEvents() { return actionEvents; }
     virtual protected void onCopyAction(guid id) { actionEvents = "C"; }
-    virtual protected void onCreateAction(guid id) { actionEvents += "N"; }
+    virtual protected void onCreateAction(guid id) { actionEvents = "N"; }
     virtual protected void onUpdateAction(guid id) { actionEvents = "U"; }
     virtual protected void onDestroyAction(guid id) { actionEvents = "D"; }
     virtual protected sql_bool scope() { return amount >= 0; }
@@ -214,7 +214,7 @@ void main(string[] args) {
     auto table = P.m_make();
     auto eventTarget = P.m_make();
     eventTarget.z8_query_virtual_onCopyAction(z8_guid_create(1)); eventTarget.z8_query_virtual_onCreateAction(z8_guid_create(1));
-    assert(eventTarget.m_getActionEvents() == "CN"w);
+    assert(eventTarget.m_getActionEvents() == "N"w);
     eventTarget.z8_query_virtual_onUpdateAction(z8_guid_create(1)); assert(eventTarget.m_getActionEvents() == "U"w);
     eventTarget.z8_query_virtual_onDestroyAction(z8_guid_create(1)); assert(eventTarget.m_getActionEvents() == "D"w);
     assert(P.m_fieldKey(table) == z8_guid_create_name("Sample;--.Title"w));
@@ -703,6 +703,28 @@ void main(string[] args) {
     assert(!update(`[{"recordId":"00000000-0000-0000-0000-00000000012D","title":"Denied"}]`w, updateResult));
     queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
     assert(!update(`[{"title":"Missing id"}]`w, updateResult));
+    bool create(wstring data, out wstring output) {
+        auto request = new Z8ApplicationRequest(); request.session = querySession; request.monitor = new Z8RequestMonitor();
+        request.parameters.z8_add("request"w, "Sample"w); request.parameters.z8_add("action"w, "create"w);
+        request.parameters.z8_add("fields"w, `["title","amount"]`w); request.parameters.z8_add("data"w, data);
+        z8_application_set_request(request); z8_application_start_response(request, "Sample"w);
+        try { z8_application_dispatch_request(); } catch (Exception) { return false; }
+        z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); output = z8_application_response_text(request); return true;
+    }
+    wstring createResult;
+    assert(create(`[{"recordId":"00000000-0000-0000-0000-000000000133","title":"Created","amount":88}]`w, createResult));
+    auto createdJson = parseJSON(createResult.to!string);
+    assert(createdJson["data"].array.length == 1 && createdJson["data"][0]["recordId"].str == "00000000-0000-0000-0000-000000000133");
+    assert(createdJson["data"][0]["title"].str == "Created" && createdJson["data"][0]["amount"].integer == 88);
+    assert(!create(`[{"recordId":"00000000-0000-0000-0000-000000000134","title":"Rollback"},{"recordId":"00000000-0000-0000-0000-000000000133"}]`w, createResult));
+    assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-000000000134'`).rows[0][0].text == "0");
+    queryUser.privileges.setTableAccess(bootTableKey, Z8Access(true, false, false, false, false, true));
+    assert(!create(`[{"title":"Denied"}]`w, createResult));
+    queryUser.privileges.setTableAccess(bootTableKey, Z8Access(true, false, true, false, false, true));
+    assert(create(`[{"recordId":"00000000-0000-0000-0000-000000000000","title":"Generated","amount":66}]`w, createResult));
+    createdJson = parseJSON(createResult.to!string);
+    assert(createdJson["data"].array.length == 1 && createdJson["data"][0]["recordId"].str != "00000000-0000-0000-0000-000000000000");
+    queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
     db.execute(`CREATE TABLE "z8_bootstrap"."DeleteRef" ("Target" uuid REFERENCES "z8_bootstrap"."Sample;--" ("RecordId"))`);
     db.execute(`INSERT INTO "z8_bootstrap"."DeleteRef" VALUES ('00000000-0000-0000-0000-00000000012E')`);
     bool destroy(wstring data) {
