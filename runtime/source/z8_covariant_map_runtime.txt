@@ -1,0 +1,54 @@
+// Map views share storage while presenting the declared BL key and value types.
+class Z8CovariantMap(K, V, M, bool keyObject, bool valueObject) {
+    static if (is(K == long) || is(K == bool) || is(K == Z8Decimal)) alias Key = Z8Optional!K;
+    else alias Key = K;
+    static if (is(V == long) || is(V == bool) || is(V == Z8Decimal)) alias Element = Z8Optional!V;
+    else alias Element = V;
+    private M data;
+    this() { data = new M(); }
+    private this(M sharedData) { data = sharedData; }
+    private static Element checkedValue(typeof(M.init.z8_get(Key.init)) value) {
+        static if (valueObject) {
+            auto result = cast(V)value;
+            if (value !is null && result is null) throw new Exception("invalid map value cast");
+            return result;
+        } else return value;
+    }
+    override bool opEquals(Object other) {
+        if (this is other) return true;
+        auto right = cast(Z8CovariantMap!(K, V, M, keyObject, valueObject))other;
+        return right !is null && z8_map_content_equals(this, right);
+    }
+    long z8_size() { return data.z8_size(); }
+    bool z8_isEmpty() { return data.z8_isEmpty(); }
+    void z8_clear() { data.z8_clear(); }
+    bool z8_containsKey(Key key) { return data.z8_containsKey(key); }
+    bool z8_containsValue(Element value) { return data.z8_containsValue(value); }
+    Element z8_get(Key key) { return checkedValue(data.z8_get(key)); }
+    Element z8_add(Key key, Element value) { return checkedValue(data.z8_add(key, value)); }
+    void z8_add(Z8CovariantMap!(K, V, M, keyObject, valueObject) other) { data.z8_add(z8_nonnull(other).data); }
+    Element z8_remove(Key key) { return checkedValue(data.z8_remove(key)); }
+    Z8ValueArray!K z8_keys() {
+        static if (keyObject) return z8_object_array_view!K(data.z8_keys());
+        else return data.z8_keys();
+    }
+    Z8ValueArray!V z8_values() {
+        static if (valueObject) return new Z8ObjectArray!V(data.z8_values());
+        else return data.z8_values();
+    }
+}
+Z8CovariantMap!(ToK, ToV, M, keyObject, valueObject)
+z8_covariant_map_view(ToK, ToV, K, V, M, bool keyObject, bool valueObject)(Z8CovariantMap!(K, V, M, keyObject, valueObject) value) {
+    if (value is null) return null;
+    return new Z8CovariantMap!(ToK, ToV, M, keyObject, valueObject)(value.data);
+}
+Z8CovariantMap!(K, V, M, keyObject, valueObject)
+z8_map_union(K, V, M, bool keyObject, bool valueObject)(Z8CovariantMap!(K, V, M, keyObject, valueObject) left, Z8CovariantMap!(K, V, M, keyObject, valueObject) right) {
+    auto result = new Z8CovariantMap!(K, V, M, keyObject, valueObject)();
+    result.z8_add(z8_nonnull(left)); result.z8_add(z8_nonnull(right)); return result;
+}
+void z8_map_add_assign(K, V, M, bool keyObject, bool valueObject)(ref Z8CovariantMap!(K, V, M, keyObject, valueObject) left,
+        lazy Z8CovariantMap!(K, V, M, keyObject, valueObject) previous, lazy Z8CovariantMap!(K, V, M, keyObject, valueObject) right) {
+    auto oldValue = previous; auto newValue = right;
+    left = z8_map_union(oldValue, newValue);
+}

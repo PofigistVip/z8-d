@@ -39,15 +39,27 @@ private string dType(ValueType type, Program objectClass = null, Program[] keyOb
         if (value == ValueType.primaryType && key == ValueType.stringType) return "Z8PrimaryMap";
         if (value == ValueType.intType && key == ValueType.stringType) return "Z8StringIntMap";
         auto innerKeys = innerMapKeyClasses(type, keyObjectClasses);
+        auto keyType = dType(key, outerMapKeyClass(type, keyObjectClasses));
+        auto valueType = dType(value, objectClass, innerKeys);
+        bool keyObject = key == ValueType.selfType, valueObject = value == ValueType.selfType;
+        auto storedKey = keyObject ? "Z8Object" : keyType;
+        auto storedValue = valueObject ? "Object" : valueType;
+        string storage;
         if ([ValueType.selfType, ValueType.enumType, ValueType.exceptionType, ValueType.encodingType].canFind(key) || isSqlType(key))
-            return "Z8ObjectKeyMap!(" ~ dType(key, outerMapKeyClass(type, keyObjectClasses)) ~ ", " ~ dType(value, objectClass, innerKeys) ~ ")";
-        if ([ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(key))
-            return "Z8ReferenceKeyMap!(" ~ dType(key) ~ ", " ~ dType(value, objectClass, innerKeys) ~ ")";
-        auto templateName = key == ValueType.primaryType ? "Z8PrimaryKeyMap" :
-            key == ValueType.stringType ? "Z8StringValueMap" :
-            key == ValueType.intType ? "Z8IntMap" : key == ValueType.boolType ? "Z8BoolMap" :
-            key == ValueType.decimalType ? "Z8DecimalMap" : "Z8GuidMap";
-        return templateName ~ "!(" ~ dType(value, objectClass, innerKeys) ~ ")";
+            storage = "Z8ObjectKeyMap!(" ~ storedKey ~ ", " ~ storedValue ~ ")";
+        else if ([ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(key))
+            storage = "Z8ReferenceKeyMap!(" ~ storedKey ~ ", " ~ storedValue ~ ")";
+        else {
+            auto templateName = key == ValueType.primaryType ? "Z8PrimaryKeyMap" :
+                key == ValueType.stringType ? "Z8StringValueMap" :
+                key == ValueType.intType ? "Z8IntMap" : key == ValueType.boolType ? "Z8BoolMap" :
+                key == ValueType.decimalType ? "Z8DecimalMap" : "Z8GuidMap";
+            storage = templateName ~ "!(" ~ storedValue ~ ")";
+        }
+        if (keyObject || valueObject)
+            return "Z8CovariantMap!(" ~ keyType ~ ", " ~ valueType ~ ", " ~ storage ~ ", " ~
+                (keyObject ? "true" : "false") ~ ", " ~ (valueObject ? "true" : "false") ~ ")";
+        return storage;
     }
     switch (type) {
         case ValueType.intType: return "long"; case ValueType.boolType: return "bool";
@@ -210,11 +222,13 @@ private string emitExpr(Expression e) {
         bool[] savedPromotions;
         bool[] savedFileConversions, savedExceptionConversions, savedDateConversions, savedSqlBoolConversions, savedSqlIntConversions, savedSqlDecimalConversions, savedSqlIntDecimalConversions, savedSqlStringConversions;
         Method[] savedUserConversions;
-        Program[] savedArrayConversions;
+        Program[] savedArrayConversions, savedMapKeyConversions, savedMapValueConversions;
         foreach (i, argument; e.arguments) {
             savedOverrides ~= argument.emittedOverride;
             savedUserConversions ~= argument.userConversion;
             savedArrayConversions ~= argument.arrayConversionClass;
+            savedMapKeyConversions ~= argument.mapConversionKeyClass;
+            savedMapValueConversions ~= argument.mapConversionValueClass;
             savedBinaryConversions ~= argument.convertToBinary;
             savedFileConversions ~= argument.makeFile;
             savedExceptionConversions ~= argument.makeException;
@@ -243,6 +257,8 @@ private string emitExpr(Expression e) {
             argument.emittedOverride = name;
             argument.userConversion = null;
             argument.arrayConversionClass = null;
+            argument.mapConversionKeyClass = null;
+            argument.mapConversionValueClass = null;
         }
         value ~= "return " ~ emitExprRaw(e) ~ "; })()";
         if (!e.builtinCall.length) e.left.emittedOverride = savedReceiver;
@@ -250,6 +266,8 @@ private string emitExpr(Expression e) {
             argument.emittedOverride = savedOverrides[i];
             argument.userConversion = savedUserConversions[i];
             argument.arrayConversionClass = savedArrayConversions[i];
+            argument.mapConversionKeyClass = savedMapKeyConversions[i];
+            argument.mapConversionValueClass = savedMapValueConversions[i];
             argument.promoteToDecimal = savedPromotions[i]; argument.convertToString = savedStringConversions[i];
             argument.convertToBinary = savedBinaryConversions[i];
             argument.makeFile = savedFileConversions[i]; argument.makeException = savedExceptionConversions[i];
@@ -308,6 +326,15 @@ private string emitExpr(Expression e) {
         foreach (_; 0 .. count) value = "z8_sql_geometry_group(" ~ value ~ ")";
     }
     if (e.arrayConversionClass !is null) value = "z8_object_array_view!(" ~ e.arrayConversionClass.emittedName ~ ")(" ~ value ~ ")";
+    if (e.mapConversionKeyClass !is null || e.mapConversionValueClass !is null) {
+        auto type = e.mapConversionType;
+        auto key = e.mapConversionKeyClass !is null ? e.mapConversionKeyClass.emittedName :
+            dType(mapKeyType(type), outerMapKeyClass(type, e.keyObjectClasses));
+        auto mapped = e.mapConversionValueClass !is null ? e.mapConversionValueClass.emittedName :
+            dType(mapValueType(type), e.objectClass, innerMapKeyClasses(type, e.keyObjectClasses));
+        value = "z8_covariant_map_view!(" ~ key ~ ", " ~ mapped ~ ")(" ~ value ~ ")";
+    }
+
     if (e.userConversion !is null) value = "z8_nonnull(" ~ value ~ ")." ~ methodDName(e.userConversion) ~ "()";
     if (e.nonNullStringResult) value = "z8_string_or_empty(" ~ value ~ ")";
     if (e.optionalRequired) value = "z8_optional_require(" ~ value ~ ")";

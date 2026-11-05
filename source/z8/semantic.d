@@ -207,6 +207,23 @@ class Checker {
             }
         return best;
     }
+    // The original VariableType permits a direct inheritance cast for the
+    // value and for each key; this view currently handles the outer key and
+    // direct object value while retaining exact types in nested dimensions.
+    private bool covariantMapMatches(Expression e, ValueType type, Program expectedClass, Program[] expectedKeyClasses) {
+        if (hasObjectClass(type)) {
+            if (mapValueType(type) == ValueType.selfType) {
+                if (!isAssignable(e.objectClass, expectedClass)) return false;
+            } else if (e.objectClass !is expectedClass) return false;
+        }
+        if (hasMapKeyClass(type)) {
+            if (mapKeyType(type) == ValueType.selfType) {
+                if (innerMapKeyClasses(type, e.keyObjectClasses) != innerMapKeyClasses(type, expectedKeyClasses) ||
+                    !isAssignable(outerMapKeyClass(type, e.keyObjectClasses), outerMapKeyClass(type, expectedKeyClasses))) return false;
+            } else if (e.keyObjectClasses != expectedKeyClasses) return false;
+        }
+        return true;
+    }
     private bool matches(Expression e, ValueType expected, Program expectedClass = null, Program[] expectedKeyClasses = null) {
         if (e.kind == ExprKind.arrayLiteral && hasObjectClass(expected)) e.objectClass = expectedClass;
         if (e.kind == ExprKind.arrayLiteral && hasMapKeyClass(expected)) e.keyObjectClasses = expectedKeyClasses;
@@ -248,6 +265,14 @@ class Checker {
             return true;
         }
         if (expected == ValueType.sqlPrimaryType && isSqlType(actual)) return true;
+        if (isMap(expected) && actual == expected && covariantMapMatches(e, expected, expectedClass, expectedKeyClasses)) {
+            if (mapValueType(expected) == ValueType.selfType && e.objectClass !is expectedClass)
+                e.mapConversionValueClass = expectedClass;
+            if (mapKeyType(expected) == ValueType.selfType && outerMapKeyClass(expected, e.keyObjectClasses) !is outerMapKeyClass(expected, expectedKeyClasses))
+                e.mapConversionKeyClass = outerMapKeyClass(expected, expectedKeyClasses);
+            if (e.mapConversionKeyClass !is null || e.mapConversionValueClass !is null) e.mapConversionType = actual;
+            return true;
+        }
         if (expected == ValueType.selfArray && actual == ValueType.selfArray &&
             isAssignable(e.objectClass, expectedClass)) {
             if (e.objectClass !is expectedClass) e.arrayConversionClass = expectedClass;
@@ -393,12 +418,18 @@ class Checker {
                             }
                         }
                     }
-                    if (actual != ValueType.selfType && hasObjectClass(actual)) {
-                        auto parameterClass = resolveClass(candidate.owner, p.objectName, p.name);
-                        if (actual == ValueType.selfArray ? !isAssignable(e.arguments[i].objectClass, parameterClass) : e.arguments[i].objectClass !is parameterClass)
-                            applicable = false;
+                    if (isMap(actual)) {
+                        auto parameterClass = hasObjectClass(actual) ? resolveClass(candidate.owner, p.objectName, p.name) : null;
+                        auto parameterKeys = hasMapKeyClass(actual) ? resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name) : null;
+                        if (!covariantMapMatches(e.arguments[i], actual, parameterClass, parameterKeys)) applicable = false;
+                    } else {
+                        if (actual != ValueType.selfType && hasObjectClass(actual)) {
+                            auto parameterClass = resolveClass(candidate.owner, p.objectName, p.name);
+                            if (actual == ValueType.selfArray ? !isAssignable(e.arguments[i].objectClass, parameterClass) : e.arguments[i].objectClass !is parameterClass)
+                                applicable = false;
+                        }
+                        if (hasMapKeyClass(actual) && e.arguments[i].keyObjectClasses != resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name)) applicable = false;
                     }
-                    if (hasMapKeyClass(actual) && e.arguments[i].keyObjectClasses != resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name)) applicable = false;
                 } else if (actual == ValueType.selfType && findConversion(e.arguments[i].objectClass, p.type,
                             p.type == ValueType.enumType ? resolveClass(candidate.owner, p.objectName, p.name) : null) !is null) weight += 100;
                 else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;

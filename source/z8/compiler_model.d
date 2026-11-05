@@ -53,7 +53,9 @@ class Expression {
     Method userConversion;
     string builtinCall;
     string emittedOverride;
-    Program objectClass, arrayConversionClass; Program[] keyObjectClasses;
+    Program objectClass, arrayConversionClass, mapConversionKeyClass, mapConversionValueClass;
+    ValueType mapConversionType;
+    Program[] keyObjectClasses;
     NullableStringMode nullableStringMode;
     bool nullableStringReceiver, nullableStringLeft, nonNullStringResult;
     bool enumConstant;

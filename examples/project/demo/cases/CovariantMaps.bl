@@ -1,0 +1,26 @@
+public class CovariantMaps {
+    private static int size(CovariantBase[string] values) { return values.size(); }
+    private static CovariantBase[string] widen(CovariantChild[string] values) { return values; }
+    public static int run() {
+        CovariantChild child = new CovariantChild;
+        CovariantChild[string] children = {("first", child)};
+        CovariantBase[string] bases = children;
+        if (size(children) != 1 || widen(children)["first"].value != 11) return 1;
+        bases.add("second", new CovariantBase);
+        if (children.size() != 2 || bases["second"].value != 11) return 2;
+        try { CovariantBase invalid = children["second"]; return 3; } catch (exception expected) {}
+        bases.remove("second");
+        int[CovariantChild] childKeys = {(child, 5)};
+        int[CovariantBase] baseKeys = childKeys;
+        CovariantBase other = new CovariantBase;
+        baseKeys.add(other, 8);
+        if (childKeys.size() != 2 || baseKeys[other] != 8) return 4;
+        try { for (CovariantChild key : childKeys.keys()) { int seen = key.value; } return 5; } catch (exception expectedKey) {}
+        CovariantChild[CovariantChild] pairs = {(child, child)};
+        CovariantBase[CovariantBase] widePairs = pairs;
+        widePairs.add(child, other);
+        try { CovariantBase invalid = pairs[child]; return 6; } catch (exception expectedValue) {}
+        if (widePairs[child].value != 11 || pairs.size() != 1) return 7;
+        return 135;
+    }
+}
