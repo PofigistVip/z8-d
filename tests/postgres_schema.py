@@ -618,8 +618,21 @@ void main(string[] args) {
     z8_application_set_request(filtered); z8_application_start_response(filtered, "Sample"w); z8_application_dispatch_query_read("Sample"w);
     z8_application_finish_response(filtered, cast(Z8RequestMonitor)filtered.monitor);
     assert(parseJSON(z8_application_response_text(filtered).to!string)["data"].array.length == 0);
+    long lookup(wstring fields, wstring text) {
+        auto request = new Z8ApplicationRequest(); request.session = querySession; request.monitor = new Z8RequestMonitor();
+        request.parameters.z8_add("action"w, "read"w); request.parameters.z8_add("fields"w, `["amount"]`w);
+        request.parameters.z8_add("lookupFields"w, fields); request.parameters.z8_add("lookup"w, text);
+        z8_application_set_request(request); z8_application_start_response(request, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+        z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor);
+        return cast(long)parseJSON(z8_application_response_text(request).to!string)["data"].array.length;
+    }
+    assert(lookup(`["title","details"]`w, "VIS"w) == 1);
+    assert(lookup(`["title","details"]`w, "absent"w) == 0);
     queryUser.privileges.setFieldAccess(bootFieldKey, Z8Access.init);
     assert(rejectedRead("filter"w, `{"property":"title","value":"Visible"}`w));
+    bool lookupDenied;
+    try { lookup(`["title"]`w, "Visible"w); } catch (Exception) { lookupDenied = true; }
+    assert(lookupDenied);
     queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
     queryUser.privileges.setRequestAccess(bootRequestKey, Z8Access.init);
     assert(rejectedRead("fields"w, `["title"]`w));

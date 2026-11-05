@@ -110,7 +110,8 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         auto name = parameterKeys.z8_get(i);
         if (name is null) throw new Exception("invalid query read parameter");
         if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "fields"w || name == "start"w || name == "limit"w ||
-            name == "filter"w || name == "where"w || name == "quickFilter"w || name == "sort"w || name == "recordId"w || name == "count"w || name == "values"w) continue;
+            name == "filter"w || name == "where"w || name == "quickFilter"w || name == "sort"w || name == "recordId"w || name == "count"w || name == "values"w ||
+            name == "lookup"w || name == "lookupFields"w) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported query read parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
@@ -192,6 +193,27 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
             throw new Exception("linked and computed sort fields are not supported");
         auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
         if (field !is key && !privileges.getFieldAccess(queryKey, fieldKey).read) throw new Exception("query sort field access denied");
+    }
+    auto lookupFields = params.z8_get("lookupFields"w), lookup = params.z8_get("lookup"w);
+    if (!read.byRecordIds && lookupFields !is null && lookupFields.length) {
+        auto parsed = z8_json_parse(lookupFields.to!string);
+        if (parsed.type != JSONType.array) throw new Exception("query lookup fields must be a JSON array");
+        Z8SqlBool match;
+        foreach (item; parsed.array) {
+            if (item.type != JSONType.string || !item.str.length) throw new Exception("invalid query lookup field");
+            if (lookup is null || !lookup.length) continue;
+            auto field = z8_query_find_field_id(query, item.str.to!wstring);
+            if (field.z8_get_owner() !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
+                throw new Exception("linked and computed lookup fields are not supported");
+            auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
+            if (field !is key && !privileges.getFieldAccess(queryKey, fieldKey).read) throw new Exception("query lookup field access denied");
+            auto type = z8_field_type_id(field);
+            if (type != "string"w && type != "text"w && type != "file"w && type != "attachments"w) continue;
+            auto column = type == "string"w ? z8_string_field_sql(field) : z8_text_field_sql(field);
+            auto pattern = z8_sql_string_const("%"w ~ z8_str_toLowerCase(lookup) ~ "%"w);
+            match = z8_filter_combine(match, z8_sql_string_like(z8_sql_string_toLower(column), pattern), true);
+        }
+        if (match !is null) read.where = z8_filter_combine(read.where, z8_sql_bool_group(match));
     }
     foreach (name; ["filter"w, "where"w, "quickFilter"w]) {
         // ReadAction in the original Z8 uses the record IDs instead of the
