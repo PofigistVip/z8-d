@@ -113,6 +113,15 @@ missing non-primary columns with their BL defaults and nullability. The caller
 can review and execute the statements; other differences, indexes and foreign
 keys require separate handling.
 
+`z8_postgres_sync_registry` in `z8.database.metadata` inserts or updates the
+registered table, field and request metadata and creates initial access rows
+for existing roles when metadata is new. Existing permissions and unregistered
+rows are preserved. It uses the caller's transaction if present, otherwise it
+creates one; concurrent synchronizations of the same schema are serialized.
+This is the additive part of `AccessRightsGenerator`: it does not remove stale
+metadata, emit cross-server notifications or populate audit fields through BL
+table events.
+
 `Z8PostgresQueryExecutor` connects BL `Query` reads to PostgreSQL tables.
 Construct it with a connection, schema and root table name, then attach it to
 the generated query with `z8_query_set_executor`. It supports explicit selected

@@ -167,6 +167,7 @@ import z8.database.schema;
 import z8.database.catalog;
 import z8.database.compare;
 import z8.database.migration;
+import z8.database.metadata;
 import z8gen.p_Probe;
 import std.algorithm.searching : canFind;
 import std.conv : to;
@@ -175,6 +176,16 @@ void main(string[] args) {
     auto db = new Z8PostgresConnection(args[1]);
     if (args.length > 2) {
         import std.stdio : writeln;
+        if (args[2] == "metadata_worker") {
+            auto registry = new Z8RuntimeRegistry(); registry.registerTable(P.m_statics());
+            z8_postgres_sync_registry(db, "z8_access"w, registry); db.close(); return;
+        }
+        if (args[2] == "metadata_count") {
+            auto key = Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("StaticSample"w)).to!string);
+            auto counts = db.execute(`SELECT (SELECT count(*) FROM "z8_access"."SystemTables" WHERE "RecordId" = $1::uuid), (SELECT count(*) FROM "z8_access"."SystemFields" WHERE "Table" = $1::uuid), (SELECT count(*) FROM "z8_access"."SystemRoleTableAccess" WHERE "Table" = $1::uuid), (SELECT count(*) FROM "z8_access"."SystemRoleFieldAccess" a JOIN "z8_access"."SystemFields" f ON a."Field" = f."RecordId" WHERE f."Table" = $1::uuid)`, [key]);
+            writeln(counts.rows[0][0].text, " ", counts.rows[0][1].text, " ", counts.rows[0][2].text, " ", counts.rows[0][3].text);
+            db.close(); return;
+        }
         auto backend = new Z8PostgresDatabase(db, "z8_test"w); z8_connection_set_current(backend);
         auto transactional = args[2] == "worker_tx";
         foreach (i; 0 .. (transactional ? 20 : 30)) {
@@ -653,6 +664,44 @@ void main(string[] args) {
     assert(retainedRole.rows[0][0].text == "Preserved admin" && retainedRole.rows[0][1].text == "Keep" && retainedRole.rows[0][2].text == "0" && retainedRole.rows[0][3].text == "3");
     auto builtInRoleAccess = db.execute(`SELECT (SELECT count(*) FROM "z8_access"."SystemRoleTableAccess" WHERE "Role" = '421A8413-A8EC-4DAB-9235-9A5FF83341C5'), (SELECT count(*) FROM "z8_access"."SystemRoleFieldAccess" WHERE "Role" = '421A8413-A8EC-4DAB-9235-9A5FF83341C5'), (SELECT count(*) FROM "z8_access"."SystemRoleRequestAccess" WHERE "Role" = '421A8413-A8EC-4DAB-9235-9A5FF83341C5')`);
     assert(builtInRoleAccess.rows[0][0].text == "2" && builtInRoleAccess.rows[0][1].text == "2" && builtInRoleAccess.rows[0][2].text == "1");
+    auto registeredSample = P.m_make(); registeredSample.z8_set_attribute("displayName"w, "Пример"w);
+    roleRegistry.registerTable(registeredSample); roleRegistry.registerTable(P.m_geo()); roleRegistry.registerRequest(registeredSample);
+    z8_postgres_sync_registry(db, "z8_access"w, roleRegistry);
+    auto sampleKey = Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("Sample;--"w)).to!string);
+    auto sampleMetadata = db.execute(`SELECT "Name", "Class", "Display Name", "Lock" FROM "z8_access"."SystemTables" WHERE "RecordId" = $1::uuid`, [sampleKey]);
+    assert(sampleMetadata.rows[0][0].text == "Sample;--" && sampleMetadata.rows[0][1].text == "Sample" && sampleMetadata.rows[0][2].text == "Пример" && sampleMetadata.rows[0][3].text == "1");
+    auto titleKey = Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("Sample;--.Title"w)).to!string);
+    auto titleMetadataRow = db.execute(`SELECT "Name", "Type", "Position", "Table"::text FROM "z8_access"."SystemFields" WHERE "RecordId" = $1::uuid`, [titleKey]);
+    assert(titleMetadataRow.rows[0][0].text == "Title" && titleMetadataRow.rows[0][1].text == "string(30)" && titleMetadataRow.rows[0][2].text == "6" && z8_guid_literal(titleMetadataRow.rows[0][3].text) == z8_guid_create_name("Sample;--"w));
+    auto geoKey = Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("GeoSample"w)).to!string);
+    assert(db.execute(`SELECT count(*) FROM "z8_access"."SystemRoleTableAccess" WHERE "Table" = $1::uuid`, [geoKey]).rows[0][0].text == "3");
+    auto userFieldRights = db.execute(`SELECT "Read", "Write" FROM "z8_access"."SystemRoleFieldAccess" WHERE "Field" = $1::uuid AND "Role" = '421A8413-A8EC-4DAB-9235-9A5FF83341C5'`, [titleKey]);
+    assert(userFieldRights.rows.length == 1 && userFieldRights.rows[0][0].text == "1" && userFieldRights.rows[0][1].text == "0");
+    auto requestKey = Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("Sample"w)).to!string);
+    auto requestMetadata = db.execute(`SELECT "Name", "Class" FROM "z8_access"."SystemRequests" WHERE "RecordId" = $1::uuid`, [requestKey]);
+    assert(requestMetadata.rows[0][0].text == "Пример" && requestMetadata.rows[0][1].text == "Sample");
+    assert(db.execute(`SELECT count(*) FROM "z8_access"."SystemRoleRequestAccess" WHERE "Request" = $1::uuid`, [requestKey]).rows[0][0].text == "3");
+    db.execute(`UPDATE "z8_access"."SystemRoleFieldAccess" SET "Read" = 0, "Write" = 1 WHERE "Field" = $1::uuid AND "Role" = '421A8413-A8EC-4DAB-9235-9A5FF83341C5'`, [titleKey]);
+    auto beforeFields = db.execute(`SELECT count(*) FROM "z8_access"."SystemFields"`).rows[0][0].text;
+    z8_postgres_sync_registry(db, "z8_access"w, roleRegistry);
+    assert(db.execute(`SELECT count(*) FROM "z8_access"."SystemFields"`).rows[0][0].text == beforeFields);
+    userFieldRights = db.execute(`SELECT "Read", "Write" FROM "z8_access"."SystemRoleFieldAccess" WHERE "Field" = $1::uuid AND "Role" = '421A8413-A8EC-4DAB-9235-9A5FF83341C5'`, [titleKey]);
+    assert(userFieldRights.rows.length == 1 && userFieldRights.rows[0][0].text == "0" && userFieldRights.rows[0][1].text == "1");
+    roleRegistry.registerRequest(P.m_geo());
+    auto rolledBackRequest = Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("GeoSample"w)).to!string);
+    db.beginTransaction(); z8_postgres_sync_registry(db, "z8_access"w, roleRegistry);
+    assert(db.execute(`SELECT count(*) FROM "z8_access"."SystemRequests" WHERE "RecordId" = $1::uuid`, [rolledBackRequest]).rows[0][0].text == "1");
+    db.rollback();
+    assert(db.execute(`SELECT count(*) FROM "z8_access"."SystemRequests" WHERE "RecordId" = $1::uuid`, [rolledBackRequest]).rows[0][0].text == "0");
+    assert(db.execute(`SELECT count(*) FROM "z8_access"."SystemTables" WHERE "RecordId" = '00000000-0000-0000-0000-000000000066'`).rows[0][0].text == "1");
+    auto newMetadataTable = P.m_systemTables(); roleRegistry.registerTable(newMetadataTable);
+    auto newMetadataKey = Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("SystemTables"w)).to!string);
+    db.execute(`ALTER TABLE "z8_access"."SystemRoleFieldAccess" ADD CONSTRAINT "reject_new" CHECK ("Read" = -1) NOT VALID`);
+    bool metadataRolledBack;
+    try { z8_postgres_sync_registry(db, "z8_access"w, roleRegistry); } catch (Z8PostgresException) { metadataRolledBack = true; }
+    assert(metadataRolledBack && !db.inTransaction());
+    assert(db.execute(`SELECT count(*) FROM "z8_access"."SystemTables" WHERE "RecordId" = $1::uuid`, [newMetadataKey]).rows[0][0].text == "0");
+    db.execute(`ALTER TABLE "z8_access"."SystemRoleFieldAccess" DROP CONSTRAINT "reject_new"`);
     z8_connection_set_current(accessBackend);
     z8_connection_set_current(savedAccessBackend);
     db.execute(`ALTER TABLE "z8_test"."StaticSample" DROP CONSTRAINT "StaticSample_pkey", ADD PRIMARY KEY ("Label")`);
@@ -707,4 +756,14 @@ void main(string[] args) {
                 raise SystemExit(f"Transactional sequence worker failed ({worker.returncode}):\n{stdout}\n{stderr}")
             values.extend(map(int, stdout.splitlines()))
         assert sorted(values) == list(range(2, 82)), values
+        workers = [subprocess.Popen([str(exe), connection, "metadata_worker"], env=environment, cwd=temp, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, text=True,
+                                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0) for _ in range(3)]
+        for worker in workers:
+            stdout, stderr = worker.communicate(timeout=30)
+            if worker.returncode:
+                raise SystemExit(f"Metadata worker failed ({worker.returncode}):\n{stdout}\n{stderr}")
+        check = subprocess.run([str(exe), connection, "metadata_count"], env=environment, cwd=temp, capture_output=True, text=True,
+                               creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0, check=True)
+        assert check.stdout.strip() == "1 9 3 27", check.stdout
 print("BL table schema generation, defaults and primary key verified in PostgreSQL")
