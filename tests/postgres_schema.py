@@ -63,7 +63,11 @@ import org.zenframework.z8.base.table.value.IntField;
 ''', encoding="utf-8")
     (source / "ReferenceTarget.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
-[name "Target;--"] public class ReferenceTarget extends Table {}
+import org.zenframework.z8.base.table.value.StringField;
+[name "Target;--"] public class ReferenceTarget extends Table {
+    [name "Label"] public StringField label;
+    virtual protected void onNew() { label = "created by hook"; }
+}
 ''', encoding="utf-8")
     (source / "ReferenceSource.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
@@ -130,8 +134,18 @@ void main(string[] args) {
     auto referenced = P.m_target(); auto referencing = P.m_references();
     db.execute(z8_postgres_create_table_sql("pg_temp"w, referenced));
     db.execute(z8_postgres_create_table_sql("pg_temp"w, referencing));
-    db.execute(`INSERT INTO "Target;--" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000000')`);
-    db.execute(`INSERT INTO "Source" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000000')`);
+    auto priorBackend = new Z8PostgresDatabase(db, "pg_temp"w);
+    auto priorConnection = z8_connection_set_current(priorBackend);
+    auto priorExecutor = priorBackend.queryExecutor(referenced);
+    z8_query_set_executor(referenced, priorExecutor);
+    assert(z8_postgres_ensure_null_record(db, "pg_temp"w, referenced));
+    assert(z8_connection_current_backend() is priorBackend);
+    assert(z8_query_swap_executor(referenced, null) is priorExecutor);
+    z8_connection_set_current(priorConnection);
+    assert(!z8_postgres_ensure_null_record(db, "pg_temp"w, referenced));
+    assert(db.execute(`SELECT "Label" FROM "Target;--"`).rows[0][0].text == "created by hook");
+    assert(z8_postgres_ensure_null_record(db, "pg_temp"w, referencing));
+    assert(!z8_postgres_ensure_null_record(db, "pg_temp"w, referencing));
     auto foreignKeys = z8_postgres_create_foreign_keys_sql("pg_temp"w, referencing);
     assert(foreignKeys.length == 2);
     bool targetKey, parentKey;

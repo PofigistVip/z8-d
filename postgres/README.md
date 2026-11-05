@@ -42,8 +42,10 @@ Geometry columns and indexes require PostGIS; trigram indexes require `pg_trgm`.
 Unique GIN and GiST indexes are rejected because PostgreSQL does not support
 them. `z8_postgres_create_foreign_keys_sql(schema, table)` returns constraints
 for enabled BL `Link` fields, including self-referencing parent keys. Create
-referenced tables and the Z8 zero-GUID records before applying constraints:
-the schema lifecycle does not yet create these records automatically.
+referenced tables and use `z8_postgres_ensure_null_record` for their zero-GUID
+records before applying constraints. The helper invokes BL creation hooks for
+missing records and preserves existing ones; callers must serialize concurrent
+schema generation. The schema lifecycle does not yet call it automatically.
 Existing-table migration and the original schema lifecycle are not yet
 implemented.
 

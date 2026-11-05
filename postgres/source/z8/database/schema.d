@@ -4,7 +4,8 @@ import std.conv : to;
 import std.string : icmp;
 import z8.runtime;
 import z8.database.plan : quoteIdentifier;
-import z8.database.postgres : Z8PostgresException;
+import z8.database.postgres : Z8PostgresConnection, Z8PostgresException;
+import z8.database.connection : Z8PostgresDatabase;
 
 private string fieldType(Z8Object field) {
     switch (z8_field_type_id(field)) {
@@ -116,4 +117,28 @@ string[] z8_postgres_create_foreign_keys_sql(wstring schema, Z8Object table) {
             ") REFERENCES " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(targetName) ~ " (" ~ quoteIdentifier(targetKeyName) ~ ")";
     }
     return result;
+}
+
+// Like TableGenerator.createNullRecord, preserve an existing row and invoke
+// Table.create for a missing one, including the BL lifecycle hooks.
+bool z8_postgres_ensure_null_record(Z8PostgresConnection connection, wstring schema, Z8Object table) {
+    if (connection is null || connection.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
+    if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, z8_nonnull(table)))
+        throw new Z8PostgresException("PostgreSQL schema requires a Table");
+    auto key = z8_query_primary_key(table);
+    if (key is null) throw new Z8PostgresException("PostgreSQL table has no primary key");
+    auto tableName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, table);
+    auto keyName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, key);
+    auto sql = "SELECT 1 FROM " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(tableName) ~
+        " WHERE " ~ quoteIdentifier(keyName) ~ " = '00000000-0000-0000-0000-000000000000'::uuid";
+    if (connection.execute(sql).rows.length) return false;
+    auto backend = new Z8PostgresDatabase(connection, schema);
+    auto previousExecutor = z8_query_swap_executor(table, backend.queryExecutor(table));
+    auto previousConnection = z8_connection_set_current(backend);
+    scope(exit) {
+        z8_query_set_executor(table, previousExecutor);
+        z8_connection_set_current(previousConnection);
+    }
+    z8_native_call!Z8Guid("org.zenframework.z8.server.base.query.Query.m_create"w, table, z8_guid_zero());
+    return true;
 }

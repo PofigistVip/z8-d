@@ -117,6 +117,10 @@ long z8_query_limit(Z8Object self) {
     return value.present ? cast(int)value.value : 200;
 }
 void z8_query_set_executor(Z8Object self, IZ8QueryExecutor executor) { z8_query_state(self).executor = executor; }
+IZ8QueryExecutor z8_query_swap_executor(Z8Object self, IZ8QueryExecutor executor) {
+    auto state = z8_query_state(self);
+    auto previous = state.executor; state.executor = executor; return previous;
+}
 private Z8SqlBool z8_query_default_filter(Z8Object self) { z8_nonnull(self); return z8_sql_bool_const(true); }
 Z8SqlBool z8_query_where(Z8Object self) {
     auto state = z8_query_state(self);
