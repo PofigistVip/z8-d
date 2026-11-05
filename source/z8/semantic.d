@@ -2384,6 +2384,8 @@ class Checker {
                 }
                 if (left == ValueType.stringType && right == ValueType.nullableString) left = ValueType.nullableString;
                 if (left == ValueType.nullableString && right == ValueType.stringType) right = ValueType.nullableString;
+                if (left != right && isSqlType(right) && matches(e.right, right)) left = right;
+                if (left != right && isSqlType(left) && matches(e.third, left)) right = left;
                 if (left != ValueType.primaryType && right == ValueType.primaryType && matches(e.right, ValueType.primaryType))
                     left = ValueType.primaryType;
                 if (right != ValueType.primaryType && left == ValueType.primaryType && matches(e.third, ValueType.primaryType))
