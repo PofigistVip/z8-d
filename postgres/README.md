@@ -15,3 +15,15 @@ DMD on Windows, or `-L-lpq` on Linux).
 `Z8PostgresParameter` values. Null parameters and empty strings are distinct;
 results are copied and remain usable after closing the connection. Close each
 connection explicitly when it is no longer needed.
+
+`Z8PostgresQueryExecutor` connects BL `Query` reads to a single PostgreSQL
+table. Construct it with a connection, schema and table name, then attach it to
+the generated query with `z8_query_set_executor`. It supports explicit selected
+fields, SQL filters and scope, sort direction, pagination, read locks and GUID
+record lookup. It reads integer, boolean, decimal, string, text, file, binary,
+GUID and date/duration fields. It also selects the table's primary key.
+
+The executor currently rejects linked queries, grouping, nontrivial HAVING,
+geometry and reads without an explicit field list. Query write operations and
+schema generation are not yet implemented. Z8 table and field privilege checks
+are not implemented by this executor; the host must enforce them.

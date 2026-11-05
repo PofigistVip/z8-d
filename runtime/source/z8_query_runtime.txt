@@ -234,6 +234,12 @@ private Z8ObjectArray!Z8Object z8_query_data_fields(Z8Object self, bool primaryO
 }
 private Z8ObjectArray!Z8Object z8_query_fields(Z8Object self) { return z8_query_data_fields(self); }
 private Z8ObjectArray!Z8Object z8_query_primary_fields(Z8Object self) { return z8_query_data_fields(self, true); }
+Z8Object[] z8_query_declared_fields(Z8Object self, bool primaryOnly = false) {
+    auto fields = z8_query_data_fields(self, primaryOnly);
+    Z8Object[] result;
+    for (long i; i < fields.z8_size(); ++i) result ~= fields.z8_get(i);
+    return result;
+}
 private Z8Object z8_query_find_direct(string kind)(Z8Object self, wstring value) {
     value = z8_string_required(value);
     auto fields = z8_query_data_fields(self);

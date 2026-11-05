@@ -5,5 +5,6 @@
   "targetType": "staticLibrary",
   "targetName": "z8-postgres",
   "targetPath": "lib",
-  "sourcePaths": ["source"]
+  "sourcePaths": ["source"],
+  "dependencies": { "z8-runtime": { "path": "../runtime" } }
 }

@@ -194,6 +194,11 @@ private wstring z8_field_type_name(Z8Object self) {
     if (z8_native_is_instance(prefix ~ "Expression"w, self)) return "none"w;
     throw new Exception("unknown native Field type");
 }
+wstring z8_field_type_id(Z8Object self) { return z8_field_type_name(self); }
+wstring z8_field_sort_direction(Z8Object self) {
+    auto cell = z8_field_state(self).sortCell;
+    return cell is null ? "asc"w : cell.text();
+}
 T z8_field_type(T)(Z8Object self) {
     switch (z8_field_type_name(self)) {
         case "attachments"w: return T.e_Attachments;
