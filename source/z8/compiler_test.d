@@ -16,6 +16,11 @@ unittest {
     rejects(q{final public class A {}});
     rejects(q{[request "true"] class A {}});
     rejects(q{[native "x"] class A {}});
+    compile(q{class A { [flag] A child; public [tag "value"] A nested = class {}; }});
+    rejects(q{class A { [flag] int x; }});
+    rejects(q{class A { [flag] A[] x; }});
+    rejects(q{class A { [flag] [flag] A x; }});
+    rejects(q{class A { [flag] void method() {} }});
     rejects(q{class A { bool f() { A a; return a.getAttribute("x") == "x"; } }});
     compile(q{class A { bool operator !() { return true; } static bool f() { A a; return !a; } }});
     compile(q{class A { virtual int f() { return 1; } A child = class { int f() { return 2; } }; }});

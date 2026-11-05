@@ -222,6 +222,9 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             !"новое 😀".equals(metadata.getAttribute("sharedTag")) ||
             !"".equals(metadata.getAttribute("flag")) || metadata.getAttribute("absent") != null)
             throw new AssertionError("type attribute metadata differs");
+        if (!"от родителя".equals(metadata.get().annotated.getAttribute("fieldTag")) ||
+            !"специализация".equals(metadata.get().specialized.getAttribute("fieldTag")))
+            throw new AssertionError("field attribute metadata differs");
         System.out.println("RESULT:" + demo.Main.z8_run().get());
         System.out.println("RESULT:" + demo.cases.Arithmetic.z8_run().get());
         System.out.println("RESULT:" + demo.cases.Text.z8_run().get());
@@ -386,10 +389,13 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
 import std.stdio : writeln;
 void main() {
     auto metadata = z8_new!Z8p_64656D6F2E63617365732E5374617469634F7665726C6F61644368696C64();
-    assert(metadata.z8_get_type_attribute("baseTag"w) == "base"w);
-    assert(metadata.z8_get_type_attribute("sharedTag"w) == "новое 😀"w);
-    assert(metadata.z8_get_type_attribute("flag"w) == ""w);
-    assert(metadata.z8_get_type_attribute("absent"w) is null);
+    assert(metadata.z8_get_attribute("baseTag"w) == "base"w);
+    assert(metadata.z8_get_attribute("sharedTag"w) == "новое 😀"w);
+    assert(metadata.z8_get_attribute("flag"w) == ""w);
+    assert(metadata.z8_get_attribute("absent"w) is null);
+    z8_nonnull(metadata);
+    assert(metadata.f_annotated.z8_get_attribute("fieldTag"w) == "от родителя"w);
+    assert(metadata.f_specialized.z8_get_attribute("fieldTag"w) == "специализация"w);
     writeln(z8_optional_require(Z8p_64656D6F2E4D61696E.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E41726974686D65746963.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E54657874.m_run()));

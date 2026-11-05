@@ -145,6 +145,23 @@ class Parser {
         }
         expect("}");
     }
+    private TypeAttribute parseAttribute(TypeAttribute[] previous) {
+        expect("[");
+        TypeAttribute attribute;
+        attribute.name = identifier();
+        foreach (old; previous)
+            if (old.name.text == attribute.name.text) throw new CompileException("duplicate attribute", attribute.name.position);
+        if (current.text != "]") {
+            if (current.kind != TokenKind.stringLiteral) error("only string literal attributes are supported");
+            attribute.hasValue = true; attribute.value = take();
+        }
+        expect("]");
+        return attribute;
+    }
+    private void checkSupportedAttribute(TypeAttribute attribute) {
+        if (["name", "primary", "request", "job"].canFind(attribute.name.text))
+            throw new CompileException("this attribute is not supported yet", attribute.name.position);
+    }
     Program parse() {
         auto result = new Program;
         while (current.text == "import") {
@@ -156,21 +173,11 @@ class Parser {
         bool nativeAttribute, isPublic;
         while (current.text == "[" || current.text == "public") {
             if (accept("public")) { if (isPublic) error("duplicate public modifier"); isPublic = true; continue; }
-            expect("[");
-            TypeAttribute attribute;
-            attribute.name = identifier();
-            foreach (previous; result.attributes)
-                if (previous.name.text == attribute.name.text) throw new CompileException("duplicate attribute", attribute.name.position);
-            if (current.text != "]") {
-                if (current.kind != TokenKind.stringLiteral) error("only string literal type attributes are supported");
-                attribute.hasValue = true; attribute.value = take();
-            }
-            expect("]");
+            auto attribute = parseAttribute(result.attributes);
             if (attribute.name.text == "native") {
                 if (!attribute.hasValue) error("native attribute requires a string");
                 nativeAttribute = true;
-            } else if (["name", "primary", "request", "job"].canFind(attribute.name.text))
-                error("this type attribute is not supported yet");
+            } else checkSupportedAttribute(attribute);
             result.attributes ~= attribute;
         }
         result.isFinal = accept("final");
@@ -210,7 +217,15 @@ class Parser {
             if (current.kind == TokenKind.endOfFile) error("expected '}'");
             bool isStatic, isAuto;
             bool isPublic = true, isProtected, hasAccess, isVirtual;
-            while (["public", "private", "protected", "static", "virtual", "auto"].canFind(current.text)) {
+            TypeAttribute[] attributes;
+            while (current.text == "[" || ["public", "private", "protected", "static", "virtual", "auto"].canFind(current.text)) {
+                if (current.text == "[") {
+                    auto attribute = parseAttribute(attributes);
+                    if (attribute.name.text == "native") error("native member attributes are not supported yet");
+                    checkSupportedAttribute(attribute);
+                    attributes ~= attribute;
+                    continue;
+                }
                 if (current.text == "static") { if (isStatic) error("duplicate static modifier"); isStatic = true; }
                 else if (current.text == "auto") { if (isAuto) error("duplicate auto modifier"); isAuto = true; }
                 else if (current.text == "virtual") { if (isVirtual) error("duplicate virtual modifier"); isVirtual = true; }
@@ -219,7 +234,7 @@ class Parser {
             }
             if (result.lexicalOwner !is null && isStatic) error("static members cannot be declared in a nested type");
             if (isMemberSpecializationStart()) {
-                if (hasAccess || isStatic || isVirtual || isAuto) error("modifiers cannot be applied to a field specialization");
+                if (hasAccess || isStatic || isVirtual || isAuto || attributes.length) error("modifiers cannot be applied to a field specialization");
                 Token[] path;
                 path ~= identifier();
                 while (accept(".")) path ~= identifier();
@@ -240,7 +255,7 @@ class Parser {
                 expect(";"); continue;
             }
             if (isMemberInitializationStart()) {
-                if (hasAccess || isStatic || isVirtual || isAuto) error("modifiers cannot be applied to a field initialization");
+                if (hasAccess || isStatic || isVirtual || isAuto || attributes.length) error("modifiers cannot be applied to a field initialization");
                 auto name = identifier();
                 auto target = new Expression(ExprKind.variable, name);
                 while (accept(".")) {
@@ -252,7 +267,7 @@ class Parser {
                 if (current.text != ";") { init.assignmentOperator = take().text; init.expression = initializer(); }
                 expect(";"); result.memberInitializers ~= init; continue;
             }
-            if (accept("records")) { parseRecords(result); continue; }
+            if (accept("records")) { if (attributes.length) error("record block attributes are not supported yet"); parseRecords(result); continue; }
             auto declaredFinal = accept("final");
             bool isCastOperator = current.text == "operator";
             Token name;
@@ -277,7 +292,7 @@ class Parser {
                 if (isVirtual || declaredType == ValueType.voidType) error("this field type or modifier is not supported");
                 if (isStatic && (declaredType == ValueType.selfArray || declaredType == ValueType.exceptionType || isMap(declaredType)))
                     error("static object fields are not supported");
-                auto field = new Field; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.isProtected = isProtected; field.isStatic = isStatic; field.isAuto = isAuto; field.declaredFinal = declaredFinal; field.objectName = declaredObjectName; field.owner = result;
+                auto field = new Field; field.attributes = attributes; field.type = declaredType; field.name = name; field.isPublic = isPublic; field.isProtected = isProtected; field.isStatic = isStatic; field.isAuto = isAuto; field.declaredFinal = declaredFinal; field.objectName = declaredObjectName; field.owner = result;
                 if (accept("=")) {
                     if (accept("class")) {
                         if (isStatic || declaredType != ValueType.selfType) error("nested specialization requires an instance object field");
@@ -285,6 +300,7 @@ class Parser {
                         nested.name = name; nested.name.text = "__nested_" ~ name.position.offset.to!string;
                         nested.baseName = declaredObjectName; nested.baseToken = name;
                         nested.lexicalOwner = result; nested.imports = result.imports.dup;
+                        nested.attributes = field.attributes; field.attributes = null;
                         parseClassBody(nested);
                         field.nestedClass = nested;
                         result.nestedPrograms ~= nested;
@@ -292,6 +308,7 @@ class Parser {
                 }
                 expect(";"); result.fields ~= field; continue;
             }
+            if (attributes.length) error("method attributes are not supported yet");
             if (isAuto) error("auto cannot be applied to a method");
             if (declaredFinal) error("final methods are not supported by BL");
             auto method = new Method;

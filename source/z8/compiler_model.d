@@ -87,7 +87,7 @@ class Method {
     string operatorSymbol;
     bool isCastOperator;
 }
-class Field { ValueType type; Token name; Expression initializer; bool isPublic, isProtected, isStatic, isAuto, isRecord, declaredFinal, userOperatorAssignment; string objectName; Program objectClass; Program owner, nestedClass; }
+class Field { ValueType type; Token name; TypeAttribute[] attributes; Expression initializer; bool isPublic, isProtected, isStatic, isAuto, isRecord, declaredFinal, userOperatorAssignment; string objectName; Program objectClass; Program owner, nestedClass; }
 struct TypeAttribute { Token name; Token value; bool hasValue; }
 struct Import { string name; Token token; }
 struct Capture { string name; ValueType type; Program objectClass; }

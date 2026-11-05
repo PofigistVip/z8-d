@@ -1,6 +1,7 @@
 [sharedTag "новое 😀"]
 [flag]
 public class StaticOverloadChild extends StaticOverloadBase {
+    public [fieldTag "специализация"] StaticOverloadBase specialized = class {};
     public static int select(string value) { return value.length() + 30; }
     public int blend(string value) { return value.length() + 70; }
     public int staticFieldThroughSuper() { super.shared = 7; return super.shared; }

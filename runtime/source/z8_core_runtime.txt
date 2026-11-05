@@ -62,8 +62,8 @@ class Z8Object {
     private wstring[wstring] z8_attributes;
 
     void z8_init_type_attributes() {}
-    final void z8_set_type_attribute(wstring key, wstring value) { z8_attributes[key] = value; }
-    final wstring z8_get_type_attribute(wstring key) {
+    final void z8_set_attribute(wstring key, wstring value) { z8_attributes[key] = value; }
+    final wstring z8_get_attribute(wstring key) {
         auto value = key in z8_attributes;
         return value is null ? null : *value;
     }

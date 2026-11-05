@@ -131,6 +131,8 @@ class Checker {
         currentProgram = program; allClasses = programs;
         foreach (field; program.fields) {
             field.type = resolveDeclaredType(field.type, program, field.objectName, field.name);
+            if (field.attributes.length && field.type != ValueType.selfType)
+                fail("attributes require an object reference field", field.name);
             if (field.isAuto && (field.isStatic || field.type != ValueType.selfArray))
                 fail("auto requires an instance array of object references", field.name);
             if (field.isStatic && (field.type == ValueType.selfType || field.type == ValueType.enumType))

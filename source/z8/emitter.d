@@ -614,7 +614,7 @@ package string emitPrograms(Program[] programs) {
         if (program.attributes.length) {
             result ~= "override void z8_init_type_attributes() {\nsuper.z8_init_type_attributes();\n";
             foreach (attribute; program.attributes)
-                result ~= "this.z8_set_type_attribute(" ~ emitWStringLiteral(attribute.name.text.to!wstring) ~ ", " ~
+                result ~= "this.z8_set_attribute(" ~ emitWStringLiteral(attribute.name.text.to!wstring) ~ ", " ~
                     (attribute.hasValue ? emitStringLiteral(attribute.value.text) : `z8_string_new(""w)`) ~ ");\n";
             result ~= "}\n";
         }
@@ -666,6 +666,9 @@ package string emitPrograms(Program[] programs) {
                 result ~= "if (this.f_" ~ field.name.text ~ " is null) throw new Exception(\"null object field initializer\");\n";
             else if (field.initializer !is null)
                 result ~= "this.f_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
+            foreach (attribute; field.attributes)
+                result ~= "this.f_" ~ field.name.text ~ ".z8_set_attribute(" ~ emitWStringLiteral(attribute.name.text.to!wstring) ~ ", " ~
+                    (attribute.hasValue ? emitStringLiteral(attribute.value.text) : `z8_string_new(""w)`) ~ ");\n";
         }
         foreach (init; program.memberInitializers)
             if (init.expression !is null && init.type != ValueType.selfType) result ~= emitSimple(init) ~ ";\n";
