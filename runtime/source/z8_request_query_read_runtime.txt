@@ -47,7 +47,7 @@ void z8_application_dispatch_query_read(wstring className) {
         auto name = parameterKeys.z8_get(i);
         if (name is null) throw new Exception("invalid query read parameter");
         if (name == "request"w || name == "session"w || name == "action"w || name == "fields"w || name == "start"w || name == "limit"w ||
-            name == "filter"w || name == "where"w || name == "quickFilter"w || name == "sort"w) continue;
+            name == "filter"w || name == "where"w || name == "quickFilter"w || name == "sort"w || name == "recordId"w) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported query read parameter: " ~ name.to!string);
     }
     auto query = z8_object_new_instance_native(z8_string_required(className));
@@ -102,6 +102,24 @@ void z8_application_dispatch_query_read(wstring className) {
     if (!limit) limit = z8_query_limit(query);
     Z8QueryReadRequest read;
     read.fields = selected; read.start = cast(int)start; read.limit = cast(int)limit;
+    auto recordIds = params.z8_get("recordId"w);
+    if (recordIds !is null && recordIds.length) {
+        auto json = recordIds[0] == '[' ? recordIds : recordIds[0] == '"' ? "["w ~ recordIds ~ "]"w : "[\""w ~ recordIds ~ "\"]"w;
+        auto parsed = z8_json_parse(json.to!string);
+        if (parsed.type != JSONType.array) throw new Exception("recordId must be a GUID or a JSON array of GUIDs");
+        if (parsed.array.length) {
+            auto filter = new Z8SqlBool(Z8SqlBoolKind.inVector);
+            filter.vectorValue = new Z8SqlFieldToken(key);
+            foreach (item; parsed.array) {
+                if (item.type != JSONType.string) throw new Exception("recordId must contain GUIDs");
+                auto id = z8_guid_parse(item.str.to!wstring);
+                if (id is null) throw new Exception("invalid recordId");
+                filter.vectorItems ~= new Z8SqlBoxedConstant(z8_primary_box(id));
+            }
+            read.where = filter;
+            read.byRecordIds = true;
+        }
+    }
     auto sorting = params.z8_get("sort"w);
     if (sorting !is null && sorting.length) {
         auto parsed = z8_json_parse(sorting.to!string);
@@ -127,6 +145,9 @@ void z8_application_dispatch_query_read(wstring className) {
         if (field !is key && !privileges.getFieldAccess(queryKey, fieldKey).read) throw new Exception("query sort field access denied");
     }
     foreach (name; ["filter"w, "where"w, "quickFilter"w]) {
+        // ReadAction in the original Z8 uses the record IDs instead of the
+        // request and query filters when a nonempty ID list is provided.
+        if (read.byRecordIds) break;
         auto json = params.z8_get(name);
         if (json is null || !json.length) continue;
         auto filter = z8_application_query_filter(query, json);

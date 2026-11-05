@@ -43,6 +43,7 @@ import org.zenframework.z8.base.table.value.IntExpression;
     [name "Details"] public TextField details;
     [name "Blob"] public BinaryField blob;
     public IntExpression computed;
+    virtual protected sql_bool scope() { return amount >= 0; }
 }
 ''', encoding="utf-8")
     (source / "GeoSample.bl").write_text('''
@@ -620,6 +621,23 @@ void main(string[] args) {
     assert(sortedAmount(`[{"property":"amount","direction":"DESC"}]`w, "1"w) == 10);
     assert(rejectedRead("sort"w, `[{"property":"amount","direction":"invalid"}]`w));
     assert(rejectedRead("sort"w, `[{"property":"computed"}]`w));
+    long recordCount(wstring ids, wstring filter = null) {
+        auto byId = new Z8ApplicationRequest(); byId.session = querySession; byId.monitor = new Z8RequestMonitor();
+        byId.parameters.z8_add("action"w, "read"w); byId.parameters.z8_add("fields"w, `["amount"]`w);
+        byId.parameters.z8_add("recordId"w, ids); if (filter !is null) byId.parameters.z8_add("filter"w, filter);
+        z8_application_set_request(byId); z8_application_start_response(byId, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+        z8_application_finish_response(byId, cast(Z8RequestMonitor)byId.monitor);
+        return cast(long)parseJSON(z8_application_response_text(byId).to!string)["data"].array.length;
+    }
+    assert(recordCount("00000000-0000-0000-0000-00000000012D"w) == 1);
+    assert(recordCount(`["00000000-0000-0000-0000-00000000012D","00000000-0000-0000-0000-00000000012E"]`w) == 2);
+    assert(recordCount(`["00000000-0000-0000-0000-00000000012D"]`w, `{"property":"amount","operator":"lt","value":"0"}`w) == 1);
+    assert(recordCount(`[]`w, `{"property":"amount","operator":"lt","value":"0"}`w) == 0);
+    assert(recordCount("00000000-0000-0000-0000-000000000000"w) == 0);
+    db.execute(`INSERT INTO "z8_bootstrap"."Sample;--" ("RecordId", "Title", "Amount") VALUES ('00000000-0000-0000-0000-00000000012F', 'Outside scope', -10)`);
+    assert(recordCount(`[]`w) == 2);
+    assert(recordCount("00000000-0000-0000-0000-00000000012F"w) == 1);
+    assert(rejectedRead("recordId"w, `["invalid"]`w));
     queryUser.privileges.setFieldAccess(bootFieldKey, Z8Access.init);
     assert(rejectedRead("sort"w, `[{"property":"title"}]`w));
     queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;

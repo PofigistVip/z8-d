@@ -10,7 +10,7 @@ struct Z8QueryReadRequest {
     Z8SqlBool queryWhere, queryHaving, queryScope;
     int start, limit = -1;
     Z8Guid recordId;
-    bool byRecordId, disableGrouping;
+    bool byRecordId, byRecordIds, disableGrouping;
     Z8QueryReadLock readLock;
 }
 interface IZ8QueryCursor : IZ8FieldCursor {
@@ -208,7 +208,7 @@ private class Z8QuerySavedState {
 }
 private void z8_query_prepare_read(Z8Object self, ref Z8QueryReadRequest request) {
     if (z8_query_user_events_enabled()) self.z8_query_virtual_beforeRead();
-    if (!request.byRecordId) {
+    if (!request.byRecordId && !request.byRecordIds) {
         request.queryWhere = z8_query_where(self); request.queryHaving = z8_query_having(self);
         request.queryScope = z8_query_scope(self);
     }

@@ -245,7 +245,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         auto plan = new Z8PostgresQueryPlan(query, schema, table);
         foreach (field; groups) plan.includeField(field);
         foreach (condition; [request.where, request.queryWhere, request.queryScope, request.having, request.queryHaving]) plan.includeExpression(condition);
-        plan.finish(!request.byRecordId);
+        plan.finish(!request.byRecordId && !request.byRecordIds);
         auto previous = z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
         scope(exit) z8_sql_set_field_options(previous);
         string sql = groups.length ? "SELECT count(*) FROM (SELECT 1" : "SELECT count(0)";
@@ -317,7 +317,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         foreach (field; request.sortFields) plan.includeField(field);
         foreach (field; groups) plan.includeField(field);
         foreach (condition; [request.where, request.queryWhere, request.queryScope, request.having, request.queryHaving]) plan.includeExpression(condition);
-        plan.finish(!request.byRecordId);
+        plan.finish(!request.byRecordId && !request.byRecordIds);
         if (!request.disableGrouping && !grouped && plan.having.length)
             throw new Z8PostgresException("PostgreSQL HAVING filters require grouped query support");
         auto previous = z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);

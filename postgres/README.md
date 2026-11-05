@@ -99,9 +99,11 @@ adapter described below.
 connection and the session's privilege snapshot. It requires request execute
 and table read permissions, omits fields without read permission, and always
 includes the primary key. It supports `action=read`, a JSON `fields` array,
-non-negative `start` and `limit`, JSON `sort`, and `filter`, `where` and
+non-negative `start` and `limit`, `recordId` (one GUID or a JSON array), JSON `sort`, and `filter`, `where` and
 `quickFilter` conditions. Sort and filter fields must be readable; malformed or empty filter
 expressions are rejected rather than ignored, while `[]` means no filter.
+As in the Java `ReadAction`, a nonempty `recordId` list replaces the request
+filters and query scope; an empty list keeps the normal filters and scope.
 Linked and computed fields, other read options and custom request parameters
 are rejected. The host must
 open the application response before calling it; the CivetWeb transport does
