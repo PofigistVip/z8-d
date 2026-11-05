@@ -19,6 +19,49 @@ private Z8Primary z8_filter_value(wstring type, wstring value) {
         default: throw new Exception("unsupported JSON filter field type");
     }
 }
+private wstring[] z8_filter_words(wstring text) {
+    wstring[] words;
+    size_t start;
+    bool whitespace(wchar c) { return c == ' ' || (c >= '\t' && c <= '\r'); }
+    while (start < text.length) {
+        while (start < text.length && whitespace(text[start])) ++start;
+        auto end = start;
+        while (end < text.length && !whitespace(text[end])) ++end;
+        if (end > start) words ~= text[start .. end];
+        start = end;
+    }
+    return words;
+}
+private Z8SqlBool z8_filter_text_operation(Z8Object field, wstring type, wstring operation, wstring value) {
+    import std.string : strip;
+    Z8SqlString text = type == "guid"w ? z8_sql_guid_toString(z8_guid_field_sql(field)) :
+        type != "string"w ? z8_text_field_sql(field) : z8_string_field_sql(field);
+    if (operation == "isempty"w || operation == "isnotempty"w)
+        return operation == "isempty"w ? z8_sql_string_compare!"=="(text, z8_sql_string_const(""w)) :
+            z8_sql_string_compare!"!="(text, z8_sql_string_const(""w));
+    if (value is null || !value.strip().length) return null;
+    auto negative = operation == "notbeginswith"w || operation == "notendswith"w ||
+        operation == "notcontains"w || operation == "notcontainsword"w;
+    bool words = operation == "containsword"w || operation == "notcontainsword"w;
+    bool contains = operation == "contains"w || operation == "notcontains"w;
+    bool begins = operation == "beginswith"w || operation == "notbeginswith"w;
+    bool ends = operation == "endswith"w || operation == "notendswith"w;
+    if (!words && !contains && !begins && !ends) throw new Exception("unsupported JSON filter operation");
+    wstring[] terms;
+    if (words || contains) {
+        value = value.strip();
+        terms = value.length > 1 && value[0] == '"' && value[$ - 1] == '"' ? [value[1 .. $ - 1]] : z8_filter_words(value);
+    } else terms = [value];
+    auto lower = z8_sql_string_toLower(text);
+    Z8SqlBool result;
+    foreach (term; terms) {
+        wstring pattern = words ? "\\y"w ~ term ~ "\\y"w : begins ? term ~ "%"w : ends ? "%"w ~ term : "%"w ~ term ~ "%"w;
+        auto sqlPattern = z8_sql_string_const(z8_str_toLowerCase(pattern));
+        auto part = words ? z8_sql_string_regLike(lower, sqlPattern) : z8_sql_string_like(lower, sqlPattern);
+        result = z8_filter_combine(result, part);
+    }
+    return negative && result !is null ? z8_sql_bool_not(result) : result;
+}
 private Z8SqlBool z8_filter_compare(Z8Object field, wstring operation, wstring[] values) {
     auto type = z8_field_type_name(field);
     if (values.length > 1) {
@@ -34,9 +77,12 @@ private Z8SqlBool z8_filter_compare(Z8Object field, wstring operation, wstring[]
         bool number = operation == "istrue"w ? true : operation == "isfalse"w ? false : z8_bool_parse(value);
         return z8_sql_bool_binary!"=="(z8_bool_field_sql(field), z8_sql_bool_const(number));
     }
+    bool textType = type == "string"w || type == "text"w || type == "file"w || type == "attachments"w;
+    if ((textType || type == "guid"w) && ["beginswith"w, "notbeginswith"w, "endswith"w, "notendswith"w,
+        "contains"w, "notcontains"w, "containsword"w, "notcontainsword"w, "isempty"w, "isnotempty"w].canFind(operation))
+        return z8_filter_text_operation(field, type, operation, value);
     if (!["eq"w, "noteq"w, "lt"w, "gt"w, "le"w, "ge"w].canFind(operation))
         throw new Exception("unsupported JSON filter operation");
-    bool textType = type == "string"w || type == "text"w || type == "file"w || type == "attachments"w;
     if (textType && value is null) return null;
     Z8SqlBoolKind kind;
     switch (operation) {
@@ -50,7 +96,7 @@ private Z8SqlBool z8_filter_compare(Z8Object field, wstring operation, wstring[]
     }
     if (textType) {
         auto result = new Z8SqlBool(kind);
-        auto left = type == "text"w ? z8_text_field_sql(field) : z8_string_field_sql(field);
+        auto left = type != "string"w ? z8_text_field_sql(field) : z8_string_field_sql(field);
         if (operation == "eq"w || operation == "noteq"w) { left = z8_sql_string_toLower(left); value = z8_str_toLowerCase(value); }
         result.textLeft = left; result.textRight = z8_sql_string_const(value); return result;
     }

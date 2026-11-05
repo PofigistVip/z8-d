@@ -100,7 +100,10 @@ public class Probe {
         table.setWhere(filters);
     }
     public static void jsonNot(Sales table) { table.setWhere("{logical:'not',expressions:[{property:'" + table.amount.id() + "',operator:'gt',value:'10'}]}"); }
-    public static void jsonUnsupported(Sales table) { table.setWhere("{property:'" + table.title.id() + "',operator:'isEmpty'}"); }
+    public static void jsonUnsupported(Sales table) { table.setWhere("{property:'" + table.title.id() + "',operator:'isSimilarTo',value:'hello'}"); }
+    public static void jsonTitle(Sales table, string op, string value) { table.setWhere("{property:'" + table.title.id() + "',operator:'" + op + "',value:'" + value + "'}"); }
+    public static void jsonInfo(Sales table, string op, string value) { table.setWhere("{property:'" + table.info.id() + "',operator:'" + op + "',value:'" + value + "'}"); }
+    public static void jsonId(Sales table, string op, string value) { table.setWhere("{property:'" + table.recordId.id() + "',operator:'" + op + "',value:'" + value + "'}"); }
     public static void jsonHaving(Sales table) {
         table.groupBy = {table.flag}; table.amount.aggregation = Aggregation.Sum;
         table.addHaving("{property:'" + table.amount.id() + "',operator:'ge',value:'20'}");
@@ -219,6 +222,25 @@ void main(string[] args) {
     bool unsupported; try { P.m_jsonUnsupported(table); } catch (Exception) { unsupported = true; }
     assert(unsupported && z8_optional_require(P.m_count(table)) == 2);
     P.m_jsonReset(table); assert(z8_optional_require(P.m_count(table)) == 3);
+    db.execute("BEGIN");
+    db.execute(`INSERT INTO "Sales""Quote" ("RecordId","Amount","Title") VALUES ('00000000-0000-0000-0000-000000000005',12,'Hello World'), ('00000000-0000-0000-0000-000000000006',13,'World hello'), ('00000000-0000-0000-0000-000000000007',14,''), ('00000000-0000-0000-0000-000000000008',15,NULL)`);
+    db.execute(`UPDATE "Sales""Quote" SET "Info"=convert_to('Quick Brown Fox','UTF8') WHERE "RecordId"='00000000-0000-0000-0000-000000000005'`);
+    P.m_jsonTitle(table, "contains"w, "hello WORLD"w); assert(z8_optional_require(P.m_count(table)) == 2);
+    P.m_jsonTitle(table, "contains"w, `"hello world"`w); assert(z8_optional_require(P.m_count(table)) == 1);
+    P.m_jsonTitle(table, "notContains"w, "HELLO WORLD"w); assert(z8_optional_require(P.m_count(table)) == 3);
+    P.m_jsonTitle(table, "beginsWith"w, "HEL"w); assert(z8_optional_require(P.m_count(table)) == 1);
+    P.m_jsonTitle(table, "notBeginsWith"w, "HEL"w); assert(z8_optional_require(P.m_count(table)) == 4);
+    P.m_jsonTitle(table, "endsWith"w, "world"w); assert(z8_optional_require(P.m_count(table)) == 1);
+    P.m_jsonTitle(table, "notEndsWith"w, "world"w); assert(z8_optional_require(P.m_count(table)) == 4);
+    P.m_jsonTitle(table, "containsWord"w, "hello"w); assert(z8_optional_require(P.m_count(table)) == 2);
+    P.m_jsonTitle(table, "containsWord"w, `"hello world"`w); assert(z8_optional_require(P.m_count(table)) == 1);
+    P.m_jsonTitle(table, "notContainsWord"w, "hello"w); assert(z8_optional_require(P.m_count(table)) == 3);
+    P.m_jsonTitle(table, "isEmpty"w, ""w); assert(z8_optional_require(P.m_count(table)) == 1);
+    P.m_jsonTitle(table, "isNotEmpty"w, ""w); assert(z8_optional_require(P.m_count(table)) == 4);
+    P.m_jsonTitle(table, "contains"w, "   "w); assert(z8_optional_require(P.m_count(table)) == 7);
+    P.m_jsonInfo(table, "contains"w, "quick FOX"w); assert(z8_optional_require(P.m_count(table)) == 1);
+    P.m_jsonId(table, "endsWith"w, "0005"w); assert(z8_optional_require(P.m_count(table)) == 1);
+    P.m_jsonReset(table); db.execute("ROLLBACK");
     auto groupedFilter = P.m_make(); z8_query_set_executor(groupedFilter, new Z8PostgresQueryExecutor(db, "pg_temp"w, `Sales"Quote`w));
     P.m_jsonHaving(groupedFilter); assert(z8_optional_require(P.m_count(groupedFilter)) == 1);
     P.m_groupSum(table);
