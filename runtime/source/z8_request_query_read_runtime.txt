@@ -84,6 +84,7 @@ private void z8_application_query_write_rows(Z8Object query, Z8JsonWriterState w
             auto value = z8_field_primary(field);
             auto wasNull = z8_optional_require(z8_field_was_null(field));
             if (field is key && wasNull) continue;
+            if (wasNull) value = field.z8_field_virtual_default();
             writer.property(field.z8_id());
             if (value !is null && value.kind == Z8PrimaryKind.geometry &&
                 (wasNull || (value.geometryValue !is null && value.geometryValue.rawHex is null && value.geometryValue.shape == -1)))

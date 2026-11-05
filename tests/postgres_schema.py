@@ -825,6 +825,14 @@ void main(string[] args) {
     queryUser.privileges.setFieldAccess(bootFieldKey, Z8Access(true, false, false, false, false, false));
     assert(!copy("00000000-0000-0000-0000-000000000133"w, `[{}]`w, copyResult));
     queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
+    db.execute(`INSERT INTO "z8_bootstrap"."Sample;--" ("RecordId", "Title", "Amount") VALUES ('00000000-0000-0000-0000-000000000130', NULL, NULL)`);
+    auto nullRead = new Z8ApplicationRequest(); nullRead.session = querySession; nullRead.monitor = new Z8RequestMonitor();
+    nullRead.parameters.z8_add("action"w, "read"w); nullRead.parameters.z8_add("fields"w, `["title","amount"]`w);
+    nullRead.parameters.z8_add("recordId"w, "00000000-0000-0000-0000-000000000130"w);
+    z8_application_set_request(nullRead); z8_application_start_response(nullRead, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+    z8_application_finish_response(nullRead, cast(Z8RequestMonitor)nullRead.monitor);
+    auto nullJson = parseJSON(z8_application_response_text(nullRead).to!string);
+    assert(nullJson["data"].array.length == 1 && nullJson["data"][0]["title"].str == "O'Reilly 😀" && nullJson["data"][0]["amount"].integer == 7);
     db.execute(`CREATE TABLE "z8_bootstrap"."DeleteRef" ("Target" uuid REFERENCES "z8_bootstrap"."Sample;--" ("RecordId"))`);
     db.execute(`INSERT INTO "z8_bootstrap"."DeleteRef" VALUES ('00000000-0000-0000-0000-00000000012E')`);
     bool destroy(wstring data) {
