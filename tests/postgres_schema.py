@@ -623,6 +623,14 @@ void main(string[] args) {
     z8_application_set_request(previousAccessRequest);
     assert(db.execute(`SELECT count(*) FROM "z8_access"."SystemRoleTableAccess" WHERE "Role" = '00000000-0000-0000-0000-000000000071'`).rows[0][0].text == "0");
     P.m_deleteRole(P.m_roles(), z8_guid_create(113));
+    db.execute(`UPDATE "z8_access"."SystemRoles" SET "Name" = 'Preserved admin', "Description" = convert_to('Keep', 'UTF8'), "Read" = 0, "Lock" = 0 WHERE "RecordId" = 'DC08CA72-C668-412F-91B7-022F1C82AC09'`);
+    db.beginTransaction();
+    z8_postgres_apply_static_records(db, "z8_access"w, P.m_roles(), roleRegistry);
+    db.commit();
+    auto retainedRole = db.execute(`SELECT "Name", convert_from("Description", 'UTF8'), "Read", "Lock" FROM "z8_access"."SystemRoles" WHERE "RecordId" = 'DC08CA72-C668-412F-91B7-022F1C82AC09'`);
+    assert(retainedRole.rows[0][0].text == "Preserved admin" && retainedRole.rows[0][1].text == "Keep" && retainedRole.rows[0][2].text == "0" && retainedRole.rows[0][3].text == "3");
+    auto builtInRoleAccess = db.execute(`SELECT (SELECT count(*) FROM "z8_access"."SystemRoleTableAccess" WHERE "Role" = '421A8413-A8EC-4DAB-9235-9A5FF83341C5'), (SELECT count(*) FROM "z8_access"."SystemRoleFieldAccess" WHERE "Role" = '421A8413-A8EC-4DAB-9235-9A5FF83341C5'), (SELECT count(*) FROM "z8_access"."SystemRoleRequestAccess" WHERE "Role" = '421A8413-A8EC-4DAB-9235-9A5FF83341C5')`);
+    assert(builtInRoleAccess.rows[0][0].text == "2" && builtInRoleAccess.rows[0][1].text == "2" && builtInRoleAccess.rows[0][2].text == "1");
     z8_connection_set_current(accessBackend);
     z8_connection_set_current(savedAccessBackend);
     db.execute(`ALTER TABLE "z8_test"."StaticSample" DROP CONSTRAINT "StaticSample_pkey", ADD PRIMARY KEY ("Label")`);

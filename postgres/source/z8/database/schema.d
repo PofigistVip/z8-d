@@ -148,14 +148,14 @@ bool z8_postgres_ensure_null_record(Z8PostgresConnection connection, wstring sch
 }
 
 // Apply declared records using the same create/update events as TableGenerator.
-// Roles need additional access-table lifecycle handling before they can be applied.
-void z8_postgres_apply_static_records(Z8PostgresConnection connection, wstring schema, Z8Object table) {
+// Roles require the application registry and initialized access tables.
+void z8_postgres_apply_static_records(Z8PostgresConnection connection, wstring schema, Z8Object table, Z8RuntimeRegistry registry = null) {
     if (connection is null || connection.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
     if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, z8_nonnull(table)))
         throw new Z8PostgresException("PostgreSQL schema requires a Table");
     auto users = z8_native_is_instance("org.zenframework.z8.server.base.table.system.Users"w, table);
-    if (z8_native_is_instance("org.zenframework.z8.server.base.table.system.Roles"w, table))
-        throw new Z8PostgresException("static role records require access-table lifecycle handling");
+    auto roles = z8_native_is_instance("org.zenframework.z8.server.base.table.system.Roles"w, table);
+    if (roles && registry is null) throw new Z8PostgresException("static role records require an application registry");
     auto key = z8_query_primary_key(table);
     if (key is null) throw new Z8PostgresException("PostgreSQL table has no primary key");
     auto tableName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, table);
@@ -173,7 +173,7 @@ void z8_postgres_apply_static_records(Z8PostgresConnection connection, wstring s
             if (!found) throw new Z8PostgresException("static record field is not a table data field");
         }
     }
-    auto backend = new Z8PostgresDatabase(connection, schema);
+    auto backend = new Z8PostgresDatabase(connection, schema, registry);
     auto previousExecutor = z8_query_swap_executor(table, backend.queryExecutor(table));
     auto previousConnection = z8_connection_set_current(backend);
     scope(exit) {
@@ -183,9 +183,13 @@ void z8_postgres_apply_static_records(Z8PostgresConnection connection, wstring s
     foreach (record; records) {
         auto exists = connection.execute(sql, [Z8PostgresParameter.value(z8_guid_to_string(record.key).to!string)]).rows.length != 0;
         auto protectedUser = users && exists && (record.key == z8_guid_create(1) || record.key == z8_guid_create(2));
+        auto protectedRole = roles && exists && (record.key == z8_guid_literal("DC08CA72-C668-412F-91B7-022F1C82AC09") ||
+            record.key == z8_guid_literal("421A8413-A8EC-4DAB-9235-9A5FF83341C5") || record.key == z8_guid_literal("BE41CEB5-02DF-44EE-885F-B82DDEDCAA08"));
         foreach (item; record.values) {
             auto index = item.field.z8_index();
             if (protectedUser && (index == "name"w || index == "password"w || index == "description"w)) continue;
+            if (protectedRole && (index == "name"w || index == "description"w || index == "read"w || index == "write"w ||
+                index == "create"w || index == "copy"w || index == "destroy"w || index == "execute"w)) continue;
             z8_field_set(item.field, item.value);
         }
         if (exists)

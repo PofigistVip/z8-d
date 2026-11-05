@@ -49,13 +49,16 @@ schema generation. The schema lifecycle does not yet call it automatically.
 `z8_postgres_apply_static_records` creates or updates declared BL records using
 table events; it expects a clean table instance and leaves transaction control
 to the caller. Existing built-in user names, passwords and descriptions are
-preserved on reapplication. The Roles table is rejected until its associated
-access-table lifecycle is implemented.
+preserved on reapplication. Built-in roles can be applied separately when an
+application registry and initialized access tables are supplied; their names,
+descriptions and permissions are preserved on reapplication. The combined
+`z8_postgres_create_tables` bootstrap still rejects Roles because it does not
+yet populate the application metadata needed by the role lifecycle.
 Users' and Roles' native fields, built-in identifiers and Java-defined static
 record metadata are available. Built-in user deletion is rejected, while the
 built-in role deletion and user-ban checks follow Z8's user-event setting.
-General authorization and applying built-in role records to the database are
-still pending, as are cross-server user-change notifications.
+General authorization and cross-server user-change notifications are still
+pending.
 Physical fields of the system `Tables`, `Fields` and `Requests` metadata tables
 are available, including the `Fields` link to `Tables`. Registry-based localized
 display values remain unimplemented.
