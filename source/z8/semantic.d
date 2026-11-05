@@ -225,6 +225,31 @@ class Checker {
             }
         return best;
     }
+    // A conversion result may itself derive from primary (for example,
+    // JsonArray.operator string() when passed to a primary parameter).
+    private Method findPrimaryConversion(Program owner) {
+        auto direct = findConversion(owner, ValueType.primaryType);
+        if (direct !is null) return direct;
+        Method best;
+        size_t bestDistance = size_t.max;
+        for (auto current = owner; current !is null; current = current.baseClass)
+            foreach (method; current.methods) {
+                if (!method.isCastOperator || !accessible(method.owner, method.isPublic, method.isProtected)) continue;
+                size_t distance = size_t.max;
+                if ([ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType,
+                     ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType,
+                     ValueType.dateType, ValueType.fileType].canFind(method.returnType)) distance = 1;
+                else if (method.returnType == ValueType.selfType) {
+                    size_t depth;
+                    for (auto result = method.returnObjectClass; result !is null; result = result.baseClass) {
+                        ++depth;
+                        if (result.baseIsPrimary) { distance = depth; break; }
+                    }
+                }
+                if (distance < bestDistance) { best = method; bestDistance = distance; }
+            }
+        return best;
+    }
     private int sqlIifConversionCost(Expression argument, ValueType actual, ValueType target) {
         if (actual == ValueType.nullType || actual == target) return 0;
         if (actual == ValueType.selfType && findConversion(argument.objectClass, target) !is null) return 100;
@@ -322,9 +347,10 @@ class Checker {
                 e.convertExceptionObject = true;
                 return true;
             }
-            auto conversion = findConversion(e.objectClass, expected, expectedClass);
+            auto conversion = expected == ValueType.primaryType ? findPrimaryConversion(e.objectClass) : findConversion(e.objectClass, expected, expectedClass);
             if (conversion !is null) {
                 e.userConversion = conversion;
+                if (expected == ValueType.primaryType && conversion.returnType != ValueType.primaryType) e.boxPrimary = true;
                 if ([ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(expected)) e.optionalRequired = true;
                 return true;
             }
@@ -474,7 +500,8 @@ class Checker {
                     ++weight;
                 } else if (actual == ValueType.selfType && p.type == ValueType.primaryType && extendsBuiltinPrimary(e.arguments[i].objectClass)) {
                     if (binaryOperator) ++distance;
-                } else if (actual == ValueType.selfType && findConversion(e.arguments[i].objectClass, p.type,
+                } else if (actual == ValueType.selfType && p.type == ValueType.primaryType && findPrimaryConversion(e.arguments[i].objectClass) !is null) weight += 100;
+                else if (actual == ValueType.selfType && findConversion(e.arguments[i].objectClass, p.type,
                             p.type == ValueType.enumType ? resolveClass(candidate.owner, p.objectName, p.name) : null) !is null) weight += 100;
                 else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
                 else if (actual == ValueType.intType && p.type == ValueType.dateType) weight += 100;
