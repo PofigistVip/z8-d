@@ -525,7 +525,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                 demo.cases.SqlStringValues.z8_jsonIndex(), demo.cases.SqlStringValues.z8_identity(),
                 demo.cases.SqlStringValues.z8_booleanText(), demo.cases.SqlStringValues.z8_integerText(),
                 demo.cases.SqlStringValues.z8_decimalText(), demo.cases.SqlStringValues.z8_regexText(),
-                demo.cases.SqlStringValues.z8_notIntegerText()
+                demo.cases.SqlStringValues.z8_notIntegerText(), demo.cases.SqlStringValues.z8_choiceRegexText()
             };
             for (org.zenframework.z8.server.types.sql.sql_string value : extraStrings) {
                 try { System.out.println("SQLTEXTEXTRA:" + vendor.name() + ":" + value.format(vendor, null)); }
@@ -923,7 +923,8 @@ void main() {
             Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_integerText(),
             Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_decimalText(),
             Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_regexText(),
-            Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_notIntegerText()];
+            Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_notIntegerText(),
+            Z8p_64656D6F2E63617365732E53716C537472696E6756616C756573.m_choiceRegexText()];
         foreach (value; extraStrings) {
             try { writeln("SQLTEXTEXTRA:", vendor, ":", z8_to_utf8(z8_sql_string_format(value, dialect))); }
             catch (Exception error) { writeln("SQLTEXTEXTRA:", vendor, ":ERROR"); }
@@ -954,7 +955,7 @@ void main() {
         d_sql = [line for line in d_lines if line.startswith("SQLBOOL:")]
         if original_sql != d_sql or len(d_sql) != 40:
             raise SystemExit(f"SQL boolean formatting differs: original={original_sql!r}, D={d_sql!r}")
-        for prefix, count in (("SQLINT:", 32), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 40), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 36), ("SQLTEXTTEST:", 16)):
+        for prefix, count in (("SQLINT:", 32), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 40), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 40), ("SQLTEXTTEST:", 16)):
             original_lines = [line for line in output.splitlines() if line.startswith(prefix)]
             d_formatted = [line for line in d_lines if line.startswith(prefix)]
             if original_lines != d_formatted or len(d_formatted) != count:

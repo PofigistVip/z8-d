@@ -39,6 +39,7 @@ public class SqlStringValues {
     public static sql_string decimalText() { sql_decimal value = 1.5; return value.toString(); }
     public static sql_string regexText() { sql_string value = "abc"; return value.regLike("a.*").toString(); }
     public static sql_string notIntegerText() { sql_int value = 42; return (~value).toString(); }
+    public static sql_string choiceRegexText() { sql_bool condition = true; sql_string value = "abc"; return condition.IIF(value.regLike("a.*"), false).toString(); }
     public static int run() {
         sql_string value = concatenation();
         if (value == null) return 1;

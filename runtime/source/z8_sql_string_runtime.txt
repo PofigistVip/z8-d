@@ -132,8 +132,8 @@ private wstring z8_sql_string_as_text(Z8SqlString value, Z8SqlVendor vendor) {
 // the BL wrapper type (RegLike reports Integer and integer ~ reports Boolean).
 private bool z8_sql_bool_is_numeric(Z8SqlBool value) {
     z8_nonnull(value);
-    if (value.kind == Z8SqlBoolKind.group || value.kind == Z8SqlBoolKind.choose)
-        return z8_sql_bool_is_numeric(value.left);
+    if (value.kind == Z8SqlBoolKind.group) return z8_sql_bool_is_numeric(value.left);
+    if (value.kind == Z8SqlBoolKind.choose) return z8_sql_bool_is_numeric(value.right);
     return value.kind == Z8SqlBoolKind.textRegLike;
 }
 private bool z8_sql_int_is_numeric(Z8SqlInt value) {
