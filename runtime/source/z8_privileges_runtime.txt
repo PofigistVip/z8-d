@@ -1,0 +1,36 @@
+// In-memory counterparts of security.Access and security.Privileges.
+struct Z8Access {
+    bool read, write, create, copy, destroy, execute;
+    Z8Access orAccess(Z8Access other) const {
+        return Z8Access(read || other.read, write || other.write, create || other.create,
+            copy || other.copy, destroy || other.destroy, execute || other.execute);
+    }
+    Z8Access andAccess(Z8Access other) const {
+        return Z8Access(read && other.read, write && other.write, create && other.create,
+            copy && other.copy, destroy && other.destroy, execute && other.execute);
+    }
+}
+class Z8Privileges {
+    private Z8Access defaultAccess;
+    private Z8Access[wstring] tables, fields, requests;
+    this(Z8Access initial = Z8Access.init) { defaultAccess = initial; }
+    void setDefaultAccess(Z8Access access) { defaultAccess = access; }
+    Z8Access getDefaultAccess() { return defaultAccess; }
+    private wstring key(Z8Guid id) { return id is null ? null : z8_guid_to_string(id); }
+    void setTableAccess(Z8Guid id, Z8Access access) { tables[key(z8_nonnull(id))] = access; }
+    void setFieldAccess(Z8Guid id, Z8Access access) { fields[key(z8_nonnull(id))] = access; }
+    void setRequestAccess(Z8Guid id, Z8Access access) { requests[key(z8_nonnull(id))] = access; }
+    Z8Access getTableAccess(Z8Guid id) {
+        if (id is null) return defaultAccess;
+        auto access = key(id) in tables; return access is null ? defaultAccess : *access;
+    }
+    Z8Access getFieldAccess(Z8Guid table, Z8Guid field) {
+        auto tableAccess = getTableAccess(table);
+        if (field is null) return tableAccess;
+        auto access = key(field) in fields; return access is null ? tableAccess : tableAccess.andAccess(*access);
+    }
+    Z8Access getRequestAccess(Z8Guid id) {
+        if (id is null) return defaultAccess;
+        auto access = key(id) in requests; return access is null ? defaultAccess : *access;
+    }
+}
