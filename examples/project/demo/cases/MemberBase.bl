@@ -1,0 +1,3 @@
+public class MemberBase {
+    public NestedBase item = class { public int value() { return super.value() + 10; } };
+}

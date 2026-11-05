@@ -249,6 +249,9 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         System.out.println("RESULT:" + demo.cases.NullableObjectField.z8_run().get());
         System.out.println("RESULT:" + demo.cases.LifecycleCases.z8_run().get());
         System.out.println("RESULT:" + demo.cases.LifecyclePhases.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.RemoteMemberDerived.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.MemberLeaf.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.MemberOwn.z8_run().get());
         System.out.println("RESULT:" + demo.cases.NestedLocalCases.z8_run().get());
         System.out.println("RESULT:" + demo.cases.NestedOwner.z8_run().get());
         System.out.println("RESULT:" + demo.cases.AssignmentRanking.z8_run().get());
@@ -406,6 +409,9 @@ void main() {
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4E756C6C61626C654F626A6563744669656C64.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4C6966656379636C654361736573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4C6966656379636C65506861736573.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E52656D6F74654D656D62657244657269766564.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4D656D6265724C656166.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4D656D6265724F776E.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4E65737465644C6F63616C4361736573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E4E65737465644F776E6572.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E41737369676E6D656E7452616E6B696E67.m_run()));
@@ -454,8 +460,8 @@ void main() {
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_results = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        if original_results[-42:-13] != ["209", "207", "203", "201", "197", "195", "193", "185", "187", "189", "181", "183", "179", "177", "171", "169", "167", "165", "163", "159", "155", "153", "151", "149", "167", "171", "251", "28", "241"]:
-            raise SystemExit(f"Language fixtures failed in original Z8: {original_results[-42:-13]}")
+        if original_results[-45:-13] != ["215", "211", "213", "209", "207", "203", "201", "197", "195", "193", "185", "187", "189", "181", "183", "179", "177", "171", "169", "167", "165", "163", "159", "155", "153", "151", "149", "167", "171", "251", "28", "241"]:
+            raise SystemExit(f"Language fixtures failed in original Z8: {original_results[-45:-13]}")
         if original_results[-13:] != ["173", "179", "181", "191", "193", "197", "199", "211", "223", "227", "229", "233", "239"]:
             raise SystemExit(f"Basic types fixture failed in original Z8: {original_results[-13:]}")
         if original_results != d_results:

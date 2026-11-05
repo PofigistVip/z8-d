@@ -100,7 +100,10 @@ class Program {
     Token baseToken;
     Program baseClass;
     Program lexicalOwner;
-    Program[] nestedPrograms;
+    Program[] nestedPrograms, memberSpecializations;
+    Token specializedName;
+    Field specializedField;
+    bool isFieldSpecialization;
     Capture[] captures;
     bool enclosingStatic;
     bool isFinal;

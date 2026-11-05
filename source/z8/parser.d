@@ -191,6 +191,21 @@ class Parser {
                 take();
             }
             if (result.lexicalOwner !is null && isStatic) error("static members cannot be declared in a nested type");
+            if (current.kind == TokenKind.identifier && look(1).text == "=" && look(2).text == "class") {
+                if (hasAccess || isStatic || isVirtual || isAuto) error("modifiers cannot be applied to a field specialization");
+                auto name = take();
+                foreach (previous; result.memberSpecializations)
+                    if (previous.specializedName.text == name.text) throw new CompileException("duplicate field specialization", name.position);
+                expect("="); expect("class");
+                auto nested = new Program;
+                nested.name = name; nested.name.text = "__nested_" ~ name.position.offset.to!string;
+                nested.specializedName = name; nested.baseToken = name; nested.isFieldSpecialization = true;
+                nested.lexicalOwner = result; nested.imports = result.imports.dup;
+                parseClassBody(nested);
+                result.memberSpecializations ~= nested;
+                result.nestedPrograms ~= nested;
+                expect(";"); continue;
+            }
             if (accept("records")) { parseRecords(result); continue; }
             auto declaredFinal = accept("final");
             bool isCastOperator = current.text == "operator";

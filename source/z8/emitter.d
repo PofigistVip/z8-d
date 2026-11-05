@@ -597,6 +597,8 @@ package string emitPrograms(Program[] programs) {
                 field.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(field.type, field.objectClass, true);
             result ~= "this.f_" ~ field.name.text ~ " = " ~ initial ~ ";\n";
         }
+        foreach (specialization; program.memberSpecializations)
+            result ~= "this.f_" ~ specialization.specializedName.text ~ " = z8_new!(" ~ specialization.emittedName ~ ")(this);\n";
         result ~= "}\noverride void z8_init_references() {\n";
         foreach (field; orderedReferenceFields(program)) {
             if (field.userOperatorAssignment)

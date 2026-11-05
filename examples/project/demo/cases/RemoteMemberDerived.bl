@@ -1,0 +1,10 @@
+import demo.util.RemoteMemberBase;
+public class RemoteMemberDerived extends RemoteMemberBase {
+    private int bonus = 5;
+    thing = class { public int value() { return super.value() + container.bonus; } };
+    public static int run() {
+        RemoteMemberDerived value;
+        if (value.thing.value() != 8) return 1;
+        return 215;
+    }
+}

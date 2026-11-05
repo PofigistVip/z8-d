@@ -37,8 +37,27 @@ class Checker {
     }
     void bindBase(Program program, Program[string] programs) {
         currentProgram = program; allClasses = programs;
-        if (program.baseName.length) {
-            program.baseClass = resolveClass(program, program.baseName, program.baseToken);
+        if (program.isFieldSpecialization) {
+            auto owner = program.lexicalOwner;
+            auto field = lookupField(owner, program.specializedName.text);
+            if (field is null || field.isStatic) fail("field specialization requires an instance field", program.specializedName);
+            currentProgram = owner;
+            if (!accessible(field.owner, field.isPublic, field.isProtected)) fail("field is not accessible", program.specializedName);
+            if (field.type != ValueType.selfType) fail("field specialization requires an object field", program.specializedName);
+            if (field.owner is owner && field.nestedClass !is null) fail("duplicate field specialization", program.specializedName);
+            program.specializedField = field;
+            for (auto base = owner.baseClass; base !is null && program.baseClass is null; base = base.baseClass) {
+                foreach (candidate; base.memberSpecializations)
+                    if (candidate.specializedName.text == program.specializedName.text) { program.baseClass = candidate; break; }
+                if (program.baseClass is null)
+                    foreach (candidate; base.fields)
+                        if (candidate.name.text == program.specializedName.text && candidate.nestedClass !is null) {
+                            program.baseClass = candidate.nestedClass; break;
+                        }
+            }
+            if (program.baseClass is null) program.baseClass = resolveClass(field.owner, field.objectName, field.name);
+        } else if (program.baseName.length) program.baseClass = resolveClass(program, program.baseName, program.baseToken);
+        if (program.baseClass !is null) {
             if (program.baseClass.isEnum) fail("cannot extend an enum", program.baseToken);
             if (program.baseClass.isFinal) fail("cannot extend a final class", program.baseToken);
         }

@@ -1,0 +1,4 @@
+import demo.cases.NestedBase;
+public class RemoteMemberBase {
+    public NestedBase thing;
+}

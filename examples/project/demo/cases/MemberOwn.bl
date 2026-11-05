@@ -1,0 +1,9 @@
+public class MemberOwn {
+    public NestedBase item;
+    item = class { public int value() { return super.value() + 40; } };
+    public static int run() {
+        MemberOwn owner;
+        if (owner.item.value() != 43) return 1;
+        return 213;
+    }
+}
