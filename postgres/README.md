@@ -57,7 +57,9 @@ General authorization and applying these system records to the database are
 still pending.
 The native `Users.onNew` defaults mirror the Java implementation, including its
 default password value and `changePassword` flag; explicitly supplied values
-are preserved even when user-level events are disabled.
+are preserved even when user-level events are disabled. With user events enabled,
+unnamed nonzero user records receive a sequence-based name. The prefix can be
+provided through the `Users.name.default` resource; it defaults to `User`.
 `Sequencer.next` and `Field.getSequencer` allocate values from the native
 `SystemSequences` table. Allocation uses atomic database updates. When the
 first call for a key occurs in a transaction, the initial row is created using

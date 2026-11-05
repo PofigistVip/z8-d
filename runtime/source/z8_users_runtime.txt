@@ -70,6 +70,16 @@ private bool z8_users_is_builtin(Z8Guid id) {
 }
 void z8_users_before_write(Z8Object self, Z8Guid id, bool create) {
     auto state = z8_users_state(self);
+    auto name = state.fields[0];
+    if (create && id !is null && id != z8_guid_zero()) {
+        auto value = z8_field_default_value(name);
+        if (!z8_field_is_changed(name) || value is null || !z8_primary_cast!wstring(value).length) {
+            auto resource = "Users.name.default"w in z8_string_resources;
+            auto prefix = resource is null ? "User"w : *resource;
+            auto next = z8_optional_require(z8_sequencer_next(z8_field_get_sequencer(name)));
+            z8_field_set(name, z8_primary_box(prefix ~ next.to!wstring));
+        }
+    }
     if (!create && z8_users_is_builtin(id) && z8_field_is_changed(state.fields[10]) &&
         z8_optional_require(z8_primary_cast!bool(z8_field_default_value(state.fields[10]))))
         throw new Exception("Builtin users ban state can not be changed");

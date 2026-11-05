@@ -113,6 +113,7 @@ public class Probe {
     public static guid administratorUser() { return Users.Administrator; }
     public static void createUser(Users value, guid id) { value.create(id); }
     public static void createCustomUser(Users value, guid id) { value.password = "custom"; value.changePassword = false; value.create(id); }
+    public static void createNamedUser(Users value, guid id, string name) { value.name = name; value.create(id); }
     public static void banUser(Users value, guid id, bool banned) { value.banned = banned; value.update(id); }
     public static void deleteUser(Users value, guid id) { value.destroy(id); }
     public static void deleteRole(Roles value, guid id) { value.destroy(id); }
@@ -379,8 +380,12 @@ void main(string[] args) {
     db.execute(userDDL);
     auto userBackend = new Z8PostgresDatabase(db, "z8_test"w);
     auto savedBackend = z8_connection_set_current(userBackend);
+    assert(z8_postgres_ensure_null_record(db, "z8_test"w, P.m_users()));
+    assert(db.execute(`SELECT count(*) FROM "z8_test"."SystemSequences" WHERE "Key" = 'SystemUsers.Name'`).rows[0][0].text == "0");
+    z8_string_set_resource("Users.name.default"w, "Имя "w);
     P.m_createUser(userTable, z8_guid_create(70));
     P.m_createCustomUser(userTable, z8_guid_create(71));
+    P.m_createNamedUser(P.m_users(), z8_guid_create(74), "Alice"w);
     auto suppressed = new Z8ApplicationRequest(); suppressed.setEventsLevel(Z8EventsLevel.none);
     auto savedRequest = z8_application_set_request(suppressed);
     P.m_createUser(P.m_users(), z8_guid_create(72));
@@ -388,10 +393,11 @@ void main(string[] args) {
     try { P.m_deleteUser(P.m_users(), P.m_systemUser()); } catch (Exception) { cannotDeleteSystem = true; }
     assert(cannotDeleteSystem);
     z8_application_set_request(savedRequest);
-    auto createdUsers = db.execute(`SELECT "Password", "Change Password" FROM "z8_test"."SystemUsers" ORDER BY "RecordId"`);
-    assert(createdUsers.rows.length == 3 && createdUsers.rows[0][0].text == "d41d8cd98f00b204e9800998ecf8427e" && createdUsers.rows[0][1].text == "1");
+    auto createdUsers = db.execute(`SELECT "Password", "Change Password", "Name" FROM "z8_test"."SystemUsers" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000' ORDER BY "RecordId"`);
+    assert(createdUsers.rows.length == 4 && createdUsers.rows[0][0].text == "d41d8cd98f00b204e9800998ecf8427e" && createdUsers.rows[0][1].text == "1" && createdUsers.rows[0][2].text == "Имя 2");
     assert(createdUsers.rows[1][0].text == "custom" && createdUsers.rows[1][1].text == "0");
-    assert(createdUsers.rows[2][0].text == "d41d8cd98f00b204e9800998ecf8427e" && createdUsers.rows[2][1].text == "1");
+    assert(createdUsers.rows[1][2].text == "Имя 3" && createdUsers.rows[2][0].text == "d41d8cd98f00b204e9800998ecf8427e" && createdUsers.rows[2][1].text == "1" && createdUsers.rows[2][2].text == "");
+    assert(createdUsers.rows[3][2].text == "Alice"); z8_string_clear_resources();
     db.execute(`INSERT INTO "z8_test"."SystemUsers" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000001')`);
     bool cannotBanSystem;
     try { P.m_banUser(P.m_users(), P.m_systemUser(), z8_optional_wrap(true)); } catch (Exception) { cannotBanSystem = true; }
@@ -404,6 +410,9 @@ void main(string[] args) {
         if (field.z8_index() == "verification"w) z8_field_set(field, z8_primary_box("token"w));
     P.m_createUser(verifiedUser, z8_guid_create(73));
     assert(db.execute(`SELECT "Verification Modified At" > 0 FROM "z8_test"."SystemUsers" WHERE "RecordId" = '00000000-0000-0000-0000-000000000049'`).rows[0][0].text == "t");
+    assert(db.execute(`SELECT "Name" FROM "z8_test"."SystemUsers" WHERE "RecordId" = '00000000-0000-0000-0000-000000000049'`).rows[0][0].text == "User4");
+    P.m_createNamedUser(P.m_users(), z8_guid_create(75), ""w);
+    assert(db.execute(`SELECT "Name" FROM "z8_test"."SystemUsers" WHERE "RecordId" = '00000000-0000-0000-0000-00000000004B'`).rows[0][0].text == "User5");
     db.execute(roleDDL);
     db.execute(`INSERT INTO "z8_test"."SystemRoles" ("RecordId") VALUES ('DC08CA72-C668-412F-91B7-022F1C82AC09')`);
     bool cannotDeleteRole;
