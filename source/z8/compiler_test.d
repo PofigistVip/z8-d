@@ -205,6 +205,12 @@ unittest {
 }
 
 unittest {
+    compile(q{class A { static sql_bool f(bool x) { sql_bool a = false; return a && x; } }});
+    rejects(q{class A { static void f() { sql_bool a = true; if (a) {} } }});
+    rejects(q{class A { static void f() { sql_bool a = true; bool b = a; } }});
+}
+
+unittest {
     compile(q{class A { static void f() {
         string[string] values = {("a", "b"), ("c", "d"),};
         primary[string] mixed = {("number", 42), ("text", "value")};

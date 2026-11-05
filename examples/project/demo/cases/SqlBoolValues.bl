@@ -1,0 +1,40 @@
+import org.zenframework.z8.lang.sql.sql_bool;
+public class SqlBoolValues {
+    private static int calls;
+    private static sql_bool mark() { calls += 1; return true; }
+    private static sql_bool receiver() { calls += 1; return true; }
+    private static bool late() { calls += 10; return true; }
+    public static sql_bool expression() {
+        sql_bool left = false;
+        return (left && mark());
+    }
+    public static sql_bool choose() {
+        sql_bool condition = true;
+        return condition.IIF(true, false);
+    }
+    public static sql_bool compare() {
+        sql_bool left = true;
+        return left != false;
+    }
+    public static int run() {
+        calls = 0;
+        sql_bool condition = expression();
+        if (calls != 1) return 1;
+        sql_bool absent = null;
+        if (absent != null || condition == null) return 5;
+        sql_bool comparison = condition != false;
+        sql_bool comparisonWithNull = condition == absent;
+        bool flag = true;
+        sql_bool mixed = condition && flag;
+        sql_bool choice = condition.IIF(true, false);
+        sql_bool other = new sql_bool;
+        sql_bool combined = !other || choice;
+        if (calls != 1) return 2;
+        calls = 0;
+        bool missing = null;
+        try { sql_bool invalid = receiver().IIF(missing, late()); return 3; }
+        catch (exception error) {}
+        if (calls != 1) return 4;
+        return 235;
+    }
+}

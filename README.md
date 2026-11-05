@@ -55,6 +55,7 @@ python tests/object_conversion.py
 python tests/operator_distance.py
 python tests/assignment_operators.py
 python tests/priority_operator.py
+python tests/sql_bool.py
 python tests/compound_objects.py
 python tests/nested_fields.py
 python tests/nested_packages.py
@@ -230,6 +231,11 @@ Java backend оригинала в проверенных случаях ген�
 литерала `datespan` вычисляется с 32-битным переполнением, как в исходном компиляторе.
 Регистрация
 framework по атрибутам пока не реализована.
+Начата поддержка `sql_bool`: преобразование из `bool`, операции `!`, `&&`,
+`||`, `==`, `!=` и `IIF` для логических аргументов строят дерево выражения.
+Операнды SQL-операторов вычисляются без короткого замыкания. Генерация SQL,
+работа с полями и запросами, остальные SQL-типы и другие перегрузки пока не
+реализованы.
 Типы: `int` (64-битный знаковый), `decimal`, `bool`,
 `string`, `guid`, `binary`, `datespan`, `date`, `geometry`, `file`, `exception`, `primary`, `encoding`, одномерные и двумерные массивы этих типов,
 пользовательских классов и перечислений,

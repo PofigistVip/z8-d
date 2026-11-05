@@ -1,0 +1,32 @@
+// SQL values describe an expression tree; operators do not execute SQL.
+enum Z8SqlBoolKind { constant, group, not, and, or, equal, notEqual, choose }
+class Z8SqlBool {
+    Z8SqlBoolKind kind;
+    bool constant;
+    Z8SqlBool left, right, alternative;
+    this(Z8SqlBoolKind kind, bool constant = false, Z8SqlBool left = null,
+         Z8SqlBool right = null, Z8SqlBool alternative = null) {
+        this.kind = kind; this.constant = constant;
+        this.left = left; this.right = right; this.alternative = alternative;
+    }
+}
+Z8SqlBool z8_sql_bool_const(bool value) { return new Z8SqlBool(Z8SqlBoolKind.constant, value); }
+Z8SqlBool z8_sql_bool_const(Z8Optional!bool value) { return z8_sql_bool_const(z8_optional_require(value)); }
+Z8SqlBool z8_sql_bool_group(Z8SqlBool value) {
+    return new Z8SqlBool(Z8SqlBoolKind.group, false, z8_nonnull(value));
+}
+Z8SqlBool z8_sql_bool_not(Z8SqlBool value) {
+    return new Z8SqlBool(Z8SqlBoolKind.not, false, z8_nonnull(value));
+}
+Z8SqlBool z8_sql_bool_binary(string op)(Z8SqlBool left, Z8SqlBool right) {
+    z8_nonnull(left);
+    static if (op == "&&") enum kind = Z8SqlBoolKind.and;
+    else static if (op == "||") enum kind = Z8SqlBoolKind.or;
+    else static if (op == "==") enum kind = Z8SqlBoolKind.equal;
+    else static if (op == "!=") enum kind = Z8SqlBoolKind.notEqual;
+    else static assert(0, "unsupported SQL boolean operator");
+    return new Z8SqlBool(kind, false, left, right);
+}
+Z8SqlBool z8_sql_bool_iif(Z8SqlBool condition, Z8SqlBool yes, Z8SqlBool no) {
+    return new Z8SqlBool(Z8SqlBoolKind.choose, false, z8_nonnull(condition), yes, no);
+}

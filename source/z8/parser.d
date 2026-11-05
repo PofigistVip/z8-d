@@ -91,6 +91,7 @@ class Parser {
             case "file": result = ValueType.fileType; break;
             case "exception": result = ValueType.exceptionType; break;
             case "encoding": result = ValueType.encodingType; break;
+            case "sql_bool": case "org.zenframework.z8.lang.sql.sql_bool": result = ValueType.sqlBoolType; break;
             case "primary": result = ValueType.primaryType; break;
             default:
                 if (token.kind == TokenKind.identifier) { result = ValueType.selfType; parsedObjectName = token.text; }
