@@ -81,6 +81,8 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.fileMatrix: return "Z8Array!(Z8Array!Z8File)";
         case ValueType.exceptionArray: return "Z8Array!Throwable";
         case ValueType.exceptionMatrix: return "Z8Array!(Z8Array!Throwable)";
+        case ValueType.encodingArray: return "Z8Array!Z8Encoding";
+        case ValueType.encodingMatrix: return "Z8Array!(Z8Array!Z8Encoding)";
         case ValueType.nullType: assert(0, "null has no concrete D type");
         case ValueType.nullableString: return "wstring";
         case ValueType.enumType: assert(objectClass !is null); return objectClass.emittedName;

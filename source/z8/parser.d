@@ -141,6 +141,9 @@ class Parser {
                 case ValueType.exceptionType:
                     if (accept("[")) { expect("]"); return ValueType.exceptionMatrix; }
                     return ValueType.exceptionArray;
+                case ValueType.encodingType:
+                    if (accept("[")) { expect("]"); return ValueType.encodingMatrix; }
+                    return ValueType.encodingArray;
                 case ValueType.selfType:
                     if (accept("[")) { expect("]"); return ValueType.selfMatrix; }
                     return ValueType.selfArray;

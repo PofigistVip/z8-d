@@ -1,3 +1,4 @@
+import org.zenframework.z8.lang.encoding;
 public class ArrayMatrices {
     private static int rows(FieldMode[][] input) { return input.size(); }
     public static int run() {
@@ -45,6 +46,8 @@ public class ArrayMatrices {
         int modeCount = 0;
         for (FieldMode[] modeRow : modes) modeCount += modeRow.size();
         if (modeCount != 2) return 14;
+        encoding[][] encodings = {{encoding.UTF8, encoding.UTF16}};
+        if (encodings[0][1] != encoding.UTF16) return 15;
         return 227;
     }
 }

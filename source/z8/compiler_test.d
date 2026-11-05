@@ -214,6 +214,7 @@ unittest {
         string[][] words = {{"a"}, {"b"}};
         guid[][] ids; binary[][] data; datespan[][] spans; date[][] dates;
         geometry[][] shapes; file[][] files; exception[][] errors; primary[][] values2;
+        encoding[] one; encoding[][] two = {{encoding.UTF8}};
         int[] ordinary = {(1 + 2), (3)};
     } }});
     rejects(q{class A { static void f() { int[] values = {(1, 2)}; } }});

@@ -218,7 +218,7 @@ Java backend оригинала в проверенных случаях ген�
 Регистрация
 framework по атрибутам пока не реализована.
 Типы: `int` (64-битный знаковый), `decimal`, `bool`,
-`string`, `guid`, `binary`, `datespan`, `date`, `geometry`, `file`, `exception`, `primary`, одномерные и двумерные массивы этих типов,
+`string`, `guid`, `binary`, `datespan`, `date`, `geometry`, `file`, `exception`, `primary`, `encoding`, одномерные и двумерные массивы этих типов,
 пользовательских классов и перечислений,
 а также `void` (для возвращаемого значения).
 `primary` принимает значения `int`, `bool`, `decimal`, `string`, `guid`, `binary`, `datespan`, `date`, `geometry`, `file` и `null`,
