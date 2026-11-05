@@ -152,8 +152,8 @@ class Parser {
         foreach (old; previous)
             if (old.name.text == attribute.name.text) throw new CompileException("duplicate attribute", attribute.name.position);
         if (current.text != "]") {
-            if (current.kind != TokenKind.stringLiteral && current.kind != TokenKind.booleanLiteral)
-                error("only string and boolean literal attributes are supported");
+            if (![TokenKind.stringLiteral, TokenKind.booleanLiteral, TokenKind.integerLiteral].canFind(current.kind))
+                error("only string, boolean and integer literal attributes are supported");
             attribute.hasValue = true; attribute.value = take();
         }
         expect("]");

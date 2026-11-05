@@ -16,7 +16,8 @@ unittest {
     rejects(q{final public class A {}});
     rejects(q{[request "true"] class A {}});
     rejects(q{[native true] enum A {}});
-    compile(q{[request true] [flag false] class A {}});
+    compile(q{[request true] [flag false] [count 0x10] class A {}});
+    rejects(q{[request 1] class A {}});
     rejects(q{[native "x"] class A {}});
     compile(q{class A { [flag] A child; public [tag "value"] A nested = class {}; }});
     rejects(q{class A { [flag] int x; }});

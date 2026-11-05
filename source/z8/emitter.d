@@ -135,6 +135,15 @@ private string emitAttributeValue(TypeAttribute attribute) {
     if (!attribute.hasValue) return `z8_string_new(""w)`;
     if (attribute.value.kind == TokenKind.booleanLiteral)
         return emitWStringLiteral(attribute.value.text.to!wstring);
+    if (attribute.value.kind == TokenKind.integerLiteral) {
+        auto spelling = attribute.value.text.replace(" ", "").replace("\t", "");
+        long value;
+        if (spelling.startsWith("0x") || spelling.startsWith("0X"))
+            value = cast(long)spelling[2 .. $].to!ulong(16);
+        else value = spelling.to!long;
+        // IntegerToken.getValueString() uses the Java code-generation spelling.
+        return emitWStringLiteral((value.to!string ~ "L").to!wstring);
+    }
     return emitStringLiteral(attribute.value.text);
 }
 
