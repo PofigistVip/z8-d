@@ -57,6 +57,7 @@ python tests/assignment_operators.py
 python tests/priority_operator.py
 python tests/sql_bool.py
 python tests/sql_int.py
+python tests/sql_decimal.py
 python tests/compound_objects.py
 python tests/nested_fields.py
 python tests/nested_packages.py
@@ -241,7 +242,10 @@ framework по атрибутам пока не реализована.
 `^`, `~`, сравнения, `sign`, `abs`, `power`, выбор через `IIF` и форматирование через
 `z8_sql_int_format`. Остаток для H2 отклоняется, как в текущем исходном runtime.
 Оператор `~` повторяет реализацию Z8, которая формирует SQL-узел `NOT`.
-Работа с полями и запросами, остальные SQL-типы и другие перегрузки пока не реализованы.
+Для `sql_decimal` поддерживаются константы, преобразования, арифметика и
+сравнения с `sql_int`, выбор через `IIF` и форматирование в SQL с учётом диалекта.
+Методы `sql_decimal`, работа с полями и запросами, остальные SQL-типы и другие
+перегрузки пока не реализованы.
 Типы: `int` (64-битный знаковый), `decimal`, `bool`,
 `string`, `guid`, `binary`, `datespan`, `date`, `geometry`, `file`, `exception`, `primary`, `encoding`, одномерные и двумерные массивы этих типов,
 пользовательских классов и перечислений,

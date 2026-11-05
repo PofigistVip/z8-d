@@ -1,11 +1,12 @@
 // SQL values describe an expression tree; operators do not execute SQL.
 enum Z8SqlVendor { Oracle, SqlServer, Postgres, H2 }
+abstract class Z8SqlNumeric { abstract wstring z8_format(Z8SqlVendor vendor, bool logical = false); }
 enum Z8SqlBoolKind { constant, group, not, and, or, equal, notEqual, choose, intEqual, intNotEqual, intLess, intGreater, intLessEqual, intGreaterEqual }
 class Z8SqlBool {
     Z8SqlBoolKind kind;
     bool constant;
     Z8SqlBool left, right, alternative;
-    Z8SqlInt intLeft, intRight;
+    Z8SqlNumeric numericLeft, numericRight;
     this(Z8SqlBoolKind kind, bool constant = false, Z8SqlBool left = null,
          Z8SqlBool right = null, Z8SqlBool alternative = null) {
         this.kind = kind; this.constant = constant;
@@ -70,7 +71,7 @@ wstring z8_sql_bool_format(Z8SqlBool value, bool logical = false, Z8SqlVendor ve
             auto op = value.kind == Z8SqlBoolKind.intEqual ? "="w : value.kind == Z8SqlBoolKind.intNotEqual ? "<>"w :
                 value.kind == Z8SqlBoolKind.intLess ? "<"w : value.kind == Z8SqlBoolKind.intGreater ? ">"w :
                 value.kind == Z8SqlBoolKind.intLessEqual ? "<="w : ">="w;
-            auto condition = z8_sql_int_format(value.intLeft, vendor) ~ op ~ z8_sql_int_format(value.intRight, vendor);
+            auto condition = z8_nonnull(value.numericLeft).z8_format(vendor) ~ op ~ z8_nonnull(value.numericRight).z8_format(vendor);
             return logical ? condition : z8_sql_bool_case(condition, "1"w, "0"w);
         case Z8SqlBoolKind.choose:
             auto text = z8_sql_bool_case(z8_sql_bool_format(value.left, true, vendor), z8_sql_bool_format(value.right, false, vendor), z8_sql_bool_format(value.alternative, false, vendor));

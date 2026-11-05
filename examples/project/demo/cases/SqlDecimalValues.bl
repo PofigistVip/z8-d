@@ -1,0 +1,31 @@
+import org.zenframework.z8.lang.sql.sql_bool;
+import org.zenframework.z8.lang.sql.sql_int;
+import org.zenframework.z8.lang.sql.sql_decimal;
+public class SqlDecimalValues {
+    public static sql_decimal expression() {
+        sql_decimal value = 1.25;
+        sql_int integer = 2;
+        return ((value + integer) / 2.0) - 0.10;
+    }
+    public static sql_decimal mixed() { sql_int value = 3; return value / 2.0; }
+    public static sql_decimal converted() { sql_int value = 2; sql_decimal result = value; return result; }
+    public static sql_decimal choice() { sql_bool condition = true; return condition.IIF(1.5, 2.5); }
+    public static sql_decimal remainder() { sql_decimal value = 7.5; return value % 2; }
+    public static sql_decimal convertedLeft() { sql_int value = 2; return 1.5 + value; }
+    public static sql_decimal integerLeft() { sql_decimal value = 2.50; return 3 + value; }
+    public static sql_decimal zero() { return 0.00; }
+    public static sql_decimal convertedChoice() { sql_bool condition = false; sql_int value = 7; return condition.IIF(value, 2.0); }
+    public static sql_decimal negative() { sql_decimal value = 0.125; return -value; }
+    public static sql_bool compare() { sql_decimal value = 1.25; return value < 2; }
+    public static sql_bool mixedCompare() { sql_int left = 1; sql_decimal right = 2.50; return left < right; }
+    public static int run() {
+        sql_decimal result = expression();
+        if (result == null) return 1;
+        decimal absent = null;
+        try { sql_decimal invalid = absent; return 2; }
+        catch (exception error) {}
+        sql_bool condition = compare();
+        sql_decimal selected = choice();
+        return 239;
+    }
+}

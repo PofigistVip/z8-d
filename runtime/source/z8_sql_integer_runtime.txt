@@ -1,5 +1,5 @@
 enum Z8SqlIntKind { constant, group, negate, bitNot, add, subtract, multiply, divide, modulo, bitAnd, bitOr, bitXor, sign, abs, power, choose }
-class Z8SqlInt {
+class Z8SqlInt : Z8SqlNumeric {
     Z8SqlIntKind kind;
     long constant;
     Z8SqlInt left, right;
@@ -7,6 +7,7 @@ class Z8SqlInt {
     this(Z8SqlIntKind kind, long constant = 0, Z8SqlInt left = null, Z8SqlInt right = null, Z8SqlBool condition = null) {
         this.kind = kind; this.constant = constant; this.left = left; this.right = right; this.condition = condition;
     }
+    override wstring z8_format(Z8SqlVendor vendor, bool logical = false) { return z8_sql_int_format(this, vendor, logical); }
 }
 Z8SqlInt z8_sql_int_const(long value) { return new Z8SqlInt(Z8SqlIntKind.constant, value); }
 Z8SqlInt z8_sql_int_const(Z8Optional!long value) { return z8_sql_int_const(z8_optional_require(value)); }
@@ -43,7 +44,7 @@ Z8SqlBool z8_sql_int_compare(string op)(Z8SqlInt left, Z8SqlInt right) {
     else static if (op == ">=") enum kind = Z8SqlBoolKind.intGreaterEqual;
     else static assert(0, "unsupported SQL integer comparison");
     auto result = new Z8SqlBool(kind);
-    result.intLeft = left; result.intRight = right;
+    result.numericLeft = left; result.numericRight = right;
     return result;
 }
 Z8SqlInt z8_sql_int_iif(Z8SqlBool condition, Z8SqlInt yes, Z8SqlInt no) {

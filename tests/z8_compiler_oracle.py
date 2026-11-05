@@ -418,6 +418,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         System.out.println("RESULT:" + demo.cases.FinallyControl.z8_run().get());
         System.out.println("RESULT:" + demo.cases.SqlBoolValues.z8_run().get());
         System.out.println("RESULT:" + demo.cases.SqlIntValues.z8_run().get());
+        System.out.println("RESULT:" + demo.cases.SqlDecimalValues.z8_run().get());
         for (org.zenframework.z8.server.db.DatabaseVendor vendor : org.zenframework.z8.server.db.DatabaseVendor.values()) {
             org.zenframework.z8.server.types.sql.sql_bool[] expressions = {
                 demo.cases.SqlBoolValues.z8_expression(), demo.cases.SqlBoolValues.z8_choose(),
@@ -439,6 +440,23 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             }
             for (boolean logical : new boolean[] {false, true})
                 System.out.println("SQLINTBOOL:" + vendor.name() + ":" + logical + ":" + demo.cases.SqlIntValues.z8_compare().format(vendor, null, logical));
+            org.zenframework.z8.server.types.sql.sql_decimal[] decimals = {
+                demo.cases.SqlDecimalValues.z8_expression(), demo.cases.SqlDecimalValues.z8_mixed(),
+                demo.cases.SqlDecimalValues.z8_converted(), demo.cases.SqlDecimalValues.z8_choice(),
+                demo.cases.SqlDecimalValues.z8_remainder(), demo.cases.SqlDecimalValues.z8_convertedLeft(),
+                demo.cases.SqlDecimalValues.z8_integerLeft(), demo.cases.SqlDecimalValues.z8_zero(),
+                demo.cases.SqlDecimalValues.z8_convertedChoice(), demo.cases.SqlDecimalValues.z8_negative()
+            };
+            for (org.zenframework.z8.server.types.sql.sql_decimal value : decimals) {
+                try { System.out.println("SQLDECIMAL:" + vendor.name() + ":" + value.format(vendor, null)); }
+                catch (RuntimeException error) { System.out.println("SQLDECIMAL:" + vendor.name() + ":ERROR"); }
+            }
+            org.zenframework.z8.server.types.sql.sql_bool[] decimalComparisons = {
+                demo.cases.SqlDecimalValues.z8_compare(), demo.cases.SqlDecimalValues.z8_mixedCompare()
+            };
+            for (org.zenframework.z8.server.types.sql.sql_bool comparison : decimalComparisons)
+                for (boolean logical : new boolean[] {false, true})
+                    System.out.println("SQLDECIMALBOOL:" + vendor.name() + ":" + logical + ":" + comparison.format(vendor, null, logical));
         }
     }
 }''', encoding="utf-8")
@@ -507,13 +525,14 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         # The cached SQL runtime can predate the checked-out operator methods.
         # Compile the SQL classes exercised here from the current sources.
         server_source = original / "org.zenframework.z8.server" / "src" / "main" / "java" / "org" / "zenframework" / "z8" / "server"
-        sql_sources = [server_source / "types" / "sql" / name for name in ("sql_primary.java", "sql_bool.java", "sql_integer.java")]
+        sql_sources = [server_source / "types" / "sql" / name for name in ("sql_primary.java", "sql_bool.java", "sql_integer.java", "sql_decimal.java")]
         sql_sources += [server_source / "db" / "sql" / "SqlConst.java"]
         sql_sources += [server_source / "db" / "sql" / "expressions" / name for name in
                         ("Operation.java", "Add.java", "Mul.java", "Group.java", "And.java", "Or.java", "Rel.java", "Unary.java", "UnaryNot.java", "Bitwise.java")]
         sql_sources += [server_source / "db" / "sql" / "functions" / name for name in ("If.java", "CaseToken.java")]
         sql_sources += [server_source / "db" / "sql" / "functions" / "numeric" / name for name in
-                        ("Floor.java", "Mod.java", "Sign.java", "Abs.java", "Power.java")]
+                        ("Floor.java", "Mod.java", "Sign.java", "Abs.java", "Power.java", "IsNaN.java")]
+        sql_sources += [server_source / "db" / "sql" / "functions" / "conversion" / name for name in ("IntToDecimal.java", "ToDecimal.java")]
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
                         "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes)] + list(map(str, sql_sources)), cwd=temp, check=True)
         generated_sources = [str(p) for p in (project / "out" / "demo").rglob("*.java")]
@@ -692,6 +711,7 @@ void main() {
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E46696E616C6C79436F6E74726F6C.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E53716C426F6F6C56616C756573.m_run()));
     writeln(z8_optional_require(Z8p_64656D6F2E63617365732E53716C496E7456616C756573.m_run()));
+    writeln(z8_optional_require(Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_run()));
     foreach (vendorIndex, vendor; ["Oracle", "SqlServer", "Postgres", "H2"]) {
         auto dialect = [Z8SqlVendor.Oracle, Z8SqlVendor.SqlServer, Z8SqlVendor.Postgres, Z8SqlVendor.H2][vendorIndex];
         auto expressions = [Z8p_64656D6F2E63617365732E53716C426F6F6C56616C756573.m_expression(),
@@ -716,6 +736,25 @@ void main() {
         }
         foreach (logical; [false, true])
             writeln("SQLINTBOOL:", vendor, ":", logical, ":", z8_to_utf8(z8_sql_bool_format(Z8p_64656D6F2E63617365732E53716C496E7456616C756573.m_compare(), logical, dialect)));
+        auto decimals = [Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_expression(),
+            Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_mixed(),
+            Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_converted(),
+            Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_choice(),
+            Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_remainder(),
+            Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_convertedLeft(),
+            Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_integerLeft(),
+            Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_zero(),
+            Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_convertedChoice(),
+            Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_negative()];
+        foreach (value; decimals) {
+            try { writeln("SQLDECIMAL:", vendor, ":", z8_to_utf8(z8_sql_decimal_format(value, dialect))); }
+            catch (Exception error) { writeln("SQLDECIMAL:", vendor, ":ERROR"); }
+        }
+        auto decimalComparisons = [Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_compare(),
+            Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_mixedCompare()];
+        foreach (comparison; decimalComparisons)
+            foreach (logical; [false, true])
+                writeln("SQLDECIMALBOOL:", vendor, ":", logical, ":", z8_to_utf8(z8_sql_bool_format(comparison, logical, dialect)));
     }
 }
 ''', encoding="utf-8")
@@ -723,12 +762,12 @@ void main() {
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_lines = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:"))]
+        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:"))]
         original_sql = [line for line in output.splitlines() if line.startswith("SQLBOOL:")]
         d_sql = [line for line in d_lines if line.startswith("SQLBOOL:")]
         if original_sql != d_sql or len(d_sql) != 40:
             raise SystemExit(f"SQL boolean formatting differs: original={original_sql!r}, D={d_sql!r}")
-        for prefix, count in (("SQLINT:", 32), ("SQLINTBOOL:", 8)):
+        for prefix, count in (("SQLINT:", 32), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 40), ("SQLDECIMALBOOL:", 16)):
             original_lines = [line for line in output.splitlines() if line.startswith(prefix)]
             d_formatted = [line for line in d_lines if line.startswith(prefix)]
             if original_lines != d_formatted or len(d_formatted) != count:
@@ -737,10 +776,10 @@ void main() {
         d_file_attributes = [line for line in d_lines if line.startswith("FILEATTR:")]
         if original_file_attributes != d_file_attributes or len(d_file_attributes) != 1:
             raise SystemExit(f"File attribute differs: original={original_file_attributes!r}, D={d_file_attributes!r}")
-        if original_results[-54:-19] != ["221", "219", "217", "215", "211", "213", "209", "207", "203", "201", "197", "195", "193", "185", "187", "189", "181", "183", "179", "177", "171", "169", "167", "165", "163", "159", "155", "153", "151", "149", "167", "171", "251", "28", "241"]:
-            raise SystemExit(f"Language fixtures failed in original Z8: {original_results[-54:-19]}")
-        if original_results[-19:] != ["173", "179", "181", "191", "193", "197", "199", "211", "223", "227", "229", "233", "239", "223", "227", "229", "231", "235", "237"]:
-            raise SystemExit(f"Basic types and control flow failed in original Z8: {original_results[-19:]}")
+        if original_results[-55:-20] != ["221", "219", "217", "215", "211", "213", "209", "207", "203", "201", "197", "195", "193", "185", "187", "189", "181", "183", "179", "177", "171", "169", "167", "165", "163", "159", "155", "153", "151", "149", "167", "171", "251", "28", "241"]:
+            raise SystemExit(f"Language fixtures failed in original Z8: {original_results[-55:-20]}")
+        if original_results[-20:] != ["173", "179", "181", "191", "193", "197", "199", "211", "223", "227", "229", "233", "239", "223", "227", "229", "231", "235", "237", "239"]:
+            raise SystemExit(f"Basic types and control flow failed in original Z8: {original_results[-20:]}")
         if original_results != d_results:
             raise SystemExit(f"Original Z8: {original_results!r}; z8-d: {d_results!r}")
         print(f"Matched {len(d_results)} program results against the original compiler and runtime (CLASS from current source)")

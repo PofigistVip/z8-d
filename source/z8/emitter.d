@@ -49,6 +49,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.encodingType: return "Z8Encoding";
         case ValueType.sqlBoolType: return "Z8SqlBool";
         case ValueType.sqlIntType: return "Z8SqlInt";
+        case ValueType.sqlDecimalType: return "Z8SqlDecimal";
         case ValueType.guidType: return "Z8Guid";
         case ValueType.binaryType: return "Z8Binary";
         case ValueType.datespanType: return "Z8Datespan";
@@ -190,7 +191,7 @@ private string emitExpr(Expression e) {
         ValueType[] savedBinaryConversions;
         ValueType[] savedStringConversions;
         bool[] savedPromotions;
-        bool[] savedFileConversions, savedExceptionConversions, savedDateConversions, savedSqlBoolConversions, savedSqlIntConversions;
+        bool[] savedFileConversions, savedExceptionConversions, savedDateConversions, savedSqlBoolConversions, savedSqlIntConversions, savedSqlDecimalConversions, savedSqlIntDecimalConversions;
         Method[] savedUserConversions;
         foreach (i, argument; e.arguments) {
             savedOverrides ~= argument.emittedOverride;
@@ -201,10 +202,12 @@ private string emitExpr(Expression e) {
             savedDateConversions ~= argument.convertToDate;
             savedSqlBoolConversions ~= argument.convertToSqlBool;
             savedSqlIntConversions ~= argument.convertToSqlInt;
+            savedSqlDecimalConversions ~= argument.convertToSqlDecimal;
+            savedSqlIntDecimalConversions ~= argument.convertSqlIntToDecimal;
             auto required = argument.optionalRequired, promote = argument.promoteToDecimal;
             auto convert = argument.convertToString;
             savedPromotions ~= promote; savedStringConversions ~= convert;
-            if (required) { argument.optionalRequired = false; argument.promoteToDecimal = false; argument.convertToString = ValueType.voidType; argument.convertToDate = false; argument.convertToSqlBool = false; argument.convertToSqlInt = false; }
+            if (required) { argument.optionalRequired = false; argument.promoteToDecimal = false; argument.convertToString = ValueType.voidType; argument.convertToDate = false; argument.convertToSqlBool = false; argument.convertToSqlInt = false; argument.convertToSqlDecimal = false; argument.convertSqlIntToDecimal = false; }
             auto name = "z8_arg_" ~ suffix ~ "_" ~ i.to!string;
             value ~= "auto " ~ name ~ " = " ~ emitExpr(argument) ~ "; ";
             argument.optionalRequired = required; argument.promoteToDecimal = required && promote;
@@ -214,6 +217,8 @@ private string emitExpr(Expression e) {
             argument.convertToDate = required ? savedDateConversions[$ - 1] : false;
             argument.convertToSqlBool = required && savedSqlBoolConversions[$ - 1];
             argument.convertToSqlInt = required && savedSqlIntConversions[$ - 1];
+            argument.convertToSqlDecimal = required && savedSqlDecimalConversions[$ - 1];
+            argument.convertSqlIntToDecimal = required && savedSqlIntDecimalConversions[$ - 1];
             argument.emittedOverride = name;
             argument.userConversion = null;
         }
@@ -228,6 +233,8 @@ private string emitExpr(Expression e) {
             argument.convertToDate = savedDateConversions[i];
             argument.convertToSqlBool = savedSqlBoolConversions[i];
             argument.convertToSqlInt = savedSqlIntConversions[i];
+            argument.convertToSqlDecimal = savedSqlDecimalConversions[i];
+            argument.convertSqlIntToDecimal = savedSqlIntDecimalConversions[i];
         }
     } else value = emitExprRaw(e);
     if (!e.emittedOverride.length && e.kind == ExprKind.memberCall &&
@@ -252,11 +259,17 @@ private string emitExpr(Expression e) {
         auto count = e.parenthesisCount - (e.firstParenthesisIsConditional ? 1 : 0);
         foreach (_; 0 .. count) value = "z8_sql_int_group(" ~ value ~ ")";
     }
+    if (!e.emittedOverride.length && e.sqlDecimalPriority) {
+        auto count = e.parenthesisCount - (e.firstParenthesisIsConditional ? 1 : 0);
+        foreach (_; 0 .. count) value = "z8_sql_decimal_group(" ~ value ~ ")";
+    }
     if (e.userConversion !is null) value = "z8_nonnull(" ~ value ~ ")." ~ methodDName(e.userConversion) ~ "()";
     if (e.nonNullStringResult) value = "z8_string_or_empty(" ~ value ~ ")";
     if (e.optionalRequired) value = "z8_optional_require(" ~ value ~ ")";
     if (e.convertToSqlBool) value = "z8_sql_bool_const(" ~ value ~ ")";
     if (e.convertToSqlInt) value = "z8_sql_int_const(" ~ value ~ ")";
+    if (e.convertToSqlDecimal) value = "z8_sql_decimal_const(" ~ value ~ ")";
+    if (e.convertSqlIntToDecimal) value = "z8_sql_decimal_from_int(" ~ value ~ ")";
     if (e.nullableStringMode == NullableStringMode.required) value = "z8_string_required(" ~ value ~ ")";
     if (e.nullableStringMode == NullableStringMode.nullAsEmpty) value = "z8_string_or_empty(" ~ value ~ ")";
     if (e.kind == ExprKind.conditional && isNullableReference(e.inferredType))
@@ -324,6 +337,7 @@ private string emitExprRaw(Expression e) {
         case ExprKind.newSelf:
             if (e.inferredType == ValueType.sqlBoolType) return "z8_sql_bool_const(false)";
             if (e.inferredType == ValueType.sqlIntType) return "z8_sql_int_const(0L)";
+            if (e.inferredType == ValueType.sqlDecimalType) return "z8_sql_decimal_const(z8_decimal_from_int(0))";
             return "z8_new!(" ~ e.objectClass.emittedName ~ ")(" ~ (e.newHasContainer ? "this" : "") ~ ")";
         case ExprKind.field:
             if (e.nativeField.length) return "z8_nonnull(" ~ emitExpr(e.left) ~ ")." ~ e.nativeField;
@@ -434,6 +448,7 @@ private string emitExprRaw(Expression e) {
         case ExprKind.unary:
             if (e.sqlBoolOperator) return "z8_sql_bool_not(" ~ emitExpr(e.left) ~ ")";
             if (e.sqlIntOperator) return (e.token.text == "~" ? "z8_sql_int_bit_not(" : "z8_sql_int_negate(") ~ emitExpr(e.left) ~ ")";
+            if (e.sqlDecimalOperator) return "z8_sql_decimal_negate(" ~ emitExpr(e.left) ~ ")";
             if (e.userUnaryOperator) return emitReceiver(e.left) ~ "." ~ operatorDName(e.token.text) ~ "()";
             if (e.optionalDecimalUnary) return "(" ~ e.token.text ~ "z8_optional_require(" ~ emitExpr(e.left) ~ "))";
             if (e.optionalBoolUnary) return "(!z8_optional_require(" ~ emitExpr(e.left) ~ "))";
@@ -442,6 +457,7 @@ private string emitExprRaw(Expression e) {
         case ExprKind.binary:
             if (e.sqlBoolOperator) return "z8_sql_bool_binary!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.sqlIntOperator) return (e.sqlIntComparison ? "z8_sql_int_compare!\"" : "z8_sql_int_binary!\"") ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            if (e.sqlDecimalOperator) return (e.sqlDecimalComparison ? "z8_sql_numeric_compare!\"" : "z8_sql_decimal_binary!\"") ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.userBinaryOperator) return emitReceiver(e.left) ~ "." ~ operatorDName(e.token.text) ~ "(" ~ emitExpr(e.right) ~ ")";
             if (e.dateBinary) return "z8_date_binary!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.fileBinary) return "z8_file_compare!\"" ~ e.token.text ~ "\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
@@ -536,6 +552,7 @@ private string emitStatement(Statement s, ControlContext context = ControlContex
             if (s.priorityMethod !is null) returned = "z8_nonnull(" ~ returned ~ ")." ~ methodDName(s.priorityMethod) ~ "()";
             if (s.sqlBoolReturnPriority) returned = "z8_sql_bool_group(" ~ returned ~ ")";
             if (s.sqlIntReturnPriority) returned = "z8_sql_int_group(" ~ returned ~ ")";
+            if (s.sqlDecimalReturnPriority) returned = "z8_sql_decimal_group(" ~ returned ~ ")";
             if (context.enabled) return s.expression is null ? "throw new Z8ReturnVoid();\n" :
                 "throw new Z8Return!(" ~ dStorageType(context.returnType, context.returnClass) ~ ")(" ~ returned ~ ");\n";
             return "return" ~ (s.expression is null ? "" : " " ~ returned) ~ ";\n";
@@ -632,6 +649,7 @@ private string defaultValue(ValueType type, Program objectClass = null, bool has
     if (type == ValueType.encodingType) return "null";
     if (type == ValueType.sqlBoolType) return "z8_sql_bool_const(false)";
     if (type == ValueType.sqlIntType) return "z8_sql_int_const(0L)";
+    if (type == ValueType.sqlDecimalType) return "z8_sql_decimal_const(z8_decimal_from_int(0))";
     if (type == ValueType.enumType) return "null";
     if (type == ValueType.primaryType) return "null";
     if (type == ValueType.guidType) return "z8_guid_zero()";

@@ -209,6 +209,9 @@ unittest {
     compile(q{class A { static sql_int f(int x) { sql_int a = 1; return (a + x) / 2; } }});
     compile(q{class A { static sql_bool f(sql_int x) { return x > 1; } }});
     compile(q{class A { static sql_int f(sql_int x) { return ~x; } }});
+    compile(q{class A { static sql_decimal f(sql_int x) { sql_decimal d = 1.5; return d + x; } }});
+    compile(q{class A { static sql_bool f(sql_decimal x) { return x >= 1; } }});
+    rejects(q{class A { static void f() { sql_decimal d = 1.5; decimal x = d; } }});
     rejects(q{class A { static void f() { sql_bool a = true; if (a) {} } }});
     rejects(q{class A { static void f() { sql_bool a = true; bool b = a; } }});
     rejects(q{class A { static void f() { sql_int a = 1; int b = a; } }});

@@ -1,0 +1,79 @@
+enum Z8SqlDecimalKind { constant, group, fromInt, negate, add, subtract, multiply, divide, modulo, choose }
+class Z8SqlDecimal : Z8SqlNumeric {
+    Z8SqlDecimalKind kind;
+    Z8Decimal constant;
+    Z8SqlNumeric left, right;
+    Z8SqlBool condition;
+    this(Z8SqlDecimalKind kind, Z8Decimal constant = Z8Decimal.init,
+         Z8SqlNumeric left = null, Z8SqlNumeric right = null, Z8SqlBool condition = null) {
+        this.kind = kind; this.constant = constant; this.left = left; this.right = right; this.condition = condition;
+    }
+    override wstring z8_format(Z8SqlVendor vendor, bool logical = false) { return z8_sql_decimal_format(this, vendor, logical); }
+}
+Z8SqlDecimal z8_sql_decimal_const(Z8Decimal value) { return new Z8SqlDecimal(Z8SqlDecimalKind.constant, value); }
+Z8SqlDecimal z8_sql_decimal_const(Z8Optional!Z8Decimal value) { return z8_sql_decimal_const(z8_optional_require(value)); }
+Z8SqlDecimal z8_sql_decimal_from_int(Z8SqlInt value) { return new Z8SqlDecimal(Z8SqlDecimalKind.fromInt, Z8Decimal.init, z8_nonnull(value)); }
+Z8SqlDecimal z8_sql_decimal_group(Z8SqlDecimal value) { return new Z8SqlDecimal(Z8SqlDecimalKind.group, Z8Decimal.init, z8_nonnull(value)); }
+Z8SqlDecimal z8_sql_decimal_negate(Z8SqlDecimal value) { return new Z8SqlDecimal(Z8SqlDecimalKind.negate, Z8Decimal.init, z8_nonnull(value)); }
+Z8SqlDecimal z8_sql_decimal_binary(string op)(Z8SqlNumeric left, Z8SqlNumeric right) {
+    z8_nonnull(left);
+    static if (op == "+") enum kind = Z8SqlDecimalKind.add;
+    else static if (op == "-") enum kind = Z8SqlDecimalKind.subtract;
+    else static if (op == "*") enum kind = Z8SqlDecimalKind.multiply;
+    else static if (op == "/") enum kind = Z8SqlDecimalKind.divide;
+    else static if (op == "%") enum kind = Z8SqlDecimalKind.modulo;
+    else static assert(0, "unsupported SQL decimal operator");
+    return new Z8SqlDecimal(kind, Z8Decimal.init, left, right);
+}
+Z8SqlBool z8_sql_numeric_compare(string op)(Z8SqlNumeric left, Z8SqlNumeric right) {
+    z8_nonnull(left);
+    static if (op == "==") enum kind = Z8SqlBoolKind.intEqual;
+    else static if (op == "!=") enum kind = Z8SqlBoolKind.intNotEqual;
+    else static if (op == "<") enum kind = Z8SqlBoolKind.intLess;
+    else static if (op == ">") enum kind = Z8SqlBoolKind.intGreater;
+    else static if (op == "<=") enum kind = Z8SqlBoolKind.intLessEqual;
+    else static if (op == ">=") enum kind = Z8SqlBoolKind.intGreaterEqual;
+    else static assert(0, "unsupported SQL numeric comparison");
+    auto result = new Z8SqlBool(kind);
+    result.numericLeft = left; result.numericRight = right;
+    return result;
+}
+Z8SqlDecimal z8_sql_decimal_iif(Z8SqlBool condition, Z8SqlDecimal yes, Z8SqlDecimal no) {
+    return new Z8SqlDecimal(Z8SqlDecimalKind.choose, Z8Decimal.init, yes, no, z8_nonnull(condition));
+}
+private wstring z8_sql_decimal_constant(Z8Decimal value, Z8SqlVendor vendor) {
+    auto text = value.z8_string();
+    if (vendor == Z8SqlVendor.Postgres && value.nan) return "double precision 'NaN'"w;
+    if (vendor != Z8SqlVendor.SqlServer) return text;
+    auto scale = value.nan || value.scale == 0 ? 1 : value.scale;
+    auto digits = value.nan ? 0 : cast(int)z8_precision(value.coefficient);
+    auto precision = (digits + scale > 38 ? 38 - scale : digits) + scale;
+    return "CONVERT([numeric]("w ~ precision.to!wstring ~ ","w ~ scale.to!wstring ~ "),("w ~ text ~ "),(0))"w;
+}
+wstring z8_sql_decimal_format(Z8SqlDecimal value, Z8SqlVendor vendor = Z8SqlVendor.Postgres, bool logical = false) {
+    z8_nonnull(value);
+    final switch (value.kind) {
+        case Z8SqlDecimalKind.constant: return z8_sql_decimal_constant(value.constant, vendor);
+        case Z8SqlDecimalKind.group: return "("w ~ z8_nonnull(value.left).z8_format(vendor, logical) ~ ")"w;
+        case Z8SqlDecimalKind.fromInt:
+            auto text = z8_nonnull(value.left).z8_format(vendor);
+            if (vendor == Z8SqlVendor.Oracle) return text;
+            if (vendor == Z8SqlVendor.SqlServer) return "CONVERT(numeric(36,14),"w ~ text ~ ")"w;
+            if (vendor == Z8SqlVendor.Postgres) return "CAST("w ~ text ~ " AS FLOAT)"w;
+            throw new Exception("unsupported SQL database vendor");
+        case Z8SqlDecimalKind.negate: return "(-"w ~ z8_nonnull(value.left).z8_format(vendor) ~ ")"w;
+        case Z8SqlDecimalKind.add: return z8_nonnull(value.left).z8_format(vendor) ~ " + "w ~ z8_nonnull(value.right).z8_format(vendor);
+        case Z8SqlDecimalKind.subtract: return z8_nonnull(value.left).z8_format(vendor) ~ " - ("w ~ z8_nonnull(value.right).z8_format(vendor) ~ ")"w;
+        case Z8SqlDecimalKind.multiply: return z8_nonnull(value.left).z8_format(vendor) ~ "*"w ~ z8_nonnull(value.right).z8_format(vendor);
+        case Z8SqlDecimalKind.divide: return z8_nonnull(value.left).z8_format(vendor) ~ "/"w ~ z8_nonnull(value.right).z8_format(vendor);
+        case Z8SqlDecimalKind.modulo:
+            if (vendor == Z8SqlVendor.H2) throw new Exception("unsupported SQL database vendor");
+            auto left = z8_nonnull(value.left).z8_format(vendor), right = z8_nonnull(value.right).z8_format(vendor);
+            if (vendor == Z8SqlVendor.Oracle) return "MOD("w ~ left ~ ", "w ~ right ~ ")"w;
+            if (vendor == Z8SqlVendor.Postgres) return "mod("w ~ left ~ ", "w ~ right ~ ")"w;
+            if (vendor == Z8SqlVendor.SqlServer) return left ~ " % "w ~ right;
+            throw new Exception("unsupported SQL database vendor");
+        case Z8SqlDecimalKind.choose:
+            return z8_sql_bool_case(z8_sql_bool_format(value.condition, true, vendor), z8_nonnull(value.left).z8_format(vendor), z8_nonnull(value.right).z8_format(vendor));
+    }
+}
