@@ -558,7 +558,8 @@ class Checker {
                 actual = optionalBaseType(actual);
             }
             if ([ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.primaryType,
-                 ValueType.guidType, ValueType.datespanType].canFind(actual))
+                 ValueType.guidType, ValueType.datespanType, ValueType.dateType,
+                 ValueType.geometryType, ValueType.binaryType].canFind(actual))
                 attribute.expression.convertToString = actual;
             else if (actual == ValueType.selfType)
                 attribute.expression.convertToString = ValueType.selfType;

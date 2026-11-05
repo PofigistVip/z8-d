@@ -225,6 +225,7 @@ private string emitExpr(Expression e) {
     if (e.convertToString == ValueType.boolType) return "(" ~ value ~ " ? \"true\"w : \"false\"w)";
     if (e.convertToString == ValueType.decimalType) return "(" ~ value ~ ").z8_string()";
     if (e.convertToString == ValueType.primaryType) return "z8_primary_to_string(" ~ value ~ ")";
+    if (e.convertToString == ValueType.binaryType) return "z8_binary_to_string(" ~ value ~ ")";
     if (e.convertToString == ValueType.guidType) return "z8_guid_to_string(" ~ value ~ ")";
     if (e.convertToString == ValueType.datespanType) return "z8_datespan_to_string(" ~ value ~ ")";
     if (e.convertToString == ValueType.fileType) return "z8_file_path(" ~ value ~ ")";

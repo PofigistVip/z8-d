@@ -19,9 +19,12 @@ public class StaticOverloadBase {
     public guid attributeGuid = '00112233-4455-6677-8899-aabbccddeeff';
     public primary attributePrimary = 42;
     public datespan attributeSpan = '2 03:04:05';
+    public date attributeDate = '29/02/2024 12:30:45';
+    public geometry attributeGeometry = geometry.point(1.5, -2.25, 4326);
+    public binary attributeBinary = ('65').setName("report.bin");
     [copied "источник"] public AttributeSource attributeSource;
     public string nextAttribute() { attributeCalls += 1; return attributeText; }
-    [textValue attributeText] [methodValue nextAttribute()] [numericValue attributeCalls] [booleanValue attributeFlag] [decimalValue attributeDecimal] [guidValue attributeGuid] [primaryValue attributePrimary] [spanValue attributeSpan] [copied attributeSource] [name "First Field"] [fieldTag "от родителя"] [enabled false] [delta -7] [decimalDelta -12.340] [count 7] [job "*/15 0 1-31 1,3,5 1-5"] public StaticOverloadBase annotated;
+    [textValue attributeText] [methodValue nextAttribute()] [numericValue attributeCalls] [booleanValue attributeFlag] [decimalValue attributeDecimal] [guidValue attributeGuid] [primaryValue attributePrimary] [spanValue attributeSpan] [dateValue attributeDate] [geometryValue attributeGeometry] [binaryValue attributeBinary] [copied attributeSource] [name "First Field"] [fieldTag "от родителя"] [enabled false] [delta -7] [decimalDelta -12.340] [count 7] [job "*/15 0 1-31 1,3,5 1-5"] public StaticOverloadBase annotated;
     public static int select(int value) { return value + 10; }
     public static int blend(int value) { return value + 50; }
     public int blend(bool value) { if (value) return 60; return 61; }

@@ -273,6 +273,9 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             !"00112233-4455-6677-8899-AABBCCDDEEFF".equals(metadata.get().annotated.getAttribute("guidValue")) ||
             !"42".equals(metadata.get().annotated.getAttribute("primaryValue")) ||
             !"2 03:04:05".equals(metadata.get().annotated.getAttribute("spanValue")) ||
+            !"2024-02-29T12:30:45+03:00".equals(metadata.get().annotated.getAttribute("dateValue")) ||
+            !"0101000020E6100000000000000000F83F00000000000002C0".equals(metadata.get().annotated.getAttribute("geometryValue")) ||
+            !"report.bin".equals(metadata.get().annotated.getAttribute("binaryValue")) ||
             !"источник".equals(metadata.get().annotated.getAttribute("copied")) ||
             demo.cases.AttributeSource.calls.get() != 0 ||
             !"false".equals(metadata.get().jobTarget.getAttribute("request")) ||
@@ -492,6 +495,9 @@ void main() {
     assert(metadata.f_annotated.z8_get_attribute("guidValue"w) == "00112233-4455-6677-8899-AABBCCDDEEFF"w);
     assert(metadata.f_annotated.z8_get_attribute("primaryValue"w) == "42"w);
     assert(metadata.f_annotated.z8_get_attribute("spanValue"w) == "2 03:04:05"w);
+    assert(metadata.f_annotated.z8_get_attribute("dateValue"w) == "2024-02-29T12:30:45+03:00"w);
+    assert(metadata.f_annotated.z8_get_attribute("geometryValue"w) == "0101000020E6100000000000000000F83F00000000000002C0"w);
+    assert(metadata.f_annotated.z8_get_attribute("binaryValue"w) == "report.bin"w);
     assert(metadata.f_annotated.z8_get_attribute("copied"w) == "источник"w);
     assert(z8_optional_require(Z8p_64656D6F2E63617365732E417474726962757465536F75726365.f_calls) == 0);
     assert(metadata.f_jobTarget.z8_get_attribute("request"w) == "false"w);
