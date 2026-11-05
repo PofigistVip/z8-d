@@ -1311,7 +1311,7 @@ class Checker {
                     auto target = resolveClass(currentProgram, e.token.text, e.token);
                     if (target.isEnum) {
                         auto source = typeOf(e.left);
-                        if (source != ValueType.enumType || e.left.objectClass !is target)
+                        if (source != ValueType.nullType && (source != ValueType.enumType || e.left.objectClass !is target))
                             fail("unsupported enum cast", e.token);
                         e.castType = ValueType.enumType;
                         e.objectClass = target;

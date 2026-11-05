@@ -9,7 +9,8 @@ public class EnumCases {
         Flavor castValue = (Flavor)value;
         Flavor castSource = null;
         Flavor castNull = (Flavor)castSource;
-        if (castValue != Flavor.Red || castNull != null) return 13;
+        Flavor literalNull = (Flavor)(null);
+        if (castValue != Flavor.Red || castNull != null || literalNull != null) return 13;
         if (value != Flavor.Red || value == Flavor.Blue) return 1;
         value = pick(false);
         if (value != Flavor.Blue) return 2;

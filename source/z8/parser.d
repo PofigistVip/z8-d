@@ -574,6 +574,10 @@ class Parser {
             (look(castEnd + 1).kind == TokenKind.identifier || [TokenKind.integerLiteral, TokenKind.decimalLiteral, TokenKind.booleanLiteral, TokenKind.stringLiteral].canFind(look(castEnd + 1).kind) ||
              ["(", "this", "super", "new", "!", "~", "null"].canFind(look(castEnd + 1).text));
         if (castEnd != 0 && look(castEnd).text == ")" && (primitiveCast || objectCast)) {
+            // The BL cast grammar takes a postfix operand; null and unary
+            // operators need their own parentheses after the cast.
+            if (["null", "!", "~", "+", "-"].canFind(look(castEnd + 1).text))
+                error("cast operand must be a postfix expression");
             take(); auto castExpression = new Expression(ExprKind.castExpr, current);
             castExpression.castType = parseType();
             if (castExpression.castType == ValueType.selfType) {

@@ -106,6 +106,10 @@ unittest {
     rejects(q{class A { int child = class {}; }});
     rejects(q{class A { A child = class { static int f() { return 1; } }; }});
     rejects(q{class A { static int f() { return +null; } }});
+    rejects(q{class A { static int f() { return (int)null; } }});
+    rejects(q{class A { static bool f(bool x) { return (bool)!x; } }});
+    compile(q{class A { static int f() { return (int)(null); } }});
+    compile(q{class A { static bool f(bool x) { return (bool)(!x); } }});
     compile(q{class A { operator int() { return 3; } static int f() { A a; return a; } }});
     rejects(q{class A { operator int(int value) { return value; } }});
     rejects(q{class A { operator int() { return 1; } operator decimal() { return 1.0; } static int f() { A a; return -a; } }});
