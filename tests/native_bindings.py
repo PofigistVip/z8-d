@@ -24,11 +24,22 @@ Z8Optional!long scale(Math self, Z8Optional!long value) { return z8_optional_wra
 Z8Optional!long read(Number self) { return z8_optional_wrap(9L); }
 Z8Optional!long convertNumber(Number self) { return z8_optional_wrap(2L); }
 Z8Optional!long ignored(Math self) { return z8_optional_wrap(10L); }
+__gshared Z8Optional!long nativeFactor, nativeTotal;
+Z8Optional!long* factor(Math self) { assert(self !is null); return &nativeFactor; }
+Z8Optional!long* total() { return &nativeTotal; }
+Z8Optional!long* badField() { return null; }
 void reset() {}
 void main() {
     bool missing;
     try { Consumer.m_run(); } catch (Exception e) { missing = e.msg.indexOf("native binding not found") >= 0; }
     assert(missing);
+    z8_native_bind_field("example.bad.f_field"w, &badField);
+    bool badPointer;
+    try { z8_native_field!(Z8Optional!long)("example.bad.f_field"w) = z8_optional_wrap(1L); }
+    catch (Exception e) { badPointer = e.msg.indexOf("native field binding returned null") >= 0; }
+    assert(badPointer);
+    nativeFactor = z8_optional_wrap(3L);
+    nativeTotal = z8_optional_wrap(7L);
     z8_native_bind("example.NativeMath.m_add"w, &add);
     z8_native_bind("example.NativeMath.m_add"w, &addText);
     z8_native_bind("example.NativeMath.m_scale"w, &scale);
@@ -36,7 +47,16 @@ void main() {
     z8_native_bind("example.NativeNumber.m_read"w, &read);
     z8_native_bind("example.NativeNumber.z8cast_int"w, &convertNumber);
     z8_native_bind("example.NativeMath.m_ignored"w, &ignored);
-    assert(z8_optional_require(Consumer.m_run()) == 38);
+    bool missingField;
+    try { Consumer.m_run(); } catch (Exception e) { missingField = e.msg.indexOf("example.NativeMath.f_factor") >= 0; }
+    assert(missingField);
+    z8_native_bind_field("example.NativeMath.f_factor"w, &factor);
+    bool missingStaticField;
+    try { Consumer.m_run(); } catch (Exception e) { missingStaticField = e.msg.indexOf("example.NativeMath.f_total") >= 0; }
+    assert(missingStaticField);
+    z8_native_bind_field("example.NativeMath.f_total"w, &total);
+    assert(z8_optional_require(Consumer.m_run()) == 54);
+    assert(z8_optional_require(nativeFactor) == 4 && z8_optional_require(nativeTotal) == 12);
     z8_native_clear_bindings();
 }
 '''.replace('import z8.runtime;', 'import z8.runtime;\nimport std.string : indexOf;'), encoding="utf-8")

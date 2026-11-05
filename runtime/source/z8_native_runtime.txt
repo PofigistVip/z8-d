@@ -15,6 +15,15 @@ void z8_native_bind(R, Args...)(wstring name, R function(Args) callback) {
     auto key = z8_native_binding_key!(R, Args)(name);
     synchronized (z8_native_monitor) z8_native_bindings[key] = new Z8NativeBinding!(R, Args)(callback);
 }
+// Field callbacks return an address owned by the native implementation.
+void z8_native_bind_field(T, Args...)(wstring name, T* function(Args) callback) {
+    z8_native_bind(name, callback);
+}
+ref T z8_native_field(T, Args...)(wstring name, Args args) {
+    auto address = z8_native_call!(T*)(name, args);
+    if (address is null) throw new Exception("native field binding returned null: " ~ name.to!string);
+    return *address;
+}
 void z8_native_clear_bindings() { synchronized (z8_native_monitor) z8_native_bindings.clear(); }
 R z8_native_call(R, Args...)(wstring name, Args args) {
     auto key = z8_native_binding_key!(R, Args)(name);

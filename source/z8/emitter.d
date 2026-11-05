@@ -800,6 +800,7 @@ private ReferenceInitialization[] orderedReferences(Program program) {
     ReferenceInitialization[] references;
     void collect(Program current) {
         if (current.baseClass !is null) collect(current.baseClass);
+        if (current.isNative) return;
         ReferenceInitialization[] own;
         foreach (field; current.fields)
             if (!field.isStatic && field.type == ValueType.selfType && field.initializer !is null)
@@ -863,20 +864,25 @@ package string emitPrograms(Program[] programs) {
             result ~= dStorageType(capture.type, capture.objectClass, capture.keyObjectClasses) ~ " z8_capture_" ~ capture.name ~ ";\n";
         foreach (field; program.fields) {
             auto storageType = dStorageType(field.type, field.objectClass, field.keyObjectClasses);
-            if (field.isStatic) {
+            if (program.isNative) {
+                auto binding = emitRawWStringLiteral(program.nativeName ~ ".f_"w ~ field.name.text.to!wstring);
+                result ~= (field.isStatic ? "static " : "") ~ "@property ref " ~ storageType ~ " f_" ~ field.name.text ~ "() { " ~
+                    (field.isStatic ? "z8_ensure_static(); " : "") ~ "return z8_native_field!(" ~ storageType ~ ")(" ~ binding ~
+                    (field.isStatic ? "" : ", this") ~ "); }\n";
+            } else if (field.isStatic) {
                 result ~= "private __gshared " ~ storageType ~ " z8_static_storage_" ~ field.name.text ~ ";\n";
                 result ~= "static @property ref " ~ storageType ~ " f_" ~ field.name.text ~ "() { z8_ensure_static(); return z8_static_storage_" ~ field.name.text ~ "; }\n";
             } else result ~= storageType ~ " f_" ~ field.name.text ~ ";\n";
         }
         result ~= "override void z8_allocate_fields() {\nsuper.z8_allocate_fields();\n";
-        foreach (field; program.fields) if (!field.isStatic && (field.initializer is null || field.userOperatorAssignment)) {
+        foreach (field; program.fields) if (!program.isNative && !field.isStatic && (field.initializer is null || field.userOperatorAssignment)) {
             auto initial = field.nestedClass !is null ? "z8_new!(" ~ field.nestedClass.emittedName ~ ")(this)" :
                 field.type == ValueType.intType ? "z8_optional_wrap(0L)" :
                 field.type == ValueType.boolType ? "z8_optional_wrap(false)" :
                 field.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(field.type, field.objectClass, true, field.keyObjectClasses);
             result ~= "this.f_" ~ field.name.text ~ " = " ~ initial ~ ";\n";
         }
-        foreach (specialization; program.memberSpecializations)
+        foreach (specialization; program.memberSpecializations) if (!program.isNative)
             result ~= "this.f_" ~ specialization.specializedName.text ~ " = z8_new!(" ~ specialization.emittedName ~ ")(this);\n";
         result ~= "}\noverride void z8_init_references() {\n";
         foreach (reference; orderedReferences(program)) {
@@ -887,7 +893,7 @@ package string emitPrograms(Program[] programs) {
         }
         result ~= "}\n";
         string autoInitializers;
-        foreach (field; program.fields) if (!field.isStatic && field.type == ValueType.selfType) {
+        foreach (field; program.fields) if (!program.isNative && !field.isStatic && field.type == ValueType.selfType) {
             for (auto owner = program; owner !is null; owner = owner.baseClass) {
                 foreach (array; owner.fields) if (array.isAuto) {
                     for (auto fieldClass = field.objectClass; fieldClass !is null; fieldClass = fieldClass.baseClass) {
@@ -904,7 +910,7 @@ package string emitPrograms(Program[] programs) {
         result ~= "override void z8_init_values() {\nsuper.z8_init_values();\n";
         // TypeBody.rearrangeMembers puts declarations before standalone member initializers.
         foreach (field; program.fields) {
-            if (field.isStatic) continue;
+            if (field.isStatic || program.isNative) continue;
             if (field.type == ValueType.selfType)
                 result ~= "if (this.f_" ~ field.name.text ~ " is null) throw new Exception(\"null object field initializer\");\n";
             else if (field.initializer !is null)
@@ -913,7 +919,7 @@ package string emitPrograms(Program[] programs) {
                 result ~= "this.f_" ~ field.name.text ~ ".z8_set_attribute(" ~ emitWStringLiteral(attribute.name.text.to!wstring) ~ ", " ~
                     emitAttributeValue(attribute) ~ ");\n";
         }
-        foreach (init; program.memberInitializers) {
+        foreach (init; program.memberInitializers) if (!program.isNative) {
             if (init.expression !is null && init.type != ValueType.selfType) result ~= emitSimple(init) ~ ";\n";
             foreach (attribute; init.attributes)
                 result ~= emitExpr(init.attributeTarget) ~ ".z8_set_attribute(" ~ emitWStringLiteral(attribute.name.text.to!wstring) ~ ", " ~
@@ -932,9 +938,9 @@ package string emitPrograms(Program[] programs) {
         if (program.baseClass !is null) result ~= program.baseClass.emittedName ~ ".z8_ensure_static();\n";
         // Z8 first allocates default values for all static declarations, then
         // executes explicit initializers in declaration order.
-        foreach (field; program.fields) if (field.isStatic && field.initializer is null)
+        foreach (field; program.fields) if (!program.isNative && field.isStatic && field.initializer is null)
             result ~= "z8_static_storage_" ~ field.name.text ~ " = " ~ (field.type == ValueType.intType ? "z8_optional_wrap(0L)" : field.type == ValueType.boolType ? "z8_optional_wrap(false)" : field.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(field.type, field.objectClass, false, field.keyObjectClasses)) ~ ";\n";
-        foreach (field; program.fields) if (field.isStatic && field.initializer !is null)
+        foreach (field; program.fields) if (!program.isNative && field.isStatic && field.initializer !is null)
             result ~= "z8_static_storage_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
         result ~= "z8_static_state = 2;\n} catch (Throwable failure) { z8_static_failure = failure; z8_static_state = 3; throw failure; }\n}\n}\n";
         foreach (m; program.methods) {

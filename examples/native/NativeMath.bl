@@ -1,5 +1,8 @@
 [native "example.NativeMath"]
 public class NativeMath {
+    public int factor = 42;
+    public static int total = 77;
+    public NativeNumber reference = new NativeNumber;
     public static int add(int left, int right);
     public static string add(string left, string right);
     public virtual int scale(int value);

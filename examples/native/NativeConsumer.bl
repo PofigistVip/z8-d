@@ -1,10 +1,14 @@
 public class NativeConsumer {
     public static int run() {
-        NativeMath object = new NativeMath;
+        NativeChild child = new NativeChild;
+        NativeMath object = child;
         NativeNumber number = new NativeNumber;
         NativeMath.reset();
+        if (object.factor != 3 || NativeMath.total != 7 || child.own != 6) return 2;
+        object.factor = 4;
+        NativeMath.total += 5;
         if (NativeMath.add("a", "b") != "ab") return 1;
         int converted = number;
-        return NativeMath.add(2, 3) + object.scale(4) + number.read() + object.ignored() + converted;
+        return NativeMath.add(2, 3) + object.scale(4) + number.read() + object.ignored() + converted + object.factor + NativeMath.total;
     }
 }
