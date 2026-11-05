@@ -731,6 +731,9 @@ class Checker {
                                     !isAssignable(entry.right.objectClass, e.objectClass) : entry.right.objectClass !is e.objectClass))
                                     fail("map value type mismatch", entry.right.token);
                             }
+                            if ([ValueType.binaryType, ValueType.datespanType, ValueType.dateType, ValueType.geometryType,
+                                ValueType.fileType, ValueType.exceptionType, ValueType.encodingType].canFind(valueType) && typeOf(entry.right) != valueType)
+                                fail("map value type mismatch", entry.right.token);
                             if (isSqlType(valueType)) {
                                 auto actualValue = typeOf(entry.right);
                                 if (actualValue != valueType && !(valueType == ValueType.sqlPrimaryType && isSqlType(actualValue)))

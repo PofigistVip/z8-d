@@ -1,0 +1,27 @@
+import org.zenframework.z8.lang.encoding;
+public class ReferenceMaps {
+    public static int run() {
+        binary data = '1, 2';
+        datespan span = '1 02:03:04';
+        date day = '29/02/2024';
+        geometry shape;
+        file path = "matrix.txt";
+        exception problem = "message";
+        encoding charset = encoding.UTF8;
+        binary[string] binaries = {("value", data)};
+        datespan[int] spans = {(1, span)};
+        date[guid] dates = {('00000000-0000-0000-0000-000000000001', day)};
+        geometry[bool] shapes = {(true, shape)};
+        decimal amount = 1.5;
+        file[decimal] files = {(amount, path)};
+        exception[string] problems = {("value", problem)};
+        encoding[int] encodings = {(1, charset)};
+        if (binaries["value"].length() != 2 || spans[1] != span) return 1;
+        if (dates.values().first() != day || shapes.values().size() != 1) return 2;
+        if (files[amount] != path || problems["value"].getMessage() != "message") return 3;
+        if (encodings[1] != encoding.UTF8 || encodings.values().first() != charset) return 4;
+        binaries.add("empty", null);
+        if (!binaries.containsKey("empty") || binaries["empty"] != null) return 5;
+        return 89;
+    }
+}

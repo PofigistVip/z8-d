@@ -580,3 +580,4 @@ $env:Z8_RUNTIME_LIB = (Resolve-Path runtime/lib/z8-runtime.lib).Path
 Исходный проект распространяется на условиях LGPL-3.0; см. [LICENSE](LICENSE).
 
 Словари с ключами `string`, `int`, `guid`, `bool` и `decimal` поддерживают значения пользовательских классов и перечислений, включая инициализаторы, `get`, `add`, `remove`, `values` и объединение. Класс значения проверяется при передаче и присваивании словаря.
+Для тех же ключей поддерживаются значения `binary`, `date`, `datespan`, `geometry`, `file`, `exception` и `encoding`.
