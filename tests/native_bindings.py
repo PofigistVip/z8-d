@@ -25,6 +25,16 @@ Z8Object invalid(Z8Object self) { return new Z8Object(); }
 Z8Optional!long inspect(Z8Object value) { return z8_optional_wrap(value is null ? 0L : 7L); }
 Z8Object make() { return z8_native_new("example.GenericNative"w); }
 Z8Object makeInvalid() { return new Z8Object(); }
+Z8ObjectArray!Z8Object extend(Z8Object self, Z8ObjectArray!Z8Object values) {
+    assert(self !is null);
+    if (values is null) return null;
+    values.z8_add(self);
+    return values;
+}
+Z8ObjectArray!Z8Object invalidArray() {
+    return new Z8ObjectArray!Z8Object([new Z8Object()]);
+}
+void clearArray(Z8ObjectArray!Z8Object values) { z8_nonnull(values).z8_clear(); }
 void clear(Z8Object self) { ++cleared; }
 bool valueEquals(Z8Object self, Z8Object other) { return other !is null && self.classinfo is other.classinfo; }
 void bindGeneric() {
@@ -37,6 +47,9 @@ void bindGeneric() {
     z8_native_bind("example.GenericNative.m_inspect"w, &inspect);
     z8_native_bind("example.GenericNative.m_make"w, &make);
     z8_native_bind("example.GenericNative.m_makeInvalid"w, &makeInvalid);
+    z8_native_bind("example.GenericNative.m_extend"w, &extend);
+    z8_native_bind("example.GenericNative.m_invalidArray"w, &invalidArray);
+    z8_native_bind("example.GenericNative.m_clearArray"w, &clearArray);
     z8_native_bind("example.GenericNative.m_clear"w, &clear);
     z8_native_bind("example.NativeNumber.m_equals"w, &valueEquals);
 }
@@ -75,6 +88,7 @@ void reset() {}
 Z8Optional!long exactGet(Generic self) { return z8_optional_wrap(22L); }
 __gshared Generic exactPartnerValue;
 Generic* exactPartner(Generic self) { return &exactPartnerValue; }
+Z8ObjectArray!Generic exactExtend(Generic self, Z8ObjectArray!Generic values) { return values; }
 Z8Object anyFactory() { return new Z8Object(); }
 void main() {
     bool missing;
@@ -171,6 +185,21 @@ void main() {
     bool invalidReturn;
     try { z8_nonnull(generic).m_invalid(); } catch (Exception e) { invalidReturn = e.msg.indexOf("invalid native return type") >= 0; }
     assert(invalidReturn);
+    assert(z8_optional_require(Consumer.m_nativeArray(generic)) == 2);
+    assert(z8_nonnull(generic).m_extend(null) is null);
+    auto objects = new Z8ObjectArray!Generic([generic]);
+    auto returnedObjects = z8_nonnull(generic).m_extend(objects);
+    assert(objects.z8_size() == 2 && returnedObjects.z8_size() == 2);
+    assert(returnedObjects.z8_get(1) is generic);
+    returnedObjects.z8_set(0, created);
+    assert(objects.z8_get(0) is created);
+    bool badArrayElement;
+    try { Generic.m_invalidArray().z8_get(0); } catch (Exception e) { badArrayElement = e.msg.indexOf("invalid object array element cast") >= 0; }
+    assert(badArrayElement);
+    Generic.m_clearArray(returnedObjects);
+    assert(objects.z8_isEmpty());
+    z8_native_bind("example.GenericNative.m_extend"w, &exactExtend);
+    assert(z8_nonnull(generic).m_extend(objects) is objects && objects.z8_isEmpty());
     z8_native_bind("example.GenericNative.m_get"w, &exactGet);
     assert(z8_optional_require(z8_nonnull(generic).m_get()) == 22);
     z8_native_clear_bindings();

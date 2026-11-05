@@ -1,4 +1,9 @@
 public class NativeConsumer {
+    public static int nativeArray(GenericNative value) {
+        GenericNative[] values = {value};
+        GenericNative[] result = value.extend(values);
+        return result.size();
+    }
     public static bool fieldRoundTrip(GenericNative value) {
         value.partner = value;
         return value.partner.get() == 21;

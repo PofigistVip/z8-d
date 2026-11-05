@@ -8,5 +8,8 @@ public class GenericNative {
     public static int inspect(GenericNative value);
     public static GenericNative make();
     public static GenericNative makeInvalid();
+    public GenericNative[] extend(GenericNative[] values);
+    public static GenericNative[] invalidArray();
+    public static void clearArray(GenericNative[] values);
     public void clear();
 }

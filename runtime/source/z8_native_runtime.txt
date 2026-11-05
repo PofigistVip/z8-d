@@ -2,11 +2,25 @@
 private import std.meta : staticMap;
 private template Z8NativeErased(T) {
     static if (is(T : Z8Object)) alias Z8NativeErased = Z8Object;
+    else static if (is(T == Z8ObjectArray!U, U) && is(U : Z8Object))
+        alias Z8NativeErased = Z8ObjectArray!Z8Object;
     else alias Z8NativeErased = T;
 }
 private template Z8NativeErasedReturn(T) {
     static if (is(T == U*, U) && is(U : Z8Object)) alias Z8NativeErasedReturn = Z8Object*;
     else alias Z8NativeErasedReturn = Z8NativeErased!T;
+}
+private Z8NativeErased!T z8_native_erased_argument(T)(T value) {
+    static if (is(T == Z8ObjectArray!U, U) && is(U : Z8Object))
+        return z8_object_array_view!Z8Object(value);
+    else return value;
+}
+private auto z8_native_erased_arguments(Args...)(Args args) {
+    import std.typecons : Tuple;
+    alias ErasedArgs = staticMap!(Z8NativeErased, Args);
+    Tuple!ErasedArgs result;
+    static foreach (i; 0 .. Args.length) result[i] = z8_native_erased_argument(args[i]);
+    return result;
 }
 private class Z8NativeBinding(R, Args...) {
     alias Callback = R function(Args);
@@ -86,16 +100,19 @@ bool z8_native_try_call(R, Args...)(wstring name, out R result, Args args) if (!
     alias ErasedArgs = staticMap!(Z8NativeErased, Args);
     auto erased = z8_native_find!(ErasedR, ErasedArgs)(name);
     if (erased is null) return false;
+    auto erasedArguments = z8_native_erased_arguments(args);
     static if (is(R : Z8Object)) {
-        auto value = erased.callback(args);
+        auto value = erased.callback(erasedArguments.expand);
         result = cast(R)value;
         if (value !is null && result is null) throw new Exception("invalid native return type: " ~ name.to!string);
     } else static if (is(R == U*, U) && is(U : Z8Object)) {
-        auto address = erased.callback(args);
+        auto address = erased.callback(erasedArguments.expand);
         if (address !is null && *address !is null && cast(U)*address is null)
             throw new Exception("invalid native return type: " ~ name.to!string);
         result = cast(R)address;
-    } else result = erased.callback(args);
+    } else static if (is(R == Z8ObjectArray!U, U) && is(U : Z8Object)) {
+        result = z8_object_array_view!U(erased.callback(erasedArguments.expand));
+    } else result = erased.callback(erasedArguments.expand);
     return true;
 }
 bool z8_native_try_call_void(Args...)(wstring name, Args args) {
@@ -107,7 +124,8 @@ bool z8_native_try_call_void(Args...)(wstring name, Args args) {
     alias ErasedArgs = staticMap!(Z8NativeErased, Args);
     auto erased = z8_native_find!(void, ErasedArgs)(name);
     if (erased is null) return false;
-    erased.callback(args);
+    auto erasedArguments = z8_native_erased_arguments(args);
+    erased.callback(erasedArguments.expand);
     return true;
 }
 void z8_native_clear_bindings() { synchronized (z8_native_monitor) z8_native_bindings.clear(); }
