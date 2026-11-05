@@ -29,6 +29,9 @@
 статическую библиотеку. Сгенерированные файлы подключают её через `import z8.runtime`.
 Шаблоны D дополнительно проверяются при их
 инстанцировании в интеграционных тестах сгенерированных программ.
+Для проекта с native-классами дополнительно создаётся модуль
+`z8gen.native_registry`, который регистрирует их фабрики без циклов статической
+инициализации взаимно зависимых модулей.
 
 ## Сборка и запуск
 
@@ -68,6 +71,7 @@ python tests/member_initializers.py
 python tests/qualified_names.py
 python tests/records.py
 python tests/record_attributes.py
+python tests/native_cyclic_modules.py
 python tests/sql_field_operators.py
 python tests/static_initialization.py
 python tests/decimal_oracle.py
