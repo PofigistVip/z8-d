@@ -36,6 +36,25 @@ void main(string[] args) {
     assert(literal.rows[0][0].text == "'; DROP TABLE sample; --");
     db.execute("BEGIN"); db.execute("DELETE FROM sample"); db.execute("ROLLBACK");
     assert(db.execute("SELECT count(*) FROM sample").rows[0][0].text == "2");
+    db.beginTransaction(); assert(db.inTransaction());
+    db.execute("INSERT INTO sample VALUES (9,'outer',NULL)");
+    db.beginTransaction(); db.execute("INSERT INTO sample VALUES (10,'inner',NULL)");
+    db.rollback(); assert(db.inTransaction()); db.commit(); assert(!db.inTransaction());
+    assert(db.execute("SELECT count(*) FROM sample").rows[0][0].text == "4");
+    db.beginTransaction(); db.execute("INSERT INTO sample VALUES (11,'rollback outer',NULL)");
+    db.beginTransaction(); db.execute("INSERT INTO sample VALUES (12,'commit inner',NULL)");
+    db.commit(); assert(db.inTransaction()); db.rollback(); assert(!db.inTransaction());
+    assert(db.execute("SELECT count(*) FROM sample").rows[0][0].text == "4");
+    db.rollback(); bool noTransaction;
+    try { db.commit(); } catch (Z8PostgresException) { noTransaction = true; } assert(noTransaction);
+    db.beginTransaction(); bool failedInTransaction;
+    try { db.execute("SELECT missing FROM sample"); } catch (Z8PostgresException) { failedInTransaction = true; }
+    bool abortedCommit; try { db.commit(); } catch (Z8PostgresException) { abortedCommit = true; }
+    assert(failedInTransaction && abortedCommit && db.inTransaction());
+    db.rollback(); assert(!db.inTransaction() && db.execute("SELECT 1").rows[0][0].text == "1");
+    db.execute("BEGIN"); bool externalTransaction;
+    try { db.beginTransaction(); } catch (Z8PostgresException) { externalTransaction = true; }
+    assert(externalTransaction); db.execute("ROLLBACK");
     bool sqlError; try { db.execute("SELECT missing FROM sample"); } catch (Z8PostgresException) { sqlError = true; }
     assert(sqlError && db.execute("SELECT 1").rows[0][0].text == "1");
     bool nul; try { db.execute("SELECT $1::text", [Z8PostgresParameter.value("x\\0y")]); } catch (Z8PostgresException) { nul = true; }

@@ -16,6 +16,12 @@ DMD on Windows, or `-L-lpq` on Linux).
 results are copied and remain usable after closing the connection. Close each
 connection explicitly when it is no longer needed.
 
+`beginTransaction`, `commit` and `rollback` maintain a nesting counter like the
+original Z8 connection: only the outermost commit or rollback issues SQL; an
+inner rollback is not a savepoint and does not undo changes by itself. If a SQL
+error aborts the transaction, an outer commit reports an error and the caller
+must roll back. Do not mix these methods with raw `BEGIN`/`COMMIT`/`ROLLBACK`.
+
 `Z8PostgresQueryExecutor` connects BL `Query` reads to PostgreSQL tables.
 Construct it with a connection, schema and root table name, then attach it to
 the generated query with `z8_query_set_executor`. It supports explicit selected
