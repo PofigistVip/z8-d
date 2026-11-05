@@ -1,0 +1,36 @@
+// SQL GUID values retain their expression tree until formatted for a vendor.
+enum Z8SqlGuidKind { constant, group, choose }
+class Z8SqlGuid {
+    Z8SqlGuidKind kind;
+    Z8Guid constant;
+    Z8SqlGuid left, right;
+    Z8SqlBool condition;
+    this(Z8SqlGuidKind kind, Z8Guid constant = null, Z8SqlGuid left = null,
+         Z8SqlGuid right = null, Z8SqlBool condition = null) {
+        this.kind = kind; this.constant = constant; this.left = left; this.right = right; this.condition = condition;
+    }
+}
+Z8SqlGuid z8_sql_guid_const(Z8Guid value) { return new Z8SqlGuid(Z8SqlGuidKind.constant, z8_nonnull(value)); }
+Z8SqlGuid z8_sql_guid_group(Z8SqlGuid value) { return new Z8SqlGuid(Z8SqlGuidKind.group, null, z8_nonnull(value)); }
+Z8SqlGuid z8_sql_guid_iif(Z8SqlBool condition, Z8SqlGuid yes, Z8SqlGuid no) {
+    return new Z8SqlGuid(Z8SqlGuidKind.choose, null, yes, no, z8_nonnull(condition));
+}
+Z8SqlBool z8_sql_guid_compare(string op)(Z8SqlGuid left, Z8SqlGuid right) {
+    static assert(op == "==" || op == "!=", "unsupported SQL guid comparison");
+    auto result = new Z8SqlBool(op == "==" ? Z8SqlBoolKind.guidEqual : Z8SqlBoolKind.guidNotEqual);
+    result.guidLeft = z8_nonnull(left); result.guidRight = right; return result;
+}
+wstring z8_sql_guid_format(Z8SqlGuid value, Z8SqlVendor vendor = Z8SqlVendor.Postgres) {
+    z8_nonnull(value);
+    final switch (value.kind) {
+        case Z8SqlGuidKind.constant:
+            import std.array : replace;
+            auto text = z8_guid_to_string(value.constant);
+            if (vendor == Z8SqlVendor.Oracle) return "HEXTORAW('"w ~ text.replace("-"w, ""w) ~ "')"w;
+            return "'"w ~ text ~ "'"w;
+        case Z8SqlGuidKind.group: return "("w ~ z8_sql_guid_format(value.left, vendor) ~ ")"w;
+        case Z8SqlGuidKind.choose:
+            return z8_sql_bool_case(z8_sql_bool_format(value.condition, true, vendor),
+                z8_sql_guid_format(value.left, vendor), z8_sql_guid_format(value.right, vendor));
+    }
+}

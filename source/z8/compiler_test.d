@@ -225,6 +225,10 @@ unittest {
     compile(q{class A { static sql_bool f(sql_string x) { return x.isInt() || x.isNumeric(); } }});
     compile(q{class A { static sql_string f(sql_string x) { return x.json("a").json(1).quote().toString(); } }});
     compile(q{class A { static sql_string f(sql_bool x, sql_int y, sql_decimal z) { return x.toString() + y.toString() + z.toString(); } }});
+    compile(q{class A { static sql_guid f(guid x, sql_bool test) { sql_guid a = x; return test.IIF(a, x); } }});
+    compile(q{class A { static sql_bool f(sql_guid x, guid y) { return x == y; } }});
+    compile(q{class A { static sql_string f(sql_guid x) { return x.toString(); } }});
+    rejects(q{class A { static guid f(sql_guid x) { return x; } }});
     rejects(q{class A { static sql_string f(sql_string x) { return x.json(null); } }});
     rejects(q{class A { static void f() { sql_string a = "x"; string b = a; } }});
     rejects(q{class A { static void f() { sql_decimal d = 1.5; decimal x = d; } }});

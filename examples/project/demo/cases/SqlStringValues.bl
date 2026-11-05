@@ -2,6 +2,7 @@ import org.zenframework.z8.lang.sql.sql_string;
 import org.zenframework.z8.lang.sql.sql_bool;
 import org.zenframework.z8.lang.sql.sql_int;
 import org.zenframework.z8.lang.sql.sql_decimal;
+import org.zenframework.z8.lang.sql.sql_guid;
 public class SqlStringValues {
     public static sql_string literal() { return "O'Reilly 😀"; }
     public static sql_string concatenation() { sql_string value = "alpha"; return (value + " β").toUpper(); }
@@ -40,6 +41,10 @@ public class SqlStringValues {
     public static sql_string regexText() { sql_string value = "abc"; return value.regLike("a.*").toString(); }
     public static sql_string notIntegerText() { sql_int value = 42; return (~value).toString(); }
     public static sql_string choiceRegexText() { sql_bool condition = true; sql_string value = "abc"; return condition.IIF(value.regLike("a.*"), false).toString(); }
+    public static sql_guid sqlGuid() { guid value = '00112233-4455-6677-8899-AABBCCDDEEFF'; return value; }
+    public static sql_guid guidChoice() { sql_bool condition = true; sql_guid value = sqlGuid(); return condition.IIF(value, value); }
+    public static sql_bool guidEqual() { sql_guid value = sqlGuid(); return value == '00112233-4455-6677-8899-AABBCCDDEEFF'; }
+    public static sql_string guidText() { sql_guid value = sqlGuid(); return value.toString(); }
     public static int run() {
         sql_string value = concatenation();
         if (value == null) return 1;

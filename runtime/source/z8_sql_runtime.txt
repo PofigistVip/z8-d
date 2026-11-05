@@ -1,7 +1,7 @@
 // SQL values describe an expression tree; operators do not execute SQL.
 enum Z8SqlVendor { Oracle, SqlServer, Postgres, H2 }
 abstract class Z8SqlNumeric { abstract wstring z8_format(Z8SqlVendor vendor, bool logical = false); }
-enum Z8SqlBoolKind { constant, group, not, and, or, equal, notEqual, choose, intEqual, intNotEqual, intLess, intGreater, intLessEqual, intGreaterEqual, decimalIsNaN, textEqual, textNotEqual, textLess, textGreater, textLessEqual, textGreaterEqual, textLike, textRegLike, textIsEmpty }
+enum Z8SqlBoolKind { constant, group, not, and, or, equal, notEqual, choose, intEqual, intNotEqual, intLess, intGreater, intLessEqual, intGreaterEqual, decimalIsNaN, textEqual, textNotEqual, textLess, textGreater, textLessEqual, textGreaterEqual, textLike, textRegLike, textIsEmpty, guidEqual, guidNotEqual }
 class Z8SqlBool {
     Z8SqlBoolKind kind;
     bool constant;
@@ -9,6 +9,7 @@ class Z8SqlBool {
     Z8SqlNumeric numericLeft, numericRight;
     Z8SqlString textLeft, textRight;
     Z8SqlString textEscape;
+    Z8SqlGuid guidLeft, guidRight;
     this(Z8SqlBoolKind kind, bool constant = false, Z8SqlBool left = null,
          Z8SqlBool right = null, Z8SqlBool alternative = null) {
         this.kind = kind; this.constant = constant;
@@ -43,7 +44,7 @@ private wstring z8_sql_bool_group_format(Z8SqlBool value, bool logical, Z8SqlVen
          Z8SqlBoolKind.equal, Z8SqlBoolKind.notEqual, Z8SqlBoolKind.intEqual, Z8SqlBoolKind.intNotEqual,
          Z8SqlBoolKind.intLess, Z8SqlBoolKind.intGreater, Z8SqlBoolKind.intLessEqual, Z8SqlBoolKind.intGreaterEqual,
          Z8SqlBoolKind.textEqual, Z8SqlBoolKind.textNotEqual, Z8SqlBoolKind.textLess, Z8SqlBoolKind.textGreater,
-         Z8SqlBoolKind.textLessEqual, Z8SqlBoolKind.textGreaterEqual].canFind(value.kind)) return text;
+         Z8SqlBoolKind.textLessEqual, Z8SqlBoolKind.textGreaterEqual, Z8SqlBoolKind.guidEqual, Z8SqlBoolKind.guidNotEqual].canFind(value.kind)) return text;
     return "("w ~ text ~ ")"w;
 }
 private wstring z8_sql_bool_case(wstring condition, wstring yes, wstring no) {
@@ -90,6 +91,9 @@ wstring z8_sql_bool_format(Z8SqlBool value, bool logical = false, Z8SqlVendor ve
         case Z8SqlBoolKind.textLike:
             return z8_sql_string_as_text(value.textLeft, vendor) ~ " LIKE "w ~ z8_sql_string_as_text(value.textRight, vendor) ~
                 (value.textEscape is null ? ""w : " ESCAPE "w ~ z8_sql_string_as_text(value.textEscape, vendor));
+        case Z8SqlBoolKind.guidEqual: case Z8SqlBoolKind.guidNotEqual:
+            auto condition = z8_sql_guid_format(value.guidLeft, vendor) ~ (value.kind == Z8SqlBoolKind.guidEqual ? "="w : "<>"w) ~ z8_sql_guid_format(value.guidRight, vendor);
+            return logical ? condition : z8_sql_bool_case(condition, "1"w, "0"w);
         case Z8SqlBoolKind.textRegLike:
             if (vendor != Z8SqlVendor.Postgres) throw new Exception("unsupported SQL database vendor");
             return z8_sql_string_format(value.textLeft, vendor) ~ " ~ "w ~ z8_sql_string_format(value.textRight, vendor);
