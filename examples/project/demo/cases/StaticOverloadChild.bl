@@ -3,7 +3,7 @@
 public class StaticOverloadChild extends StaticOverloadBase {
     public [fieldTag "специализация"] StaticOverloadBase specialized = class {};
     public StaticOverloadBase replacement;
-    [initTag "существующее"] annotated = replacement;
+    [initTag "существующее"] [selected true] annotated = replacement;
     [chainTag "вложенное"] annotated.annotated;
     StaticOverloadBase ownSpecial;
     [specialTag "специализация поля"] ownSpecial = class {};

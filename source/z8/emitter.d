@@ -7,6 +7,7 @@ import std.format : format;
 import std.string : replace, startsWith, split;
 import std.regex : matchAll, regex;
 import z8.compiler_model;
+import z8.lexer : TokenKind;
 import z8.d_writer : formatDSource;
 
 private string operatorDName(string symbol) {
@@ -128,6 +129,13 @@ private string emitWStringLiteral(const(wchar)[] value) {
         }
     }
     return `z8_string_new(` ~ literal ~ `"w)`;
+}
+
+private string emitAttributeValue(TypeAttribute attribute) {
+    if (!attribute.hasValue) return `z8_string_new(""w)`;
+    if (attribute.value.kind == TokenKind.booleanLiteral)
+        return emitWStringLiteral(attribute.value.text.to!wstring);
+    return emitStringLiteral(attribute.value.text);
 }
 
 private string emitWStringCodeUnits(const(wchar)[] value) {
@@ -615,7 +623,7 @@ package string emitPrograms(Program[] programs) {
             result ~= "override void z8_init_type_attributes() {\nsuper.z8_init_type_attributes();\n";
             foreach (attribute; program.attributes)
                 result ~= "this.z8_set_attribute(" ~ emitWStringLiteral(attribute.name.text.to!wstring) ~ ", " ~
-                    (attribute.hasValue ? emitStringLiteral(attribute.value.text) : `z8_string_new(""w)`) ~ ");\n";
+                    emitAttributeValue(attribute) ~ ");\n";
             result ~= "}\n";
         }
         foreach (capture; program.captures)
@@ -668,13 +676,13 @@ package string emitPrograms(Program[] programs) {
                 result ~= "this.f_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
             foreach (attribute; field.attributes)
                 result ~= "this.f_" ~ field.name.text ~ ".z8_set_attribute(" ~ emitWStringLiteral(attribute.name.text.to!wstring) ~ ", " ~
-                    (attribute.hasValue ? emitStringLiteral(attribute.value.text) : `z8_string_new(""w)`) ~ ");\n";
+                    emitAttributeValue(attribute) ~ ");\n";
         }
         foreach (init; program.memberInitializers) {
             if (init.expression !is null && init.type != ValueType.selfType) result ~= emitSimple(init) ~ ";\n";
             foreach (attribute; init.attributes)
                 result ~= emitExpr(init.attributeTarget) ~ ".z8_set_attribute(" ~ emitWStringLiteral(attribute.name.text.to!wstring) ~ ", " ~
-                    (attribute.hasValue ? emitStringLiteral(attribute.value.text) : `z8_string_new(""w)`) ~ ");\n";
+                    emitAttributeValue(attribute) ~ ");\n";
         }
         result ~= "}\n";
         foreach (method; program.methods) if (method.name.text == "constructor") {

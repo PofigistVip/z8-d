@@ -1,8 +1,10 @@
+[request false]
+[boolTag true]
 [baseTag "base"]
 [sharedTag "old"]
 public class StaticOverloadBase {
     public static int shared;
-    [fieldTag "от родителя"] public StaticOverloadBase annotated;
+    [fieldTag "от родителя"] [enabled false] public StaticOverloadBase annotated;
     public static int select(int value) { return value + 10; }
     public static int blend(int value) { return value + 50; }
     public int blend(bool value) { if (value) return 60; return 61; }

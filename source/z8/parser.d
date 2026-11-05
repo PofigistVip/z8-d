@@ -152,15 +152,18 @@ class Parser {
         foreach (old; previous)
             if (old.name.text == attribute.name.text) throw new CompileException("duplicate attribute", attribute.name.position);
         if (current.text != "]") {
-            if (current.kind != TokenKind.stringLiteral) error("only string literal attributes are supported");
+            if (current.kind != TokenKind.stringLiteral && current.kind != TokenKind.booleanLiteral)
+                error("only string and boolean literal attributes are supported");
             attribute.hasValue = true; attribute.value = take();
         }
         expect("]");
         return attribute;
     }
     private void checkSupportedAttribute(TypeAttribute attribute) {
-        if (["name", "primary", "request", "job"].canFind(attribute.name.text))
+        if (["name", "primary", "job"].canFind(attribute.name.text))
             throw new CompileException("this attribute is not supported yet", attribute.name.position);
+        if (attribute.name.text == "request" && attribute.hasValue && attribute.value.kind != TokenKind.booleanLiteral)
+            throw new CompileException("request attribute requires a boolean literal", attribute.value.position);
     }
     Program parse() {
         auto result = new Program;
@@ -175,7 +178,7 @@ class Parser {
             if (accept("public")) { if (isPublic) error("duplicate public modifier"); isPublic = true; continue; }
             auto attribute = parseAttribute(result.attributes);
             if (attribute.name.text == "native") {
-                if (!attribute.hasValue) error("native attribute requires a string");
+                if (!attribute.hasValue || attribute.value.kind != TokenKind.stringLiteral) error("native attribute requires a string");
                 nativeAttribute = true;
             } else checkSupportedAttribute(attribute);
             result.attributes ~= attribute;

@@ -220,12 +220,15 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         demo.cases.StaticOverloadChild.CLASS<?> metadata = new demo.cases.StaticOverloadChild.CLASS<>(null);
         if (!"base".equals(metadata.getAttribute("baseTag")) ||
             !"новое 😀".equals(metadata.getAttribute("sharedTag")) ||
-            !"".equals(metadata.getAttribute("flag")) || metadata.getAttribute("absent") != null)
+            !"".equals(metadata.getAttribute("flag")) || !"false".equals(metadata.getAttribute("request")) ||
+            !"true".equals(metadata.getAttribute("boolTag")) || metadata.getAttribute("absent") != null)
             throw new AssertionError("type attribute metadata differs");
         if (metadata.get().annotated != metadata.get().replacement ||
             !"от родителя".equals(metadata.get().annotated.getAttribute("fieldTag")) ||
             !"специализация".equals(metadata.get().specialized.getAttribute("fieldTag")) ||
             !"существующее".equals(metadata.get().annotated.getAttribute("initTag")) ||
+            !"false".equals(metadata.get().annotated.getAttribute("enabled")) ||
+            !"true".equals(metadata.get().annotated.getAttribute("selected")) ||
             !"вложенное".equals(metadata.get().annotated.get().annotated.getAttribute("chainTag")) ||
             !"специализация поля".equals(metadata.get().ownSpecial.getAttribute("specialTag")))
             throw new AssertionError("field attribute metadata differs");
@@ -396,12 +399,16 @@ void main() {
     assert(metadata.z8_get_attribute("baseTag"w) == "base"w);
     assert(metadata.z8_get_attribute("sharedTag"w) == "новое 😀"w);
     assert(metadata.z8_get_attribute("flag"w) == ""w);
+    assert(metadata.z8_get_attribute("request"w) == "false"w);
+    assert(metadata.z8_get_attribute("boolTag"w) == "true"w);
     assert(metadata.z8_get_attribute("absent"w) is null);
     z8_nonnull(metadata);
     assert(metadata.f_annotated is metadata.f_replacement);
     assert(metadata.f_annotated.z8_get_attribute("fieldTag"w) == "от родителя"w);
     assert(metadata.f_specialized.z8_get_attribute("fieldTag"w) == "специализация"w);
     assert(metadata.f_annotated.z8_get_attribute("initTag"w) == "существующее"w);
+    assert(metadata.f_annotated.z8_get_attribute("enabled"w) == "false"w);
+    assert(metadata.f_annotated.z8_get_attribute("selected"w) == "true"w);
     assert(z8_nonnull(metadata.f_annotated).f_annotated.z8_get_attribute("chainTag"w) == "вложенное"w);
     assert(metadata.f_ownSpecial.z8_get_attribute("specialTag"w) == "специализация поля"w);
     writeln(z8_optional_require(Z8p_64656D6F2E4D61696E.m_run()));
