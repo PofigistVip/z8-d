@@ -2390,11 +2390,9 @@ class Checker {
                     return left;
                 }
                 if (isArray(left) && left == right && op == "+") {
-                    if (hasMapKeyClass(left) && e.left.keyObjectClasses != e.right.keyObjectClasses)
-                        fail("array map key type mismatch", e.token);
-                    e.keyObjectClasses = e.left.keyObjectClasses;
-                    if (hasObjectClass(left) && e.left.objectClass !is e.right.objectClass)
+                    if (!matches(e.right, left, e.left.objectClass, e.left.keyObjectClasses))
                         fail("array element type mismatch", e.token);
+                    e.keyObjectClasses = e.left.keyObjectClasses;
                     e.inferredType = left;
                     e.objectClass = e.left.objectClass;
                     return left;

@@ -58,6 +58,7 @@ python tests/cast_operators.py
 python tests/cast_container.py
 python tests/exception_subclasses.py
 python tests/primary_array_views.py
+python tests/covariant_array_union.py path/to/original-z8
 python tests/primary_user_conversions.py path/to/original-z8
 python tests/array_join_primary.py path/to/original-z8
 python tests/guid_string_comparisons.py path/to/original-z8
