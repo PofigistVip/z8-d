@@ -38,6 +38,68 @@ private ubyte[] decodeHex(string value) {
     for (size_t i; i < value.length; i += 2) result ~= cast(ubyte)((digit(value[i]) << 4) | digit(value[i + 1]));
     return result;
 }
+private string encodeBinary(Z8Binary binary) {
+    immutable digits = "0123456789abcdef";
+    char[] result;
+    ubyte[8192] buffer;
+    scope(exit) z8_binary_close(binary);
+    while (true) {
+        auto chunk = z8_binary_read_chunk(binary, buffer[]);
+        if (!chunk.length) break;
+        foreach (b; chunk) { result ~= digits[b >> 4]; result ~= digits[b & 15]; }
+    }
+    return cast(string)result;
+}
+private struct FieldParameter { string sql; Z8PostgresParameter value; }
+private FieldParameter fieldParameter(Z8Object field, size_t index) {
+    auto kind = z8_field_type_id(field);
+    auto value = z8_field_default_value(field);
+    auto marker = "$" ~ index.to!string;
+    string expression, text;
+    switch (kind) {
+        case "int"w:
+            expression = marker ~ "::bigint";
+            if (value !is null) text = z8_optional_require(z8_primary_cast!long(value)).to!string;
+            break;
+        case "boolean"w:
+            expression = marker ~ "::smallint";
+            if (value !is null) text = z8_optional_require(z8_primary_cast!bool(value)) ? "1" : "0";
+            break;
+        case "float"w:
+            expression = marker ~ "::numeric";
+            if (value !is null) text = z8_optional_require(z8_primary_cast!Z8Decimal(value)).z8_string().to!string;
+            break;
+        case "string"w:
+            expression = marker ~ "::text";
+            if (value !is null) text = z8_primary_cast!wstring(value).to!string;
+            break;
+        case "text"w: case "file"w: case "attachments"w:
+            expression = "convert_to(" ~ marker ~ "::text, 'UTF8')";
+            if (value !is null) text = z8_primary_cast!wstring(value).to!string;
+            break;
+        case "guid"w:
+            expression = marker ~ "::uuid";
+            if (value !is null) text = z8_guid_to_string(z8_primary_cast!Z8Guid(value)).to!string;
+            break;
+        case "date"w: case "datetime"w:
+            expression = marker ~ "::bigint";
+            if (value !is null) text = z8_date_ticks(z8_primary_cast!Z8Date(value)).to!string;
+            break;
+        case "datespan"w:
+            expression = marker ~ "::bigint";
+            if (value !is null) text = z8_datespan_milliseconds(z8_primary_cast!Z8Datespan(value)).to!string;
+            break;
+        case "binary"w:
+            expression = "decode(" ~ marker ~ "::text, 'hex')";
+            if (value !is null) text = encodeBinary(z8_primary_cast!Z8Binary(value));
+            break;
+        default: throw new Z8PostgresException("unsupported PostgreSQL write field type: " ~ kind.to!string);
+    }
+    return FieldParameter(expression, value is null ? Z8PostgresParameter.nullValue() : Z8PostgresParameter.value(text));
+}
+private string fieldColumn(Z8Object field) {
+    return quoteIdentifier(z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, field));
+}
 private Z8Primary decodeField(wstring kind, Z8PostgresValue value) {
     auto text = value.isNull ? null : value.text.to!wstring;
     switch (kind) {
@@ -83,13 +145,55 @@ private class Z8PostgresRows : IZ8QueryCursor {
 
 // Executes the single-table subset of Query. Links and nested form controls
 // require query planning that is not yet available.
-class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter {
+class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWriter {
     private Z8PostgresConnection connection;
     private wstring schema, table;
     this(Z8PostgresConnection connection, wstring schema, wstring table) {
         if (connection is null) throw new Z8PostgresException("PostgreSQL connection is null");
         quoteIdentifier(schema); quoteIdentifier(table);
         this.connection = connection; this.schema = schema.idup; this.table = table.idup;
+    }
+    void insert(Z8Object query, Z8Object[] fields) {
+        auto declared = z8_query_declared_fields(query, true);
+        string columns, values;
+        Z8PostgresParameter[] parameters;
+        foreach (field; uniqueFields(fields)) {
+            if (!containsField(declared, field)) throw new Z8PostgresException("PostgreSQL insert field belongs to another query");
+            auto parameter = fieldParameter(field, parameters.length + 1);
+            if (parameters.length) { columns ~= ", "; values ~= ", "; }
+            columns ~= fieldColumn(field); values ~= parameter.sql; parameters ~= parameter.value;
+        }
+        auto sql = "INSERT INTO " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(table);
+        sql ~= parameters.length ? " (" ~ columns ~ ") VALUES (" ~ values ~ ")" : " DEFAULT VALUES";
+        connection.execute(sql, parameters);
+    }
+    long update(Z8Object query, Z8Guid id, Z8Object[] fields) {
+        auto declared = z8_query_declared_fields(query, true);
+        auto key = z8_query_primary_key(query);
+        string set;
+        Z8PostgresParameter[] parameters;
+        foreach (field; uniqueFields(fields)) {
+            if (!containsField(declared, field)) throw new Z8PostgresException("PostgreSQL update field belongs to another query");
+            if (field is key) continue;
+            auto parameter = fieldParameter(field, parameters.length + 1);
+            if (parameters.length) set ~= ", ";
+            set ~= fieldColumn(field) ~ " = " ~ parameter.sql; parameters ~= parameter.value;
+        }
+        if (!parameters.length) throw new Z8PostgresException("PostgreSQL update has no writable fields");
+        auto sql = "UPDATE " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(table) ~ " SET " ~ set;
+        if (id !is null) {
+            if (key is null) throw new Z8PostgresException("record update requires a primary key");
+            parameters ~= Z8PostgresParameter.value(z8_guid_to_string(id).to!string);
+            sql ~= " WHERE " ~ fieldColumn(key) ~ " = $" ~ parameters.length.to!string ~ "::uuid";
+        }
+        return connection.execute(sql, parameters).affectedRows;
+    }
+    long destroy(Z8Object query, Z8Guid id) {
+        auto key = z8_query_primary_key(query);
+        if (key is null) throw new Z8PostgresException("record deletion requires a primary key");
+        auto parameter = id is null ? Z8PostgresParameter.nullValue() : Z8PostgresParameter.value(z8_guid_to_string(id).to!string);
+        auto sql = "DELETE FROM " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(table) ~ " WHERE " ~ fieldColumn(key) ~ " = $1::uuid";
+        return connection.execute(sql, [parameter]).affectedRows;
     }
     long count(Z8Object query, Z8QueryReadRequest request) {
         if (z8_query_array(query, "aggregateBy"w).length) throw new Z8PostgresException("PostgreSQL aggregateBy links are not implemented");

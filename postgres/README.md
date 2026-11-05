@@ -24,11 +24,14 @@ record lookup. Single-table `GROUP BY`, `HAVING` and array aggregations are
 supported. `Query.count()` preserves an active cursor and counts groups when
 the query is grouped; `hasRecord` and `findRecords` are also available. It reads integer, boolean, decimal, string, text, file, binary, GUID
 and date/duration fields. Ungrouped reads also select the table's primary key.
+`create`, `update(guid)` and `destroy(guid)` use parameterized statements for
+the same single-table field types. As in Z8, `update(null)` updates every row;
+the SQL transaction is controlled by the connection's caller.
 
 An empty field list selects the query's direct field controls, names, columns
 and extra fields; nested form controls are not yet supported.
 
 The executor currently rejects linked queries, `aggregateBy` links, geometry,
-and nontrivial HAVING without grouping. Query write operations and
-schema generation are not yet implemented. Z8 table and field privilege checks
-are not implemented by this executor; the host must enforce them.
+and nontrivial HAVING without grouping. Filter-based writes, automatic table
+audit values and schema generation are not yet implemented. Z8 table and field
+privilege checks are not implemented by this executor; the host must enforce them.

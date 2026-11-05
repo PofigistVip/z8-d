@@ -35,7 +35,15 @@ public class Sales extends Table {
     [name "Info"] public TextField info;
     [name "Blob"] public BinaryField blob;
     [name "When"] public DatetimeField instant;
+    public string events = "";
     virtual protected sql_bool scope() { return amount >= 0; }
+    virtual protected void onNew() { events += "N"; }
+    virtual protected void beforeCreate(guid id) { events += "C"; }
+    virtual protected void afterCreate(guid id) { events += "A"; }
+    virtual protected void beforeUpdate(guid id) { events += "U"; }
+    virtual protected void afterUpdate(guid id) { events += "V"; }
+    virtual protected void beforeDestroy(guid id) { events += "D"; }
+    virtual protected void afterDestroy(guid id) { events += "E"; }
 }
 ''', encoding="utf-8")
     (source / "Probe.bl").write_text('''
@@ -100,6 +108,18 @@ public class Probe {
     }
     public static int[] groupValues(Sales table) { return table.amount.array(); }
     public static bool groupFlag(Sales table) { return table.flag.get(); }
+    public static void prepareCreate(Sales table) {
+        table.amount = 33; table.title = "New O'Reilly"; table.flag = true;
+        table.info = "Данные 😀"; table.blob = '1, 2, 255'; table.instant = 1234;
+    }
+    public static guid create(Sales table, guid id) { return table.create(id); }
+    public static void prepareUpdate(Sales table) {
+        table.amount = 40; table.title = "Changed"; table.info = "Обновлено"; table.blob = '9, 8';
+    }
+    public static void prepareBulk(Sales table) { table.amount = 77; }
+    public static int update(Sales table, guid id) { return table.update(id); }
+    public static int destroy(Sales table, guid id) { return table.destroy(id); }
+    public static string events(Sales table) { return table.events; }
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -112,10 +132,10 @@ import z8gen.p_Probe;
 void main(string[] args) {
     alias P = Z8p_50726F6265;
     auto db = new Z8PostgresConnection(args[1]);
-    db.execute(`CREATE TEMP TABLE "Sales""Quote" ("RecordId" uuid, "Amount" bigint, "Title" varchar(30), "Flag" smallint, "Info" bytea, "Blob" bytea, "When" bigint)`);
-    db.execute(`INSERT INTO "Sales""Quote" VALUES ('00000000-0000-0000-0000-000000000001',10,'O''Reilly',1,convert_to('Русский 😀','UTF8'),decode('0001ff','hex'),1234)`);
-    db.execute(`INSERT INTO "Sales""Quote" VALUES ('00000000-0000-0000-0000-000000000002',20,NULL,NULL,NULL,NULL,NULL)`);
-    db.execute(`INSERT INTO "Sales""Quote" VALUES ('00000000-0000-0000-0000-000000000003',-1,'hidden',1,NULL,NULL,NULL)`);
+    db.execute(`CREATE TEMP TABLE "Sales""Quote" ("RecordId" uuid PRIMARY KEY, "CreatedAt" bigint, "ModifiedAt" bigint, "CreatedBy" uuid, "ModifiedBy" uuid, "Lock" bigint, "Amount" bigint, "Title" varchar(30), "Flag" smallint, "Info" bytea, "Blob" bytea, "When" bigint)`);
+    db.execute(`INSERT INTO "Sales""Quote" ("RecordId","Amount","Title","Flag","Info","Blob","When") VALUES ('00000000-0000-0000-0000-000000000001',10,'O''Reilly',1,convert_to('Русский 😀','UTF8'),decode('0001ff','hex'),1234)`);
+    db.execute(`INSERT INTO "Sales""Quote" ("RecordId","Amount","Title","Flag","Info","Blob","When") VALUES ('00000000-0000-0000-0000-000000000002',20,NULL,NULL,NULL,NULL,NULL)`);
+    db.execute(`INSERT INTO "Sales""Quote" ("RecordId","Amount","Title","Flag","Info","Blob","When") VALUES ('00000000-0000-0000-0000-000000000003',-1,'hidden',1,NULL,NULL,NULL)`);
     auto table = P.m_make();
     z8_query_set_executor(table, new Z8PostgresQueryExecutor(db, "pg_temp"w, `Sales"Quote`w));
     P.m_read(table);
@@ -140,7 +160,7 @@ void main(string[] args) {
     assert(keys == 2);
     assert(z8_optional_require(P.m_record(table, z8_guid_create(3))) && z8_optional_require(P.m_amount(table)) == -1);
     P.m_close(table);
-    db.execute(`INSERT INTO "Sales""Quote" VALUES ('00000000-0000-0000-0000-000000000004',5,'O''Reilly',1,NULL,NULL,NULL)`);
+    db.execute(`INSERT INTO "Sales""Quote" ("RecordId","Amount","Title","Flag","Info","Blob","When") VALUES ('00000000-0000-0000-0000-000000000004',5,'O''Reilly',1,NULL,NULL,NULL)`);
     P.m_groupSum(table);
     long sum, groups;
     while (z8_optional_require(P.m_next(table))) { sum += z8_optional_require(P.m_amount(table)); ++groups; }
@@ -158,6 +178,31 @@ void main(string[] args) {
     assert(z8_optional_require(P.m_count(table)) == 2);
     while (z8_optional_require(P.m_next(table))) { sum += z8_optional_require(P.m_amount(table)); ++groups; }
     assert(groups == 2 && sum == 35);
+    P.m_prepareCreate(table);
+    assert(P.m_create(table, z8_guid_create(42)) == z8_guid_create(42) && P.m_events(table) == "NCA"w);
+    auto inserted = db.execute(`SELECT "Amount", "Title", "Flag", convert_from("Info",'UTF8'), encode("Blob",'hex'), "When" FROM "Sales""Quote" WHERE "RecordId"='00000000-0000-0000-0000-00000000002a'`);
+    assert(inserted.rows.length == 1 && inserted.rows[0][0].text == "33" && inserted.rows[0][1].text == "New O'Reilly");
+    assert(inserted.rows[0][2].text == "1" && inserted.rows[0][3].text == "Данные 😀" && inserted.rows[0][4].text == "0102ff" && inserted.rows[0][5].text == "1234");
+    P.m_prepareUpdate(table);
+    assert(z8_optional_require(P.m_update(table, z8_guid_create(42))) == 1 && P.m_events(table) == "NCAUV"w);
+    auto updated = db.execute(`SELECT "Amount", "Title", convert_from("Info",'UTF8'), encode("Blob",'hex') FROM "Sales""Quote" WHERE "RecordId"='00000000-0000-0000-0000-00000000002a'`);
+    assert(updated.rows[0][0].text == "40" && updated.rows[0][1].text == "Changed" && updated.rows[0][2].text == "Обновлено" && updated.rows[0][3].text == "0908");
+    z8_field_set(table.f_title, null); z8_field_set(table.f_info, null); z8_field_set(table.f_blob, null);
+    assert(z8_optional_require(P.m_update(table, z8_guid_create(42))) == 1);
+    auto nulls = db.execute(`SELECT "Title", "Info", "Blob" FROM "Sales""Quote" WHERE "RecordId"='00000000-0000-0000-0000-00000000002a'`);
+    assert(nulls.rows[0][0].isNull && nulls.rows[0][1].isNull && nulls.rows[0][2].isNull);
+    db.execute("BEGIN"); P.m_prepareBulk(table);
+    assert(z8_optional_require(P.m_update(table, null)) == 5);
+    assert(db.execute(`SELECT count(*) FROM "Sales""Quote" WHERE "Amount"=77`).rows[0][0].text == "5");
+    db.execute("ROLLBACK");
+    assert(z8_optional_require(P.m_destroy(table, z8_guid_create(42))) == 1 && P.m_events(table) == "NCAUVUVDE"w);
+    assert(!z8_optional_require(P.m_hasId(table, z8_guid_create(42))));
+    assert(z8_optional_require(P.m_destroy(table, z8_guid_zero())) == 0 && P.m_events(table) == "NCAUVUVDE"w);
+    assert(z8_optional_require(P.m_destroy(table, null)) == 0 && P.m_events(table) == "NCAUVUVDEDE"w);
+    P.m_prepareCreate(table); bool duplicate;
+    try { P.m_create(table, z8_guid_create(1)); } catch (Z8PostgresException) { duplicate = true; }
+    assert(duplicate && P.m_events(table) == "NCAUVUVDEDENC"w && z8_field_is_changed(table.f_amount));
+    assert(z8_optional_require(P.m_amount(table)) == 33);
     db.close();
 }
 ''', encoding="utf-8")
