@@ -1,4 +1,4 @@
-enum Z8SqlDateKind { constant, group, choose, fromString, truncDay, truncHour, truncMinute, truncSecond, addDay, addHour, addMinute, addSecond }
+enum Z8SqlDateKind { constant, group, choose, fromString, truncDay, truncHour, truncMinute, truncSecond, addDay, addHour, addMinute, addSecond, addSpan, subtractSpan }
 class Z8SqlDate {
     Z8SqlDateKind kind;
     Z8Date constant;
@@ -6,6 +6,8 @@ class Z8SqlDate {
     Z8SqlBool condition;
     Z8SqlString textOperand;
     Z8SqlInt quantity;
+    Z8SqlDatespan spanOperand;
+    bool spanFirst;
     this(Z8SqlDateKind kind, Z8Date constant = null, Z8SqlDate left = null,
          Z8SqlDate right = null, Z8SqlBool condition = null) {
         this.kind = kind; this.constant = constant; this.left = left; this.right = right; this.condition = condition;
@@ -115,5 +117,9 @@ wstring z8_sql_date_format(Z8SqlDate value, Z8SqlVendor vendor = Z8SqlVendor.Pos
             auto text = z8_sql_date_format(value.left, vendor), quantity = z8_sql_int_format(value.quantity, vendor);
             auto unit = value.kind == Z8SqlDateKind.addDay ? " 86400000"w : value.kind == Z8SqlDateKind.addHour ? "3600000"w : value.kind == Z8SqlDateKind.addMinute ? "60000"w : " 1000"w;
             return "("w ~ text ~ " + "w ~ quantity ~ " *"w ~ unit ~ (vendor == Z8SqlVendor.Postgres ? "::bigint"w : ""w) ~ ")"w;
+        case Z8SqlDateKind.addSpan: case Z8SqlDateKind.subtractSpan:
+            if (value.spanFirst) return z8_sql_datespan_format(value.spanOperand, vendor) ~ " + "w ~ z8_sql_date_format(value.left, vendor);
+            if (value.kind == Z8SqlDateKind.addSpan) return z8_sql_date_format(value.left, vendor) ~ " + "w ~ z8_sql_datespan_format(value.spanOperand, vendor);
+            return z8_sql_date_format(value.left, vendor) ~ " - ("w ~ z8_sql_datespan_format(value.spanOperand, vendor) ~ ")"w;
     }
 }

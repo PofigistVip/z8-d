@@ -4,6 +4,7 @@ import org.zenframework.z8.lang.sql.sql_int;
 import org.zenframework.z8.lang.sql.sql_decimal;
 import org.zenframework.z8.lang.sql.sql_guid;
 import org.zenframework.z8.lang.sql.sql_date;
+import org.zenframework.z8.lang.sql.sql_datespan;
 public class SqlStringValues {
     public static sql_string literal() { return "O'Reilly 😀"; }
     public static sql_string concatenation() { sql_string value = "alpha"; return (value + " β").toUpper(); }
@@ -66,6 +67,16 @@ public class SqlStringValues {
     public static sql_date dateAddMinute() { sql_date value = sqlDate(); return value.addMinute(2); }
     public static sql_date dateAddSecond() { sql_date value = sqlDate(); return value.addSecond(2); }
     public static sql_bool dateCompare() { sql_date value = sqlDate(); date other = 100000000; return value < other; }
+    public static sql_datespan sqlSpan() { datespan value = '1 02:03:04'; return value; }
+    public static sql_datespan spanChoice() { sql_bool condition = true; sql_datespan value = sqlSpan(); return condition.IIF(value, value); }
+    public static sql_datespan spanSum() { sql_datespan value = sqlSpan(); return value + value; }
+    public static sql_datespan spanDifference() { sql_datespan value = sqlSpan(); return value - value; }
+    public static sql_datespan dateDifference() { sql_date value = sqlDate(); return value - value; }
+    public static sql_date datePlusSpan() { sql_date value = sqlDate(); return value + sqlSpan(); }
+    public static sql_date dateMinusSpan() { sql_date value = sqlDate(); return value - sqlSpan(); }
+    public static sql_date spanPlusDate() { sql_datespan value = sqlSpan(); return value + sqlDate(); }
+    public static sql_bool spanCompare() { sql_datespan value = sqlSpan(); return value >= value; }
+    public static sql_string spanText() { sql_datespan value = sqlSpan(); return value.toString(); }
     public static int run() {
         sql_string value = concatenation();
         if (value == null) return 1;

@@ -221,6 +221,10 @@ class Checker {
             e.convertToSqlDate = true;
             return true;
         }
+        if (expected == ValueType.sqlDatespanType && actual == ValueType.datespanType) {
+            e.convertToSqlDatespan = true;
+            return true;
+        }
         if (actual == ValueType.selfType) {
             if (expected == ValueType.selfType && isAssignable(e.objectClass, expectedClass)) return true;
             auto conversion = findConversion(e.objectClass, expected, expectedClass);
@@ -366,6 +370,7 @@ class Checker {
                 else if ([ValueType.stringType, ValueType.nullableString].canFind(actual) && p.type == ValueType.sqlStringType) weight += 100;
                 else if (actual == ValueType.guidType && p.type == ValueType.sqlGuidType) weight += 100;
                 else if (actual == ValueType.dateType && p.type == ValueType.sqlDateType) weight += 100;
+                else if (actual == ValueType.datespanType && p.type == ValueType.sqlDatespanType) weight += 100;
                 else if (p.type == ValueType.binaryType && [ValueType.stringType, ValueType.nullableString, ValueType.fileType].canFind(actual)) weight += 100;
                 else if ([ValueType.fileType, ValueType.exceptionType].canFind(p.type) && [ValueType.stringType, ValueType.nullableString].canFind(actual)) weight += 100;
                 else if (p.type == ValueType.primaryType && [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType, ValueType.nullableString, ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType, ValueType.dateType, ValueType.fileType].canFind(actual)) { if (binaryOperator) ++distance; }
@@ -437,6 +442,7 @@ class Checker {
             if (item.name == "org.zenframework.z8.lang.sql.sql_string") continue;
             if (item.name == "org.zenframework.z8.lang.sql.sql_guid") continue;
             if (item.name == "org.zenframework.z8.lang.sql.sql_date") continue;
+            if (item.name == "org.zenframework.z8.lang.sql.sql_datespan") continue;
             if (item.name == "org.zenframework.z8.lang.Math") { importedMath = true; continue; }
             auto found = item.name in allPrograms;
             if (found is null) fail("unresolved import '" ~ item.name ~ "'", item.token);
@@ -649,6 +655,7 @@ class Checker {
         if (e.parenthesisCount && result == ValueType.sqlStringType) e.sqlStringPriority = true;
         if (e.parenthesisCount && result == ValueType.sqlGuidType) e.sqlGuidPriority = true;
         if (e.parenthesisCount && result == ValueType.sqlDateType) e.sqlDatePriority = true;
+        if (e.parenthesisCount && result == ValueType.sqlDatespanType) e.sqlDatespanPriority = true;
         if (result == ValueType.stringType && (e.kind == ExprKind.memberCall || e.kind == ExprKind.binary))
             e.nonNullStringResult = true;
         return result;
@@ -757,6 +764,7 @@ class Checker {
                 if (e.token.text == "sql_string") { e.inferredType = ValueType.sqlStringType; return ValueType.sqlStringType; }
                 if (e.token.text == "sql_guid") { e.inferredType = ValueType.sqlGuidType; return ValueType.sqlGuidType; }
                 if (e.token.text == "sql_date") { e.inferredType = ValueType.sqlDateType; return ValueType.sqlDateType; }
+                if (e.token.text == "sql_datespan") { e.inferredType = ValueType.sqlDatespanType; return ValueType.sqlDatespanType; }
                 e.newHasContainer = !staticContext;
                 e.objectClass = resolveClass(currentProgram, e.token.text, e.token);
                 if (e.objectClass.isEnum) fail("cannot instantiate an enum", e.token);
@@ -1003,10 +1011,10 @@ class Checker {
                     return checkCall(target, target.owner, e);
                 }
                 auto receiver = typeOf(e.left);
-                if ([ValueType.sqlBoolType, ValueType.sqlIntType, ValueType.sqlDecimalType, ValueType.sqlGuidType, ValueType.sqlDateType].canFind(receiver) && e.token.text == "toString") {
+                if ([ValueType.sqlBoolType, ValueType.sqlIntType, ValueType.sqlDecimalType, ValueType.sqlGuidType, ValueType.sqlDateType, ValueType.sqlDatespanType].canFind(receiver) && e.token.text == "toString") {
                     checkArguments(e, []);
                     e.builtinCall = receiver == ValueType.sqlBoolType ? "z8_sql_bool_toString" :
-                        receiver == ValueType.sqlIntType ? "z8_sql_int_toString" : receiver == ValueType.sqlGuidType ? "z8_sql_guid_toString" : receiver == ValueType.sqlDateType ? "z8_sql_date_toString" : "z8_sql_decimal_toString";
+                        receiver == ValueType.sqlIntType ? "z8_sql_int_toString" : receiver == ValueType.sqlGuidType ? "z8_sql_guid_toString" : receiver == ValueType.sqlDateType ? "z8_sql_date_toString" : receiver == ValueType.sqlDatespanType ? "z8_sql_datespan_toString" : "z8_sql_decimal_toString";
                     return ValueType.sqlStringType;
                 }
                 if (receiver == ValueType.sqlBoolType) {
@@ -1023,9 +1031,10 @@ class Checker {
                             [ValueType.sqlIntType, ValueType.intType, ValueType.optionalInt].canFind(second);
                         bool guidChoice = [ValueType.sqlGuidType, ValueType.guidType].canFind(first) || [ValueType.sqlGuidType, ValueType.guidType].canFind(second);
                         bool dateChoice = [ValueType.sqlDateType, ValueType.dateType].canFind(first) || [ValueType.sqlDateType, ValueType.dateType].canFind(second);
-                        auto type = stringChoice ? ValueType.sqlStringType : decimalChoice ? ValueType.sqlDecimalType : intChoice ? ValueType.sqlIntType : guidChoice ? ValueType.sqlGuidType : dateChoice ? ValueType.sqlDateType : ValueType.sqlBoolType;
+                        bool spanChoice = [ValueType.sqlDatespanType, ValueType.datespanType].canFind(first) || [ValueType.sqlDatespanType, ValueType.datespanType].canFind(second);
+                        auto type = stringChoice ? ValueType.sqlStringType : decimalChoice ? ValueType.sqlDecimalType : intChoice ? ValueType.sqlIntType : guidChoice ? ValueType.sqlGuidType : dateChoice ? ValueType.sqlDateType : spanChoice ? ValueType.sqlDatespanType : ValueType.sqlBoolType;
                         checkArguments(e, [type, type]);
-                        e.builtinCall = stringChoice ? "z8_sql_string_iif" : decimalChoice ? "z8_sql_decimal_iif" : intChoice ? "z8_sql_int_iif" : guidChoice ? "z8_sql_guid_iif" : dateChoice ? "z8_sql_date_iif" : "z8_sql_bool_iif"; return type;
+                        e.builtinCall = stringChoice ? "z8_sql_string_iif" : decimalChoice ? "z8_sql_decimal_iif" : intChoice ? "z8_sql_int_iif" : guidChoice ? "z8_sql_guid_iif" : dateChoice ? "z8_sql_date_iif" : spanChoice ? "z8_sql_datespan_iif" : "z8_sql_bool_iif"; return type;
                     }
                     fail("unsupported SQL boolean method", e.token);
                 }
@@ -1507,6 +1516,7 @@ class Checker {
                     case "sql_string": targetType = ValueType.sqlStringType; break;
                     case "sql_guid": targetType = ValueType.sqlGuidType; break;
                     case "sql_date": targetType = ValueType.sqlDateType; break;
+                    case "sql_datespan": targetType = ValueType.sqlDatespanType; break;
                     case "primary": targetType = ValueType.primaryType; break;
                     default: targetType = ValueType.voidType; break;
                 }
@@ -1514,7 +1524,7 @@ class Checker {
                     e.exceptionInstanceOf = true;
                     return ValueType.boolType;
                 }
-                if (targetType != ValueType.voidType && targetType != ValueType.exceptionType && targetType != ValueType.encodingType && targetType != ValueType.sqlBoolType && targetType != ValueType.sqlIntType && targetType != ValueType.sqlDecimalType && targetType != ValueType.sqlStringType && targetType != ValueType.sqlGuidType && targetType != ValueType.sqlDateType && sourceType == ValueType.primaryType) {
+                if (targetType != ValueType.voidType && targetType != ValueType.exceptionType && targetType != ValueType.encodingType && targetType != ValueType.sqlBoolType && targetType != ValueType.sqlIntType && targetType != ValueType.sqlDecimalType && targetType != ValueType.sqlStringType && targetType != ValueType.sqlGuidType && targetType != ValueType.sqlDateType && targetType != ValueType.sqlDatespanType && sourceType == ValueType.primaryType) {
                     e.castType = targetType; e.primaryInstanceOf = true;
                     return ValueType.boolType;
                 }
@@ -1522,11 +1532,11 @@ class Checker {
                     sourceType == ValueType.nullableString ? ValueType.stringType : sourceType;
                 bool scalar = [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType,
                     ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType,
-                    ValueType.dateType, ValueType.fileType, ValueType.encodingType, ValueType.sqlBoolType, ValueType.sqlIntType, ValueType.sqlDecimalType, ValueType.sqlStringType, ValueType.sqlGuidType, ValueType.sqlDateType].canFind(baseSource);
+                    ValueType.dateType, ValueType.fileType, ValueType.encodingType, ValueType.sqlBoolType, ValueType.sqlIntType, ValueType.sqlDecimalType, ValueType.sqlStringType, ValueType.sqlGuidType, ValueType.sqlDateType, ValueType.sqlDatespanType].canFind(baseSource);
                 if (targetType != ValueType.voidType) {
                     if (sourceType == ValueType.voidType) fail("instanceof requires a value", e.token);
                     e.inferredType = sourceType;
-                    e.falseInstanceOf = !scalar || (targetType == ValueType.primaryType && [ValueType.encodingType, ValueType.sqlBoolType, ValueType.sqlIntType, ValueType.sqlDecimalType, ValueType.sqlStringType, ValueType.sqlGuidType, ValueType.sqlDateType].canFind(baseSource)) || (targetType != ValueType.primaryType && targetType != baseSource);
+                    e.falseInstanceOf = !scalar || (targetType == ValueType.primaryType && [ValueType.encodingType, ValueType.sqlBoolType, ValueType.sqlIntType, ValueType.sqlDecimalType, ValueType.sqlStringType, ValueType.sqlGuidType, ValueType.sqlDateType, ValueType.sqlDatespanType].canFind(baseSource)) || (targetType != ValueType.primaryType && targetType != baseSource);
                     e.scalarInstanceOf = !e.falseInstanceOf;
                     return ValueType.boolType;
                 }
@@ -1608,6 +1618,29 @@ class Checker {
                 }
                 if (left == ValueType.dateType && right == ValueType.sqlDateType) {
                     matches(e.left, ValueType.sqlDateType); left = ValueType.sqlDateType;
+                }
+                if (left == ValueType.datespanType && [ValueType.sqlDatespanType, ValueType.sqlDateType].canFind(right)) {
+                    matches(e.left, ValueType.sqlDatespanType); left = ValueType.sqlDatespanType;
+                }
+                if (left == ValueType.dateType && right == ValueType.sqlDatespanType) {
+                    matches(e.left, ValueType.sqlDateType); left = ValueType.sqlDateType;
+                }
+                if (left == ValueType.sqlDateType && (right == ValueType.sqlDatespanType || right == ValueType.datespanType)) {
+                    if (!["+", "-"].canFind(op) || !matches(e.right, ValueType.sqlDatespanType)) fail("invalid SQL date arithmetic", e.token);
+                    e.sqlDateArithmetic = true; return ValueType.sqlDateType;
+                }
+                if (left == ValueType.sqlDateType && [ValueType.sqlDateType, ValueType.dateType].canFind(right) && op == "-") {
+                    if (!matches(e.right, ValueType.sqlDateType)) fail("invalid SQL date arithmetic", e.token);
+                    e.sqlDateArithmetic = true; return ValueType.sqlDatespanType;
+                }
+                if (left == ValueType.sqlDatespanType && [ValueType.sqlDateType, ValueType.dateType].canFind(right)) {
+                    if (op != "+" || !matches(e.right, ValueType.sqlDateType)) fail("invalid SQL date arithmetic", e.token);
+                    e.sqlDateArithmetic = true; return ValueType.sqlDateType;
+                }
+                if (left == ValueType.sqlDatespanType && right != ValueType.nullType) {
+                    if (!["+", "-", "==", "!=", "<", ">", "<=", ">="].canFind(op) || !matches(e.right, ValueType.sqlDatespanType)) fail("invalid SQL datespan operands", e.token);
+                    e.sqlDatespanOperator = true; e.sqlDatespanComparison = op != "+" && op != "-";
+                    return e.sqlDatespanComparison ? ValueType.sqlBoolType : ValueType.sqlDatespanType;
                 }
                 if (left == ValueType.sqlDateType && right != ValueType.nullType) {
                     if (!["==", "!=", "<", ">", "<=", ">="].canFind(op) || !matches(e.right, ValueType.sqlDateType)) fail("invalid SQL date operands", e.token);
@@ -2003,6 +2036,7 @@ class Checker {
                 if (s.expression !is null && returnType == ValueType.sqlStringType) s.sqlStringReturnPriority = true;
                 if (s.expression !is null && returnType == ValueType.sqlGuidType) s.sqlGuidReturnPriority = true;
                 if (s.expression !is null && returnType == ValueType.sqlDateType) s.sqlDateReturnPriority = true;
+                if (s.expression !is null && returnType == ValueType.sqlDatespanType) s.sqlDatespanReturnPriority = true;
                 return true;
             case StmtKind.ifStmt:
                 if (!matches(s.expression, ValueType.boolType)) fail("if condition must be bool", s.token);

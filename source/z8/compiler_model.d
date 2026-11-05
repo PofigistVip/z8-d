@@ -13,7 +13,7 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, intType, decimalType, boolType, stringType, guidType, binaryType, datespanType, dateType, geometryType, fileType, exceptionType, encodingType, sqlBoolType, sqlIntType, sqlDecimalType, sqlStringType, sqlGuidType, sqlDateType, primaryType, selfType, intArray, intMatrix, decimalArray, decimalMatrix, boolArray, boolMatrix, stringArray, stringMatrix, guidArray, guidMatrix, binaryArray, binaryMatrix, datespanArray, datespanMatrix, dateArray, dateMatrix, geometryArray, geometryMatrix, fileArray, fileMatrix, exceptionArray, exceptionMatrix, encodingArray, encodingMatrix, primaryArray, primaryMatrix, selfArray, selfMatrix, stringMap, primaryStringMap, intStringMap, boolStringMap, decimalStringMap, guidStringMap, intIntMap, stringIntMap, primaryIntMap, boolIntMap, decimalIntMap, guidIntMap, stringGuidMap, primaryGuidMap, intGuidMap, boolGuidMap, decimalGuidMap, guidGuidMap, stringBoolMap, primaryBoolMap, intBoolMap, boolBoolMap, decimalBoolMap, guidBoolMap, stringDecimalMap, primaryDecimalMap, intDecimalMap, boolDecimalMap, decimalDecimalMap, guidDecimalMap, nullType, nullableString, enumType, enumArray, enumMatrix, optionalInt, optionalBool, optionalDecimal }
+enum ValueType { voidType, intType, decimalType, boolType, stringType, guidType, binaryType, datespanType, dateType, geometryType, fileType, exceptionType, encodingType, sqlBoolType, sqlIntType, sqlDecimalType, sqlStringType, sqlGuidType, sqlDateType, sqlDatespanType, primaryType, selfType, intArray, intMatrix, decimalArray, decimalMatrix, boolArray, boolMatrix, stringArray, stringMatrix, guidArray, guidMatrix, binaryArray, binaryMatrix, datespanArray, datespanMatrix, dateArray, dateMatrix, geometryArray, geometryMatrix, fileArray, fileMatrix, exceptionArray, exceptionMatrix, encodingArray, encodingMatrix, primaryArray, primaryMatrix, selfArray, selfMatrix, stringMap, primaryStringMap, intStringMap, boolStringMap, decimalStringMap, guidStringMap, intIntMap, stringIntMap, primaryIntMap, boolIntMap, decimalIntMap, guidIntMap, stringGuidMap, primaryGuidMap, intGuidMap, boolGuidMap, decimalGuidMap, guidGuidMap, stringBoolMap, primaryBoolMap, intBoolMap, boolBoolMap, decimalBoolMap, guidBoolMap, stringDecimalMap, primaryDecimalMap, intDecimalMap, boolDecimalMap, decimalDecimalMap, guidDecimalMap, nullType, nullableString, enumType, enumArray, enumMatrix, optionalInt, optionalBool, optionalDecimal }
 enum NullableStringMode { none, required, nullAsEmpty }
 enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, guidLiteral, binaryLiteral, datespanLiteral, dateLiteral, nullLiteral, arrayLiteral, mapEntry, variable, selfRef, superRef, containerRef, newSelf, field, call, memberCall, index, castExpr, instanceOf, unary, binary, conditional, elvis }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
@@ -33,6 +33,7 @@ class Expression {
     bool sqlBoolOperator, sqlBoolPriority, sqlIntOperator, sqlIntComparison, sqlIntPriority, sqlDecimalOperator, sqlDecimalComparison, sqlDecimalPriority, sqlStringOperator, sqlStringComparison, sqlStringPriority;
     bool sqlGuidOperator, sqlGuidPriority;
     bool convertToSqlDate, sqlDatePriority, sqlDateOperator;
+    bool convertToSqlDatespan, sqlDatespanPriority, sqlDatespanOperator, sqlDatespanComparison, sqlDateArithmetic;
     bool dateBinary, fileBinary;
     bool primaryCast, primaryInstanceOf, objectInstanceOf, scalarInstanceOf, falseInstanceOf, exceptionInstanceOf;
     bool typedInitializer;
@@ -82,6 +83,7 @@ class Statement {
     bool sqlBoolReturnPriority, sqlIntReturnPriority, sqlDecimalReturnPriority, sqlStringReturnPriority;
     bool sqlGuidReturnPriority;
     bool sqlDateReturnPriority;
+    bool sqlDatespanReturnPriority;
     this(StmtKind kind, Token token) { this.kind = kind; this.token = token; }
 }
 struct Parameter { ValueType type; Token name; string objectName; Program objectClass; bool declaredFinal; }
@@ -307,7 +309,7 @@ package ValueType mapValueReadType(ValueType type) {
     return value == ValueType.stringType ? ValueType.nullableString : storedValueType(value);
 }
 package bool hasObjectClass(ValueType type) { return type == ValueType.selfType || type == ValueType.selfArray || type == ValueType.selfMatrix || type == ValueType.enumType || type == ValueType.enumArray || type == ValueType.enumMatrix; }
-package bool isNullableReference(ValueType type) { return type == ValueType.selfType || type == ValueType.enumType || type == ValueType.exceptionType || type == ValueType.encodingType || type == ValueType.sqlBoolType || type == ValueType.sqlIntType || type == ValueType.sqlDecimalType || type == ValueType.sqlStringType || type == ValueType.sqlGuidType || type == ValueType.sqlDateType || type == ValueType.primaryType || type == ValueType.guidType || type == ValueType.binaryType || type == ValueType.datespanType || type == ValueType.dateType || type == ValueType.geometryType || type == ValueType.fileType || isMap(type) || type == ValueType.nullableString || type == ValueType.stringType || isArray(type); }
+package bool isNullableReference(ValueType type) { return type == ValueType.selfType || type == ValueType.enumType || type == ValueType.exceptionType || type == ValueType.encodingType || type == ValueType.sqlBoolType || type == ValueType.sqlIntType || type == ValueType.sqlDecimalType || type == ValueType.sqlStringType || type == ValueType.sqlGuidType || type == ValueType.sqlDateType || type == ValueType.sqlDatespanType || type == ValueType.primaryType || type == ValueType.guidType || type == ValueType.binaryType || type == ValueType.datespanType || type == ValueType.dateType || type == ValueType.geometryType || type == ValueType.fileType || isMap(type) || type == ValueType.nullableString || type == ValueType.stringType || isArray(type); }
 package ValueType storedValueType(ValueType type) {
     if (type == ValueType.intType) return ValueType.optionalInt;
     if (type == ValueType.boolType) return ValueType.optionalBool;
