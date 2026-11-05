@@ -1,4 +1,4 @@
-"""Check shared string/primary array storage and checked typed reads."""
+"""Check shared scalar/primary array storage and checked typed reads."""
 from pathlib import Path
 import os
 import subprocess
@@ -64,6 +64,16 @@ void main() {
     assert(primaryIds.opEquals(ids) && ids.opEquals(primaryIds));
     auto unshared = new Z8Array!Z8Guid([second, first]);
     unshared.z8_sort(); assert(unshared.z8_first() is first && unshared.z8_last() is second);
+    auto file1 = z8_file_from_path("one.txt"w), file2 = z8_file_from_path("two.txt"w);
+    auto files = new Z8Array!Z8File([file1, file2]); auto primaryFiles = z8_primary_array_view(files);
+    primaryFiles.z8_set(0, z8_primary_box(file2)); files.z8_set(1, file1);
+    assert(files.z8_get(0) is file2 && z8_primary_cast!Z8File(primaryFiles.z8_get(1)) is file1);
+    primaryFiles.z8_add(null); assert(files.z8_get(2) is null);
+    files.z8_set(2, file2); primaryFiles.z8_add(z8_primary_box("wrong"w));
+    invalid = false; try { files.z8_get(3); } catch (Exception) { invalid = true; }
+    assert(invalid); primaryFiles.z8_removeAt(3);
+    assert(primaryFiles.opEquals(files) && files.opEquals(primaryFiles));
+    assert(z8_primary_array_view(cast(Z8Array!Z8File)null) is null);
     auto ints = new Z8Array!long([1L, 2L]); auto primaryInts = z8_primary_array_view(ints);
     primaryInts.z8_set(0, z8_primary_box(9L)); ints.z8_set(1, 8L);
     assert(z8_optional_require(ints.z8_get(0)) == 9 && z8_optional_require(z8_primary_cast!long(primaryInts.z8_get(1))) == 8);
@@ -108,6 +118,20 @@ public class Probe {
         values.set(2, guid.create(3)); values.add(null); ids[3] = guid.create(4);
         if (ids[2].minor() != 3 || ((guid) values[3]).minor() != 4) return 3;
         if (guidCount(ids) != 4 || Input.size(ids) != 4) return 4;
+        return 0;
+    }
+    public static int fileRun() {
+        file first = "one.txt"; file second = "two.txt";
+        file[] files = {first, second}; primary[] values = files;
+        values.set(0, second); files[1] = first;
+        if (files[0].path != "two.txt" || ((file)values[1]).path != "one.txt") return 1;
+        values.add("wrong");
+        try { file wrong = files[2]; return 2; } catch (exception expected) {}
+        values.set(2, first); values.add(null); files[3] = second;
+        if (files[2].path != "one.txt" || ((file)values[3]).path != "two.txt") return 3;
+        if (Input.size(files) != 4) return 4;
+        int count = 0; for (primary item : files) { count += 1; }
+        if (count != 4) return 5;
         return 0;
     }
     public static int primitiveRun() {
@@ -156,6 +180,7 @@ void main() {
     z8_native_bind("example.Input.m_size"w, &count);
     assert(z8_optional_require(Z8p_50726F6265.m_run()) == 0);
     assert(z8_optional_require(Z8p_50726F6265.m_guidRun()) == 0);
+    assert(z8_optional_require(Z8p_50726F6265.m_fileRun()) == 0);
     assert(z8_optional_require(Z8p_50726F6265.m_primitiveRun()) == 0);
 }
 ''', encoding="utf-8")
@@ -163,4 +188,4 @@ void main() {
     subprocess.run(["dmd", "-I" + str(generated), *import_args(), *map(str, generated.rglob("*.d")),
                     str(harness), str(runtime), "-of=" + str(executable)], cwd=temp, check=True)
     subprocess.run([str(executable)], cwd=temp, check=True)
-print("Primitive, string, GUID and primary array views share storage")
+print("Primitive, string, GUID, file and primary array views share storage")

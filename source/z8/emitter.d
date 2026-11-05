@@ -526,7 +526,7 @@ private string emitExprRaw(Expression e) {
         case ExprKind.index:
             if (isMap(e.inferredType)) return "z8_invoke!\"z8_get\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if (e.inferredType == ValueType.stringArray) return "z8_string_array_get(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
-            if (e.inferredType == ValueType.guidArray) return "z8_guid_array_get(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            if ([ValueType.guidArray, ValueType.fileArray].canFind(e.inferredType)) return "z8_reference_array_get(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             if ([ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(e.inferredType))
                 return "z8_primitive_array_get(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             return "z8_array_at(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
@@ -749,8 +749,8 @@ private string emitSimple(Statement s) {
     if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.stringArray)
         return (s.assignmentOperator == "+=" ? "z8_string_array_add_assign(" : "z8_string_array_assign(") ~
             emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
-    if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.guidArray)
-        return "z8_guid_array_assign(" ~ emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
+    if (s.target.kind == ExprKind.index && [ValueType.guidArray, ValueType.fileArray].canFind(s.target.inferredType))
+        return "z8_reference_array_assign(" ~ emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.target.kind == ExprKind.index && [ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(s.target.inferredType))
         return (s.assignmentOperator == "=" ? "z8_primitive_array_assign(" : "z8_primitive_array_compound!\"" ~ s.assignmentOperator[0 .. $-1] ~ "\"(") ~
             emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
