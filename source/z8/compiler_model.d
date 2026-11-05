@@ -217,6 +217,7 @@ class Program {
     string baseName;
     Token baseToken;
     Program baseClass;
+    bool baseIsPrimary;
     Program lexicalOwner;
     Program[] nestedPrograms, memberSpecializations;
     Token specializedName;
@@ -228,6 +229,11 @@ class Program {
     bool isEnum, isNative, isPrimary;
     wstring nativeName;
     Token[] enumValues;
+}
+package bool extendsBuiltinPrimary(Program program) {
+    for (auto current = program; current !is null; current = current.baseClass)
+        if (current.baseIsPrimary) return true;
+    return false;
 }
 struct SourceUnit { string name, path, source; }
 /// One generated D module and its path relative to the output directory.

@@ -68,4 +68,10 @@ void main() {
     result = subprocess.run([str(compiler), "project", str(source), str(temp / "bad")], capture_output=True, text=True)
     if result.returncode == 0 or "requires a native type" not in result.stderr:
         raise SystemExit("A bodyless method was accepted on an ordinary class")
+    (source / "Bad.bl").write_text("class Bad extends primary {}", encoding="utf-8")
+    result = subprocess.run([str(compiler), "project", str(source), str(temp / "bad-primary")], capture_output=True, text=True)
+    if result.returncode == 0 or "must implement assignment from itself" not in result.stderr:
+        raise SystemExit("A non-native primary subclass without assignment was accepted")
+    (source / "Bad.bl").write_text("class Bad extends primary { public void operator = (Bad value) {} }", encoding="utf-8")
+    subprocess.run([str(compiler), "project", str(source), str(temp / "good-primary")], check=True)
 print("Native and primary declarations bound through the separate runtime")

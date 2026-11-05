@@ -1,4 +1,5 @@
 public class NativeConsumer {
+    private static int acceptsPrimary(primary value) { return (value instanceof NativeNumber) ? 1 : 0; }
     public static int run() {
         NativeChild child = new NativeChild;
         NativeMath object = child;
@@ -9,6 +10,23 @@ public class NativeConsumer {
         NativeMath.total += 5;
         if (NativeMath.add("a", "b") != "ab") return 1;
         int converted = number;
+        primary boxed = number;
+        if (!(number instanceof primary) || !(boxed instanceof NativeNumber)) return 3;
+        NativeNumber unboxed = (NativeNumber)boxed;
+        if (unboxed.read() != 9) return 4;
+        primary[] values = {number};
+        NativeNumber fromArray = (NativeNumber)values[0];
+        if (fromArray.read() != 9) return 5;
+        primary wrong = 1;
+        if (wrong instanceof NativeNumber) return 6;
+        try { NativeNumber invalid = (NativeNumber)wrong; return 7; }
+        catch (exception expectedCast) {}
+        primary empty = null;
+        NativeNumber absent = (NativeNumber)empty;
+        if (absent != null) return 8;
+        if (acceptsPrimary(number) != 1) return 9;
+        int[primary] keys = {(number, 4)};
+        if (keys[number] != 4) return 10;
         return NativeMath.add(2, 3) + object.scale(4) + number.read() + object.ignored() + converted + object.factor + NativeMath.total;
     }
 }

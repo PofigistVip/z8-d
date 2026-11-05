@@ -147,6 +147,7 @@ private wstring z8_message_value(Z8Primary value) {
         case Z8PrimaryKind.guid: return z8_guid_to_string(value.guidValue);
         case Z8PrimaryKind.geometry: return z8_geometry_to_string(value.geometryValue);
         case Z8PrimaryKind.file: return "null"w;
+        case Z8PrimaryKind.user: return z8_primary_to_string(value);
         case Z8PrimaryKind.binary: case Z8PrimaryKind.date: throw new Exception("unsupported MessageFormat value");
     }
 }

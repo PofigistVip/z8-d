@@ -44,6 +44,8 @@ class Checker {
                         }
             }
             if (program.baseClass is null) program.baseClass = resolveClass(field.owner, field.objectName, field.name);
+        } else if (program.baseName == "primary" || program.baseName == "org.zenframework.z8.lang.primary") {
+            program.baseIsPrimary = true;
         } else if (program.baseName.length) program.baseClass = resolveClass(program, program.baseName, program.baseToken);
         if (program.baseClass !is null) {
             if (program.baseClass.isEnum) fail("cannot extend an enum", program.baseToken);
@@ -276,6 +278,11 @@ class Checker {
             return true;
         }
 
+        if (expected == ValueType.primaryType && actual == ValueType.selfType && extendsBuiltinPrimary(e.objectClass)) {
+            e.boxPrimary = true;
+            return true;
+        }
+
         if (actual == ValueType.selfType) {
             if (expected == ValueType.selfType && isAssignable(e.objectClass, expectedClass)) return true;
             auto conversion = findConversion(e.objectClass, expected, expectedClass);
@@ -426,6 +433,8 @@ class Checker {
                         }
                         if (hasMapKeyClass(actual) && e.arguments[i].keyObjectClasses != resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name)) applicable = false;
                     }
+                } else if (actual == ValueType.selfType && p.type == ValueType.primaryType && extendsBuiltinPrimary(e.arguments[i].objectClass)) {
+                    if (binaryOperator) ++distance;
                 } else if (actual == ValueType.selfType && findConversion(e.arguments[i].objectClass, p.type,
                             p.type == ValueType.enumType ? resolveClass(candidate.owner, p.objectName, p.name) : null) !is null) weight += 100;
                 else if (actual == ValueType.intType && p.type == ValueType.decimalType) weight += 100;
@@ -571,6 +580,15 @@ class Checker {
             }
             methods[m.name.text] = m;
             ownOverloads[m.name.text] ~= m;
+        }
+        if (extendsBuiltinPrimary(program) && !program.isNative) {
+            bool hasAssignment;
+            foreach (method; program.methods)
+                if (method.operatorSymbol == "=" && method.parameters.length == 1 &&
+                    method.parameters[0].type == ValueType.selfType &&
+                    resolveClass(program, method.parameters[0].objectName, method.parameters[0].name) is program)
+                    hasAssignment = true;
+            if (!hasAssignment) fail("type extending primary must implement assignment from itself", program.name);
         }
         variables = null; objectVariables = null; keyObjectVariables = null; staticContext = false;
         foreach (field; program.fields) {
@@ -885,8 +903,8 @@ class Checker {
                 if (e.token.text == "sql_binary") { e.inferredType = ValueType.sqlBinaryType; return ValueType.sqlBinaryType; }
                 if (e.token.text == "sql_geometry") { e.inferredType = ValueType.sqlGeometryType; return ValueType.sqlGeometryType; }
                 if (e.token.text == "sql_primary") { e.inferredType = ValueType.sqlPrimaryType; return ValueType.sqlPrimaryType; }
-                e.newHasContainer = !staticContext;
                 e.objectClass = resolveClass(currentProgram, e.token.text, e.token);
+                e.newHasContainer = !staticContext && !extendsBuiltinPrimary(e.objectClass);
                 if (e.objectClass.isEnum) fail("cannot instantiate an enum", e.token);
                 return ValueType.selfType;
             case ExprKind.field:
@@ -1694,6 +1712,11 @@ class Checker {
                         e.objectClass = target;
                         return ValueType.enumType;
                     }
+                    if (typeOf(e.left) == ValueType.primaryType && extendsBuiltinPrimary(target)) {
+                        e.primaryCast = true;
+                        e.objectClass = target;
+                        return ValueType.selfType;
+                    }
                     if (typeOf(e.left) != ValueType.selfType) fail("unsupported object cast", e.token);
                     if (!isAssignable(e.left.objectClass, target)) {
                         auto conversion = findConversion(e.left.objectClass, ValueType.selfType, target);
@@ -1749,6 +1772,11 @@ class Checker {
                     e.castType = targetType; e.primaryInstanceOf = true;
                     return ValueType.boolType;
                 }
+                if (targetType == ValueType.primaryType && sourceType == ValueType.selfType && extendsBuiltinPrimary(e.left.objectClass)) {
+                    e.inferredType = sourceType;
+                    e.scalarInstanceOf = true;
+                    return ValueType.boolType;
+                }
                 auto baseSource = isOptionalPrimitive(sourceType) ? optionalBaseType(sourceType) :
                     sourceType == ValueType.nullableString ? ValueType.stringType : sourceType;
                 bool scalar = [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType,
@@ -1762,6 +1790,12 @@ class Checker {
                     return ValueType.boolType;
                 }
                 auto target = resolveClass(currentProgram, e.token.text, e.token);
+                if (sourceType == ValueType.primaryType && extendsBuiltinPrimary(target)) {
+                    e.castType = ValueType.selfType;
+                    e.objectClass = target;
+                    e.primaryInstanceOf = true;
+                    return ValueType.boolType;
+                }
                 if (scalar || sourceType == ValueType.primaryType || sourceType == ValueType.exceptionType || isArray(sourceType) || isMap(sourceType)) {
                     e.inferredType = sourceType;
                     e.falseInstanceOf = true;
@@ -2195,6 +2229,7 @@ class Checker {
                 if (s.type == ValueType.primaryType && s.expression is null && !allowUninitializedEnum) fail("primary variables require an initializer", s.token);
                 if (s.type == ValueType.voidType) fail("variable cannot be void", s.token);
                 if (hasObjectClass(s.type)) s.objectClass = resolveClass(currentProgram, s.objectName, s.token);
+                if (s.type == ValueType.selfType && extendsBuiltinPrimary(s.objectClass)) s.hasContainer = false;
                 if (hasMapKeyClass(s.type)) s.keyObjectClasses = resolveKeyClasses(currentProgram, s.keyObjectNames, s.token);
                 if (s.nestedClass !is null) {
                     s.nestedClass.enclosingStatic = staticContext;

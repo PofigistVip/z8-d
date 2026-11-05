@@ -1,5 +1,5 @@
 [primary "example.NativeNumber"]
-public class NativeNumber {
+public class NativeNumber extends primary {
     public int read();
     public operator int();
 }

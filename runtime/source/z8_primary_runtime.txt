@@ -1,5 +1,5 @@
 // The original primary class is the common base for Z8 scalar values.
-enum Z8PrimaryKind { integer, boolean, decimal, text, guid, binary, datespan, geometry, date, file }
+enum Z8PrimaryKind { integer, boolean, decimal, text, guid, binary, datespan, geometry, date, file, user }
 
 class Z8Primary {
     Z8PrimaryKind kind;
@@ -13,6 +13,7 @@ class Z8Primary {
     Z8Geometry geometryValue;
     Z8Date dateValue;
     Z8File fileValue;
+    Z8Object userValue;
 
     override bool opEquals(Object other) {
         auto right = cast(Z8Primary)other;
@@ -28,6 +29,7 @@ class Z8Primary {
             case Z8PrimaryKind.geometry: return z8_geometry_equals(geometryValue, right.geometryValue);
             case Z8PrimaryKind.date: return z8_date_binary!"=="(dateValue, right.dateValue);
             case Z8PrimaryKind.file: return fileValue == right.fileValue;
+            case Z8PrimaryKind.user: return userValue is right.userValue || (userValue !is null && userValue == right.userValue);
         }
     }
 }
@@ -44,6 +46,7 @@ bool z8_primary_collection_equals(Z8Primary left, Z8Primary right) {
         case Z8PrimaryKind.geometry: if (left.geometryValue is right.geometryValue) return true; break;
         case Z8PrimaryKind.date: if (left.dateValue is right.dateValue) return true; break;
         case Z8PrimaryKind.file: if (left.fileValue is right.fileValue) return true; break;
+        case Z8PrimaryKind.user: if (left.userValue is right.userValue) return true; break;
         case Z8PrimaryKind.integer: case Z8PrimaryKind.boolean: case Z8PrimaryKind.decimal: case Z8PrimaryKind.text: break;
     }
     return left == right;
@@ -94,6 +97,12 @@ Z8Primary z8_primary_box(T)(T value) {
         boxed.kind = Z8PrimaryKind.file;
         boxed.fileValue = value;
         return boxed;
+    } else static if (is(T : Z8Object)) {
+        if (value is null) return null;
+        auto boxed = new Z8Primary();
+        boxed.kind = Z8PrimaryKind.user;
+        boxed.userValue = value;
+        return boxed;
     } else {
         auto boxed = new Z8Primary();
         static if (is(T == long)) { boxed.kind = Z8PrimaryKind.integer; boxed.integerValue = value; }
@@ -117,6 +126,7 @@ wstring z8_primary_to_string(Z8Primary value) {
         case Z8PrimaryKind.geometry: return z8_geometry_to_string(value.geometryValue);
         case Z8PrimaryKind.date: return z8_date_toString(value.dateValue);
         case Z8PrimaryKind.file: return z8_file_to_string(value.fileValue);
+        case Z8PrimaryKind.user: return z8_nonnull(value.userValue).toString().to!wstring;
     }
 }
 
@@ -157,6 +167,7 @@ long z8_primary_hash(Z8Primary value) {
         case Z8PrimaryKind.geometry: return z8_geometry_hashCode(value.geometryValue);
         case Z8PrimaryKind.date: return z8_date_hashCode(value.dateValue);
         case Z8PrimaryKind.file: return z8_file_hashCode(value.fileValue);
+        case Z8PrimaryKind.user: return cast(long)cast(int)z8_nonnull(value.userValue).toHash();
     }
     return cast(long)cast(int)hash;
 }
@@ -176,6 +187,7 @@ bool z8_primary_is(T)(Z8Primary value) {
     else static if (is(T == Z8Geometry)) return value.kind == Z8PrimaryKind.geometry;
     else static if (is(T == Z8Date)) return value.kind == Z8PrimaryKind.date;
     else static if (is(T == Z8File)) return value.kind == Z8PrimaryKind.file;
+    else static if (is(T : Z8Object)) return value.kind == Z8PrimaryKind.user && cast(T)value.userValue !is null;
     else static assert(0, "unsupported primary instanceof target");
 }
 
@@ -196,4 +208,9 @@ T z8_primary_cast(T)(Z8Primary value) if (is(T == wstring) || is(T == Z8Guid) ||
     else static if (is(T == Z8Geometry)) return value.geometryValue;
     else static if (is(T == Z8Date)) return value.dateValue;
     else return value.fileValue;
+}
+T z8_primary_cast(T)(Z8Primary value) if (is(T : Z8Object)) {
+    if (value is null) return null;
+    if (!z8_primary_is!T(value)) throw new Exception("invalid primary cast");
+    return cast(T)value.userValue;
 }

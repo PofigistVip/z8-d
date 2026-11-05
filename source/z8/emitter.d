@@ -515,7 +515,7 @@ private string emitExprRaw(Expression e) {
             if (isMap(e.inferredType)) return "z8_invoke!\"z8_get\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             return "z8_array_at(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
         case ExprKind.castExpr:
-            if (e.primaryCast) return "z8_primary_cast!(" ~ dType(e.castType) ~ ")(" ~ emitExpr(e.left) ~ ")";
+            if (e.primaryCast) return "z8_primary_cast!(" ~ dType(e.castType, e.objectClass) ~ ")(" ~ emitExpr(e.left) ~ ")";
             if (e.sqlPrimaryCast) return "z8_cast!(" ~ dType(e.castType) ~ ")(" ~ emitExpr(e.left) ~ ")";
             return e.castType == ValueType.selfType ? "z8_cast!(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")" : emitExpr(e.left);
         case ExprKind.instanceOf:
@@ -531,7 +531,7 @@ private string emitExprRaw(Expression e) {
                     return "(() { auto z8_value = " ~ emitExpr(e.left) ~ "; return true; })()";
                 return "(" ~ emitExpr(e.left) ~ " !is null)";
             }
-            if (e.primaryInstanceOf) return "z8_primary_is!(" ~ dType(e.castType) ~ ")(" ~ emitExpr(e.left) ~ ")";
+            if (e.primaryInstanceOf) return "z8_primary_is!(" ~ dType(e.castType, e.objectClass) ~ ")(" ~ emitExpr(e.left) ~ ")";
             if (e.objectInstanceOf) return "(cast(" ~ e.objectClass.emittedName ~ ")(cast(Object)(" ~ emitExpr(e.left) ~ ")) !is null)";
             return "(cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ") !is null)";
         case ExprKind.unary:
@@ -768,7 +768,7 @@ private string defaultValue(ValueType type, Program objectClass = null, bool has
     if (type == ValueType.geometryType) return "new Z8Geometry()";
     if (type == ValueType.fileType) return "new Z8File()";
     if (type == ValueType.decimalType) return "z8_decimal_from_int(0)";
-    if (type == ValueType.selfType) return "z8_new!(" ~ dType(type, objectClass) ~ ")(" ~ (hasContainer ? "this" : "") ~ ")";
+    if (type == ValueType.selfType) return "z8_new!(" ~ dType(type, objectClass) ~ ")(" ~ (hasContainer && !extendsBuiltinPrimary(objectClass) ? "this" : "") ~ ")";
     if (isMap(type)) return "new " ~ dType(type, objectClass, keyObjectClasses) ~ "()";
     if (isArray(type)) return "new " ~ dType(type, objectClass, keyObjectClasses) ~ "()";
     if (type == ValueType.intType) return "0";
