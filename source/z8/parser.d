@@ -7,7 +7,6 @@ import z8.lexer;
 class Parser {
     private Token[] tokens;
     private size_t index;
-    private string className;
     private string parsedObjectName;
     this(string source) {
         auto lexer = new Lexer(source);
@@ -151,7 +150,7 @@ class Parser {
         result.isEnum = accept("enum");
         if (!result.isEnum) expect("class");
         if (nativeAttribute && !result.isEnum) error("native classes are not supported");
-        result.name = identifier(); className = result.name.text;
+        result.name = identifier();
         if (result.isEnum) {
             expect("{");
             if (current.text != "}") {
@@ -169,6 +168,12 @@ class Parser {
             return result;
         }
         if (accept("extends")) { result.baseToken = qualifiedIdentifier(); result.baseName = result.baseToken.text; }
+        parseClassBody(result);
+        if (current.kind != TokenKind.endOfFile) error("only one class per file is supported");
+        return result;
+    }
+    // Shared by top-level types and, subsequently, nested specializations.
+    private void parseClassBody(Program result) {
         expect("{");
         while (current.text != "}") {
             if (current.kind == TokenKind.endOfFile) error("expected '}'");
@@ -236,8 +241,6 @@ class Parser {
             result.methods ~= method;
         }
         expect("}");
-        if (current.kind != TokenKind.endOfFile) error("only one class per file is supported");
-        return result;
     }
     private Statement statement() {
         auto t = current;
