@@ -228,6 +228,7 @@ unittest {
     compile(q{class A { static sql_guid f(guid x, sql_bool test) { sql_guid a = x; return test.IIF(a, x); } }});
     compile(q{class A { static sql_bool f(sql_guid x, guid y) { return x == y; } }});
     compile(q{class A { static sql_string f(sql_guid x) { return x.toString(); } }});
+    compile(q{class A { static sql_decimal f(sql_decimal x) { return +x; } static sql_int g(sql_int x) { return +x; } }});
     rejects(q{class A { static guid f(sql_guid x) { return x; } }});
     rejects(q{class A { static sql_string f(sql_string x) { return x.json(null); } }});
     rejects(q{class A { static void f() { sql_string a = "x"; string b = a; } }});

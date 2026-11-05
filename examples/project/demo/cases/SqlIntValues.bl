@@ -19,6 +19,7 @@ public class SqlIntValues {
     public static sql_int convertedLeft() { sql_int value = 4; return 2 + value; }
     public static sql_int invert() { sql_int value = 5; return ~value; }
     public static sql_int invertTwice() { sql_int value = 5; return ~(~value); }
+    public static sql_int positive() { sql_int value = 5; return +value; }
     public static int run() {
         calls = 0;
         sql_int result = expression();

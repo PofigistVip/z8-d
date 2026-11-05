@@ -1527,8 +1527,8 @@ class Checker {
             case ExprKind.unary:
                 auto operand = typeOf(e.left);
                 if (operand == ValueType.sqlBoolType && e.token.text == "!") { e.sqlBoolOperator = true; return ValueType.sqlBoolType; }
-                if (operand == ValueType.sqlIntType && ["-", "~"].canFind(e.token.text)) { e.sqlIntOperator = true; return ValueType.sqlIntType; }
-                if (operand == ValueType.sqlDecimalType && e.token.text == "-") { e.sqlDecimalOperator = true; return ValueType.sqlDecimalType; }
+                if (operand == ValueType.sqlIntType && ["+", "-", "~"].canFind(e.token.text)) { e.sqlIntOperator = true; return ValueType.sqlIntType; }
+                if (operand == ValueType.sqlDecimalType && ["+", "-"].canFind(e.token.text)) { e.sqlDecimalOperator = true; return ValueType.sqlDecimalType; }
                 if (operand == ValueType.selfType && ["!", "~", "-"].canFind(e.token.text)) {
                     auto method = lookupUnaryOperator(e.left.objectClass, "operator" ~ e.token.text);
                     if (method is null) {

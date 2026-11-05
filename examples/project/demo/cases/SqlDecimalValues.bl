@@ -16,6 +16,7 @@ public class SqlDecimalValues {
     public static sql_decimal zero() { return 0.00; }
     public static sql_decimal convertedChoice() { sql_bool condition = false; sql_int value = 7; return condition.IIF(value, 2.0); }
     public static sql_decimal negative() { sql_decimal value = 0.125; return -value; }
+    public static sql_decimal positive() { sql_decimal value = 0.125; return +value; }
     public static sql_bool compare() { sql_decimal value = 1.25; return value < 2; }
     public static sql_bool mixedCompare() { sql_int left = 1; sql_decimal right = 2.50; return left < right; }
     public static sql_decimal absolute() { sql_decimal value = -1.25; return value.abs(); }

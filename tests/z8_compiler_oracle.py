@@ -433,7 +433,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                 demo.cases.SqlIntValues.z8_expression(), demo.cases.SqlIntValues.z8_remainder(),
                 demo.cases.SqlIntValues.z8_bitwise(), demo.cases.SqlIntValues.z8_choice(),
                 demo.cases.SqlIntValues.z8_functions(), demo.cases.SqlIntValues.z8_convertedLeft(),
-                demo.cases.SqlIntValues.z8_invert(), demo.cases.SqlIntValues.z8_invertTwice()
+                demo.cases.SqlIntValues.z8_invert(), demo.cases.SqlIntValues.z8_invertTwice(), demo.cases.SqlIntValues.z8_positive()
             };
             for (org.zenframework.z8.server.types.sql.sql_integer value : integers) {
                 try { System.out.println("SQLINT:" + vendor.name() + ":" + value.format(vendor, null)); }
@@ -446,7 +446,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                 demo.cases.SqlDecimalValues.z8_converted(), demo.cases.SqlDecimalValues.z8_choice(),
                 demo.cases.SqlDecimalValues.z8_remainder(), demo.cases.SqlDecimalValues.z8_convertedLeft(),
                 demo.cases.SqlDecimalValues.z8_integerLeft(), demo.cases.SqlDecimalValues.z8_zero(),
-                demo.cases.SqlDecimalValues.z8_convertedChoice(), demo.cases.SqlDecimalValues.z8_negative()
+                demo.cases.SqlDecimalValues.z8_convertedChoice(), demo.cases.SqlDecimalValues.z8_negative(), demo.cases.SqlDecimalValues.z8_positive()
             };
             for (org.zenframework.z8.server.types.sql.sql_decimal value : decimals) {
                 try { System.out.println("SQLDECIMAL:" + vendor.name() + ":" + value.format(vendor, null)); }
@@ -826,7 +826,8 @@ void main() {
             Z8p_64656D6F2E63617365732E53716C496E7456616C756573.m_functions(),
             Z8p_64656D6F2E63617365732E53716C496E7456616C756573.m_convertedLeft(),
             Z8p_64656D6F2E63617365732E53716C496E7456616C756573.m_invert(),
-            Z8p_64656D6F2E63617365732E53716C496E7456616C756573.m_invertTwice()];
+            Z8p_64656D6F2E63617365732E53716C496E7456616C756573.m_invertTwice(),
+            Z8p_64656D6F2E63617365732E53716C496E7456616C756573.m_positive()];
         foreach (value; integers) {
             try { writeln("SQLINT:", vendor, ":", z8_to_utf8(z8_sql_int_format(value, dialect))); }
             catch (Exception error) { writeln("SQLINT:", vendor, ":ERROR"); }
@@ -842,7 +843,8 @@ void main() {
             Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_integerLeft(),
             Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_zero(),
             Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_convertedChoice(),
-            Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_negative()];
+            Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_negative(),
+            Z8p_64656D6F2E63617365732E53716C446563696D616C56616C756573.m_positive()];
         foreach (value; decimals) {
             try { writeln("SQLDECIMAL:", vendor, ":", z8_to_utf8(z8_sql_decimal_format(value, dialect))); }
             catch (Exception error) { writeln("SQLDECIMAL:", vendor, ":ERROR"); }
@@ -966,7 +968,7 @@ void main() {
         d_sql = [line for line in d_lines if line.startswith("SQLBOOL:")]
         if original_sql != d_sql or len(d_sql) != 40:
             raise SystemExit(f"SQL boolean formatting differs: original={original_sql!r}, D={d_sql!r}")
-        for prefix, count in (("SQLINT:", 32), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 40), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 44), ("SQLTEXTTEST:", 16), ("SQLGUID:", 8), ("SQLGUIDBOOL:", 8)):
+        for prefix, count in (("SQLINT:", 36), ("SQLINTBOOL:", 8), ("SQLDECIMAL:", 44), ("SQLDECIMALBOOL:", 16), ("SQLDECFUNC:", 24), ("SQLDECINT:", 12), ("SQLDECNAN:", 8), ("SQLSTRING:", 52), ("SQLSTRINGLEN:", 4), ("SQLSTRINGBOOL:", 24), ("SQLSEARCH:", 24), ("SQLSEARCHBOOL:", 24), ("SQLSEARCHCROSS:", 8), ("SQLCONV:", 8), ("SQLTEXTEXTRA:", 44), ("SQLTEXTTEST:", 16), ("SQLGUID:", 8), ("SQLGUIDBOOL:", 8)):
             original_lines = [line for line in output.splitlines() if line.startswith(prefix)]
             d_formatted = [line for line in d_lines if line.startswith(prefix)]
             if original_lines != d_formatted or len(d_formatted) != count:
