@@ -20,7 +20,8 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     shutil.copytree(language, source)
     (source / "Customer.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
-public class Customer extends Table {}
+import org.zenframework.z8.base.table.value.IntField;
+public class Customer extends Table { public IntField score; }
 ''', encoding="utf-8")
     (source / "LeftLink.bl").write_text('''
 import org.zenframework.z8.base.table.value.Link;
@@ -75,6 +76,16 @@ void main() {
     z8_field_bind_sql(link, "orders"w, "CustomerId"w);
     z8_field_bind_sql(customer.f_recordId(), "customers"w, "RecordId"w);
     assert(z8_sql_bool_format(z8_link_on(link), true) == `orders."CustomerId"=customers."RecordId"`w);
+    auto keySql = new Z8SqlGuid(Z8SqlGuidKind.field); keySql.field = customer.f_recordId();
+    auto complex = z8_sql_bool_binary!"&&"(z8_link_on(link), z8_sql_string_like(z8_sql_guid_toString(keySql), z8_sql_string_const("%5"w)));
+    auto fields = z8_sql_collect_fields(complex);
+    assert(fields.length == 2 && fields[0] is link && fields[1] is customer.f_recordId());
+    auto score = new Z8SqlInt(Z8SqlIntKind.field); score.field = customer.f_score;
+    auto sum = z8_sql_int_binary!"+"(score, z8_sql_int_const(1));
+    auto predicate = z8_sql_int_compare!">"(sum, z8_sql_int_const(2));
+    fields = z8_sql_collect_fields(z8_sql_bool_binary!"||"(complex, predicate));
+    assert(fields.length == 3 && fields[2] is customer.f_score);
+    sum.left = sum; assert(z8_sql_collect_fields(predicate).length == 0);
     auto replacement = P.m_customer(); P.m_assign(order, replacement);
     assert(z8_link_query(link) is replacement);
     P.m_assign(order, null); assert(z8_link_query(link) is null);

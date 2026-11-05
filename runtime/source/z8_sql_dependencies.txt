@@ -1,0 +1,53 @@
+// Collect field references without formatting SQL. Query planners use this to
+// discover links that occur only in filters, sorting or computed expressions.
+Z8Object[] z8_sql_collect_fields(Z8SqlPrimary expression) {
+    Z8Object[] result;
+    Z8SqlPrimary[] seen;
+    void add(Z8Object field) {
+        if (field is null) return;
+        foreach (existing; result) if (existing is field) return;
+        result ~= field;
+    }
+    void visit(Z8SqlPrimary token) {
+        if (token is null) return;
+        foreach (existing; seen) if (existing is token) return;
+        seen ~= token;
+        if (auto value = cast(Z8SqlBool)token) {
+            add(value.field); visit(value.left); visit(value.right); visit(value.alternative);
+            visit(value.numericLeft); visit(value.numericRight); visit(value.textLeft); visit(value.textRight); visit(value.textEscape);
+            visit(value.guidLeft); visit(value.guidRight); visit(value.dateLeft); visit(value.dateRight);
+            visit(value.spanLeft); visit(value.spanRight); visit(value.geometryLeft); visit(value.geometryRight);
+            visit(value.vectorValue); foreach (item; value.vectorItems) visit(item);
+        } else if (auto value = cast(Z8SqlInt)token) {
+            add(value.field); visit(value.left); visit(value.right); visit(value.condition); visit(value.decimalOperand);
+            visit(value.textOperand); visit(value.textPattern); visit(value.textPosition); visit(value.dateOperand);
+            visit(value.spanOperand); visit(value.geometryOperand);
+        } else if (auto value = cast(Z8SqlDecimal)token) {
+            add(value.field); visit(value.left); visit(value.right); visit(value.condition);
+            visit(value.textOperand); visit(value.textQuery); visit(value.geometryLeft); visit(value.geometryRight);
+        } else if (auto value = cast(Z8SqlString)token) {
+            add(value.field); visit(value.left); visit(value.right); visit(value.replacement); visit(value.flags);
+            visit(value.position); visit(value.length); visit(value.condition); visit(value.numericOperand);
+            visit(value.guidOperand); visit(value.dateOperand); visit(value.spanOperand); visit(value.binaryOperand); visit(value.geometryOperand);
+        } else if (auto value = cast(Z8SqlGuid)token) {
+            add(value.field); visit(value.left); visit(value.right); visit(value.condition);
+        } else if (auto value = cast(Z8SqlDate)token) {
+            add(value.field); visit(value.left); visit(value.right); visit(value.condition);
+            visit(value.textOperand); visit(value.quantity); visit(value.spanOperand);
+        } else if (auto value = cast(Z8SqlDatespan)token) {
+            add(value.field); visit(value.left); visit(value.right); visit(value.dateLeft); visit(value.dateRight);
+            visit(value.condition); visit(value.quantity);
+        } else if (auto value = cast(Z8SqlBinary)token) {
+            add(value.field);
+        } else if (auto value = cast(Z8SqlGeometry)token) {
+            add(value.field); visit(value.left); visit(value.right); visit(value.condition);
+            visit(value.x); visit(value.y); visit(value.srs); visit(value.intArgument); visit(value.decimalArgument);
+        } else if (auto value = cast(Z8SqlFieldToken)token) {
+            add(value.field);
+        } else if (cast(Z8SqlBoxedConstant)token is null) {
+            throw new Exception("unsupported SQL dependency node");
+        }
+    }
+    visit(expression);
+    return result;
+}
