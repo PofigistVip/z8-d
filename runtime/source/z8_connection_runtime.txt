@@ -1,0 +1,65 @@
+// The host supplies the current database connection for this thread.
+private enum z8_connection_name = "org.zenframework.z8.server.base.sql.Connection"w;
+interface IZ8DatabaseConnection {
+    void beginTransaction();
+    void commit();
+    void rollback();
+    void execute(wstring sql);
+    void flush();
+    IZ8QueryExecutor queryExecutor(Z8Object query);
+}
+private class Z8ConnectionState {
+    IZ8DatabaseConnection backend;
+    this(IZ8DatabaseConnection backend) { this.backend = backend; }
+}
+private IZ8DatabaseConnection z8_connection_current;
+IZ8DatabaseConnection z8_connection_set_current(IZ8DatabaseConnection backend) {
+    auto previous = z8_connection_current;
+    z8_connection_current = backend;
+    return previous;
+}
+IZ8DatabaseConnection z8_connection_current_backend() { return z8_connection_current; }
+private IZ8DatabaseConnection z8_connection_backend(Z8Object self) {
+    self = z8_nonnull(self);
+    auto state = cast(Z8ConnectionState)self.z8_get_native_state(z8_connection_name);
+    if (state is null || state.backend is null) throw new Exception("database connection is not configured");
+    return state.backend;
+}
+private Z8Object z8_connection_get() {
+    auto backend = z8_connection_current;
+    if (backend is null) throw new Exception("no current database connection");
+    auto wrapper = z8_native_new(z8_connection_name);
+    wrapper.z8_set_native_state(z8_connection_name, new Z8ConnectionState(backend));
+    return wrapper;
+}
+private void z8_connection_begin(Z8Object self) { z8_connection_backend(self).beginTransaction(); }
+private void z8_connection_commit(Z8Object self) { z8_connection_backend(self).commit(); }
+private void z8_connection_rollback(Z8Object self) { z8_connection_backend(self).rollback(); }
+private void z8_connection_execute(Z8Object self, wstring sql) { z8_connection_backend(self).execute(z8_string_required(sql)); }
+private void z8_connection_flush(Z8Object self) { z8_connection_backend(self).flush(); }
+private void z8_connection_call(Z8Object self, wstring name, Z8Array!Z8Primary parameters) {
+    z8_connection_backend(self);
+    throw new Exception("database stored procedure calls are not implemented");
+}
+private void z8_query_set_connection(Z8Object self, Z8Object connection) {
+    auto executor = z8_connection_backend(connection).queryExecutor(z8_nonnull(self));
+    if (executor is null) throw new Exception("database connection returned a null query executor");
+    z8_query_set_executor(self, executor);
+}
+private IZ8QueryExecutor z8_query_executor(Z8Object self) {
+    auto executor = z8_query_state(self).executor;
+    if (executor !is null) return executor;
+    auto backend = z8_connection_current_backend();
+    return backend is null ? null : backend.queryExecutor(self);
+}
+void z8_bind_builtin_connection() {
+    z8_native_bind(z8_connection_name ~ ".m_get"w, &z8_connection_get);
+    z8_native_bind(z8_connection_name ~ ".m_beginTransaction"w, &z8_connection_begin);
+    z8_native_bind(z8_connection_name ~ ".m_commit"w, &z8_connection_commit);
+    z8_native_bind(z8_connection_name ~ ".m_rollback"w, &z8_connection_rollback);
+    z8_native_bind(z8_connection_name ~ ".m_execute"w, &z8_connection_execute);
+    z8_native_bind(z8_connection_name ~ ".m_flush"w, &z8_connection_flush);
+    z8_native_bind(z8_connection_name ~ ".m_call"w, &z8_connection_call);
+    z8_native_bind(z8_query_name ~ ".m_setConnection"w, &z8_query_set_connection);
+}
+shared static this() { z8_bind_builtin_connection(); }

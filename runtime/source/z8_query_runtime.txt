@@ -202,7 +202,7 @@ private void z8_query_prepare_read(Z8Object self, ref Z8QueryReadRequest request
     }
 }
 private IZ8QueryCursor z8_query_execute_read(Z8Object self, Z8QueryReadRequest request) {
-    auto executor = z8_query_state(self).executor;
+    auto executor = z8_query_executor(self);
     if (executor is null) throw new Exception("query executor is not configured");
     IZ8QueryCursor cursor;
     scope(failure) if (cursor !is null) cursor.close();
@@ -213,7 +213,7 @@ private IZ8QueryCursor z8_query_execute_read(Z8Object self, Z8QueryReadRequest r
 }
 private void z8_query_open(Z8Object self, Z8QueryReadRequest request, bool useQueryLimit = true) {
     auto state = z8_query_state(self);
-    if (state.executor is null) throw new Exception("query executor is not configured");
+    if (z8_query_executor(self) is null) throw new Exception("query executor is not configured");
     z8_query_prepare_read(self, request);
     z8_query_close(self);
     if (useQueryLimit && request.limit < 0 && state.limit.present) request.limit = cast(int)state.limit.value;
@@ -238,7 +238,7 @@ private Z8Optional!bool z8_query_next(Z8Object self) {
 }
 private Z8Optional!long z8_query_count_where(Z8Object self, Z8SqlBool where) {
     auto state = z8_query_state(self);
-    auto counter = cast(IZ8QueryCounter)state.executor;
+    auto counter = cast(IZ8QueryCounter)z8_query_executor(self);
     if (counter is null) throw new Exception("query executor does not support count");
     auto saved = new Z8QuerySavedState(self);
     scope(exit) saved.restore();
@@ -251,7 +251,7 @@ private Z8Optional!long z8_query_count_where(Z8Object self, Z8SqlBool where) {
 }
 private Z8Optional!long z8_query_count(Z8Object self) { return z8_query_count_where(self, null); }
 private IZ8QueryWriter z8_query_writer(Z8Object self) {
-    auto writer = cast(IZ8QueryWriter)z8_query_state(self).executor;
+    auto writer = cast(IZ8QueryWriter)z8_query_executor(self);
     if (writer is null) throw new Exception("query executor does not support writes");
     return writer;
 }

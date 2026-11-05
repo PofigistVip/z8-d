@@ -22,6 +22,15 @@ inner rollback is not a savepoint and does not undo changes by itself. If a SQL
 error aborts the transaction, an outer commit reports an error and the caller
 must roll back. Do not mix these methods with raw `BEGIN`/`COMMIT`/`ROLLBACK`.
 
+`Z8PostgresDatabase` from `z8.database.connection` connects this client to the
+BL `Connection` API. Install it for the current thread with
+`z8_connection_set_current`, and restore the returned previous backend when the
+request ends. `Connection.get()` uses that backend; queries without an explicit
+executor use it and derive the table name from the BL query's `name` attribute.
+`Query.setConnection` binds a query to a specific connection. `flush()` is a
+no-op because this client executes statements immediately. BL `Connection.call`
+for stored procedures is not yet implemented.
+
 `Z8PostgresQueryExecutor` connects BL `Query` reads to PostgreSQL tables.
 Construct it with a connection, schema and root table name, then attach it to
 the generated query with `z8_query_set_executor`. It supports explicit selected
