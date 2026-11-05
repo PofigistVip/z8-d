@@ -1,11 +1,12 @@
 module z8.webserver.civetweb;
 
 import core.memory : GC;
+import core.internal.gc.proxy : gc_getProxy;
 import core.thread : Thread, thread_attachThis, thread_detachThis;
 import std.algorithm : min;
 import std.conv : to;
 import std.json : JSONValue;
-import std.string : fromStringz, toStringz, indexOf, startsWith, toLower;
+import std.string : fromStringz, toStringz, indexOf, startsWith, toLower, split;
 import z8.runtime;
 
 // The declarations below follow the pinned CivetWeb 1.16 public C header.
@@ -25,7 +26,13 @@ extern(C) {
         int remotePort, serverPort, isSsl;
     }
     private struct MgServerPort { int protocol, port, isSsl, isRedirect, reserved1, reserved2, reserved3, reserved4; }
-    private MgContext* mg_start(const(void)* callbacks, void* userData, const(char)** options);
+    private struct MgCallbacks {
+        void*[15] unused;
+        void* function(const(MgContext)*, int) nothrow initThread;
+        void function(const(MgContext)*, int, void*) nothrow exitThread;
+        void* initConnection;
+    }
+    private MgContext* mg_start(const(MgCallbacks)* callbacks, void* userData, const(char)** options);
     private void mg_stop(MgContext* context);
     private alias MgHandler = int function(MgConnection* connection, void* data) nothrow;
     private void mg_set_request_handler(MgContext* context, const(char)* uri, MgHandler callback, void* data);
@@ -36,6 +43,7 @@ extern(C) {
     private int mg_write(MgConnection* connection, const(void)* data, size_t length);
     private void rt_moduleTlsCtor();
     private void rt_moduleTlsDtor();
+    private void thread_setThis(void* thread) nothrow @nogc;
 }
 
 class Z8HttpRequest {
@@ -44,7 +52,6 @@ class Z8HttpRequest {
 }
 private class BadRequest : Exception { this(string text) { super(text); } }
 private class BodyTooLarge : Exception { this() { super("request body too large"); } }
-private class UnsupportedMedia : Exception { this() { super("multipart requests are not implemented"); } }
 
 private string cString(const(char)* value) { return value is null ? "" : value.fromStringz.idup; }
 private int hexDigit(char c) {
@@ -77,6 +84,113 @@ private void addParameters(Z8StringMap parameters, string encoded) {
         if (!parameters.z8_containsKey(key)) parameters.z8_add(key, value);
         if (end < 0) break;
         start = stop + 1;
+    }
+}
+// Split header parameters while preserving quoted semicolons and escaped quotes.
+private string[string] headerParameters(string header, out string kind) {
+    import std.string : strip;
+    string[string] result;
+    size_t i;
+    while (i < header.length && header[i] != ';') ++i;
+    kind = header[0 .. i].strip.toLower();
+    while (i < header.length) {
+        ++i;
+        while (i < header.length && (header[i] == ' ' || header[i] == '\t')) ++i;
+        auto start = i;
+        while (i < header.length && header[i] != '=' && header[i] != ';') ++i;
+        if (i == header.length || header[i] != '=') throw new BadRequest("invalid header parameter");
+        auto key = header[start .. i].strip.toLower();
+        if (!key.length) throw new BadRequest("empty header parameter");
+        ++i;
+        while (i < header.length && (header[i] == ' ' || header[i] == '\t')) ++i;
+        string value;
+        if (i < header.length && header[i] == '"') {
+            ++i;
+            char[] decoded;
+            bool closed;
+            while (i < header.length) {
+                char c = header[i++];
+                if (c == '"') { closed = true; break; }
+                if (c == '\\') { if (i == header.length) throw new BadRequest("invalid quoted header"); c = header[i++]; }
+                decoded ~= c;
+            }
+            if (!closed) throw new BadRequest("unterminated quoted header");
+            value = decoded.idup;
+            while (i < header.length && (header[i] == ' ' || header[i] == '\t')) ++i;
+            if (i < header.length && header[i] != ';') throw new BadRequest("invalid quoted header");
+        } else {
+            start = i;
+            while (i < header.length && header[i] != ';') ++i;
+            value = header[start .. i].strip;
+        }
+        result[key] = value;
+    }
+    return result;
+}
+private wstring multipartText(string value) {
+    try { return z8_string_new(value.length ? value.to!wstring : ""w); }
+    catch (Exception) { throw new BadRequest("invalid UTF-8 in multipart data"); }
+}
+private ptrdiff_t findBytes(const(ubyte)[] data, string needle, size_t start) {
+    if (start > data.length || needle.length > data.length - start) return -1;
+    foreach (i; start .. data.length - needle.length + 1)
+        if (data[i .. i + needle.length] == cast(const(ubyte)[])needle) return cast(ptrdiff_t)i;
+    return -1;
+}
+private void addMultipart(Z8ApplicationRequest application, string contentType, const(ubyte)[] data) {
+    string kind;
+    auto attributes = headerParameters(contentType, kind);
+    auto boundary = "boundary" in attributes;
+    if (boundary is null || !boundary.length || boundary.length > 70) throw new BadRequest("invalid multipart boundary");
+    foreach (c; *boundary) if (c < 32 || c >= 127) throw new BadRequest("invalid multipart boundary");
+    auto delimiter = "--" ~ *boundary;
+    if (data.length < delimiter.length || data[0 .. delimiter.length] != cast(const(ubyte)[])delimiter)
+        throw new BadRequest("missing multipart boundary");
+    size_t pos = delimiter.length;
+    for (;;) {
+        if (pos + 2 > data.length) throw new BadRequest("incomplete multipart boundary");
+        if (data[pos .. pos + 2] == cast(const(ubyte)[])"--") {
+            pos += 2;
+            if (pos != data.length && (pos + 2 > data.length || data[pos .. pos + 2] != cast(const(ubyte)[])"\r\n"))
+                throw new BadRequest("invalid final multipart boundary");
+            return;
+        }
+        if (data[pos .. pos + 2] != cast(const(ubyte)[])"\r\n") throw new BadRequest("invalid multipart boundary");
+        pos += 2;
+        auto headerEnd = findBytes(data, "\r\n\r\n", pos);
+        if (headerEnd < 0) throw new BadRequest("missing multipart headers");
+        auto headers = cast(string)data[pos .. headerEnd];
+        string disposition;
+        foreach (line; headers.split("\r\n")) {
+            auto colon = line.indexOf(':');
+            if (colon <= 0) throw new BadRequest("invalid multipart header");
+            import std.string : strip;
+            if (line[0 .. colon].strip.toLower() == "content-disposition") {
+                if (disposition.length) throw new BadRequest("duplicate content disposition");
+                disposition = line[colon + 1 .. $].strip;
+            }
+        }
+        auto part = headerParameters(disposition, kind);
+        auto name = "name" in part;
+        if (kind != "form-data" || name is null) throw new BadRequest("invalid content disposition");
+        pos = cast(size_t)headerEnd + 4;
+        auto marker = "\r\n" ~ delimiter;
+        ptrdiff_t end;
+        for (;;) {
+            end = findBytes(data, marker, pos);
+            if (end < 0) throw new BadRequest("missing closing multipart boundary");
+            auto after = cast(size_t)end + marker.length;
+            if (after + 2 <= data.length && (data[after .. after + 2] == cast(const(ubyte)[])"\r\n" ||
+                    data[after .. after + 2] == cast(const(ubyte)[])"--")) break;
+            pos = cast(size_t)end + 2;
+        }
+        // Search may have skipped boundary-like bytes; content begins after headers.
+        auto contentStart = cast(size_t)headerEnd + 4;
+        auto content = data[contentStart .. cast(size_t)end];
+        auto filename = "filename" in part;
+        if (filename !is null) application.files.z8_add(z8_file_from_upload(multipartText(*filename), content));
+        else application.parameters.z8_add(multipartText(*name), multipartText(cast(string)content));
+        pos = cast(size_t)end + marker.length;
     }
 }
 private void writeAll(MgConnection* connection, string data) {
@@ -123,7 +237,9 @@ class Z8CivetServer {
             "num_threads\0".ptr, "4\0".ptr, "enable_keep_alive\0".ptr, "no\0".ptr, null];
         GC.setAttr(cast(void*)this, GC.BlkAttr.NO_MOVE);
         GC.addRoot(cast(void*)this);
-        context = mg_start(null, null, options.ptr);
+        MgCallbacks callbacks;
+        callbacks.initThread = &initWorker; callbacks.exitThread = &exitWorker;
+        context = mg_start(&callbacks, null, options.ptr);
         if (context is null) { GC.removeRoot(cast(void*)this); throw new Exception("CivetWeb could not start"); }
         mg_set_request_handler(context, "/\0".ptr, &dispatch, cast(void*)this);
     }
@@ -149,10 +265,12 @@ class Z8CivetServer {
             auto transfer = cString(mg_get_header(connection, "Transfer-Encoding\0".ptr)).toLower();
             request.body = readBody(connection, info.contentLength, transfer == "chunked", bodyLimit);
             auto type = request.contentType.toLower();
-            if (type.startsWith("multipart/form-data")) throw new UnsupportedMedia();
             auto application = new Z8ApplicationRequest();
-            addParameters(application.parameters, request.query);
-            if (type.startsWith("application/x-www-form-urlencoded")) addParameters(application.parameters, cast(string)request.body);
+            if (type.startsWith("multipart/form-data")) addMultipart(application, request.contentType, request.body);
+            else {
+                addParameters(application.parameters, request.query);
+                if (type.startsWith("application/x-www-form-urlencoded")) addParameters(application.parameters, cast(string)request.body);
+            }
             application.parameters.z8_add("ip"w, request.remoteAddress.to!wstring);
             auto previous = z8_application_set_request(application);
             scope (exit) z8_application_set_request(previous);
@@ -164,21 +282,28 @@ class Z8CivetServer {
             data["status"] = JSONValue(302); data["redirect"] = JSONValue(redirect.location.to!string);
             return respond(connection, 302, "Found", JSONValue(data).toString());
         } catch (BodyTooLarge) { return respond(connection, 413, "Content Too Large", `{"error":"request body too large"}`); }
-        catch (UnsupportedMedia) { return respond(connection, 415, "Unsupported Media Type", `{"error":"unsupported media type"}`); }
         catch (BadRequest) { return respond(connection, 400, "Bad Request", `{"error":"invalid request"}`); }
         catch (Throwable) { return respond(connection, 500, "Internal Server Error", `{"error":"internal server error"}`); }
     }
 }
-private extern(C) int dispatch(MgConnection* connection, void* data) nothrow {
-    bool attached;
+private extern(C) void* initWorker(const(MgContext)* context, int type) nothrow {
+    if (type != 1) return null;
     try {
-        attached = Thread.getThis() !is null;
-        if (!attached) {
-            thread_attachThis();
-            try { rt_moduleTlsCtor(); }
-            catch (Throwable error) { thread_detachThis(); throw error; }
-        }
-        scope (exit) if (!attached) { rt_moduleTlsDtor(); thread_detachThis(); }
-        return (cast(Z8CivetServer)data).handle(connection);
-    } catch (Throwable) { return 500; }
+        thread_attachThis();
+        try { rt_moduleTlsCtor(); }
+        catch (Throwable error) { thread_detachThis(); thread_setThis(null); throw error; }
+        return cast(void*)1;
+    } catch (Throwable) { return null; }
+}
+private extern(C) void exitWorker(const(MgContext)* context, int type, void* initialized) nothrow {
+    if (type != 1 || initialized is null) return;
+    try { rt_moduleTlsDtor(); } catch (Throwable) { }
+    gc_getProxy().cleanupThread(Thread.getThis());
+    thread_detachThis();
+    thread_setThis(null);
+}
+private extern(C) int dispatch(MgConnection* connection, void* data) nothrow {
+    if (Thread.getThis() is null) return 500;
+    try { return (cast(Z8CivetServer)data).handle(connection); }
+    catch (Throwable) { return 500; }
 }

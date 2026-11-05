@@ -11,10 +11,13 @@ The host owns the server and must call `stop()` from outside a request handler.
 Callbacks may run concurrently and must synchronize their own shared state.
 `Z8HttpRequest` exposes the HTTP method, decoded path, raw query, content type,
 remote address, and body. Query strings and URL-encoded forms populate the
-application parameters; for repeated keys the first value is used and `ip` is
-set from the connection. The default maximum body is 1 MiB; the constructor
-accepts another positive byte limit. Oversized, malformed, and unsupported
-multipart requests return HTTP 413, 400, and 415 respectively. A `Z8Redirect`
+application parameters; for repeated keys the first value is used. Multipart
+forms instead use the last value for repeated fields, ignore query parameters,
+and expose uploaded files through `Application.requestFiles()`. The `ip`
+parameter is set from the connection. The default maximum body is 1 MiB; the
+constructor accepts another positive byte limit. Multipart content is buffered
+in memory within this limit. Oversized and malformed requests return HTTP 413
+and 400 respectively. A `Z8Redirect`
 produces a JSON response with status 302. Unexpected errors return HTTP 500.
 
 To compile the CivetWeb object on Windows with MSVC x64 or on Unix with `cc`:
@@ -31,5 +34,5 @@ build and runs concurrent loopback HTTP requests through a BL handler.
 
 The bundled test build enables WebSockets, disables CGI, and does not include
 TLS. It is suitable for local integration. Session handling, authorization,
-application routing, multipart uploads, static assets, the full Z8 response
+application routing, static assets, the full Z8 response
 protocol, and TLS-capable deployment remain to be implemented.
