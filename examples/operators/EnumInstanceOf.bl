@@ -1,6 +1,7 @@
 public class EnumInstanceOf {
     private static int calls;
     private static ProbeEnum next() { calls += 1; return ProbeEnum.One; }
+    private static int missingInt() { calls += 1; return null; }
     public static int run() {
         ProbeEnum value = ProbeEnum.One;
         if (!(value instanceof ProbeEnum)) return 1;
@@ -16,6 +17,10 @@ public class EnumInstanceOf {
         ProbeA first;
         if (first instanceof ProbeB) return 8;
         if (ProbeEnum.One instanceof ProbeA) return 9;
+        if ((1 instanceof ProbeA) || (object instanceof int)) return 10;
+        if ((next() instanceof int) || calls != 2) return 11;
+        if ((missingInt() instanceof bool) || calls != 3) return 12;
+        if (1 instanceof bool) return 13;
         return 221;
     }
 }

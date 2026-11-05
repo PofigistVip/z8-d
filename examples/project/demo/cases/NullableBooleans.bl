@@ -8,6 +8,7 @@ public class NullableBooleans {
         bool literalBranch = false ? true : null;
         if (literalBranch != null || !(true ? true : null)) return 13;
         bool value = null;
+        if ((value instanceof bool) || !(false instanceof bool)) return 15;
         if (value != null || field != null || pass(value) != null) return 1;
         if (!(bool)(!false)) return 14;
         bool casted = (bool)value;

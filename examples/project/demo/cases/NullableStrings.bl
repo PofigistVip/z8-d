@@ -6,6 +6,7 @@ public class NullableStrings {
     private static int effectIndex() { effects += 1; return 1; }
     public static int run() {
         string value = null;
+        if ((value instanceof string) || !("present" instanceof string)) return 23;
         if (value != null || field != null || pass(value) != null) return 1;
         field = pass(value);
         if (field != null) return 2;

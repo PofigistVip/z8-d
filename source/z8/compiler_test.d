@@ -435,7 +435,8 @@ unittest {
     rejectsSources([invalidCast, arrayItem], "A.bl");
     auto unrelatedInstanceOf = SourceUnit("pkg.A", "A.bl", "class A { static bool f() { A a; return a instanceof B; } }");
     compileSources([unrelatedInstanceOf, arrayItem]);
-    rejects("class A { static bool f() { return 1 instanceof A; } }");
+    compile("class A { static bool f() { return 1 instanceof A; } }");
+    compile("class A { static bool f(int x) { return x instanceof int; } }");
     rejects("class A { static bool f(A x) { return x instanceof A == true; } }");
     auto badCastValue = SourceUnit("pkg.A", "A.bl", "class A { static B f() { return (B)1; } }");
     rejectsSources([badCastValue, arrayItem], "A.bl");

@@ -1333,27 +1333,44 @@ class Checker {
                 if (!matches(e.left, e.castType)) fail("unsupported type cast", e.token);
                 return e.castType;
             case ExprKind.instanceOf:
-                auto primarySource = typeOf(e.left);
-                if (primarySource == ValueType.primaryType) {
-                    switch (e.token.text) {
-                        case "int": e.castType = ValueType.intType; break;
-                        case "bool": e.castType = ValueType.boolType; break;
-                        case "decimal": e.castType = ValueType.decimalType; break;
-                        case "string": e.castType = ValueType.stringType; break;
-                        case "guid": e.castType = ValueType.guidType; break;
-                        case "binary": e.castType = ValueType.binaryType; break;
-                        case "datespan": e.castType = ValueType.datespanType; break;
-                        case "geometry": e.castType = ValueType.geometryType; break;
-                        case "date": e.castType = ValueType.dateType; break;
-                        case "file": e.castType = ValueType.fileType; break;
-                        case "primary": e.castType = ValueType.primaryType; break;
-                        default: fail("unsupported primary instanceof target", e.token);
-                    }
-                    e.primaryInstanceOf = true;
+                auto sourceType = typeOf(e.left);
+                ValueType targetType;
+                switch (e.token.text) {
+                    case "int": targetType = ValueType.intType; break;
+                    case "bool": targetType = ValueType.boolType; break;
+                    case "decimal": targetType = ValueType.decimalType; break;
+                    case "string": targetType = ValueType.stringType; break;
+                    case "guid": targetType = ValueType.guidType; break;
+                    case "binary": targetType = ValueType.binaryType; break;
+                    case "datespan": targetType = ValueType.datespanType; break;
+                    case "geometry": targetType = ValueType.geometryType; break;
+                    case "date": targetType = ValueType.dateType; break;
+                    case "file": targetType = ValueType.fileType; break;
+                    case "primary": targetType = ValueType.primaryType; break;
+                    default: targetType = ValueType.voidType; break;
+                }
+                if (targetType != ValueType.voidType && sourceType == ValueType.primaryType) {
+                    e.castType = targetType; e.primaryInstanceOf = true;
+                    return ValueType.boolType;
+                }
+                auto baseSource = isOptionalPrimitive(sourceType) ? optionalBaseType(sourceType) :
+                    sourceType == ValueType.nullableString ? ValueType.stringType : sourceType;
+                bool scalar = [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType,
+                    ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType,
+                    ValueType.dateType, ValueType.fileType].canFind(baseSource);
+                if (targetType != ValueType.voidType) {
+                    if (sourceType == ValueType.voidType) fail("instanceof requires a value", e.token);
+                    e.inferredType = sourceType;
+                    e.falseInstanceOf = !scalar || (targetType != ValueType.primaryType && targetType != baseSource);
+                    e.scalarInstanceOf = !e.falseInstanceOf;
                     return ValueType.boolType;
                 }
                 auto target = resolveClass(currentProgram, e.token.text, e.token);
-                auto sourceType = typeOf(e.left);
+                if (scalar || sourceType == ValueType.primaryType || isArray(sourceType) || isMap(sourceType)) {
+                    e.inferredType = sourceType;
+                    e.falseInstanceOf = true;
+                    return ValueType.boolType;
+                }
                 if (target.isEnum || sourceType == ValueType.enumType) {
                     if (![ValueType.selfType, ValueType.enumType, ValueType.nullType].canFind(sourceType))
                         fail("instanceof requires an object reference", e.token);

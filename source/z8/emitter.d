@@ -375,6 +375,16 @@ private string emitExprRaw(Expression e) {
             if (e.primaryCast) return "z8_primary_cast!(" ~ dType(e.castType) ~ ")(" ~ emitExpr(e.left) ~ ")";
             return e.castType == ValueType.selfType ? "z8_cast!(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")" : emitExpr(e.left);
         case ExprKind.instanceOf:
+            if (e.falseInstanceOf) {
+                if (e.inferredType == ValueType.nullType) return "false";
+                return "(() { auto z8_value = " ~ emitExpr(e.left) ~ "; return false; })()";
+            }
+            if (e.scalarInstanceOf) {
+                if (isOptionalPrimitive(e.inferredType)) return "(!z8_optional_is_null(" ~ emitExpr(e.left) ~ "))";
+                if ([ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(e.inferredType))
+                    return "(() { auto z8_value = " ~ emitExpr(e.left) ~ "; return true; })()";
+                return "(" ~ emitExpr(e.left) ~ " !is null)";
+            }
             if (e.primaryInstanceOf) return "z8_primary_is!(" ~ dType(e.castType) ~ ")(" ~ emitExpr(e.left) ~ ")";
             if (e.objectInstanceOf) return "(cast(" ~ e.objectClass.emittedName ~ ")(cast(Object)(" ~ emitExpr(e.left) ~ ")) !is null)";
             return "(cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ") !is null)";

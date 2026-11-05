@@ -9,6 +9,8 @@ public class NullableIntegers {
         int literalBranch = false ? 3 : null;
         if (literalBranch != null || (true ? 3 : null) != 3) return 14;
         int value = null;
+        if ((value instanceof int) || (value instanceof primary)) return 15;
+        if (!(1 instanceof int) || !(1 instanceof primary)) return 16;
         if (value != null || field != null || pass(value) != null) return 1;
         field = int.parse("");
         if (field != null || missing() != null) return 2;
@@ -22,6 +24,7 @@ public class NullableIntegers {
         if (selected != null) return 10;
         if ((value ?: fallback()) != 7 || effects != 1) return 3;
         value = 4;
+        if (!(value instanceof int) || !(value instanceof primary)) return 17;
         if (value == null || pass(value) != 4 || (value ?: fallback()) != 4 || effects != 1) return 4;
         value += 3;
         if (value != 7) return 5;

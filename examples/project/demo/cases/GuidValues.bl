@@ -1,6 +1,7 @@
 public class GuidValues {
     public static int run() {
         guid zero;
+        if (!(zero instanceof guid) || !(zero instanceof primary)) return 43;
         if (zero != guid.Null || zero.toString() != "00000000-0000-0000-0000-000000000000") return 1;
         guid value = '00112233-4455-6677-8899-AABBCCDDEEFF';
         if (value.toString() != "00112233-4455-6677-8899-AABBCCDDEEFF") return 2;

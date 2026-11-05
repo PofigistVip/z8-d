@@ -31,7 +31,7 @@ class Expression {
     string nativeField;
     bool makeFile, makeException, convertToDate;
     bool dateBinary, fileBinary;
-    bool primaryCast, primaryInstanceOf, objectInstanceOf;
+    bool primaryCast, primaryInstanceOf, objectInstanceOf, scalarInstanceOf, falseInstanceOf;
     bool typedInitializer;
     ValueType initializerType;
     string initializerObjectName;
