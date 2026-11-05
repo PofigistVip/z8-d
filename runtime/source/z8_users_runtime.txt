@@ -65,6 +65,19 @@ void z8_users_on_new(Z8Object self) {
     if (!z8_field_is_changed(password)) z8_field_set(password, z8_primary_box("d41d8cd98f00b204e9800998ecf8427e"w));
     if (!z8_field_is_changed(changePassword)) z8_field_set(changePassword, z8_primary_box(true));
 }
+private bool z8_users_is_builtin(Z8Guid id) {
+    return id !is null && (id == z8_user_system || id == z8_user_administrator);
+}
+void z8_users_before_write(Z8Object self, Z8Guid id, bool create) {
+    auto state = z8_users_state(self);
+    if (!create && z8_users_is_builtin(id) && z8_field_is_changed(state.fields[10]) &&
+        z8_optional_require(z8_primary_cast!bool(z8_field_default_value(state.fields[10]))))
+        throw new Exception("Builtin users ban state can not be changed");
+    if (z8_field_is_changed(state.fields[14])) z8_field_set(state.fields[15], z8_primary_box(z8_date_now()));
+}
+void z8_users_before_destroy(Z8Guid id) {
+    if (z8_users_is_builtin(id)) throw new Exception("Builtin users can not be deleted");
+}
 private Z8Guid* z8_user_system_address() { return &z8_user_system; }
 private Z8Guid* z8_user_administrator_address() { return &z8_user_administrator; }
 shared static this() {

@@ -38,6 +38,10 @@ void z8_roles_initialize_static_records(Z8Object self) {
         self.z8_add_static_record(id, values);
     }
 }
+void z8_roles_before_destroy(Z8Guid id) {
+    if (id !is null && (id == z8_role_administrator || id == z8_role_user || id == z8_role_guest))
+        throw new Exception("Builtin roles can not be deleted");
+}
 private Z8Guid* z8_role_administrator_address() { return &z8_role_administrator; }
 private Z8Guid* z8_role_user_address() { return &z8_role_user; }
 private Z8Guid* z8_role_guest_address() { return &z8_role_guest; }

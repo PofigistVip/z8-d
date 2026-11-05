@@ -51,8 +51,10 @@ table events; it expects a clean table instance and leaves transaction control
 to the caller. Built-in Users and Roles tables are rejected until their special
 rules for preserving credentials and permissions are implemented.
 Users' and Roles' native fields, built-in identifiers and Java-defined static
-record metadata are available; authorization behavior, lock enforcement and
-applying these system records to the database are still pending.
+record metadata are available. Built-in user deletion is rejected, while the
+built-in role deletion and user-ban checks follow Z8's user-event setting.
+General authorization and applying these system records to the database are
+still pending.
 The native `Users.onNew` defaults mirror the Java implementation, including its
 default password value and `changePassword` flag; explicitly supplied values
 are preserved even when user-level events are disabled.

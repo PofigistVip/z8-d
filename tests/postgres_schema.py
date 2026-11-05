@@ -110,6 +110,9 @@ public class Probe {
     public static guid administratorUser() { return Users.Administrator; }
     public static void createUser(Users value, guid id) { value.create(id); }
     public static void createCustomUser(Users value, guid id) { value.password = "custom"; value.changePassword = false; value.create(id); }
+    public static void banUser(Users value, guid id, bool banned) { value.banned = banned; value.update(id); }
+    public static void deleteUser(Users value, guid id) { value.destroy(id); }
+    public static void deleteRole(Roles value, guid id) { value.destroy(id); }
     public static guid administratorRole() { return Roles.Administrator; }
     public static guid userRole() { return Roles.User; }
     public static guid guestRole() { return Roles.Guest; }
@@ -325,11 +328,37 @@ void main(string[] args) {
     auto suppressed = new Z8ApplicationRequest(); suppressed.setEventsLevel(Z8EventsLevel.none);
     auto savedRequest = z8_application_set_request(suppressed);
     P.m_createUser(P.m_users(), z8_guid_create(72));
-    z8_application_set_request(savedRequest); z8_connection_set_current(savedBackend);
+    bool cannotDeleteSystem;
+    try { P.m_deleteUser(P.m_users(), P.m_systemUser()); } catch (Exception) { cannotDeleteSystem = true; }
+    assert(cannotDeleteSystem);
+    z8_application_set_request(savedRequest);
     auto createdUsers = db.execute(`SELECT "Password", "Change Password" FROM "z8_test"."SystemUsers" ORDER BY "RecordId"`);
     assert(createdUsers.rows.length == 3 && createdUsers.rows[0][0].text == "d41d8cd98f00b204e9800998ecf8427e" && createdUsers.rows[0][1].text == "1");
     assert(createdUsers.rows[1][0].text == "custom" && createdUsers.rows[1][1].text == "0");
     assert(createdUsers.rows[2][0].text == "d41d8cd98f00b204e9800998ecf8427e" && createdUsers.rows[2][1].text == "1");
+    db.execute(`INSERT INTO "z8_test"."SystemUsers" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000001')`);
+    bool cannotBanSystem;
+    try { P.m_banUser(P.m_users(), P.m_systemUser(), z8_optional_wrap(true)); } catch (Exception) { cannotBanSystem = true; }
+    assert(cannotBanSystem && db.execute(`SELECT "Banned" FROM "z8_test"."SystemUsers" WHERE "RecordId" = '00000000-0000-0000-0000-000000000001'`).rows[0][0].text == "0");
+    P.m_banUser(P.m_users(), P.m_systemUser(), z8_optional_wrap(false));
+    P.m_banUser(P.m_users(), z8_guid_create(70), z8_optional_wrap(true));
+    assert(db.execute(`SELECT "Banned" FROM "z8_test"."SystemUsers" WHERE "RecordId" = '00000000-0000-0000-0000-000000000046'`).rows[0][0].text == "1");
+    auto verifiedUser = P.m_users();
+    foreach (field; z8_query_declared_fields(verifiedUser, true))
+        if (field.z8_index() == "verification"w) z8_field_set(field, z8_primary_box("token"w));
+    P.m_createUser(verifiedUser, z8_guid_create(73));
+    assert(db.execute(`SELECT "Verification Modified At" > 0 FROM "z8_test"."SystemUsers" WHERE "RecordId" = '00000000-0000-0000-0000-000000000049'`).rows[0][0].text == "t");
+    db.execute(roleDDL);
+    db.execute(`INSERT INTO "z8_test"."SystemRoles" ("RecordId") VALUES ('DC08CA72-C668-412F-91B7-022F1C82AC09')`);
+    bool cannotDeleteRole;
+    try { P.m_deleteRole(roleTable, P.m_administratorRole()); } catch (Exception) { cannotDeleteRole = true; }
+    assert(cannotDeleteRole);
+    auto disabled = new Z8ApplicationRequest(); disabled.setEventsLevel(Z8EventsLevel.none);
+    savedRequest = z8_application_set_request(disabled);
+    P.m_deleteRole(roleTable, P.m_administratorRole());
+    z8_application_set_request(savedRequest);
+    assert(db.execute(`SELECT count(*) FROM "z8_test"."SystemRoles"`).rows[0][0].text == "0");
+    z8_connection_set_current(savedBackend);
     db.execute(`ALTER TABLE "z8_test"."StaticSample" DROP CONSTRAINT "StaticSample_pkey", ADD PRIMARY KEY ("Label")`);
     differences = z8_postgres_compare_table(expectedStatic, z8_postgres_describe_table(db, "z8_test"w, "StaticSample"w));
     bool changedKey;
