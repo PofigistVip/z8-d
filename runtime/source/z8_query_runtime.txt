@@ -26,6 +26,13 @@ interface IZ8QueryExecutor {
 interface IZ8QueryCounter {
     long count(Z8Object query, Z8QueryReadRequest request);
 }
+// Writer operations receive the affected fields; values are their defaults,
+// matching Insert/Update in Z8 even while a read cursor is attached.
+interface IZ8QueryWriter {
+    void insert(Z8Object query, Z8Object[] fields);
+    long update(Z8Object query, Z8Guid id, Z8Object[] fields);
+    long destroy(Z8Object query, Z8Guid id);
+}
 private interface IZ8QueryLockCell { Z8QueryReadLock get(); }
 private class Z8QueryLockCell(T) : IZ8QueryLockCell {
     T value;
@@ -188,6 +195,46 @@ private Z8Optional!long z8_query_count_where(Z8Object self, Z8SqlBool where) {
     return z8_optional_wrap(cast(long)cast(int)counter.count(self, request));
 }
 private Z8Optional!long z8_query_count(Z8Object self) { return z8_query_count_where(self, null); }
+private IZ8QueryWriter z8_query_writer(Z8Object self) {
+    auto writer = cast(IZ8QueryWriter)z8_query_state(self).executor;
+    if (writer is null) throw new Exception("query executor does not support writes");
+    return writer;
+}
+private void z8_query_default_event(Z8Object self) { z8_nonnull(self); }
+private void z8_query_default_record_event(Z8Object self, Z8Guid id) { z8_nonnull(self); }
+private Z8Guid z8_query_create_id(Z8Object self, Z8Guid id) {
+    auto writer = z8_query_writer(self);
+    self.z8_query_virtual_onNew();
+    auto fields = z8_query_declared_fields(self, true);
+    auto key = z8_query_primary_key(self);
+    if (key !is null && !z8_field_is_changed(key)) z8_field_set(key, z8_primary_box(id));
+    self.z8_query_virtual_beforeCreate(id);
+    writer.insert(self, fields);
+    self.z8_query_virtual_afterCreate(id);
+    auto result = key is null ? id : z8_primary_cast!Z8Guid(z8_field_default_value(key));
+    foreach (field; fields) z8_field_reset(field);
+    return result;
+}
+private Z8Guid z8_query_create(Z8Object self) { return z8_query_create_id(self, z8_guid_create_random()); }
+private Z8Optional!long z8_query_update_id(Z8Object self, Z8Guid id) {
+    auto writer = z8_query_writer(self);
+    if (id !is null && id == z8_guid_zero()) return z8_optional_wrap(0L);
+    if (id !is null) self.z8_query_virtual_beforeUpdate(id);
+    Z8Object[] changed;
+    foreach (field; z8_query_declared_fields(self, true)) if (z8_field_is_changed(field)) changed ~= field;
+    auto result = changed.length ? writer.update(self, id, changed) : 0L;
+    if (id !is null) self.z8_query_virtual_afterUpdate(id);
+    foreach (field; changed) z8_field_reset(field);
+    return z8_optional_wrap(cast(long)cast(int)result);
+}
+private Z8Optional!long z8_query_destroy_id(Z8Object self, Z8Guid id) {
+    auto writer = z8_query_writer(self);
+    if (id !is null && id == z8_guid_zero()) return z8_optional_wrap(0L);
+    self.z8_query_virtual_beforeDestroy(id);
+    auto result = writer.destroy(self, id);
+    self.z8_query_virtual_afterDestroy(id);
+    return z8_optional_wrap(cast(long)cast(int)result);
+}
 private void z8_query_read_request(Z8Object self, Z8ObjectArray!Z8Object fields, Z8ObjectArray!Z8Object sort,
                                    Z8SqlBool where, Z8Optional!long start, Z8Optional!long limit) {
     Z8QueryReadRequest request;
@@ -340,6 +387,9 @@ void z8_bind_builtin_query() {
     z8_native_bind(p ~ "m_where"w, &z8_query_default_filter);
     z8_native_bind(p ~ "m_having"w, &z8_query_default_filter);
     z8_native_bind(p ~ "m_scope"w, &z8_query_default_filter);
+    z8_native_bind(p ~ "m_onNew"w, &z8_query_default_event);
+    foreach (name; ["beforeCreate"w, "afterCreate"w, "beforeUpdate"w, "afterUpdate"w, "beforeDestroy"w, "afterDestroy"w])
+        z8_native_bind(p ~ "m_"w ~ name, &z8_query_default_record_event);
     z8_native_bind(p ~ "m_setWhere"w, &z8_query_set_where);
     z8_native_bind(p ~ "m_addWhere"w, &z8_query_add_where);
     z8_native_bind(p ~ "m_addHaving"w, &z8_query_add_having);
@@ -368,6 +418,10 @@ void z8_bind_builtin_query() {
     z8_native_bind(p ~ "m_next"w, &z8_query_next);
     z8_native_bind(p ~ "m_count"w, &z8_query_count);
     z8_native_bind(p ~ "m_count"w, &z8_query_count_where);
+    z8_native_bind(p ~ "m_create"w, &z8_query_create);
+    z8_native_bind(p ~ "m_create"w, &z8_query_create_id);
+    z8_native_bind(p ~ "m_update"w, &z8_query_update_id);
+    z8_native_bind(p ~ "m_destroy"w, &z8_query_destroy_id);
     z8_native_bind(p ~ "m_close"w, &z8_query_close);
 }
 shared static this() { z8_bind_builtin_query(); }

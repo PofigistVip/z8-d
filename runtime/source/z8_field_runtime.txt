@@ -235,6 +235,8 @@ void z8_field_set(Z8Object self, Z8Primary value) {
     state.value = value;
 }
 void z8_field_set_default(Z8Object self, Z8Primary value) { z8_field_state(self).value = value; }
+Z8Primary z8_field_default_value(Z8Object self) { return z8_field_state(self).value; }
+bool z8_field_is_changed(Z8Object self) { return z8_field_state(self).changed; }
 void z8_field_set_cursor(Z8Object self, IZ8FieldCursor cursor) { z8_field_state(self).cursor = cursor; }
 private bool z8_field_is_array(Z8FieldState state) {
     return state.cursor !is null && state.cursor.isGrouped() &&

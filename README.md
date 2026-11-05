@@ -563,6 +563,9 @@ SQL-перегрузки `setWhere`, `addWhere` и `addHaving`; фильтры �
 исполнитель запросов `Query` к одной таблице PostgreSQL, включая группировку;
 также поддерживается `Query.count()`. Связи и изменение данных пока не
 реализованы.
+Runtime вызывает `create`, `update(guid)` и `destroy(guid)` через расширение
+`IZ8QueryWriter`, включая BL-события создания, изменения и удаления. Конкретный
+драйвер PostgreSQL для этих операций ещё не подключён.
 Стандартный `Table` создаёт системные поля `recordId`, `createdAt`,
 `modifiedAt`, `createdBy`, `modifiedBy` и `lock`; `recordId()` возвращает
 текущее значение первичного ключа.
