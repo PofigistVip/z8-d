@@ -229,7 +229,7 @@ private string emitExpr(Expression e) {
         ValueType[] savedBinaryConversions;
         ValueType[] savedStringConversions;
         bool[] savedPromotions;
-        bool[] savedFileConversions, savedExceptionConversions, savedExceptionObjectConversions, savedDateConversions, savedSqlBoolConversions, savedSqlIntConversions, savedSqlDecimalConversions, savedSqlIntDecimalConversions, savedSqlStringConversions;
+        bool[] savedFileConversions, savedExceptionConversions, savedExceptionObjectConversions, savedPrimaryArrayConversions, savedDateConversions, savedSqlBoolConversions, savedSqlIntConversions, savedSqlDecimalConversions, savedSqlIntDecimalConversions, savedSqlStringConversions;
         Method[] savedUserConversions;
         ValueType[] savedCollectionTypes;
         Program[] savedCollectionClasses;
@@ -244,6 +244,7 @@ private string emitExpr(Expression e) {
             savedFileConversions ~= argument.makeFile;
             savedExceptionConversions ~= argument.makeException;
             savedExceptionObjectConversions ~= argument.convertExceptionObject;
+            savedPrimaryArrayConversions ~= argument.convertStringPrimaryArray;
             savedDateConversions ~= argument.convertToDate;
             savedSqlBoolConversions ~= argument.convertToSqlBool;
             savedSqlIntConversions ~= argument.convertToSqlInt;
@@ -259,7 +260,7 @@ private string emitExpr(Expression e) {
             argument.optionalRequired = required; argument.promoteToDecimal = required && promote;
             argument.convertToString = required ? convert : ValueType.voidType;
             argument.convertToBinary = ValueType.voidType;
-            argument.makeFile = false; argument.makeException = false; argument.convertExceptionObject = false;
+            argument.makeFile = false; argument.makeException = false; argument.convertExceptionObject = false; argument.convertStringPrimaryArray = false;
             argument.convertToDate = required ? savedDateConversions[$ - 1] : false;
             argument.convertToSqlBool = required && savedSqlBoolConversions[$ - 1];
             argument.convertToSqlInt = required && savedSqlIntConversions[$ - 1];
@@ -282,6 +283,7 @@ private string emitExpr(Expression e) {
             argument.convertToBinary = savedBinaryConversions[i];
             argument.makeFile = savedFileConversions[i]; argument.makeException = savedExceptionConversions[i];
             argument.convertExceptionObject = savedExceptionObjectConversions[i];
+            argument.convertStringPrimaryArray = savedPrimaryArrayConversions[i];
             argument.convertToDate = savedDateConversions[i];
             argument.convertToSqlBool = savedSqlBoolConversions[i];
             argument.convertToSqlInt = savedSqlIntConversions[i];
@@ -361,6 +363,7 @@ private string emitExpr(Expression e) {
     if (e.makeFile) value = "z8_file_from_path(" ~ value ~ ")";
     if (e.makeException) value = "new Z8Exception(z8_to_utf8(z8_string_required(" ~ value ~ ")))";
     if (e.convertExceptionObject) value = "z8_exception_from_object(" ~ value ~ ")";
+    if (e.convertStringPrimaryArray) value = "z8_primary_array_view(" ~ value ~ ")";
     if (e.convertToDate) value = "z8_date_from_ticks(" ~ value ~ ")";
     if (e.convertToBinary == ValueType.fileType) return "z8_file_to_binary(" ~ value ~ ")";
     if (e.convertToBinary == ValueType.stringType || e.convertToBinary == ValueType.nullableString) return "z8_binary_from_string(" ~ value ~ ")";
@@ -521,6 +524,7 @@ private string emitExprRaw(Expression e) {
             return e.token.text == "length" ? "cast(long)(" ~ value ~ ")" : "(" ~ value ~ " == 0)";
         case ExprKind.index:
             if (isMap(e.inferredType)) return "z8_invoke!\"z8_get\"(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
+            if (e.inferredType == ValueType.stringArray) return "z8_string_array_get(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             return "z8_array_at(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
         case ExprKind.castExpr:
             if (e.exceptionObjectCast) return "z8_exception_cast_object!(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")";
@@ -737,6 +741,9 @@ private string emitSimple(Statement s) {
     if (s.dateTickAssignment) return "z8_date_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.target.kind == ExprKind.index && isMap(s.target.inferredType))
         return "z8_invoke!\"z8_add\"(" ~ emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
+    if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.stringArray)
+        return (s.assignmentOperator == "+=" ? "z8_string_array_add_assign(" : "z8_string_array_assign(") ~
+            emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
     auto name = emitExpr(s.target);
     // The original BL backend evaluates a compound target again to read its
     // old value before evaluating the right operand. Indexed assignment is a

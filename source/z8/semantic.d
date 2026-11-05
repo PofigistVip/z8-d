@@ -246,6 +246,10 @@ class Checker {
         if (e.kind == ExprKind.arrayLiteral && hasObjectClass(expected)) e.objectClass = expectedClass;
         if (e.kind == ExprKind.arrayLiteral && hasMapKeyClass(expected)) e.keyObjectClasses = expectedKeyClasses;
         auto actual = typeOf(e, expected);
+        if (expected == ValueType.primaryArray && actual == ValueType.stringArray) {
+            e.convertStringPrimaryArray = true;
+            return true;
+        }
         if (expected == ValueType.sqlBoolType && (actual == ValueType.boolType || actual == ValueType.optionalBool)) {
             e.convertToSqlBool = true;
             return true;
@@ -452,6 +456,8 @@ class Checker {
                         }
                         if (hasMapKeyClass(actual) && e.arguments[i].keyObjectClasses != resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name)) applicable = false;
                     }
+                } else if (actual == ValueType.stringArray && p.type == ValueType.primaryArray) {
+                    ++weight;
                 } else if (actual == ValueType.selfType && p.type == ValueType.primaryType && extendsBuiltinPrimary(e.arguments[i].objectClass)) {
                     if (binaryOperator) ++distance;
                 } else if (actual == ValueType.selfType && findConversion(e.arguments[i].objectClass, p.type,
@@ -2376,6 +2382,8 @@ class Checker {
                     left = ValueType.primaryType;
                 if (right != ValueType.primaryType && left == ValueType.primaryType && matches(e.third, ValueType.primaryType))
                     right = ValueType.primaryType;
+                if (left == ValueType.stringArray && right == ValueType.primaryArray && matches(e.right, ValueType.primaryArray)) left = right;
+                if (right == ValueType.stringArray && left == ValueType.primaryArray && matches(e.third, ValueType.primaryArray)) right = left;
                 if (left == ValueType.decimalType && right == ValueType.intType) { e.third.promoteToDecimal = true; right = ValueType.decimalType; }
                 if (left == ValueType.intType && right == ValueType.decimalType) { e.right.promoteToDecimal = true; left = ValueType.decimalType; }
                 if (left == ValueType.stringType && hasStringConversion(right)) {
@@ -2595,6 +2603,7 @@ class Checker {
                 auto old = variables.dup; auto oldObjects = objectVariables.dup; auto oldKeyObjects = keyObjectVariables.dup;
                 auto array = typeOf(s.expression);
                 checkStatement(s.initial, true);
+                if (array == ValueType.stringArray && s.initial.type == ValueType.primaryType && matches(s.expression, ValueType.primaryArray)) array = ValueType.primaryArray;
                 if (!isArray(array) || elementType(array) != s.initial.type) fail("foreach element type mismatch", s.token);
                 if (!matches(s.expression, array, s.initial.objectClass, s.initial.keyObjectClasses)) fail("foreach element type mismatch", s.token);
                 ++loopDepth; checkStatement(s.children[0]); --loopDepth;

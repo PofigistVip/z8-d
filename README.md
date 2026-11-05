@@ -57,6 +57,7 @@ python tests/binary_operators.py
 python tests/cast_operators.py
 python tests/cast_container.py
 python tests/exception_subclasses.py
+python tests/primary_array_views.py
 python tests/object_conversion.py
 python tests/value_conversion_operators.py
 python tests/operator_distance.py
@@ -567,6 +568,8 @@ Unicode D и может отличаться от Java при специфичн
 `isSubsetOf`, `join`, `clear` и операторы `+` и `+=`. Типизированный инициализатор
 можно передать как аргумент метода; нетипизированный `{...}` в этой позиции
 исходный компилятор отвергает. Массивы передаются по ссылке;
+`string[]` можно передать или присвоить как `primary[]`: обе ссылки разделяют
+хранилище, а несовместимый элемент обнаруживается при чтении как `string`.
 `first` и `last` доступны для всех этих массивов; результат пустого массива можно
 сравнить с `null` или использовать с `?:`. Для `int` доступны также арифметика и
 сравнения и сохранение результата в переменной или передача в метод; для `bool`
