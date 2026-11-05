@@ -1,0 +1,13 @@
+public class RefInitDerived extends RefInitBase {
+    public NestedBase replacement;
+    source = replacement;
+    node = alias;
+    holder.item = node;
+    public static int run() {
+        RefInitDerived value;
+        value.replacement.initial = 77;
+        if (value.source.initial != 77 || value.alias.initial != 77) return 1;
+        if (value.node.initial != 77 || value.holder.item.initial != 77) return 2;
+        return 221;
+    }
+}

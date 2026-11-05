@@ -1,0 +1,6 @@
+public class RefInitBase {
+    public NestedBase source = new NestedBase;
+    public NestedBase alias = source;
+    public NestedBase node;
+    public RefInitHolder holder;
+}

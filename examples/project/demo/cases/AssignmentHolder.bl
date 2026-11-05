@@ -6,4 +6,8 @@ public class AssignmentHolder {
     public AssignmentValue fromBase = base;
     public AssignmentValue fromLater = later;
     public int later = 33;
+    public AssignmentValue memberValue;
+    memberValue = 27;
+    public AssignmentValue memberFromBase;
+    memberFromBase = base;
 }

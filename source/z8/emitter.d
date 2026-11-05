@@ -237,7 +237,7 @@ private string emitExpr(Expression e) {
 }
 private string emitReceiver(Expression e) {
     if (e.kind == ExprKind.superRef) return "(" ~ emitExpr(e) ~ ")";
-    return "z8_nonnull(" ~ emitExpr(e) ~ (e.fieldInitialization ? ", 0" : "") ~ ")";
+    return "z8_nonnull(" ~ emitExpr(e) ~ (e.earlyFieldInitialization ? ", -1" : e.fieldInitialization ? ", 0" : "") ~ ")";
 }
 private string emitExprRaw(Expression e) {
     final switch (e.kind) {
@@ -533,29 +533,56 @@ private string defaultValue(ValueType type, Program objectClass = null, bool has
     if (type == ValueType.stringType) return `z8_string_new(""w)`;
     assert(type == ValueType.boolType); return "false";
 }
+private string qualifiedFieldName(Expression expression) {
+    if (expression is null) return "";
+    if (expression.kind == ExprKind.variable) return expression.token.text;
+    if (expression.kind != ExprKind.field) return "";
+    auto left = qualifiedFieldName(expression.left);
+    return left.length ? left ~ "." ~ expression.token.text : "";
+}
 private bool referencesField(Expression expression, string name) {
     if (expression is null) return false;
-    if ((expression.kind == ExprKind.variable || expression.kind == ExprKind.field) && expression.token.text.startsWith(name)) return true;
+    auto path = qualifiedFieldName(expression);
+    if (path.length) return path.startsWith(name);
     if (referencesField(expression.left, name) || referencesField(expression.right, name) || referencesField(expression.third, name)) return true;
     foreach (argument; expression.arguments) if (referencesField(argument, name)) return true;
     return false;
 }
-
-private Field[] orderedReferenceFields(Program program) {
-    Field[] references;
+private struct ReferenceInitialization {
+    string name;
+    Expression value;
+    Field field;
+    Statement member;
+}
+private ReferenceInitialization[] orderedReferences(Program program) {
+    ReferenceInitialization[] references;
     void collect(Program current) {
         if (current.baseClass !is null) collect(current.baseClass);
+        ReferenceInitialization[] own;
         foreach (field; current.fields)
-            if (!field.isStatic && field.type == ValueType.selfType && field.initializer !is null) references ~= field;
+            if (!field.isStatic && field.type == ValueType.selfType && field.initializer !is null)
+                own ~= ReferenceInitialization(field.name.text, field.initializer, field, null);
+        foreach (init; current.memberInitializers)
+            if (init.type == ValueType.selfType)
+                own ~= ReferenceInitialization(qualifiedFieldName(init.target), init.expression, null, init);
+        foreach (initializer; own) {
+            auto value = initializer.value;
+            if (value.kind != ExprKind.variable && value.kind != ExprKind.field && value.kind != ExprKind.newSelf && value.kind != ExprKind.containerRef) continue;
+            ReferenceInitialization[] retained;
+            foreach (previous; references)
+                if (previous.name != initializer.name && !previous.name.startsWith(initializer.name ~ ".")) retained ~= previous;
+            references = retained;
+        }
+        references ~= own;
     }
     collect(program);
-    sort!((a, b) => a.name.text < b.name.text)(references);
+    sort!((a, b) => a.name < b.name)(references);
     bool[] checked = new bool[references.length];
     for (size_t index = 0; index < references.length; ++index) {
         if (checked[index]) continue;
-        auto right = references[index].initializer;
+        auto right = references[index].value;
         for (size_t i = index + 1; i < references.length; ++i) {
-            if (!referencesField(right, references[i].name.text)) continue;
+            if (!referencesField(right, references[i].name)) continue;
             auto dependency = references[i];
             auto wasChecked = checked[i];
             for (size_t j = i; j > index; --j) { references[j] = references[j - 1]; checked[j] = checked[j - 1]; }
@@ -600,10 +627,11 @@ package string emitPrograms(Program[] programs) {
         foreach (specialization; program.memberSpecializations)
             result ~= "this.f_" ~ specialization.specializedName.text ~ " = z8_new!(" ~ specialization.emittedName ~ ")(this);\n";
         result ~= "}\noverride void z8_init_references() {\n";
-        foreach (field; orderedReferenceFields(program)) {
-            if (field.userOperatorAssignment)
-                result ~= "z8_nonnull(this.f_" ~ field.name.text ~ ", -1).z8op_assign(" ~ emitExpr(field.initializer) ~ ");\n";
-            else result ~= "this.f_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
+        foreach (reference; orderedReferences(program)) {
+            if (reference.member !is null) result ~= emitSimple(reference.member) ~ ";\n";
+            else if (reference.field.userOperatorAssignment)
+                result ~= "z8_nonnull(this.f_" ~ reference.field.name.text ~ ", -1).z8op_assign(" ~ emitExpr(reference.value) ~ ");\n";
+            else result ~= "this.f_" ~ reference.field.name.text ~ " = " ~ emitExpr(reference.value) ~ ";\n";
         }
         result ~= "}\n";
         string autoInitializers;
@@ -631,7 +659,7 @@ package string emitPrograms(Program[] programs) {
                 result ~= "this.f_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
         }
         foreach (init; program.memberInitializers)
-            result ~= emitSimple(init) ~ ";\n";
+            if (init.type != ValueType.selfType) result ~= emitSimple(init) ~ ";\n";
         result ~= "}\n";
         foreach (method; program.methods) if (method.name.text == "constructor") {
             result ~= "override void z8_call_constructor() { this.m_constructor(); }\n";

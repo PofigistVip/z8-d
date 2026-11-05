@@ -25,7 +25,7 @@ class Expression {
     Expression[] arguments;
     ValueType inferredType;
     string targetClass;
-    bool isField, isCapture, instanceCall, staticInstanceCall, fieldInitialization, newHasContainer;
+    bool isField, isCapture, instanceCall, staticInstanceCall, fieldInitialization, earlyFieldInitialization, newHasContainer;
     bool binaryNameField;
     string nativeField;
     bool makeFile, makeException, convertToDate;

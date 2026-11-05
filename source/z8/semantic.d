@@ -454,10 +454,11 @@ class Checker {
         string memberPath(Expression target) {
             return target.kind == ExprKind.variable ? target.token.text : memberPath(target.left) ~ "." ~ target.token.text;
         }
-        void setTargetStage(Expression target) {
+        void setTargetStage(Expression target, bool early) {
             if (target is null) return;
             target.fieldInitialization = false;
-            setTargetStage(target.left);
+            target.earlyFieldInitialization = early;
+            setTargetStage(target.left, early);
         }
         string[] initializedMembers;
         foreach (init; program.memberInitializers) {
@@ -473,8 +474,9 @@ class Checker {
             auto root = init.target;
             while (root.kind == ExprKind.field) root = root.left;
             if (!root.isField || root.targetClass.length) fail("field initialization requires an instance field", init.token);
-            if (init.type == ValueType.selfType) fail("reference field initialization is not supported yet", init.token);
-            setTargetStage(init.target);
+            if (init.type == ValueType.selfType && init.userCompoundAssignment)
+                fail("compound reference field initialization is not supported yet", init.token);
+            setTargetStage(init.target, init.type == ValueType.selfType);
         }
         fieldInitialization = false;
         foreach (m; program.methods) {
