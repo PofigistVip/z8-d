@@ -61,6 +61,7 @@ python tests/primary_array_views.py
 python tests/covariant_array_union.py path/to/original-z8
 python tests/primary_user_conversions.py path/to/original-z8
 python tests/array_join_primary.py path/to/original-z8
+python tests/object_array_join.py path/to/original-z8
 python tests/guid_string_comparisons.py path/to/original-z8
 python tests/long_expression_chains.py
 python tests/file_named_conversions.py

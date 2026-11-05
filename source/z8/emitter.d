@@ -914,6 +914,13 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 "z8_native_register_factory(" ~ nativeName ~ ", typeid(Z8Self), &z8_native_create_instance); }\n";
         }
         result ~= "override void z8_ensure_type_initialized() { Z8Self.z8_ensure_static(); }\n";
+        if (extendsBuiltinPrimary(program))
+            result ~= "override wstring z8_object_string_impl() { return z8_user_primary_string_impl(); }\n";
+        else foreach (method; program.methods)
+            if (!method.isStatic && method.name.text == "toString" && method.returnType == ValueType.stringType && !method.parameters.length) {
+                result ~= "override wstring z8_object_string_impl() { return this.m_toString(); }\n";
+                break;
+            }
         if (extendsBuiltinPrimary(program)) {
             if (program.isNative) {
                 auto stringBinding = emitRawWStringLiteral(program.nativeName ~ ".m_toString"w);

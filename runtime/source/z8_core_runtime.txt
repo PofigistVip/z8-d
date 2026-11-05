@@ -104,6 +104,9 @@ class Z8Object {
     private Object[wstring] z8_native_states;
     private Z8StaticRecord[] z8_records;
 
+    // OBJECT.z8_toString returns an empty string unless a BL class overrides it.
+    wstring z8_object_string_impl() { return ""w; }
+
     // Primary subclasses may provide the Java value's polymorphic operations.
     wstring z8_user_primary_string_impl() { return toString().to!wstring; }
     long z8_user_primary_hash_impl() { return cast(long)cast(int)toHash(); }

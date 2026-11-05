@@ -71,6 +71,17 @@ class Z8ObjectArray(T) : IZ8ObjectArrayView if (is(T : Z8Object)) {
     Z8ObjectArray!T z8_removeAll(Z8ObjectArray!T values) { data.z8_removeAll(z8_nonnull(values).data); return this; }
     Z8ObjectArray!T z8_reverse() { data.z8_reverse(); return this; }
     Z8ObjectArray!T z8_unique() { return new Z8ObjectArray!T(data.z8_unique()); }
+    wstring z8_join(wstring separator = ""w) {
+        wstring result;
+        auto expectedVersion = z8_version;
+        for (long i = 0; i != z8_size(); ++i) {
+            if (z8_version != expectedVersion) throw new Exception("array modified during iteration");
+            if (i) result ~= z8_string_required(separator);
+            auto text = z8_nonnull(z8_get(i)).z8_object_string_impl();
+            result ~= text is null ? "null"w : text;
+        }
+        return result;
+    }
     void z8_set(long index, T value) { data.z8_set(index, value); }
 }
 Z8ObjectArray!To z8_object_array_view(To, From)(Z8ObjectArray!From value)

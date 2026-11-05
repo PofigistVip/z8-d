@@ -1877,7 +1877,7 @@ class Checker {
                         e.objectClass = e.left.objectClass;
                         e.keyObjectClasses = e.left.keyObjectClasses;
                         auto primaryJoin = e.token.text == "join" && [ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray,
-                            ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.primaryArray].canFind(receiver);
+                            ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.primaryArray, ValueType.selfArray].canFind(receiver);
                         if (!primaryJoin && !["size", "isEmpty", "clear", "first", "last", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
                             fail("this method is not yet supported for object arrays", e.token);
                     }
