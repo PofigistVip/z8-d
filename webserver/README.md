@@ -17,8 +17,14 @@ Hosts can select `Z8ResponseMode.application` when constructing the server.
 It opens the standard `request`/`success` object before calling the handler,
 then adds `server` and monitor `info`; BL handlers write properties into that
 open object. Handler failures produce the Z8 error envelope and HTTP 200, as
-in `RequestDispatcher`. This mode does not yet implement authorization, request
-routing, retries, or the rest of the application-server protocol.
+in `RequestDispatcher`. Credential storage, retries, and the rest of the
+application-server protocol remain to be implemented.
+
+A handler can use `z8_application_dispatch_object(className, mayExecute)` to
+instantiate an ordinary BL `Object`, invoke its virtual `getData`, and write
+`data` and `ui`. The host must supply the permission-checking delegate; it
+receives the session, class name, and action. Query, job, and binary-content
+requests need specialized adapters and are not handled by this function.
 
 An optional `IZ8HttpAuthority` constructor argument connects a host authority
 to the transport. With an authority present, each request must have a session

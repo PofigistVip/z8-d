@@ -174,6 +174,33 @@ wstring z8_application_error_response(wstring requestId, Z8RequestMonitor monito
     z8_application_finish_response(request, monitor, server);
     return request.writer.stream;
 }
+// Dispatch an ordinary OBJECT response. Query, job and binary-content requests
+// have different server protocols and must be handled by their own adapters.
+void z8_application_dispatch_object(wstring className,
+        bool delegate(Z8ApplicationSession session, wstring className, wstring action) mayExecute) {
+    auto request = z8_application_require_request();
+    auto session = z8_nonnull(request.session);
+    className = z8_string_required(className);
+    auto writer = request.writer;
+    if (writer.scopes.length != 2) throw new Exception("response object is not open");
+    auto action = request.parameters.z8_get("action"w);
+    if (mayExecute is null || !mayExecute(session, className, action)) throw new Exception("request access denied");
+    if (action == "content"w) throw new Exception("binary content request requires a content adapter");
+    auto target = z8_object_new_instance_native(className);
+    if (z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, target) ||
+        z8_native_is_instance("org.zenframework.z8.server.base.Executable"w, target))
+        throw new Exception("request target requires a specialized adapter");
+    auto monitor = cast(Z8RequestMonitor)request.monitor;
+    if (monitor !is null) monitor.source = target.z8_get_attribute("displayName"w);
+    auto data = target.z8_object_get_data(request.parameters);
+    writer.property("data"w);
+    if (data is null) writer.raw("null"w);
+    else {
+        if (!z8_native_is_instance(z8_json_array_name, data)) throw new Exception("invalid object response data");
+        writer.raw(z8_json_array_render_state(z8_json_array_state(data)));
+    }
+    z8_monitor_property(writer, "ui"w, target.z8_get_attribute("ui"w));
+}
 private Z8ApplicationRequest z8_application_current_request;
 Z8ApplicationRequest z8_application_request() { return z8_application_current_request; }
 // Returns the previous context so nested host operations can restore it.

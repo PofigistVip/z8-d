@@ -26,7 +26,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
 }
 ''', encoding="utf-8")
     (source / "Endpoint.bl").write_text('''
-public class Endpoint extends Object {
+[ui "Grid"] [displayName "Demo"] public class Endpoint extends Object {
     virtual protected JsonArray getData(string[string] parameters) { return JsonArray.parse(parameters["data"]); }
     virtual protected binary processContentRequest(string[string] parameters, file[] files) {
         binary result = parameters["content"]; return result;
@@ -45,6 +45,8 @@ public class Endpoint extends Object {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
+import std.json : parseJSON;
+import std.conv : to;
 void main() {
     auto params = new Z8StringMap();
     params.z8_add("data"w, `[1,"text"]`w); params.z8_add("content"w, "payload"w);
@@ -56,6 +58,24 @@ void main() {
     assert(cast(string)content.data == "payload");
     auto object = z8_object_new_instance("org.zenframework.z8.server.runtime.OBJECT"w);
     assert(object.z8_object_get_data(params) is null && object.z8_object_process_content(params, files) is null);
+    auto user = new Z8UserData(); user.id = z8_guid_create(1);
+    auto request = new Z8ApplicationRequest(); request.parameters = params;
+    request.session = new Z8ApplicationSession("session"w, user, user);
+    auto monitor = new Z8RequestMonitor(); request.monitor = monitor;
+    z8_application_set_request(request);
+    z8_application_start_response(request, "Child"w);
+    bool denied;
+    try { z8_application_dispatch_object("Child"w, null); } catch (Exception) { denied = true; }
+    assert(denied && z8_application_response_text(request) == `{"request":"Child","success":true`w);
+    bool checked;
+    z8_application_dispatch_object("Child"w, (Z8ApplicationSession session, wstring name, wstring action) {
+        checked = session is request.session && name == "Child"w && action is null; return checked;
+    });
+    z8_application_finish_response(request, monitor, "server"w);
+    auto result = parseJSON(z8_application_response_text(request).to!string);
+    assert(checked && result["data"].array.length == 2 && result["data"][1].str == "text" && result["ui"].str == "Grid");
+    assert(monitor.source == "Demo"w);
+    z8_application_set_request(null);
 }
 ''', encoding="utf-8")
     exe = temp / ("object-dispatch.exe" if os.name == "nt" else "object-dispatch")

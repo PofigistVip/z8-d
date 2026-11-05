@@ -47,6 +47,23 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     (source / "User.bl").write_text('''
 [native "org.zenframework.z8.server.base.security.User"] public class User { public string login; }
 ''', encoding="utf-8")
+    (source / "Object.bl").write_text('''
+[native "org.zenframework.z8.server.runtime.OBJECT"] public class Object {
+    virtual protected JsonArray getData(string[string] parameters);
+}
+''', encoding="utf-8")
+    (source / "JsonArray.bl").write_text('''
+[native "org.zenframework.z8.server.base.json.parser.JsonArray"] public class JsonArray {
+    public static JsonArray parse(string text);
+}
+''', encoding="utf-8")
+    (source / "Endpoint.bl").write_text('''
+[ui "Grid"] [displayName "Endpoint"] public class Endpoint extends Object {
+    virtual protected JsonArray getData(string[string] parameters) {
+        Application.info("loaded"); return JsonArray.parse("[1,2]");
+    }
+}
+''', encoding="utf-8")
     (source / "JsonWriter.bl").write_text('''
 [native "org.zenframework.z8.server.base.json.JsonWriter"] public class JsonWriter {
     public JsonWriter startObject(); public JsonWriter finishObject();
@@ -99,10 +116,14 @@ public class Probe {
         (source / "Application.bl").unlink()
         (source / "JsonWriter.bl").unlink()
         (source / "User.bl").unlink()
+        (source / "Object.bl").unlink()
+        (source / "JsonArray.bl").unlink()
         shutil.copytree(language, source, dirs_exist_ok=True)
         probe = source / "Probe.bl"
         probe.write_text("import org.zenframework.z8.base.application.Application;\nimport org.zenframework.z8.base.json.JsonWriter;\n" +
                          probe.read_text(encoding="utf-8"), encoding="utf-8")
+        endpoint = source / "Endpoint.bl"
+        endpoint.write_text("import org.zenframework.z8.base.application.Application;\nimport org.zenframework.z8.base.json.JsonArray;\nimport org.zenframework.z8.lang.Object;\n" + endpoint.read_text(encoding="utf-8"), encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     sys.path.insert(0, str(root / "webserver"))
     from build_civetweb import build
@@ -137,6 +158,12 @@ class Authority : IZ8HttpAuthority {
 }
 void runRequest(Z8HttpRequest request) {
     if (request.query.indexOf("collect=1") >= 0) GC.collect();
+    if (request.query.indexOf("dispatch=1") >= 0) {
+        auto context = z8_application_request();
+        z8_application_dispatch_object(context.parameters.z8_get("request"w),
+            (Z8ApplicationSession session, wstring name, wstring action) { return name == "Endpoint"w; });
+        return;
+    }
     Z8p_50726F6265.m_run();
     if (request.query.indexOf("mode=monitor") >= 0) {
         auto m = request.monitor;
@@ -251,6 +278,13 @@ void main(string[] args) {
         status, body = request("/api?mode=auth&request=login&session=invalid&login=alice&password=secret", target=auth_port)
         result = json.loads(body)
         assert status == 200 and result["login"] == "alice", result
+        status, body = request("/request.json?request=Endpoint&session=valid&server=shard&dispatch=1", target=auth_port)
+        result = json.loads(body)
+        assert status == 200 and result["success"] and result["data"] == [1, 2] and result["ui"] == "Grid", result
+        assert result["info"]["messages"][0]["text"] == "loaded" and result["info"]["messages"][0]["source"] == "Endpoint", result
+        status, body = request("/request.json?request=Unauthorized&session=valid&server=shard&dispatch=1", target=auth_port)
+        result = json.loads(body)
+        assert status == 200 and not result["success"] and result["info"]["messages"][-1]["text"] == "request access denied", result
         status, body = request("/request.json?mode=protocol&request=demo", target=web_port)
         assert status == 200 and json.loads(body)["answer"] == 42, (status, body)
         def asset(path, method="GET"):
