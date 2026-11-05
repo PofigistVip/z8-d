@@ -414,7 +414,7 @@ unittest {
     auto enumType = SourceUnit("pkg.Mode", "Mode.bl", "[native \"demo.Mode\"] public enum Mode { One, Two, }");
     auto enumUse = SourceUnit("pkg.A", "A.bl", "class A { static Mode f() { return Mode.One; } }");
     compileSources([enumUse, enumType]);
-    auto enumFields = SourceUnit("pkg.A", "A.bl", "class A { Mode member; static Mode shared; static Mode missing = null; }");
+    auto enumFields = SourceUnit("pkg.A", "A.bl", "class A { Mode member; static Mode shared; static Mode missing = null; static Mode initial = Mode.One; }");
     compileSources([enumFields, enumType]);
     auto enumDefault = SourceUnit("pkg.A", "A.bl", "class A { void f() { Mode value; } }");
     rejectsSources([enumDefault, enumType], "A.bl");

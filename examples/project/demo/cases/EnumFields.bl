@@ -3,12 +3,13 @@ public class EnumFields {
     private FieldMode initialized = FieldMode.One;
     private static FieldMode shared;
     private static FieldMode missing = null;
+    private static FieldMode initial = FieldMode.One;
 
     public static int run() {
         EnumFields first;
         EnumFields second;
         if (first.member != null || shared != null || missing != null) return 1;
-        if (first.initialized != FieldMode.One) return 2;
+        if (first.initialized != FieldMode.One || initial != FieldMode.One) return 2;
         first.member = FieldMode.Two;
         shared = first.member;
         if (second.member != null || shared != FieldMode.Two) return 3;

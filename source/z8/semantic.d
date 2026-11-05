@@ -484,8 +484,6 @@ class Checker {
         foreach (field; program.fields) {
             staticContext = field.isStatic;
             fieldInitialization = !field.isStatic;
-            if (field.isStatic && field.initializer !is null && !isConstantInitializer(field.initializer))
-                fail("static field initializer must be a constant expression", field.name);
             if (field.initializer !is null) {
                 if (program.enclosingStatic && !field.isStatic)
                     fail("instance field initializer in a static local specialization", field.name);
@@ -493,6 +491,8 @@ class Checker {
                 if (field.type == ValueType.selfType && !field.isStatic)
                     field.userOperatorAssignment = useAssignmentOperator(field.objectClass, field.initializer, field.name, direct);
                 if (!direct && !field.userOperatorAssignment) fail("field initializer type mismatch", field.name);
+                if (field.isStatic && !isConstantInitializer(field.initializer) && !field.initializer.enumConstant)
+                    fail("static field initializer must be a constant expression", field.name);
             }
             if (field.attributes.length) {
                 fieldInitialization = false;
