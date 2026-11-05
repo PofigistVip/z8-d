@@ -1004,6 +1004,21 @@ class Checker {
                     }
                     fail("unsupported SQL integer method", e.token);
                 }
+                if (receiver == ValueType.sqlDecimalType) {
+                    if (["abs", "exp", "ln"].canFind(e.token.text)) {
+                        checkArguments(e, []); e.builtinCall = "z8_sql_decimal_" ~ e.token.text; return ValueType.sqlDecimalType;
+                    }
+                    if (["sign", "ceil", "floor"].canFind(e.token.text)) {
+                        checkArguments(e, []); e.builtinCall = "z8_sql_decimal_" ~ e.token.text; return ValueType.sqlIntType;
+                    }
+                    if (e.token.text == "isNaN") {
+                        checkArguments(e, []); e.builtinCall = "z8_sql_decimal_isNaN"; return ValueType.sqlBoolType;
+                    }
+                    if (["power", "round", "truncate"].canFind(e.token.text)) {
+                        checkArguments(e, [ValueType.sqlIntType]); e.builtinCall = "z8_sql_decimal_" ~ e.token.text; return ValueType.sqlDecimalType;
+                    }
+                    fail("unsupported SQL decimal method", e.token);
+                }
                 if (receiver == ValueType.optionalInt) {
                     e.optionalIntReceiver = true;
                     receiver = ValueType.intType;

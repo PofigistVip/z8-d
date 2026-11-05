@@ -1,7 +1,7 @@
 // SQL values describe an expression tree; operators do not execute SQL.
 enum Z8SqlVendor { Oracle, SqlServer, Postgres, H2 }
 abstract class Z8SqlNumeric { abstract wstring z8_format(Z8SqlVendor vendor, bool logical = false); }
-enum Z8SqlBoolKind { constant, group, not, and, or, equal, notEqual, choose, intEqual, intNotEqual, intLess, intGreater, intLessEqual, intGreaterEqual }
+enum Z8SqlBoolKind { constant, group, not, and, or, equal, notEqual, choose, intEqual, intNotEqual, intLess, intGreater, intLessEqual, intGreaterEqual, decimalIsNaN }
 class Z8SqlBool {
     Z8SqlBoolKind kind;
     bool constant;
@@ -73,6 +73,9 @@ wstring z8_sql_bool_format(Z8SqlBool value, bool logical = false, Z8SqlVendor ve
                 value.kind == Z8SqlBoolKind.intLessEqual ? "<="w : ">="w;
             auto condition = z8_nonnull(value.numericLeft).z8_format(vendor) ~ op ~ z8_nonnull(value.numericRight).z8_format(vendor);
             return logical ? condition : z8_sql_bool_case(condition, "1"w, "0"w);
+        case Z8SqlBoolKind.decimalIsNaN:
+            if (vendor != Z8SqlVendor.Postgres) throw new Exception("unsupported SQL database vendor");
+            return z8_nonnull(value.numericLeft).z8_format(vendor) ~ " = double precision 'NaN'"w;
         case Z8SqlBoolKind.choose:
             auto text = z8_sql_bool_case(z8_sql_bool_format(value.left, true, vendor), z8_sql_bool_format(value.right, false, vendor), z8_sql_bool_format(value.alternative, false, vendor));
             return logical ? "("w ~ text ~ ")=1"w : text;

@@ -18,6 +18,16 @@ public class SqlDecimalValues {
     public static sql_decimal negative() { sql_decimal value = 0.125; return -value; }
     public static sql_bool compare() { sql_decimal value = 1.25; return value < 2; }
     public static sql_bool mixedCompare() { sql_int left = 1; sql_decimal right = 2.50; return left < right; }
+    public static sql_decimal absolute() { sql_decimal value = -1.25; return value.abs(); }
+    public static sql_decimal exponent() { sql_decimal value = 1.25; return value.exp(); }
+    public static sql_decimal logarithm() { sql_decimal value = 1.25; return value.ln(); }
+    public static sql_decimal power() { sql_decimal value = 1.25; return value.power(2); }
+    public static sql_decimal round() { sql_decimal value = 1.25; return value.round(1); }
+    public static sql_decimal truncate() { sql_decimal value = 1.25; return value.truncate(1); }
+    public static sql_int sign() { sql_decimal value = -1.25; return value.sign(); }
+    public static sql_int ceil() { sql_decimal value = 1.25; return value.ceil(); }
+    public static sql_int floor() { sql_decimal value = 1.25; return value.floor(); }
+    public static sql_bool isNaN() { sql_decimal value = 1.25; return value.isNaN(); }
     public static int run() {
         sql_decimal result = expression();
         if (result == null) return 1;
