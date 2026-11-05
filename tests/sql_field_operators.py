@@ -34,6 +34,7 @@ public class Probe {
     public static sql_int negativeInt(IntField field) { return -field; }
     public static sql_decimal negativeDecimal(DecimalField field) { return -field; }
     public static bool directUnary(DirectUnary field) { return !field; }
+    public static sql_string chooseFields(sql_bool condition, TextField yes, TextField no) { return condition.IIF(yes, no); }
 }
 """,
     }
@@ -106,6 +107,7 @@ void main() {
     assert(P.m_negativeInt(i).left.kind == Z8SqlIntKind.negate && intCalls == 5);
     assert((cast(Z8SqlDecimal)P.m_negativeDecimal(decimal).left).kind == Z8SqlDecimalKind.negate && decimalCalls == 1);
     assert(!z8_optional_require(P.m_directUnary(directUnary)) && unaryCalls == 1 && boolCalls == 1);
+    assert(P.m_chooseFields(z8_sql_bool_const(true), s, s) !is null && stringCalls == 3);
 }
 """, encoding="utf-8")
     adapter_object = temp / ("adapter.obj" if os.name == "nt" else "adapter.o")
@@ -125,4 +127,14 @@ public class Bad { public static void run(Ambiguous value) { !value; } }
                             capture_output=True, text=True, encoding="utf-8", errors="replace")
     if result.returncode == 0 or "ambiguous unary operator" not in result.stderr:
         raise SystemExit("Missing ambiguity diagnostic for unary conversion: " + result.stderr)
+    (source / "Ambiguous.bl").write_text('''
+[native "example.Ambiguous"] public class Ambiguous { public operator sql_int(); public operator sql_decimal(); }
+''', encoding="utf-8")
+    (source / "Bad.bl").write_text('''
+public class Bad { public static sql_int run(sql_bool condition, Ambiguous value) { return condition.IIF(value, value); } }
+''', encoding="utf-8")
+    result = subprocess.run([str(compiler), "project", str(source), str(temp / "bad-iif")],
+                            capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if result.returncode == 0 or "ambiguous SQL IIF overload" not in result.stderr:
+        raise SystemExit("Missing ambiguity diagnostic for SQL IIF: " + result.stderr)
 print("SQL field conversions, unary and binary operators, and named casts verified")

@@ -224,6 +224,19 @@ class Checker {
             }
         return best;
     }
+    private int sqlIifConversionCost(Expression argument, ValueType actual, ValueType target) {
+        if (actual == ValueType.nullType || actual == target) return 0;
+        if (actual == ValueType.selfType && findConversion(argument.objectClass, target) !is null) return 100;
+        if (target == ValueType.sqlBoolType && [ValueType.boolType, ValueType.optionalBool].canFind(actual)) return 100;
+        if (target == ValueType.sqlIntType && [ValueType.intType, ValueType.optionalInt].canFind(actual)) return 100;
+        if (target == ValueType.sqlDecimalType && [ValueType.decimalType, ValueType.optionalDecimal, ValueType.sqlIntType].canFind(actual)) return 100;
+        if (target == ValueType.sqlStringType && [ValueType.stringType, ValueType.nullableString].canFind(actual)) return 100;
+        if (target == ValueType.sqlGuidType && actual == ValueType.guidType) return 100;
+        if (target == ValueType.sqlDateType && actual == ValueType.dateType) return 100;
+        if (target == ValueType.sqlDatespanType && actual == ValueType.datespanType) return 100;
+        if (target == ValueType.sqlGeometryType && actual == ValueType.geometryType) return 100;
+        return -1;
+    }
     // VariableType.getCastTo checks the value and each key independently.
     private bool covariantCollectionMatches(ValueType type, Program actualClass, Program[] actualKeys,
                                             Program expectedClass, Program[] expectedKeys) {
@@ -1333,19 +1346,22 @@ class Checker {
                         auto first = typeOf(e.arguments[0]), second = typeOf(e.arguments[1]);
                         if (first == ValueType.nullType && second == ValueType.nullType)
                             fail("ambiguous SQL IIF overload", e.token);
-                        bool decimalChoice = [ValueType.sqlDecimalType, ValueType.decimalType, ValueType.optionalDecimal].canFind(first) ||
-                            [ValueType.sqlDecimalType, ValueType.decimalType, ValueType.optionalDecimal].canFind(second);
-                        bool stringChoice = [ValueType.sqlStringType, ValueType.stringType, ValueType.nullableString].canFind(first) ||
-                            [ValueType.sqlStringType, ValueType.stringType, ValueType.nullableString].canFind(second);
-                        bool intChoice = [ValueType.sqlIntType, ValueType.intType, ValueType.optionalInt].canFind(first) ||
-                            [ValueType.sqlIntType, ValueType.intType, ValueType.optionalInt].canFind(second);
-                        bool guidChoice = [ValueType.sqlGuidType, ValueType.guidType].canFind(first) || [ValueType.sqlGuidType, ValueType.guidType].canFind(second);
-                        bool dateChoice = [ValueType.sqlDateType, ValueType.dateType].canFind(first) || [ValueType.sqlDateType, ValueType.dateType].canFind(second);
-                        bool spanChoice = [ValueType.sqlDatespanType, ValueType.datespanType].canFind(first) || [ValueType.sqlDatespanType, ValueType.datespanType].canFind(second);
-                        bool geometryChoice = [ValueType.sqlGeometryType, ValueType.geometryType].canFind(first) || [ValueType.sqlGeometryType, ValueType.geometryType].canFind(second);
-                        auto type = stringChoice ? ValueType.sqlStringType : decimalChoice ? ValueType.sqlDecimalType : intChoice ? ValueType.sqlIntType : guidChoice ? ValueType.sqlGuidType : dateChoice ? ValueType.sqlDateType : spanChoice ? ValueType.sqlDatespanType : geometryChoice ? ValueType.sqlGeometryType : ValueType.sqlBoolType;
+                        auto type = ValueType.voidType;
+                        int best = int.max;
+                        bool ambiguous;
+                        foreach (candidate; [ValueType.sqlBoolType, ValueType.sqlIntType, ValueType.sqlDecimalType, ValueType.sqlStringType,
+                                            ValueType.sqlGuidType, ValueType.sqlDateType, ValueType.sqlDatespanType, ValueType.sqlGeometryType]) {
+                            auto leftCost = sqlIifConversionCost(e.arguments[0], first, candidate);
+                            auto rightCost = sqlIifConversionCost(e.arguments[1], second, candidate);
+                            if (leftCost < 0 || rightCost < 0) continue;
+                            auto cost = leftCost + rightCost;
+                            if (cost < best) { type = candidate; best = cost; ambiguous = false; }
+                            else if (cost == best) ambiguous = true;
+                        }
+                        if (ambiguous) fail("ambiguous SQL IIF overload", e.token);
+                        if (type == ValueType.voidType) fail("no matching SQL IIF overload", e.token);
                         checkArguments(e, [type, type]);
-                        e.builtinCall = stringChoice ? "z8_sql_string_iif" : decimalChoice ? "z8_sql_decimal_iif" : intChoice ? "z8_sql_int_iif" : guidChoice ? "z8_sql_guid_iif" : dateChoice ? "z8_sql_date_iif" : spanChoice ? "z8_sql_datespan_iif" : geometryChoice ? "z8_sql_geometry_iif" : "z8_sql_bool_iif"; return type;
+                        e.builtinCall = type == ValueType.sqlStringType ? "z8_sql_string_iif" : type == ValueType.sqlDecimalType ? "z8_sql_decimal_iif" : type == ValueType.sqlIntType ? "z8_sql_int_iif" : type == ValueType.sqlGuidType ? "z8_sql_guid_iif" : type == ValueType.sqlDateType ? "z8_sql_date_iif" : type == ValueType.sqlDatespanType ? "z8_sql_datespan_iif" : type == ValueType.sqlGeometryType ? "z8_sql_geometry_iif" : "z8_sql_bool_iif"; return type;
                     }
                     fail("unsupported SQL boolean method", e.token);
                 }
