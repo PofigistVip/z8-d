@@ -1343,6 +1343,7 @@ class Checker {
                     case "date": targetType = ValueType.dateType; break;
                     case "file": targetType = ValueType.fileType; break;
                     case "exception": targetType = ValueType.exceptionType; break;
+                    case "encoding": targetType = ValueType.encodingType; break;
                     case "primary": targetType = ValueType.primaryType; break;
                     default: targetType = ValueType.voidType; break;
                 }
@@ -1350,7 +1351,7 @@ class Checker {
                     e.exceptionInstanceOf = true;
                     return ValueType.boolType;
                 }
-                if (targetType != ValueType.voidType && targetType != ValueType.exceptionType && sourceType == ValueType.primaryType) {
+                if (targetType != ValueType.voidType && targetType != ValueType.exceptionType && targetType != ValueType.encodingType && sourceType == ValueType.primaryType) {
                     e.castType = targetType; e.primaryInstanceOf = true;
                     return ValueType.boolType;
                 }
@@ -1358,11 +1359,11 @@ class Checker {
                     sourceType == ValueType.nullableString ? ValueType.stringType : sourceType;
                 bool scalar = [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType,
                     ValueType.guidType, ValueType.binaryType, ValueType.datespanType, ValueType.geometryType,
-                    ValueType.dateType, ValueType.fileType].canFind(baseSource);
+                    ValueType.dateType, ValueType.fileType, ValueType.encodingType].canFind(baseSource);
                 if (targetType != ValueType.voidType) {
                     if (sourceType == ValueType.voidType) fail("instanceof requires a value", e.token);
                     e.inferredType = sourceType;
-                    e.falseInstanceOf = !scalar || (targetType != ValueType.primaryType && targetType != baseSource);
+                    e.falseInstanceOf = !scalar || (targetType == ValueType.primaryType && baseSource == ValueType.encodingType) || (targetType != ValueType.primaryType && targetType != baseSource);
                     e.scalarInstanceOf = !e.falseInstanceOf;
                     return ValueType.boolType;
                 }

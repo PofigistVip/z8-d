@@ -1,3 +1,4 @@
+import org.zenframework.z8.lang.encoding;
 public class EnumInstanceOf {
     private static int calls;
     private static ProbeEnum next() { calls += 1; return ProbeEnum.One; }
@@ -22,6 +23,12 @@ public class EnumInstanceOf {
         if ((missingInt() instanceof bool) || calls != 3) return 12;
         if (1 instanceof bool) return 13;
         if (1 instanceof exception) return 14;
+        encoding charset = encoding.UTF8;
+        if (!(charset instanceof encoding)) return 15;
+        charset = null;
+        if (charset instanceof encoding) return 16;
+        if (encoding.UTF8 instanceof primary) return 17;
+        if (1 instanceof encoding) return 18;
         return 221;
     }
 }
