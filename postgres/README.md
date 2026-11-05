@@ -24,6 +24,7 @@ record lookup. Single-table `GROUP BY`, `HAVING` and array aggregations are
 supported. `Query.count()` preserves an active cursor and counts groups when
 the query is grouped; `hasRecord` and `findRecords` are also available. It reads integer, boolean, decimal, string, text, file, binary, GUID
 and date/duration fields. Ungrouped reads also select the table's primary key.
+As in Z8, ungrouped reads exclude the all-zero primary-key sentinel.
 `create`, `update(guid)` and `destroy(guid)` use parameterized statements for
 the same single-table field types. As in Z8, `update(null)` updates every row;
 the SQL transaction is controlled by the connection's caller.

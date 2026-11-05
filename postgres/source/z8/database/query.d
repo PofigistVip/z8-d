@@ -211,6 +211,9 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         string[] filters;
         foreach (condition; [request.where, request.queryWhere, request.queryScope])
             if (condition !is null) filters ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
+        auto key = z8_query_primary_key(query);
+        if (!groups.length && key !is null)
+            filters ~= "(" ~ z8_field_sql_format(key, Z8SqlVendor.Postgres).to!string ~ " <> '00000000-0000-0000-0000-000000000000'::uuid)";
         if (filters.length) {
             sql ~= " WHERE ";
             foreach (index, filter; filters) { if (index) sql ~= " AND "; sql ~= filter; }
@@ -294,6 +297,8 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
         foreach (condition; [request.where, request.queryWhere, request.queryScope])
             if (condition !is null) filters ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
+        if (!grouped && key !is null)
+            filters ~= "(" ~ z8_field_sql_format(key, Z8SqlVendor.Postgres).to!string ~ " <> '00000000-0000-0000-0000-000000000000'::uuid)";
         Z8PostgresParameter[] parameters;
         if (request.byRecordId) {
             if (key is null) throw new Z8PostgresException("record lookup requires a primary key");

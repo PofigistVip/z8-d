@@ -106,6 +106,7 @@ public class Probe {
         table.flag.aggregation = Aggregation.None; table.amount.aggregation = Aggregation.Sum;
         table.groupBy = {table.flag}; Field[] fields = {table.flag, table.amount}; table.read(fields);
     }
+    public static void clearGroup(Sales table) { table.groupBy.clear(); }
     public static int[] groupValues(Sales table) { return table.amount.array(); }
     public static bool groupFlag(Sales table) { return table.flag.get(); }
     public static void prepareCreate(Sales table) {
@@ -165,6 +166,14 @@ void main(string[] args) {
     long sum, groups;
     while (z8_optional_require(P.m_next(table))) { sum += z8_optional_require(P.m_amount(table)); ++groups; }
     assert(groups == 2 && sum == 35);
+    P.m_clearGroup(table);
+    db.execute(`INSERT INTO "Sales""Quote" ("RecordId","Amount","Title") VALUES ('00000000-0000-0000-0000-000000000000',99,'sentinel')`);
+    assert(z8_optional_require(P.m_count(table)) == 3 && !z8_optional_require(P.m_hasId(table, z8_guid_zero())));
+    auto ids = P.m_find(table); assert(ids.z8_size() == 3 && !ids.z8_contains(z8_guid_zero()));
+    P.m_groupSum(table); long sentinelGroups, sentinelSum;
+    while (z8_optional_require(P.m_next(table))) { sentinelSum += z8_optional_require(P.m_amount(table)); ++sentinelGroups; }
+    assert(sentinelGroups == 3 && sentinelSum == 134);
+    db.execute(`DELETE FROM "Sales""Quote" WHERE "RecordId" = '00000000-0000-0000-0000-000000000000'`);
     P.m_groupArray(table); groups = 0; sum = 0;
     while (z8_optional_require(P.m_next(table))) {
         auto values = P.m_groupValues(table);
