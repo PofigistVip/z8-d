@@ -67,6 +67,7 @@ python tests/long_expression_chains.py
 python tests/file_named_conversions.py
 python tests/object_conversion.py
 python tests/value_conversion_operators.py
+python tests/string_user_operator.py path/to/original-z8
 python tests/operator_distance.py
 python tests/assignment_operators.py
 python tests/priority_operator.py

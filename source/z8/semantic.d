@@ -567,6 +567,11 @@ class Checker {
     private ValueType convertedBinaryOperand(ValueType left, Expression expression, ValueType right, string op) {
         if (right != ValueType.selfType)
             return supportsConvertedBinary(left, right, op) ? right : ValueType.voidType;
+        // string operators take string, so a user conversion to another scalar
+        // cannot be followed by a second implicit scalar-to-string conversion.
+        if (left == ValueType.stringType)
+            return ["+", "==", "!=", "<", ">", "<=", ">="].canFind(op) &&
+                findConversion(expression.objectClass, ValueType.stringType) !is null ? ValueType.stringType : ValueType.voidType;
         ValueType selected = ValueType.voidType;
         foreach (target; [ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.stringType,
                           ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.fileType]) {
