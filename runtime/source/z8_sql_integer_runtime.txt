@@ -1,6 +1,7 @@
-enum Z8SqlIntKind { constant, group, negate, bitNot, add, subtract, multiply, divide, modulo, bitAnd, bitOr, bitXor, sign, abs, power, choose, decimalSign, decimalCeil, decimalFloor, textLength, textIndex, textRegIndex, textToInt, dateToInt, datePart, spanPart, geometryCount }
+enum Z8SqlIntKind { constant, field, group, negate, bitNot, add, subtract, multiply, divide, modulo, bitAnd, bitOr, bitXor, sign, abs, power, choose, decimalSign, decimalCeil, decimalFloor, textLength, textIndex, textRegIndex, textToInt, dateToInt, datePart, spanPart, geometryCount }
 class Z8SqlInt : Z8SqlNumeric {
     Z8SqlIntKind kind;
+    Z8Object field;
     long constant;
     Z8SqlInt left, right;
     Z8SqlBool condition;
@@ -65,6 +66,7 @@ Z8SqlInt z8_sql_int_power(Z8SqlInt value, Z8SqlInt power) { return z8_sql_int_bi
 wstring z8_sql_int_format(Z8SqlInt value, Z8SqlVendor vendor = Z8SqlVendor.Postgres, bool logical = false) {
     z8_nonnull(value);
     final switch (value.kind) {
+        case Z8SqlIntKind.field: return z8_field_sql_format(value.field, vendor);
         case Z8SqlIntKind.constant: return value.constant.to!wstring;
         case Z8SqlIntKind.group: return "("w ~ z8_sql_int_format(value.left, vendor, logical) ~ ")"w;
         case Z8SqlIntKind.negate: return "(-"w ~ z8_sql_int_format(value.left, vendor) ~ ")"w;

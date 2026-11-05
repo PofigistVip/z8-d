@@ -1,6 +1,7 @@
-enum Z8SqlDecimalKind { constant, group, fromInt, fromString, negate, add, subtract, multiply, divide, modulo, choose, abs, exp, ln, power, round, truncate, geometryFunction, textFtsRank }
+enum Z8SqlDecimalKind { constant, field, group, fromInt, fromString, negate, add, subtract, multiply, divide, modulo, choose, abs, exp, ln, power, round, truncate, geometryFunction, textFtsRank }
 class Z8SqlDecimal : Z8SqlNumeric {
     Z8SqlDecimalKind kind;
+    Z8Object field;
     Z8Decimal constant;
     Z8SqlNumeric left, right;
     Z8SqlBool condition;
@@ -95,6 +96,7 @@ private wstring z8_sql_decimal_constant(Z8Decimal value, Z8SqlVendor vendor) {
 wstring z8_sql_decimal_format(Z8SqlDecimal value, Z8SqlVendor vendor = Z8SqlVendor.Postgres, bool logical = false) {
     z8_nonnull(value);
     final switch (value.kind) {
+        case Z8SqlDecimalKind.field: return z8_field_sql_format(value.field, vendor);
         case Z8SqlDecimalKind.constant: return z8_sql_decimal_constant(value.constant, vendor);
         case Z8SqlDecimalKind.group: return "("w ~ z8_nonnull(value.left).z8_format(vendor, logical) ~ ")"w;
         case Z8SqlDecimalKind.fromInt:

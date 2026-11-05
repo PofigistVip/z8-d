@@ -15,6 +15,7 @@ class Z8FieldState {
     private IZ8FieldSlot slot;
     private Z8Primary originalValue;
     bool changed, wasNull = true;
+    wstring sqlOwnerAlias, sqlColumnName, sqlExpressionAlias;
     this(Z8Primary initial = null, bool wasNull = true) { value = initial; this.wasNull = wasNull; }
     @property Z8Primary value() { return slot is null ? boxedValue : slot.get(); }
     @property void value(Z8Primary item) { if (slot is null) boxedValue = item; else slot.put(item); }
@@ -44,6 +45,20 @@ void z8_field_set(Z8Object self, Z8Primary value) {
     state.value = value;
 }
 void z8_field_set_default(Z8Object self, Z8Primary value) { z8_field_state(self).value = value; }
+// Mirrors the alias information normally supplied by Query and FormatOptions.
+void z8_field_bind_sql(Z8Object self, wstring ownerAlias, wstring columnName, wstring expressionAlias = null) {
+    auto state = z8_field_state(self);
+    state.sqlOwnerAlias = ownerAlias; state.sqlColumnName = columnName; state.sqlExpressionAlias = expressionAlias;
+}
+wstring z8_field_sql_format(Z8Object self, Z8SqlVendor vendor) {
+    import std.string : replace;
+    auto state = z8_field_state(self);
+    if (state.sqlExpressionAlias !is null) return state.sqlExpressionAlias;
+    if (state.sqlOwnerAlias is null) throw new Exception("SQL field owner alias is not configured");
+    auto column = state.sqlColumnName is null ? z8_object_name(self) : state.sqlColumnName;
+    if (vendor == Z8SqlVendor.SqlServer) return state.sqlOwnerAlias ~ ".["w ~ column.replace("]"w, "]]"w) ~ "]"w;
+    return state.sqlOwnerAlias ~ ".\""w ~ column.replace("\""w, "\"\""w) ~ "\""w;
+}
 void z8_field_reset(Z8Object self) {
     auto state = z8_field_state(self);
     if (state.changed) { state.value = state.originalValue; state.changed = false; }
@@ -54,6 +69,9 @@ private Z8Optional!bool z8_field_changed(Z8Object self) { return z8_optional_wra
 private Z8Optional!bool z8_field_was_null(Z8Object self) { return z8_optional_wrap(z8_field_state(self).wasNull); }
 private wstring z8_field_string_value(Z8Object self) {
     return z8_string_new(z8_primary_to_string(z8_nonnull(z8_field_primary(self))));
+}
+private Z8SqlBool z8_field_is_null(Z8Object self) {
+    auto result = new Z8SqlBool(Z8SqlBoolKind.fieldIsNull); result.field = z8_nonnull(self); return result;
 }
 void z8_bind_builtin_field() {
     enum prefix = z8_field_name ~ "."w;
@@ -69,6 +87,7 @@ void z8_bind_builtin_field() {
     z8_native_bind(prefix ~ "m_string"w, &z8_field_cast!wstring);
     z8_native_bind(prefix ~ "m_isChanged"w, &z8_field_changed);
     z8_native_bind(prefix ~ "m_wasNull"w, &z8_field_was_null);
+    z8_native_bind(prefix ~ "m_sqlIsNull"w, &z8_field_is_null);
     z8_native_bind(prefix ~ "m_toString"w, &z8_field_string_value);
 }
 shared static this() { z8_bind_builtin_field(); }

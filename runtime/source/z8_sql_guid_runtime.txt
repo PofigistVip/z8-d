@@ -1,7 +1,8 @@
 // SQL GUID values retain their expression tree until formatted for a vendor.
-enum Z8SqlGuidKind { constant, group, choose }
+enum Z8SqlGuidKind { constant, field, group, choose }
 class Z8SqlGuid : Z8SqlPrimary {
     Z8SqlGuidKind kind;
+    Z8Object field;
     Z8Guid constant;
     Z8SqlGuid left, right;
     Z8SqlBool condition;
@@ -23,6 +24,7 @@ Z8SqlBool z8_sql_guid_compare(string op)(Z8SqlGuid left, Z8SqlGuid right) {
 wstring z8_sql_guid_format(Z8SqlGuid value, Z8SqlVendor vendor = Z8SqlVendor.Postgres) {
     z8_nonnull(value);
     final switch (value.kind) {
+        case Z8SqlGuidKind.field: return z8_field_sql_format(value.field, vendor);
         case Z8SqlGuidKind.constant:
             import std.array : replace;
             auto text = z8_guid_to_string(value.constant);

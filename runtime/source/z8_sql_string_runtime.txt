@@ -1,6 +1,7 @@
-enum Z8SqlStringKind { constant, group, concat, lower, upper, trimLeft, trimRight, choose, replace, regReplace, substring, reverse, padLeft, padRight, quote, jsonString, jsonInt, fromBool, fromNumeric, fromGuid, fromDate, fromDatespan, fromBinary, fromGeometry, geometryFunction }
+enum Z8SqlStringKind { constant, field, group, concat, lower, upper, trimLeft, trimRight, choose, replace, regReplace, substring, reverse, padLeft, padRight, quote, jsonString, jsonInt, fromBool, fromNumeric, fromGuid, fromDate, fromDatespan, fromBinary, fromGeometry, geometryFunction }
 class Z8SqlString : Z8SqlPrimary {
     Z8SqlStringKind kind;
+    Z8Object field;
     wstring constant;
     Z8SqlString left, right;
     Z8SqlString replacement, flags;
@@ -227,6 +228,7 @@ private wstring z8_sql_to_string_format(wstring value, bool numeric, Z8SqlVendor
 wstring z8_sql_string_format(Z8SqlString value, Z8SqlVendor vendor = Z8SqlVendor.Postgres, bool logical = false) {
     z8_nonnull(value);
     final switch (value.kind) {
+        case Z8SqlStringKind.field: return z8_field_sql_format(value.field, vendor);
         case Z8SqlStringKind.constant:
             wstring escaped;
             for (size_t i = 0; i < value.constant.length; ++i) {
