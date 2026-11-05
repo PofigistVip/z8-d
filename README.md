@@ -66,6 +66,7 @@ python tests/assignment_operators.py
 python tests/priority_operator.py
 python tests/sql_bool.py
 python tests/sql_conditional_conversions.py
+python tests/sql_named_conversions.py
 python tests/sql_int.py
 python tests/sql_decimal.py
 python tests/sql_string.py

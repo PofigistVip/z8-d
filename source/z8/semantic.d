@@ -1334,6 +1334,27 @@ class Checker {
                     return checkCall(target, target.owner, e);
                 }
                 auto receiver = typeOf(e.left);
+                auto scalarReceiver = isOptionalPrimitive(receiver) ? optionalBaseType(receiver) :
+                    receiver == ValueType.nullableString ? ValueType.stringType : receiver;
+                ValueType namedSqlType;
+                string namedSqlCall;
+                switch (e.token.text) {
+                    case "sql_bool": if (scalarReceiver == ValueType.boolType) { namedSqlType = ValueType.sqlBoolType; namedSqlCall = "z8_sql_bool_const"; } break;
+                    case "sql_int": if (scalarReceiver == ValueType.intType) { namedSqlType = ValueType.sqlIntType; namedSqlCall = "z8_sql_int_const"; } break;
+                    case "sql_decimal":
+                        if (scalarReceiver == ValueType.decimalType) { namedSqlType = ValueType.sqlDecimalType; namedSqlCall = "z8_sql_decimal_const"; }
+                        else if (scalarReceiver == ValueType.sqlIntType) { namedSqlType = ValueType.sqlDecimalType; namedSqlCall = "z8_sql_decimal_from_int"; }
+                        break;
+                    case "sql_string": if (scalarReceiver == ValueType.stringType) { namedSqlType = ValueType.sqlStringType; namedSqlCall = "z8_sql_string_const"; } break;
+                    case "sql_guid": if (scalarReceiver == ValueType.guidType) { namedSqlType = ValueType.sqlGuidType; namedSqlCall = "z8_sql_guid_const"; } break;
+                    case "sql_date": if (scalarReceiver == ValueType.dateType) { namedSqlType = ValueType.sqlDateType; namedSqlCall = "z8_sql_date_const"; } break;
+                    case "sql_datespan": if (scalarReceiver == ValueType.datespanType) { namedSqlType = ValueType.sqlDatespanType; namedSqlCall = "z8_sql_datespan_const"; } break;
+                    case "sql_geometry": if (scalarReceiver == ValueType.geometryType) { namedSqlType = ValueType.sqlGeometryType; namedSqlCall = "z8_sql_geometry_const"; } break;
+                    default: break;
+                }
+                if (namedSqlCall.length) {
+                    checkArguments(e, []); e.builtinCall = namedSqlCall; return namedSqlType;
+                }
                 if (isSqlType(receiver) && receiver != ValueType.sqlStringType && e.token.text == "toString") {
                     checkArguments(e, []);
                     e.builtinCall = receiver == ValueType.sqlBoolType ? "z8_sql_bool_toString" :
