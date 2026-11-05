@@ -3,6 +3,24 @@ private enum z8_query_name = "org.zenframework.z8.server.base.query.Query"w;
 private enum z8_expression_name = "org.zenframework.z8.server.base.table.value.Expression"w;
 
 enum Z8QueryReadLock { none, update, share, updateNoWait, shareNoWait }
+struct Z8QueryReadRequest {
+    Z8Object[] fields, sortFields, groupFields;
+    Z8SqlBool where, having;
+    int start, limit = -1;
+    Z8Guid recordId;
+    bool byRecordId;
+    Z8QueryReadLock readLock;
+}
+interface IZ8QueryCursor : IZ8FieldCursor {
+    Z8Object[] fields();
+    bool next();
+    void close();
+}
+// The host owns SQL execution and returns the actual selected fields with the
+// cursor, including any additional fields required by its query plan.
+interface IZ8QueryExecutor {
+    IZ8QueryCursor read(Z8Object query, Z8QueryReadRequest request);
+}
 private interface IZ8QueryLockCell { Z8QueryReadLock get(); }
 private class Z8QueryLockCell(T) : IZ8QueryLockCell {
     T value;
@@ -20,6 +38,9 @@ class Z8QueryState {
     Z8Optional!long priority, limit, colCount;
     Z8Optional!bool readOnly, totals;
     Z8Object period;
+    IZ8QueryExecutor executor;
+    private IZ8QueryCursor cursor;
+    private Z8Object[] cursorFields;
     private IZ8QueryLockCell lockCell;
     private Object[wstring] arrays;
     this() { colCount = z8_optional_wrap(4L); readOnly = totals = z8_optional_wrap(false); }
@@ -81,6 +102,78 @@ Z8Object[] z8_query_array(Z8Object self, wstring name) {
 long z8_query_limit(Z8Object self) {
     auto value = z8_query_state(self).limit;
     return value.present ? cast(int)value.value : 200;
+}
+void z8_query_set_executor(Z8Object self, IZ8QueryExecutor executor) { z8_query_state(self).executor = executor; }
+private Z8Object[] z8_query_read_fields(Z8ObjectArray!Z8Object value) {
+    if (value is null) return null;
+    Z8Object[] result;
+    for (long i; i < value.z8_size(); ++i) {
+        auto field = z8_nonnull(value.z8_get(i));
+        if (!z8_native_is_instance(z8_field_name, field)) throw new Exception("invalid query field");
+        result ~= field;
+    }
+    return result;
+}
+private void z8_query_close(Z8Object self) {
+    auto state = z8_query_state(self);
+    auto cursor = state.cursor;
+    if (cursor is null) return;
+    state.cursor = null;
+    auto fields = state.cursorFields; state.cursorFields = null;
+    foreach (field; fields) {
+        auto fieldState = z8_field_state(field);
+        if (fieldState.cursor is cursor) fieldState.cursor = null;
+    }
+    cursor.close();
+}
+private void z8_query_open(Z8Object self, Z8QueryReadRequest request) {
+    auto state = z8_query_state(self);
+    if (state.executor is null) throw new Exception("query executor is not configured");
+    z8_query_close(self);
+    if (request.limit < 0 && state.limit.present) request.limit = cast(int)state.limit.value;
+    request.readLock = z8_query_read_lock(self);
+    auto cursor = state.executor.read(self, request);
+    if (cursor is null) throw new Exception("query executor returned a null cursor");
+    scope(failure) cursor.close();
+    auto fields = cursor.fields().dup;
+    Z8FieldState[] fieldStates;
+    foreach (field; fields) {
+        if (field is null || !z8_native_is_instance(z8_field_name, field)) throw new Exception("query cursor returned an invalid field");
+        fieldStates ~= z8_field_state(field);
+    }
+    foreach (fieldState; fieldStates) fieldState.cursor = cursor;
+    state.cursor = cursor; state.cursorFields = fields;
+}
+private Z8Optional!bool z8_query_next(Z8Object self) {
+    auto cursor = z8_query_state(self).cursor;
+    if (cursor is null) throw new Exception("Query.read must be called before Query.next");
+    auto hasNext = cursor.next();
+    if (!hasNext) z8_query_close(self);
+    return z8_optional_wrap(hasNext);
+}
+private void z8_query_read_request(Z8Object self, Z8ObjectArray!Z8Object fields, Z8ObjectArray!Z8Object sort,
+                                   Z8SqlBool where, Z8Optional!long start, Z8Optional!long limit) {
+    Z8QueryReadRequest request;
+    request.fields = z8_query_read_fields(fields); request.sortFields = z8_query_read_fields(sort);
+    request.where = where; request.start = start.present ? cast(int)start.value : 0;
+    request.limit = limit.present ? cast(int)limit.value : -1;
+    z8_query_open(self, request);
+}
+private void z8_query_read_1(Z8Object self, Z8ObjectArray!Z8Object fields) { z8_query_read_request(self, fields, null, null, Z8Optional!long.init, Z8Optional!long.init); }
+private void z8_query_read_where(Z8Object self, Z8ObjectArray!Z8Object fields, Z8SqlBool where) { z8_query_read_request(self, fields, null, where, Z8Optional!long.init, Z8Optional!long.init); }
+private void z8_query_read_sort(Z8Object self, Z8ObjectArray!Z8Object fields, Z8ObjectArray!Z8Object sort) { z8_query_read_request(self, fields, sort, null, Z8Optional!long.init, Z8Optional!long.init); }
+private void z8_query_read_sort_where(Z8Object self, Z8ObjectArray!Z8Object fields, Z8ObjectArray!Z8Object sort, Z8SqlBool where) { z8_query_read_request(self, fields, sort, where, Z8Optional!long.init, Z8Optional!long.init); }
+private Z8Optional!bool z8_query_first_1(Z8Object self, Z8ObjectArray!Z8Object fields) {
+    z8_query_read_request(self, fields, null, null, Z8Optional!long.init, z8_optional_wrap(1L)); return z8_query_next(self);
+}
+private Z8Optional!bool z8_query_first_where(Z8Object self, Z8ObjectArray!Z8Object fields, Z8SqlBool where) {
+    z8_query_read_request(self, fields, null, where, Z8Optional!long.init, z8_optional_wrap(1L)); return z8_query_next(self);
+}
+private Z8Optional!bool z8_query_first_sort(Z8Object self, Z8ObjectArray!Z8Object fields, Z8ObjectArray!Z8Object sort) {
+    z8_query_read_request(self, fields, sort, null, Z8Optional!long.init, z8_optional_wrap(1L)); return z8_query_next(self);
+}
+private Z8Optional!bool z8_query_first_sort_where(Z8Object self, Z8ObjectArray!Z8Object fields, Z8ObjectArray!Z8Object sort, Z8SqlBool where) {
+    z8_query_read_request(self, fields, sort, where, Z8Optional!long.init, z8_optional_wrap(1L)); return z8_query_next(self);
 }
 
 private Z8ObjectArray!Z8Object z8_query_data_fields(Z8Object self, bool primaryOnly = false) {
@@ -147,5 +240,16 @@ void z8_bind_builtin_query() {
     z8_native_bind(p ~ "m_getFieldById"w, &z8_query_find_direct!"id");
     z8_native_bind(p ~ "m_getFieldByName"w, &z8_query_find_direct!"name");
     z8_native_bind(p ~ "m_findFieldById"w, &z8_query_find_field_id);
+    z8_native_bind(p ~ "m_read"w, &z8_query_read_1);
+    z8_native_bind(p ~ "m_read"w, &z8_query_read_where);
+    z8_native_bind(p ~ "m_read"w, &z8_query_read_sort);
+    z8_native_bind(p ~ "m_read"w, &z8_query_read_sort_where);
+    z8_native_bind(p ~ "m_read"w, &z8_query_read_request);
+    z8_native_bind(p ~ "m_readFirst"w, &z8_query_first_1);
+    z8_native_bind(p ~ "m_readFirst"w, &z8_query_first_where);
+    z8_native_bind(p ~ "m_readFirst"w, &z8_query_first_sort);
+    z8_native_bind(p ~ "m_readFirst"w, &z8_query_first_sort_where);
+    z8_native_bind(p ~ "m_next"w, &z8_query_next);
+    z8_native_bind(p ~ "m_close"w, &z8_query_close);
 }
 shared static this() { z8_bind_builtin_query(); }
