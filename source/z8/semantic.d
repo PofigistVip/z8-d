@@ -704,8 +704,6 @@ class Checker {
                         resolveClass(program, p.objectName, p.name) !is resolveClass(baseMethod.owner, baseParam.objectName, baseParam.name)))
                         fail("override parameter type mismatch", p.name);
                 }
-                if (baseMethod.isPublic && !m.isPublic) fail("override cannot reduce public access", m.name);
-                if (baseMethod.isProtected && !m.isPublic && !m.isProtected) fail("override cannot reduce protected access", m.name);
                 if (!m.isStatic) { m.isVirtual = true; m.overrides = true; }
             }
             methods[m.name.text] = m;

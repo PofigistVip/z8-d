@@ -477,8 +477,8 @@ unittest {
     compileSources([overloadedDerived, overloadedBase]);
     auto badInheritedSignature = SourceUnit("pkg.Derived", "Derived.bl", "class Derived extends Base { public int f(bool x) { return 1; } public bool f(int x) { return true; } }");
     rejectsSources([badInheritedSignature, overloadedBase], "Derived.bl");
-    auto wrongDerivedVisibility = SourceUnit("pkg.Derived", "Derived.bl", "class Derived extends Base { private int f(int x) { return x; } }");
-    rejectsSources([wrongDerivedVisibility, overloadedBase], "Derived.bl");
+    auto narrowerDerivedVisibility = SourceUnit("pkg.Derived", "Derived.bl", "class Derived extends Base { private int f(int x) { return x; } }");
+    compileSources([narrowerDerivedVisibility, overloadedBase]);
     auto finalBase = SourceUnit("pkg.Base", "Base.bl", "final class Base { }");
     rejectsSources([derived, finalBase], "Derived.bl");
     auto inheritanceA = SourceUnit("pkg.A", "A.bl", "class A extends B { }");

@@ -70,6 +70,7 @@ python tests/value_conversion_operators.py
 python tests/operator_distance.py
 python tests/assignment_operators.py
 python tests/priority_operator.py
+python tests/override_access.py path/to/original-z8
 python tests/sql_bool.py
 python tests/sql_conditional_conversions.py
 python tests/conditional_string_user.py path/to/original-z8
