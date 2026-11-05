@@ -65,6 +65,7 @@ python tests/array_join_primary.py path/to/original-z8
 python tests/object_array_join.py path/to/original-z8
 python tests/json_writer_oracle.py path/to/original-z8
 python tests/application_request.py path/to/original-z8
+python tests/civetweb_server.py path/to/original-z8
 python tests/guid_string_comparisons.py path/to/original-z8
 python tests/long_expression_chains.py
 python tests/long_generated_paths.py
@@ -528,7 +529,8 @@ GUID- и date-значений. Методы `set`, `put` и `remove` работ
 через `z8_application_set_request` и после обработки восстанавливает возвращённый
 предыдущий контекст. Контекст локален для потока; `z8_application_response_text`
 возвращает накопленный ответ, а перенаправление передаётся серверу как исключение
-`Z8Redirect`. Подключение этого интерфейса к CivetWeb ещё предстоит реализовать.
+`Z8Redirect`. Начальный HTTP-транспорт на CivetWeb подключает этот интерфейс; его сборка и
+текущие ограничения описаны в [webserver/README.md](webserver/README.md).
 Для `JsonPath` поддержаны создание, присваивание, разбор частей, получение
 родительского пути и выполнение пути по JSON с типизированным чтением и
 значениями по умолчанию.
@@ -736,7 +738,8 @@ $env:Z8_RUNTIME_LIB = (Resolve-Path runtime/lib/z8-runtime.lib).Path
   `oda.driver` — запуск, транспорт и интеграции;
 - `js`, `resources` — веб-клиент и ресурсы.
 
-Для реализации веб-сервера z8-d будет использоваться CivetWeb.
+Веб-сервер z8-d использует CivetWeb; первоначальный HTTP-транспорт находится в
+[webserver](webserver/README.md).
 
 Следующие необходимые этапы: расширение грамматики и AST; полное разрешение типов и
 семантический анализ; генерация D-кода и runtime всех встроенных типов; затем SQL,
