@@ -1,0 +1,49 @@
+// Shared native storage for the three Role*Access Java tables. Each table's
+// fields and binding names remain in its own adapter.
+enum Z8RoleAccessKind { table, field, request }
+private class Z8RoleAccessState { Z8Object roles, target, role, link; Z8Object[5] permissions; }
+private wstring z8_role_access_name(Z8RoleAccessKind kind) {
+    final switch (kind) {
+        case Z8RoleAccessKind.table: return "org.zenframework.z8.server.base.table.system.RoleTableAccess"w;
+        case Z8RoleAccessKind.field: return "org.zenframework.z8.server.base.table.system.RoleFieldAccess"w;
+        case Z8RoleAccessKind.request: return "org.zenframework.z8.server.base.table.system.RoleRequestAccess"w;
+    }
+}
+private void z8_role_access_new(Z8RoleAccessKind kind)(Z8Object self) {
+    enum base = "org.zenframework.z8.server.base.table.value."w;
+    auto state = new Z8RoleAccessState();
+    state.roles = z8_native_new(z8_roles_name); state.roles.z8_set_container(self); state.roles.z8_set_index("roles"w);
+    static if (kind == Z8RoleAccessKind.table) { enum targetName = z8_system_tables_name; enum targetIndex = "tables"w; enum linkIndex = "table"w; enum linkName = "Table"w; enum count = 5; }
+    else static if (kind == Z8RoleAccessKind.field) { enum targetName = z8_system_fields_name; enum targetIndex = "fields"w; enum linkIndex = "field"w; enum linkName = "Field"w; enum count = 2; }
+    else { enum targetName = z8_system_requests_name; enum targetIndex = "requests"w; enum linkIndex = "request"w; enum linkName = "Request"w; enum count = 1; }
+    state.target = z8_native_new(targetName); state.target.z8_set_container(self); state.target.z8_set_index(targetIndex);
+    state.role = z8_table_system_field(self, base ~ "Link"w, "role"w, "Role"w);
+    state.link = z8_table_system_field(self, base ~ "Link"w, linkIndex, linkName);
+    static if (kind == Z8RoleAccessKind.request) {
+        state.permissions[0] = z8_table_system_field(self, base ~ "BoolField"w, "execute"w, "Execute"w);
+    } else {
+        enum indexes = ["read"w, "write"w, "create"w, "copy"w, "destroy"w];
+        enum names = ["Read"w, "Write"w, "Create"w, "Copy"w, "Destroy"w];
+        foreach (i; 0 .. count) state.permissions[i] = z8_table_system_field(self, base ~ "BoolField"w, indexes[i], names[i]);
+    }
+    self.z8_set_native_state(z8_role_access_name(kind), state);
+}
+private Z8RoleAccessState z8_role_access_state(Z8RoleAccessKind kind)(Z8Object self) {
+    auto state = cast(Z8RoleAccessState)z8_nonnull(self, -1).z8_get_native_state(z8_role_access_name(kind));
+    if (state is null) throw new Exception("role access fields are not initialized");
+    return state;
+}
+private Z8Object* z8_role_access_address(Z8RoleAccessKind kind, string member)(Z8Object self) {
+    return &__traits(getMember, z8_role_access_state!kind(self), member);
+}
+private Z8Object* z8_role_access_permission_address(Z8RoleAccessKind kind, size_t index)(Z8Object self) {
+    return &z8_role_access_state!kind(self).permissions[index];
+}
+void z8_role_access_configure(Z8RoleAccessKind kind)(Z8Object self) {
+    auto state = z8_role_access_state!kind(self);
+    z8_link_assign(z8_nonnull(state.role), z8_nonnull(state.roles));
+    z8_link_assign(z8_nonnull(state.link), z8_nonnull(state.target));
+    auto table = cast(Z8TableState)self.z8_get_native_state(z8_table_name);
+    if (table is null) throw new Exception("Table fields are not initialized");
+    z8_field_set_default(z8_nonnull(table.lock), z8_primary_box(3L));
+}

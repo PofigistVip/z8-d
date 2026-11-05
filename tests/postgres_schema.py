@@ -102,6 +102,9 @@ import org.zenframework.z8.base.table.Sequencer;
 import org.zenframework.z8.base.table.system.Tables;
 import org.zenframework.z8.base.table.system.Requests;
 import org.zenframework.z8.base.table.system.Fields;
+import org.zenframework.z8.base.table.system.RoleTableAccess;
+import org.zenframework.z8.base.table.system.RoleFieldAccess;
+import org.zenframework.z8.base.table.system.RoleRequestAccess;
 import org.zenframework.z8.base.table.value.Field;
 public class Probe {
     public static Sample make() { Sample value; return value; }
@@ -116,6 +119,10 @@ public class Probe {
     public static Tables systemTables() { Tables value; return value; }
     public static Requests systemRequests() { Requests value; return value; }
     public static Fields systemFields() { Fields value; return value; }
+    public static RoleTableAccess roleTableAccess() { RoleTableAccess value; return value; }
+    public static RoleFieldAccess roleFieldAccess() { RoleFieldAccess value; return value; }
+    public static RoleRequestAccess roleRequestAccess() { RoleRequestAccess value; return value; }
+    public static string accessRoleName(RoleTableAccess value) { Field[] fields = {value.roles.name}; value.read(fields); if (value.next()) return value.roles.name.get(); return "missing"; }
     public static string fieldTableName(Fields value) { Field[] fields = {value.tables.name}; value.read(fields); if (value.next()) return value.tables.name.get(); return "missing"; }
     public static guid systemUser() { return Users.System; }
     public static guid administratorUser() { return Users.Administrator; }
@@ -474,6 +481,29 @@ void main(string[] args) {
     db.execute(`INSERT INTO "z8_fields"."SystemFields" ("RecordId", "Table") VALUES ('00000000-0000-0000-0000-000000000053', '00000000-0000-0000-0000-000000000052')`);
     auto fieldsBackend = new Z8PostgresDatabase(db, "z8_fields"w); auto savedFieldsBackend = z8_connection_set_current(fieldsBackend);
     assert(P.m_fieldTableName(systemFields) == "Customers"w); z8_connection_set_current(savedFieldsBackend);
+    auto roleTableAccess = P.m_roleTableAccess(); auto roleFieldAccess = P.m_roleFieldAccess(); auto roleRequestAccess = P.m_roleRequestAccess();
+    auto tableAccessDDL = z8_postgres_create_table_sql("z8_access"w, roleTableAccess);
+    auto fieldAccessDDL = z8_postgres_create_table_sql("z8_access"w, roleFieldAccess);
+    auto requestAccessDDL = z8_postgres_create_table_sql("z8_access"w, roleRequestAccess);
+    assert(tableAccessDDL.canFind(`"Role" uuid`) && tableAccessDDL.canFind(`"Table" uuid`) && tableAccessDDL.canFind(`"Lock" bigint DEFAULT 3`));
+    assert(fieldAccessDDL.canFind(`"Field" uuid`) && fieldAccessDDL.canFind(`"Read" smallint`) && fieldAccessDDL.canFind(`"Write" smallint`));
+    assert(requestAccessDDL.canFind(`"Request" uuid`) && requestAccessDDL.canFind(`"Execute" smallint`));
+    assert(z8_postgres_create_foreign_keys_sql("z8_access"w, roleTableAccess).length == 2);
+    assert(z8_postgres_create_foreign_keys_sql("z8_access"w, roleFieldAccess).length == 2);
+    assert(z8_postgres_create_foreign_keys_sql("z8_access"w, roleRequestAccess).length == 2);
+    db.execute(`CREATE SCHEMA "z8_access"`);
+    auto accessRoles = P.m_roles(); db.execute(z8_postgres_create_table_sql("z8_access"w, accessRoles));
+    z8_postgres_ensure_null_record(db, "z8_access"w, accessRoles);
+    z8_postgres_create_tables(db, "z8_access"w, [roleTableAccess, roleFieldAccess, roleRequestAccess, P.m_systemFields(), P.m_systemRequests(), P.m_systemTables()]);
+    bool invalidRole;
+    try { db.execute(`INSERT INTO "z8_access"."SystemRoleTableAccess" ("RecordId", "Role") VALUES ('00000000-0000-0000-0000-000000000061', '00000000-0000-0000-0000-000000000099')`); }
+    catch (Z8PostgresException) { invalidRole = true; }
+    assert(invalidRole);
+    db.execute(`INSERT INTO "z8_access"."SystemRoles" ("RecordId", "Name") VALUES ('DC08CA72-C668-412F-91B7-022F1C82AC09', 'Admins')`);
+    db.execute(`INSERT INTO "z8_access"."SystemTables" ("RecordId", "Name") VALUES ('00000000-0000-0000-0000-000000000062', 'Orders')`);
+    db.execute(`INSERT INTO "z8_access"."SystemRoleTableAccess" ("RecordId", "Role", "Table") VALUES ('00000000-0000-0000-0000-000000000063', 'DC08CA72-C668-412F-91B7-022F1C82AC09', '00000000-0000-0000-0000-000000000062')`);
+    auto accessBackend = new Z8PostgresDatabase(db, "z8_access"w); auto savedAccessBackend = z8_connection_set_current(accessBackend);
+    assert(P.m_accessRoleName(roleTableAccess) == "Admins"w); z8_connection_set_current(savedAccessBackend);
     db.execute(`ALTER TABLE "z8_test"."StaticSample" DROP CONSTRAINT "StaticSample_pkey", ADD PRIMARY KEY ("Label")`);
     differences = z8_postgres_compare_table(expectedStatic, z8_postgres_describe_table(db, "z8_test"w, "StaticSample"w));
     bool changedKey;

@@ -1,0 +1,11 @@
+private enum z8_role_field_access_name = "org.zenframework.z8.server.base.table.system.RoleFieldAccess"w;
+shared static this() {
+    enum kind = Z8RoleAccessKind.field;
+    z8_native_bind(z8_role_field_access_name ~ ".m_new"w, &z8_role_access_new!kind);
+    z8_native_bind_field(z8_role_field_access_name ~ ".f_roles"w, &z8_role_access_address!(kind, "roles"));
+    z8_native_bind_field(z8_role_field_access_name ~ ".f_fields"w, &z8_role_access_address!(kind, "target"));
+    z8_native_bind_field(z8_role_field_access_name ~ ".f_role"w, &z8_role_access_address!(kind, "role"));
+    z8_native_bind_field(z8_role_field_access_name ~ ".f_field"w, &z8_role_access_address!(kind, "link"));
+    static foreach (i, name; ["read"w, "write"w])
+        z8_native_bind_field(z8_role_field_access_name ~ ".f_"w ~ name, &z8_role_access_permission_address!(kind, i));
+}
