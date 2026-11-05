@@ -415,6 +415,9 @@ runtime D и отличается от Java.
 [examples/native](examples/native), проверка связывания — в
 [tests/native_bindings.py](tests/native_bindings.py). Это основа поддержки native:
 поля внешних типов и общая семантика пользовательских primary-типов ещё не перенесены.
+Проверка на нескольких исходных объявлениях стандартной библиотеки доступна через
+`python tests/stdlib_declarations.py <путь-к-org.zenframework.z8>`; она проверяет
+компиляцию объявлений в D, но не полноту реализаций этих классов.
 
 Поддерживаются конкатенация, сравнения, `length`, `isEmpty`, `compare`, `compareNoCase`, `startsWith`,
 `endsWith`, `indexOf`, `lastIndexOf`, `substring`, `charAt`, `trim`, `trimLeft`,
