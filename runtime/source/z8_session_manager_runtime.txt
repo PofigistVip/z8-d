@@ -1,0 +1,82 @@
+// Active-session bookkeeping analogous to org.zenframework.z8.auth.SessionManager.
+// The caller supplies session IDs issued by its authentication provider.
+class Z8SessionManager {
+    private class Entry {
+        Z8ApplicationSession session;
+        wstring userKey, schema;
+        this(Z8ApplicationSession session, wstring userKey, wstring schema) {
+            this.session = session; this.userKey = userKey; this.schema = schema;
+        }
+    }
+    private Entry[wstring] sessions, users;
+    private Object mutex;
+    private long timeoutMilliseconds;
+    private bool oneSessionPerUser;
+    this(long timeoutMilliseconds = 0, bool oneSessionPerUser = false) {
+        if (timeoutMilliseconds < 0) throw new Exception("negative session timeout");
+        this.timeoutMilliseconds = timeoutMilliseconds; this.oneSessionPerUser = oneSessionPerUser;
+        mutex = new Object();
+    }
+    private wstring key(Z8Guid id, wstring schema) {
+        return z8_string_or_empty(schema) ~ "/"w ~ z8_guid_to_string(z8_nonnull(id));
+    }
+    private void removeEntry(Entry entry) {
+        sessions.remove(entry.session.id);
+        users.remove(entry.userKey);
+    }
+    Z8ApplicationSession create(wstring id, Z8UserData user, Z8UserData system, wstring schema) {
+        if (id is null || !id.length) throw new Exception("session ID is required");
+        auto userKey = key(z8_nonnull(user).id, schema);
+        synchronized (mutex) {
+            auto found = userKey in users;
+            if (found !is null) {
+                if (!oneSessionPerUser) { (*found).session.setUser(user); return (*found).session; }
+                // Check the replacement ID first so a duplicate cannot revoke an existing session.
+                if (id in sessions) throw new Exception("duplicate session ID");
+                removeEntry(*found);
+            } else if (id in sessions) throw new Exception("duplicate session ID");
+            auto session = new Z8ApplicationSession(id, user, system);
+            auto entry = new Entry(session, userKey, schema);
+            sessions[id] = entry; users[userKey] = entry;
+            return session;
+        }
+    }
+    Z8ApplicationSession getSession(wstring id) {
+        if (id is null) return null;
+        synchronized (mutex) {
+            auto found = id in sessions;
+            if (found is null) return null;
+            auto original = (*found).session;
+            original.touch();
+            // Request-local copies isolate switchUser from the stored session.
+            return new Z8ApplicationSession(original.id, original.user, original.system);
+        }
+    }
+    void dropUserSessions(Z8Guid id, wstring schema) {
+        auto userKey = key(id, schema);
+        synchronized (mutex) { auto found = userKey in users; if (found !is null) removeEntry(*found); }
+    }
+    void dropRoleSessions(Z8Guid roleId, wstring schema) {
+        z8_nonnull(roleId);
+        synchronized (mutex) {
+            Entry[] expired;
+            foreach (entry; sessions) {
+                auto user = entry.session.user;
+                if (user.administrator || entry.schema != schema) continue;
+                foreach (role; user.roles) if (role !is null && role == roleId) { expired ~= entry; break; }
+            }
+            foreach (entry; expired) removeEntry(entry);
+        }
+    }
+    // The original manager expires sessions during an explicit periodic check.
+    void check(long now) {
+        if (!timeoutMilliseconds) return;
+        synchronized (mutex) {
+            Entry[] expired;
+            foreach (entry; sessions)
+                if (entry.session.lastAccessTime < now && now - entry.session.lastAccessTime > timeoutMilliseconds)
+                    expired ~= entry;
+            foreach (entry; expired) removeEntry(entry);
+        }
+    }
+}

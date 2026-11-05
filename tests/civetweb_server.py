@@ -99,17 +99,22 @@ import std.stdio : writeln, stdout, readln;
 import core.memory : GC;
 import std.string : indexOf;
 class Authority : IZ8HttpAuthority {
-    Z8ApplicationSession makeSession(wstring login) {
+    Z8SessionManager sessions;
+    this() {
+        sessions = new Z8SessionManager();
+        makeSession("valid"w, "session-user"w);
+    }
+    Z8ApplicationSession makeSession(wstring token, wstring login) {
         auto user = new Z8UserData(); user.id = z8_guid_create(42); user.login = login;
         auto system = new Z8UserData(); system.id = z8_guid_create(1);
-        return new Z8ApplicationSession("valid"w, user, system);
+        return sessions.create(token, user, system, "default"w);
     }
     Z8ApplicationSession authorize(Z8HttpRequest request, wstring id, wstring serverId) {
         if (request.remoteAddress != "127.0.0.1") return null;
-        return id == "valid"w && serverId == "shard"w ? makeSession("session-user"w) : null;
+        return serverId == "shard"w ? sessions.getSession(id) : null;
     }
     Z8ApplicationSession login(Z8HttpRequest request, wstring login, wstring password) {
-        return login == "alice"w && password == "secret"w ? makeSession(login) : null;
+        return login == "alice"w && password == "secret"w ? makeSession("new"w, login) : null;
     }
 }
 void runRequest(Z8HttpRequest request) {
