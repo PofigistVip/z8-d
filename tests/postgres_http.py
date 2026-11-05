@@ -53,8 +53,11 @@ class Authority : IZ8HttpAuthority {
     Z8ApplicationSession authorize(Z8HttpRequest request, wstring id, wstring server) {
         if (server != "test"w || (id != "full"w && id != "limited"w && id != "denied"w)) return null;
         auto user = new Z8UserData(); user.id = z8_guid_create(1);
-        user.privileges = new Z8Privileges(Z8Access(true, false, false, false, false, true));
-        if (id == "limited"w) user.privileges.setFieldAccess(z8_guid_create_name("Sample.Title"w), Z8Access.init);
+        user.privileges = new Z8Privileges(Z8Access(true, false, false, false, true, true));
+        if (id == "limited"w) {
+            user.privileges.setFieldAccess(z8_guid_create_name("Sample.Title"w), Z8Access.init);
+            user.privileges.setTableAccess(z8_guid_create_name("Sample"w), Z8Access(true, false, false, false, false, true));
+        }
         if (id == "denied"w) user.privileges.setRequestAccess(z8_guid_create_name("Sample"w), Z8Access.init);
         return new Z8ApplicationSession(id, user, user);
     }
@@ -97,7 +100,10 @@ void main(string[] args) {
             port = int(line)
             def request(session="full", **params):
                 query = dict(request="Sample", action="read", session=session, server="test",
-                             fields='["title","amount"]', **params)
+                             fields='["title","amount"]')
+                query.update(params)
+                if query["action"] == "destroy":
+                    query.pop("fields")
                 conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
                 try:
                     conn.request("GET", "/request.json?" + urlencode(query))
@@ -120,6 +126,13 @@ void main(string[] args) {
                 results = list(workers.map(lambda i: request(session="limited" if i % 2 else "full"), range(16)))
             assert all(result["success"] and len(result["data"]) == 2 for result in results)
             assert all(("title" not in result["data"][0]) == (i % 2 == 1) for i, result in enumerate(results))
+            data = '["00000000-0000-0000-0000-000000000001"]'
+            result = request(session="limited", action="destroy", data=data)
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = request(action="destroy", data=data)
+            assert result["success"], result
+            result = request()
+            assert len(result["data"]) == 1 and result["data"][0]["title"] == "Second", result
         finally:
             if process.poll() is None:
                 try:

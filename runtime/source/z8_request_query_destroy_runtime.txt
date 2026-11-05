@@ -1,0 +1,54 @@
+// Transactional subset of the Java DestroyAction for direct table records.
+void z8_application_dispatch_query_destroy(wstring className) {
+    z8_application_dispatch_query_destroy_target(className, null);
+}
+private void z8_application_dispatch_query_destroy_target(wstring className, Z8Object query) {
+    auto request = z8_application_require_request();
+    auto session = z8_nonnull(request.session);
+    auto params = z8_nonnull(request.parameters);
+    if (request.writer.scopes.length != 2) throw new Exception("response object is not open");
+    if (params.z8_get("action"w) != "destroy"w) throw new Exception("unsupported query action");
+    if (!z8_application_may_execute(session, className, "destroy"w)) throw new Exception("request access denied");
+    auto keys = params.z8_keys();
+    for (long i; i < keys.z8_size(); ++i) {
+        auto name = keys.z8_get(i);
+        if (name is null) throw new Exception("invalid query destroy parameter");
+        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "data"w) continue;
+        if (params.z8_get(name).length) throw new Exception("unsupported query destroy parameter: " ~ name.to!string);
+    }
+    if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
+    if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, query))
+        throw new Exception("query destroy requires a Table");
+    auto privileges = z8_nonnull(session.user).privileges;
+    auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
+    if (privileges is null || !privileges.getTableAccess(queryKey).destroy) throw new Exception("query destroy access denied");
+    auto key = z8_query_primary_key(query);
+    if (key is null) throw new Exception("query has no primary key");
+    auto json = params.z8_get("data"w);
+    if (json is null || !json.length) throw new Exception("query destroy requires records");
+    auto records = z8_json_parse(json.to!string);
+    if (records.type != JSONType.array || !records.array.length) throw new Exception("query destroy requires records");
+    Z8Guid[] ids;
+    foreach (record; records.array) {
+        JSONValue value;
+        if (record.type == JSONType.string) value = record;
+        else if (record.type == JSONType.object) {
+            auto found = key.z8_id().to!string in record.object;
+            if (found is null) throw new Exception("query destroy record has no primary key");
+            value = *found;
+        } else throw new Exception("invalid query destroy record");
+        if (value.type != JSONType.string || !value.str.length) throw new Exception("invalid query destroy record id");
+        auto id = z8_guid_parse(value.str.to!wstring);
+        if (id is null) throw new Exception("invalid query destroy record id");
+        ids ~= id;
+    }
+    auto connection = z8_connection_current_backend();
+    if (connection is null) throw new Exception("no current database connection");
+    connection.beginTransaction();
+    scope(failure) connection.rollback();
+    foreach (id; ids) {
+        if (z8_query_user_events_enabled()) query.z8_query_virtual_onDestroyAction(id);
+        z8_query_destroy_id(query, id);
+    }
+    connection.commit();
+}

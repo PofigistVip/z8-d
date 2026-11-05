@@ -110,7 +110,13 @@ Linked and computed fields, other read options and custom request parameters
 are rejected. The host must open the application response before calling it.
 `z8_application_dispatch_request` selects this adapter for a table request;
 the CivetWeb host must explicitly call the dispatcher and install a backend for
-the worker thread. Other query actions are not implemented.
+the worker thread. The separately supported `destroy` action is described below.
+The direct-table `destroy` action accepts a nonempty `data` array of GUID
+strings or objects containing the primary-key field. It checks request execute
+and table destroy access, invokes the BL destroy hooks, and processes all records
+in a transaction. Linked-query deletion and additional options are not supported.
+As with the Java connection manager, nested transactions share the outer
+transaction; callers must propagate failures to the outermost rollback.
 The native `Users.onNew` defaults mirror the Java implementation, including its
 default password value and `changePassword` flag; explicitly supplied values
 are preserved even when user-level events are disabled. With user events enabled,

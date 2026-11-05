@@ -242,8 +242,10 @@ void z8_application_dispatch_request() {
     if (request.writer.scopes.length != 2) throw new Exception("response object is not open");
     if (!z8_application_may_execute(request.session, className, action)) throw new Exception("request access denied");
     auto target = z8_object_new_instance_native(className);
-    if (z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, target))
-        z8_application_dispatch_query_read_target(className, target);
+    if (z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, target)) {
+        if (action == "destroy"w) z8_application_dispatch_query_destroy_target(className, target);
+        else z8_application_dispatch_query_read_target(className, target);
+    }
     else z8_application_dispatch_object_target(className,
         (Z8ApplicationSession session, wstring name, wstring selectedAction) {
             return z8_application_may_execute(session, name, selectedAction);

@@ -49,7 +49,7 @@ import org.zenframework.z8.base.application.Application;
     virtual protected void onCopyAction(guid id) { actionEvents = "C"; }
     virtual protected void onCreateAction(guid id) { actionEvents += "N"; }
     virtual protected void onUpdateAction(guid id) { actionEvents += "U"; }
-    virtual protected void onDestroyAction(guid id) { actionEvents += "D"; }
+    virtual protected void onDestroyAction(guid id) { actionEvents = "D"; }
     virtual protected sql_bool scope() { return amount >= 0; }
     virtual protected void onReadAction() {
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-hook") addWhere(amount >= 40);
@@ -214,8 +214,8 @@ void main(string[] args) {
     auto table = P.m_make();
     auto eventTarget = P.m_make();
     eventTarget.z8_query_virtual_onCopyAction(z8_guid_create(1)); eventTarget.z8_query_virtual_onCreateAction(z8_guid_create(1));
-    eventTarget.z8_query_virtual_onUpdateAction(z8_guid_create(1)); eventTarget.z8_query_virtual_onDestroyAction(z8_guid_create(1));
-    assert(eventTarget.m_getActionEvents() == "CNUD"w);
+    eventTarget.z8_query_virtual_onUpdateAction(z8_guid_create(1)); assert(eventTarget.m_getActionEvents() == "CNU"w);
+    eventTarget.z8_query_virtual_onDestroyAction(z8_guid_create(1)); assert(eventTarget.m_getActionEvents() == "D"w);
     assert(P.m_fieldKey(table) == z8_guid_create_name("Sample;--.Title"w));
     auto registry = new Z8RuntimeRegistry(); registry.registerTable(table); registry.registerTable(P.m_make());
     registry.registerTable(P.m_indexes()); registry.registerRequest(table);
@@ -680,6 +680,25 @@ void main(string[] args) {
     z8_application_finish_response(hooked, cast(Z8RequestMonitor)hooked.monitor);
     auto hookedJson = parseJSON(z8_application_response_text(hooked).to!string);
     assert(hookedJson["data"].array.length == 1 && hookedJson["data"][0]["amount"].integer == 42);
+    db.execute(`CREATE TABLE "z8_bootstrap"."DeleteRef" ("Target" uuid REFERENCES "z8_bootstrap"."Sample;--" ("RecordId"))`);
+    db.execute(`INSERT INTO "z8_bootstrap"."DeleteRef" VALUES ('00000000-0000-0000-0000-00000000012E')`);
+    bool destroy(wstring data) {
+        auto request = new Z8ApplicationRequest(); request.session = querySession; request.monitor = new Z8RequestMonitor();
+        request.parameters.z8_add("request"w, "Sample"w); request.parameters.z8_add("action"w, "destroy"w); request.parameters.z8_add("data"w, data);
+        z8_application_set_request(request); z8_application_start_response(request, "Sample"w);
+        try { z8_application_dispatch_request(); } catch (Exception) { return false; }
+        z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return true;
+    }
+    assert(!destroy(`[]`w));
+    assert(!destroy(`[{"recordId":"bad"}]`w));
+    queryUser.privileges.setTableAccess(bootTableKey, Z8Access(true, false, false, false, false, true));
+    assert(!destroy(`["00000000-0000-0000-0000-00000000012D"]`w));
+    queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
+    assert(!destroy(`["00000000-0000-0000-0000-00000000012D",{"recordId":"00000000-0000-0000-0000-00000000012E"}]`w));
+    assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-00000000012D'`).rows[0][0].text == "1");
+    db.execute(`DELETE FROM "z8_bootstrap"."DeleteRef"`);
+    assert(destroy(`["00000000-0000-0000-0000-00000000012D",{"recordId":"00000000-0000-0000-0000-00000000012E"},"00000000-0000-0000-0000-000000000000"]`w));
+    assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."Sample;--" WHERE "RecordId" IN ('00000000-0000-0000-0000-00000000012D', '00000000-0000-0000-0000-00000000012E')`).rows[0][0].text == "0");
     assert(rejectedRead("recordId"w, `["invalid"]`w));
     queryUser.privileges.setFieldAccess(bootFieldKey, Z8Access.init);
     assert(rejectedRead("sort"w, `[{"property":"title"}]`w));
