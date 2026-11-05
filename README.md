@@ -70,6 +70,7 @@ python tests/assignment_operators.py
 python tests/priority_operator.py
 python tests/sql_bool.py
 python tests/sql_conditional_conversions.py
+python tests/conditional_string_user.py path/to/original-z8
 python tests/sql_named_conversions.py
 python tests/sql_int.py
 python tests/sql_decimal.py

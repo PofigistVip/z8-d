@@ -2473,6 +2473,8 @@ class Checker {
                     if (!matches(e.right, ValueType.stringType)) fail("conditional branch type mismatch", e.token);
                     left = right;
                 }
+                if ([ValueType.stringType, ValueType.nullableString].canFind(left) && right == ValueType.selfType && matches(e.third, ValueType.stringType)) right = left;
+                if ([ValueType.stringType, ValueType.nullableString].canFind(right) && left == ValueType.selfType && matches(e.right, ValueType.stringType)) left = right;
                 if (left == ValueType.stringType && right == ValueType.nullableString) left = ValueType.nullableString;
                 if (left == ValueType.nullableString && right == ValueType.stringType) right = ValueType.nullableString;
                 if (left != right && isSqlType(right) && matches(e.right, right)) left = right;
