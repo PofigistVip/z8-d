@@ -37,8 +37,6 @@ private Z8Object[] z8_application_query_field_path(Z8Object root, Z8Object field
     enum tableName = "org.zenframework.z8.server.base.table.Table"w;
     enum linkName = "org.zenframework.z8.server.base.table.value.Link"w;
     enum joinName = "org.zenframework.z8.server.base.table.value.Join"w;
-    if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
-        throw new Exception("computed fields are not supported by query read");
     auto owner = z8_object_container(field);
     while (owner !is null && !z8_native_is_instance(queryName, owner)) owner = z8_object_container(owner);
     if (owner is null) throw new Exception("query field has no owner");
@@ -75,18 +73,25 @@ private Z8Object[] z8_application_query_field_path(Z8Object root, Z8Object field
     return links;
 }
 private bool z8_application_query_field_readable(Z8Object root, Z8Object field, Z8Privileges privileges) {
-    z8_application_query_field_path(root, field, privileges);
-    if (field is z8_query_primary_key(root)) return true;
-    auto owner = z8_nonnull(field.z8_get_owner());
-    auto ownerKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, owner);
-    auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
-    return privileges.getFieldAccess(ownerKey, fieldKey).read;
+    Z8Object[] seen;
+    bool check(Z8Object candidate) {
+        foreach (existing; seen) if (existing is candidate) return true;
+        seen ~= candidate;
+        z8_application_query_field_path(root, candidate, privileges);
+        auto owner = z8_nonnull(candidate.z8_get_owner());
+        auto ownerKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, owner);
+        auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, candidate);
+        if (candidate !is z8_query_primary_key(root) && !privileges.getFieldAccess(ownerKey, fieldKey).read) return false;
+        foreach (dependency; z8_field_query_dependencies(candidate))
+            if (dependency !is candidate && !check(dependency)) return false;
+        return true;
+    }
+    return check(field);
 }
 
 // Shared by read and mutation responses; field selection is checked before a
 // mutation starts, so malformed response options cannot fail after commit.
 private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges privileges, Z8StringMap params, bool includeKeys = true) {
-    auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
     auto key = z8_nonnull(z8_query_primary_key(query));
     Z8Object[] requested;
     auto fields = params.z8_get("fields"w);
@@ -116,10 +121,7 @@ private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges priv
         foreach (existing; selected) if (existing is field) { duplicate = true; break; }
         if (duplicate) continue;
         auto path = z8_application_query_field_path(query, field, privileges);
-        auto owner = field.z8_get_owner();
-        auto tableKey = owner is null ? queryKey : z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, owner);
-        auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
-        if (field !is key && !privileges.getFieldAccess(tableKey, fieldKey).read) continue;
+        if (!z8_application_query_field_readable(query, field, privileges)) continue;
         foreach (link; path) {
             bool present;
             foreach (existing; selected) if (existing is link) { present = true; break; }
@@ -220,6 +222,8 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         if (!exists) selected ~= field;
     }
     if (groups.length) foreach (field; selected) {
+        if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
+            throw new Exception("computed fields in grouped results are not supported");
         auto aggregation = z8_field_aggregation(field);
         if (aggregation == Z8FieldAggregation.array || aggregation == Z8FieldAggregation.distinct)
             throw new Exception("group array serialization is not supported");
@@ -375,6 +379,8 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         Z8Object[] fields;
         Z8FieldAggregation[] aggregations;
         foreach (field; selected) {
+            if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
+                throw new Exception("computed fields in totals are not supported");
             auto fieldState = z8_field_state(field);
             auto aggregation = z8_field_aggregation(field);
             if ((fieldState.totals.present && !fieldState.totals.value) || aggregation == Z8FieldAggregation.none ||

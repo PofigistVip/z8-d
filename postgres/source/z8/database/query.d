@@ -392,7 +392,12 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                 if (index) sql ~= ", ";
                 auto direction = z8_field_sort_direction(field);
                 if (direction != "asc"w && direction != "desc"w) throw new Z8PostgresException("invalid PostgreSQL sort direction");
-                sql ~= z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string ~ " " ~ direction.to!string;
+                auto expression = z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string;
+                // A bare numeric constant in ORDER BY is interpreted as a
+                // column ordinal by PostgreSQL, even when it is a BL expression.
+                if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
+                    expression = "(CASE WHEN TRUE THEN " ~ expression ~ " ELSE NULL END)";
+                sql ~= expression ~ " " ~ direction.to!string;
             }
         }
         if (request.limit >= 0) sql ~= " LIMIT " ~ request.limit.to!string;

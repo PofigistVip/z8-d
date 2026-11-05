@@ -602,7 +602,7 @@ void main(string[] args) {
     assert(rejectedRead("otherOption"w, "true"w));
     assert(rejectedRead("action"w, "write"w));
     assert(rejectedRead("fields"w, `{"id":"title"}`w));
-    assert(rejectedRead("fields"w, `["computed"]`w));
+    assert(!rejectedRead("fields"w, `["computed"]`w));
     assert(rejectedRead("start"w, "-1"w));
     assert(rejectedRead("filter"w, `{"logical":"or","expressions":[{"property":"title","value":"Visible"},{}]}`w));
     assert(rejectedRead("filter"w, `{"logical":"bad","expressions":[{"property":"title","value":"Visible"}]}`w));
@@ -727,7 +727,7 @@ void main(string[] args) {
     assert(sortedAmount(`[{"property":"amount","direction":"DESC"}]`w) == 42);
     assert(sortedAmount(`[{"property":"amount","direction":"DESC"}]`w, "1"w) == 10);
     assert(rejectedRead("sort"w, `[{"property":"amount","direction":"invalid"}]`w));
-    assert(rejectedRead("sort"w, `[{"property":"computed"}]`w));
+    assert(!rejectedRead("sort"w, `[{"property":"computed"}]`w));
     long recordCount(wstring ids, wstring filter = null) {
         auto byId = new Z8ApplicationRequest(); byId.session = querySession; byId.monitor = new Z8RequestMonitor();
         byId.parameters.z8_add("action"w, "read"w); byId.parameters.z8_add("fields"w, `["amount"]`w);

@@ -70,9 +70,11 @@ public class InnerOrder extends Table {
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.Link;
 import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.table.value.IntExpression;
 [name "Orders"] public class HttpOrder extends Table {
     [name "Title"] public StringField title;
     public Customer customer; [name "CustomerId"] public Link customerId = customer;
+    public IntExpression nameLength = customer.label.sql_string().length();
 }
 ''',
         "LeftOrder": '''
@@ -284,6 +286,10 @@ void main(string[] args) {
     assert(response["data"].array.length == 2 && response["data"][0]["title"].str == "Second");
     response = parseJSON(requestFields(`["title"]`w, null, null, "ob"w, `["customer.label"]`w).to!string);
     assert(response["data"].array.length == 1 && response["data"][0]["title"].str == "Second");
+    response = parseJSON(requestFields(`["title","nameLength"]`w, `{"property":"nameLength","operator":"gt","value":"3"}`w).to!string);
+    assert(response["data"].array.length == 1 && response["data"][0]["title"].str == "First" && response["data"][0]["nameLength"].integer == 5);
+    response = parseJSON(requestFields(`["title"]`w, null, `[{"property":"nameLength"}]`w).to!string);
+    assert(response["data"].array.length == 2 && response["data"][0]["title"].str == "Second");
     auto denied = Z8Access.init;
     user.privileges.setTableAccess(z8_guid_create_name("Customers"w), denied);
     bool blocked; try { requestFields(`["customer.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
@@ -300,6 +306,9 @@ void main(string[] args) {
     blocked = false; try { requestFields(`["title"]`w, `{"property":"customer.label","value":"alice"}`w); } catch (Exception) { blocked = true; } assert(blocked);
     blocked = false; try { requestFields(`["title"]`w, null, `[{"property":"customer.label"}]`w); } catch (Exception) { blocked = true; } assert(blocked);
     blocked = false; try { requestFields(`["title"]`w, null, null, "alice"w, `["customer.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
+    response = parseJSON(requestFields(`["nameLength"]`w).to!string);
+    foreach (row; response["data"].array) assert("nameLength" !in row.object);
+    blocked = false; try { requestFields(`["title"]`w, `{"property":"nameLength","operator":"gt","value":"3"}`w); } catch (Exception) { blocked = true; } assert(blocked);
     z8_connection_set_current(priorBackend);
     db.close();
 }

@@ -123,9 +123,11 @@ filters and query scope; an empty list keeps the normal filters and scope.
 Direct Link paths may be selected, filtered, searched and sorted when every
 intermediate link and target table is readable; selected linked fields include
 their link fields in the response. Linked SQL-group, HAVING and context fields, custom
-Join paths, computed fields, other read
+Join paths, computed fields in grouped results or totals, other read
 options and custom request parameters are rejected. The host must open the
 application response before calling it.
+Ordinary computed fields can be selected, filtered and sorted only when all
+their declared and SQL expression dependencies are readable.
 `z8_application_dispatch_request` selects this adapter for a table request;
 the CivetWeb host must explicitly call the dispatcher and install a backend for
 the worker thread. The separately supported write actions are described below.
