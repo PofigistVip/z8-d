@@ -16,6 +16,26 @@ public class ArrayMatrices {
         if (empty.first() != null || empty.last() != null) return 6;
         empty.add(row);
         if (empty.first()[2] != 4 || empty[0].size() != 3) return 7;
+        guid id = '00000000-0000-0000-0000-000000000001';
+        binary bytes = '1, 2';
+        datespan span = '1 02:03:04';
+        date day = '29/02/2024';
+        geometry point;
+        file path = "matrix.txt";
+        exception problem = "matrix";
+        primary number = 42;
+        guid[][] ids = {{id}};
+        binary[][] payloads = {{bytes}};
+        datespan[][] spans = {{span}};
+        date[][] dates = {{day}};
+        geometry[][] shapes = {{point}};
+        file[][] paths = {{path}};
+        exception[][] problems = {{problem}};
+        primary[][] values = {{number}};
+        if (ids[0][0].minor() != 1 || payloads[0][0].length() != 2) return 8;
+        if (spans[0][0].days() != 1 || dates[0][0].year() != 2024) return 9;
+        if (shapes[0].size() != 1 || paths[0][0].name != "matrix.txt") return 10;
+        if (problems[0][0].getMessage() != "matrix" || values[0][0].toString() != "42") return 11;
         return 227;
     }
 }

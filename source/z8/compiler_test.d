@@ -212,6 +212,8 @@ unittest {
         int[][] numbers = {{1}, {2, 3}};
         bool[][] flags = {{true}, {false}};
         string[][] words = {{"a"}, {"b"}};
+        guid[][] ids; binary[][] data; datespan[][] spans; date[][] dates;
+        geometry[][] shapes; file[][] files; exception[][] errors; primary[][] values2;
         int[] ordinary = {(1 + 2), (3)};
     } }});
     rejects(q{class A { static void f() { int[] values = {(1, 2)}; } }});

@@ -117,14 +117,30 @@ class Parser {
                 case ValueType.stringType:
                     if (accept("[")) { expect("]"); return ValueType.stringMatrix; }
                     return ValueType.stringArray;
-                case ValueType.primaryType: return ValueType.primaryArray;
-                case ValueType.guidType: return ValueType.guidArray;
-                case ValueType.binaryType: return ValueType.binaryArray;
-                case ValueType.datespanType: return ValueType.datespanArray;
-                case ValueType.dateType: return ValueType.dateArray;
-                case ValueType.geometryType: return ValueType.geometryArray;
-                case ValueType.fileType: return ValueType.fileArray;
-                case ValueType.exceptionType: return ValueType.exceptionArray;
+                case ValueType.primaryType:
+                    if (accept("[")) { expect("]"); return ValueType.primaryMatrix; }
+                    return ValueType.primaryArray;
+                case ValueType.guidType:
+                    if (accept("[")) { expect("]"); return ValueType.guidMatrix; }
+                    return ValueType.guidArray;
+                case ValueType.binaryType:
+                    if (accept("[")) { expect("]"); return ValueType.binaryMatrix; }
+                    return ValueType.binaryArray;
+                case ValueType.datespanType:
+                    if (accept("[")) { expect("]"); return ValueType.datespanMatrix; }
+                    return ValueType.datespanArray;
+                case ValueType.dateType:
+                    if (accept("[")) { expect("]"); return ValueType.dateMatrix; }
+                    return ValueType.dateArray;
+                case ValueType.geometryType:
+                    if (accept("[")) { expect("]"); return ValueType.geometryMatrix; }
+                    return ValueType.geometryArray;
+                case ValueType.fileType:
+                    if (accept("[")) { expect("]"); return ValueType.fileMatrix; }
+                    return ValueType.fileArray;
+                case ValueType.exceptionType:
+                    if (accept("[")) { expect("]"); return ValueType.exceptionMatrix; }
+                    return ValueType.exceptionArray;
                 case ValueType.selfType: return ValueType.selfArray;
                 default: error("this array element type is not supported"); assert(0);
             }
