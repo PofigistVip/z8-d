@@ -114,12 +114,28 @@ class Z8Redirect : Z8Exception {
     this(wstring location) { super(null); this.location = location; }
 }
 
+// The host supplies an authenticated identity and the database's system user.
+// As in Session.java, restoreUser returns to setUser's identity, not a stack.
+class Z8ApplicationSession {
+    wstring id;
+    Z8UserData user, system;
+    private Z8UserData originalUser;
+    long lastAccessTime;
+    this(wstring id, Z8UserData user, Z8UserData system) {
+        this.id = id; this.system = system; setUser(user);
+    }
+    void setUser(Z8UserData value) { user = value; originalUser = value; touch(); }
+    void switchUser(Z8UserData value) { user = value; }
+    void restoreUser() { user = originalUser; }
+    void touch() { lastAccessTime = z8_optional_require(z8_application_current_time()); }
+}
 // The host supplies a request for the current thread; response wrappers share
 // the request's writer, as ApplicationServer.getRequest() does in Z8.
 class Z8ApplicationRequest {
     Z8StringMap parameters;
     Z8Array!Z8File files;
     IZ8ApplicationMonitor monitor;
+    Z8ApplicationSession session;
     private Z8JsonWriterState writer;
     this() {
         parameters = new Z8StringMap();
@@ -172,6 +188,13 @@ private Z8ApplicationRequest z8_application_require_request() {
     return value;
 }
 private Z8Optional!bool z8_application_is_request() { return z8_optional_wrap(z8_application_current_request !is null); }
+private Z8ApplicationSession z8_application_session() { return z8_nonnull(z8_application_require_request().session); }
+private Z8Object z8_application_user() { return z8_user_wrap(z8_application_session().user); }
+private Z8Object z8_application_system() { return z8_user_wrap(z8_application_session().system); }
+private Z8Guid z8_application_user_id() { return z8_nonnull(z8_application_session().user).id; }
+private Z8Guid z8_application_system_id() { return z8_nonnull(z8_application_session().system).id; }
+private void z8_application_switch_user(Z8Object user) { z8_application_session().switchUser(z8_user_data(user)); }
+private void z8_application_restore_user() { z8_application_session().restoreUser(); }
 private Z8Optional!bool z8_application_is_multitenant() { return z8_optional_wrap(z8_application_configuration().multitenant); }
 private Z8Optional!long z8_application_max_upload() {
     return z8_optional_wrap(cast(long)cast(int)(z8_application_configuration().uploadMaxMiB * 1_048_576));
@@ -217,6 +240,12 @@ private void z8_application_redirect(wstring location) { throw new Z8Redirect(z8
 void z8_bind_builtin_application_request() {
     enum prefix = "org.zenframework.z8.server.base.application.Application."w;
     z8_native_bind(prefix ~ "m_isRequest"w, &z8_application_is_request);
+    z8_native_bind(prefix ~ "m_user"w, &z8_application_user);
+    z8_native_bind(prefix ~ "m_system"w, &z8_application_system);
+    z8_native_bind(prefix ~ "m_userId"w, &z8_application_user_id);
+    z8_native_bind(prefix ~ "m_systemId"w, &z8_application_system_id);
+    z8_native_bind(prefix ~ "m_switchUser"w, &z8_application_switch_user);
+    z8_native_bind(prefix ~ "m_restoreUser"w, &z8_application_restore_user);
     z8_native_bind(prefix ~ "m_isMultitenant"w, &z8_application_is_multitenant);
     z8_native_bind(prefix ~ "m_maxUploadSize"w, &z8_application_max_upload);
     z8_native_bind(prefix ~ "m_maxDownloadSize"w, &z8_application_max_download);

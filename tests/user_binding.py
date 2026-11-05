@@ -23,6 +23,12 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     public bool getParameter(string key, bool value); public guid getParameter(string key, guid value);
 }
 ''', encoding="utf-8")
+    (source / "Application.bl").write_text('''
+[native "org.zenframework.z8.server.base.application.Application"] public class Application {
+    public static User user(); public static User system(); public static guid userId(); public static guid systemId();
+    public static void switchUser(User user); public static void restoreUser();
+}
+''', encoding="utf-8")
     (source / "Probe.bl").write_text('''
 public class Probe {
     public static User create() { User user; return user; }
@@ -34,14 +40,24 @@ public class Probe {
         u.login = "changed"; u.parameters.add("new", "shared"); return true;
     }
     public static bool empty(User u) { return u.id == null && u.login == null && !u.isAdministrator(); }
+    public static bool session(User other) {
+        if (Application.userId() != guid.create(42) || Application.systemId() != guid.create(1)) return false;
+        User initial = Application.user(); initial.login = "local";
+        if (Application.user().login != "alice" || !Application.system().isBuiltinSystem()) return false;
+        Application.switchUser(other);
+        if (Application.userId() != guid.create(2) || Application.user().login != "bob") return false;
+        Application.switchUser(Application.system());
+        Application.restoreUser();
+        return Application.userId() == guid.create(42) && Application.user().login == "alice";
+    }
 }
 ''', encoding="utf-8")
     if len(sys.argv) == 2:
         language = Path(sys.argv[1]).resolve() / "org.zenframework.z8.lang/src/bl"
         if not language.is_dir(): raise SystemExit("Original BL standard library not found")
-        (source / "User.bl").unlink(); shutil.copytree(language, source, dirs_exist_ok=True)
+        (source / "User.bl").unlink(); (source / "Application.bl").unlink(); shutil.copytree(language, source, dirs_exist_ok=True)
         probe = source / "Probe.bl"
-        probe.write_text("import org.zenframework.z8.base.security.User;\n" + probe.read_text(encoding="utf-8"), encoding="utf-8")
+        probe.write_text("import org.zenframework.z8.base.security.User;\nimport org.zenframework.z8.base.application.Application;\n" + probe.read_text(encoding="utf-8"), encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "main.d"
     harness.write_text('''
@@ -62,6 +78,17 @@ void main() {
     auto noRoles = new Z8UserData(); noRoles.id = z8_guid_create(1); noRoles.hasRoles = false;
     auto other = P.m_create(); z8_user_attach(other, noRoles);
     assert(z8_optional_require(P.m_empty(other)));
+    auto bob = new Z8UserData(); bob.id = z8_guid_create(2); bob.login = "bob"w;
+    auto bobWrapper = P.m_create(); z8_user_attach(bobWrapper, bob);
+    auto system = new Z8UserData(); system.id = z8_guid_create(1); system.builtinSystem = true;
+    auto request = new Z8ApplicationRequest();
+    request.session = new Z8ApplicationSession("session"w, data, system);
+    assert(request.session.lastAccessTime > 1_600_000_000_000L);
+    z8_application_set_request(request);
+    assert(z8_optional_require(P.m_session(bobWrapper)));
+    request.session.setUser(bob); request.session.switchUser(data); request.session.restoreUser();
+    assert(request.session.user is bob);
+    z8_application_set_request(null);
 }
 ''', encoding="utf-8")
     exe = temp / ("user-binding.exe" if os.name == "nt" else "user-binding")
