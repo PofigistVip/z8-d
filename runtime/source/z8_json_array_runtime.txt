@@ -185,10 +185,44 @@ private Z8Object z8_json_array_remove(Z8Object self, Z8Optional!long index) {
     state.decimals = shifted;
     return self;
 }
+private Z8JsonArrayState z8_json_array_from_values(Z8Array!Z8Primary values) {
+    auto state = new Z8JsonArrayState(z8_json_empty_array());
+    if (values !is null) foreach (index; 0 .. values.z8_size()) {
+        auto converted = z8_json_from_primary(values.z8_get(index));
+        state.value.array ~= converted.value;
+        if (converted.hasDecimal) state.decimals[cast(size_t)index] = converted.decimalValue;
+    }
+    return state;
+}
+private void z8_json_array_assign_values(Z8Object self, Z8Array!Z8Primary values) {
+    auto state = z8_json_array_state(self);
+    auto replacement = z8_json_array_from_values(values);
+    state.value = replacement.value;
+    state.decimals = replacement.decimals;
+}
+private Z8Object z8_json_array_from_array(Z8Array!Z8Primary values) {
+    if (values is null) return null;
+    auto state = z8_json_array_from_values(values);
+    auto result = z8_native_new(z8_json_array_name);
+    z8_nonnull(result).z8_set_native_state(z8_json_array_name, state);
+    return result;
+}
+private Z8Object z8_json_array_add_array(Z8Object self, Z8Object other) {
+    auto left = z8_json_array_state(self), right = z8_json_array_state(other);
+    auto state = new Z8JsonArrayState(JSONValue(left.value.array ~ right.value.array));
+    foreach (index, number; left.decimals) state.decimals[index] = number;
+    foreach (index, number; right.decimals) state.decimals[left.value.array.length + index] = number;
+    auto result = z8_native_new(z8_json_array_name);
+    z8_nonnull(result).z8_set_native_state(z8_json_array_name, state);
+    return result;
+}
 void z8_bind_builtin_json_array() {
     enum prefix = z8_json_array_name ~ "."w;
     z8_native_bind(prefix ~ "m_parse"w, &z8_json_array_parse);
     z8_native_bind(prefix ~ "z8op_assign"w, &z8_json_array_assign);
+    z8_native_bind(prefix ~ "z8op_assign"w, &z8_json_array_assign_values);
+    z8_native_bind(prefix ~ "z8op_add"w, &z8_json_array_add_array);
+    z8_native_bind(prefix ~ "m_fromArray"w, &z8_json_array_from_array);
     z8_native_bind(prefix ~ "z8cast_string"w, &z8_json_array_string);
     z8_native_bind(prefix ~ "m_toString"w, &z8_json_array_string);
     z8_native_bind(prefix ~ "m_isEmpty"w, &z8_json_array_empty);

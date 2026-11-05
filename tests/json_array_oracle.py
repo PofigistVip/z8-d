@@ -50,6 +50,9 @@ public class Probe {
     public static JsonArray insert(JsonArray array, int index, primary value) { return array.insert(index, value); }
     public static JsonArray put(JsonArray array, int index, primary value) { return array.put(index, value); }
     public static JsonArray remove(JsonArray array, int index) { return array.remove(index); }
+    public static JsonArray from(primary[] values) { return JsonArray.fromArray(values); }
+    public static void assignValues(JsonArray array, primary[] values) { array = values; }
+    public static JsonArray concat(JsonArray left, JsonArray right) { return left + right; }
     public static string render(JsonArray array) { return (string)array; }
     public static string display(JsonArray array) { return array.toString(); }
 }
@@ -111,6 +114,20 @@ class JsonArrayOracle {
         scalars.z8_add(new org.zenframework.z8.server.types.datespan(12345));
         scalars.z8_add(new date(0)); scalars.z8_add(new date(date.MinTicks)); scalars.z8_add(decimal.NaN);
         System.out.println("scalars:" + scalars.string().get());
+        org.zenframework.z8.server.runtime.RCollection<primary> values = new org.zenframework.z8.server.runtime.RCollection<>();
+        values.add(new decimal("1.2500")); values.add(new integer(9)); values.add(null);
+        JsonArray from = JsonArray.z8_fromArray(values).get();
+        System.out.println("from:" + from.string().get());
+        JsonArray.CLASS<JsonArray> rightClass = JsonArray.z8_parse(new string("[4]"));
+        JsonArray right = rightClass.get(); right.z8_add(new decimal("1E-7"));
+        JsonArray combined = from.operatorAdd(rightClass).get();
+        System.out.println("concat:" + combined.string().get());
+        from.z8_remove(new integer(0)); right.z8_add(new integer(5));
+        System.out.println("copies:" + combined.string().get() + ":" + from.string().get() + ":" + right.string().get());
+        from.operatorAssign(values);
+        System.out.println("assigned:" + from.string().get());
+        from.operatorAssign((org.zenframework.z8.server.runtime.RCollection)null);
+        System.out.println("empty:" + from.string().get() + ":" + (JsonArray.z8_fromArray(null) == null));
         for (String input : new String[] {"", "1,2", " [1,2]", "[1,]", "[1,,2]", "[1", "{x:1}"}) {
             try { System.out.println("p:" + parse(input).string().get()); } catch (RuntimeException expected) { System.out.println("p:error"); }
         }
@@ -197,6 +214,18 @@ void main() {
     bool rejected;
     try { P.m_add(scalars, z8_primary_box(new Z8Binary())); } catch (Exception) { rejected = true; }
     assert(rejected && P.m_render(scalars) == beforeInvalid);
+    auto values = new Z8Array!Z8Primary([z8_primary_box(z8_decimal_parse("1.2500"w)), z8_primary_box(9L), null]);
+    auto from = P.m_from(values);
+    writeln("from:", P.m_render(from).to!string);
+    auto right = P.m_parse("[4]"w); P.m_add(right, z8_primary_box(z8_decimal_parse("1E-7"w)));
+    auto combined = P.m_concat(from, right);
+    writeln("concat:", P.m_render(combined).to!string);
+    P.m_remove(from, 0); P.m_add(right, z8_primary_box(5L));
+    writeln("copies:", P.m_render(combined).to!string, ":", P.m_render(from).to!string, ":", P.m_render(right).to!string);
+    P.m_assignValues(from, values);
+    writeln("assigned:", P.m_render(from).to!string);
+    P.m_assignValues(from, null);
+    writeln("empty:", P.m_render(from).to!string, ":", P.m_from(null) is null);
     foreach (input; [""w, "1,2"w, " [1,2]"w, "[1,]"w, "[1,,2]"w, "[1"w, "{x:1}"w]) {
         try { writeln("p:", P.m_render(P.m_parse(input)).to!string); } catch (Exception) { writeln("p:error"); }
     }
@@ -215,4 +244,4 @@ void main() {
     actual = subprocess.check_output([str(executable)], cwd=temp, text=True, encoding="utf-8").splitlines()
     if actual != expected:
         raise SystemExit(f"JsonArray differs:\nJava={expected!r}\nD={actual!r}")
-print("JsonArray parsing, getters and typed arrays match Java")
+print("JsonArray parsing, access, mutation and array conversion match Java")
