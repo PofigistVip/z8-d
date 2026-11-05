@@ -22,19 +22,6 @@ class Checker {
     private size_t loopDepth;
     private size_t finallyDepth;
     private void fail(string message, Token t) { throw new CompileException(message, t.position); }
-    private static bool isConstantInitializer(Expression expression) {
-        switch (expression.kind) {
-            case ExprKind.integer: case ExprKind.decimalLiteral: case ExprKind.boolean: case ExprKind.stringLiteral: case ExprKind.guidLiteral: case ExprKind.binaryLiteral: case ExprKind.datespanLiteral: case ExprKind.dateLiteral: case ExprKind.nullLiteral: return true;
-            case ExprKind.arrayLiteral:
-                foreach (item; expression.arguments) if (!isConstantInitializer(item)) return false;
-                return true;
-            case ExprKind.mapEntry: return isConstantInitializer(expression.left) && isConstantInitializer(expression.right);
-            case ExprKind.castExpr: case ExprKind.unary: return isConstantInitializer(expression.left);
-            case ExprKind.binary: return isConstantInitializer(expression.left) && isConstantInitializer(expression.right);
-            case ExprKind.conditional: return isConstantInitializer(expression.left) && isConstantInitializer(expression.right) && isConstantInitializer(expression.third);
-            default: return false;
-        }
-    }
     void bindBase(Program program, Program[string] programs) {
         currentProgram = program; allClasses = programs;
         if (program.isFieldSpecialization) {
@@ -489,8 +476,6 @@ class Checker {
                 if (field.type == ValueType.selfType && !field.isStatic)
                     field.userOperatorAssignment = useAssignmentOperator(field.objectClass, field.initializer, field.name, direct);
                 if (!direct && !field.userOperatorAssignment) fail("field initializer type mismatch", field.name);
-                if (field.isStatic && !isConstantInitializer(field.initializer) && !field.initializer.enumConstant)
-                    fail("static field initializer must be a constant expression", field.name);
             }
             if (field.attributes.length) {
                 fieldInitialization = false;

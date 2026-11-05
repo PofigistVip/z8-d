@@ -1,0 +1,6 @@
+public class StaticInitTarget {
+    public static int first = compute();
+    public static int later;
+    public static int second = StaticInitTracker.record(7);
+    private static int compute() { return later + StaticInitTracker.record(1); }
+}

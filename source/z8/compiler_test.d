@@ -488,7 +488,7 @@ unittest {
     rejects("class A { static void f() { string[string] x; x -= x; } }");
     rejects("class A { static void f() { string[string] x; int[] y; x = x + y; } }");
     rejects("class A { static void f() { A[] x = {true}; } }");
-    rejects("class A { static int f() { return 1; } static int x = f(); }");
+    compile("class A { static int f() { return 1; } static int x = f(); }");
     rejects("class A { int x; static int f() { return A.x; } }");
     rejects("class A { int f() { return 1; } static int g() { return f(); } }");
     rejects("class A { static int f() { return this.f(); } }");

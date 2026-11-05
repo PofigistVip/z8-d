@@ -1,0 +1,4 @@
+public class StaticInitObject {
+    public static int value = StaticInitTracker.record(4);
+    public void ping() {}
+}

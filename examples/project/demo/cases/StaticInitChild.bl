@@ -1,0 +1,4 @@
+public class StaticInitChild extends StaticInitBase {
+    public static int child = StaticInitTracker.record(3);
+    public static int read() { return child; }
+}

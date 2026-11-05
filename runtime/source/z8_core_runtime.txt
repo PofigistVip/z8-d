@@ -71,6 +71,16 @@ auto z8_nullable_string_call(string name, Args...)(wstring value, Args args) {
 }
 // A Z8 object reference is created before its object is initialized.  The
 // stages are advanced before invoking user code, matching CLASS.get(stage).
+// Allocate each class monitor under a short global lock; initialization itself
+// is guarded by that class's reentrant monitor.
+__gshared Object z8_static_initialization_lock;
+shared static this() { z8_static_initialization_lock = new Object(); }
+Object z8_static_class_lock(ref Object monitor) {
+    synchronized (z8_static_initialization_lock) {
+        if (monitor is null) monitor = new Object();
+        return monitor;
+    }
+}
 class Z8Object {
     private int z8_stage = -1;
     private bool z8_allocated;
@@ -87,6 +97,7 @@ class Z8Object {
     final void z8_ensure(int requested = 1) {
         if (z8_container !is null && z8_container.z8_stage < requested)
             z8_container.z8_ensure(requested);
+        z8_ensure_type_initialized();
         if (!z8_allocated) {
             z8_allocate_fields();
             z8_allocated = true;
@@ -102,6 +113,7 @@ class Z8Object {
             z8_call_constructor();
         }
     }
+    void z8_ensure_type_initialized() {}
     void z8_allocate_fields() {}
     void z8_init_references() {}
     void z8_init_members() {}

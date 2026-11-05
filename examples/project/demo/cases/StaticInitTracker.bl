@@ -1,0 +1,5 @@
+public class StaticInitTracker {
+    public static int calls;
+    public static int trace;
+    public static int record(int value) { calls += 1; trace = trace * 10 + value; return value; }
+}

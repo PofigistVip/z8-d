@@ -1,0 +1,5 @@
+public class StaticInitCycleA {
+    public static int first = StaticInitCycleB.read();
+    public static int later = 3;
+    public static int current() { if (later == null) return 4; return later; }
+}

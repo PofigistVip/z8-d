@@ -1,0 +1,18 @@
+public class StaticInitCases {
+    public static int run() {
+        if (StaticInitTracker.calls != 0) return 1;
+        if (StaticInitTarget.first != 1) return 2;
+        if (StaticInitTarget.later != 0 || StaticInitTarget.second != 7) return 3;
+        if (StaticInitTracker.calls != 2) return 4;
+        if (StaticInitTarget.first != 1 || StaticInitTracker.calls != 2) return 5;
+        if (StaticInitTracker.trace != 17) return 6;
+        if (StaticInitCycleA.first != 4 || StaticInitCycleA.later != 3) return 7;
+        if (StaticInitChild.read() != 3 || StaticInitChild.base != 2) return 8;
+        if (StaticInitTracker.calls != 4 || StaticInitTracker.trace != 1723) return 9;
+        StaticInitObject object;
+        if (StaticInitTracker.calls != 4) return 10;
+        object.ping();
+        if (StaticInitTracker.calls != 5 || StaticInitTracker.trace != 17234) return 11;
+        return 229;
+    }
+}

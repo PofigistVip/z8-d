@@ -1,0 +1,7 @@
+public class StaticInitFailure {
+    public static int value = fail();
+    private static int fail() {
+        StaticInitTracker.record(5);
+        throw "initialization failed";
+    }
+}

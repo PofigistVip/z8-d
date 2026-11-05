@@ -1,0 +1,3 @@
+public class StaticInitBase {
+    public static int base = StaticInitTracker.record(2);
+}

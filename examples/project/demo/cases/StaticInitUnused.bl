@@ -1,0 +1,3 @@
+public class StaticInitUnused {
+    public static int value = StaticInitTracker.record(100);
+}

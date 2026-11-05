@@ -654,6 +654,7 @@ package string emitPrograms(Program[] programs) {
         }
         result ~= "class " ~ program.emittedName ~ " : " ~ (program.baseClass is null ? "Z8Object" : program.baseClass.emittedName) ~ " {\n";
         result ~= "alias Z8Self = " ~ program.emittedName ~ ";\n";
+        result ~= "override void z8_ensure_type_initialized() { Z8Self.z8_ensure_static(); }\n";
         if (program.attributes.length) {
             result ~= "override void z8_init_type_attributes() {\nsuper.z8_init_type_attributes();\n";
             foreach (attribute; program.attributes)
@@ -663,10 +664,12 @@ package string emitPrograms(Program[] programs) {
         }
         foreach (capture; program.captures)
             result ~= dStorageType(capture.type, capture.objectClass) ~ " z8_capture_" ~ capture.name ~ ";\n";
-        bool hasStaticFields;
         foreach (field; program.fields) {
-            result ~= (field.isStatic ? "__gshared " : "") ~ dStorageType(field.type, field.objectClass) ~ " f_" ~ field.name.text ~ ";\n";
-            if (field.isStatic) hasStaticFields = true;
+            auto storageType = dStorageType(field.type, field.objectClass);
+            if (field.isStatic) {
+                result ~= "private __gshared " ~ storageType ~ " z8_static_storage_" ~ field.name.text ~ ";\n";
+                result ~= "static @property ref " ~ storageType ~ " f_" ~ field.name.text ~ "() { z8_ensure_static(); return z8_static_storage_" ~ field.name.text ~ "; }\n";
+            } else result ~= storageType ~ " f_" ~ field.name.text ~ ";\n";
         }
         result ~= "override void z8_allocate_fields() {\nsuper.z8_allocate_fields();\n";
         foreach (field; program.fields) if (!field.isStatic && (field.initializer is null || field.userOperatorAssignment)) {
@@ -724,12 +727,19 @@ package string emitPrograms(Program[] programs) {
             result ~= "override void z8_call_constructor() { this.m_constructor(); }\n";
             break;
         }
-        if (hasStaticFields) {
-            result ~= "shared static this() {\n";
-            foreach (field; program.fields) if (field.isStatic)
-                result ~= "f_" ~ field.name.text ~ " = " ~ (field.initializer is null ? field.type == ValueType.intType ? "z8_optional_wrap(0L)" : field.type == ValueType.boolType ? "z8_optional_wrap(false)" : field.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(field.type, field.objectClass) : emitExpr(field.initializer)) ~ ";\n";
-            result ~= "}\n";
-        }
+        result ~= "private __gshared int z8_static_state;\nprivate __gshared Throwable z8_static_failure;\nprivate __gshared Object z8_static_monitor;\n";
+        result ~= "static void z8_ensure_static() {\nsynchronized (z8_static_class_lock(z8_static_monitor)) {\n";
+        result ~= "if (z8_static_state == 2 || z8_static_state == 1) return;\n";
+        result ~= "if (z8_static_state == 3) throw z8_static_failure;\n";
+        result ~= "z8_static_state = 1;\ntry {\n";
+        if (program.baseClass !is null) result ~= program.baseClass.emittedName ~ ".z8_ensure_static();\n";
+        // Z8 first allocates default values for all static declarations, then
+        // executes explicit initializers in declaration order.
+        foreach (field; program.fields) if (field.isStatic && field.initializer is null)
+            result ~= "z8_static_storage_" ~ field.name.text ~ " = " ~ (field.type == ValueType.intType ? "z8_optional_wrap(0L)" : field.type == ValueType.boolType ? "z8_optional_wrap(false)" : field.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(field.type, field.objectClass)) ~ ";\n";
+        foreach (field; program.fields) if (field.isStatic && field.initializer !is null)
+            result ~= "z8_static_storage_" ~ field.name.text ~ " = " ~ emitExpr(field.initializer) ~ ";\n";
+        result ~= "z8_static_state = 2;\n} catch (Throwable failure) { z8_static_failure = failure; z8_static_state = 3; throw failure; }\n}\n}\n";
         foreach (m; program.methods) {
             if (program.baseClass !is null) {
                 bool hasInheritedName;
@@ -756,7 +766,9 @@ package string emitPrograms(Program[] programs) {
                     (m.returnType == ValueType.voidType ? "" : "return ") ~ methodDName(m) ~ "(" ~ nativeArgs.join(", ") ~ "); }\n";
             }
             auto modifiers = m.isStatic ? "static " : m.overrides ? "override " : m.isVirtual ? "" : "final ";
-            result ~= modifiers ~ dStorageType(m.returnType, m.returnObjectClass) ~ " " ~ methodDName(m) ~ "(" ~ params.join(", ") ~ ")\n" ~ emitStatement(m.body);
+            auto body = emitStatement(m.body);
+            if (m.isStatic) body = "{\nz8_ensure_static();\n" ~ body[1 .. $];
+            result ~= modifiers ~ dStorageType(m.returnType, m.returnObjectClass) ~ " " ~ methodDName(m) ~ "(" ~ params.join(", ") ~ ")\n" ~ body;
         }
         result ~= "}\n";
     }
