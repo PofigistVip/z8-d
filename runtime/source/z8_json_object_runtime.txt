@@ -335,10 +335,30 @@ private Z8Object z8_json_object_from_primary_map(Z8PrimaryKeyMap!Z8Primary map) 
     }
     return result;
 }
+private Z8Object z8_json_object_from_json_map(Z8NativePrimaryObjectMap map, wstring expected) {
+    if (map is null) return null;
+    auto result = z8_json_wrap_state(new Z8JsonObjectState(z8_json_empty_object()));
+    auto keys = map.z8_keys();
+    foreach (i; 0 .. keys.z8_size()) {
+        auto key = keys.z8_get(i);
+        auto value = z8_nonnull(map.z8_get(key));
+        if (!z8_native_is_instance(expected, value)) throw new Exception("invalid JSON map value");
+        z8_json_object_set_nested(result, z8_primary_to_string(key), value);
+    }
+    return result;
+}
+private Z8Object z8_json_object_from_array_map(Z8NativePrimaryObjectMap map) {
+    return z8_json_object_from_json_map(map, z8_json_array_name);
+}
+private Z8Object z8_json_object_from_object_map(Z8NativePrimaryObjectMap map) {
+    return z8_json_object_from_json_map(map, z8_json_object_name);
+}
 void z8_bind_builtin_json_object() {
     enum prefix = z8_json_object_name ~ "."w;
     z8_native_bind(prefix ~ "m_parse"w, &z8_json_object_parse);
     z8_native_bind(prefix ~ "m_fromPrimaryMap"w, &z8_json_object_from_primary_map);
+    z8_native_bind(prefix ~ "m_fromJsonArrayMap"w, &z8_json_object_from_array_map);
+    z8_native_bind(prefix ~ "m_fromJsonObjectMap"w, &z8_json_object_from_object_map);
     z8_native_bind(prefix ~ "z8cast_string"w, &z8_json_object_to_string);
     z8_native_bind(prefix ~ "m_toString"w, &z8_json_object_to_string);
     z8_native_bind(prefix ~ "z8op_assign"w, &z8_json_object_assign);

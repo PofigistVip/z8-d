@@ -4,15 +4,38 @@ private template Z8NativeErased(T) {
     static if (is(T : Z8Object)) alias Z8NativeErased = Z8Object;
     else static if (is(T == Z8ObjectArray!U, U) && is(U : Z8Object))
         alias Z8NativeErased = Z8ObjectArray!Z8Object;
+    else static if (is(T == Z8PrimaryKeyMap!U, U) && is(U : Z8Object))
+        alias Z8NativeErased = Z8NativePrimaryObjectMap;
+    else static if (is(T == Z8CovariantMap!(Z8Primary, V, M, false, true), V, M) && is(V : Z8Object))
+        alias Z8NativeErased = Z8NativePrimaryObjectMap;
     else alias Z8NativeErased = T;
 }
 private template Z8NativeErasedReturn(T) {
     static if (is(T == U*, U) && is(U : Z8Object)) alias Z8NativeErasedReturn = Z8Object*;
+    else static if (is(T == Z8PrimaryKeyMap!U, U) && is(U : Z8Object)) alias Z8NativeErasedReturn = T;
+    else static if (is(T == Z8CovariantMap!(Z8Primary, V, M, false, true), V, M) && is(V : Z8Object)) alias Z8NativeErasedReturn = T;
     else alias Z8NativeErasedReturn = Z8NativeErased!T;
+}
+// A native adapter can inspect a map without depending on generated D classes.
+abstract class Z8NativePrimaryObjectMap {
+    abstract long z8_size();
+    abstract Z8Array!Z8Primary z8_keys();
+    abstract Z8Object z8_get(Z8Primary key);
+}
+private class Z8NativePrimaryObjectMapView(T) : Z8NativePrimaryObjectMap {
+    private T source;
+    this(T source) { this.source = source; }
+    override long z8_size() { return source.z8_size(); }
+    override Z8Array!Z8Primary z8_keys() { return source.z8_keys(); }
+    override Z8Object z8_get(Z8Primary key) { return source.z8_get(key); }
 }
 private Z8NativeErased!T z8_native_erased_argument(T)(T value) {
     static if (is(T == Z8ObjectArray!U, U) && is(U : Z8Object))
         return z8_object_array_view!Z8Object(value);
+    else static if (is(T == Z8PrimaryKeyMap!U, U) && is(U : Z8Object))
+        return value is null ? null : new Z8NativePrimaryObjectMapView!T(value);
+    else static if (is(T == Z8CovariantMap!(Z8Primary, V, M, false, true), V, M) && is(V : Z8Object))
+        return value is null ? null : new Z8NativePrimaryObjectMapView!T(value);
     else return value;
 }
 private auto z8_native_erased_arguments(Args...)(Args args) {

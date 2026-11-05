@@ -74,6 +74,8 @@ public class Probe {
     public static int objectSize(JsonObject object) { return object.size(); }
     public static JsonObject fromMap(primary[primary] values) { return JsonObject.fromPrimaryMap(values); }
     public static bool objectHas(JsonObject object, string key) { return object.has(key); }
+    public static JsonObject fromArrayMap(JsonArray[primary] values) { return JsonObject.fromJsonArrayMap(values); }
+    public static JsonObject fromObjectMap(JsonObject[primary] values) { return JsonObject.fromJsonObjectMap(values); }
     public static string render(JsonArray array) { return (string)array; }
     public static string display(JsonArray array) { return array.toString(); }
 }
@@ -197,6 +199,19 @@ class JsonArrayOracle {
         org.zenframework.z8.server.base.json.parser.JsonObject mapped = org.zenframework.z8.server.base.json.parser.JsonObject.z8_fromPrimaryMap(map).get();
         System.out.println("map:" + mapped.z8_getString(new string("7")).get() + ":" + mapped.z8_has(new string("absent")).get() + ":" + mapped.z8_has(new string("true")).get());
         System.out.println("mapnull:" + (org.zenframework.z8.server.base.json.parser.JsonObject.z8_fromPrimaryMap(null) == null));
+        org.zenframework.z8.server.runtime.RLinkedHashMap<primary, JsonArray.CLASS<JsonArray>> arrayMap = new org.zenframework.z8.server.runtime.RLinkedHashMap<>();
+        arrayMap.put(new integer(1), insertedArray);
+        org.zenframework.z8.server.base.json.parser.JsonObject mappedArray = org.zenframework.z8.server.base.json.parser.JsonObject.z8_fromJsonArrayMap(arrayMap).get();
+        insertedArray.get().z8_add(new integer(11));
+        System.out.println("amap:" + mappedArray.z8_getString(new string("1")).get());
+        org.zenframework.z8.server.runtime.RLinkedHashMap<primary, org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject>> objectMap = new org.zenframework.z8.server.runtime.RLinkedHashMap<>();
+        objectMap.put(new string("k"), insertedObject);
+        org.zenframework.z8.server.base.json.parser.JsonObject mappedObject = org.zenframework.z8.server.base.json.parser.JsonObject.z8_fromJsonObjectMap(objectMap).get();
+        insertedObject.get().z8_set(new string("x"), new integer(10));
+        System.out.println("omap:" + mappedObject.z8_getString(new string("k")).get());
+        System.out.println("jsonmapnull:" + (org.zenframework.z8.server.base.json.parser.JsonObject.z8_fromJsonArrayMap(null) == null) + ":" + (org.zenframework.z8.server.base.json.parser.JsonObject.z8_fromJsonObjectMap(null) == null));
+        arrayMap.put(new integer(2), null);
+        try { org.zenframework.z8.server.base.json.parser.JsonObject.z8_fromJsonArrayMap(arrayMap); System.out.println("bad"); } catch (RuntimeException expected) { System.out.println("jsonmapvalue:error"); }
         for (String input : new String[] {"", "1,2", " [1,2]", "[1,]", "[1,,2]", "[1", "{x:1}"}) {
             try { System.out.println("p:" + parse(input).string().get()); } catch (RuntimeException expected) { System.out.println("p:error"); }
         }
@@ -224,6 +239,7 @@ import z8.runtime;
 import z8gen.p_Probe;
 import std.stdio : writeln;
 import std.conv : to;
+import std.traits : Parameters;
 void main() {
     alias P = Z8p_50726F6265;
     auto value = P.m_parse("[1,2147483648,3.9,'-9',true,'yes',null,'00112233-4455-6677-8899-aabbccddeeff']"w);
@@ -332,6 +348,17 @@ void main() {
     auto mapped = P.m_fromMap(map);
     writeln("map:", P.m_objectText(mapped, "7"w).to!string, ":", z8_optional_require(P.m_objectHas(mapped, "absent"w)), ":", z8_optional_require(P.m_objectHas(mapped, "true"w)));
     writeln("mapnull:", P.m_fromMap(null) is null);
+    alias ArrayMap = Parameters!(P.m_fromArrayMap)[0];
+    auto arrayMap = new ArrayMap(); arrayMap.z8_add(z8_primary_box(1L), insertedArray);
+    auto mappedArray = P.m_fromArrayMap(arrayMap); P.m_add(insertedArray, z8_primary_box(11L));
+    writeln("amap:", P.m_objectText(mappedArray, "1"w).to!string);
+    alias ObjectMap = Parameters!(P.m_fromObjectMap)[0];
+    auto objectMap = new ObjectMap(); objectMap.z8_add(z8_primary_box("k"w), insertedObject);
+    auto mappedObject = P.m_fromObjectMap(objectMap); P.m_objectPut(insertedObject, "x"w, z8_primary_box(10L));
+    writeln("omap:", P.m_objectText(mappedObject, "k"w).to!string);
+    writeln("jsonmapnull:", P.m_fromArrayMap(null) is null, ":", P.m_fromObjectMap(null) is null);
+    arrayMap.z8_add(z8_primary_box(2L), null);
+    try { P.m_fromArrayMap(arrayMap); writeln("bad"); } catch (Exception) { writeln("jsonmapvalue:error"); }
     foreach (input; [""w, "1,2"w, " [1,2]"w, "[1,]"w, "[1,,2]"w, "[1"w, "{x:1}"w]) {
         try { writeln("p:", P.m_render(P.m_parse(input)).to!string); } catch (Exception) { writeln("p:error"); }
     }
