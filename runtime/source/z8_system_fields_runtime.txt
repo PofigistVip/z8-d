@@ -1,0 +1,32 @@
+// Native Fields.java owns a table link and metadata for each registered field.
+private enum z8_system_fields_name = "org.zenframework.z8.server.base.table.system.Fields"w;
+private class Z8SystemFieldsState { Z8Object[8] members; }
+private void z8_system_fields_new(Z8Object self) {
+    enum base = "org.zenframework.z8.server.base.table.value."w;
+    enum kinds = ["Link"w, "StringField"w, "TextField"w, "StringField"w, "StringField"w, "StringField"w, "IntegerField"w];
+    enum indexes = ["table"w, "name"w, "description"w, "classId"w, "displayName"w, "type"w, "position"w];
+    enum names = ["Table"w, "Name"w, "Description"w, "Class"w, "Display Name"w, "Type"w, "Position"w];
+    auto state = new Z8SystemFieldsState();
+    state.members[0] = z8_native_new(z8_system_tables_name);
+    state.members[0].z8_set_container(self); state.members[0].z8_set_index("tables"w);
+    foreach (i; 0 .. kinds.length)
+        state.members[i + 1] = z8_table_system_field(self, base ~ kinds[i], indexes[i], names[i]);
+    self.z8_set_native_state(z8_system_fields_name, state);
+}
+private Z8SystemFieldsState z8_system_fields_state(Z8Object self) {
+    auto state = cast(Z8SystemFieldsState)z8_nonnull(self, -1).z8_get_native_state(z8_system_fields_name);
+    if (state is null) throw new Exception("Fields members are not initialized");
+    return state;
+}
+private Z8Object* z8_system_fields_member_address(size_t index)(Z8Object self) { return &z8_system_fields_state(self).members[index]; }
+void z8_system_fields_configure(Z8Object self) {
+    auto state = z8_system_fields_state(self);
+    z8_link_assign(z8_nonnull(state.members[1]), z8_nonnull(state.members[0]));
+    foreach (i; [2, 4, 5]) z8_field_state(z8_nonnull(state.members[i])).length = z8_optional_wrap(256L);
+    z8_field_state(z8_nonnull(state.members[6])).length = z8_optional_wrap(50L);
+}
+shared static this() {
+    z8_native_bind(z8_system_fields_name ~ ".m_new"w, &z8_system_fields_new);
+    static foreach (i, name; ["tables"w, "table"w, "name"w, "description"w, "classId"w, "displayName"w, "type"w, "position"w])
+        z8_native_bind_field(z8_system_fields_name ~ ".f_"w ~ name, &z8_system_fields_member_address!i);
+}

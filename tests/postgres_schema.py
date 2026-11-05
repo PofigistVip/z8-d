@@ -101,6 +101,8 @@ import org.zenframework.z8.base.table.system.Sequences;
 import org.zenframework.z8.base.table.Sequencer;
 import org.zenframework.z8.base.table.system.Tables;
 import org.zenframework.z8.base.table.system.Requests;
+import org.zenframework.z8.base.table.system.Fields;
+import org.zenframework.z8.base.table.value.Field;
 public class Probe {
     public static Sample make() { Sample value; return value; }
     public static GeoSample geo() { GeoSample value; return value; }
@@ -113,6 +115,8 @@ public class Probe {
     public static Sequences sequences() { Sequences value; return value; }
     public static Tables systemTables() { Tables value; return value; }
     public static Requests systemRequests() { Requests value; return value; }
+    public static Fields systemFields() { Fields value; return value; }
+    public static string fieldTableName(Fields value) { Field[] fields = {value.tables.name}; value.read(fields); if (value.next()) return value.tables.name.get(); return "missing"; }
     public static guid systemUser() { return Users.System; }
     public static guid administratorUser() { return Users.Administrator; }
     public static void createUser(Users value, guid id) { value.create(id); }
@@ -452,6 +456,24 @@ void main(string[] args) {
     z8_postgres_create_tables(db, "z8_security"w, [systemTables, systemRequests]);
     assert(db.execute(`SELECT count(*) FROM "z8_security"."SystemTables"`).rows[0][0].text == "1");
     assert(db.execute(`SELECT count(*) FROM "z8_security"."SystemRequests"`).rows[0][0].text == "1");
+    auto systemFields = P.m_systemFields();
+    auto fieldsDDL = z8_postgres_create_table_sql("z8_fields"w, systemFields);
+    assert(fieldsDDL.canFind(`"Table" uuid`) && fieldsDDL.canFind(`"Class" character varying`) && fieldsDDL.canFind(`"Position" bigint`));
+    auto fieldsKeys = z8_postgres_create_foreign_keys_sql("z8_fields"w, systemFields);
+    assert(fieldsKeys.length == 1 && fieldsKeys[0].canFind(`FOREIGN KEY ("Table") REFERENCES "z8_fields"."SystemTables" ("RecordId")`));
+    bool fieldsTableIndexed;
+    foreach (sql; z8_postgres_create_indexes_sql("z8_fields"w, systemFields)) if (sql.canFind(`("Table")`)) fieldsTableIndexed = true;
+    assert(fieldsTableIndexed);
+    db.execute(`CREATE SCHEMA "z8_fields"`);
+    z8_postgres_create_tables(db, "z8_fields"w, [systemFields, P.m_systemTables()]);
+    bool invalidTableReference;
+    try { db.execute(`INSERT INTO "z8_fields"."SystemFields" ("RecordId", "Table") VALUES ('00000000-0000-0000-0000-000000000051', '00000000-0000-0000-0000-000000000099')`); }
+    catch (Z8PostgresException) { invalidTableReference = true; }
+    assert(invalidTableReference);
+    db.execute(`INSERT INTO "z8_fields"."SystemTables" ("RecordId", "Name") VALUES ('00000000-0000-0000-0000-000000000052', 'Customers')`);
+    db.execute(`INSERT INTO "z8_fields"."SystemFields" ("RecordId", "Table") VALUES ('00000000-0000-0000-0000-000000000053', '00000000-0000-0000-0000-000000000052')`);
+    auto fieldsBackend = new Z8PostgresDatabase(db, "z8_fields"w); auto savedFieldsBackend = z8_connection_set_current(fieldsBackend);
+    assert(P.m_fieldTableName(systemFields) == "Customers"w); z8_connection_set_current(savedFieldsBackend);
     db.execute(`ALTER TABLE "z8_test"."StaticSample" DROP CONSTRAINT "StaticSample_pkey", ADD PRIMARY KEY ("Label")`);
     differences = z8_postgres_compare_table(expectedStatic, z8_postgres_describe_table(db, "z8_test"w, "StaticSample"w));
     bool changedKey;

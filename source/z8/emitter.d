@@ -1151,6 +1151,12 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 result ~= "this.f_objects().z8_add(this.f_" ~ name ~ "());\n";
             result ~= "}\n";
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Fields"w) {
+            result ~= "override void z8_init_members() {\nsuper.z8_init_members();\n";
+            foreach (name; ["name", "description", "classId", "table", "displayName", "type", "position", "tables"])
+                result ~= "this.f_objects().z8_add(this.f_" ~ name ~ "());\n";
+            result ~= "}\n";
+        }
         result ~= "override void z8_init_values() {\nsuper.z8_init_values();\n";
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Roles"w)
             result ~= "z8_roles_configure(this);\n";
@@ -1162,6 +1168,8 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
             result ~= "z8_system_tables_configure(this);\n";
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Requests"w)
             result ~= "z8_system_requests_configure(this);\n";
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Fields"w)
+            result ~= "z8_system_fields_configure(this);\n";
         // TypeBody.rearrangeMembers puts declarations before standalone member initializers.
         foreach (field; program.fields) {
             if (field.isStatic || program.isNative) continue;

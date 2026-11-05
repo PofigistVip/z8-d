@@ -56,8 +56,9 @@ record metadata are available. Built-in user deletion is rejected, while the
 built-in role deletion and user-ban checks follow Z8's user-event setting.
 General authorization and applying built-in role records to the database are
 still pending, as are cross-server user-change notifications.
-Physical fields of the system `Tables` and `Requests` metadata tables are
-available; their registry-based localized display values remain unimplemented.
+Physical fields of the system `Tables`, `Fields` and `Requests` metadata tables
+are available, including the `Fields` link to `Tables`. Registry-based localized
+display values remain unimplemented.
 The native `Users.onNew` defaults mirror the Java implementation, including its
 default password value and `changePassword` flag; explicitly supplied values
 are preserved even when user-level events are disabled. With user events enabled,
