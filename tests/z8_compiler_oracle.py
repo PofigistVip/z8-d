@@ -267,6 +267,11 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             !"существующее".equals(metadata.get().annotated.getAttribute("initTag")) ||
             !"исходное".equals(metadata.get().annotated.getAttribute("textValue")) ||
             !"исходное".equals(metadata.get().annotated.getAttribute("methodValue")) ||
+            !"1".equals(metadata.get().annotated.getAttribute("numericValue")) ||
+            !"false".equals(metadata.get().annotated.getAttribute("booleanValue")) ||
+            !"12.34".equals(metadata.get().annotated.getAttribute("decimalValue")) ||
+            !"false".equals(metadata.get().jobTarget.getAttribute("request")) ||
+            !"исходное".equals(metadata.get().jobTarget.getAttribute("job")) ||
             metadata.get().attributeCalls.get() != 1 ||
             !"исходное значение".equals(metadata.get().annotated.getAttribute("joinedValue")) ||
             !"Second Field".equals(metadata.get().annotated.getAttribute("name")) ||
@@ -283,6 +288,10 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             new demo.cases.AttributeNull.CLASS<>(null).get();
             throw new AssertionError("null string attribute accepted");
         } catch (NullPointerException expectedNullAttribute) { }
+        try {
+            new demo.cases.AttributeNullNumber.CLASS<>(null).get();
+            throw new AssertionError("null numeric attribute accepted");
+        } catch (NullPointerException expectedNullNumericAttribute) { }
         System.out.println("RESULT:" + demo.Main.z8_run().get());
         System.out.println("RESULT:" + demo.cases.Arithmetic.z8_run().get());
         System.out.println("RESULT:" + demo.cases.Text.z8_run().get());
@@ -468,6 +477,11 @@ void main() {
     assert(metadata.f_annotated.z8_get_attribute("initTag"w) == "существующее"w);
     assert(metadata.f_annotated.z8_get_attribute("textValue"w) == "исходное"w);
     assert(metadata.f_annotated.z8_get_attribute("methodValue"w) == "исходное"w);
+    assert(metadata.f_annotated.z8_get_attribute("numericValue"w) == "1"w);
+    assert(metadata.f_annotated.z8_get_attribute("booleanValue"w) == "false"w);
+    assert(metadata.f_annotated.z8_get_attribute("decimalValue"w) == "12.34"w);
+    assert(metadata.f_jobTarget.z8_get_attribute("request"w) == "false"w);
+    assert(metadata.f_jobTarget.z8_get_attribute("job"w) == "исходное"w);
     assert(z8_optional_require(metadata.f_attributeCalls) == 1);
     assert(metadata.f_annotated.z8_get_attribute("joinedValue"w) == "исходное значение"w);
     assert(metadata.f_annotated.z8_get_attribute("name"w) == "Second Field"w);
@@ -481,6 +495,10 @@ void main() {
     assert(metadata.f_ownSpecial.z8_get_attribute("specialTag"w) == "специализация поля"w);
     bool nullAttributeRejected;
     try { z8_nonnull(z8_new!Z8p_64656D6F2E63617365732E4174747269627574654E756C6C()); }
+    catch (Exception) { nullAttributeRejected = true; }
+    assert(nullAttributeRejected);
+    nullAttributeRejected = false;
+    try { z8_nonnull(z8_new!Z8p_64656D6F2E63617365732E4174747269627574654E756C6C4E756D626572()); }
     catch (Exception) { nullAttributeRejected = true; }
     assert(nullAttributeRejected);
     writeln(z8_optional_require(Z8p_64656D6F2E4D61696E.m_run()));

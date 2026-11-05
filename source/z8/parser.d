@@ -191,10 +191,10 @@ class Parser {
                     throw new CompileException("name attribute has an illegal character", attribute.value.position);
             }
         }
-        if (attribute.name.text == "request" && attribute.hasValue && (attribute.expression !is null || attribute.value.kind != TokenKind.booleanLiteral))
+        if (attribute.name.text == "request" && attribute.hasValue && attribute.expression is null && attribute.value.kind != TokenKind.booleanLiteral)
             throw new CompileException("request attribute requires a boolean literal", attribute.value.position);
-        if (attribute.name.text == "job" && attribute.hasValue) {
-            if (attribute.expression !is null || attribute.value.kind != TokenKind.stringLiteral)
+        if (attribute.name.text == "job" && attribute.hasValue && attribute.expression is null) {
+            if (attribute.value.kind != TokenKind.stringLiteral)
                 throw new CompileException("job attribute requires a string literal", attribute.name.position);
             auto cron = decodeStringLiteral(attribute.value.text).to!string;
             enum column = `((\*|[0-9]{1,2}(-[0-9]{1,2})?)(/[0-9]{1,2})?(,(\*|[0-9]{1,2}(-[0-9]{1,2})?)(/[0-9]{1,2})?)*)`;

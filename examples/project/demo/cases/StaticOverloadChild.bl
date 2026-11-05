@@ -3,6 +3,7 @@
 [flag]
 public class StaticOverloadChild extends StaticOverloadBase {
     public [fieldTag "специализация"] StaticOverloadBase specialized = class {};
+    [request attributeFlag] [job attributeText] public StaticOverloadBase jobTarget;
     public StaticOverloadBase replacement;
     [joinedValue attributeText + " значение"] [name "Second Field"] [initTag "существующее"] [selected true] annotated = replacement;
     [chainTag "вложенное"] annotated.annotated;

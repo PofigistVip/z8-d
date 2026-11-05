@@ -553,8 +553,14 @@ class Checker {
     private void checkAttributeExpressions(TypeAttribute[] attributes) {
         foreach (attribute; attributes) if (attribute.expression !is null) {
             auto actual = typeOf(attribute.expression);
-            if (actual != ValueType.stringType && actual != ValueType.nullableString)
-                fail("only string attribute expressions are supported", attribute.name);
+            if (isOptionalPrimitive(actual)) {
+                attribute.expression.optionalRequired = true;
+                actual = optionalBaseType(actual);
+            }
+            if ([ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(actual))
+                attribute.expression.convertToString = actual;
+            else if (actual != ValueType.stringType && actual != ValueType.nullableString)
+                fail("this attribute expression type is not supported yet", attribute.name);
         }
     }
     // Follow the original compiler's return and reachability traversal. In

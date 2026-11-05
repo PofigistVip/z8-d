@@ -49,7 +49,8 @@ unittest {
     compile(q{class A { [flag] A child; public [tag "value"] A nested = class {}; }});
     compile(q{class A { string text = "value"; [tag text + "!"] A child; }});
     rejects(q{[tag "a" + "b"] class A {}});
-    rejects(q{class A { int value; [tag value] A child; }});
+    compile(q{class A { int value; [tag value] A child; }});
+    compile(q{class A { bool flag; [request flag] A child; }});
     rejects(q{class A { string text; [name text] A child; }});
     rejects(q{class A { [flag] int x; }});
     rejects(q{class A { [flag] A[] x; }});
