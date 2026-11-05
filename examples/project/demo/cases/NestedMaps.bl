@@ -1,0 +1,23 @@
+public class NestedMaps {
+    private static int[string][int] echo(int[string][int] input) { return input; }
+    public static int run() {
+        int[string][int] values = {(1, {("one", 11)}), (2, {("two", 22)})};
+        if (echo(values)[1]["one"] != 11 || values[2]["two"] != 22) return 1;
+        if (values.values().size() != 2 || values.keys().size() != 2) return 2;
+        int[string][int][bool] deeper = {(true, values)};
+        if (deeper[true][1]["one"] != 11) return 3;
+        int[string][int][] array = {values};
+        if (array[0][2]["two"] != 22) return 4;
+        int[][][][string] grids = {("cube", {{{7}}})};
+        if (grids["cube"][0][0][0] != 7) return 5;
+        KeyItem key = new KeyItem;
+        ValueItem value = new ValueItem;
+        ValueItem[KeyItem][int] innerKey = {(1, {(key, value)})};
+        if (innerKey[1][key].number != 11) return 6;
+        ValueItem[int][KeyItem] outerKey = {(key, {(1, value)})};
+        if (outerKey[key][1].number != 11) return 7;
+        ValueItem[KeyItem][KeyItem] repeated = {(key, {(key, value)})};
+        if (repeated[key][key].number != 11) return 8;
+        return 123;
+    }
+}

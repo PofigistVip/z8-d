@@ -116,7 +116,10 @@ class Parser {
                 auto key = accept("string") ? ValueType.stringType : accept("int") ? ValueType.intType : accept("guid") ? ValueType.guidType : accept("bool") ? ValueType.boolType : accept("decimal") ? ValueType.decimalType : accept("primary") ? ValueType.primaryType : accept("date") ? ValueType.dateType : accept("datespan") ? ValueType.datespanType : accept("binary") ? ValueType.binaryType : accept("geometry") ? ValueType.geometryType : accept("file") ? ValueType.fileType : ValueType.voidType;
                 if (key == ValueType.voidType && current.kind == TokenKind.identifier) {
                     key = ValueType.selfType;
-                    parsedKeyObjectName = take().text;
+                    auto keyName = take().text;
+                    if (parsedKeyObjectName.length && parsedKeyObjectName != keyName)
+                        error("different user-defined map key types in one declaration are not yet supported");
+                    parsedKeyObjectName = keyName;
                 }
                 result = mapType(result, key);
                 if (result == ValueType.voidType) error("unsupported map key or value type");

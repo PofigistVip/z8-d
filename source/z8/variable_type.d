@@ -21,6 +21,7 @@ enum ValueType : uint {
     primaryMatrix, selfArray, selfMatrix, nullType, nullableString, enumType,
     enumArray, enumMatrix, optionalInt, optionalBool, optionalDecimal,
     mapStart = 65536,
+    dynamicMapStart = 1 << 18,
     dynamicArrayStep = 1 << 20
 }
 
@@ -139,29 +140,53 @@ private enum ValueType[] mapKeyTypes = [
     ValueType.stringType, ValueType.intType, ValueType.guidType, ValueType.boolType,
     ValueType.decimalType,
 ];
+private struct DynamicMapType { ValueType value, key; }
+private __gshared DynamicMapType[] dynamicMapTypes;
+private __gshared ValueType[ulong] dynamicMapIds;
+private __gshared Object dynamicMapMonitor;
+shared static this() { dynamicMapMonitor = new Object(); }
+
 package bool isMap(ValueType type) {
     auto id = cast(uint)type;
-    return id >= cast(uint)ValueType.mapStart && id < cast(uint)ValueType.mapStart + mapValueTypes.length * mapKeyTypes.length;
+    return (id >= cast(uint)ValueType.mapStart && id < cast(uint)ValueType.mapStart + mapValueTypes.length * mapKeyTypes.length) ||
+           (id >= cast(uint)ValueType.dynamicMapStart && id < cast(uint)ValueType.dynamicArrayStep);
 }
 package bool hasMapKeyClass(ValueType type) {
     if (isDynamicArray(type)) return hasMapKeyClass(elementType(type));
-    return isMap(type) && [ValueType.selfType, ValueType.enumType].canFind(mapKeyType(type));
+    return isMap(type) && ([ValueType.selfType, ValueType.enumType].canFind(mapKeyType(type)) || hasMapKeyClass(mapValueType(type)));
 }
 package ValueType mapKeyType(ValueType type) {
     assert(isMap(type), "not a map");
-    auto index = cast(uint)type - cast(uint)ValueType.mapStart;
-    return mapKeyTypes[index % mapKeyTypes.length];
+    auto id = cast(uint)type;
+    if (id >= cast(uint)ValueType.dynamicMapStart) {
+        synchronized (dynamicMapMonitor) return dynamicMapTypes[id - cast(uint)ValueType.dynamicMapStart].key;
+    }
+    return mapKeyTypes[(id - cast(uint)ValueType.mapStart) % mapKeyTypes.length];
 }
 package ValueType mapValueType(ValueType type) {
     assert(isMap(type), "not a map");
-    auto index = cast(uint)type - cast(uint)ValueType.mapStart;
-    return mapValueTypes[index / mapKeyTypes.length];
+    auto id = cast(uint)type;
+    if (id >= cast(uint)ValueType.dynamicMapStart) {
+        synchronized (dynamicMapMonitor) return dynamicMapTypes[id - cast(uint)ValueType.dynamicMapStart].value;
+    }
+    return mapValueTypes[(id - cast(uint)ValueType.mapStart) / mapKeyTypes.length];
 }
 package ValueType mapType(ValueType value, ValueType key) {
     foreach (i, candidateValue; mapValueTypes) if (candidateValue == value)
         foreach (j, candidateKey; mapKeyTypes) if (candidateKey == key)
             return cast(ValueType)(cast(uint)ValueType.mapStart + i * mapKeyTypes.length + j);
-    return ValueType.voidType;
+    if (!mapKeyTypes.canFind(key) || (!isArray(value) && !isMap(value))) return ValueType.voidType;
+    auto signature = (cast(ulong)cast(uint)value << 32) | cast(uint)key;
+    synchronized (dynamicMapMonitor) {
+        auto existing = signature in dynamicMapIds;
+        if (existing !is null) return *existing;
+        if (dynamicMapTypes.length >= cast(uint)ValueType.dynamicArrayStep - cast(uint)ValueType.dynamicMapStart)
+            return ValueType.voidType;
+        auto id = cast(ValueType)(cast(uint)ValueType.dynamicMapStart + dynamicMapTypes.length);
+        dynamicMapTypes ~= DynamicMapType(value, key);
+        dynamicMapIds[signature] = id;
+        return id;
+    }
 }
 unittest {
     foreach (value; mapValueTypes) foreach (key; mapKeyTypes) {
@@ -172,13 +197,38 @@ unittest {
     foreach (i, value; mapValueTypes) foreach (other; mapValueTypes[i + 1 .. $]) assert(value != other);
     foreach (i, key; mapKeyTypes) foreach (other; mapKeyTypes[i + 1 .. $]) assert(key != other);
     assert(cast(uint)ValueType.optionalDecimal < cast(uint)ValueType.mapStart);
+    assert(cast(uint)ValueType.mapStart + mapValueTypes.length * mapKeyTypes.length < cast(uint)ValueType.dynamicMapStart);
     assert(!isMap(ValueType.intType));
     assert(mapType(ValueType.intType, ValueType.exceptionType) == ValueType.voidType);
     auto nestedMap = arrayOf(arrayOf(mapType(ValueType.selfType, ValueType.enumType)));
     assert(isDynamicArray(nestedMap) && hasObjectClass(nestedMap) && hasMapKeyClass(nestedMap));
     assert(mapKeyType(elementType(elementType(nestedMap))) == ValueType.enumType);
+    auto nested = mapType(mapType(ValueType.intType, ValueType.stringType), ValueType.intType);
+    assert(isMap(nested) && mapKeyType(nested) == ValueType.intType);
+    assert(mapValueType(nested) == mapType(ValueType.intType, ValueType.stringType));
+    assert(mapType(mapValueType(nested), mapKeyType(nested)) == nested);
     auto cube = arrayOf(ValueType.intMatrix);
     assert(isArray(cube) && elementType(cube) == ValueType.intMatrix);
+}
+unittest {
+    import core.thread : Thread;
+    class Worker : Thread {
+        ValueType inner, result;
+        this(ValueType inner) { this.inner = inner; super(&run); }
+        void run() {
+            foreach (_; 0 .. 1000) {
+                auto type = mapType(inner, ValueType.boolType);
+                assert(mapValueType(type) == inner && mapKeyType(type) == ValueType.boolType);
+                result = type;
+            }
+        }
+    }
+    auto inner = mapType(ValueType.stringType, ValueType.intType);
+    Worker[] workers;
+    foreach (_; 0 .. 8) workers ~= new Worker(inner);
+    foreach (worker; workers) worker.start();
+    foreach (worker; workers) worker.join();
+    foreach (worker; workers) assert(worker.result == workers[0].result);
 }
 package ValueType mapKeyArrayType(ValueType type) {
     auto result = arrayOf(mapKeyType(type));

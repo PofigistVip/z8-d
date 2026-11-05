@@ -111,11 +111,8 @@ class Checker {
         if (isDynamicArray(type))
             return arrayOf(resolveDeclaredType(elementType(type), owner, objectName, keyObjectName, site));
         if (isMap(type)) {
-            auto value = mapValueType(type), key = mapKeyType(type);
-            if ([ValueType.selfType, ValueType.selfArray, ValueType.selfMatrix].canFind(value)) {
-                auto target = resolveClass(owner, objectName, site);
-                if (target.isEnum) value = value == ValueType.selfMatrix ? ValueType.enumMatrix : value == ValueType.selfArray ? ValueType.enumArray : ValueType.enumType;
-            }
+            auto value = resolveDeclaredType(mapValueType(type), owner, objectName, keyObjectName, site);
+            auto key = mapKeyType(type);
             if (key == ValueType.selfType && resolveClass(owner, keyObjectName, site).isEnum) key = ValueType.enumType;
             return mapType(value, key);
         }
@@ -771,7 +768,7 @@ class Checker {
                                 if (actualValue != valueType && !(valueType == ValueType.sqlPrimaryType && isSqlType(actualValue)))
                                     fail("map value type mismatch", entry.right.token);
                             }
-                            if (!matchesStored(entry.right, valueType, e.objectClass)) fail("map value type mismatch", entry.right.token);
+                            if (!matchesStored(entry.right, valueType, e.objectClass, e.keyObjectClass)) fail("map value type mismatch", entry.right.token);
                         }
                     }
                     e.inferredType = expected; return expected;
@@ -1529,7 +1526,7 @@ class Checker {
                             return e.token.text == "size" ? ValueType.intType : e.token.text == "isEmpty" ? ValueType.boolType : ValueType.voidType;
                         case "containsKey": checkStoredArguments(e, [mapKeyType(receiver)], e.left.keyObjectClass); return ValueType.boolType;
                         case "containsValue":
-                            if (e.arguments.length != 1 || !matchesStored(e.arguments[0], mapValue, e.left.objectClass)) fail("argument type mismatch", e.token);
+                            if (e.arguments.length != 1 || !matchesStored(e.arguments[0], mapValue, e.left.objectClass, e.left.keyObjectClass)) fail("argument type mismatch", e.token);
                             return ValueType.boolType;
                         case "get":
                             checkStoredArguments(e, [mapKeyType(receiver)], e.left.keyObjectClass); return mapValueReadType(receiver);
@@ -1540,7 +1537,7 @@ class Checker {
                                 if (!matches(e.arguments[0], receiver, e.left.objectClass, e.left.keyObjectClass)) fail("argument type mismatch", e.token);
                                 return ValueType.voidType;
                             }
-                            if (e.arguments.length != 2 || !matchesStored(e.arguments[0], mapKeyType(receiver), e.left.keyObjectClass) || !matchesStored(e.arguments[1], mapValue, e.left.objectClass)) fail("argument type mismatch", e.token);
+                            if (e.arguments.length != 2 || !matchesStored(e.arguments[0], mapKeyType(receiver), e.left.keyObjectClass) || !matchesStored(e.arguments[1], mapValue, e.left.objectClass, e.left.keyObjectClass)) fail("argument type mismatch", e.token);
                             return mapValueReadType(receiver);
                         case "keys": checkArguments(e, []); e.objectClass = e.left.keyObjectClass; return mapKeyArrayType(receiver);
                         case "values": checkArguments(e, []); return mapValueArrayType(receiver);
@@ -1613,6 +1610,7 @@ class Checker {
                     if (!matchesStored(e.right, mapKeyType(array), e.left.keyObjectClass)) fail("map key type mismatch", e.token);
                     e.inferredType = array;
                     if (hasObjectClass(array)) e.objectClass = e.left.objectClass;
+                    if (hasMapKeyClass(mapValueType(array))) e.keyObjectClass = e.left.keyObjectClass;
                     return mapValueReadType(array);
                 }
                 if (!isArray(array)) fail("indexing requires an array", e.token);
