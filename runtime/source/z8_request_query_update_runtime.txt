@@ -1,6 +1,6 @@
 // QueryUtils.setFieldValue for the PostgreSQL writer, including uploaded
 // binary content and GeoJSON geometry values.
-private void z8_application_query_set_value(Z8Object field, JSONValue value, bool acceptBinary = false) {
+private Z8Primary z8_application_query_parse_value(Z8Object field, JSONValue value, bool acceptBinary = false) {
     auto type = z8_field_type_id(field);
     if (value.type == JSONType.array || (value.type == JSONType.object && type != "geometry"w)) throw new Exception("invalid query field value");
     auto text = z8_json_value_text(value);
@@ -24,12 +24,17 @@ private void z8_application_query_set_value(Z8Object field, JSONValue value, boo
         case "datespan"w: boxed = z8_primary_box(z8_datespan_parse(text)); break;
         default: throw new Exception("unsupported query write field type");
     }
-    z8_field_set(field, boxed);
+    return boxed;
+}
+private void z8_application_query_set_value(Z8Object field, JSONValue value, bool acceptBinary = false) {
+    z8_field_set(field, z8_application_query_parse_value(field, value, acceptBinary));
 }
 
-private void z8_application_query_write_affected(Z8Object query, Z8Object[] selected, Z8Guid[] ids, Z8JsonWriterState writer) {
+private void z8_application_query_write_affected(Z8Object query, Z8Object[] selected, Z8Guid[] ids,
+        Z8JsonWriterState writer, Z8Privileges privileges, Z8StringMap params) {
     auto key = z8_nonnull(z8_query_primary_key(query));
     foreach (field; z8_query_declared_fields(query, true)) z8_field_reset(field);
+    z8_application_query_context_values(query, privileges, params, true);
     auto filter = new Z8SqlBool(Z8SqlBoolKind.inVector);
     filter.vectorValue = new Z8SqlFieldToken(key);
     foreach (id; ids) filter.vectorItems ~= new Z8SqlBoxedConstant(z8_primary_box(id));
@@ -57,7 +62,7 @@ private void z8_application_dispatch_query_update_target(wstring className, Z8Ob
     for (long i; i < keys.z8_size(); ++i) {
         auto name = keys.z8_get(i);
         if (name is null) throw new Exception("invalid query update parameter");
-        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "data"w || name == "fields"w) continue;
+        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "data"w || name == "fields"w || name == "values"w) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported query update parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
@@ -69,6 +74,7 @@ private void z8_application_dispatch_query_update_target(wstring className, Z8Ob
     auto key = z8_query_primary_key(query);
     if (key is null) throw new Exception("query has no primary key");
     auto selected = z8_application_query_fields(query, privileges, params);
+    z8_application_query_context_values(query, privileges, params, false);
     auto json = params.z8_get("data"w);
     if (json is null || !json.length) throw new Exception("query update requires records");
     auto records = z8_json_parse(json.to!string);
@@ -98,5 +104,5 @@ private void z8_application_dispatch_query_update_target(wstring className, Z8Ob
         ids ~= id;
     }
     connection.commit();
-    z8_application_query_write_affected(query, selected, ids, request.writer);
+    z8_application_query_write_affected(query, selected, ids, request.writer, privileges, params);
 }

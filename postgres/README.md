@@ -147,6 +147,8 @@ is installed in the database. File and attachment field values are stored
 as text metadata; binary fields accept an index into the request's uploaded
 files. Linked or computed fields and additional write options are rejected.
 Persisting attachment files separately is not implemented.
+Optional `values` are checked before a create, update or copy transaction and
+applied as readable context fields when selecting its response.
 The direct-table `copy` action accepts source GUIDs in `recordId` and one
 override object per source in `data`. It requires copy access and write access
 to every primary field, invokes the BL copy hooks, and returns the copied

@@ -52,7 +52,10 @@ import org.zenframework.z8.base.application.Application;
     virtual protected void onCreateAction(guid id) { actionEvents = "N"; }
     virtual protected void onUpdateAction(guid id) { actionEvents = "U"; }
     virtual protected void onDestroyAction(guid id) { actionEvents = "D"; }
-    virtual protected sql_bool scope() { return amount >= 0; }
+    virtual protected sql_bool scope() {
+        if (Application.isRequest() && Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "write-values") return amount >= amount.get();
+        return amount >= 0;
+    }
     virtual protected void onReadAction() {
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-hook") { amount = 999; addWhere(amount >= 40); }
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-values") addWhere(amount >= amount.get());
@@ -784,10 +787,12 @@ void main(string[] args) {
     queryUser.privileges.setFieldAccess(bootFieldKey, Z8Access.init);
     assert(rejectedRead("values"w, `{"title":"Hidden"}`w));
     queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
-    bool update(wstring data, out wstring output) {
+    bool update(wstring data, out wstring output, wstring values = null, wstring sessionId = null) {
         auto request = new Z8ApplicationRequest(); request.session = querySession; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, "Sample"w); request.parameters.z8_add("action"w, "update"w);
         request.parameters.z8_add("fields"w, `["title","amount"]`w); request.parameters.z8_add("data"w, data);
+        if (values !is null) request.parameters.z8_add("values"w, values);
+        if (sessionId !is null) request.parameters.z8_add("session"w, sessionId);
         z8_application_set_request(request); z8_application_start_response(request, "Sample"w);
         try { z8_application_dispatch_request(); } catch (Exception) { return false; }
         z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); output = z8_application_response_text(request); return true;
@@ -813,10 +818,14 @@ void main(string[] args) {
     assert(!update(`[{"recordId":"00000000-0000-0000-0000-00000000012D","title":"Denied"}]`w, updateResult));
     queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
     assert(!update(`[{"title":"Missing id"}]`w, updateResult));
-    bool create(wstring data, out wstring output) {
+    assert(update(`[{"recordId":"00000000-0000-0000-0000-00000000012D","amount":44}]`w, updateResult, `{"amount":100}`w, "write-values"w));
+    assert(parseJSON(updateResult.to!string)["data"].array.length == 0);
+    bool create(wstring data, out wstring output, wstring values = null, wstring sessionId = null) {
         auto request = new Z8ApplicationRequest(); request.session = querySession; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, "Sample"w); request.parameters.z8_add("action"w, "create"w);
         request.parameters.z8_add("fields"w, `["title","amount"]`w); request.parameters.z8_add("data"w, data);
+        if (values !is null) request.parameters.z8_add("values"w, values);
+        if (sessionId !is null) request.parameters.z8_add("session"w, sessionId);
         z8_application_set_request(request); z8_application_start_response(request, "Sample"w);
         try { z8_application_dispatch_request(); } catch (Exception) { return false; }
         z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); output = z8_application_response_text(request); return true;
@@ -826,6 +835,11 @@ void main(string[] args) {
     auto createdJson = parseJSON(createResult.to!string);
     assert(createdJson["data"].array.length == 1 && createdJson["data"][0]["recordId"].str == "00000000-0000-0000-0000-000000000133");
     assert(createdJson["data"][0]["title"].str == "Created" && createdJson["data"][0]["amount"].integer == 88);
+    assert(create(`[{"recordId":"00000000-0000-0000-0000-000000000136","title":"Context","amount":88}]`w, createResult, `{"amount":100}`w, "write-values"w));
+    assert(parseJSON(createResult.to!string)["data"].array.length == 0);
+    assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-000000000136'`).rows[0][0].text == "1");
+    assert(!create(`[{"recordId":"00000000-0000-0000-0000-000000000137"}]`w, createResult, `{"amount":[]}`w));
+    assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-000000000137'`).rows[0][0].text == "0");
     auto createUpload = new Z8ApplicationRequest(); createUpload.session = querySession; createUpload.monitor = new Z8RequestMonitor();
     createUpload.parameters.z8_add("request"w, "Sample"w); createUpload.parameters.z8_add("action"w, "create"w); createUpload.parameters.z8_add("fields"w, `["title"]`w);
     createUpload.parameters.z8_add("data"w, `[{"recordId":"00000000-0000-0000-0000-000000000135","title":"Upload","blob":0}]`w);
@@ -841,10 +855,12 @@ void main(string[] args) {
     createdJson = parseJSON(createResult.to!string);
     assert(createdJson["data"].array.length == 1 && createdJson["data"][0]["recordId"].str != "00000000-0000-0000-0000-000000000000");
     queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
-    bool copy(wstring sourceIds, wstring data, out wstring output) {
+    bool copy(wstring sourceIds, wstring data, out wstring output, wstring values = null, wstring sessionId = null) {
         auto request = new Z8ApplicationRequest(); request.session = querySession; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, "Sample"w); request.parameters.z8_add("action"w, "copy"w);
         request.parameters.z8_add("fields"w, `["title","amount"]`w); request.parameters.z8_add("data"w, data); request.parameters.z8_add("recordId"w, sourceIds);
+        if (values !is null) request.parameters.z8_add("values"w, values);
+        if (sessionId !is null) request.parameters.z8_add("session"w, sessionId);
         z8_application_set_request(request); z8_application_start_response(request, "Sample"w);
         try { z8_application_dispatch_request(); } catch (Exception) { return false; }
         z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); output = z8_application_response_text(request); return true;
@@ -854,6 +870,8 @@ void main(string[] args) {
     auto copyJson = parseJSON(copyResult.to!string);
     assert(copyJson["data"].array.length == 1 && copyJson["data"][0]["title"].str == "Copy" && copyJson["data"][0]["amount"].integer == 99);
     assert(copyJson["data"][0]["recordId"].str != "00000000-0000-0000-0000-000000000133");
+    assert(copy("00000000-0000-0000-0000-000000000133"w, `[{"recordId":"00000000-0000-0000-0000-000000000138","amount":88}]`w, copyResult, `{"amount":100}`w, "write-values"w));
+    assert(parseJSON(copyResult.to!string)["data"].array.length == 0);
     auto countBeforeFailedCopy = db.execute(`SELECT count(*) FROM "z8_bootstrap"."Sample;--"`).rows[0][0].text;
     assert(!copy(`["00000000-0000-0000-0000-000000000133","invalid"]`w, `[{},{}]`w, copyResult));
     assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."Sample;--"`).rows[0][0].text == countBeforeFailedCopy);

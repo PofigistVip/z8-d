@@ -14,7 +14,7 @@ private void z8_application_dispatch_query_copy_target(wstring className, Z8Obje
         auto name = keys.z8_get(i);
         if (name is null) throw new Exception("invalid query copy parameter");
         if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w ||
-            name == "data"w || name == "fields"w || name == "recordId"w) continue;
+            name == "data"w || name == "fields"w || name == "recordId"w || name == "values"w) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported query copy parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
@@ -28,6 +28,7 @@ private void z8_application_dispatch_query_copy_target(wstring className, Z8Obje
         if (!privileges.getFieldAccess(queryKey, fieldKey).write) throw new Exception("query copy field access denied");
     }
     auto selected = z8_application_query_fields(query, privileges, params);
+    z8_application_query_context_values(query, privileges, params, false);
     auto data = params.z8_get("data"w), sourceIds = params.z8_get("recordId"w);
     if (data is null || !data.length || sourceIds is null || !sourceIds.length) throw new Exception("query copy requires records and record ids");
     auto records = z8_json_parse(data.to!string);
@@ -56,5 +57,5 @@ private void z8_application_dispatch_query_copy_target(wstring className, Z8Obje
         ids ~= z8_query_copy(query, id);
     }
     connection.commit();
-    z8_application_query_write_affected(query, selected, ids, request.writer);
+    z8_application_query_write_affected(query, selected, ids, request.writer, privileges, params);
 }

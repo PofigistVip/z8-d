@@ -13,7 +13,7 @@ private void z8_application_dispatch_query_create_target(wstring className, Z8Ob
     for (long i; i < keys.z8_size(); ++i) {
         auto name = keys.z8_get(i);
         if (name is null) throw new Exception("invalid query create parameter");
-        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "data"w || name == "fields"w) continue;
+        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "data"w || name == "fields"w || name == "values"w) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported query create parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
@@ -25,6 +25,7 @@ private void z8_application_dispatch_query_create_target(wstring className, Z8Ob
     auto key = z8_query_primary_key(query);
     if (key is null) throw new Exception("query has no primary key");
     auto selected = z8_application_query_fields(query, privileges, params);
+    z8_application_query_context_values(query, privileges, params, false);
     auto json = params.z8_get("data"w);
     if (json is null || !json.length) throw new Exception("query create requires records");
     auto records = z8_json_parse(json.to!string);
@@ -57,5 +58,5 @@ private void z8_application_dispatch_query_create_target(wstring className, Z8Ob
         ids ~= id;
     }
     connection.commit();
-    z8_application_query_write_affected(query, selected, ids, request.writer);
+    z8_application_query_write_affected(query, selected, ids, request.writer, privileges, params);
 }
