@@ -1,0 +1,22 @@
+// Field.array() reads a grouped JSON value and converts every item through the
+// corresponding Java Field.parse implementation.
+private Z8Array!T z8_field_array(T)(Z8Object self) {
+    auto text = z8_primary_cast!wstring(z8_field_internal_get(self));
+    auto json = z8_json_array_read(text);
+    auto result = new Z8Array!T();
+    foreach (item; json.array) {
+        auto value = item.type == JSONType.null_ ? null : z8_json_value_text(item);
+        static if (is(T == long)) result.z8_add(z8_int_parse(value));
+        else static if (is(T == bool)) result.z8_add(z8_bool_parse(value));
+        else static if (is(T == Z8Decimal)) result.z8_add(z8_decimal_parse(value));
+        else static if (is(T == wstring)) result.z8_add(z8_string_new(value));
+        else static if (is(T == Z8Guid)) result.z8_add(value is null ? z8_guid_zero() : z8_guid_parse(value));
+        else static if (is(T == Z8Date)) {
+            if (value is null || (value.length && (value[$ - 1] == 'L' || value[$ - 1] == 'l')))
+                throw new Exception("invalid date milliseconds");
+            result.z8_add(z8_date_from_ticks(z8_int_parse(value)));
+        } else static if (is(T == Z8Geometry)) result.z8_add(value is null ? new Z8Geometry() : z8_geometry_fromHexString(value));
+        else static assert(0, "unsupported Field.array element type");
+    }
+    return result;
+}

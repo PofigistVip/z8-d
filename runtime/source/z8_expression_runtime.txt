@@ -43,6 +43,7 @@ private void z8_register_expression(S, T, Base = T)(wstring name, wstring sqlCas
                                                      void function(Z8Object) create, S function(Z8Object) sql) {
     z8_native_bind(name ~ ".m_new"w, create);
     z8_native_bind(name ~ ".m_get"w, &z8_typed_field_get!(T, Base));
+    static if (!is(Base == Z8Datespan)) z8_native_bind(name ~ ".m_array"w, &z8_field_array!Base);
     z8_native_bind(name ~ ".m_setDefault"w, &z8_typed_field_set_default!T);
     z8_native_bind(name ~ ".m_expression"w, &z8_expression_default!(S, Base));
     z8_native_bind(name ~ ".m_setExpression"w, &z8_expression_set!S);

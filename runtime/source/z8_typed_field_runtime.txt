@@ -115,6 +115,7 @@ private void z8_register_value_field(T, Base = T)(wstring name, void function(Z8
     z8_native_bind_field(name ~ ".f_defaultValue"w, &z8_typed_field_default_address!(T, Base));
     z8_native_bind(name ~ ".m_get"w, &z8_typed_field_get!(T, Base));
     z8_native_bind(name ~ ".m_getDefault"w, &z8_typed_field_get_default!(T, Base));
+    static if (!is(Base == Z8Binary) && !is(Base == Z8Datespan)) z8_native_bind(name ~ ".m_array"w, &z8_field_array!Base);
     z8_native_bind(name ~ ".m_setDefault"w, &z8_typed_field_set_default!T);
     z8_native_bind(name ~ ".z8op_assign"w, &z8_typed_field_assign!T);
 }
@@ -122,6 +123,7 @@ private void z8_register_value_field(T, Base = T)(wstring name, void function(Z8
 void z8_bind_builtin_typed_fields() {
     z8_native_bind(z8_integer_expression_name ~ ".m_new"w, &z8_integer_expression_new);
     z8_native_bind(z8_integer_expression_name ~ ".m_get"w, &z8_integer_field_get);
+    z8_native_bind(z8_integer_expression_name ~ ".m_array"w, &z8_field_array!long);
     z8_native_bind(z8_integer_expression_name ~ ".m_setDefault"w, &z8_integer_field_set_default);
     z8_native_bind(z8_integer_expression_name ~ ".m_expression"w, &z8_integer_expression_default);
     z8_native_bind(z8_integer_expression_name ~ ".m_setExpression"w, &z8_integer_expression_set);
@@ -136,12 +138,14 @@ void z8_bind_builtin_typed_fields() {
     z8_native_bind(z8_integer_field_name ~ ".m_new"w, &z8_integer_field_new);
     z8_native_bind_field(z8_integer_field_name ~ ".f_defaultValue"w, &z8_integer_field_default_address);
     z8_native_bind(z8_integer_field_name ~ ".m_get"w, &z8_integer_field_get);
+    z8_native_bind(z8_integer_field_name ~ ".m_array"w, &z8_field_array!long);
     z8_native_bind(z8_integer_field_name ~ ".m_getDefault"w, &z8_integer_field_get_default);
     z8_native_bind(z8_integer_field_name ~ ".m_setDefault"w, &z8_integer_field_set_default);
     z8_native_bind(z8_integer_field_name ~ ".z8op_assign"w, &z8_integer_field_assign);
     z8_native_bind(z8_string_field_name ~ ".m_new"w, &z8_string_field_new);
     z8_native_bind_field(z8_string_field_name ~ ".f_defaultValue"w, &z8_string_field_default_address);
     z8_native_bind(z8_string_field_name ~ ".m_get"w, &z8_string_field_get);
+    z8_native_bind(z8_string_field_name ~ ".m_array"w, &z8_field_array!wstring);
     z8_native_bind(z8_string_field_name ~ ".m_getDefault"w, &z8_string_field_get_default);
     z8_native_bind(z8_string_field_name ~ ".m_setDefault"w, &z8_string_field_set_default);
     z8_native_bind(z8_string_field_name ~ ".z8op_assign"w, &z8_string_field_assign);

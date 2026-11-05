@@ -6,7 +6,8 @@ enum Z8FieldAggregation { none, sum, max, min, average, count, array, distinct, 
 interface IZ8FieldCursor {
     bool isClosed();
     bool isGrouped();
-    Z8Primary read(Z8Object field, out bool wasNull);
+    // When asArray is true, return the grouped result as a boxed JSON string.
+    Z8Primary read(Z8Object field, bool asArray, out bool wasNull);
 }
 // Like FormatOptions, this affects the current formatting operation, not the
 // stored expression. Keep it thread-local for concurrent HTTP requests.
@@ -234,14 +235,24 @@ private bool z8_field_is_array(Z8FieldState state) {
     return state.cursor !is null && state.cursor.isGrouped() &&
         (state.aggregation == Z8FieldAggregation.array || state.aggregation == Z8FieldAggregation.distinct);
 }
-private Z8Primary z8_field_current(Z8Object self) {
+private Z8Primary z8_field_internal_get(Z8Object self) {
     auto state = z8_field_state(self);
-    if (z8_field_is_array(state)) return null;
     if (state.changed || state.cursor is null || state.cursor.isClosed()) return state.value;
     bool wasNull;
-    auto value = state.cursor.read(self, wasNull);
+    auto value = state.cursor.read(self, z8_field_is_array(state), wasNull);
     state.wasNull = wasNull;
     return value;
+}
+private Z8Primary z8_field_current(Z8Object self) {
+    auto state = z8_field_state(self);
+    if (z8_field_is_array(state)) {
+        enum prefix = "org.zenframework.z8.server.base.table.value."w;
+        bool isString = z8_native_is_instance(prefix ~ "StringField"w, self) ||
+            z8_native_is_instance(prefix ~ "TextField"w, self) || z8_native_is_instance(prefix ~ "StringExpression"w, self) ||
+            z8_native_is_instance(prefix ~ "TextExpression"w, self) || z8_native_is_instance(prefix ~ "FileExpression"w, self);
+        if (!isString) return null;
+    }
+    return z8_field_internal_get(self);
 }
 // Mirrors the alias information normally supplied by Query and FormatOptions.
 void z8_field_bind_sql(Z8Object self, wstring ownerAlias, wstring columnName, wstring expressionAlias = null) {
