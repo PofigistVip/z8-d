@@ -1021,6 +1021,14 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 ["arrayOrderBy", "usedFields", "columns"].canFind(field.name.text) && !field.isStatic && field.type == ValueType.selfArray && field.objectClass !is null) {
                 result ~= "@property ref " ~ storageType ~ " f_" ~ field.name.text ~ "() { return z8_field_array_ref!(" ~
                     field.objectClass.emittedName ~ ", \"" ~ field.name.text ~ "\")(this); }\n";
+            } else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.query.Query"w &&
+                !field.isStatic && field.type == ValueType.selfArray && field.objectClass !is null) {
+                result ~= "@property ref " ~ storageType ~ " f_" ~ field.name.text ~ "() { return z8_query_array_ref!(" ~
+                    field.objectClass.emittedName ~ ", \"" ~ field.name.text ~ "\")(this); }\n";
+            } else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.query.Query"w &&
+                field.name.text == "readLock" && !field.isStatic && field.type == ValueType.enumType && field.objectClass !is null) {
+                result ~= "@property ref " ~ storageType ~ " f_readLock() { return z8_query_lock_ref!(" ~
+                    field.objectClass.emittedName ~ ")(this); }\n";
             } else if (program.isNative && program.nativeName == "org.zenframework.z8.server.runtime.OBJECT"w &&
                 field.name.text == "objects" && !field.isStatic && field.isAuto && field.objectClass !is null) {
                 result ~= "@property ref " ~ storageType ~ " f_objects() { return z8_object_members_field!(" ~

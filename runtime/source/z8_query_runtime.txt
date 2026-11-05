@@ -2,6 +2,87 @@
 private enum z8_query_name = "org.zenframework.z8.server.base.query.Query"w;
 private enum z8_expression_name = "org.zenframework.z8.server.base.table.value.Expression"w;
 
+enum Z8QueryReadLock { none, update, share, updateNoWait, shareNoWait }
+private interface IZ8QueryLockCell { Z8QueryReadLock get(); }
+private class Z8QueryLockCell(T) : IZ8QueryLockCell {
+    T value;
+    this() { value = T.e_None; }
+    Z8QueryReadLock get() {
+        if (value is T.e_None) return Z8QueryReadLock.none;
+        if (value is T.e_Update) return Z8QueryReadLock.update;
+        if (value is T.e_Share) return Z8QueryReadLock.share;
+        if (value is T.e_UpdateNoWait) return Z8QueryReadLock.updateNoWait;
+        if (value is T.e_ShareNoWait) return Z8QueryReadLock.shareNoWait;
+        throw new Exception("invalid query read lock");
+    }
+}
+class Z8QueryState {
+    Z8Optional!long priority, limit, colCount;
+    Z8Optional!bool readOnly, totals;
+    Z8Object period;
+    private IZ8QueryLockCell lockCell;
+    private Object[wstring] arrays;
+    this() { colCount = z8_optional_wrap(4L); readOnly = totals = z8_optional_wrap(false); }
+}
+private Z8QueryState z8_query_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_query_name, self)) throw new Exception("invalid Query object");
+    auto state = cast(Z8QueryState)self.z8_get_native_state(z8_query_name);
+    if (state is null) { state = new Z8QueryState(); self.z8_set_native_state(z8_query_name, state); }
+    return state;
+}
+private auto z8_query_metadata_address(string member)(Z8Object self) {
+    return &__traits(getMember, z8_query_state(self), member);
+}
+ref Z8ObjectArray!T z8_query_array_ref(T, string name)(Z8Object self) if (is(T : Z8Object)) {
+    auto state = z8_query_state(self);
+    auto key = name.to!wstring;
+    auto found = key in state.arrays;
+    auto cell = found is null ? null : cast(Z8FieldOrderCell!T)*found;
+    if (cell is null) {
+        if (found !is null) throw new Exception("incompatible query array type");
+        cell = new Z8FieldOrderCell!T(); state.arrays[key] = cell;
+    }
+    return cell.value;
+}
+ref T z8_query_lock_ref(T)(Z8Object self) {
+    auto state = z8_query_state(self);
+    auto cell = cast(Z8QueryLockCell!T)state.lockCell;
+    if (cell is null) {
+        if (state.lockCell !is null) throw new Exception("incompatible query read lock enum");
+        cell = new Z8QueryLockCell!T(); state.lockCell = cell;
+    }
+    return cell.value;
+}
+Z8QueryReadLock z8_query_read_lock(Z8Object self) {
+    auto cell = z8_query_state(self).lockCell;
+    return cell is null ? Z8QueryReadLock.none : cell.get();
+}
+// Return a snapshot of a query collection for a database or UI adapter.
+Z8Object[] z8_query_array(Z8Object self, wstring name) {
+    switch (name) {
+        case "controls"w: case "columns"w: case "names"w: case "quickFilters"w: case "filterFields"w:
+        case "extraFields"w: case "sortFields"w: case "groupFields"w: case "actions"w: case "reports"w:
+        case "aggregateBy"w: case "groupBy"w: break;
+        default: throw new Exception("unknown query collection");
+    }
+    auto state = z8_query_state(self);
+    auto entry = name in state.arrays;
+    if (entry is null) return [];
+    auto cell = cast(IZ8FieldOrderCell)*entry;
+    if (cell is null) throw new Exception("invalid query collection");
+    auto view = cell.view();
+    if (view is null) return [];
+    auto values = view.z8_erased_data();
+    Z8Object[] result;
+    for (long i; i < values.z8_size(); ++i) result ~= cast(Z8Object)values.z8_get(i);
+    return result;
+}
+long z8_query_limit(Z8Object self) {
+    auto value = z8_query_state(self).limit;
+    return value.present ? cast(int)value.value : 200;
+}
+
 private Z8ObjectArray!Z8Object z8_query_data_fields(Z8Object self, bool primaryOnly = false) {
     self = z8_nonnull(self);
     if (!z8_native_is_instance(z8_query_name, self)) throw new Exception("invalid Query object");
@@ -54,6 +135,12 @@ private Z8Object z8_query_find_field_id(Z8Object self, wstring id) {
 }
 void z8_bind_builtin_query() {
     enum p = z8_query_name ~ "."w;
+    z8_native_bind_field(p ~ "f_priority"w, &z8_query_metadata_address!"priority");
+    z8_native_bind_field(p ~ "f_limit"w, &z8_query_metadata_address!"limit");
+    z8_native_bind_field(p ~ "f_colCount"w, &z8_query_metadata_address!"colCount");
+    z8_native_bind_field(p ~ "f_readOnly"w, &z8_query_metadata_address!"readOnly");
+    z8_native_bind_field(p ~ "f_totals"w, &z8_query_metadata_address!"totals");
+    z8_native_bind_field(p ~ "f_period"w, &z8_query_metadata_address!"period");
     z8_native_bind(p ~ "m_fields"w, &z8_query_fields);
     z8_native_bind(p ~ "m_primaryFields"w, &z8_query_primary_fields);
     z8_native_bind(p ~ "m_getFieldByIndex"w, &z8_query_find_direct!"index");
