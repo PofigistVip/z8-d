@@ -9,6 +9,20 @@ class Z8Array(T) {
         this(T[] values) { foreach (value; values) items ~= z8_optional_wrap(value); }
         this(Element[] values, bool boxed) { items = values; }
     } else this(T[] values) { items = values; }
+    // RCollection inherits ArrayList, whose equals compares element values.
+    override bool opEquals(Object other) {
+        auto right = cast(Z8Array!T)other;
+        if (right is null || items.length != right.items.length) return false;
+        foreach (i, item; items) {
+            auto value = right.items[i];
+            static if (is(T == wstring)) {
+                if (!z8_string_equals(item, value)) return false;
+            } else static if (is(T == class)) {
+                if (item !is value && (item is null || value is null || item != value)) return false;
+            } else if (item != value) return false;
+        }
+        return true;
+    }
     long z8_size() { return cast(long)items.length; }
     bool z8_isEmpty() { return items.length == 0; }
     static if (is(T == class)) {

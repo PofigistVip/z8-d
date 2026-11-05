@@ -108,63 +108,15 @@ class Parser {
                 if (token.kind == TokenKind.identifier) { result = ValueType.selfType; parsedObjectName = token.text; }
                 else throw new CompileException("unsupported type", token.position);
         }
-        if (accept("[")) {
-            if (current.text != "]") {
+        while (accept("[")) {
+            if (accept("]")) {
+                result = arrayOf(result);
+                if (result == ValueType.voidType) error("this array element type is not supported");
+            } else {
                 auto key = accept("string") ? ValueType.stringType : accept("int") ? ValueType.intType : accept("guid") ? ValueType.guidType : accept("bool") ? ValueType.boolType : accept("decimal") ? ValueType.decimalType : ValueType.voidType;
-                auto map = mapType(result, key);
-                if (map == ValueType.voidType) error("unsupported map key or value type");
-                expect("]"); return map;
-            }
-            expect("]");
-            if (isSqlType(result)) {
-                bool matrix = accept("[");
-                if (matrix) expect("]");
-                return sqlArrayType(result, matrix);
-            }
-            switch (result) {
-                case ValueType.intType:
-                    if (accept("[")) { expect("]"); return ValueType.intMatrix; }
-                    return ValueType.intArray;
-                case ValueType.decimalType:
-                    if (accept("[")) { expect("]"); return ValueType.decimalMatrix; }
-                    return ValueType.decimalArray;
-                case ValueType.boolType:
-                    if (accept("[")) { expect("]"); return ValueType.boolMatrix; }
-                    return ValueType.boolArray;
-                case ValueType.stringType:
-                    if (accept("[")) { expect("]"); return ValueType.stringMatrix; }
-                    return ValueType.stringArray;
-                case ValueType.primaryType:
-                    if (accept("[")) { expect("]"); return ValueType.primaryMatrix; }
-                    return ValueType.primaryArray;
-                case ValueType.guidType:
-                    if (accept("[")) { expect("]"); return ValueType.guidMatrix; }
-                    return ValueType.guidArray;
-                case ValueType.binaryType:
-                    if (accept("[")) { expect("]"); return ValueType.binaryMatrix; }
-                    return ValueType.binaryArray;
-                case ValueType.datespanType:
-                    if (accept("[")) { expect("]"); return ValueType.datespanMatrix; }
-                    return ValueType.datespanArray;
-                case ValueType.dateType:
-                    if (accept("[")) { expect("]"); return ValueType.dateMatrix; }
-                    return ValueType.dateArray;
-                case ValueType.geometryType:
-                    if (accept("[")) { expect("]"); return ValueType.geometryMatrix; }
-                    return ValueType.geometryArray;
-                case ValueType.fileType:
-                    if (accept("[")) { expect("]"); return ValueType.fileMatrix; }
-                    return ValueType.fileArray;
-                case ValueType.exceptionType:
-                    if (accept("[")) { expect("]"); return ValueType.exceptionMatrix; }
-                    return ValueType.exceptionArray;
-                case ValueType.encodingType:
-                    if (accept("[")) { expect("]"); return ValueType.encodingMatrix; }
-                    return ValueType.encodingArray;
-                case ValueType.selfType:
-                    if (accept("[")) { expect("]"); return ValueType.selfMatrix; }
-                    return ValueType.selfArray;
-                default: error("this array element type is not supported"); assert(0);
+                result = mapType(result, key);
+                if (result == ValueType.voidType) error("unsupported map key or value type");
+                expect("]");
             }
         }
         return result;

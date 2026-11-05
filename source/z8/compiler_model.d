@@ -13,7 +13,7 @@ class CompileException : Exception {
     this(string message, Position position) { super(message); this.position = position; }
 }
 
-enum ValueType { voidType, binaryStringMap, binaryIntMap, binaryGuidMap, binaryBoolMap, binaryDecimalMap, datespanStringMap, datespanIntMap, datespanGuidMap, datespanBoolMap, datespanDecimalMap, dateStringMap, dateIntMap, dateGuidMap, dateBoolMap, dateDecimalMap, geometryStringMap, geometryIntMap, geometryGuidMap, geometryBoolMap, geometryDecimalMap, fileStringMap, fileIntMap, fileGuidMap, fileBoolMap, fileDecimalMap, exceptionStringMap, exceptionIntMap, exceptionGuidMap, exceptionBoolMap, exceptionDecimalMap, encodingStringMap, encodingIntMap, encodingGuidMap, encodingBoolMap, encodingDecimalMap, selfStringMap, selfIntMap, selfGuidMap, selfBoolMap, selfDecimalMap, enumStringMap, enumIntMap, enumGuidMap, enumBoolMap, enumDecimalMap, intType, decimalType, boolType, stringType, guidType, binaryType, datespanType, dateType, geometryType, fileType, exceptionType, encodingType, ftsType, ftsQueryType, sqlBoolType, sqlIntType, sqlDecimalType, sqlStringType, sqlGuidType, sqlDateType, sqlDatespanType, sqlBinaryType, sqlGeometryType, sqlPrimaryType, sqlBoolStringMap, sqlBoolIntMap, sqlBoolGuidMap, sqlBoolBoolMap, sqlBoolDecimalMap, sqlIntStringMap, sqlIntIntMap, sqlIntGuidMap, sqlIntBoolMap, sqlIntDecimalMap, sqlDecimalStringMap, sqlDecimalIntMap, sqlDecimalGuidMap, sqlDecimalBoolMap, sqlDecimalDecimalMap, sqlStringStringMap, sqlStringIntMap, sqlStringGuidMap, sqlStringBoolMap, sqlStringDecimalMap, sqlGuidStringMap, sqlGuidIntMap, sqlGuidGuidMap, sqlGuidBoolMap, sqlGuidDecimalMap, sqlDateStringMap, sqlDateIntMap, sqlDateGuidMap, sqlDateBoolMap, sqlDateDecimalMap, sqlDatespanStringMap, sqlDatespanIntMap, sqlDatespanGuidMap, sqlDatespanBoolMap, sqlDatespanDecimalMap, sqlBinaryStringMap, sqlBinaryIntMap, sqlBinaryGuidMap, sqlBinaryBoolMap, sqlBinaryDecimalMap, sqlGeometryStringMap, sqlGeometryIntMap, sqlGeometryGuidMap, sqlGeometryBoolMap, sqlGeometryDecimalMap, sqlPrimaryStringMap, sqlPrimaryIntMap, sqlPrimaryGuidMap, sqlPrimaryBoolMap, sqlPrimaryDecimalMap, sqlBoolArray, sqlBoolMatrix, sqlIntArray, sqlIntMatrix, sqlDecimalArray, sqlDecimalMatrix, sqlStringArray, sqlStringMatrix, sqlGuidArray, sqlGuidMatrix, sqlDateArray, sqlDateMatrix, sqlDatespanArray, sqlDatespanMatrix, sqlBinaryArray, sqlBinaryMatrix, sqlGeometryArray, sqlGeometryMatrix, sqlPrimaryArray, sqlPrimaryMatrix, primaryType, selfType, intArray, intMatrix, decimalArray, decimalMatrix, boolArray, boolMatrix, stringArray, stringMatrix, guidArray, guidMatrix, binaryArray, binaryMatrix, datespanArray, datespanMatrix, dateArray, dateMatrix, geometryArray, geometryMatrix, fileArray, fileMatrix, exceptionArray, exceptionMatrix, encodingArray, encodingMatrix, primaryArray, primaryMatrix, selfArray, selfMatrix, stringMap, primaryStringMap, intStringMap, boolStringMap, decimalStringMap, guidStringMap, intIntMap, stringIntMap, primaryIntMap, boolIntMap, decimalIntMap, guidIntMap, stringGuidMap, primaryGuidMap, intGuidMap, boolGuidMap, decimalGuidMap, guidGuidMap, stringBoolMap, primaryBoolMap, intBoolMap, boolBoolMap, decimalBoolMap, guidBoolMap, stringDecimalMap, primaryDecimalMap, intDecimalMap, boolDecimalMap, decimalDecimalMap, guidDecimalMap, nullType, nullableString, enumType, enumArray, enumMatrix, optionalInt, optionalBool, optionalDecimal }
+enum ValueType { voidType, intArrayStringMap, intArrayIntMap, intArrayGuidMap, intArrayBoolMap, intArrayDecimalMap, decimalArrayStringMap, decimalArrayIntMap, decimalArrayGuidMap, decimalArrayBoolMap, decimalArrayDecimalMap, boolArrayStringMap, boolArrayIntMap, boolArrayGuidMap, boolArrayBoolMap, boolArrayDecimalMap, stringArrayStringMap, stringArrayIntMap, stringArrayGuidMap, stringArrayBoolMap, stringArrayDecimalMap, guidArrayStringMap, guidArrayIntMap, guidArrayGuidMap, guidArrayBoolMap, guidArrayDecimalMap, binaryArrayStringMap, binaryArrayIntMap, binaryArrayGuidMap, binaryArrayBoolMap, binaryArrayDecimalMap, datespanArrayStringMap, datespanArrayIntMap, datespanArrayGuidMap, datespanArrayBoolMap, datespanArrayDecimalMap, dateArrayStringMap, dateArrayIntMap, dateArrayGuidMap, dateArrayBoolMap, dateArrayDecimalMap, geometryArrayStringMap, geometryArrayIntMap, geometryArrayGuidMap, geometryArrayBoolMap, geometryArrayDecimalMap, fileArrayStringMap, fileArrayIntMap, fileArrayGuidMap, fileArrayBoolMap, fileArrayDecimalMap, exceptionArrayStringMap, exceptionArrayIntMap, exceptionArrayGuidMap, exceptionArrayBoolMap, exceptionArrayDecimalMap, encodingArrayStringMap, encodingArrayIntMap, encodingArrayGuidMap, encodingArrayBoolMap, encodingArrayDecimalMap, primaryArrayStringMap, primaryArrayIntMap, primaryArrayGuidMap, primaryArrayBoolMap, primaryArrayDecimalMap, selfArrayStringMap, selfArrayIntMap, selfArrayGuidMap, selfArrayBoolMap, selfArrayDecimalMap, enumArrayStringMap, enumArrayIntMap, enumArrayGuidMap, enumArrayBoolMap, enumArrayDecimalMap, sqlBoolArrayStringMap, sqlBoolArrayIntMap, sqlBoolArrayGuidMap, sqlBoolArrayBoolMap, sqlBoolArrayDecimalMap, sqlIntArrayStringMap, sqlIntArrayIntMap, sqlIntArrayGuidMap, sqlIntArrayBoolMap, sqlIntArrayDecimalMap, sqlDecimalArrayStringMap, sqlDecimalArrayIntMap, sqlDecimalArrayGuidMap, sqlDecimalArrayBoolMap, sqlDecimalArrayDecimalMap, sqlStringArrayStringMap, sqlStringArrayIntMap, sqlStringArrayGuidMap, sqlStringArrayBoolMap, sqlStringArrayDecimalMap, sqlGuidArrayStringMap, sqlGuidArrayIntMap, sqlGuidArrayGuidMap, sqlGuidArrayBoolMap, sqlGuidArrayDecimalMap, sqlDateArrayStringMap, sqlDateArrayIntMap, sqlDateArrayGuidMap, sqlDateArrayBoolMap, sqlDateArrayDecimalMap, sqlDatespanArrayStringMap, sqlDatespanArrayIntMap, sqlDatespanArrayGuidMap, sqlDatespanArrayBoolMap, sqlDatespanArrayDecimalMap, sqlBinaryArrayStringMap, sqlBinaryArrayIntMap, sqlBinaryArrayGuidMap, sqlBinaryArrayBoolMap, sqlBinaryArrayDecimalMap, sqlGeometryArrayStringMap, sqlGeometryArrayIntMap, sqlGeometryArrayGuidMap, sqlGeometryArrayBoolMap, sqlGeometryArrayDecimalMap, sqlPrimaryArrayStringMap, sqlPrimaryArrayIntMap, sqlPrimaryArrayGuidMap, sqlPrimaryArrayBoolMap, sqlPrimaryArrayDecimalMap, binaryStringMap, binaryIntMap, binaryGuidMap, binaryBoolMap, binaryDecimalMap, datespanStringMap, datespanIntMap, datespanGuidMap, datespanBoolMap, datespanDecimalMap, dateStringMap, dateIntMap, dateGuidMap, dateBoolMap, dateDecimalMap, geometryStringMap, geometryIntMap, geometryGuidMap, geometryBoolMap, geometryDecimalMap, fileStringMap, fileIntMap, fileGuidMap, fileBoolMap, fileDecimalMap, exceptionStringMap, exceptionIntMap, exceptionGuidMap, exceptionBoolMap, exceptionDecimalMap, encodingStringMap, encodingIntMap, encodingGuidMap, encodingBoolMap, encodingDecimalMap, selfStringMap, selfIntMap, selfGuidMap, selfBoolMap, selfDecimalMap, enumStringMap, enumIntMap, enumGuidMap, enumBoolMap, enumDecimalMap, intType, decimalType, boolType, stringType, guidType, binaryType, datespanType, dateType, geometryType, fileType, exceptionType, encodingType, ftsType, ftsQueryType, sqlBoolType, sqlIntType, sqlDecimalType, sqlStringType, sqlGuidType, sqlDateType, sqlDatespanType, sqlBinaryType, sqlGeometryType, sqlPrimaryType, sqlBoolStringMap, sqlBoolIntMap, sqlBoolGuidMap, sqlBoolBoolMap, sqlBoolDecimalMap, sqlIntStringMap, sqlIntIntMap, sqlIntGuidMap, sqlIntBoolMap, sqlIntDecimalMap, sqlDecimalStringMap, sqlDecimalIntMap, sqlDecimalGuidMap, sqlDecimalBoolMap, sqlDecimalDecimalMap, sqlStringStringMap, sqlStringIntMap, sqlStringGuidMap, sqlStringBoolMap, sqlStringDecimalMap, sqlGuidStringMap, sqlGuidIntMap, sqlGuidGuidMap, sqlGuidBoolMap, sqlGuidDecimalMap, sqlDateStringMap, sqlDateIntMap, sqlDateGuidMap, sqlDateBoolMap, sqlDateDecimalMap, sqlDatespanStringMap, sqlDatespanIntMap, sqlDatespanGuidMap, sqlDatespanBoolMap, sqlDatespanDecimalMap, sqlBinaryStringMap, sqlBinaryIntMap, sqlBinaryGuidMap, sqlBinaryBoolMap, sqlBinaryDecimalMap, sqlGeometryStringMap, sqlGeometryIntMap, sqlGeometryGuidMap, sqlGeometryBoolMap, sqlGeometryDecimalMap, sqlPrimaryStringMap, sqlPrimaryIntMap, sqlPrimaryGuidMap, sqlPrimaryBoolMap, sqlPrimaryDecimalMap, sqlBoolArray, sqlBoolMatrix, sqlIntArray, sqlIntMatrix, sqlDecimalArray, sqlDecimalMatrix, sqlStringArray, sqlStringMatrix, sqlGuidArray, sqlGuidMatrix, sqlDateArray, sqlDateMatrix, sqlDatespanArray, sqlDatespanMatrix, sqlBinaryArray, sqlBinaryMatrix, sqlGeometryArray, sqlGeometryMatrix, sqlPrimaryArray, sqlPrimaryMatrix, primaryType, selfType, intArray, intMatrix, decimalArray, decimalMatrix, boolArray, boolMatrix, stringArray, stringMatrix, guidArray, guidMatrix, binaryArray, binaryMatrix, datespanArray, datespanMatrix, dateArray, dateMatrix, geometryArray, geometryMatrix, fileArray, fileMatrix, exceptionArray, exceptionMatrix, encodingArray, encodingMatrix, primaryArray, primaryMatrix, selfArray, selfMatrix, stringMap, primaryStringMap, intStringMap, boolStringMap, decimalStringMap, guidStringMap, intIntMap, stringIntMap, primaryIntMap, boolIntMap, decimalIntMap, guidIntMap, stringGuidMap, primaryGuidMap, intGuidMap, boolGuidMap, decimalGuidMap, guidGuidMap, stringBoolMap, primaryBoolMap, intBoolMap, boolBoolMap, decimalBoolMap, guidBoolMap, stringDecimalMap, primaryDecimalMap, intDecimalMap, boolDecimalMap, decimalDecimalMap, guidDecimalMap, nullType, nullableString, enumType, enumArray, enumMatrix, optionalInt, optionalBool, optionalDecimal }
 enum NullableStringMode { none, required, nullAsEmpty }
 enum ExprKind { integer, decimalLiteral, boolean, stringLiteral, guidLiteral, binaryLiteral, datespanLiteral, dateLiteral, nullLiteral, arrayLiteral, mapEntry, variable, selfRef, superRef, containerRef, newSelf, field, call, memberCall, index, castExpr, instanceOf, unary, binary, conditional, elvis }
 enum StmtKind { block, variable, assignment, expressionStmt, returnStmt, ifStmt,
@@ -264,6 +264,44 @@ unittest {
         assert(isArray(d.array) && isArray(d.matrix));
     }
 }
+// Add one sequence dimension, preserving its element type.
+package ValueType arrayOf(ValueType type) {
+    if (type == ValueType.intType) return ValueType.intArray;
+    if (type == ValueType.intArray) return ValueType.intMatrix;
+    if (type == ValueType.decimalType) return ValueType.decimalArray;
+    if (type == ValueType.decimalArray) return ValueType.decimalMatrix;
+    if (type == ValueType.boolType) return ValueType.boolArray;
+    if (type == ValueType.boolArray) return ValueType.boolMatrix;
+    if (type == ValueType.stringType) return ValueType.stringArray;
+    if (type == ValueType.stringArray) return ValueType.stringMatrix;
+    if (type == ValueType.guidType) return ValueType.guidArray;
+    if (type == ValueType.guidArray) return ValueType.guidMatrix;
+    if (type == ValueType.binaryType) return ValueType.binaryArray;
+    if (type == ValueType.binaryArray) return ValueType.binaryMatrix;
+    if (type == ValueType.datespanType) return ValueType.datespanArray;
+    if (type == ValueType.datespanArray) return ValueType.datespanMatrix;
+    if (type == ValueType.dateType) return ValueType.dateArray;
+    if (type == ValueType.dateArray) return ValueType.dateMatrix;
+    if (type == ValueType.geometryType) return ValueType.geometryArray;
+    if (type == ValueType.geometryArray) return ValueType.geometryMatrix;
+    if (type == ValueType.fileType) return ValueType.fileArray;
+    if (type == ValueType.fileArray) return ValueType.fileMatrix;
+    if (type == ValueType.exceptionType) return ValueType.exceptionArray;
+    if (type == ValueType.exceptionArray) return ValueType.exceptionMatrix;
+    if (type == ValueType.encodingType) return ValueType.encodingArray;
+    if (type == ValueType.encodingArray) return ValueType.encodingMatrix;
+    if (type == ValueType.primaryType) return ValueType.primaryArray;
+    if (type == ValueType.primaryArray) return ValueType.primaryMatrix;
+    if (type == ValueType.selfType) return ValueType.selfArray;
+    if (type == ValueType.selfArray) return ValueType.selfMatrix;
+    if (type == ValueType.enumType) return ValueType.enumArray;
+    if (type == ValueType.enumArray) return ValueType.enumMatrix;
+    foreach (d; sqlArrayDescriptors) {
+        if (type == d.element) return d.array;
+        if (type == d.array) return d.matrix;
+    }
+    return ValueType.voidType;
+}
 package bool isArray(ValueType type) {
     return isSqlArray(type) || [ValueType.intArray, ValueType.intMatrix, ValueType.decimalArray, ValueType.decimalMatrix, ValueType.boolArray, ValueType.boolMatrix, ValueType.stringArray, ValueType.stringMatrix, ValueType.guidArray, ValueType.guidMatrix, ValueType.binaryArray, ValueType.binaryMatrix, ValueType.datespanArray, ValueType.datespanMatrix, ValueType.dateArray, ValueType.dateMatrix, ValueType.geometryArray, ValueType.geometryMatrix, ValueType.fileArray, ValueType.fileMatrix, ValueType.exceptionArray, ValueType.exceptionMatrix, ValueType.encodingArray, ValueType.encodingMatrix, ValueType.primaryArray, ValueType.primaryMatrix, ValueType.selfArray, ValueType.selfMatrix, ValueType.enumArray, ValueType.enumMatrix].canFind(type);
 }
@@ -272,6 +310,131 @@ package bool isReferenceArray(ValueType type) { return isSqlArray(type) || [Valu
 // VariableType in the original compiler likewise stores the value type and keys.
 private struct MapDescriptor { ValueType type, value, key; }
 private enum MapDescriptor[] mapDescriptors = [
+    MapDescriptor(ValueType.intArrayStringMap, ValueType.intArray, ValueType.stringType),
+    MapDescriptor(ValueType.intArrayIntMap, ValueType.intArray, ValueType.intType),
+    MapDescriptor(ValueType.intArrayGuidMap, ValueType.intArray, ValueType.guidType),
+    MapDescriptor(ValueType.intArrayBoolMap, ValueType.intArray, ValueType.boolType),
+    MapDescriptor(ValueType.intArrayDecimalMap, ValueType.intArray, ValueType.decimalType),
+    MapDescriptor(ValueType.decimalArrayStringMap, ValueType.decimalArray, ValueType.stringType),
+    MapDescriptor(ValueType.decimalArrayIntMap, ValueType.decimalArray, ValueType.intType),
+    MapDescriptor(ValueType.decimalArrayGuidMap, ValueType.decimalArray, ValueType.guidType),
+    MapDescriptor(ValueType.decimalArrayBoolMap, ValueType.decimalArray, ValueType.boolType),
+    MapDescriptor(ValueType.decimalArrayDecimalMap, ValueType.decimalArray, ValueType.decimalType),
+    MapDescriptor(ValueType.boolArrayStringMap, ValueType.boolArray, ValueType.stringType),
+    MapDescriptor(ValueType.boolArrayIntMap, ValueType.boolArray, ValueType.intType),
+    MapDescriptor(ValueType.boolArrayGuidMap, ValueType.boolArray, ValueType.guidType),
+    MapDescriptor(ValueType.boolArrayBoolMap, ValueType.boolArray, ValueType.boolType),
+    MapDescriptor(ValueType.boolArrayDecimalMap, ValueType.boolArray, ValueType.decimalType),
+    MapDescriptor(ValueType.stringArrayStringMap, ValueType.stringArray, ValueType.stringType),
+    MapDescriptor(ValueType.stringArrayIntMap, ValueType.stringArray, ValueType.intType),
+    MapDescriptor(ValueType.stringArrayGuidMap, ValueType.stringArray, ValueType.guidType),
+    MapDescriptor(ValueType.stringArrayBoolMap, ValueType.stringArray, ValueType.boolType),
+    MapDescriptor(ValueType.stringArrayDecimalMap, ValueType.stringArray, ValueType.decimalType),
+    MapDescriptor(ValueType.guidArrayStringMap, ValueType.guidArray, ValueType.stringType),
+    MapDescriptor(ValueType.guidArrayIntMap, ValueType.guidArray, ValueType.intType),
+    MapDescriptor(ValueType.guidArrayGuidMap, ValueType.guidArray, ValueType.guidType),
+    MapDescriptor(ValueType.guidArrayBoolMap, ValueType.guidArray, ValueType.boolType),
+    MapDescriptor(ValueType.guidArrayDecimalMap, ValueType.guidArray, ValueType.decimalType),
+    MapDescriptor(ValueType.binaryArrayStringMap, ValueType.binaryArray, ValueType.stringType),
+    MapDescriptor(ValueType.binaryArrayIntMap, ValueType.binaryArray, ValueType.intType),
+    MapDescriptor(ValueType.binaryArrayGuidMap, ValueType.binaryArray, ValueType.guidType),
+    MapDescriptor(ValueType.binaryArrayBoolMap, ValueType.binaryArray, ValueType.boolType),
+    MapDescriptor(ValueType.binaryArrayDecimalMap, ValueType.binaryArray, ValueType.decimalType),
+    MapDescriptor(ValueType.datespanArrayStringMap, ValueType.datespanArray, ValueType.stringType),
+    MapDescriptor(ValueType.datespanArrayIntMap, ValueType.datespanArray, ValueType.intType),
+    MapDescriptor(ValueType.datespanArrayGuidMap, ValueType.datespanArray, ValueType.guidType),
+    MapDescriptor(ValueType.datespanArrayBoolMap, ValueType.datespanArray, ValueType.boolType),
+    MapDescriptor(ValueType.datespanArrayDecimalMap, ValueType.datespanArray, ValueType.decimalType),
+    MapDescriptor(ValueType.dateArrayStringMap, ValueType.dateArray, ValueType.stringType),
+    MapDescriptor(ValueType.dateArrayIntMap, ValueType.dateArray, ValueType.intType),
+    MapDescriptor(ValueType.dateArrayGuidMap, ValueType.dateArray, ValueType.guidType),
+    MapDescriptor(ValueType.dateArrayBoolMap, ValueType.dateArray, ValueType.boolType),
+    MapDescriptor(ValueType.dateArrayDecimalMap, ValueType.dateArray, ValueType.decimalType),
+    MapDescriptor(ValueType.geometryArrayStringMap, ValueType.geometryArray, ValueType.stringType),
+    MapDescriptor(ValueType.geometryArrayIntMap, ValueType.geometryArray, ValueType.intType),
+    MapDescriptor(ValueType.geometryArrayGuidMap, ValueType.geometryArray, ValueType.guidType),
+    MapDescriptor(ValueType.geometryArrayBoolMap, ValueType.geometryArray, ValueType.boolType),
+    MapDescriptor(ValueType.geometryArrayDecimalMap, ValueType.geometryArray, ValueType.decimalType),
+    MapDescriptor(ValueType.fileArrayStringMap, ValueType.fileArray, ValueType.stringType),
+    MapDescriptor(ValueType.fileArrayIntMap, ValueType.fileArray, ValueType.intType),
+    MapDescriptor(ValueType.fileArrayGuidMap, ValueType.fileArray, ValueType.guidType),
+    MapDescriptor(ValueType.fileArrayBoolMap, ValueType.fileArray, ValueType.boolType),
+    MapDescriptor(ValueType.fileArrayDecimalMap, ValueType.fileArray, ValueType.decimalType),
+    MapDescriptor(ValueType.exceptionArrayStringMap, ValueType.exceptionArray, ValueType.stringType),
+    MapDescriptor(ValueType.exceptionArrayIntMap, ValueType.exceptionArray, ValueType.intType),
+    MapDescriptor(ValueType.exceptionArrayGuidMap, ValueType.exceptionArray, ValueType.guidType),
+    MapDescriptor(ValueType.exceptionArrayBoolMap, ValueType.exceptionArray, ValueType.boolType),
+    MapDescriptor(ValueType.exceptionArrayDecimalMap, ValueType.exceptionArray, ValueType.decimalType),
+    MapDescriptor(ValueType.encodingArrayStringMap, ValueType.encodingArray, ValueType.stringType),
+    MapDescriptor(ValueType.encodingArrayIntMap, ValueType.encodingArray, ValueType.intType),
+    MapDescriptor(ValueType.encodingArrayGuidMap, ValueType.encodingArray, ValueType.guidType),
+    MapDescriptor(ValueType.encodingArrayBoolMap, ValueType.encodingArray, ValueType.boolType),
+    MapDescriptor(ValueType.encodingArrayDecimalMap, ValueType.encodingArray, ValueType.decimalType),
+    MapDescriptor(ValueType.primaryArrayStringMap, ValueType.primaryArray, ValueType.stringType),
+    MapDescriptor(ValueType.primaryArrayIntMap, ValueType.primaryArray, ValueType.intType),
+    MapDescriptor(ValueType.primaryArrayGuidMap, ValueType.primaryArray, ValueType.guidType),
+    MapDescriptor(ValueType.primaryArrayBoolMap, ValueType.primaryArray, ValueType.boolType),
+    MapDescriptor(ValueType.primaryArrayDecimalMap, ValueType.primaryArray, ValueType.decimalType),
+    MapDescriptor(ValueType.selfArrayStringMap, ValueType.selfArray, ValueType.stringType),
+    MapDescriptor(ValueType.selfArrayIntMap, ValueType.selfArray, ValueType.intType),
+    MapDescriptor(ValueType.selfArrayGuidMap, ValueType.selfArray, ValueType.guidType),
+    MapDescriptor(ValueType.selfArrayBoolMap, ValueType.selfArray, ValueType.boolType),
+    MapDescriptor(ValueType.selfArrayDecimalMap, ValueType.selfArray, ValueType.decimalType),
+    MapDescriptor(ValueType.enumArrayStringMap, ValueType.enumArray, ValueType.stringType),
+    MapDescriptor(ValueType.enumArrayIntMap, ValueType.enumArray, ValueType.intType),
+    MapDescriptor(ValueType.enumArrayGuidMap, ValueType.enumArray, ValueType.guidType),
+    MapDescriptor(ValueType.enumArrayBoolMap, ValueType.enumArray, ValueType.boolType),
+    MapDescriptor(ValueType.enumArrayDecimalMap, ValueType.enumArray, ValueType.decimalType),
+    MapDescriptor(ValueType.sqlBoolArrayStringMap, ValueType.sqlBoolArray, ValueType.stringType),
+    MapDescriptor(ValueType.sqlBoolArrayIntMap, ValueType.sqlBoolArray, ValueType.intType),
+    MapDescriptor(ValueType.sqlBoolArrayGuidMap, ValueType.sqlBoolArray, ValueType.guidType),
+    MapDescriptor(ValueType.sqlBoolArrayBoolMap, ValueType.sqlBoolArray, ValueType.boolType),
+    MapDescriptor(ValueType.sqlBoolArrayDecimalMap, ValueType.sqlBoolArray, ValueType.decimalType),
+    MapDescriptor(ValueType.sqlIntArrayStringMap, ValueType.sqlIntArray, ValueType.stringType),
+    MapDescriptor(ValueType.sqlIntArrayIntMap, ValueType.sqlIntArray, ValueType.intType),
+    MapDescriptor(ValueType.sqlIntArrayGuidMap, ValueType.sqlIntArray, ValueType.guidType),
+    MapDescriptor(ValueType.sqlIntArrayBoolMap, ValueType.sqlIntArray, ValueType.boolType),
+    MapDescriptor(ValueType.sqlIntArrayDecimalMap, ValueType.sqlIntArray, ValueType.decimalType),
+    MapDescriptor(ValueType.sqlDecimalArrayStringMap, ValueType.sqlDecimalArray, ValueType.stringType),
+    MapDescriptor(ValueType.sqlDecimalArrayIntMap, ValueType.sqlDecimalArray, ValueType.intType),
+    MapDescriptor(ValueType.sqlDecimalArrayGuidMap, ValueType.sqlDecimalArray, ValueType.guidType),
+    MapDescriptor(ValueType.sqlDecimalArrayBoolMap, ValueType.sqlDecimalArray, ValueType.boolType),
+    MapDescriptor(ValueType.sqlDecimalArrayDecimalMap, ValueType.sqlDecimalArray, ValueType.decimalType),
+    MapDescriptor(ValueType.sqlStringArrayStringMap, ValueType.sqlStringArray, ValueType.stringType),
+    MapDescriptor(ValueType.sqlStringArrayIntMap, ValueType.sqlStringArray, ValueType.intType),
+    MapDescriptor(ValueType.sqlStringArrayGuidMap, ValueType.sqlStringArray, ValueType.guidType),
+    MapDescriptor(ValueType.sqlStringArrayBoolMap, ValueType.sqlStringArray, ValueType.boolType),
+    MapDescriptor(ValueType.sqlStringArrayDecimalMap, ValueType.sqlStringArray, ValueType.decimalType),
+    MapDescriptor(ValueType.sqlGuidArrayStringMap, ValueType.sqlGuidArray, ValueType.stringType),
+    MapDescriptor(ValueType.sqlGuidArrayIntMap, ValueType.sqlGuidArray, ValueType.intType),
+    MapDescriptor(ValueType.sqlGuidArrayGuidMap, ValueType.sqlGuidArray, ValueType.guidType),
+    MapDescriptor(ValueType.sqlGuidArrayBoolMap, ValueType.sqlGuidArray, ValueType.boolType),
+    MapDescriptor(ValueType.sqlGuidArrayDecimalMap, ValueType.sqlGuidArray, ValueType.decimalType),
+    MapDescriptor(ValueType.sqlDateArrayStringMap, ValueType.sqlDateArray, ValueType.stringType),
+    MapDescriptor(ValueType.sqlDateArrayIntMap, ValueType.sqlDateArray, ValueType.intType),
+    MapDescriptor(ValueType.sqlDateArrayGuidMap, ValueType.sqlDateArray, ValueType.guidType),
+    MapDescriptor(ValueType.sqlDateArrayBoolMap, ValueType.sqlDateArray, ValueType.boolType),
+    MapDescriptor(ValueType.sqlDateArrayDecimalMap, ValueType.sqlDateArray, ValueType.decimalType),
+    MapDescriptor(ValueType.sqlDatespanArrayStringMap, ValueType.sqlDatespanArray, ValueType.stringType),
+    MapDescriptor(ValueType.sqlDatespanArrayIntMap, ValueType.sqlDatespanArray, ValueType.intType),
+    MapDescriptor(ValueType.sqlDatespanArrayGuidMap, ValueType.sqlDatespanArray, ValueType.guidType),
+    MapDescriptor(ValueType.sqlDatespanArrayBoolMap, ValueType.sqlDatespanArray, ValueType.boolType),
+    MapDescriptor(ValueType.sqlDatespanArrayDecimalMap, ValueType.sqlDatespanArray, ValueType.decimalType),
+    MapDescriptor(ValueType.sqlBinaryArrayStringMap, ValueType.sqlBinaryArray, ValueType.stringType),
+    MapDescriptor(ValueType.sqlBinaryArrayIntMap, ValueType.sqlBinaryArray, ValueType.intType),
+    MapDescriptor(ValueType.sqlBinaryArrayGuidMap, ValueType.sqlBinaryArray, ValueType.guidType),
+    MapDescriptor(ValueType.sqlBinaryArrayBoolMap, ValueType.sqlBinaryArray, ValueType.boolType),
+    MapDescriptor(ValueType.sqlBinaryArrayDecimalMap, ValueType.sqlBinaryArray, ValueType.decimalType),
+    MapDescriptor(ValueType.sqlGeometryArrayStringMap, ValueType.sqlGeometryArray, ValueType.stringType),
+    MapDescriptor(ValueType.sqlGeometryArrayIntMap, ValueType.sqlGeometryArray, ValueType.intType),
+    MapDescriptor(ValueType.sqlGeometryArrayGuidMap, ValueType.sqlGeometryArray, ValueType.guidType),
+    MapDescriptor(ValueType.sqlGeometryArrayBoolMap, ValueType.sqlGeometryArray, ValueType.boolType),
+    MapDescriptor(ValueType.sqlGeometryArrayDecimalMap, ValueType.sqlGeometryArray, ValueType.decimalType),
+    MapDescriptor(ValueType.sqlPrimaryArrayStringMap, ValueType.sqlPrimaryArray, ValueType.stringType),
+    MapDescriptor(ValueType.sqlPrimaryArrayIntMap, ValueType.sqlPrimaryArray, ValueType.intType),
+    MapDescriptor(ValueType.sqlPrimaryArrayGuidMap, ValueType.sqlPrimaryArray, ValueType.guidType),
+    MapDescriptor(ValueType.sqlPrimaryArrayBoolMap, ValueType.sqlPrimaryArray, ValueType.boolType),
+    MapDescriptor(ValueType.sqlPrimaryArrayDecimalMap, ValueType.sqlPrimaryArray, ValueType.decimalType),
     MapDescriptor(ValueType.binaryStringMap, ValueType.binaryType, ValueType.stringType),
     MapDescriptor(ValueType.binaryIntMap, ValueType.binaryType, ValueType.intType),
     MapDescriptor(ValueType.binaryGuidMap, ValueType.binaryType, ValueType.guidType),
@@ -415,18 +578,9 @@ package ValueType mapKeyArrayType(ValueType type) {
     return key == ValueType.decimalType ? ValueType.decimalArray : key == ValueType.boolType ? ValueType.boolArray : key == ValueType.intType ? ValueType.intArray : key == ValueType.guidType ? ValueType.guidArray : ValueType.stringArray;
 }
 package ValueType mapValueArrayType(ValueType type) {
-    auto value = mapValueType(type);
-    if (isSqlType(value)) return sqlArrayType(value, false);
-    if (value == ValueType.selfType) return ValueType.selfArray;
-    if (value == ValueType.enumType) return ValueType.enumArray;
-    if (value == ValueType.binaryType) return ValueType.binaryArray;
-    if (value == ValueType.datespanType) return ValueType.datespanArray;
-    if (value == ValueType.dateType) return ValueType.dateArray;
-    if (value == ValueType.geometryType) return ValueType.geometryArray;
-    if (value == ValueType.fileType) return ValueType.fileArray;
-    if (value == ValueType.exceptionType) return ValueType.exceptionArray;
-    if (value == ValueType.encodingType) return ValueType.encodingArray;
-    return value == ValueType.intType ? ValueType.intArray : value == ValueType.boolType ? ValueType.boolArray : value == ValueType.decimalType ? ValueType.decimalArray : value == ValueType.guidType ? ValueType.guidArray : value == ValueType.primaryType ? ValueType.primaryArray : ValueType.stringArray;
+    auto result = arrayOf(mapValueType(type));
+    assert(result != ValueType.voidType, "map values cannot be represented as an array");
+    return result;
 }
 package ValueType mapType(ValueType value, ValueType key) {
     foreach (descriptor; mapDescriptors)
@@ -452,7 +606,7 @@ package ValueType mapValueReadType(ValueType type) {
     auto value = mapValueType(type);
     return value == ValueType.stringType ? ValueType.nullableString : storedValueType(value);
 }
-package bool hasObjectClass(ValueType type) { return (isMap(type) && [ValueType.selfType, ValueType.enumType].canFind(mapValueType(type))) || type == ValueType.selfType || type == ValueType.selfArray || type == ValueType.selfMatrix || type == ValueType.enumType || type == ValueType.enumArray || type == ValueType.enumMatrix; }
+package bool hasObjectClass(ValueType type) { return (isMap(type) && hasObjectClass(mapValueType(type))) || type == ValueType.selfType || type == ValueType.selfArray || type == ValueType.selfMatrix || type == ValueType.enumType || type == ValueType.enumArray || type == ValueType.enumMatrix; }
 package bool isSqlType(ValueType type) { return [ValueType.sqlPrimaryType, ValueType.sqlBoolType, ValueType.sqlIntType, ValueType.sqlDecimalType, ValueType.sqlStringType, ValueType.sqlGuidType, ValueType.sqlDateType, ValueType.sqlDatespanType, ValueType.sqlBinaryType, ValueType.sqlGeometryType].canFind(type); }
 package bool isNullableReference(ValueType type) { return isSqlType(type) || type == ValueType.ftsType || type == ValueType.ftsQueryType || type == ValueType.selfType || type == ValueType.enumType || type == ValueType.exceptionType || type == ValueType.encodingType || type == ValueType.primaryType || type == ValueType.guidType || type == ValueType.binaryType || type == ValueType.datespanType || type == ValueType.dateType || type == ValueType.geometryType || type == ValueType.fileType || isMap(type) || type == ValueType.nullableString || type == ValueType.stringType || isArray(type); }
 package ValueType storedValueType(ValueType type) {

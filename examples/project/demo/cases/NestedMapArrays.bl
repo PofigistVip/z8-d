@@ -1,0 +1,25 @@
+import org.zenframework.z8.lang.sql.sql_int;
+public class NestedMapArrays {
+    public int number = 9;
+    private static int count(string[][int] input) { return input[1].size(); }
+    public static int run() {
+        string[][int] names = {(1, {"one", "two"}), (2, {})};
+        if (count(names) != 2 || names[1][0] != "one" || !names[2].isEmpty()) return 1;
+        names[1].add("three");
+        if (names.values().size() != 2 || names[1].size() != 3) return 2;
+        string[] equivalent = {"one", "two", "three"};
+        if (!names.containsValue(equivalent)) return 3;
+        int[][string] numbers = {("x", {1, 2})};
+        int[] sameNumbers = {1, 2};
+        if (!numbers.containsValue(sameNumbers)) return 7;
+        NestedMapArrays item = new NestedMapArrays;
+        NestedMapArrays[][string] objects = {("items", {item})};
+        if (objects["items"][0].number != 9 || objects.values().size() != 1) return 4;
+        MapFlavor[][bool] enums = {(true, {MapFlavor.First, MapFlavor.Second})};
+        if (enums[true][1] != MapFlavor.Second || enums.values().size() != 1) return 5;
+        sql_int value = 7;
+        sql_int[][guid] sqlValues = {('00000000-0000-0000-0000-000000000001', {value})};
+        if (sqlValues.values().size() != 1) return 6;
+        return 93;
+    }
+}

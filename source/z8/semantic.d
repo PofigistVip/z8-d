@@ -108,9 +108,10 @@ class Checker {
         return *found;
     }
     private ValueType resolveDeclaredType(ValueType type, Program owner, string objectName, Token site) {
-        if (isMap(type) && mapValueType(type) == ValueType.selfType) {
+        if (isMap(type) && [ValueType.selfType, ValueType.selfArray].canFind(mapValueType(type))) {
             auto target = resolveClass(owner, objectName, site);
-            return target.isEnum ? mapType(ValueType.enumType, mapKeyType(type)) : type;
+            auto enumValue = mapValueType(type) == ValueType.selfArray ? ValueType.enumArray : ValueType.enumType;
+            return target.isEnum ? mapType(enumValue, mapKeyType(type)) : type;
         }
         if (type != ValueType.selfType && type != ValueType.selfArray && type != ValueType.selfMatrix) return type;
         auto target = resolveClass(owner, objectName, site);
