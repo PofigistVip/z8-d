@@ -13,6 +13,9 @@ public class EnumInstanceOf {
         ProbeOther other = ProbeOther.One;
         if (other instanceof ProbeEnum) return 6;
         if (!(next() instanceof ProbeEnum) || calls != 1) return 7;
+        ProbeA first;
+        if (first instanceof ProbeB) return 8;
+        if (ProbeEnum.One instanceof ProbeA) return 9;
         return 221;
     }
 }

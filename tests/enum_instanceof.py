@@ -1,4 +1,4 @@
-"""Check enum instanceof, including null, in generated D."""
+"""Check instanceof across enum and unrelated object types in generated D."""
 from pathlib import Path
 import os
 import shutil
@@ -9,7 +9,7 @@ root = Path(__file__).resolve().parents[1]
 compiler = root / ("z8d.exe" if os.name == "nt" else "z8d")
 with tempfile.TemporaryDirectory() as directory:
     temp = Path(directory)
-    for name in ("ProbeEnum", "ProbeOther", "EnumInstanceOf"):
+    for name in ("ProbeEnum", "ProbeOther", "ProbeA", "ProbeB", "EnumInstanceOf"):
         shutil.copy2(root / "examples" / "operators" / (name + ".bl"), temp)
     executable = temp / ("enum-case.exe" if os.name == "nt" else "enum-case")
     subprocess.run([str(compiler), "build", str(temp), "EnumInstanceOf.run", str(executable)], check=True)

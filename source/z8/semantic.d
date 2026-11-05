@@ -1357,14 +1357,14 @@ class Checker {
                 if (target.isEnum || sourceType == ValueType.enumType) {
                     if (![ValueType.selfType, ValueType.enumType, ValueType.nullType].canFind(sourceType))
                         fail("instanceof requires an object reference", e.token);
-                    e.enumInstanceOf = true;
+                    e.objectInstanceOf = true;
                     e.objectClass = target;
                     return ValueType.boolType;
                 }
                 if (sourceType != ValueType.selfType && sourceType != ValueType.nullType)
                     fail("instanceof requires an object reference", e.token);
                 if (sourceType == ValueType.selfType && !isAssignable(e.left.objectClass, target) && !isAssignable(target, e.left.objectClass))
-                    fail("unrelated classes in instanceof", e.token);
+                    e.objectInstanceOf = true;
                 e.objectClass = target;
                 return ValueType.boolType;
             case ExprKind.unary:
