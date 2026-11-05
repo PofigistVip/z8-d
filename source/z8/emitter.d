@@ -1017,13 +1017,17 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
         foreach (record; program.fields) if (record.isRecord) hasRecords = true;
         if (hasRecords) {
             result ~= "override void z8_init_static_records() {\nsuper.z8_init_static_records();\n";
-            foreach (record; program.fields) if (record.isRecord && record.recordAttributes.length) {
-                string[] values;
-                foreach (attribute; record.recordAttributes)
-                    values ~= "Z8StaticRecordValue(z8_nonnull(this.f_" ~ attribute.recordField.name.text ~
-                        "), z8_primary_box(" ~ emitExpr(attribute.recordExpression) ~ "))";
-                result ~= "z8_add_static_record(" ~ emitExpr(record.initializer) ~ ", [" ~ values.join(", ") ~ "]);\n";
-            }
+            if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Users"w)
+                result ~= "z8_users_initialize_static_records(this);\n";
+            else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Roles"w)
+                result ~= "z8_roles_initialize_static_records(this);\n";
+            else foreach (record; program.fields) if (record.isRecord && record.recordAttributes.length) {
+                    string[] values;
+                    foreach (attribute; record.recordAttributes)
+                        values ~= "Z8StaticRecordValue(z8_nonnull(this.f_" ~ attribute.recordField.name.text ~
+                            "), z8_primary_box(" ~ emitExpr(attribute.recordExpression) ~ "))";
+                    result ~= "z8_add_static_record(" ~ emitExpr(record.initializer) ~ ", [" ~ values.join(", ") ~ "]);\n";
+                }
             result ~= "}\n";
         }
         foreach (capture; program.captures)

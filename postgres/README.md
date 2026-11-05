@@ -50,8 +50,9 @@ schema generation. The schema lifecycle does not yet call it automatically.
 table events; it expects a clean table instance and leaves transaction control
 to the caller. Built-in Users and Roles tables are rejected until their special
 rules for preserving credentials and permissions are implemented.
-Users' and Roles' native fields and built-in identifiers are available; their
-full authorization behavior and system-record initialization are still pending.
+Users' and Roles' native fields, built-in identifiers and Java-defined static
+record metadata are available; authorization behavior, lock enforcement and
+applying these system records to the database are still pending.
 `z8_postgres_create_tables` runs these operations, index creation and foreign
 keys in phases inside one transaction for a new set of tables. The schema and
 required extensions must already exist. It rejects an existing transaction and

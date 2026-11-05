@@ -46,6 +46,17 @@ void z8_users_configure(Z8Object self) {
     foreach (i; [6, 7]) z8_field_state(state.fields[i]).length = z8_optional_wrap(128L);
     z8_field_state(state.fields[14]).length = z8_optional_wrap(32L);
 }
+void z8_users_initialize_static_records(Z8Object self) {
+    auto state = z8_users_state(self);
+    auto table = cast(Z8TableState)self.z8_get_native_state(z8_table_name);
+    if (table is null) throw new Exception("Table fields are not initialized");
+    self.z8_add_static_record(z8_user_administrator, [
+        Z8StaticRecordValue(state.fields[0], z8_primary_box("Admin"w)),
+        Z8StaticRecordValue(table.lock, z8_primary_box(3L))]);
+    self.z8_add_static_record(z8_user_system, [
+        Z8StaticRecordValue(state.fields[0], z8_primary_box("System"w)),
+        Z8StaticRecordValue(table.lock, z8_primary_box(3L))]);
+}
 private Z8Guid* z8_user_system_address() { return &z8_user_system; }
 private Z8Guid* z8_user_administrator_address() { return &z8_user_administrator; }
 shared static this() {

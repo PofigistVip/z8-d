@@ -24,6 +24,20 @@ void z8_roles_configure(Z8Object self) {
     z8_nonnull(state.fields[0]);
     z8_field_state(state.fields[0]).length = z8_optional_wrap(50L);
 }
+void z8_roles_initialize_static_records(Z8Object self) {
+    auto state = cast(Z8RolesState)z8_nonnull(self, -1).z8_get_native_state(z8_roles_name);
+    auto table = cast(Z8TableState)self.z8_get_native_state(z8_table_name);
+    if (state is null || table is null) throw new Exception("Roles fields are not initialized");
+    foreach (index, id; [z8_role_administrator, z8_role_user, z8_role_guest]) {
+        auto label = ["Administrator"w, "User"w, "Guest"w][index];
+        Z8StaticRecordValue[] values = [Z8StaticRecordValue(state.fields[0], z8_primary_box(label)),
+            Z8StaticRecordValue(state.fields[1], z8_primary_box(label))];
+        foreach (permission; 0 .. 6)
+            values ~= Z8StaticRecordValue(state.fields[permission + 2], z8_primary_box(index == 0 || (index == 1 && permission == 0)));
+        values ~= Z8StaticRecordValue(table.lock, z8_primary_box(3L));
+        self.z8_add_static_record(id, values);
+    }
+}
 private Z8Guid* z8_role_administrator_address() { return &z8_role_administrator; }
 private Z8Guid* z8_role_user_address() { return &z8_role_user; }
 private Z8Guid* z8_role_guest_address() { return &z8_role_guest; }

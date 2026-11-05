@@ -288,7 +288,11 @@ void main(string[] args) {
     assert(z8_guid_to_string(P.m_userRole()) == "421A8413-A8EC-4DAB-9235-9A5FF83341C5"w);
     assert(z8_guid_to_string(P.m_guestRole()) == "BE41CEB5-02DF-44EE-885F-B82DDEDCAA08"w);
     z8_initialize_static_records(roleTable);
-    assert(roleTable.z8_static_records().length == 3);
+    auto roleRecords = roleTable.z8_static_records();
+    assert(roleRecords.length == 3 && roleRecords[0].values.length == 9);
+    assert(roleRecords[0].values[0].value.textValue == "Administrator"w && roleRecords[0].values[2].value.booleanValue);
+    assert(roleRecords[1].values[2].value.booleanValue && !roleRecords[1].values[3].value.booleanValue);
+    assert(!roleRecords[2].values[2].value.booleanValue && roleRecords[2].values[8].value.integerValue == 3);
     auto userTable = P.m_users();
     auto userDDL = z8_postgres_create_table_sql("z8_test"w, userTable);
     assert(userDDL.canFind(`"Name" character varying`) && userDDL.canFind(`"Password" character varying DEFAULT 'd41d8cd98f00b204e9800998ecf8427e'`));
@@ -307,7 +311,10 @@ void main(string[] args) {
     assert(uniqueLogin);
     assert(z8_guid_to_string(P.m_systemUser()) == "00000000-0000-0000-0000-000000000001"w);
     assert(z8_guid_to_string(P.m_administratorUser()) == "00000000-0000-0000-0000-000000000002"w);
-    z8_initialize_static_records(userTable); assert(userTable.z8_static_records().length == 2);
+    z8_initialize_static_records(userTable);
+    auto userRecords = userTable.z8_static_records();
+    assert(userRecords.length == 2 && userRecords[0].values[0].value.textValue == "Admin"w);
+    assert(userRecords[0].values[1].value.integerValue == 3 && userRecords[1].values[0].value.textValue == "System"w);
     db.execute(`ALTER TABLE "z8_test"."StaticSample" DROP CONSTRAINT "StaticSample_pkey", ADD PRIMARY KEY ("Label")`);
     differences = z8_postgres_compare_table(expectedStatic, z8_postgres_describe_table(db, "z8_test"w, "StaticSample"w));
     bool changedKey;
