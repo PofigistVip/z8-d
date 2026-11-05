@@ -1,6 +1,7 @@
-enum Z8SqlGeometryKind { constant, group, choose, point, unaryFunction, binaryFunction, intFunction, decimalFunction }
+enum Z8SqlGeometryKind { constant, field, group, choose, point, unaryFunction, binaryFunction, intFunction, decimalFunction }
 class Z8SqlGeometry : Z8SqlPrimary {
     Z8SqlGeometryKind kind;
+    Z8Object field;
     Z8Geometry constant;
     Z8SqlGeometry left, right;
     Z8SqlBool condition;
@@ -90,6 +91,7 @@ private wstring z8_sql_geometry_text(Z8SqlGeometry value, Z8SqlVendor vendor) {
 wstring z8_sql_geometry_format(Z8SqlGeometry value, Z8SqlVendor vendor = Z8SqlVendor.Postgres) {
     z8_nonnull(value);
     final switch (value.kind) {
+        case Z8SqlGeometryKind.field: return z8_field_sql_format(value.field, vendor);
         case Z8SqlGeometryKind.constant:
             auto geometry = z8_nonnull(value.constant);
             z8_geometry_ensure(geometry);

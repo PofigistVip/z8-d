@@ -1,6 +1,7 @@
-enum Z8SqlDateKind { constant, group, choose, fromString, truncDay, truncHour, truncMinute, truncSecond, addDay, addHour, addMinute, addSecond, addSpan, subtractSpan }
+enum Z8SqlDateKind { constant, field, group, choose, fromString, truncDay, truncHour, truncMinute, truncSecond, addDay, addHour, addMinute, addSecond, addSpan, subtractSpan }
 class Z8SqlDate : Z8SqlPrimary {
     Z8SqlDateKind kind;
+    Z8Object field;
     Z8Date constant;
     Z8SqlDate left, right;
     Z8SqlBool condition;
@@ -90,6 +91,7 @@ private wstring z8_sql_date_compare_format(Z8SqlBool value, Z8SqlVendor vendor) 
 wstring z8_sql_date_format(Z8SqlDate value, Z8SqlVendor vendor = Z8SqlVendor.Postgres) {
     z8_nonnull(value);
     final switch (value.kind) {
+        case Z8SqlDateKind.field: return z8_field_sql_format(value.field, vendor);
         case Z8SqlDateKind.constant: return z8_date_ticks(value.constant).to!wstring;
         case Z8SqlDateKind.group: return "("w ~ z8_sql_date_format(value.left, vendor) ~ ")"w;
         case Z8SqlDateKind.choose:

@@ -1,6 +1,7 @@
-enum Z8SqlDatespanKind { constant, group, choose, add, subtract, dateDifference, truncHour, truncMinute, truncSecond, addDay, addHour, addMinute, addSecond }
+enum Z8SqlDatespanKind { constant, field, group, choose, add, subtract, dateDifference, truncHour, truncMinute, truncSecond, addDay, addHour, addMinute, addSecond }
 class Z8SqlDatespan : Z8SqlPrimary {
     Z8SqlDatespanKind kind;
+    Z8Object field;
     Z8Datespan constant;
     Z8SqlDatespan left, right;
     Z8SqlDate dateLeft, dateRight;
@@ -79,6 +80,7 @@ Z8SqlDatespan z8_sql_date_arithmetic(string op)(Z8SqlDate left, Z8SqlDate right)
 wstring z8_sql_datespan_format(Z8SqlDatespan value, Z8SqlVendor vendor = Z8SqlVendor.Postgres) {
     z8_nonnull(value);
     final switch (value.kind) {
+        case Z8SqlDatespanKind.field: return z8_field_sql_format(value.field, vendor);
         case Z8SqlDatespanKind.constant:
             auto ticks = z8_datespan_milliseconds(value.constant).to!wstring;
             return vendor == Z8SqlVendor.SqlServer ? "("w ~ ticks ~ ")"w : ticks;

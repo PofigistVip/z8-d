@@ -1,4 +1,4 @@
-enum Z8SqlStringKind { constant, field, group, concat, lower, upper, trimLeft, trimRight, choose, replace, regReplace, substring, reverse, padLeft, padRight, quote, jsonString, jsonInt, fromBool, fromNumeric, fromGuid, fromDate, fromDatespan, fromBinary, fromGeometry, geometryFunction }
+enum Z8SqlStringKind { constant, field, textField, group, concat, lower, upper, trimLeft, trimRight, choose, replace, regReplace, substring, reverse, padLeft, padRight, quote, jsonString, jsonInt, fromBool, fromNumeric, fromGuid, fromDate, fromDatespan, fromBinary, fromGeometry, geometryFunction }
 class Z8SqlString : Z8SqlPrimary {
     Z8SqlStringKind kind;
     Z8Object field;
@@ -229,6 +229,12 @@ wstring z8_sql_string_format(Z8SqlString value, Z8SqlVendor vendor = Z8SqlVendor
     z8_nonnull(value);
     final switch (value.kind) {
         case Z8SqlStringKind.field: return z8_field_sql_format(value.field, vendor);
+        case Z8SqlStringKind.textField:
+            auto field = z8_field_sql_format(value.field, vendor);
+            if (vendor == Z8SqlVendor.Oracle) return "UTL_RAW.CAST_TO_NVARCHAR2("w ~ field ~ ")"w;
+            if (vendor == Z8SqlVendor.Postgres) return "CONVERT_FROM("w ~ field ~ ", 'UTF8')"w;
+            if (vendor == Z8SqlVendor.SqlServer) return "Cast("w ~ field ~ " as nvarchar(max))"w;
+            return field;
         case Z8SqlStringKind.constant:
             wstring escaped;
             for (size_t i = 0; i < value.constant.length; ++i) {

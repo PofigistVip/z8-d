@@ -70,6 +70,21 @@ private Z8SqlDecimal z8_decimal_field_sql(Z8Object self) {
 private Z8SqlGuid z8_guid_field_sql(Z8Object self) {
     auto value = new Z8SqlGuid(Z8SqlGuidKind.field); value.field = z8_nonnull(self); return value;
 }
+private Z8SqlDate z8_datetime_field_sql(Z8Object self) {
+    auto value = new Z8SqlDate(Z8SqlDateKind.field); value.field = z8_nonnull(self); return value;
+}
+private Z8SqlDatespan z8_datespan_field_sql(Z8Object self) {
+    auto value = new Z8SqlDatespan(Z8SqlDatespanKind.field); value.field = z8_nonnull(self); return value;
+}
+private Z8SqlBinary z8_binary_field_sql(Z8Object self) {
+    auto value = new Z8SqlBinary(); value.field = z8_nonnull(self); return value;
+}
+private Z8SqlGeometry z8_geometry_field_sql(Z8Object self) {
+    auto value = new Z8SqlGeometry(Z8SqlGeometryKind.field); value.field = z8_nonnull(self); return value;
+}
+private Z8SqlString z8_text_field_sql(Z8Object self) {
+    auto value = new Z8SqlString(Z8SqlStringKind.textField); value.field = z8_nonnull(self); return value;
+}
 private void z8_register_value_field(T, Base = T)(wstring name, void function(Z8Object) create) {
     z8_native_bind(name ~ ".m_new"w, create);
     z8_native_bind_field(name ~ ".f_defaultValue"w, &z8_typed_field_default_address!(T, Base));
@@ -105,5 +120,10 @@ void z8_bind_builtin_typed_fields() {
     z8_native_bind(z8_bool_field_name ~ ".z8cast_sql_bool"w, &z8_bool_field_sql);
     z8_native_bind(z8_decimal_field_name ~ ".z8cast_sql_decimal"w, &z8_decimal_field_sql);
     z8_native_bind(z8_guid_field_name ~ ".z8cast_sql_guid"w, &z8_guid_field_sql);
+    z8_native_bind(z8_datetime_field_name ~ ".z8cast_sql_date"w, &z8_datetime_field_sql);
+    z8_native_bind(z8_datespan_field_name ~ ".z8cast_sql_datespan"w, &z8_datespan_field_sql);
+    z8_native_bind(z8_binary_field_name ~ ".z8cast_sql_binary"w, &z8_binary_field_sql);
+    z8_native_bind(z8_geometry_field_name ~ ".z8cast_sql_geometry"w, &z8_geometry_field_sql);
+    z8_native_bind(z8_text_field_name ~ ".z8cast_sql_string"w, &z8_text_field_sql);
 }
 shared static this() { z8_bind_builtin_typed_fields(); }

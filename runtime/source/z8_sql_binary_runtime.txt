@@ -1,9 +1,11 @@
 // The BL declaration has no SQL binary operators or implicit conversion.
 class Z8SqlBinary : Z8SqlPrimary {
     Z8Binary constant;
+    Z8Object field;
     this() { constant = new Z8Binary(); }
 }
 wstring z8_sql_binary_format(Z8SqlBinary value, Z8SqlVendor vendor = Z8SqlVendor.Postgres) {
     z8_nonnull(value);
+    if (value.field !is null) return z8_field_sql_format(value.field, vendor);
     return vendor == Z8SqlVendor.Oracle || vendor == Z8SqlVendor.Postgres ? "null"w : "''"w;
 }
