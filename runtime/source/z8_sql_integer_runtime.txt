@@ -1,4 +1,4 @@
-enum Z8SqlIntKind { constant, group, negate, bitNot, add, subtract, multiply, divide, modulo, bitAnd, bitOr, bitXor, sign, abs, power, choose, decimalSign, decimalCeil, decimalFloor, textLength }
+enum Z8SqlIntKind { constant, group, negate, bitNot, add, subtract, multiply, divide, modulo, bitAnd, bitOr, bitXor, sign, abs, power, choose, decimalSign, decimalCeil, decimalFloor, textLength, textIndex, textRegIndex }
 class Z8SqlInt : Z8SqlNumeric {
     Z8SqlIntKind kind;
     long constant;
@@ -6,6 +6,8 @@ class Z8SqlInt : Z8SqlNumeric {
     Z8SqlBool condition;
     Z8SqlNumeric decimalOperand;
     Z8SqlString textOperand;
+    Z8SqlString textPattern;
+    Z8SqlInt textPosition;
     this(Z8SqlIntKind kind, long constant = 0, Z8SqlInt left = null, Z8SqlInt right = null, Z8SqlBool condition = null) {
         this.kind = kind; this.constant = constant; this.left = left; this.right = right; this.condition = condition;
     }
@@ -94,5 +96,23 @@ wstring z8_sql_int_format(Z8SqlInt value, Z8SqlVendor vendor = Z8SqlVendor.Postg
             if (vendor == Z8SqlVendor.SqlServer) return "isNull(len("w ~ text ~ "),0)"w;
             if (vendor == Z8SqlVendor.Postgres) return "length("w ~ text ~ ")"w;
             throw new Exception("unsupported SQL database vendor");
+        case Z8SqlIntKind.textIndex:
+            if (vendor == Z8SqlVendor.Oracle) {
+                value.textPosition = value.textPosition is null ? z8_sql_int_const(1) : z8_sql_int_binary!"+"(value.textPosition, z8_sql_int_const(1));
+                return "nvl(instr("w ~ z8_sql_string_format(value.textPattern, vendor) ~ ", "w ~ z8_sql_string_format(value.textOperand, vendor) ~ ", "w ~ z8_sql_int_format(value.textPosition, vendor) ~ ") - 1,-1)"w;
+            }
+            if (vendor == Z8SqlVendor.SqlServer) {
+                if (value.textPosition is null) value.textPosition = z8_sql_int_const(0);
+                return "isNull(charIndex("w ~ z8_sql_string_format(value.textPattern, vendor) ~ ", "w ~ z8_sql_string_format(value.textOperand, vendor) ~ ", "w ~ z8_sql_int_format(value.textPosition, vendor) ~ ") - 1,-1)"w;
+            }
+            if (vendor == Z8SqlVendor.Postgres) {
+                if (value.textPosition !is null) value.textOperand = z8_sql_string_substring(value.textOperand, value.textPosition, null);
+                return "(position("w ~ z8_sql_string_format(value.textPattern, vendor) ~ " in "w ~ z8_sql_string_format(value.textOperand, vendor) ~ ") - 1)"w;
+            }
+            throw new Exception("unsupported SQL database vendor");
+        case Z8SqlIntKind.textRegIndex:
+            if (vendor != Z8SqlVendor.Oracle && vendor != Z8SqlVendor.SqlServer) throw new Exception("unsupported SQL database vendor");
+            return (vendor == Z8SqlVendor.Oracle ? "nvl(RegExp_instr("w : "isNull(patIndex("w) ~
+                z8_sql_string_format(value.textPattern, vendor) ~ ", "w ~ z8_sql_string_format(value.textOperand, vendor) ~ ") - 1,-1)"w;
     }
 }

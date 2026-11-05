@@ -1,7 +1,7 @@
 // SQL values describe an expression tree; operators do not execute SQL.
 enum Z8SqlVendor { Oracle, SqlServer, Postgres, H2 }
 abstract class Z8SqlNumeric { abstract wstring z8_format(Z8SqlVendor vendor, bool logical = false); }
-enum Z8SqlBoolKind { constant, group, not, and, or, equal, notEqual, choose, intEqual, intNotEqual, intLess, intGreater, intLessEqual, intGreaterEqual, decimalIsNaN, textEqual, textNotEqual, textLess, textGreater, textLessEqual, textGreaterEqual, textLike, textRegLike }
+enum Z8SqlBoolKind { constant, group, not, and, or, equal, notEqual, choose, intEqual, intNotEqual, intLess, intGreater, intLessEqual, intGreaterEqual, decimalIsNaN, textEqual, textNotEqual, textLess, textGreater, textLessEqual, textGreaterEqual, textLike, textRegLike, textIsEmpty }
 class Z8SqlBool {
     Z8SqlBoolKind kind;
     bool constant;
@@ -93,6 +93,12 @@ wstring z8_sql_bool_format(Z8SqlBool value, bool logical = false, Z8SqlVendor ve
         case Z8SqlBoolKind.textRegLike:
             if (vendor != Z8SqlVendor.Postgres) throw new Exception("unsupported SQL database vendor");
             return z8_sql_string_format(value.textLeft, vendor) ~ " ~ "w ~ z8_sql_string_format(value.textRight, vendor);
+        case Z8SqlBoolKind.textIsEmpty:
+            auto first = "("w ~ z8_sql_string_format(value.textLeft, vendor) ~ ")"w;
+            auto second = "("w ~ z8_sql_string_format(value.textLeft, vendor) ~ ")"w;
+            auto empty = vendor == Z8SqlVendor.Oracle || vendor == Z8SqlVendor.SqlServer ? "N''"w : "''"w;
+            auto condition = first ~ " is null OR "w ~ second ~ "="w ~ empty;
+            return "("w ~ (logical ? condition : z8_sql_bool_case(condition, "1"w, "0"w)) ~ ")"w;
         case Z8SqlBoolKind.choose:
             auto text = z8_sql_bool_case(z8_sql_bool_format(value.left, true, vendor), z8_sql_bool_format(value.right, false, vendor), z8_sql_bool_format(value.alternative, false, vendor));
             return logical ? "("w ~ text ~ ")=1"w : text;

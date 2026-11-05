@@ -64,6 +64,24 @@ Z8SqlInt z8_sql_string_length(Z8SqlString value) {
     result.textOperand = z8_nonnull(value);
     return result;
 }
+Z8SqlInt z8_sql_string_indexOf(Z8SqlString value, Z8SqlString pattern, Z8SqlInt position = null) {
+    auto result = new Z8SqlInt(Z8SqlIntKind.textIndex);
+    result.textOperand = z8_nonnull(value); result.textPattern = pattern; result.textPosition = position; return result;
+}
+Z8SqlInt z8_sql_string_patIndexOf(Z8SqlString value, Z8SqlString pattern) {
+    auto result = new Z8SqlInt(Z8SqlIntKind.textRegIndex);
+    result.textOperand = z8_nonnull(value); result.textPattern = pattern; return result;
+}
+Z8SqlBool z8_sql_string_contains(Z8SqlString value, Z8SqlString pattern) {
+    return z8_sql_int_compare!"!="(z8_sql_string_indexOf(value, pattern, z8_sql_int_const(0)), z8_sql_int_const(-1));
+}
+Z8SqlBool z8_sql_string_contains(Z8SqlString value, Z8SqlString pattern, Z8SqlInt position) {
+    return z8_sql_int_compare!"!="(z8_sql_string_indexOf(value, pattern, position), z8_sql_int_const(-1));
+}
+Z8SqlBool z8_sql_string_isEmpty(Z8SqlString value) {
+    auto result = new Z8SqlBool(Z8SqlBoolKind.textIsEmpty);
+    result.textLeft = z8_nonnull(value); return result;
+}
 Z8SqlBool z8_sql_string_compare(string op)(Z8SqlString left, Z8SqlString right) {
     z8_nonnull(left);
     static if (op == "==") enum kind = Z8SqlBoolKind.textEqual;

@@ -1054,6 +1054,18 @@ class Checker {
                     if (e.token.text == "length") {
                         checkArguments(e, []); e.builtinCall = "z8_sql_string_length"; return ValueType.sqlIntType;
                     }
+                    if (e.token.text == "isEmpty") {
+                        checkArguments(e, []); e.builtinCall = "z8_sql_string_isEmpty"; return ValueType.sqlBoolType;
+                    }
+                    if (e.token.text == "indexOf" || e.token.text == "contains") {
+                        checkArguments(e, e.arguments.length == 2 ? [ValueType.sqlStringType, ValueType.sqlIntType] : [ValueType.sqlStringType]);
+                        e.builtinCall = "z8_sql_string_" ~ e.token.text;
+                        return e.token.text == "indexOf" ? ValueType.sqlIntType : ValueType.sqlBoolType;
+                    }
+                    if (e.token.text == "patIndexOf") {
+                        checkArguments(e, [ValueType.sqlStringType]);
+                        e.builtinCall = "z8_sql_string_patIndexOf"; return ValueType.sqlIntType;
+                    }
                     fail("unsupported SQL string method", e.token);
                 }
                 if (receiver == ValueType.optionalInt) {

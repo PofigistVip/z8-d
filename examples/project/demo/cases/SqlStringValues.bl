@@ -17,6 +17,12 @@ public class SqlStringValues {
     public static sql_string padRight() { sql_string value = "abc"; return value.padRight(5, "_"); }
     public static sql_bool like() { sql_string value = "a%b"; return value.like("a!%b", "!"); }
     public static sql_bool regLike() { sql_string value = "abc"; return value.regLike("a.*"); }
+    public static sql_int findIndex() { sql_string value = "abcabc"; return value.indexOf("bc"); }
+    public static sql_int indexFrom() { sql_string value = "abcabc"; return value.indexOf("bc", 2); }
+    public static sql_int patternIndex() { sql_string value = "abcabc"; return value.patIndexOf("b%"); }
+    public static sql_bool contains() { sql_string value = "abcabc"; return value.contains("bc"); }
+    public static sql_bool containsFrom() { sql_string value = "abcabc"; return value.contains("bc", 2); }
+    public static sql_bool empty() { sql_string value = "abc"; return value.isEmpty(); }
     public static sql_int length() { sql_string value = "abc"; return value.length(); }
     public static sql_bool compare() { sql_string value = "alpha"; return value >= "beta"; }
     public static int run() {
