@@ -24,8 +24,8 @@ import org.zenframework.z8.base.table.value.IntField;
 import org.zenframework.z8.base.table.value.StringField;
 public class Report extends Query {
     public IntField amount; public StringField title;
-    public string readEvents = ""; public bool filterFromHook = false;
-    virtual protected void beforeRead() { readEvents += "B"; if (filterFromHook) setWhere(amount > 9); }
+    public string readEvents = ""; public bool filterFromHook = false; public bool observe = false; public int observed;
+    virtual protected void beforeRead() { readEvents += "B"; if (observe) observed = amount.get(); if (filterFromHook) setWhere(amount > 9); }
     virtual protected void afterRead() { readEvents += "A"; }
     virtual protected sql_bool where() { return amount > 1; }
     virtual protected sql_bool having() { return amount < 100; }
@@ -66,6 +66,9 @@ public class Probe {
     public static string events(Report query) { return query.readEvents; }
     public static void clearEvents(Report query) { query.readEvents = ""; }
     public static void enableHookFilter(Report query) { query.filterFromHook = true; }
+    public static void observe(Report query) { query.observe = true; }
+    public static int observed(Report query) { return query.observed; }
+    public static void setAmount(Report query, int value) { query.amount = value; }
     public static int amount(Report query) { return query.amount.get(); }
     public static string title(Report query) { return query.title.get(); }
 }
@@ -169,11 +172,14 @@ void main() {
     P.m_close(query);
     P.m_clearEvents(query); P.m_enableHookFilter(query); P.m_all(query);
     assert(P.m_events(query) == "BA"w && z8_sql_bool_format(executor.last.queryWhere, true).canFind(">9"w));
-    auto retained = executor.cursor;
+    auto retained = executor.cursor; assert(z8_optional_require(P.m_next(query)));
+    P.m_setAmount(query, z8_optional_wrap(91L)); P.m_observe(query);
     assert(z8_optional_require(P.m_count(query)) == 2 && P.m_events(query) == "BABA"w && !retained.closed);
+    assert(z8_optional_require(P.m_observed(query)) == 0 && z8_optional_require(P.m_amount(query)) == 91);
     executor.fail = true;
     bool countFailed; try { P.m_count(query); } catch (Exception) { countFailed = true; }
-    assert(countFailed && P.m_events(query) == "BABABA"w && !retained.closed);
+    assert(countFailed && P.m_events(query) == "BABABA"w && !retained.closed && z8_optional_require(P.m_amount(query)) == 91);
+    z8_field_reset(query.f_amount); assert(z8_optional_require(P.m_amount(query)) == 10);
     bool readFailed; try { P.m_all(query); } catch (Exception) { readFailed = true; }
     assert(readFailed && P.m_events(query) == "BABABABA"w && retained.closed);
     executor.fail = false;

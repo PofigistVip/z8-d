@@ -37,8 +37,10 @@ public class Sales extends Table {
     [name "When"] public DatetimeField instant;
     public string events = "";
     public bool copying = false;
+    public bool observeRead = false; public int observedRead;
     virtual protected sql_bool scope() { return amount >= 0; }
     virtual protected void onNew() { events += "N"; if (copying) flag = false; }
+    virtual protected void beforeRead() { if (observeRead) observedRead = amount.get(); }
     virtual protected void onCopy(guid id) { events += "O"; }
     virtual protected void beforeCreate(guid id) { super.beforeCreate(id); events += "C"; }
     virtual protected void afterCreate(guid id) { events += "A"; }
@@ -133,6 +135,8 @@ public class Probe {
     public static guid copy(Sales table, guid id) { return table.copy(id); }
     public static void prepareCopy(Sales table) { table.amount = 88; table.title.unique = true; table.copying = true; }
     public static void finishCopy(Sales table) { table.copying = false; }
+    public static void observeRead(Sales table) { table.observeRead = true; }
+    public static int observedRead(Sales table) { return table.observedRead; }
     public static void prepareUpdate(Sales table) {
         table.amount = 40; table.title = "Changed"; table.info = "Обновлено"; table.blob = '9, 8';
     }
@@ -226,8 +230,11 @@ void main(string[] args) {
     db.execute("ROLLBACK"); P.m_clearGroup(table); P.m_clearEvents(table);
     db.execute("BEGIN");
     P.m_read(table); assert(z8_optional_require(P.m_next(table)) && z8_optional_require(P.m_amount(table)) == 20);
-    P.m_prepareCopy(table);
+    P.m_prepareCopy(table); P.m_observeRead(table);
+    assert(z8_optional_require(P.m_hasId(table, z8_guid_create(2))));
+    assert(z8_optional_require(P.m_observedRead(table)) == 0 && z8_optional_require(P.m_amount(table)) == 88);
     auto copied = P.m_copy(table, z8_guid_create(1));
+    assert(z8_optional_require(P.m_observedRead(table)) == 0);
     assert(copied != z8_guid_create(1) && copied != z8_guid_zero() && P.m_events(table) == "NOCA"w);
     auto copyRow = db.execute(`SELECT "Amount", "Title", "Flag", convert_from("Info",'UTF8') FROM "Sales""Quote" WHERE "RecordId"=$1::uuid`, [Z8PostgresParameter.value(z8_guid_to_string(copied).to!string)]);
     assert(copyRow.rows.length == 1 && copyRow.rows[0][0].text == "88" && copyRow.rows[0][1].text == "");

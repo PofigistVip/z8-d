@@ -156,6 +156,44 @@ private void z8_query_close(Z8Object self) {
     }
     cursor.close();
 }
+// Temporary record lookup and counting detach the active cursor and changed
+// field values, then restore them even when a callback or executor fails.
+private class Z8QuerySavedState {
+    private struct FieldState { Z8Object field; IZ8FieldCursor cursor; Z8Primary changedValue; bool changed; }
+    private Z8Object query;
+    private IZ8QueryCursor cursor;
+    private Z8Object[] cursorFields;
+    private FieldState[] fields;
+    this(Z8Object query) {
+        this.query = query;
+        auto state = z8_query_state(query);
+        cursor = state.cursor; cursorFields = state.cursorFields;
+        auto all = z8_query_declared_fields(query);
+        foreach (field; cursorFields) {
+            bool found;
+            foreach (existing; all) if (existing is field) { found = true; break; }
+            if (!found) all ~= field;
+        }
+        foreach (field; all) {
+            auto fieldState = z8_field_state(field);
+            auto changed = fieldState.changed;
+            auto value = changed ? z8_field_primary(field) : null;
+            fields ~= FieldState(field, fieldState.cursor, value, changed);
+            if (changed) z8_field_reset(field);
+            fieldState.cursor = null;
+        }
+        state.cursor = null; state.cursorFields = null;
+    }
+    void restore() {
+        z8_query_close(query);
+        auto state = z8_query_state(query);
+        state.cursor = cursor; state.cursorFields = cursorFields;
+        foreach (entry; fields) {
+            z8_field_state(entry.field).cursor = entry.cursor;
+            if (entry.changed) z8_field_set(entry.field, entry.changedValue);
+        }
+    }
+}
 private void z8_query_prepare_read(Z8Object self, ref Z8QueryReadRequest request) {
     if (z8_query_user_events_enabled()) self.z8_query_virtual_beforeRead();
     if (!request.byRecordId) {
@@ -202,6 +240,8 @@ private Z8Optional!long z8_query_count_where(Z8Object self, Z8SqlBool where) {
     auto state = z8_query_state(self);
     auto counter = cast(IZ8QueryCounter)state.executor;
     if (counter is null) throw new Exception("query executor does not support count");
+    auto saved = new Z8QuerySavedState(self);
+    scope(exit) saved.restore();
     Z8QueryReadRequest request;
     request.where = where; z8_query_prepare_read(self, request);
     long result;
@@ -299,25 +339,12 @@ private Z8ObjectArray!Z8Object z8_query_key_fields(Z8Object self) {
     return new Z8ObjectArray!Z8Object([key]);
 }
 private Z8Primary[] z8_query_copy_values(Z8Object self, Z8Object[] fields, Z8Guid id, out bool found) {
-    auto queryState = z8_query_state(self);
-    if (queryState.executor is null) throw new Exception("query executor is not configured");
+    auto saved = new Z8QuerySavedState(self);
+    scope(exit) saved.restore();
     Z8QueryReadRequest request;
     request.fields = fields; request.recordId = id; request.byRecordId = id !is null;
-    z8_query_prepare_read(self, request);
-    request.readLock = z8_query_read_lock(self);
-    auto cursor = z8_query_execute_read(self, request);
-    scope(exit) cursor.close();
-    struct SavedField { Z8FieldState state; IZ8FieldCursor cursor; bool changed, wasNull; }
-    SavedField[] saved;
-    foreach (field; fields) {
-        auto state = z8_field_state(field);
-        saved ~= SavedField(state, state.cursor, state.changed, state.wasNull);
-        state.cursor = cursor; state.changed = false;
-    }
-    scope(exit) foreach (entry; saved) {
-        entry.state.cursor = entry.cursor; entry.state.changed = entry.changed; entry.state.wasNull = entry.wasNull;
-    }
-    found = cursor.next();
+    z8_query_open(self, request, false);
+    found = z8_optional_require(z8_query_next(self));
     Z8Primary[] values;
     if (found) foreach (field; fields) values ~= z8_field_primary(field);
     return values;
@@ -368,15 +395,13 @@ private Z8Optional!long z8_query_destroy_where(Z8Object self, Z8SqlBool where) {
     return z8_optional_wrap(cast(long)result);
 }
 private Z8Optional!bool z8_query_has_record_id(Z8Object self, Z8Guid id) {
-    auto state = z8_query_state(self);
-    if (state.executor is null) throw new Exception("query executor is not configured");
+    auto saved = new Z8QuerySavedState(self);
+    scope(exit) saved.restore();
     Z8QueryReadRequest request;
     request.fields = [z8_nonnull(z8_query_primary_key(self))];
-    request.recordId = id; request.byRecordId = id !is null; request.readLock = z8_query_read_lock(self);
-    z8_query_prepare_read(self, request);
-    auto cursor = z8_query_execute_read(self, request);
-    scope(exit) cursor.close();
-    return z8_optional_wrap(cursor.next());
+    request.recordId = id; request.byRecordId = id !is null;
+    z8_query_open(self, request, false);
+    return z8_query_next(self);
 }
 private Z8Optional!bool z8_query_has_record_where(Z8Object self, Z8SqlBool where) {
     z8_query_read_request(self, z8_query_key_fields(self), null, where, Z8Optional!long.init, z8_optional_wrap(1L));
