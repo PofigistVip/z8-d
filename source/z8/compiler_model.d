@@ -90,12 +90,57 @@ class Method {
 }
 class Field { ValueType type; Token name; TypeAttribute[] attributes; Expression initializer; bool isPublic, isProtected, isStatic, isAuto, isRecord, declaredFinal, userOperatorAssignment; string objectName; Program objectClass; Program owner, nestedClass; }
 struct TypeAttribute { Token name; Token value; bool hasValue; }
+// Match the original lexer and BigDecimal.toString, including preserved scale
+// and its scientific notation for an adjusted exponent below -6.
+private string decimalAttributeValue(Token token) {
+    auto spelling = token.text.replace(" ", "").replace("\t", "");
+    bool negative = spelling.length && spelling[0] == '-';
+    if (negative) spelling = spelling[1 .. $];
+    auto exponentPosition = spelling.indexOf('e');
+    if (exponentPosition < 0) exponentPosition = spelling.indexOf('E');
+    if (exponentPosition >= 0) {
+        // Lexer.getDegree concatenates two Java chars arithmetically before
+        // appending the digits: 'e' + '+' becomes 144 and 'e' + '-' 146.
+        auto sign = spelling[exponentPosition + 1];
+        spelling = spelling[0 .. exponentPosition] ~ (sign == '+' ? "144" : "146") ~ spelling[exponentPosition + 2 .. $];
+    }
+    auto point = spelling.indexOf('.');
+    assert(point >= 0);
+    auto fractionalDigits = spelling.length - point - 1;
+    auto scale = cast(long)fractionalDigits;
+    if (scale < int.min || scale > int.max)
+        throw new CompileException("decimal scale is out of range", token.position);
+    auto digits = spelling[0 .. point] ~ spelling[point + 1 .. $];
+    size_t first;
+    while (first < digits.length && digits[first] == '0') ++first;
+    digits = first == digits.length ? "0" : digits[first .. $];
+    if (digits == "0") negative = false;
+    auto adjusted = cast(long)digits.length - scale - 1;
+    string result;
+    if (scale >= 0 && adjusted >= -6) {
+        auto pointAt = cast(long)digits.length - scale;
+        if (pointAt <= 0) {
+            result = "0.";
+            foreach (_; 0 .. cast(size_t)(-pointAt)) result ~= "0";
+            result ~= digits;
+        } else if (scale == 0) result = digits;
+        else result = digits[0 .. cast(size_t)pointAt] ~ "." ~ digits[cast(size_t)pointAt .. $];
+    } else {
+        result = digits[0 .. 1];
+        if (digits.length > 1) result ~= "." ~ digits[1 .. $];
+        result ~= "E" ~ (adjusted >= 0 ? "+" : "") ~ adjusted.to!string;
+    }
+    return negative ? "-" ~ result : result;
+}
+
 // Attribute constants use ConstantToken.getValueString, including the Java
 // integer suffix. This spelling is also used to compare [name] values.
 package wstring attributeLiteralValue(TypeAttribute attribute) {
     if (!attribute.hasValue) return ""w;
     if (attribute.value.kind == TokenKind.stringLiteral) return decodeStringLiteral(attribute.value.text);
     if (attribute.value.kind == TokenKind.booleanLiteral) return attribute.value.text.to!wstring;
+    if (attribute.value.kind == TokenKind.decimalLiteral)
+        return decimalAttributeValue(attribute.value).to!wstring;
     assert(attribute.value.kind == TokenKind.integerLiteral);
     auto spelling = attribute.value.text.replace(" ", "").replace("\t", "");
     long value;

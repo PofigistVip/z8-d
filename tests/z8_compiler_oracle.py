@@ -256,8 +256,11 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             !"".equals(metadata.getAttribute("flag")) || !"false".equals(metadata.getAttribute("request")) ||
             !"true".equals(metadata.getAttribute("boolTag")) || !"16L".equals(metadata.getAttribute("count")) ||
             !"-16L".equals(metadata.getAttribute("negative")) ||
+            !"1.2300".equals(metadata.getAttribute("price")) || !"1E-7".equals(metadata.getAttribute("tiny")) ||
+            !"0.00011462".equals(metadata.getAttribute("smallExponent")) ||
+            !"1.23001447".equals(metadata.getAttribute("large")) || !"0.00".equals(metadata.getAttribute("zero")) ||
             metadata.getAttribute("absent") != null)
-            throw new AssertionError("type attribute metadata differs");
+            throw new AssertionError("type attribute metadata differs: " + metadata.getAttributes());
         if (metadata.get().annotated != metadata.get().replacement ||
             !"от родителя".equals(metadata.get().annotated.getAttribute("fieldTag")) ||
             !"специализация".equals(metadata.get().specialized.getAttribute("fieldTag")) ||
@@ -265,6 +268,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             !"Second Field".equals(metadata.get().annotated.getAttribute("name")) ||
             !"false".equals(metadata.get().annotated.getAttribute("enabled")) ||
             !"-7L".equals(metadata.get().annotated.getAttribute("delta")) ||
+            !"-12.340".equals(metadata.get().annotated.getAttribute("decimalDelta")) ||
             !"7L".equals(metadata.get().annotated.getAttribute("count")) ||
             !"*/15 0 1-31 1,3,5 1-5".equals(metadata.get().annotated.getAttribute("job")) ||
             !"true".equals(metadata.get().annotated.getAttribute("selected")) ||
@@ -443,6 +447,11 @@ void main() {
     assert(metadata.z8_get_attribute("boolTag"w) == "true"w);
     assert(metadata.z8_get_attribute("count"w) == "16L"w);
     assert(metadata.z8_get_attribute("negative"w) == "-16L"w);
+    assert(metadata.z8_get_attribute("price"w) == "1.2300"w);
+    assert(metadata.z8_get_attribute("tiny"w) == "1E-7"w);
+    assert(metadata.z8_get_attribute("smallExponent"w) == "0.00011462"w);
+    assert(metadata.z8_get_attribute("large"w) == "1.23001447"w);
+    assert(metadata.z8_get_attribute("zero"w) == "0.00"w);
     assert(metadata.z8_get_attribute("absent"w) is null);
     z8_nonnull(metadata);
     assert(metadata.f_annotated is metadata.f_replacement);
@@ -452,6 +461,7 @@ void main() {
     assert(metadata.f_annotated.z8_get_attribute("name"w) == "Second Field"w);
     assert(metadata.f_annotated.z8_get_attribute("enabled"w) == "false"w);
     assert(metadata.f_annotated.z8_get_attribute("delta"w) == "-7L"w);
+    assert(metadata.f_annotated.z8_get_attribute("decimalDelta"w) == "-12.340"w);
     assert(metadata.f_annotated.z8_get_attribute("count"w) == "7L"w);
     assert(metadata.f_annotated.z8_get_attribute("job"w) == "*/15 0 1-31 1,3,5 1-5"w);
     assert(metadata.f_annotated.z8_get_attribute("selected"w) == "true"w);

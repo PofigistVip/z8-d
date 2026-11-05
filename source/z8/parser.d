@@ -156,9 +156,9 @@ class Parser {
         if (current.text != "]") {
             auto sign = current;
             bool negative = accept("-");
-            if (![TokenKind.stringLiteral, TokenKind.booleanLiteral, TokenKind.integerLiteral].canFind(current.kind) ||
-                (negative && current.kind != TokenKind.integerLiteral))
-                error("only string, boolean and integer literal attributes are supported");
+            if (![TokenKind.stringLiteral, TokenKind.booleanLiteral, TokenKind.integerLiteral, TokenKind.decimalLiteral].canFind(current.kind) ||
+                (negative && current.kind != TokenKind.integerLiteral && current.kind != TokenKind.decimalLiteral))
+                error("only string, boolean and numeric literal attributes are supported");
             attribute.hasValue = true; attribute.value = take();
             if (negative) {
                 attribute.value.text = "-" ~ attribute.value.text;

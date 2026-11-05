@@ -18,6 +18,10 @@ unittest {
     rejects(q{[native true] enum A {}});
     compile(q{[request true] [flag false] [count 0x10] [negative -7] class A {}});
     rejects(q{[flag -true] class A {}});
+    auto decimalAttributes = compile(q{[a 001.2300] [b .0000001] [c 1.2300e+7] [d -12.340] [e -0.00] [f .0001e-2] class A {}});
+    foreach (value; [`"1.2300"w`, `"1E-7"w`, `"1.23001447"w`, `"-12.340"w`, `"0.00"w`, `"0.00011462"w`])
+        assert(decimalAttributes.canFind(value));
+    compile("[flag 1.0e+2147483648] class A {}");
     rejects(q{[request 1] class A {}});
     compile(q{[job "*/15 0 1-31 1,3,5 1-5"] class A {}});
     compile(q{[job ""] class A {}});
