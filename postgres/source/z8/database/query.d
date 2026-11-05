@@ -285,13 +285,13 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
     IZ8QueryCursor read(Z8Object query, Z8QueryReadRequest request) {
         if (!request.disableGrouping && z8_query_array(query, "aggregateBy"w).length) throw new Z8PostgresException("PostgreSQL aggregateBy links are not implemented");
         auto groups = request.disableGrouping ? null : request.groupFields.length ? request.groupFields : z8_query_array(query, "groupBy"w);
-        bool grouped = groups.length != 0;
+        bool grouped = groups.length != 0 || request.aggregateAll;
         if (!request.disableGrouping && !grouped && (!trivialTrue(request.having) || !trivialTrue(request.queryHaving)))
             throw new Z8PostgresException("PostgreSQL HAVING filters require grouped query support");
         if (request.start < 0) throw new Z8PostgresException("negative PostgreSQL query offset");
         auto plan = new Z8PostgresQueryPlan(query, schema, table);
         auto requested = request.fields;
-        if (!requested.length) {
+        if (!requested.length && !request.aggregateAll) {
             foreach (name; ["controls"w, "names"w, "columns"w, "extraFields"w])
                 foreach (field; z8_query_array(query, name)) {
                     if (field is null || !z8_native_is_instance("org.zenframework.z8.server.base.table.value.Field"w, field))
@@ -318,6 +318,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         foreach (field; groups) plan.includeField(field);
         foreach (condition; [request.where, request.queryWhere, request.queryScope, request.having, request.queryHaving]) plan.includeExpression(condition);
         plan.finish(!request.byRecordId && !request.byRecordIds);
+        if (request.aggregateAll && plan.having.length) throw new Z8PostgresException("PostgreSQL linked HAVING filters are not supported for totals");
         if (!request.disableGrouping && !grouped && plan.having.length)
             throw new Z8PostgresException("PostgreSQL HAVING filters require grouped query support");
         auto previous = z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
@@ -360,7 +361,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             sql ~= " WHERE ";
             foreach (index, filter; filters) { if (index) sql ~= " AND "; sql ~= filter; }
         }
-        if (grouped) {
+        if (groups.length) {
             sql ~= " GROUP BY ";
             foreach (index, field; groups) {
                 if (index) sql ~= ", ";

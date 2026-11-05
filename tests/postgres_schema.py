@@ -656,6 +656,28 @@ void main(string[] args) {
     assert(rejectedRead("fields"w, `["title"]`w));
     queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
     db.execute(`INSERT INTO "z8_bootstrap"."Sample;--" ("RecordId", "Title", "Amount") VALUES ('00000000-0000-0000-0000-00000000012E', 'Second', 10)`);
+    wstring totalRead(wstring fields, wstring filter = null, wstring session = null) {
+        auto request = new Z8ApplicationRequest(); request.session = querySession; request.monitor = new Z8RequestMonitor();
+        request.parameters.z8_add("action"w, "read"w); request.parameters.z8_add("fields"w, fields); request.parameters.z8_add("totals"w, "true"w);
+        if (filter !is null) request.parameters.z8_add("filter"w, filter);
+        if (session !is null) request.parameters.z8_add("session"w, session);
+        z8_application_set_request(request); z8_application_start_response(request, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+        z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
+    }
+    auto totalsJson = parseJSON(totalRead(`["amount","title"]`w).to!string);
+    assert(totalsJson["data"]["amount"].integer == 52 && "title" !in totalsJson["data"].object);
+    totalsJson = parseJSON(totalRead(`["amount"]`w, `{"property":"amount","operator":"gt","value":"20"}`w).to!string);
+    assert(totalsJson["data"]["amount"].integer == 42);
+    totalsJson = parseJSON(totalRead(`["amount"]`w, `{"property":"amount","operator":"gt","value":"100"}`w).to!string);
+    assert(totalsJson["data"]["amount"].integer == 7);
+    bool groupedTotalsDenied;
+    try { totalRead(`["amount"]`w, null, "with-group"w); } catch (Exception) { groupedTotalsDenied = true; }
+    assert(groupedTotalsDenied);
+    auto amountKey = z8_guid_create_name("Sample;--.Amount"w);
+    queryUser.privileges.setFieldAccess(amountKey, Z8Access.init);
+    totalsJson = parseJSON(totalRead(`["amount"]`w).to!string);
+    assert("amount" !in totalsJson["data"].object);
+    queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
     wstring groupedRead(wstring having, bool count = false) {
         auto request = new Z8ApplicationRequest(); request.session = querySession; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("action"w, "read"w); request.parameters.z8_add("session"w, "with-group"w);

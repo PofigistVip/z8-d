@@ -122,6 +122,8 @@ void main(string[] args) {
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(count="true", filter='{"property":"amount","operator":"gt","value":"5"}')
             assert result["success"] and result["total"] == 1, result
+            result = request(totals="true")
+            assert result["success"] and result["data"]["amount"] == 15 and "title" not in result["data"], result
             with ThreadPoolExecutor(max_workers=8) as workers:
                 results = list(workers.map(lambda i: request(session="limited" if i % 2 else "full"), range(16)))
             assert all(result["success"] and len(result["data"]) == 2 for result in results)

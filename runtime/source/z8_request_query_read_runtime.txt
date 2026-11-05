@@ -72,25 +72,28 @@ private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges priv
     }
     return selected;
 }
-private void z8_application_query_write_rows(Z8Object query, Z8JsonWriterState writer, Z8Object[] selected) {
+private void z8_application_query_write_fields(Z8Object query, Z8JsonWriterState writer, Z8Object[] selected) {
     auto key = z8_query_primary_key(query);
+    foreach (field; selected) {
+        bool present;
+        foreach (column; z8_query_state(query).cursorFields) if (column is field) { present = true; break; }
+        if (!present) continue;
+        auto value = z8_field_primary(field);
+        auto wasNull = z8_optional_require(z8_field_was_null(field));
+        if (field is key && wasNull) continue;
+        if (wasNull) value = field.z8_field_virtual_default();
+        writer.property(field.z8_id());
+        if (value !is null && value.kind == Z8PrimaryKind.geometry &&
+            (wasNull || (value.geometryValue !is null && value.geometryValue.rawHex is null && value.geometryValue.shape == -1)))
+            writer.raw("null"w);
+        else z8_json_writer_primary(writer, value);
+    }
+}
+private void z8_application_query_write_rows(Z8Object query, Z8JsonWriterState writer, Z8Object[] selected) {
     writer.start('[', "data"w);
     while (z8_optional_require(z8_query_next(query))) {
         writer.start('{');
-        foreach (field; selected) {
-            bool present;
-            foreach (column; z8_query_state(query).cursorFields) if (column is field) { present = true; break; }
-            if (!present) continue;
-            auto value = z8_field_primary(field);
-            auto wasNull = z8_optional_require(z8_field_was_null(field));
-            if (field is key && wasNull) continue;
-            if (wasNull) value = field.z8_field_virtual_default();
-            writer.property(field.z8_id());
-            if (value !is null && value.kind == Z8PrimaryKind.geometry &&
-                (wasNull || (value.geometryValue !is null && value.geometryValue.rawHex is null && value.geometryValue.shape == -1)))
-                writer.raw("null"w);
-            else z8_json_writer_primary(writer, value);
-        }
+        z8_application_query_write_fields(query, writer, selected);
         writer.finish('}');
     }
     writer.finish(']');
@@ -117,7 +120,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         if (name is null) throw new Exception("invalid query read parameter");
         if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "fields"w || name == "start"w || name == "limit"w ||
             name == "filter"w || name == "where"w || name == "quickFilter"w || name == "sort"w || name == "recordId"w || name == "count"w || name == "values"w ||
-            name == "lookup"w || name == "lookupFields"w || name == "period"w || name == "having"w || name == "group"w) continue;
+            name == "lookup"w || name == "lookupFields"w || name == "period"w || name == "having"w || name == "group"w || name == "totals"w) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported query read parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
@@ -317,6 +320,42 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
             auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
             if (!privileges.getFieldAccess(queryKey, fieldKey).read) throw new Exception("query having field access denied");
         }
+    }
+    auto totals = params.z8_get("totals"w);
+    if (totals !is null && z8_bool_parse(totals)) {
+        if (groups.length || z8_query_array(query, "aggregateBy"w).length) throw new Exception("totals for grouped queries are not supported");
+        Z8Object[] fields;
+        Z8FieldAggregation[] aggregations;
+        foreach (field; selected) {
+            auto fieldState = z8_field_state(field);
+            auto aggregation = z8_field_aggregation(field);
+            if ((fieldState.totals.present && !fieldState.totals.value) || aggregation == Z8FieldAggregation.none ||
+                aggregation == Z8FieldAggregation.min || aggregation == Z8FieldAggregation.max) continue;
+            if (aggregation == Z8FieldAggregation.count) { aggregation = Z8FieldAggregation.sum; z8_field_set_aggregation(field, aggregation); }
+            if (aggregation != Z8FieldAggregation.sum && aggregation != Z8FieldAggregation.average)
+                throw new Exception("unsupported query totals aggregation");
+            fields ~= field; aggregations ~= aggregation;
+        }
+        read.fields = fields; read.sortFields = null; read.start = 0; read.limit = -1;
+        read.disableGrouping = true; read.aggregateAll = true;
+        z8_query_prepare_read(query, read);
+        try {
+            verifyGroups();
+            if (read.queryHaving !is null && (read.queryHaving.kind != Z8SqlBoolKind.constant || !read.queryHaving.constant))
+                throw new Exception("query having is not supported for totals");
+            foreach (i, field; fields) if (z8_field_aggregation(field) != aggregations[i])
+                throw new Exception("changing query aggregations during beforeRead is not supported");
+        } catch (Throwable error) {
+            if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();
+            throw error;
+        }
+        auto saved = new Z8QuerySavedState(query);
+        scope(exit) saved.restore();
+        z8_query_open(query, read, false, true);
+        writer.start('{', "data"w);
+        if (z8_optional_require(z8_query_next(query))) z8_application_query_write_fields(query, writer, fields);
+        writer.finish('}');
+        return;
     }
     bool prepared;
     auto count = params.z8_get("count"w);
