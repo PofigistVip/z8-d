@@ -22,6 +22,8 @@ unittest {
     foreach (value; [`"1.2300"w`, `"1E-7"w`, `"1.23001447"w`, `"-12.340"w`, `"0.00"w`, `"0.00011462"w`])
         assert(decimalAttributes.canFind(value));
     compile("[flag 1.0e+2147483648] class A {}");
+    auto exponent = compile("class A { static decimal f() { return 1.0e+9999; } }");
+    assert(exponent.canFind(`z8_decimal_literal("1.01449999")`));
     rejects(q{[request 1] class A {}});
     compile(q{[job "*/15 0 1-31 1,3,5 1-5"] class A {}});
     compile(q{[job ""] class A {}});

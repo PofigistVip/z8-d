@@ -92,7 +92,7 @@ class Field { ValueType type; Token name; TypeAttribute[] attributes; Expression
 struct TypeAttribute { Token name; Token value; bool hasValue; }
 // Match the original lexer and BigDecimal.toString, including preserved scale
 // and its scientific notation for an adjusted exponent below -6.
-private string decimalAttributeValue(Token token) {
+package string canonicalDecimalLiteral(Token token) {
     auto spelling = token.text.replace(" ", "").replace("\t", "");
     bool negative = spelling.length && spelling[0] == '-';
     if (negative) spelling = spelling[1 .. $];
@@ -140,7 +140,7 @@ package wstring attributeLiteralValue(TypeAttribute attribute) {
     if (attribute.value.kind == TokenKind.stringLiteral) return decodeStringLiteral(attribute.value.text);
     if (attribute.value.kind == TokenKind.booleanLiteral) return attribute.value.text.to!wstring;
     if (attribute.value.kind == TokenKind.decimalLiteral)
-        return decimalAttributeValue(attribute.value).to!wstring;
+        return canonicalDecimalLiteral(attribute.value).to!wstring;
     assert(attribute.value.kind == TokenKind.integerLiteral);
     auto spelling = attribute.value.text.replace(" ", "").replace("\t", "");
     long value;

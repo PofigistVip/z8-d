@@ -235,7 +235,7 @@ private string emitExprRaw(Expression e) {
         case ExprKind.integer:
             return "(cast(long)(" ~ e.token.text.replace(" ", "").replace("\t", "") ~ "))";
         case ExprKind.decimalLiteral:
-            return "z8_decimal_literal(\"" ~ e.token.text.replace(" ", "").replace("\t", "") ~ "\")";
+            return "z8_decimal_literal(\"" ~ canonicalDecimalLiteral(e.token) ~ "\")";
         case ExprKind.boolean: return e.token.text;
         case ExprKind.stringLiteral: return emitStringLiteral(e.token.text);
         case ExprKind.guidLiteral: return "z8_guid_literal(\"" ~ e.token.text[1 .. $ - 1] ~ "\")";

@@ -591,7 +591,7 @@ class Checker {
         final switch (e.kind) {
             case ExprKind.integer: return ValueType.intType;
             case ExprKind.decimalLiteral:
-                if (!safeDecimalLiteral(e.token.text)) fail("decimal literal cannot yet be converted reliably; use decimal.parse with a string", e.token);
+                if (!safeDecimalLiteral(canonicalDecimalLiteral(e.token))) fail("decimal literal cannot yet be converted reliably; use decimal.parse with a string", e.token);
                 return ValueType.decimalType;
             case ExprKind.boolean: return ValueType.boolType;
             case ExprKind.stringLiteral: return ValueType.stringType;

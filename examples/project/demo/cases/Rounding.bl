@@ -9,6 +9,9 @@ public class Rounding {
         if (decimal.parse("1e-325").signum() != 0) return 6;
         if (decimal.parse("-1e-325").ceil() != 0) return 7;
         if (decimal.parse("1e309").round() != 9223372036854775807) return 8;
+        if ((1.2300e+7).toString() != "1.23001447") return 9;
+        if ((.0001e-2).toString() != "0.00011462") return 10;
+        if ((1.0e+9999).toString() != "1.01449999") return 11;
         return 61;
     }
 }
