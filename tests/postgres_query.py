@@ -89,6 +89,24 @@ public class Probe {
     public static bool record(Sales table, guid id) { Field[] fields = {table.amount}; return table.readRecord(id, fields); }
     public static int count(Sales table) { return table.count(); }
     public static int countWhere(Sales table) { return table.count(table.amount > 10); }
+    public static void jsonRange(Sales table) { table.setWhere("{property:'" + table.amount.id() + "',operator:'ge',value:'10'}"); }
+    public static void jsonFlag(Sales table) { table.addWhere("{property:'" + table.flag.id() + "',operator:'isTrue'}"); }
+    public static void jsonOr(Sales table) {
+        table.setWhere("{logical:'or',expressions:[{property:'" + table.amount.id() + "',value:'5'},{property:'" + table.amount.id() + "',value:'20'}]}");
+    }
+    public static void jsonVector(Sales table) { table.setWhere("{property:'" + table.amount.id() + "',value:['10','20']}"); }
+    public static void jsonList(Sales table) {
+        string[] filters = {"{property:'" + table.amount.id() + "',operator:'ge',value:'10'}", "{property:'" + table.flag.id() + "',operator:'isTrue'}"};
+        table.setWhere(filters);
+    }
+    public static void jsonNot(Sales table) { table.setWhere("{logical:'not',expressions:[{property:'" + table.amount.id() + "',operator:'gt',value:'10'}]}"); }
+    public static void jsonUnsupported(Sales table) { table.setWhere("{property:'" + table.title.id() + "',operator:'isEmpty'}"); }
+    public static void jsonHaving(Sales table) {
+        table.groupBy = {table.flag}; table.amount.aggregation = Aggregation.Sum;
+        table.addHaving("{property:'" + table.amount.id() + "',operator:'ge',value:'20'}");
+    }
+    public static void jsonString(Sales table) { table.setWhere("{property:'" + table.title.id() + "',value:\\\"o'reilly\\\"}"); }
+    public static void jsonReset(Sales table) { table.setWhere("[]"); }
     public static bool hasId(Sales table, guid id) { return table.hasRecord(id); }
     public static bool hasWhere(Sales table) { return table.hasRecord(table.amount > 10); }
     public static guid[] find(Sales table) { return table.findRecords(table.amount >= 0); }
@@ -191,6 +209,18 @@ void main(string[] args) {
     assert(z8_optional_require(P.m_record(table, z8_guid_create(3))) && z8_optional_require(P.m_amount(table)) == -1);
     P.m_close(table);
     db.execute(`INSERT INTO "Sales""Quote" ("RecordId","Amount","Title","Flag","Info","Blob","When") VALUES ('00000000-0000-0000-0000-000000000004',5,'O''Reilly',1,NULL,NULL,NULL)`);
+    P.m_jsonRange(table); assert(z8_optional_require(P.m_count(table)) == 2);
+    P.m_jsonFlag(table); assert(z8_optional_require(P.m_count(table)) == 1);
+    P.m_jsonOr(table); assert(z8_optional_require(P.m_count(table)) == 2);
+    P.m_jsonVector(table); assert(z8_optional_require(P.m_count(table)) == 2);
+    P.m_jsonList(table); assert(z8_optional_require(P.m_count(table)) == 1);
+    P.m_jsonNot(table); assert(z8_optional_require(P.m_count(table)) == 2);
+    P.m_jsonString(table); assert(z8_optional_require(P.m_count(table)) == 2);
+    bool unsupported; try { P.m_jsonUnsupported(table); } catch (Exception) { unsupported = true; }
+    assert(unsupported && z8_optional_require(P.m_count(table)) == 2);
+    P.m_jsonReset(table); assert(z8_optional_require(P.m_count(table)) == 3);
+    auto groupedFilter = P.m_make(); z8_query_set_executor(groupedFilter, new Z8PostgresQueryExecutor(db, "pg_temp"w, `Sales"Quote`w));
+    P.m_jsonHaving(groupedFilter); assert(z8_optional_require(P.m_count(groupedFilter)) == 1);
     P.m_groupSum(table);
     long sum, groups;
     while (z8_optional_require(P.m_next(table))) { sum += z8_optional_require(P.m_amount(table)); ++groups; }

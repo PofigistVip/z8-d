@@ -1,0 +1,130 @@
+// JSON filter trees correspond to base.view.filter.Filter and Expression.
+private Z8SqlBool z8_filter_combine(Z8SqlBool left, Z8SqlBool right, bool useOr = false) {
+    if (left is null) return right;
+    if (right is null) return left;
+    return useOr ? z8_sql_bool_binary!"||"(left, right) : z8_sql_bool_binary!"&&"(left, right);
+}
+private wstring z8_filter_property(JSONValue[string] object, string key) {
+    auto value = key in object;
+    return value is null || value.type == JSONType.null_ ? null : z8_json_value_text(*value);
+}
+private Z8Primary z8_filter_value(wstring type, wstring value) {
+    switch (type) {
+        case "int"w: return z8_primary_box(value.length ? z8_int_parse(value) : 0L);
+        case "float"w: return z8_primary_box(z8_decimal_parse(value is null ? ""w : value));
+        case "boolean"w: return z8_primary_box(z8_bool_parse(value));
+        case "guid"w: return z8_primary_box(value is null || !value.length ? z8_guid_zero() : z8_guid_parse(value));
+        case "date"w: case "datetime"w: return z8_primary_box(z8_date_parse(value is null ? ""w : value));
+        case "string"w: case "text"w: case "file"w: case "attachments"w: return z8_primary_box(value);
+        default: throw new Exception("unsupported JSON filter field type");
+    }
+}
+private Z8SqlBool z8_filter_compare(Z8Object field, wstring operation, wstring[] values) {
+    auto type = z8_field_type_name(field);
+    if (values.length > 1) {
+        if ((operation != "eq"w && operation != "noteq"w) || type == "date"w || type == "datetime"w)
+            throw new Exception("unsupported JSON filter vector operation");
+        auto vector = new Z8SqlBool(Z8SqlBoolKind.inVector);
+        vector.vectorValue = new Z8SqlFieldToken(field);
+        foreach (value; values) vector.vectorItems ~= new Z8SqlBoxedConstant(z8_filter_value(type, value));
+        return operation == "noteq"w ? z8_sql_bool_not(vector) : vector;
+    }
+    auto value = values.length ? values[0] : null;
+    if (type == "boolean"w) {
+        bool number = operation == "istrue"w ? true : operation == "isfalse"w ? false : z8_bool_parse(value);
+        return z8_sql_bool_binary!"=="(z8_bool_field_sql(field), z8_sql_bool_const(number));
+    }
+    if (!["eq"w, "noteq"w, "lt"w, "gt"w, "le"w, "ge"w].canFind(operation))
+        throw new Exception("unsupported JSON filter operation");
+    bool textType = type == "string"w || type == "text"w || type == "file"w || type == "attachments"w;
+    if (textType && value is null) return null;
+    Z8SqlBoolKind kind;
+    switch (operation) {
+        case "eq"w: kind = textType ? Z8SqlBoolKind.textEqual : Z8SqlBoolKind.intEqual; break;
+        case "noteq"w: kind = textType ? Z8SqlBoolKind.textNotEqual : Z8SqlBoolKind.intNotEqual; break;
+        case "lt"w: kind = textType ? Z8SqlBoolKind.textLess : Z8SqlBoolKind.intLess; break;
+        case "gt"w: kind = textType ? Z8SqlBoolKind.textGreater : Z8SqlBoolKind.intGreater; break;
+        case "le"w: kind = textType ? Z8SqlBoolKind.textLessEqual : Z8SqlBoolKind.intLessEqual; break;
+        case "ge"w: kind = textType ? Z8SqlBoolKind.textGreaterEqual : Z8SqlBoolKind.intGreaterEqual; break;
+        default: throw new Exception("unsupported JSON filter operation");
+    }
+    if (textType) {
+        auto result = new Z8SqlBool(kind);
+        auto left = type == "text"w ? z8_text_field_sql(field) : z8_string_field_sql(field);
+        if (operation == "eq"w || operation == "noteq"w) { left = z8_sql_string_toLower(left); value = z8_str_toLowerCase(value); }
+        result.textLeft = left; result.textRight = z8_sql_string_const(value); return result;
+    }
+    auto boxed = z8_filter_value(type, value);
+    if (type == "guid"w) {
+        if (operation == "eq"w) return z8_sql_guid_compare!"=="(z8_guid_field_sql(field), z8_sql_guid_const(boxed.guidValue));
+        if (operation == "noteq"w) return z8_sql_guid_compare!"!="(z8_guid_field_sql(field), z8_sql_guid_const(boxed.guidValue));
+        throw new Exception("unsupported JSON GUID filter operation");
+    }
+    if (type == "date"w || type == "datetime"w) {
+        auto result = new Z8SqlBool(Z8SqlBoolKind.dateCompare);
+        result.dateLeft = z8_datetime_field_sql(field); result.dateRight = z8_sql_date_const(boxed.dateValue);
+        result.dateOperator = operation == "eq"w ? "==" : operation == "noteq"w ? "!=" : operation == "lt"w ? "<" : operation == "gt"w ? ">" : operation == "le"w ? "<=" : ">=";
+        return result;
+    }
+    if (type != "int"w && type != "float"w) throw new Exception("unsupported JSON filter field type");
+    auto result = new Z8SqlBool(kind);
+    result.numericLeft = type == "int"w ? cast(Z8SqlNumeric)z8_integer_field_sql(field) : z8_decimal_field_sql(field);
+    result.numericRight = type == "int"w ? cast(Z8SqlNumeric)z8_sql_int_const(boxed.integerValue) : z8_sql_decimal_const(boxed.decimalValue);
+    return result;
+}
+private Z8SqlBool z8_filter_node(Z8Object query, JSONValue node) {
+    if (node.type != JSONType.object) throw new Exception("JSON filter expression must be an object");
+    auto object = node.object;
+    if ("logical" in object) {
+        auto logical = z8_filter_property(object, "logical");
+        logical = logical is null ? null : z8_str_toLowerCase(logical);
+        auto children = "expressions" in object;
+        if (children is null || children.type != JSONType.array) throw new Exception("JSON filter group requires expressions");
+        Z8SqlBool result;
+        foreach (child; children.array) result = z8_filter_combine(result, z8_filter_node(query, child), logical == "or"w);
+        return result is null ? null : logical == "not"w ? z8_sql_bool_not(result) : z8_sql_bool_group(result);
+    }
+    auto property = z8_filter_property(object, "property");
+    if (property is null) return null;
+    auto field = z8_query_find_field_id(query, property);
+    auto operation = z8_filter_property(object, "operator");
+    operation = operation is null ? "eq"w : z8_str_toLowerCase(operation);
+    auto value = z8_filter_property(object, "value");
+    wstring[] values;
+    if (value !is null && value.length) {
+        if (value[0] == '[') {
+            JSONValue parsed;
+            bool valid;
+            try { parsed = z8_json_parse(value.to!string); valid = parsed.type == JSONType.array; } catch (Exception) { }
+            if (valid) foreach (item; parsed.array) {
+                if (item.type != JSONType.string) throw new Exception("JSON filter values must be strings");
+                values ~= z8_json_value_text(item);
+            }
+            else values ~= value;
+        } else values ~= value;
+    }
+    return z8_filter_compare(field, operation, values);
+}
+private Z8SqlBool z8_filter_json(Z8Object query, wstring json) {
+    if (json is null || !json.length) return null;
+    auto root = z8_json_parse(json.to!string);
+    if (root.type == JSONType.object) {
+        auto result = z8_filter_node(query, root);
+        return result is null ? null : z8_sql_bool_group(result);
+    }
+    if (root.type != JSONType.array) throw new Exception("JSON filter must be an object or array");
+    Z8SqlBool result;
+    foreach (node; root.array) result = z8_filter_combine(result, z8_filter_node(query, node));
+    return result is null ? null : z8_sql_bool_group(result);
+}
+private Z8SqlBool z8_filter_json_array(Z8Object query, Z8Array!wstring json) {
+    Z8SqlBool result;
+    for (long i; i < z8_nonnull(json).z8_size(); ++i) result = z8_filter_combine(result, z8_filter_node(query, z8_json_parse(z8_string_required(json.z8_get(i)).to!string)));
+    return result is null ? null : z8_sql_bool_group(result);
+}
+private void z8_query_set_where_json(Z8Object self, wstring json) { if (json !is null) z8_query_set_where(self, z8_filter_json(self, json)); }
+private void z8_query_set_where_json_array(Z8Object self, Z8Array!wstring json) { z8_query_set_where(self, z8_filter_json_array(self, json)); }
+private void z8_query_add_where_json(Z8Object self, wstring json) { z8_query_add_where(self, z8_filter_json(self, json)); }
+private void z8_query_add_where_json_array(Z8Object self, Z8Array!wstring json) { z8_query_add_where(self, z8_filter_json_array(self, json)); }
+private void z8_query_add_having_json(Z8Object self, wstring json) { if (json !is null) z8_query_add_having(self, z8_filter_json(self, json)); }
+private void z8_query_add_having_json_array(Z8Object self, Z8Array!wstring json) { z8_query_add_having(self, z8_filter_json_array(self, json)); }
