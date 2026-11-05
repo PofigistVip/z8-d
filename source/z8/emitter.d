@@ -923,6 +923,19 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 result ~= "override wstring z8_object_string_impl() { return this.m_toString(); }\n";
                 break;
             }
+        bool isObjectSubclass;
+        for (auto base = program.baseClass; base !is null; base = base.baseClass)
+            if (base.isNative && base.nativeName == "org.zenframework.z8.server.runtime.OBJECT"w) isObjectSubclass = true;
+        if (isObjectSubclass && !program.isNative) foreach (method; program.methods) {
+            if (!method.overrides || method.isStatic) continue;
+            if (method.name.text == "getData" && method.parameters.length == 1 &&
+                dStorageType(method.parameters[0].type, method.parameters[0].objectClass, method.parameters[0].keyObjectClasses) == "Z8StringMap")
+                result ~= "override Z8Object z8_object_get_data(Z8StringMap parameters) { return this.m_getData(parameters); }\n";
+            if (method.name.text == "processContentRequest" && method.parameters.length == 2 &&
+                dStorageType(method.parameters[0].type, method.parameters[0].objectClass, method.parameters[0].keyObjectClasses) == "Z8StringMap" &&
+                dStorageType(method.parameters[1].type, method.parameters[1].objectClass, method.parameters[1].keyObjectClasses) == "Z8Array!Z8File")
+                result ~= "override Z8Binary z8_object_process_content(Z8StringMap parameters, Z8Array!Z8File files) { return this.m_processContentRequest(parameters, files); }\n";
+        }
         if (extendsBuiltinPrimary(program)) {
             if (program.isNative) {
                 auto stringBinding = emitRawWStringLiteral(program.nativeName ~ ".m_toString"w);

@@ -109,6 +109,9 @@ class Z8Object {
 
     // OBJECT.z8_toString returns an empty string unless a BL class overrides it.
     wstring z8_object_string_impl() { return ""w; }
+    // Virtual request hooks are overridden by generated OBJECT subclasses.
+    Z8Object z8_object_get_data(Z8StringMap parameters) { return null; }
+    Z8Binary z8_object_process_content(Z8StringMap parameters, Z8Array!Z8File files) { return null; }
 
     // Primary subclasses may provide the Java value's polymorphic operations.
     wstring z8_user_primary_string_impl() { return toString().to!wstring; }
