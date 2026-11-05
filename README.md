@@ -454,7 +454,7 @@ runtime D и отличается от Java.
 Объект сохраняет ссылку на данные, поэтому последующие изменения видны методам BL.
 Для `Cron` доступны проверка выражений и поиск следующей даты для пяти- и
 шестипольного формата; вычисления используют часовой пояс runtime `Europe/Moscow`.
-Шесть перегрузок `Sql.IIF` строят условные SQL-выражения для соответствующих типов.
+Перегрузки `Sql.IIF` и `Sql.inVector` строят SQL-выражения для шести типов.
 Смена регистра в `Base34.decode` использует Unicode D и может
 отличаться от Java для отдельных локалей. Остальные методы этих проверяемых
 классов этим не реализуются. Строки для хеша
@@ -463,7 +463,7 @@ runtime D и отличается от Java.
 можно восстановить функцией `z8_bind_builtin_crypto()`; поля `RecordLock` —
 функцией `z8_bind_builtin_record_lock()`, методы `Base34` — `z8_bind_builtin_base34()`,
 методы `LoginParameters` — `z8_bind_builtin_login_parameters()`, `Cron` —
-`z8_bind_builtin_cron()`, а `Sql.IIF` — `z8_bind_builtin_sql_functions()`.
+`z8_bind_builtin_cron()`, а методы `Sql` — `z8_bind_builtin_sql_functions()`.
 
 Поддерживаются конкатенация, сравнения, `length`, `isEmpty`, `compare`, `compareNoCase`, `startsWith`,
 `endsWith`, `indexOf`, `lastIndexOf`, `substring`, `charAt`, `trim`, `trimLeft`,

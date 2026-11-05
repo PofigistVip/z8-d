@@ -1,4 +1,30 @@
 // Native org.zenframework.z8.server.db.sql.functions.Sql overloads.
+private wstring z8_sql_functions_format(Z8SqlPrimary value, Z8SqlVendor vendor) {
+    z8_nonnull(value);
+    if (auto item = cast(Z8SqlDatespan)value) return z8_sql_datespan_format(item, vendor);
+    if (auto item = cast(Z8SqlDate)value) return z8_sql_date_format(item, vendor);
+    if (auto item = cast(Z8SqlDecimal)value) return z8_sql_decimal_format(item, vendor);
+    if (auto item = cast(Z8SqlGuid)value) return z8_sql_guid_format(item, vendor);
+    if (auto item = cast(Z8SqlInt)value) return z8_sql_int_format(item, vendor);
+    if (auto item = cast(Z8SqlString)value) return z8_sql_string_format(item, vendor);
+    throw new Exception("unsupported SQL inVector value");
+}
+private Z8SqlBool z8_sql_in_vector(S, T)(S value, Z8Array!T values) {
+    auto result = new Z8SqlBool(Z8SqlBoolKind.inVector);
+    result.vectorValue = value;
+    z8_nonnull(values);
+    for (long i = 0; i < values.z8_size(); ++i) {
+        auto item = values.z8_get(i);
+        static if (is(T == long)) result.vectorItems ~= item.present ? z8_sql_int_const(item.value) : null;
+        else static if (is(T == Z8Decimal)) result.vectorItems ~= item.present ? z8_sql_decimal_const(item.value) : null;
+        else static if (is(T == wstring)) result.vectorItems ~= item is null ? null : z8_sql_string_const(item);
+        else static if (is(T == Z8Date)) result.vectorItems ~= item is null ? null : z8_sql_date_const(item);
+        else static if (is(T == Z8Datespan)) result.vectorItems ~= item is null ? null : z8_sql_datespan_const(item);
+        else static if (is(T == Z8Guid)) result.vectorItems ~= item is null ? null : z8_sql_guid_const(item);
+        else static assert(0, "unsupported SQL inVector array");
+    }
+    return result;
+}
 void z8_bind_builtin_sql_functions() {
     enum name = "org.zenframework.z8.server.db.sql.functions.Sql.m_IIF"w;
     z8_native_bind(name, &z8_sql_datespan_iif);
@@ -7,5 +33,12 @@ void z8_bind_builtin_sql_functions() {
     z8_native_bind(name, &z8_sql_guid_iif);
     z8_native_bind(name, &z8_sql_int_iif);
     z8_native_bind(name, &z8_sql_string_iif);
+    enum inName = "org.zenframework.z8.server.db.sql.functions.Sql.m_inVector"w;
+    z8_native_bind(inName, &z8_sql_in_vector!(Z8SqlDatespan, Z8Datespan));
+    z8_native_bind(inName, &z8_sql_in_vector!(Z8SqlDate, Z8Date));
+    z8_native_bind(inName, &z8_sql_in_vector!(Z8SqlDecimal, Z8Decimal));
+    z8_native_bind(inName, &z8_sql_in_vector!(Z8SqlGuid, Z8Guid));
+    z8_native_bind(inName, &z8_sql_in_vector!(Z8SqlInt, long));
+    z8_native_bind(inName, &z8_sql_in_vector!(Z8SqlString, wstring));
 }
 shared static this() { z8_bind_builtin_sql_functions(); }

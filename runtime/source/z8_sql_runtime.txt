@@ -15,7 +15,7 @@ Z8SqlString z8_sql_primary_toString(Z8SqlPrimary value) {
     if (auto result = cast(Z8SqlGeometry)value) return z8_sql_geometry_toString(result);
     throw new Exception("unsupported SQL primary conversion");
 }
-enum Z8SqlBoolKind { constant, group, not, and, or, equal, notEqual, choose, intEqual, intNotEqual, intLess, intGreater, intLessEqual, intGreaterEqual, decimalIsNaN, textEqual, textNotEqual, textLess, textGreater, textLessEqual, textGreaterEqual, textLike, textRegLike, textIsEmpty, textFtsLike, guidEqual, guidNotEqual, dateCompare, spanCompare, geometryCompare, geometryPredicate }
+enum Z8SqlBoolKind { constant, group, not, and, or, equal, notEqual, choose, inVector, intEqual, intNotEqual, intLess, intGreater, intLessEqual, intGreaterEqual, decimalIsNaN, textEqual, textNotEqual, textLess, textGreater, textLessEqual, textGreaterEqual, textLike, textRegLike, textIsEmpty, textFtsLike, guidEqual, guidNotEqual, dateCompare, spanCompare, geometryCompare, geometryPredicate }
 class Z8SqlBool : Z8SqlPrimary {
     Z8SqlBoolKind kind;
     bool constant;
@@ -32,6 +32,8 @@ class Z8SqlBool : Z8SqlPrimary {
     string geometryOperator;
     wstring geometryFunction;
     Z8Fts ftsConfig;
+    Z8SqlPrimary vectorValue;
+    Z8SqlPrimary[] vectorItems;
     this(Z8SqlBoolKind kind, bool constant = false, Z8SqlBool left = null,
          Z8SqlBool right = null, Z8SqlBool alternative = null) {
         this.kind = kind; this.constant = constant;
@@ -79,6 +81,15 @@ wstring z8_sql_bool_format(Z8SqlBool value, bool logical = false, Z8SqlVendor ve
     final switch (value.kind) {
         case Z8SqlBoolKind.constant:
             return (value.constant ? "1"w : "0"w) ~ (logical ? "=1"w : ""w);
+        case Z8SqlBoolKind.inVector:
+            if (!value.vectorItems.length) return logical ? "0=1"w : "0"w;
+            auto condition = "("w ~ z8_sql_functions_format(value.vectorValue, vendor) ~ " in ("w;
+            foreach (i, item; value.vectorItems) {
+                if (i) condition ~= ", "w;
+                condition ~= z8_sql_functions_format(item, vendor);
+            }
+            condition ~= "))"w;
+            return logical ? condition : z8_sql_bool_case(condition, "1"w, "0"w);
         case Z8SqlBoolKind.group: return z8_sql_bool_group_format(value.left, logical, vendor);
         case Z8SqlBoolKind.not:
             auto condition = "not("w ~ z8_sql_bool_format(value.left, true, vendor) ~ ")"w;
