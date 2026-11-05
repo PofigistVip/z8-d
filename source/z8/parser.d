@@ -178,8 +178,9 @@ class Parser {
         return attribute;
     }
     private void checkSupportedAttribute(TypeAttribute attribute) {
-        if (attribute.name.text == "primary")
-            throw new CompileException("this attribute is not supported yet", attribute.name.position);
+        if (["primary", "native"].canFind(attribute.name.text) &&
+            (!attribute.hasValue || attribute.expression !is null))
+            throw new CompileException("this attribute requires a constant", attribute.name.position);
         if (attribute.name.text == "name" && attribute.hasValue) {
             if (attribute.expression !is null) throw new CompileException("name attribute requires a constant", attribute.name.position);
             if (attribute.value.kind == TokenKind.dateLiteral)
@@ -228,7 +229,10 @@ class Parser {
             if (attribute.name.text == "native") {
                 if (!attribute.hasValue || attribute.expression !is null || attribute.value.kind != TokenKind.stringLiteral) error("native attribute requires a string");
                 nativeAttribute = true;
-            } else checkSupportedAttribute(attribute);
+            } else {
+                if (attribute.name.text == "primary") error("primary type declarations are not supported yet");
+                checkSupportedAttribute(attribute);
+            }
             result.attributes ~= attribute;
         }
         result.isFinal = accept("final");
@@ -270,7 +274,6 @@ class Parser {
             while (current.text == "[" || ["public", "private", "protected", "static", "virtual", "auto"].canFind(current.text)) {
                 if (current.text == "[") {
                     auto attribute = parseAttribute(attributes);
-                    if (attribute.name.text == "native") error("native member attributes are not supported yet");
                     checkSupportedAttribute(attribute);
                     attributes ~= attribute;
                     continue;
@@ -300,6 +303,8 @@ class Parser {
                     owner.nestedPrograms ~= nested;
                     owner = nested;
                 }
+                foreach (attribute; attributes)
+                    if (["native", "primary"].canFind(attribute.name.text)) error("native and primary nested types are not supported yet");
                 owner.attributes = attributes;
                 parseClassBody(owner);
                 expect(";"); continue;
@@ -350,6 +355,8 @@ class Parser {
                         nested.name = name; nested.name.text = "__nested_" ~ name.position.offset.to!string;
                         nested.baseName = declaredObjectName; nested.baseToken = name;
                         nested.lexicalOwner = result; nested.imports = result.imports.dup;
+                        foreach (attribute; field.attributes)
+                            if (["native", "primary"].canFind(attribute.name.text)) error("native and primary nested types are not supported yet");
                         nested.attributes = field.attributes; field.attributes = null;
                         parseClassBody(nested);
                         field.nestedClass = nested;

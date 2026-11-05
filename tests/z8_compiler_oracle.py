@@ -277,6 +277,8 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             !"от родителя".equals(metadata.get().annotated.getAttribute("fieldTag")) ||
             !"специализация".equals(metadata.get().specialized.getAttribute("fieldTag")) ||
             !"существующее".equals(metadata.get().annotated.getAttribute("initTag")) ||
+            !"field.impl".equals(metadata.get().annotated.getAttribute("native")) ||
+            !"field.primary".equals(metadata.get().annotated.getAttribute("primary")) ||
             !"исходное".equals(metadata.get().annotated.getAttribute("textValue")) ||
             !"исходное".equals(metadata.get().annotated.getAttribute("methodValue")) ||
             !"1".equals(metadata.get().annotated.getAttribute("numericValue")) ||
@@ -507,6 +509,8 @@ void main() {
     assert(metadata.f_annotated.z8_get_attribute("fieldTag"w) == "от родителя"w);
     assert(metadata.f_specialized.z8_get_attribute("fieldTag"w) == "специализация"w);
     assert(metadata.f_annotated.z8_get_attribute("initTag"w) == "существующее"w);
+    assert(metadata.f_annotated.z8_get_attribute("native"w) == "field.impl"w);
+    assert(metadata.f_annotated.z8_get_attribute("primary"w) == "field.primary"w);
     assert(metadata.f_annotated.z8_get_attribute("textValue"w) == "исходное"w);
     assert(metadata.f_annotated.z8_get_attribute("methodValue"w) == "исходное"w);
     assert(metadata.f_annotated.z8_get_attribute("numericValue"w) == "1"w);

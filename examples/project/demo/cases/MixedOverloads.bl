@@ -3,7 +3,7 @@ public class MixedOverloads {
     static int attributeCalls;
     public static int attributeEffect() { attributeCalls += 1; return attributeCalls; }
     static int field;
-    [name "MethodNote"] [ignored attributeEffect()] public static int choose(int value) { return value + 10; }
+    [native "method.impl"] [primary "method.primary"] [name "MethodNote"] [ignored attributeEffect()] public static int choose(int value) { return value + 10; }
     public int choose(string value) { return value.length() + 20; }
     public static void add(int value) { effects += value; }
     public void add(string value) { effects += value.length(); }
