@@ -44,6 +44,78 @@ private JSONValue z8_json_object_get(Z8Object self, wstring name) {
     auto value = z8_string_required(name).to!string in state.value.object;
     return value is null ? JSONValue.init : *value;
 }
+private wstring z8_json_quote(wstring value) {
+    enum string hex = "0123456789abcdef";
+    wstring result = "\""w;
+    wchar previous;
+    foreach (wchar current; value) {
+        switch (current) {
+            case '\\': result ~= "\\\\"w; break;
+            case '"': result ~= "\\\""w; break;
+            case '/': if (previous == '<') result ~= '\\'; result ~= current; break;
+            case '\b': result ~= "\\b"w; break;
+            case '\t': result ~= "\\t"w; break;
+            case '\n': result ~= "\\n"w; break;
+            case '\f': result ~= "\\f"w; break;
+            case '\r': result ~= "\\r"w; break;
+            default:
+                if (current < 0x20 || (current >= 0x80 && current < 0xa0) ||
+                    (current >= 0x2000 && current < 0x2100)) {
+                    result ~= "\\u"w;
+                    foreach_reverse (shift; [0, 4, 8, 12]) result ~= cast(wchar)hex[(current >> shift) & 15];
+                } else result ~= current;
+        }
+        previous = current;
+    }
+    return result ~ "\""w;
+}
+private string z8_json_number_text(string value) {
+    if (value.indexOf('.') > 0 && value.indexOf('e') < 0 && value.indexOf('E') < 0) {
+        while (value.length && value[$ - 1] == '0') value = value[0 .. $ - 1];
+        if (value.length && value[$ - 1] == '.') value = value[0 .. $ - 1];
+    }
+    return value;
+}
+private wstring z8_json_render(JSONValue value) {
+    final switch (value.type) {
+        case JSONType.null_: return "null"w;
+        case JSONType.string: return z8_json_quote(value.str.to!wstring);
+        case JSONType.integer: return value.integer.to!wstring;
+        case JSONType.uinteger: return value.uinteger.to!wstring;
+        case JSONType.float_: return z8_json_number_text(z8_java_double_string(value.floating)).to!wstring;
+        case JSONType.true_: return "true"w;
+        case JSONType.false_: return "false"w;
+        case JSONType.array:
+            wstring result = "["w;
+            foreach (i, entry; value.array) {
+                if (i) result ~= ","w;
+                result ~= z8_json_render(entry);
+            }
+            return result ~ "]"w;
+        case JSONType.object:
+            wstring result = "{"w;
+            bool first = true;
+            foreach (key, entry; value.object) {
+                if (!first) result ~= ","w;
+                first = false;
+                result ~= z8_json_quote(key.to!wstring) ~ ":"w ~ z8_json_render(entry);
+            }
+            return result ~ "}"w;
+    }
+}
+private wstring z8_json_object_to_string(Z8Object self) {
+    auto state = z8_json_object_state(self);
+    wstring result = "{"w;
+    bool first = true;
+    foreach (key, value; state.value.object) {
+        if (!first) result ~= ","w;
+        first = false;
+        auto decimalValue = key in state.decimals;
+        result ~= z8_json_quote(key.to!wstring) ~ ":"w ~
+            (decimalValue is null ? z8_json_render(value) : z8_json_number_text(z8_json_bigdecimal_text(*decimalValue)).to!wstring);
+    }
+    return z8_string_new(result ~ "}"w);
+}
 private wstring z8_json_value_text(JSONValue value) {
     final switch (value.type) {
         case JSONType.null_: return ""w;
@@ -53,7 +125,7 @@ private wstring z8_json_value_text(JSONValue value) {
         case JSONType.float_: return z8_java_double_string(value.floating).to!wstring;
         case JSONType.true_: return "true"w;
         case JSONType.false_: return "false"w;
-        case JSONType.array: case JSONType.object: return value.toString().to!wstring;
+        case JSONType.array: case JSONType.object: return z8_json_render(value);
     }
 }
 private wstring z8_json_object_get_string(Z8Object self, wstring name) {
@@ -192,6 +264,8 @@ private Z8Object z8_json_object_remove(Z8Object self, wstring name) {
 void z8_bind_builtin_json_object() {
     enum prefix = z8_json_object_name ~ "."w;
     z8_native_bind(prefix ~ "m_parse"w, &z8_json_object_parse);
+    z8_native_bind(prefix ~ "z8cast_string"w, &z8_json_object_to_string);
+    z8_native_bind(prefix ~ "m_toString"w, &z8_json_object_to_string);
     z8_native_bind(prefix ~ "z8op_assign"w, &z8_json_object_assign);
     z8_native_bind(prefix ~ "m_getString"w, &z8_json_object_get_string);
     z8_native_bind(prefix ~ "m_has"w, &z8_json_object_has);

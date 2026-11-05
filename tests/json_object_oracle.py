@@ -45,6 +45,8 @@ public class Probe {
     public static JsonObject put(JsonObject object, string name, primary entry) { return object.set(name, entry); }
     public static JsonObject putLegacy(JsonObject object, string name, primary entry) { return object.put(name, entry); }
     public static JsonObject remove(JsonObject object, string name) { return object.remove(name); }
+    public static string render(JsonObject object) { return (string)object; }
+    public static string display(JsonObject object) { return object.toString(); }
 }
 """, encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -58,7 +60,7 @@ import org.zenframework.z8.server.types.string;
 class JsonObjectOracle {
     public static void main(String[] args) throws Exception {
         org.zenframework.z8.server.config.ServerConfig.load(args[0]);
-        String source = "{name:'Привет',count:'-9',fraction:12.75,precise:7413.04345526901443,suffix:'1L',flag:true,word:'true',empty:null,id:'00112233-4455-6677-8899-aabbccddeeff',day:'2024-02-29T12:34:56',nested:{k:1},list:[1,2]}";
+        String source = "{name:'Привет',count:'-9',fraction:12.75,precise:7413.04345526901443,suffix:'1L',flag:true,word:'true',empty:null,id:'00112233-4455-6677-8899-aabbccddeeff',day:'2024-02-29T12:34:56',nested:{k:1},list:[1.0,2]}";
         JsonObject value = JsonObject.z8_parse(new string(source)).get();
         System.out.println(value.z8_isEmpty().get());
         for (String key : new String[] {"name", "count", "precise", "flag", "word", "empty", "missing", "nested", "list"})
@@ -110,6 +112,19 @@ class JsonObjectOracle {
             try { JsonObject.z8_parse(new string(input)); System.out.println("ok"); }
             catch (RuntimeException expected) { System.out.println("error"); }
         }
+        for (String input : new String[] {"{}", "{a:1.0}", "{a:-0.0}", "{a:'</script>'}", "{a:' '}", "{a:[1.0,true,null]}"}) {
+            JsonObject item = JsonObject.z8_parse(new string(input)).get();
+            System.out.println(item.string().get());
+            System.out.println(item.z8_toString().get());
+        }
+        for (String number : new String[] {"1.2500", "1E+3", "1E-7", "12345678901234567890.2500"}) {
+            JsonObject item = JsonObject.z8_parse(new string("{}")).get();
+            item.z8_set(new string("a"), new org.zenframework.z8.server.types.decimal(number));
+            System.out.println(item.string().get());
+        }
+        JsonObject escaped = JsonObject.z8_parse(new string("{}")).get();
+        escaped.z8_set(new string("a"), new string("line\\n\\t\\"\\\\end"));
+        System.out.println(escaped.string().get());
     }
 }
 """, encoding="utf-8")
@@ -137,7 +152,7 @@ import std.algorithm : sort;
 import std.array : join;
 void main() {
     alias P = Z8p_50726F6265;
-    auto value = P.m_parse("{name:'Привет',count:'-9',fraction:12.75,precise:7413.04345526901443,suffix:'1L',flag:true,word:'true',empty:null,id:'00112233-4455-6677-8899-aabbccddeeff',day:'2024-02-29T12:34:56',nested:{k:1},list:[1,2]}"w);
+    auto value = P.m_parse("{name:'Привет',count:'-9',fraction:12.75,precise:7413.04345526901443,suffix:'1L',flag:true,word:'true',empty:null,id:'00112233-4455-6677-8899-aabbccddeeff',day:'2024-02-29T12:34:56',nested:{k:1},list:[1.0,2]}"w);
     writeln(z8_optional_require(P.m_empty(value)));
     foreach (key; ["name"w, "count"w, "precise"w, "flag"w, "word"w, "empty"w, "missing"w, "nested"w, "list"w])
         writeln(z8_optional_require(P.m_has(value, key)), ":", P.m_text(value, key).to!string);
@@ -188,6 +203,19 @@ void main() {
     foreach (input; [""w, "  "w, "{}"w, "{x:1; y=2}"w, "[]"w, "{name:'unterminated"w, "{a:1,}"w, "null"w, "42"w]) {
         try { P.m_parse(input); writeln("ok"); } catch (Exception) { writeln("error"); }
     }
+    foreach (input; ["{}"w, "{a:1.0}"w, "{a:-0.0}"w, "{a:'</script>'}"w, "{a:' '}"w, "{a:[1.0,true,null]}"w]) {
+        auto item = P.m_parse(input);
+        writeln(P.m_render(item).to!string);
+        writeln(P.m_display(item).to!string);
+    }
+    foreach (number; ["1.2500"w, "1E+3"w, "1E-7"w, "12345678901234567890.2500"w]) {
+        auto item = P.m_parse("{}"w);
+        P.m_put(item, "a"w, z8_primary_box(z8_decimal_parse(number)));
+        writeln(P.m_render(item).to!string);
+    }
+    auto escaped = P.m_parse("{}"w);
+    P.m_put(escaped, "a"w, z8_primary_box("line\\n\\t\\"\\\\end"w));
+    writeln(P.m_render(escaped).to!string);
     z8_native_clear_bindings();
     z8_bind_builtin_object();
     z8_bind_builtin_json_object();

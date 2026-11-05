@@ -14,6 +14,13 @@ private wstring z8_object_display_name(Z8Object self) {
 private void z8_object_set_display_name(Z8Object self, wstring value) {
     z8_nonnull(self).z8_set_attribute("displayName"w, z8_string_new(z8_string_required(value)));
 }
+private wstring z8_object_to_string(Z8Object self) {
+    self = z8_nonnull(self);
+    wstring result;
+    if (z8_native_try_virtual_string("m_toString"w, "org.zenframework.z8.server.runtime.OBJECT"w, self, result))
+        return result;
+    return z8_string_new(""w);
+}
 private Z8Optional!bool z8_object_equal(Z8Object self, Z8Object other) {
     return z8_optional_wrap(z8_nonnull(self) is z8_nonnull(other));
 }
@@ -26,6 +33,7 @@ void z8_bind_builtin_object() {
     z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_setAttribute"w, &z8_object_set_attribute);
     z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_displayName"w, &z8_object_display_name);
     z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_setDisplayName"w, &z8_object_set_display_name);
+    z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.m_toString"w, &z8_object_to_string);
     z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.z8op_equal"w, &z8_object_equal);
     z8_native_bind("org.zenframework.z8.server.runtime.OBJECT.z8op_not_equal"w, &z8_object_not_equal);
 }

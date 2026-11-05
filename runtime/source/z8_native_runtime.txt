@@ -84,6 +84,32 @@ bool z8_native_is_instance(wstring name, Z8Object value) {
     }
     return false;
 }
+// A native Java subclass can override an inherited virtual method without
+// repeating its declaration in BL. Look for the most specific registered
+// implementation before falling back to the base native implementation.
+bool z8_native_try_virtual_string(wstring method, wstring baseName, Z8Object self, out wstring result) {
+    struct Candidate { TypeInfo_Class type; wstring name; }
+    Candidate[] candidates;
+    synchronized (z8_native_monitor) {
+        foreach (name, entries; z8_native_factories) {
+            if (name == baseName) continue;
+            foreach (entry; entries)
+                if (entry.type.isBaseOf(self.classinfo)) candidates ~= Candidate(entry.type, name);
+        }
+    }
+    TypeInfo_Class bestType;
+    Z8NativeBinding!(wstring, Z8Object) best;
+    foreach (candidate; candidates) {
+        auto binding = z8_native_find!(wstring, Z8Object)(candidate.name ~ "."w ~ method);
+        if (binding is null) continue;
+        if (bestType is null || bestType.isBaseOf(candidate.type)) {
+            bestType = candidate.type; best = binding;
+        }
+    }
+    if (best is null) return false;
+    result = best.callback(self);
+    return true;
+}
 ref T z8_native_field(T, Args...)(wstring name, Args args) {
     auto address = z8_native_call!(T*)(name, args);
     if (address is null) throw new Exception("native field binding returned null: " ~ name.to!string);

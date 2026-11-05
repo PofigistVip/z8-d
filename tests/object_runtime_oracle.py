@@ -36,6 +36,7 @@ public class Probe {
     public static void put(Object value, string name, primary entry) { value.setAttribute(name, entry); }
     public static string display(Object value) { return value.displayName(); }
     public static void setDisplay(Object value, string name) { value.setDisplayName(name); }
+    public static string render(Object value) { return value.toString(); }
     public static bool equal(Object left, Object right) { return left == right; }
     public static bool different(Object left, Object right) { return left != right; }
 }
@@ -58,6 +59,7 @@ class ObjectOracle {
         OBJECT.CLASS<OBJECT> a = new OBJECT.CLASS<OBJECT>(null), b = new OBJECT.CLASS<OBJECT>(null);
         OBJECT value = a.get();
         System.out.println(value.z8_getAttribute(new string("missing")).get());
+        System.out.println(value.z8_toString().get());
         System.out.println(value.z8_displayName().get());
         value.z8_setDisplayName(new string("Display"));
         System.out.println(value.z8_displayName().get());
@@ -90,6 +92,7 @@ void main() {
     z8_string_set_resource("test.login"w, "Alice localized"w);
     auto a = P.m_create(), b = P.m_create();
     writeln(P.m_get(a, "missing"w).to!string);
+    writeln(P.m_render(a).to!string);
     writeln(P.m_display(a).to!string);
     P.m_setDisplay(a, "Display"w);
     writeln(P.m_display(a).to!string);
