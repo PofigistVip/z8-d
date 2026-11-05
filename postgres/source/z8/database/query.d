@@ -81,8 +81,8 @@ private class Z8PostgresRows : IZ8QueryCursor {
     }
 }
 
-// Executes the single-table subset of Query. Links and UI-derived
-// default field selection are rejected until their query planning is available.
+// Executes the single-table subset of Query. Links and nested form controls
+// require query planning that is not yet available.
 class Z8PostgresQueryExecutor : IZ8QueryExecutor {
     private Z8PostgresConnection connection;
     private wstring schema, table;
@@ -97,15 +97,23 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor {
         bool grouped = groups.length != 0;
         if (!grouped && (!trivialTrue(request.having) || !trivialTrue(request.queryHaving)))
             throw new Z8PostgresException("PostgreSQL HAVING filters require grouped query support");
-        if (!request.fields.length) throw new Z8PostgresException("PostgreSQL query requires explicit selected fields");
         if (request.start < 0) throw new Z8PostgresException("negative PostgreSQL query offset");
         auto declared = z8_query_declared_fields(query);
         foreach (field; declared) {
             auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, field);
             z8_field_bind_sql(field, "t"w, name);
         }
+        auto requested = request.fields;
+        if (!requested.length) {
+            foreach (name; ["controls"w, "names"w, "columns"w, "extraFields"w])
+                foreach (field; z8_query_array(query, name)) {
+                    if (field is null || !z8_native_is_instance("org.zenframework.z8.server.base.table.value.Field"w, field))
+                        throw new Z8PostgresException("nested PostgreSQL form controls are not implemented");
+                    requested ~= field;
+                }
+        }
         Z8Object[] selected;
-        foreach (field; request.fields) foreach (dependency; z8_field_fields(field)) {
+        foreach (field; requested) foreach (dependency; z8_field_fields(field)) {
             if (!containsField(declared, dependency)) throw new Z8PostgresException("PostgreSQL query links are not implemented");
             selected ~= dependency;
         }
@@ -125,6 +133,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor {
         scope(exit) z8_sql_set_field_options(previous);
         string sql = "SELECT ";
         wstring[] kinds;
+        if (!selected.length) sql ~= "count(0) AS z8_0";
         foreach (index, field; selected) {
             if (index) sql ~= ", ";
             auto kind = z8_field_type_id(field); kinds ~= kind;

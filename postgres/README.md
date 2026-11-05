@@ -24,7 +24,10 @@ record lookup. Single-table `GROUP BY`, `HAVING` and array aggregations are
 supported. It reads integer, boolean, decimal, string, text, file, binary, GUID
 and date/duration fields. Ungrouped reads also select the table's primary key.
 
+An empty field list selects the query's direct field controls, names, columns
+and extra fields; nested form controls are not yet supported.
+
 The executor currently rejects linked queries, `aggregateBy` links, geometry,
-nontrivial HAVING without grouping, and reads without an explicit field list. Query write operations and
+and nontrivial HAVING without grouping. Query write operations and
 schema generation are not yet implemented. Z8 table and field privilege checks
 are not implemented by this executor; the host must enforce them.

@@ -53,6 +53,14 @@ public class Probe {
         Field[] fields = {table.amount, table.title}; Field[] sort = {table.amount};
         table.amount.sortDirection = SortDirection.Desc; table.read(fields, sort, table.amount >= 0, 1, 1);
     }
+    public static void readDefault(Sales table) {
+        table.controls = {table.title}; table.names = {table.amount}; table.columns = {table.title};
+        Field[] fields = {}; table.read(fields);
+    }
+    public static void readKeyOnly(Sales table) {
+        table.controls.clear(); table.names.clear(); table.columns.clear();
+        Field[] fields = {}; table.read(fields);
+    }
     public static bool record(Sales table, guid id) { Field[] fields = {table.amount}; return table.readRecord(id, fields); }
     public static bool next(Sales table) { return table.next(); }
     public static void close(Sales table) { table.close(); }
@@ -111,6 +119,12 @@ void main(string[] args) {
     assert(!z8_optional_require(P.m_next(table)));
     P.m_page(table); assert(z8_optional_require(P.m_next(table)) && z8_optional_require(P.m_amount(table)) == 10);
     assert(!z8_optional_require(P.m_next(table)));
+    P.m_readDefault(table); long defaultRows;
+    while (z8_optional_require(P.m_next(table))) { assert(z8_optional_require(P.m_amount(table)) > 0); ++defaultRows; }
+    assert(defaultRows == 2);
+    P.m_readKeyOnly(table); long keys;
+    while (z8_optional_require(P.m_next(table))) { assert(table.m_recordId() != z8_guid_zero()); ++keys; }
+    assert(keys == 2);
     assert(z8_optional_require(P.m_record(table, z8_guid_create(3))) && z8_optional_require(P.m_amount(table)) == -1);
     P.m_close(table);
     db.execute(`INSERT INTO "Sales""Quote" VALUES ('00000000-0000-0000-0000-000000000004',5,'O''Reilly',1,NULL,NULL,NULL)`);
