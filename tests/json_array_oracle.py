@@ -46,6 +46,10 @@ public class Probe {
     public static decimal[] decimals(JsonArray array) { return array.toDecimalArray(); }
     public static guid[] ids(JsonArray array) { return array.toGuidArray(); }
     public static date[] dates(JsonArray array) { return array.toDateArray(); }
+    public static JsonArray add(JsonArray array, primary value) { return array.add(value); }
+    public static JsonArray insert(JsonArray array, int index, primary value) { return array.insert(index, value); }
+    public static JsonArray put(JsonArray array, int index, primary value) { return array.put(index, value); }
+    public static JsonArray remove(JsonArray array, int index) { return array.remove(index); }
     public static string render(JsonArray array) { return (string)array; }
     public static string display(JsonArray array) { return array.toString(); }
 }
@@ -79,6 +83,34 @@ class JsonArrayOracle {
         for (decimal x : parse("[1.25,'2.5',-3]").z8_toDecimalArray()) System.out.println("d:" + x.toString());
         for (guid x : parse("['00112233-4455-6677-8899-aabbccddeeff',null]").z8_toGuidArray()) System.out.println("g:" + (x == null ? "<null>" : x.toString()));
         for (date x : parse("['2024-02-29T12:34:56',null,'0','']").z8_toDateArray()) System.out.println("t:" + (x == null ? "<null>" : x.getTicks()));
+        JsonArray changed = parse("[1,2]");
+        if (changed.z8_add(new decimal("12345678901234567890.2500")).get() != changed) throw new AssertionError();
+        changed.z8_insert(new integer(0), new bool(true));
+        changed.z8_put(new integer(2), new string("x"));
+        changed.z8_add((primary)null);
+        System.out.println("m:" + changed.string().get());
+        System.out.println("v:" + changed.z8_getString(new integer(4)).get() + ":" + changed.z8_getInt(new integer(4)).get() + ":" + changed.z8_getDecimal(new integer(4)).toString());
+        changed.z8_remove(new integer(1));
+        System.out.println("r:" + changed.string().get() + ":" + changed.z8_getString(new integer(3)).get());
+        try { changed.z8_remove(new integer(-1)); System.out.println("bad"); } catch (RuntimeException expected) { System.out.println("index:error"); }
+        try { changed.z8_insert(new integer(10), new integer(1)); System.out.println("bad"); } catch (RuntimeException expected) { System.out.println("index:error"); }
+        System.out.println("r:" + changed.string().get());
+        JsonArray numbers = parse("[]");
+        numbers.z8_add(new decimal("1.2500"));
+        numbers.z8_add(new decimal("1E+3"));
+        numbers.z8_add(new decimal("1E-7"));
+        for (string x : numbers.z8_toStringArray()) System.out.println("ms:" + x.get());
+        for (integer x : numbers.z8_toIntArray()) System.out.println("mi:" + x.get());
+        for (decimal x : numbers.z8_toDecimalArray()) System.out.println("md:" + x.toString());
+        System.out.println("n:" + numbers.string().get());
+        numbers.operatorAssign(new string("[7]"));
+        System.out.println("a:" + numbers.z8_getString(new integer(0)).get());
+        JsonArray scalars = parse("[]");
+        scalars.z8_add(new integer(43)); scalars.z8_add(new bool(false)); scalars.z8_add(new string("hello"));
+        scalars.z8_add(new guid("00112233-4455-6677-8899-aabbccddeeff"));
+        scalars.z8_add(new org.zenframework.z8.server.types.datespan(12345));
+        scalars.z8_add(new date(0)); scalars.z8_add(new date(date.MinTicks)); scalars.z8_add(decimal.NaN);
+        System.out.println("scalars:" + scalars.string().get());
         for (String input : new String[] {"", "1,2", " [1,2]", "[1,]", "[1,,2]", "[1", "{x:1}"}) {
             try { System.out.println("p:" + parse(input).string().get()); } catch (RuntimeException expected) { System.out.println("p:error"); }
         }
@@ -132,6 +164,39 @@ void main() {
     foreach (i; 0 .. ids.z8_size()) { auto x = ids.z8_get(i); writeln("g:", x is null ? "<null>" : z8_guid_to_string(x).to!string); }
     auto dates = P.m_dates(P.m_parse("['2024-02-29T12:34:56',null,'0','']"w));
     foreach (i; 0 .. dates.z8_size()) { auto x = dates.z8_get(i); writeln("t:", x is null ? "<null>" : z8_date_ticks(x).to!string); }
+    auto changed = P.m_parse("[1,2]"w);
+    assert(P.m_add(changed, z8_primary_box(z8_decimal_parse("12345678901234567890.2500"w))) is changed);
+    P.m_insert(changed, 0, z8_primary_box(true));
+    P.m_put(changed, 2, z8_primary_box("x"w));
+    P.m_add(changed, null);
+    writeln("m:", P.m_render(changed).to!string);
+    writeln("v:", P.m_text(changed, 4).to!string, ":", z8_optional_require(P.m_integer(changed, 4)), ":", z8_optional_require(P.m_decimalValue(changed, 4)).z8_string());
+    P.m_remove(changed, 1);
+    writeln("r:", P.m_render(changed).to!string, ":", P.m_text(changed, 3).to!string);
+    try { P.m_remove(changed, -1); writeln("bad"); } catch (Exception) { writeln("index:error"); }
+    try { P.m_insert(changed, 10, z8_primary_box(1L)); writeln("bad"); } catch (Exception) { writeln("index:error"); }
+    writeln("r:", P.m_render(changed).to!string);
+    auto numbers = P.m_parse("[]"w);
+    foreach (number; ["1.2500"w, "1E+3"w, "1E-7"w]) P.m_add(numbers, z8_primary_box(z8_decimal_parse(number)));
+    auto numberStrings = P.m_strings(numbers);
+    foreach (i; 0 .. numberStrings.z8_size()) writeln("ms:", numberStrings.z8_get(i).to!string);
+    auto numberInts = P.m_ints(numbers);
+    foreach (i; 0 .. numberInts.z8_size()) writeln("mi:", z8_optional_require(numberInts.z8_get(i)));
+    auto numberDecimals = P.m_decimals(numbers);
+    foreach (i; 0 .. numberDecimals.z8_size()) writeln("md:", z8_optional_require(numberDecimals.z8_get(i)).z8_string());
+    writeln("n:", P.m_render(numbers).to!string);
+    P.m_assign(numbers, "[7]"w);
+    writeln("a:", P.m_text(numbers, 0).to!string);
+    auto scalars = P.m_parse("[]"w);
+    P.m_add(scalars, z8_primary_box(43L)); P.m_add(scalars, z8_primary_box(false)); P.m_add(scalars, z8_primary_box("hello"w));
+    P.m_add(scalars, z8_primary_box(z8_guid_literal("00112233-4455-6677-8899-aabbccddeeff")));
+    P.m_add(scalars, z8_primary_box(new Z8Datespan(12345)));
+    P.m_add(scalars, z8_primary_box(z8_date_from_ticks(0))); P.m_add(scalars, z8_primary_box(z8_date_min)); P.m_add(scalars, z8_primary_box(z8_decimal_nan()));
+    writeln("scalars:", P.m_render(scalars).to!string);
+    auto beforeInvalid = P.m_render(scalars);
+    bool rejected;
+    try { P.m_add(scalars, z8_primary_box(new Z8Binary())); } catch (Exception) { rejected = true; }
+    assert(rejected && P.m_render(scalars) == beforeInvalid);
     foreach (input; [""w, "1,2"w, " [1,2]"w, "[1,]"w, "[1,,2]"w, "[1"w, "{x:1}"w]) {
         try { writeln("p:", P.m_render(P.m_parse(input)).to!string); } catch (Exception) { writeln("p:error"); }
     }

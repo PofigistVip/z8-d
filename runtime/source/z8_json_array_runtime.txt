@@ -2,6 +2,7 @@
 private enum z8_json_array_name = "org.zenframework.z8.server.base.json.parser.JsonArray"w;
 private class Z8JsonArrayState {
     JSONValue value;
+    Z8Decimal[size_t] decimals;
     this(JSONValue value) { this.value = value; }
 }
 private JSONValue z8_json_empty_array() { return JSONValue(cast(JSONValue[])null); }
@@ -31,13 +32,24 @@ private Z8Object z8_json_array_parse(wstring source) {
     return result;
 }
 private void z8_json_array_assign(Z8Object self, wstring source) {
-    z8_json_array_state(self).value = z8_json_array_read(source);
+    auto state = z8_json_array_state(self);
+    state.value = z8_json_array_read(source);
+    state.decimals = null;
+}
+private size_t z8_json_array_position(Z8JsonArrayState state, Z8Optional!long index, bool insertion = false) {
+    auto position = cast(int)z8_optional_require(index);
+    if (position < 0 || cast(size_t)position > state.value.array.length ||
+        (!insertion && cast(size_t)position == state.value.array.length))
+        throw new Exception("JSON array index out of bounds");
+    return cast(size_t)position;
 }
 private JSONValue z8_json_array_get(Z8Object self, Z8Optional!long index) {
-    auto values = z8_json_array_state(self).value.array;
-    auto position = cast(int)z8_optional_require(index);
-    if (position < 0 || cast(size_t)position >= values.length) throw new Exception("JSON array index out of bounds");
-    return values[position];
+    auto state = z8_json_array_state(self);
+    return state.value.array[z8_json_array_position(state, index)];
+}
+private wstring z8_json_array_text_at(Z8JsonArrayState state, size_t position) {
+    auto decimalValue = position in state.decimals;
+    return decimalValue is null ? z8_json_value_text(state.value.array[position]) : z8_json_bigdecimal_text(*decimalValue).to!wstring;
 }
 private Z8Optional!long z8_json_array_size(Z8Object self) {
     return z8_optional_wrap(cast(long)z8_json_array_state(self).value.array.length);
@@ -46,10 +58,18 @@ private Z8Optional!bool z8_json_array_empty(Z8Object self) {
     return z8_optional_wrap(z8_json_array_state(self).value.array.length == 0);
 }
 private wstring z8_json_array_string(Z8Object self) {
-    return z8_string_new(z8_json_render(z8_json_array_state(self).value));
+    auto state = z8_json_array_state(self);
+    wstring result = "["w;
+    foreach (position, value; state.value.array) {
+        if (position) result ~= ","w;
+        auto decimalValue = position in state.decimals;
+        result ~= decimalValue is null ? z8_json_render(value) : z8_json_number_text(z8_json_bigdecimal_text(*decimalValue)).to!wstring;
+    }
+    return z8_string_new(result ~ "]"w);
 }
 private wstring z8_json_array_get_string(Z8Object self, Z8Optional!long index) {
-    return z8_string_new(z8_json_value_text(z8_json_array_get(self, index)));
+    auto state = z8_json_array_state(self);
+    return z8_string_new(z8_json_array_text_at(state, z8_json_array_position(state, index)));
 }
 private Z8Optional!bool z8_json_array_get_bool(Z8Object self, Z8Optional!long index) {
     auto value = z8_json_array_get(self, index);
@@ -77,48 +97,93 @@ private int z8_json_array_integer(JSONValue value) {
     }
 }
 private Z8Optional!long z8_json_array_get_int(Z8Object self, Z8Optional!long index) {
-    return z8_optional_wrap(cast(long)z8_json_array_integer(z8_json_array_get(self, index)));
+    auto state = z8_json_array_state(self);
+    auto position = z8_json_array_position(state, index);
+    auto decimalValue = position in state.decimals;
+    return z8_optional_wrap(cast(long)(decimalValue is null ? z8_json_array_integer(state.value.array[position]) : cast(int)z8_json_bigdecimal_long(*decimalValue)));
 }
 private Z8Optional!Z8Decimal z8_json_array_get_decimal(Z8Object self, Z8Optional!long index) {
-    return z8_optional_wrap(z8_json_value_decimal(z8_json_array_get(self, index)));
+    auto state = z8_json_array_state(self);
+    auto position = z8_json_array_position(state, index);
+    auto decimalValue = position in state.decimals;
+    return z8_optional_wrap(decimalValue is null ? z8_json_value_decimal(state.value.array[position]) :
+        z8_math_result(z8_literal_parse_double(z8_json_bigdecimal_text(*decimalValue))));
 }
 private Z8Guid z8_json_array_get_guid(Z8Object self, Z8Optional!long index) {
-    auto value = z8_json_array_get(self, index);
-    return value.type == JSONType.null_ ? null : z8_guid_parse(z8_json_value_text(value));
+    auto state = z8_json_array_state(self);
+    auto position = z8_json_array_position(state, index);
+    return state.value.array[position].type == JSONType.null_ ? null : z8_guid_parse(z8_json_array_text_at(state, position));
 }
 private Z8Array!long z8_json_array_to_ints(Z8Object self) {
     auto result = new Z8Array!long();
-    foreach (entry; z8_json_array_state(self).value.array) result.z8_add(cast(long)z8_json_array_integer(entry));
+    foreach (position; 0 .. z8_json_array_state(self).value.array.length)
+        result.z8_add(z8_json_array_get_int(self, z8_optional_wrap(cast(long)position)));
     return result;
 }
 private Z8Array!wstring z8_json_array_to_strings(Z8Object self) {
     auto result = new Z8Array!wstring();
-    foreach (entry; z8_json_array_state(self).value.array)
-        result.z8_add(entry.type == JSONType.null_ ? null : z8_string_new(z8_json_value_text(entry)));
+    auto state = z8_json_array_state(self);
+    foreach (position, entry; state.value.array)
+        result.z8_add(entry.type == JSONType.null_ ? null : z8_string_new(z8_json_array_text_at(state, position)));
     return result;
 }
 private Z8Array!bool z8_json_array_to_bools(Z8Object self) {
     auto result = new Z8Array!bool();
-    foreach (entry; z8_json_array_state(self).value.array)
-        result.z8_add(entry.type == JSONType.null_ ? false : z8_bool_parse(z8_json_value_text(entry)));
+    auto state = z8_json_array_state(self);
+    foreach (position, entry; state.value.array)
+        result.z8_add(entry.type == JSONType.null_ ? false : z8_bool_parse(z8_json_array_text_at(state, position)));
     return result;
 }
 private Z8Array!Z8Decimal z8_json_array_to_decimals(Z8Object self) {
     auto result = new Z8Array!Z8Decimal();
-    foreach (entry; z8_json_array_state(self).value.array) result.z8_add(z8_json_value_decimal(entry));
+    foreach (position; 0 .. z8_json_array_state(self).value.array.length)
+        result.z8_add(z8_json_array_get_decimal(self, z8_optional_wrap(cast(long)position)));
     return result;
 }
 private Z8Array!Z8Guid z8_json_array_to_guids(Z8Object self) {
     auto result = new Z8Array!Z8Guid();
-    foreach (entry; z8_json_array_state(self).value.array)
-        result.z8_add(entry.type == JSONType.null_ ? null : z8_guid_parse(z8_json_value_text(entry)));
+    auto state = z8_json_array_state(self);
+    foreach (position, entry; state.value.array)
+        result.z8_add(entry.type == JSONType.null_ ? null : z8_guid_parse(z8_json_array_text_at(state, position)));
     return result;
 }
 private Z8Array!Z8Date z8_json_array_to_dates(Z8Object self) {
     auto result = new Z8Array!Z8Date();
-    foreach (entry; z8_json_array_state(self).value.array)
-        result.z8_add(entry.type == JSONType.null_ ? null : z8_date_parse(z8_string_new(z8_json_value_text(entry))));
+    auto state = z8_json_array_state(self);
+    foreach (position, entry; state.value.array)
+        result.z8_add(entry.type == JSONType.null_ ? null : z8_date_parse(z8_json_array_text_at(state, position)));
     return result;
+}
+private void z8_json_array_insert_value(Z8JsonArrayState state, size_t position, Z8JsonPrimaryValue value) {
+    auto old = state.value.array;
+    state.value.array = old[0 .. position] ~ [value.value] ~ old[position .. $];
+    Z8Decimal[size_t] shifted;
+    foreach (index, number; state.decimals) shifted[index >= position ? index + 1 : index] = number;
+    if (value.hasDecimal) shifted[position] = value.decimalValue;
+    state.decimals = shifted;
+}
+private Z8Object z8_json_array_add_primary(Z8Object self, Z8Primary value) {
+    auto state = z8_json_array_state(self);
+    auto converted = z8_json_from_primary(value);
+    z8_json_array_insert_value(state, state.value.array.length, converted);
+    return self;
+}
+private Z8Object z8_json_array_insert_primary(Z8Object self, Z8Optional!long index, Z8Primary value) {
+    auto state = z8_json_array_state(self);
+    auto converted = z8_json_from_primary(value);
+    auto position = z8_json_array_position(state, index, true);
+    z8_json_array_insert_value(state, position, converted);
+    return self;
+}
+private Z8Object z8_json_array_remove(Z8Object self, Z8Optional!long index) {
+    auto state = z8_json_array_state(self);
+    auto position = z8_json_array_position(state, index);
+    auto old = state.value.array;
+    state.value.array = old[0 .. position] ~ old[position + 1 .. $];
+    Z8Decimal[size_t] shifted;
+    foreach (key, value; state.decimals) if (key != position) shifted[key > position ? key - 1 : key] = value;
+    state.decimals = shifted;
+    return self;
 }
 void z8_bind_builtin_json_array() {
     enum prefix = z8_json_array_name ~ "."w;
@@ -140,5 +205,9 @@ void z8_bind_builtin_json_array() {
     z8_native_bind(prefix ~ "m_toDecimalArray"w, &z8_json_array_to_decimals);
     z8_native_bind(prefix ~ "m_toGuidArray"w, &z8_json_array_to_guids);
     z8_native_bind(prefix ~ "m_toDateArray"w, &z8_json_array_to_dates);
+    z8_native_bind(prefix ~ "m_add"w, &z8_json_array_add_primary);
+    z8_native_bind(prefix ~ "m_insert"w, &z8_json_array_insert_primary);
+    z8_native_bind(prefix ~ "m_put"w, &z8_json_array_insert_primary);
+    z8_native_bind(prefix ~ "m_remove"w, &z8_json_array_remove);
 }
 shared static this() { z8_bind_builtin_json_array(); }

@@ -228,32 +228,40 @@ private Z8Guid z8_json_object_get_guid(Z8Object self, wstring name) {
 private Z8Date z8_json_object_get_date(Z8Object self, wstring name) {
     return z8_date_parse(z8_json_object_get_string(self, name));
 }
-private Z8Object z8_json_object_set_primary(Z8Object self, wstring name, Z8Primary value) {
-    auto state = z8_json_object_state(self);
-    auto key = z8_string_required(name).to!string;
-    JSONValue converted;
-    bool decimalValue;
+private struct Z8JsonPrimaryValue {
+    JSONValue value;
+    bool hasDecimal;
+    Z8Decimal decimalValue;
+}
+private Z8JsonPrimaryValue z8_json_from_primary(Z8Primary value) {
+    Z8JsonPrimaryValue result;
     if (value !is null) final switch (value.kind) {
-        case Z8PrimaryKind.integer: converted = JSONValue(value.integerValue); break;
-        case Z8PrimaryKind.boolean: converted = JSONValue(value.booleanValue); break;
-        case Z8PrimaryKind.text: converted = JSONValue(z8_string_or_empty(value.textValue).to!string); break;
-        case Z8PrimaryKind.guid: converted = JSONValue(z8_guid_to_string(value.guidValue).to!string); break;
-        case Z8PrimaryKind.datespan: converted = JSONValue(z8_datespan_milliseconds(value.datespanValue)); break;
+        case Z8PrimaryKind.integer: result.value = JSONValue(value.integerValue); break;
+        case Z8PrimaryKind.boolean: result.value = JSONValue(value.booleanValue); break;
+        case Z8PrimaryKind.text: result.value = JSONValue(z8_string_or_empty(value.textValue).to!string); break;
+        case Z8PrimaryKind.guid: result.value = JSONValue(z8_guid_to_string(value.guidValue).to!string); break;
+        case Z8PrimaryKind.datespan: result.value = JSONValue(z8_datespan_milliseconds(value.datespanValue)); break;
         case Z8PrimaryKind.date:
             auto ticks = z8_date_ticks(value.dateValue);
-            converted = JSONValue((ticks == z8_date_ticks(z8_date_min) || ticks == z8_date_ticks(z8_date_max) ?
+            result.value = JSONValue((ticks == z8_date_ticks(z8_date_min) || ticks == z8_date_ticks(z8_date_max) ?
                                    ""w : z8_date_toString(value.dateValue)).to!string);
             break;
         case Z8PrimaryKind.decimal:
-            if (!value.decimalValue.nan) { converted = JSONValue(0L); decimalValue = true; }
+            if (!value.decimalValue.nan) { result.value = JSONValue(0L); result.hasDecimal = true; result.decimalValue = value.decimalValue; }
             break;
         case Z8PrimaryKind.binary: throw new Exception("binary JSON value is unsupported");
         case Z8PrimaryKind.geometry: case Z8PrimaryKind.file: case Z8PrimaryKind.user:
             throw new Exception("JSON value type is not supported yet");
     }
+    return result;
+}
+private Z8Object z8_json_object_set_primary(Z8Object self, wstring name, Z8Primary value) {
+    auto state = z8_json_object_state(self);
+    auto key = z8_string_required(name).to!string;
+    auto converted = z8_json_from_primary(value);
     state.decimals.remove(key);
-    if (decimalValue) state.decimals[key] = value.decimalValue;
-    state.value.object[key] = converted;
+    if (converted.hasDecimal) state.decimals[key] = converted.decimalValue;
+    state.value.object[key] = converted.value;
     return self;
 }
 private Z8Object z8_json_object_remove(Z8Object self, wstring name) {
