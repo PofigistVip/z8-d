@@ -37,7 +37,13 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
                        if hashlib.sha256(str(i).encode()).digest()[0] == 0)
     (source / "Probe.bl").write_text('''import org.zenframework.z8.base.crypto.MD5;
 import org.zenframework.z8.base.crypto.Digest;
+import org.zenframework.z8.base.table.RecordLock;
 public class Probe {
+    public static string recordLock() {
+        string before = "" + RecordLock.None + ":" + RecordLock.Full + ":" + RecordLock.Edit + ":" + RecordLock.Destroy;
+        RecordLock.Edit = 9;
+        return before + ":" + RecordLock.Edit;
+    }
     public static string run() {
         return MD5.hex("hello") + ":" + Digest.md5("Привет 😀") + ":" +
             Digest.sha1("hello") + ":" + Digest.sha256("__INPUT__");
@@ -54,7 +60,10 @@ public class Probe {
     harness.write_text('''import z8.runtime;
 import z8gen.p_Probe;
 import std.stdio : writeln;
-void main() { writeln(z8_to_utf8(Z8p_50726F6265.m_run())); }
+void main() {
+    writeln(z8_to_utf8(Z8p_50726F6265.m_recordLock()));
+    writeln(z8_to_utf8(Z8p_50726F6265.m_run()));
+}
 ''', encoding="utf-8")
     binary = temp / ("probe.exe" if os.name == "nt" else "probe")
     subprocess.run(["dmd", "-I" + str(generated), *import_args(), *map(str, modules),
@@ -77,6 +86,24 @@ class CryptoOracle {
 ''', encoding="utf-8")
     subprocess.run(["javac", "-source", "8", "-target", "8", "-encoding", "UTF-8", str(java)], cwd=temp, check=True)
     expected = subprocess.check_output(["java", "-cp", str(temp), "CryptoOracle", input_value], text=True, encoding="utf-8").strip()
-    actual = subprocess.check_output([str(binary)], cwd=temp, text=True, encoding="utf-8").strip()
-    assert actual == expected, (actual, expected)
-print(f"Compiled {len(declarations)} original native declarations; crypto results match Java")
+    actual = subprocess.check_output([str(binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
+    assert len(actual) == 2 and actual[1] == expected, (actual, expected)
+    record_expected = "0:1:2:3:9"
+    server_jars = list((Path(sys.argv[1]).resolve() / "org.zenframework.z8.server" / "target" / "libs").glob("org.zenframework.z8.server-*.jar"))
+    if server_jars:
+        server = str(server_jars[0])
+        record_java = temp / "RecordLockOracle.java"
+        record_java.write_text('''import org.zenframework.z8.server.base.query.RecordLock;
+import org.zenframework.z8.server.types.integer;
+class RecordLockOracle {
+    public static void main(String[] args) {
+        String before = RecordLock.None.get() + ":" + RecordLock.Full.get() + ":" + RecordLock.Edit.get() + ":" + RecordLock.Destroy.get();
+        RecordLock.Edit = new integer(9);
+        System.out.println(before + ":" + RecordLock.Edit.get());
+    }
+}
+''', encoding="utf-8")
+        subprocess.run(["javac", "-source", "8", "-target", "8", "-cp", server, str(record_java)], cwd=temp, check=True)
+        record_expected = subprocess.check_output(["java", "-cp", str(temp) + os.pathsep + server, "RecordLockOracle"], text=True, encoding="utf-8").strip()
+    assert actual[0] == record_expected, (actual[0], record_expected)
+print(f"Compiled {len(declarations)} original native declarations; RecordLock fields work and crypto results match Java")

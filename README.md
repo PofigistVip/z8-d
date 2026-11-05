@@ -423,10 +423,12 @@ primary-типов ещё не перенесена полностью.
 `python tests/stdlib_declarations.py <путь-к-org.zenframework.z8>`; она проверяет
 компиляцию объявлений в D и сравнивает результаты криптографических функций с Java.
 В runtime уже связаны `MD5.hex`, `Digest.md5`, `Digest.sha1` и `Digest.sha256`;
-остальные методы этих проверяемых классов этим не реализуются. Строки для хеша
+также связаны статические поля `RecordLock`. Остальные методы этих проверяемых
+классов этим не реализуются. Строки для хеша
 кодируются в UTF-8; в исходном Java используется кодировка JVM по умолчанию.
 После вызова `z8_native_clear_bindings()` встроенные криптографические привязки
-можно восстановить функцией `z8_bind_builtin_crypto()`.
+можно восстановить функцией `z8_bind_builtin_crypto()`; поля `RecordLock` —
+функцией `z8_bind_builtin_record_lock()`.
 
 Поддерживаются конкатенация, сравнения, `length`, `isEmpty`, `compare`, `compareNoCase`, `startsWith`,
 `endsWith`, `indexOf`, `lastIndexOf`, `substring`, `charAt`, `trim`, `trimLeft`,

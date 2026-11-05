@@ -1,0 +1,21 @@
+// Native fields of org.zenframework.z8.server.base.query.RecordLock.
+private __gshared Z8Optional!long z8_record_lock_none, z8_record_lock_full;
+private __gshared Z8Optional!long z8_record_lock_edit, z8_record_lock_destroy;
+private Z8Optional!long* z8_record_lock_none_field() { return &z8_record_lock_none; }
+private Z8Optional!long* z8_record_lock_full_field() { return &z8_record_lock_full; }
+private Z8Optional!long* z8_record_lock_edit_field() { return &z8_record_lock_edit; }
+private Z8Optional!long* z8_record_lock_destroy_field() { return &z8_record_lock_destroy; }
+
+void z8_bind_builtin_record_lock() {
+    z8_native_bind_field("org.zenframework.z8.server.base.query.RecordLock.f_None"w, &z8_record_lock_none_field);
+    z8_native_bind_field("org.zenframework.z8.server.base.query.RecordLock.f_Full"w, &z8_record_lock_full_field);
+    z8_native_bind_field("org.zenframework.z8.server.base.query.RecordLock.f_Edit"w, &z8_record_lock_edit_field);
+    z8_native_bind_field("org.zenframework.z8.server.base.query.RecordLock.f_Destroy"w, &z8_record_lock_destroy_field);
+}
+shared static this() {
+    z8_record_lock_none = z8_optional_wrap(0L);
+    z8_record_lock_full = z8_optional_wrap(1L);
+    z8_record_lock_edit = z8_optional_wrap(2L);
+    z8_record_lock_destroy = z8_optional_wrap(3L);
+    z8_bind_builtin_record_lock();
+}
