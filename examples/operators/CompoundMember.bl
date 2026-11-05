@@ -1,0 +1,12 @@
+public class CompoundMember {
+    public CompoundObjectHolder holder;
+    holder.item += 4;
+    holder.accumulator += 5;
+
+    public static int run() {
+        CompoundMember value;
+        if (value.holder.item.amount != 4 || value.holder.accumulator.amount != 5)
+            return 1;
+        return 223;
+    }
+}

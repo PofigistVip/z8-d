@@ -157,7 +157,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     operator_source.mkdir(parents=True)
     shutil.copy2(root / "examples" / "operators" / "BinaryOperators.bl", operator_source)
     shutil.copy2(root / "examples" / "operators" / "BinaryConversionFallback.bl", operator_source)
-    for name in ("OperatorRoot", "OperatorMiddle", "OperatorLeaf", "OperatorDistance", "CompoundObject", "CompoundAccumulator", "CompoundObjectHolder", "CompoundObjectCases"):
+    for name in ("OperatorRoot", "OperatorMiddle", "OperatorLeaf", "OperatorDistance", "CompoundObject", "CompoundAccumulator", "CompoundObjectHolder", "CompoundObjectCases", "CompoundMember"):
         shutil.copy2(root / "examples" / "operators" / (name + ".bl"), operator_source)
     operator_command = ["java", "-cp", str(classes) + os.pathsep + classpath,
                         "org.zenframework.z8.compiler.cmd.Main", str(operator_project),

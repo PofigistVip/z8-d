@@ -478,8 +478,6 @@ class Checker {
             auto root = init.target;
             while (root.kind == ExprKind.field) root = root.left;
             if (!root.isField || root.targetClass.length) fail("field initialization requires an instance field", init.token);
-            if (init.type == ValueType.selfType && init.userCompoundAssignment)
-                fail("compound reference field initialization is not supported yet", init.token);
             setTargetStage(init.target, init.type == ValueType.selfType);
         }
         fieldInitialization = false;
@@ -1566,6 +1564,12 @@ class Checker {
         checkCall(selected, selected.owner, call);
         return true;
     }
+    private Expression copyQualifiedTarget(Expression expression) {
+        assert(expression.kind == ExprKind.variable || expression.kind == ExprKind.field);
+        auto copy = new Expression(expression.kind, expression.token);
+        if (expression.left !is null) copy.left = copyQualifiedTarget(expression.left);
+        return copy;
+    }
     private bool checkStatement(Statement s, bool allowUninitializedEnum = false) {
         final switch (s.kind) {
             case StmtKind.block:
@@ -1606,7 +1610,8 @@ class Checker {
                     auto token = s.token;
                     token.text = s.assignmentOperator[0 .. $ - 1];
                     auto binary = new Expression(ExprKind.binary, token);
-                    binary.left = s.target; binary.right = s.expression;
+                    binary.left = s.isMemberInitializer ? copyQualifiedTarget(s.target) : s.target;
+                    binary.right = s.expression;
                     s.expression = binary;
                     s.assignmentOperator = "=";
                     s.userCompoundAssignment = true;

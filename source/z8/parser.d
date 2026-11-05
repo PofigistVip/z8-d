@@ -233,7 +233,7 @@ class Parser {
                     member.left = target; target = member;
                 }
                 auto init = new Statement(StmtKind.assignment, name);
-                init.target = target;
+                init.target = target; init.isMemberInitializer = true;
                 if (current.text != ";") { init.assignmentOperator = take().text; init.expression = initializer(); }
                 expect(";"); result.memberInitializers ~= init; continue;
             }
