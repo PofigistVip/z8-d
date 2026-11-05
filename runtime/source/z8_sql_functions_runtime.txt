@@ -1,6 +1,32 @@
 // Native org.zenframework.z8.server.db.sql.functions.Sql overloads.
+private class Z8SqlFieldToken : Z8SqlPrimary {
+    Z8Object field;
+    this(Z8Object field) { this.field = field; }
+}
+private class Z8SqlBoxedConstant : Z8SqlPrimary {
+    Z8Primary value;
+    this(Z8Primary value) { this.value = value; }
+}
 private wstring z8_sql_functions_format(Z8SqlPrimary value, Z8SqlVendor vendor) {
     z8_nonnull(value);
+    if (auto item = cast(Z8SqlFieldToken)value) return z8_field_sql_format(item.field, vendor);
+    if (auto item = cast(Z8SqlBoxedConstant)value) {
+        auto primary = z8_nonnull(item.value);
+        final switch (primary.kind) {
+            case Z8PrimaryKind.integer: return z8_sql_int_format(z8_sql_int_const(primary.integerValue), vendor);
+            case Z8PrimaryKind.boolean: return z8_sql_bool_format(z8_sql_bool_const(primary.booleanValue), false, vendor);
+            case Z8PrimaryKind.decimal: return z8_sql_decimal_format(z8_sql_decimal_const(primary.decimalValue), vendor);
+            case Z8PrimaryKind.text: return z8_sql_string_format(z8_sql_string_const(primary.textValue), vendor);
+            case Z8PrimaryKind.guid: return z8_sql_guid_format(z8_sql_guid_const(primary.guidValue), vendor);
+            case Z8PrimaryKind.date: return z8_sql_date_format(z8_sql_date_const(primary.dateValue), vendor);
+            case Z8PrimaryKind.datespan: return z8_sql_datespan_format(z8_sql_datespan_const(primary.datespanValue), vendor);
+            case Z8PrimaryKind.binary: return z8_sql_binary_format(new Z8SqlBinary(), vendor);
+            case Z8PrimaryKind.geometry:
+                auto text = z8_sql_geometry_format(z8_sql_geometry_const(primary.geometryValue), vendor);
+                return text is null ? "null"w : text;
+            case Z8PrimaryKind.file: case Z8PrimaryKind.user: throw new Exception("unsupported SQL primary constant");
+        }
+    }
     if (auto item = cast(Z8SqlDatespan)value) return z8_sql_datespan_format(item, vendor);
     if (auto item = cast(Z8SqlDate)value) return z8_sql_date_format(item, vendor);
     if (auto item = cast(Z8SqlDecimal)value) return z8_sql_decimal_format(item, vendor);

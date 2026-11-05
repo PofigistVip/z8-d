@@ -60,6 +60,8 @@ public class Probe {
     public static sql_geometry geometrySql(GeometryField value) { return value.sql_geometry(); }
     public static sql_string longTextSql(TextField value) { return value.sql_string(); }
     public static sql_string fileSql(FileField value) { return value.sql_string(); }
+    public static sql_bool inVector(Field value, primary[] values) { return value.inVector(values); }
+    public static sql_bool notInVector(Field value, primary[] values) { return value.notInVector(values); }
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -69,6 +71,9 @@ import org.zenframework.z8.server.base.table.value.*;
 import org.zenframework.z8.server.db.DatabaseVendor;
 import org.zenframework.z8.server.db.sql.*;
 import org.zenframework.z8.server.types.sql.*;
+import org.zenframework.z8.server.types.*;
+import org.zenframework.z8.server.runtime.RCollection;
+import java.util.Arrays;
 public class SqlFieldOracle {
     public static void main(String[] args) throws Exception {
         java.lang.reflect.Field language = org.zenframework.z8.server.config.ServerConfig.class.getDeclaredField("language");
@@ -80,11 +85,16 @@ public class SqlFieldOracle {
         TextField longText = new TextField(null); FileField file = new FileField(null);
         FormatOptions options = new FormatOptions(); options.disableAggregation();
         for (Field f : new Field[] {number, text, flag, amount, id, dateField, duration, bytes, geometryField, longText, file}) options.setFieldAlias(f, "T.col");
+        RCollection<primary> items = new RCollection<primary>(Arrays.asList(new integer(1), new string("O'Reilly"), new bool(true)));
+        RCollection<primary> empty = new RCollection<primary>();
+        RCollection<primary> mixed = new RCollection<primary>(Arrays.asList(new date(0), new datespan(1234), guid.create(5), new decimal("1.25"), new binary()));
         SqlToken[] values = {number.sql_int().operatorPriority(), text.sql_string().operatorPriority(),
                              flag.sql_bool().operatorPriority(), amount.sql_decimal().operatorPriority(), id.sql_guid().operatorPriority(),
                              number.z8_sqlIsNull().operatorPriority(), number.sql_int().operatorMore(new sql_integer(5)),
                              dateField.sql_date().operatorPriority(), duration.sql_datespan().operatorPriority(), bytes.sql_binary(),
-                             geometryField.sql_geometry().operatorPriority(), longText.sql_string().operatorPriority(), file.sql_string().operatorPriority()};
+                             geometryField.sql_geometry().operatorPriority(), longText.sql_string().operatorPriority(), file.sql_string().operatorPriority(),
+                             number.z8_inVector(items).operatorPriority(), number.z8_notInVector(items).operatorPriority(),
+                             number.z8_inVector(empty).operatorPriority(), number.z8_inVector(mixed).operatorPriority()};
         for (DatabaseVendor vendor : new DatabaseVendor[] {DatabaseVendor.Oracle, DatabaseVendor.SqlServer, DatabaseVendor.Postgres, DatabaseVendor.H2})
             for (int i = 0; i < values.length; i++) for (boolean logical : new boolean[] {false, true})
                 System.out.println(vendor + ":" + i + ":" + logical + ":" + values[i].format(vendor, options, logical));
@@ -118,8 +128,15 @@ void main() {
     auto nullSql = P.m_isNull(number); auto greater = P.m_greater(number);
     auto dateSql = P.m_dateSql(dateField); auto spanSql = P.m_spanSql(duration); auto binarySql = P.m_binarySql(bytes);
     auto geometrySql = P.m_geometrySql(geometryField); auto longTextSql = P.m_longTextSql(longText); auto fileSql = P.m_fileSql(file);
+    auto items = new Z8Array!Z8Primary([z8_primary_box(1L), z8_primary_box("O'Reilly"w), z8_primary_box(true)]);
+    auto inVector = P.m_inVector(number, items); auto notInVector = P.m_notInVector(number, items);
+    auto empty = P.m_inVector(number, new Z8Array!Z8Primary());
+    auto mixed = P.m_inVector(number, new Z8Array!Z8Primary([z8_primary_box(z8_date_from_ticks(0)),
+        z8_primary_box(new Z8Datespan(1234)), z8_primary_box(z8_guid_create(5)),
+        z8_primary_box(z8_decimal_parse("1.25"w)), z8_primary_box(new Z8Binary())]));
+    items.z8_set(0, z8_primary_box(99L));
     foreach (vendor; [Z8SqlVendor.Oracle, Z8SqlVendor.SqlServer, Z8SqlVendor.Postgres, Z8SqlVendor.H2])
-        foreach (i; 0 .. 13) foreach (logical; [false, true]) {
+        foreach (i; 0 .. 17) foreach (logical; [false, true]) {
             wstring result;
             switch (i) {
                 case 0: result = z8_sql_int_format(intSql, vendor, logical); break;
@@ -135,6 +152,10 @@ void main() {
                 case 10: result = z8_sql_geometry_format(geometrySql, vendor); break;
                 case 11: result = z8_sql_string_format(longTextSql, vendor); break;
                 case 12: result = z8_sql_string_format(fileSql, vendor); break;
+                case 13: result = z8_sql_bool_format(inVector, logical, vendor); break;
+                case 14: result = z8_sql_bool_format(notInVector, logical, vendor); break;
+                case 15: result = z8_sql_bool_format(empty, logical, vendor); break;
+                case 16: result = z8_sql_bool_format(mixed, logical, vendor); break;
                 default: assert(0);
             }
             writeln(vendor, ":", i, ":", logical, ":", result.to!string);
@@ -142,6 +163,11 @@ void main() {
     z8_field_bind_sql(number, "t"w, `a"b`w);
     assert(z8_sql_int_format(intSql, Z8SqlVendor.Postgres) == `(t."a""b")`w);
     assert(z8_sql_int_format(intSql, Z8SqlVendor.SqlServer) == `(t.[a"b])`w);
+    bool badValues; try { P.m_inVector(number, null); } catch (Exception) { badValues = true; }
+    assert(badValues);
+    auto withNull = P.m_inVector(number, new Z8Array!Z8Primary([null]));
+    bool badElement; try { z8_sql_bool_format(withNull); } catch (Exception) { badElement = true; }
+    assert(badElement);
 }
 ''', encoding="utf-8")
     exe = temp / ("sql-field.exe" if os.name == "nt" else "sql-field")

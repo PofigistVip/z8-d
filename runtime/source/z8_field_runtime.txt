@@ -73,6 +73,16 @@ private wstring z8_field_string_value(Z8Object self) {
 private Z8SqlBool z8_field_is_null(Z8Object self) {
     auto result = new Z8SqlBool(Z8SqlBoolKind.fieldIsNull); result.field = z8_nonnull(self); return result;
 }
+private Z8SqlBool z8_field_in_vector(Z8Object self, Z8Array!Z8Primary values) {
+    auto result = new Z8SqlBool(Z8SqlBoolKind.inVector);
+    result.vectorValue = new Z8SqlFieldToken(z8_nonnull(self));
+    values = z8_nonnull(values);
+    for (long i; i < values.z8_size(); ++i) result.vectorItems ~= new Z8SqlBoxedConstant(values.z8_get(i));
+    return result;
+}
+private Z8SqlBool z8_field_not_in_vector(Z8Object self, Z8Array!Z8Primary values) {
+    return z8_sql_bool_not(z8_field_in_vector(self, values));
+}
 void z8_bind_builtin_field() {
     enum prefix = z8_field_name ~ "."w;
     z8_native_bind(prefix ~ "m_primary"w, &z8_field_primary);
@@ -88,6 +98,8 @@ void z8_bind_builtin_field() {
     z8_native_bind(prefix ~ "m_isChanged"w, &z8_field_changed);
     z8_native_bind(prefix ~ "m_wasNull"w, &z8_field_was_null);
     z8_native_bind(prefix ~ "m_sqlIsNull"w, &z8_field_is_null);
+    z8_native_bind(prefix ~ "m_inVector"w, &z8_field_in_vector);
+    z8_native_bind(prefix ~ "m_notInVector"w, &z8_field_not_in_vector);
     z8_native_bind(prefix ~ "m_toString"w, &z8_field_string_value);
 }
 shared static this() { z8_bind_builtin_field(); }
