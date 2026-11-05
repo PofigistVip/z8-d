@@ -98,9 +98,12 @@ adapter described below.
 `z8_application_dispatch_query_read` reads a table using the current database
 connection and the session's privilege snapshot. It requires request execute
 and table read permissions, omits fields without read permission, and always
-includes the primary key. It supports `action=read`, a JSON `fields` array and
-non-negative `start` and `limit`. Linked and computed fields, filters, sorting,
-other read options and custom request parameters are rejected. The host must
+includes the primary key. It supports `action=read`, a JSON `fields` array,
+non-negative `start` and `limit`, and JSON `filter`, `where` and `quickFilter`
+conditions. Filter fields must be readable; malformed or empty filter
+expressions are rejected rather than ignored, while `[]` means no filter.
+Linked and computed fields,
+sorting, other read options and custom request parameters are rejected. The host must
 open the application response before calling it; the CivetWeb transport does
 not select this adapter automatically. Other query actions are not implemented.
 The native `Users.onNew` defaults mirror the Java implementation, including its

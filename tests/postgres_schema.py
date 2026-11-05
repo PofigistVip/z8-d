@@ -573,6 +573,7 @@ void main(string[] args) {
     bool rejectedRead(wstring parameter, wstring value) {
         auto bad = new Z8ApplicationRequest(); bad.session = querySession;
         bad.parameters.z8_add("action"w, "read"w); bad.parameters.z8_add(parameter, value);
+        if (parameter != "fields"w) bad.parameters.z8_add("fields"w, `["amount"]`w);
         z8_application_set_request(bad); z8_application_start_response(bad, "Sample"w);
         try { z8_application_dispatch_query_read("Sample"w); } catch (Exception) { return true; }
         return false;
@@ -582,6 +583,26 @@ void main(string[] args) {
     assert(rejectedRead("fields"w, `{"id":"title"}`w));
     assert(rejectedRead("fields"w, `["computed"]`w));
     assert(rejectedRead("start"w, "-1"w));
+    assert(rejectedRead("filter"w, `{"logical":"or","expressions":[{"property":"title","value":"Visible"},{}]}`w));
+    assert(rejectedRead("filter"w, `{"logical":"bad","expressions":[{"property":"title","value":"Visible"}]}`w));
+    auto filtered = new Z8ApplicationRequest(); filtered.session = querySession; filtered.monitor = new Z8RequestMonitor();
+    filtered.parameters.z8_add("action"w, "read"w); filtered.parameters.z8_add("fields"w, `["title","amount"]`w);
+    filtered.parameters.z8_add("filter"w, `{"logical":"or","expressions":[{"property":"amount","operator":"gt","value":"40"},{"property":"title","value":"No match"}]}`w);
+    filtered.parameters.z8_add("where"w, `{"property":"title","value":"Visible"}`w);
+    filtered.parameters.z8_add("quickFilter"w, `{"property":"amount","operator":"lt","value":"50"}`w);
+    z8_application_set_request(filtered); z8_application_start_response(filtered, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+    z8_application_finish_response(filtered, cast(Z8RequestMonitor)filtered.monitor);
+    assert(parseJSON(z8_application_response_text(filtered).to!string)["data"].array.length == 1);
+    filtered = new Z8ApplicationRequest(); filtered.session = querySession; filtered.monitor = new Z8RequestMonitor();
+    filtered.parameters.z8_add("action"w, "read"w); filtered.parameters.z8_add("fields"w, `["amount"]`w);
+    filtered.parameters.z8_add("filter"w, `[]`w);
+    filtered.parameters.z8_add("where"w, `{"property":"amount","operator":"lt","value":"40"}`w);
+    z8_application_set_request(filtered); z8_application_start_response(filtered, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+    z8_application_finish_response(filtered, cast(Z8RequestMonitor)filtered.monitor);
+    assert(parseJSON(z8_application_response_text(filtered).to!string)["data"].array.length == 0);
+    queryUser.privileges.setFieldAccess(bootFieldKey, Z8Access.init);
+    assert(rejectedRead("filter"w, `{"property":"title","value":"Visible"}`w));
+    queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
     queryUser.privileges.setRequestAccess(bootRequestKey, Z8Access.init);
     assert(rejectedRead("fields"w, `["title"]`w));
     queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
