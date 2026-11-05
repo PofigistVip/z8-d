@@ -1,0 +1,34 @@
+// Native fields of Roles.java. Authorization behavior and record lifecycle
+// remain separate from this table's field and identifier metadata.
+private enum z8_roles_name = "org.zenframework.z8.server.base.table.system.Roles"w;
+private class Z8RolesState { Z8Object[8] fields; }
+private __gshared Z8Guid z8_role_administrator, z8_role_user, z8_role_guest;
+private void z8_roles_new(Z8Object self) {
+    enum base = "org.zenframework.z8.server.base.table.value."w;
+    enum kinds = ["StringField"w, "TextField"w, "BoolField"w, "BoolField"w, "BoolField"w, "BoolField"w, "BoolField"w, "BoolField"w];
+    enum indexes = ["name"w, "description"w, "read"w, "write"w, "create"w, "copy"w, "destroy"w, "execute"w];
+    enum names = ["Name"w, "Description"w, "Read"w, "Write"w, "Create"w, "Copy"w, "Destroy"w, "Execute"w];
+    auto state = new Z8RolesState();
+    foreach (i; 0 .. state.fields.length)
+        state.fields[i] = z8_table_system_field(self, base ~ kinds[i], indexes[i], names[i]);
+    self.z8_set_native_state(z8_roles_name, state);
+}
+private Z8Object* z8_roles_field_address(size_t index)(Z8Object self) {
+    auto state = cast(Z8RolesState)z8_nonnull(self).z8_get_native_state(z8_roles_name);
+    if (state is null) throw new Exception("Roles fields are not initialized");
+    return &state.fields[index];
+}
+private Z8Guid* z8_role_administrator_address() { return &z8_role_administrator; }
+private Z8Guid* z8_role_user_address() { return &z8_role_user; }
+private Z8Guid* z8_role_guest_address() { return &z8_role_guest; }
+shared static this() {
+    z8_role_administrator = z8_guid_literal("DC08CA72-C668-412F-91B7-022F1C82AC09");
+    z8_role_user = z8_guid_literal("421A8413-A8EC-4DAB-9235-9A5FF83341C5");
+    z8_role_guest = z8_guid_literal("BE41CEB5-02DF-44EE-885F-B82DDEDCAA08");
+    z8_native_bind(z8_roles_name ~ ".m_new"w, &z8_roles_new);
+    static foreach (i, name; ["name"w, "description"w, "read"w, "write"w, "create"w, "copy"w, "destroy"w, "execute"w])
+        z8_native_bind_field(z8_roles_name ~ ".f_"w ~ name, &z8_roles_field_address!i);
+    z8_native_bind_field(z8_roles_name ~ ".f_Administrator"w, &z8_role_administrator_address);
+    z8_native_bind_field(z8_roles_name ~ ".f_User"w, &z8_role_user_address);
+    z8_native_bind_field(z8_roles_name ~ ".f_Guest"w, &z8_role_guest_address);
+}

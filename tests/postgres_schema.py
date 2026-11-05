@@ -95,6 +95,7 @@ import org.zenframework.z8.base.table.value.IntField;
 }
 ''', encoding="utf-8")
     (source / "Probe.bl").write_text('''
+import org.zenframework.z8.base.table.system.Roles;
 public class Probe {
     public static Sample make() { Sample value; return value; }
     public static GeoSample geo() { GeoSample value; return value; }
@@ -102,6 +103,10 @@ public class Probe {
     public static ReferenceSource references() { ReferenceSource value; return value; }
     public static ReferenceTarget target() { ReferenceTarget value; return value; }
     public static StaticSample statics() { StaticSample value; return value; }
+    public static Roles roles() { Roles value; return value; }
+    public static guid administratorRole() { return Roles.Administrator; }
+    public static guid userRole() { return Roles.User; }
+    public static guid guestRole() { return Roles.Guest; }
     public static int count(Sample value) { return value.count(); }
     public static void create(Sample value, guid id) { value.create(id); }
 }
@@ -272,6 +277,14 @@ void main(string[] args) {
     try { z8_postgres_plan_add_columns("z8_test"w, expectedStatic, noKey); }
     catch (Z8PostgresException) { missingKeyRejected = true; }
     assert(missingKeyRejected);
+    auto roleTable = P.m_roles();
+    auto roleDDL = z8_postgres_create_table_sql("z8_test"w, roleTable);
+    assert(roleDDL.canFind(`"Name" character varying`) && roleDDL.canFind(`"Description" bytea`) && roleDDL.canFind(`"Read" smallint`));
+    assert(z8_guid_to_string(P.m_administratorRole()) == "DC08CA72-C668-412F-91B7-022F1C82AC09"w);
+    assert(z8_guid_to_string(P.m_userRole()) == "421A8413-A8EC-4DAB-9235-9A5FF83341C5"w);
+    assert(z8_guid_to_string(P.m_guestRole()) == "BE41CEB5-02DF-44EE-885F-B82DDEDCAA08"w);
+    z8_initialize_static_records(roleTable);
+    assert(roleTable.z8_static_records().length == 3);
     db.execute(`ALTER TABLE "z8_test"."StaticSample" DROP CONSTRAINT "StaticSample_pkey", ADD PRIMARY KEY ("Label")`);
     differences = z8_postgres_compare_table(expectedStatic, z8_postgres_describe_table(db, "z8_test"w, "StaticSample"w));
     bool changedKey;
