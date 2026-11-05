@@ -718,6 +718,11 @@ class Checker {
                             if (valueType == ValueType.decimalType &&
                                 ![ValueType.decimalType, ValueType.optionalDecimal].canFind(typeOf(entry.right)))
                                 fail("map value type mismatch", entry.right.token);
+                            if (isSqlType(valueType)) {
+                                auto actualValue = typeOf(entry.right);
+                                if (actualValue != valueType && !(valueType == ValueType.sqlPrimaryType && isSqlType(actualValue)))
+                                    fail("map value type mismatch", entry.right.token);
+                            }
                             if (!matchesStored(entry.right, valueType)) fail("map value type mismatch", entry.right.token);
                         }
                     }

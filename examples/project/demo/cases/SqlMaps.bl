@@ -1,0 +1,30 @@
+import org.zenframework.z8.lang.sql.sql_int;
+import org.zenframework.z8.lang.sql.sql_bool;
+import org.zenframework.z8.lang.sql.sql_string;
+import org.zenframework.z8.lang.sql.sql_primary;
+
+public class SqlMaps {
+    public static int run() {
+        sql_int number = 42;
+        sql_bool flag = true;
+        sql_string text = "value";
+        sql_primary[string] mixed = {("number", number), ("flag", flag), ("text", text)};
+        if (!(mixed["number"] instanceof sql_int) || !(mixed["flag"] instanceof sql_bool)) return 1;
+        if (mixed.values().size() != 3 || !mixed.containsValue(text)) return 2;
+        sql_int[string] names = {("first", number)};
+        if (names["first"] == null || !names.containsValue(number)) return 3;
+        sql_int[int] numbers = {(1, number)};
+        if (numbers[1] == null || numbers.values().size() != 1) return 4;
+        guid key = '00000000-0000-0000-0000-000000000001';
+        sql_int[guid] ids = {(key, number)};
+        if (ids[key] == null || ids.keys().size() != 1) return 5;
+        sql_int[bool] flags = {(true, number)};
+        if (flags[true] == null || flags.size() != 1) return 6;
+        decimal amount = 1.5;
+        sql_int[decimal] amounts = {(amount, number)};
+        if (amounts[amount] == null || amounts.values().size() != 1) return 7;
+        names.add("empty", null);
+        if (!names.containsKey("empty") || names["empty"] != null) return 8;
+        return 263;
+    }
+}

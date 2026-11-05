@@ -257,6 +257,9 @@ unittest {
     compile(q{class A { static sql_int[] f() { sql_int[] a = {1, 2, null}; a.add(3); return a; } }});
     compile(q{class A { static sql_int[][] f() { sql_int[][] a = {{1}, {2}}; return a; } }});
     compile(q{class A { static sql_primary[] f(sql_int x, sql_bool y) { return {x, y, null}; } }});
+    compile(q{class A { static sql_primary[string] f(sql_int x) { sql_primary[string] a = {("x", x)}; return a; } }});
+    compile(q{class A { static sql_int[guid] f(sql_int x, guid y) { sql_int[guid] a = {(y, x)}; return a; } }});
+    rejects(q{class A { static sql_int[string] f() { sql_int[string] a = {("x", 1)}; return a; } }});
     rejects(q{class A { static sql_binary f(binary x) { return x; } }});
     rejects(q{class A { static date f(sql_date x) { return x; } }});
     rejects(q{class A { static guid f(sql_guid x) { return x; } }});

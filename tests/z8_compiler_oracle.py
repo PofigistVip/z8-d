@@ -234,6 +234,13 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     if tie_result.returncode == 0 or "ambiguous" not in tie_result.stdout:
         raise SystemExit("Original Z8 did not reject an equally ranked assignment:\n" + tie_result.stdout)
     tie.unlink()
+    sql_map_probe = operator_source / "SqlMapConversion.bl"
+    sql_map_probe.write_text('''import org.zenframework.z8.lang.sql.sql_int;
+    public class SqlMapConversion { public static void run() { sql_int[string] values = {("x", 1)}; } }''', encoding="utf-8")
+    sql_map_result = subprocess.run(operator_command, cwd=temp, capture_output=True, text=True, encoding="utf-8")
+    if sql_map_result.returncode == 0 or "Type mismatch" not in sql_map_result.stdout:
+        raise SystemExit("Original Z8 did not reject scalar conversion in a SQL map initializer:\n" + sql_map_result.stdout)
+    sql_map_probe.unlink()
     shutil.copy2(root / "examples" / "project" / "demo" / "cases" / "NestedBase.bl", operator_source)
     static_nested = operator_source / "StaticNestedInit.bl"
     static_nested.write_text('''public class StaticNestedInit {
@@ -274,6 +281,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         demo.cases.StaticOverloadChild.CLASS<?> metadata = new demo.cases.StaticOverloadChild.CLASS<>(null);
         System.out.println("STATICEXC:" + demo.cases.StaticExceptionValues.z8_run().get());
         System.out.println("SQLARRAY:" + demo.cases.SqlArrays.z8_run().get());
+        System.out.println("SQLMAP:" + demo.cases.SqlMaps.z8_run().get());
         if (!"1709199045000L".equals(metadata.getAttribute("dateConstant")) ||
             !"-2134967296L".equals(metadata.getAttribute("spanConstant")) ||
             !"/* 00112233-4455-6677-8899-aabbccddeeff */4822678189205111L, -8603657889541918977L".equals(metadata.getAttribute("guidConstant")) ||
@@ -777,6 +785,7 @@ Z8SqlBool compareDate(int op, Z8SqlDate left, Z8SqlDate right) {
 void main() {
     writeln("STATICEXC:", z8_optional_require(Z8p_64656D6F2E63617365732E537461746963457863657074696F6E56616C756573.m_run()));
     writeln("SQLARRAY:", z8_optional_require(Z8p_64656D6F2E63617365732E53716C417272617973.m_run()));
+    writeln("SQLMAP:", z8_optional_require(Z8p_64656D6F2E63617365732E53716C4D617073.m_run()));
     auto metadata = z8_new!Z8p_64656D6F2E63617365732E5374617469634F7665726C6F61644368696C64();
     assert(metadata.z8_get_attribute("dateConstant"w) == "1709199045000L"w);
     assert(metadata.z8_get_attribute("spanConstant"w) == "-2134967296L"w);
@@ -1219,7 +1228,7 @@ void main() {
         subprocess.run(["dmd", str(d_runner), *map(str, d_modules), "-I" + str(d_root), *import_args(),
                         str(runtime_lib), "-oq", "-od=" + str(temp), "-of=" + str(d_binary)], cwd=temp, check=True)
         d_lines = subprocess.check_output([str(d_binary)], cwd=temp, text=True, encoding="utf-8").splitlines()
-        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "STATICEXC:", "SQLARRAY:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:", "SQLSPAN:", "SQLSPANARITH:", "SQLSPANBOOL:", "SQLSPANPART:", "SQLSPANFUNC:", "SQLBINARY:", "SQLGEOM:", "SQLGEOMBOOL:", "SQLGEOMEMPTY:", "SQLGEOMFUNC:", "SQLGEOMMETRIC:", "SQLGEOMTEST:", "SQLGEOMTEXT:", "SQLGEOMCOUNT:", "SQLPRIMARY:", "SQLPRIMARYCHECK:", "SQLFTSBOOL:", "SQLFTSRANK:"))]
+        d_results = [line for line in d_lines if not line.startswith(("FILEATTR:", "STATICEXC:", "SQLARRAY:", "SQLMAP:", "SQLBOOL:", "SQLINT:", "SQLINTBOOL:", "SQLDECIMAL:", "SQLDECIMALBOOL:", "SQLDECFUNC:", "SQLDECINT:", "SQLDECNAN:", "SQLSTRING:", "SQLSTRINGLEN:", "SQLSTRINGBOOL:", "SQLSEARCH:", "SQLSEARCHBOOL:", "SQLSEARCHCROSS:", "SQLCONV:", "SQLTEXTEXTRA:", "SQLTEXTTEST:", "SQLGUID:", "SQLGUIDBOOL:", "SQLDATE:", "SQLDATETICKS:", "SQLDATEFUNC:", "SQLDATEPART:", "SQLDATECMP:", "SQLDATEBL:", "SQLSPAN:", "SQLSPANARITH:", "SQLSPANBOOL:", "SQLSPANPART:", "SQLSPANFUNC:", "SQLBINARY:", "SQLGEOM:", "SQLGEOMBOOL:", "SQLGEOMEMPTY:", "SQLGEOMFUNC:", "SQLGEOMMETRIC:", "SQLGEOMTEST:", "SQLGEOMTEXT:", "SQLGEOMCOUNT:", "SQLPRIMARY:", "SQLPRIMARYCHECK:", "SQLFTSBOOL:", "SQLFTSRANK:"))]
         original_static_exception = [line for line in output.splitlines() if line.startswith("STATICEXC:")]
         d_static_exception = [line for line in d_lines if line.startswith("STATICEXC:")]
         if original_static_exception != ["STATICEXC:253"] or d_static_exception != original_static_exception:
@@ -1228,6 +1237,10 @@ void main() {
         d_sql_array = [line for line in d_lines if line.startswith("SQLARRAY:")]
         if original_sql_array != ["SQLARRAY:257"] or d_sql_array != original_sql_array:
             raise SystemExit(f"SQL array behavior differs: original={original_sql_array!r}, D={d_sql_array!r}")
+        original_sql_map = [line for line in output.splitlines() if line.startswith("SQLMAP:")]
+        d_sql_map = [line for line in d_lines if line.startswith("SQLMAP:")]
+        if original_sql_map != ["SQLMAP:263"] or d_sql_map != original_sql_map:
+            raise SystemExit(f"SQL map behavior differs: original={original_sql_map!r}, D={d_sql_map!r}")
         original_sql = [line for line in output.splitlines() if line.startswith("SQLBOOL:")]
         d_sql = [line for line in d_lines if line.startswith("SQLBOOL:")]
         if original_sql != d_sql or len(d_sql) != 40:

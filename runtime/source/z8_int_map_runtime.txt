@@ -3,7 +3,7 @@ class Z8ScalarKeyMap(K, V) {
     static assert(is(K == long) || is(K == bool) || is(K == Z8Decimal), "unsupported scalar map key");
     static if (is(V == long) || is(V == bool) || is(V == Z8Decimal)) alias Element = Z8Optional!V;
     else static if (is(V == wstring)) alias Element = wstring;
-    else static if (is(V == Z8Primary) || is(V == Z8Guid)) alias Element = V;
+    else static if (is(V == Z8Primary) || is(V == Z8Guid) || is(V : Z8SqlPrimary)) alias Element = V;
     else static assert(0, "unsupported scalar-key map value");
 
     private struct Entry { K key; Element value; }

@@ -1,14 +1,14 @@
 // String-keyed scalar maps retain null keys and null scalar values.
 class Z8StringValueMap(V) {
     static if (is(V == long) || is(V == bool) || is(V == Z8Decimal)) alias Element = Z8Optional!V;
-    else static if (is(V == Z8Guid)) alias Element = V;
+    else static if (is(V == Z8Guid) || is(V : Z8SqlPrimary)) alias Element = V;
     else static assert(0, "unsupported string-key map value");
     private Element[wstring] entries;
     private bool hasNullKey;
     private Element nullKeyValue;
 
     private static bool valueEquals(Element left, Element right) {
-        static if (is(V == Z8Guid)) return left is right || (left !is null && left == right);
+        static if (is(V == Z8Guid) || is(V : Z8SqlPrimary)) return left is right || (left !is null && left == right);
         else return left.present == right.present && (!left.present || left.value == right.value);
     }
 
