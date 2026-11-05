@@ -98,11 +98,30 @@ public class SqlFieldOracle {
         for (DatabaseVendor vendor : new DatabaseVendor[] {DatabaseVendor.Oracle, DatabaseVendor.SqlServer, DatabaseVendor.Postgres, DatabaseVendor.H2})
             for (int i = 0; i < values.length; i++) for (boolean logical : new boolean[] {false, true})
                 System.out.println(vendor + ":" + i + ":" + logical + ":" + values[i].format(vendor, options, logical));
+        options.enableAggregation();
+        Aggregation[] aggregations = {Aggregation.None, Aggregation.Sum, Aggregation.Max, Aggregation.Min, Aggregation.Average,
+            Aggregation.Count, Aggregation.Array, Aggregation.Distinct, Aggregation.Concat, Aggregation.BitwiseOr, Aggregation.BitwiseAnd};
+        Field[] fields = {number, text, flag, amount, id, dateField, duration, bytes, geometryField, longText, file};
+        for (boolean order : new boolean[] {false, true}) {
+            options.setOrderBy(order);
+            for (int a = 0; a < aggregations.length; a++) {
+                for (Field f : fields) f.aggregation = aggregations[a];
+                for (DatabaseVendor vendor : new DatabaseVendor[] {DatabaseVendor.Oracle, DatabaseVendor.SqlServer, DatabaseVendor.Postgres, DatabaseVendor.H2})
+                    for (int i = 0; i < 13; i++) for (boolean logical : new boolean[] {false, true}) {
+                        String result;
+                        try { result = values[i].format(vendor, options, logical); } catch (RuntimeException error) { result = "ERROR"; }
+                        System.out.println("A:" + order + ":" + a + ":" + vendor + ":" + i + ":" + logical + ":" + result);
+                    }
+            }
+        }
     }
 }
 ''', encoding="utf-8")
     cp = os.pathsep.join(map(str, jars))
-    subprocess.run(["javac", "-source", "8", "-target", "8", "-cp", cp, str(java)], check=True)
+    aggregation_java = original / "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/Aggregation.java"
+    functions_java = original / "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/db/sql/functions"
+    subprocess.run(["javac", "-source", "8", "-target", "8", "-cp", cp, "-d", str(temp), str(aggregation_java),
+                    str(functions_java / "Array.java"), str(functions_java / "Distinct.java"), str(java)], check=True)
     expected = subprocess.check_output(["java", "-cp", str(temp) + os.pathsep + cp, "SqlFieldOracle"], text=True, encoding="utf-8").splitlines()
     harness = temp / "main.d"
     harness.write_text('''
@@ -110,6 +129,7 @@ import z8.runtime;
 import z8gen.p_Probe;
 import std.stdio : writeln;
 import std.conv : to;
+import core.thread : Thread;
 void main() {
     alias P = Z8p_50726F6265;
     auto number = P.m_number(); auto text = P.m_text(); auto flag = P.m_flag();
@@ -119,9 +139,10 @@ void main() {
     auto intSql = P.m_numberSql(number); bool missing;
     try { z8_sql_int_format(intSql); } catch (Exception) { missing = true; }
     assert(missing);
-    foreach (field; [cast(Z8Object)number, cast(Z8Object)text, cast(Z8Object)flag, cast(Z8Object)amount, cast(Z8Object)id,
-                    cast(Z8Object)dateField, cast(Z8Object)duration, cast(Z8Object)bytes, cast(Z8Object)geometryField,
-                    cast(Z8Object)longText, cast(Z8Object)file])
+    auto fields = [cast(Z8Object)number, cast(Z8Object)text, cast(Z8Object)flag, cast(Z8Object)amount, cast(Z8Object)id,
+                   cast(Z8Object)dateField, cast(Z8Object)duration, cast(Z8Object)bytes, cast(Z8Object)geometryField,
+                   cast(Z8Object)longText, cast(Z8Object)file];
+    foreach (field; fields)
         z8_field_bind_sql(field, null, null, "T.col"w);
     auto stringSql = P.m_textSql(text); auto boolSql = P.m_flagSql(flag);
     auto decimalSql = P.m_amountSql(amount); auto guidSql = P.m_idSql(id);
@@ -135,31 +156,51 @@ void main() {
         z8_primary_box(new Z8Datespan(1234)), z8_primary_box(z8_guid_create(5)),
         z8_primary_box(z8_decimal_parse("1.25"w)), z8_primary_box(new Z8Binary())]));
     items.z8_set(0, z8_primary_box(99L));
-    foreach (vendor; [Z8SqlVendor.Oracle, Z8SqlVendor.SqlServer, Z8SqlVendor.Postgres, Z8SqlVendor.H2])
-        foreach (i; 0 .. 17) foreach (logical; [false, true]) {
-            wstring result;
-            switch (i) {
-                case 0: result = z8_sql_int_format(intSql, vendor, logical); break;
-                case 1: result = z8_sql_string_format(stringSql, vendor); break;
-                case 2: result = z8_sql_bool_format(boolSql, logical, vendor); break;
-                case 3: result = z8_sql_decimal_format(decimalSql, vendor, logical); break;
-                case 4: result = z8_sql_guid_format(guidSql, vendor); break;
-                case 5: result = z8_sql_bool_format(nullSql, logical, vendor); break;
-                case 6: result = z8_sql_bool_format(greater, logical, vendor); break;
-                case 7: result = z8_sql_date_format(dateSql, vendor); break;
-                case 8: result = z8_sql_datespan_format(spanSql, vendor); break;
-                case 9: result = z8_sql_binary_format(binarySql, vendor); break;
-                case 10: result = z8_sql_geometry_format(geometrySql, vendor); break;
-                case 11: result = z8_sql_string_format(longTextSql, vendor); break;
-                case 12: result = z8_sql_string_format(fileSql, vendor); break;
-                case 13: result = z8_sql_bool_format(inVector, logical, vendor); break;
-                case 14: result = z8_sql_bool_format(notInVector, logical, vendor); break;
-                case 15: result = z8_sql_bool_format(empty, logical, vendor); break;
-                case 16: result = z8_sql_bool_format(mixed, logical, vendor); break;
-                default: assert(0);
-            }
-            writeln(vendor, ":", i, ":", logical, ":", result.to!string);
+    wstring formatSql(int i, Z8SqlVendor vendor, bool logical) {
+        switch (i) {
+            case 0: return z8_sql_int_format(intSql, vendor, logical);
+            case 1: return z8_sql_string_format(stringSql, vendor);
+            case 2: return z8_sql_bool_format(boolSql, logical, vendor);
+            case 3: return z8_sql_decimal_format(decimalSql, vendor, logical);
+            case 4: return z8_sql_guid_format(guidSql, vendor);
+            case 5: return z8_sql_bool_format(nullSql, logical, vendor);
+            case 6: return z8_sql_bool_format(greater, logical, vendor);
+            case 7: return z8_sql_date_format(dateSql, vendor);
+            case 8: return z8_sql_datespan_format(spanSql, vendor);
+            case 9: return z8_sql_binary_format(binarySql, vendor);
+            case 10: return z8_sql_geometry_format(geometrySql, vendor);
+            case 11: return z8_sql_string_format(longTextSql, vendor);
+            case 12: return z8_sql_string_format(fileSql, vendor);
+            case 13: return z8_sql_bool_format(inVector, logical, vendor);
+            case 14: return z8_sql_bool_format(notInVector, logical, vendor);
+            case 15: return z8_sql_bool_format(empty, logical, vendor);
+            case 16: return z8_sql_bool_format(mixed, logical, vendor);
+            default: assert(0);
         }
+    }
+    auto vendors = [Z8SqlVendor.Oracle, Z8SqlVendor.SqlServer, Z8SqlVendor.Postgres, Z8SqlVendor.H2];
+    foreach (vendor; vendors) foreach (i; 0 .. 17) foreach (logical; [false, true])
+        writeln(vendor, ":", i, ":", logical, ":", formatSql(i, vendor, logical).to!string);
+    auto aggregations = [Z8FieldAggregation.none, Z8FieldAggregation.sum, Z8FieldAggregation.max, Z8FieldAggregation.min,
+        Z8FieldAggregation.average, Z8FieldAggregation.count, Z8FieldAggregation.array, Z8FieldAggregation.distinct,
+        Z8FieldAggregation.concat, Z8FieldAggregation.bitwiseOr, Z8FieldAggregation.bitwiseAnd];
+    foreach (order; [false, true]) {
+        z8_sql_set_field_options(Z8SqlFieldFormatOptions(true, order));
+        foreach (a, aggregation; aggregations) {
+            foreach (field; fields) z8_field_set_aggregation(field, aggregation);
+            foreach (vendor; vendors) foreach (i; 0 .. 13) foreach (logical; [false, true]) {
+                string result;
+                try { result = formatSql(i, vendor, logical).to!string; } catch (Exception) { result = "ERROR"; }
+                writeln("A:", order, ":", a, ":", vendor, ":", i, ":", logical, ":", result);
+            }
+        }
+    }
+    z8_field_set_aggregation(number, Z8FieldAggregation.sum);
+    z8_sql_set_field_options(Z8SqlFieldFormatOptions(true, false));
+    auto thread = new Thread({ assert(z8_sql_int_format(intSql) == "(T.col)"w); });
+    thread.start(); thread.join();
+    assert(z8_sql_int_format(intSql) == "(sum(T.col))"w);
+    z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
     z8_field_bind_sql(number, "t"w, `a"b`w);
     assert(z8_sql_int_format(intSql, Z8SqlVendor.Postgres) == `(t."a""b")`w);
     assert(z8_sql_int_format(intSql, Z8SqlVendor.SqlServer) == `(t.[a"b])`w);
@@ -174,5 +215,8 @@ void main() {
     subprocess.run(["dmd", "-I" + str(generated), *import_args(), *map(str, generated.rglob("*.d")),
                     str(harness), str(runtime), "-of=" + str(exe)], cwd=temp, check=True)
     actual = subprocess.check_output([str(exe)], text=True, encoding="utf-8").splitlines()
-    if actual != expected: raise SystemExit(f"SQL field formatting differs:\nD: {actual}\nJava: {expected}")
-print("SQL field references match Java Z8 without aggregation")
+    if actual != expected:
+        differences = [(i, a, b) for i, (a, b) in enumerate(zip(actual, expected)) if a != b]
+        raise SystemExit(f"SQL field formatting differs ({len(actual)} D lines, {len(expected)} Java lines):\n" +
+                         "\n".join(f"{i}: D={a!r} Java={b!r}" for i, a, b in differences[:20]))
+print("SQL field references and aggregation match Java Z8")

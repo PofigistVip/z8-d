@@ -81,8 +81,7 @@ wstring z8_sql_bool_format(Z8SqlBool value, bool logical = false, Z8SqlVendor ve
     z8_nonnull(value);
     final switch (value.kind) {
         case Z8SqlBoolKind.field:
-            auto field = z8_field_sql_format(value.field, vendor);
-            return logical ? field ~ "=1"w : field;
+            return z8_field_sql_format(value.field, vendor, logical);
         case Z8SqlBoolKind.fieldIsNull:
             auto condition = z8_field_sql_format(value.field, vendor) ~ " is null"w;
             return logical ? condition : "("w ~ z8_sql_bool_case(condition, "1"w, "0"w) ~ ")=1"w;

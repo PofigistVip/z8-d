@@ -2,6 +2,13 @@
 // cursors, typed field constructors and SQL expressions are separate adapters.
 private enum z8_field_name = "org.zenframework.z8.server.base.table.value.Field"w;
 enum Z8FieldAggregation { none, sum, max, min, average, count, array, distinct, concat, bitwiseOr, bitwiseAnd }
+// Like FormatOptions, this affects the current formatting operation, not the
+// stored expression. Keep it thread-local for concurrent HTTP requests.
+struct Z8SqlFieldFormatOptions { bool aggregation, orderBy; }
+private Z8SqlFieldFormatOptions z8_sql_field_options;
+Z8SqlFieldFormatOptions z8_sql_set_field_options(Z8SqlFieldFormatOptions value) {
+    auto previous = z8_sql_field_options; z8_sql_field_options = value; return previous;
+}
 private interface IZ8FieldAggregationCell {
     Z8FieldAggregation get();
     void put(Z8FieldAggregation value);
@@ -104,14 +111,57 @@ void z8_field_bind_sql(Z8Object self, wstring ownerAlias, wstring columnName, ws
     auto state = z8_field_state(self);
     state.sqlOwnerAlias = ownerAlias; state.sqlColumnName = columnName; state.sqlExpressionAlias = expressionAlias;
 }
-wstring z8_field_sql_format(Z8Object self, Z8SqlVendor vendor) {
+wstring z8_field_sql_format(Z8Object self, Z8SqlVendor vendor, bool booleanLogical = false) {
     import std.string : replace;
     auto state = z8_field_state(self);
-    if (state.sqlExpressionAlias !is null) return state.sqlExpressionAlias;
-    if (state.sqlOwnerAlias is null) throw new Exception("SQL field owner alias is not configured");
-    auto column = state.sqlColumnName is null ? z8_object_name(self) : state.sqlColumnName;
-    if (vendor == Z8SqlVendor.SqlServer) return state.sqlOwnerAlias ~ ".["w ~ column.replace("]"w, "]]"w) ~ "]"w;
-    return state.sqlOwnerAlias ~ ".\""w ~ column.replace("\""w, "\"\""w) ~ "\""w;
+    wstring expression;
+    if (state.sqlExpressionAlias !is null) expression = state.sqlExpressionAlias;
+    else {
+        if (state.sqlOwnerAlias is null) throw new Exception("SQL field owner alias is not configured");
+        auto column = state.sqlColumnName is null ? z8_object_name(self) : state.sqlColumnName;
+        expression = vendor == Z8SqlVendor.SqlServer ? state.sqlOwnerAlias ~ ".["w ~ column.replace("]"w, "]]"w) ~ "]"w :
+            state.sqlOwnerAlias ~ ".\""w ~ column.replace("\""w, "\"\""w) ~ "\""w;
+    }
+    if (booleanLogical) expression ~= "=1"w;
+    if (!z8_sql_field_options.aggregation) return expression;
+    auto aggregation = state.aggregation;
+    if (aggregation == Z8FieldAggregation.none || aggregation == Z8FieldAggregation.bitwiseOr || aggregation == Z8FieldAggregation.bitwiseAnd)
+        return expression;
+    auto isGuid = z8_native_is_instance("org.zenframework.z8.server.base.table.value.GuidField"w, self);
+    auto isGeometry = z8_native_is_instance("org.zenframework.z8.server.base.table.value.GeometryField"w, self);
+    auto isText = z8_native_is_instance("org.zenframework.z8.server.base.table.value.TextField"w, self);
+    auto isFile = z8_native_is_instance("org.zenframework.z8.server.base.table.value.FileField"w, self);
+    if (aggregation == Z8FieldAggregation.array || aggregation == Z8FieldAggregation.distinct) {
+        if (vendor == Z8SqlVendor.Oracle) return "collect("w ~ expression ~ ")"w;
+        if (vendor != Z8SqlVendor.Postgres) throw new Exception("unsupported SQL database vendor");
+        if (isText && !isFile) expression = "CONVERT_FROM("w ~ expression ~ ", 'UTF8')"w;
+        if (aggregation == Z8FieldAggregation.distinct) expression = "DISTINCT "w ~ expression;
+        return (z8_sql_field_options.orderBy ? "array_agg("w : "json_agg("w) ~ expression ~ ")"w;
+    }
+    if (aggregation == Z8FieldAggregation.concat) {
+        if (vendor != Z8SqlVendor.Postgres) throw new Exception("unsupported SQL database vendor");
+        return "string_agg("w ~ expression ~ ",',')"w;
+    }
+    if (vendor == Z8SqlVendor.Postgres || vendor == Z8SqlVendor.Oracle) {
+        if (isGuid) expression = vendor == Z8SqlVendor.Postgres ? expression ~ "::text"w : "RAWTOHEX("w ~ expression ~ ")"w;
+        else if (isText) expression = vendor == Z8SqlVendor.Postgres ? "CONVERT_FROM("w ~ expression ~ ", 'UTF8')"w :
+            "UTL_RAW.CAST_TO_NVARCHAR2("w ~ expression ~ ")"w;
+    }
+    wstring functionName;
+    final switch (aggregation) {
+        case Z8FieldAggregation.sum: functionName = isGeometry ? "ST_Union"w : "sum"w; break;
+        case Z8FieldAggregation.max: functionName = "max"w; break;
+        case Z8FieldAggregation.min: functionName = "min"w; break;
+        case Z8FieldAggregation.average: functionName = "avg"w; break;
+        case Z8FieldAggregation.count: functionName = "count"w; break;
+        case Z8FieldAggregation.none: case Z8FieldAggregation.array: case Z8FieldAggregation.distinct:
+        case Z8FieldAggregation.concat: case Z8FieldAggregation.bitwiseOr: case Z8FieldAggregation.bitwiseAnd:
+            assert(0, "aggregation already handled");
+    }
+    expression = functionName ~ "("w ~ expression ~ ")"w;
+    if (isGuid && vendor == Z8SqlVendor.Postgres) expression ~= "::uuid"w;
+    else if (isGuid && vendor == Z8SqlVendor.Oracle) expression = "HEXTORAW("w ~ expression ~ ")"w;
+    return expression;
 }
 void z8_field_reset(Z8Object self) {
     auto state = z8_field_state(self);
