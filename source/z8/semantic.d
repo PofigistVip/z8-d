@@ -273,9 +273,9 @@ class Checker {
             if (e.mapConversionKeyClass !is null || e.mapConversionValueClass !is null) e.mapConversionType = actual;
             return true;
         }
-        if (expected == ValueType.selfArray && actual == ValueType.selfArray &&
+        if (actual == expected && isObjectArrayTree(expected) &&
             isAssignable(e.objectClass, expectedClass)) {
-            if (e.objectClass !is expectedClass) e.arrayConversionClass = expectedClass;
+            if (e.objectClass !is expectedClass) { e.arrayConversionClass = expectedClass; e.arrayConversionType = expected; }
             return true;
         }
 
@@ -425,7 +425,7 @@ class Checker {
                     } else {
                         if (actual != ValueType.selfType && hasObjectClass(actual)) {
                             auto parameterClass = resolveClass(candidate.owner, p.objectName, p.name);
-                            if (actual == ValueType.selfArray ? !isAssignable(e.arguments[i].objectClass, parameterClass) : e.arguments[i].objectClass !is parameterClass)
+                            if (isObjectArrayTree(actual) ? !isAssignable(e.arguments[i].objectClass, parameterClass) : e.arguments[i].objectClass !is parameterClass)
                                 applicable = false;
                         }
                         if (hasMapKeyClass(actual) && e.arguments[i].keyObjectClasses != resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name)) applicable = false;
@@ -2306,9 +2306,15 @@ class Checker {
                 auto array = typeOf(s.expression);
                 checkStatement(s.initial, true);
                 if (!isArray(array) || elementType(array) != s.initial.type) fail("foreach element type mismatch", s.token);
-                if (array == ValueType.selfArray && !isAssignable(s.expression.objectClass, s.initial.objectClass)) fail("foreach element type mismatch", s.token);
+                if (isObjectArrayTree(array)) {
+                    if (!isAssignable(s.expression.objectClass, s.initial.objectClass)) fail("foreach element type mismatch", s.token);
+                    if (array != ValueType.selfArray && s.expression.objectClass !is s.initial.objectClass) {
+                        s.expression.arrayConversionClass = s.initial.objectClass;
+                        s.expression.arrayConversionType = array;
+                    }
+                }
                 if (array == ValueType.enumArray && s.expression.objectClass !is s.initial.objectClass) fail("foreach element type mismatch", s.token);
-                if ((array == ValueType.selfMatrix || array == ValueType.enumMatrix || (isDynamicArray(array) && hasObjectClass(array))) && s.expression.objectClass !is s.initial.objectClass) fail("foreach element type mismatch", s.token);
+                if ((array == ValueType.enumMatrix || (isDynamicArray(array) && hasObjectClass(array) && !isObjectArrayTree(array))) && s.expression.objectClass !is s.initial.objectClass) fail("foreach element type mismatch", s.token);
                 if (hasMapKeyClass(array) && s.expression.keyObjectClasses != s.initial.keyObjectClasses) fail("foreach element type mismatch", s.token);
                 ++loopDepth; checkStatement(s.children[0]); --loopDepth;
                 variables = old; objectVariables = oldObjects; keyObjectVariables = oldKeyObjects; return false;

@@ -54,6 +54,7 @@ class Expression {
     string builtinCall;
     string emittedOverride;
     Program objectClass, arrayConversionClass, mapConversionKeyClass, mapConversionValueClass;
+    ValueType arrayConversionType;
     ValueType mapConversionType;
     Program[] keyObjectClasses;
     NullableStringMode nullableStringMode;

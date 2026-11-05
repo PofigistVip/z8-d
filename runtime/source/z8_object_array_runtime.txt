@@ -1,23 +1,40 @@
 // Views of object collections retain shared storage across BL inheritance casts.
 template Z8ValueArray(T) {
     static if (is(T : Z8Object)) alias Z8ValueArray = Z8ObjectArray!T;
+    else static if (is(T : IZ8ObjectArrayView)) alias Z8ValueArray = Z8NestedObjectArray!T;
     else alias Z8ValueArray = Z8Array!T;
+}
+
+// All typed views expose their shared storage, including nested dimensions.
+interface IZ8ObjectArrayView {
+    Z8Array!Object z8_erased_data();
+}
+
+T z8_object_collection_view(T)(Object value) if (is(T : IZ8ObjectArrayView)) {
+    if (value is null) return null;
+    auto exact = cast(T)value;
+    if (exact !is null) return exact;
+    auto view = cast(IZ8ObjectArrayView)value;
+    if (view is null) throw new Exception("invalid object array element cast");
+    return T.z8_from_data(view.z8_erased_data());
 }
 
 private ref T z8_object_array_slot(T)(ref Object item) {
     if (item !is null && cast(T)item is null) throw new Exception("invalid object array element cast");
     return *cast(T*)&item;
 }
-class Z8ObjectArray(T) if (is(T : Z8Object)) {
+class Z8ObjectArray(T) : IZ8ObjectArrayView if (is(T : Z8Object)) {
     private Z8Array!Object data;
     this() { data = new Z8Array!Object(); }
     this(T[] values) { this(); foreach (value; values) data.z8_add(value); }
     private this(Z8Array!Object sharedData) { data = sharedData; }
+    static Z8ObjectArray!T z8_from_data(Z8Array!Object data) { return new Z8ObjectArray!T(data); }
+    Z8Array!Object z8_erased_data() { return data; }
     @property size_t z8_version() { return data.z8_version; }
     override bool opEquals(Object other) {
         if (this is other) return true;
-        auto right = cast(Z8ObjectArray!T)other;
-        return right !is null && data.opEquals(right.data);
+        auto right = cast(IZ8ObjectArrayView)other;
+        return right !is null && data.opEquals(right.z8_erased_data());
     }
     long z8_size() { return data.z8_size(); }
     bool z8_isEmpty() { return data.z8_isEmpty(); }

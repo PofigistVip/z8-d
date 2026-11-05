@@ -1,6 +1,8 @@
 public class CovariantArrays {
     private static int count(CovariantBase[] values) { return values.size(); }
     private static CovariantBase[] widen(CovariantChild[] values) { return values; }
+    private static int countRows(CovariantBase[][] values) { return values.size(); }
+    private static CovariantBase[][] widenRows(CovariantChild[][] values) { return values; }
     public static int run() {
         CovariantChild first = new CovariantChild;
         CovariantChild[] children = {first};
@@ -18,6 +20,34 @@ public class CovariantArrays {
         try { CovariantChild invalid = children.removeAt(1); return 6; }
         catch (exception caughtRemoval) {}
         if (children.size() != 1) return 7;
+        CovariantChild[][] childRows = {{first}};
+        CovariantBase[][] baseRows = childRows;
+        if (countRows(childRows) != 1 || widenRows(childRows)[0][0].value != 11) return 8;
+        baseRows[0].add(new CovariantBase);
+        if (childRows[0].size() != 2) return 9;
+        try { CovariantChild invalid = childRows[0][1]; return 10; }
+        catch (exception expectedElement) {}
+        baseRows[0].removeAt(1);
+        CovariantBase[] otherRow = {new CovariantBase};
+        baseRows.add(otherRow);
+        if (childRows.size() != 2) return 11;
+        try { CovariantChild invalid = childRows[1][0]; return 12; }
+        catch (exception expectedRow) {}
+        childRows.removeAt(1);
+        for (CovariantBase[] widenedRow : childRows) widenedRow.add(new CovariantBase);
+        if (childRows[0].size() != 2) return 17;
+        try { CovariantChild invalid = childRows[0][1]; return 18; }
+        catch (exception expectedForeachValue) {}
+        baseRows[0].removeAt(1);
+        try { for (CovariantChild[] row : childRows) baseRows.add(otherRow); return 13; }
+        catch (exception expectedModification) {}
+        if (childRows.size() != 2) return 14;
+        CovariantChild[][][] cubes = {{{first}}};
+        CovariantBase[][][] wideCubes = cubes;
+        wideCubes[0][0].add(new CovariantBase);
+        if (cubes[0][0].size() != 2) return 15;
+        try { CovariantChild invalid = cubes[0][0][1]; return 16; }
+        catch (exception expectedCube) {}
         return 131;
     }
 }

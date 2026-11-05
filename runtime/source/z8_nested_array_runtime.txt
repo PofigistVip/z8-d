@@ -1,0 +1,50 @@
+// Nested object arrays use the same erased collection storage as RCollection.
+class Z8NestedObjectArray(T) : IZ8ObjectArrayView if (is(T : IZ8ObjectArrayView)) {
+    private Z8Array!Object data;
+    this() { data = new Z8Array!Object(); }
+    this(T[] values) { this(); foreach (value; values) data.z8_add(value); }
+    private this(Z8Array!Object sharedData) { data = sharedData; }
+    static Z8NestedObjectArray!T z8_from_data(Z8Array!Object data) { return new Z8NestedObjectArray!T(data); }
+    Z8Array!Object z8_erased_data() { return data; }
+    @property size_t z8_version() { return data.z8_version; }
+    override bool opEquals(Object other) {
+        if (this is other) return true;
+        auto right = cast(IZ8ObjectArrayView)other;
+        return right !is null && data.opEquals(right.z8_erased_data());
+    }
+    long z8_size() { return data.z8_size(); }
+    bool z8_isEmpty() { return data.z8_isEmpty(); }
+    void z8_clear() { data.z8_clear(); }
+    ref T z8_at(long index) {
+        ref slot = data.z8_at(index);
+        // Replacing a view does not change the underlying collection or its version.
+        slot = z8_object_collection_view!T(slot);
+        return *cast(T*)&slot;
+    }
+    T z8_get(long index) { return z8_at(index); }
+    T z8_first() { return z8_isEmpty() ? null : z8_get(0); }
+    T z8_last() { return z8_isEmpty() ? null : z8_get(z8_size() - 1); }
+    Z8NestedObjectArray!T z8_add(T value) { data.z8_add(value); return this; }
+    Z8NestedObjectArray!T z8_add(long index, T value) { data.z8_add(index, value); return this; }
+    void z8_addAll(Z8NestedObjectArray!T other) { data.z8_addAll(z8_nonnull(other).data); }
+    void z8_addAll(long index, Z8NestedObjectArray!T other) { data.z8_addAll(index, z8_nonnull(other).data); }
+    long z8_indexOf(T value) { return data.z8_indexOf(value); }
+    bool z8_contains(T value) { return data.z8_contains(value); }
+    bool z8_isSubsetOf(Z8NestedObjectArray!T other) { return data.z8_isSubsetOf(z8_nonnull(other).data); }
+    T z8_removeAt(long index) { return z8_object_collection_view!T(data.z8_removeAt(index)); }
+    bool z8_remove(T value) { return data.z8_remove(value); }
+    Z8NestedObjectArray!T z8_removeAll(T value) { data.z8_removeAll(value); return this; }
+    Z8NestedObjectArray!T z8_removeAll(Z8NestedObjectArray!T values) { data.z8_removeAll(z8_nonnull(values).data); return this; }
+    Z8NestedObjectArray!T z8_reverse() { data.z8_reverse(); return this; }
+    Z8NestedObjectArray!T z8_unique() { return new Z8NestedObjectArray!T(data.z8_unique()); }
+    void z8_set(long index, T value) { data.z8_set(index, value); }
+}
+ref T z8_array_at(T)(Z8NestedObjectArray!T value, long index) { return z8_nonnull(value).z8_at(index); }
+Z8NestedObjectArray!T z8_array_union(T)(Z8NestedObjectArray!T left, Z8NestedObjectArray!T right) {
+    auto result = new Z8NestedObjectArray!T();
+    result.z8_addAll(z8_nonnull(left)); result.z8_addAll(z8_nonnull(right)); return result;
+}
+void z8_array_add_assign(T)(ref Z8NestedObjectArray!T left, lazy Z8NestedObjectArray!T previous, lazy Z8NestedObjectArray!T right) {
+    auto oldValue = previous; auto newValue = right;
+    left = z8_array_union(oldValue, newValue);
+}

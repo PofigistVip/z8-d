@@ -31,7 +31,7 @@ private string methodDName(Method method) {
 }
 
 private string dType(ValueType type, Program objectClass = null, Program[] keyObjectClasses = null) {
-    if (isDynamicArray(type)) return "Z8Array!(" ~ dType(elementType(type), objectClass, keyObjectClasses) ~ ")";
+    if (isDynamicArray(type)) return "Z8ValueArray!(" ~ dType(elementType(type), objectClass, keyObjectClasses) ~ ")";
     if (isSqlArray(type)) return "Z8Array!(" ~ dType(elementType(type)) ~ ")";
     if (isMap(type)) {
         auto key = mapKeyType(type), value = mapValueType(type);
@@ -88,7 +88,7 @@ private string dType(ValueType type, Program objectClass = null, Program[] keyOb
         case ValueType.primaryType: return "Z8Primary";
         case ValueType.selfType: assert(objectClass !is null); return objectClass.emittedName;
         case ValueType.selfArray: assert(objectClass !is null); return "Z8ObjectArray!(" ~ objectClass.emittedName ~ ")";
-        case ValueType.selfMatrix: assert(objectClass !is null); return "Z8Array!(Z8ObjectArray!(" ~ objectClass.emittedName ~ "))";
+        case ValueType.selfMatrix: assert(objectClass !is null); return "Z8NestedObjectArray!(Z8ObjectArray!(" ~ objectClass.emittedName ~ "))";
         case ValueType.intArray: return "Z8Array!long";
         case ValueType.intMatrix: return "Z8Array!(Z8Array!long)";
         case ValueType.decimalArray: return "Z8Array!Z8Decimal";
@@ -332,7 +332,11 @@ private string emitExpr(Expression e) {
         auto count = e.parenthesisCount - (e.firstParenthesisIsConditional ? 1 : 0);
         foreach (_; 0 .. count) value = "z8_sql_geometry_group(" ~ value ~ ")";
     }
-    if (e.arrayConversionClass !is null) value = "z8_object_array_view!(" ~ e.arrayConversionClass.emittedName ~ ")(" ~ value ~ ")";
+    if (e.arrayConversionClass !is null) {
+        if (e.arrayConversionType == ValueType.selfArray)
+            value = "z8_object_array_view!(" ~ e.arrayConversionClass.emittedName ~ ")(" ~ value ~ ")";
+        else value = "z8_object_collection_view!(" ~ dType(e.arrayConversionType, e.arrayConversionClass) ~ ")(" ~ value ~ ")";
+    }
     if (e.mapConversionKeyClass !is null || e.mapConversionValueClass !is null) {
         auto type = e.mapConversionType;
         auto key = e.mapConversionKeyClass !is null ? e.mapConversionKeyClass.emittedName :
