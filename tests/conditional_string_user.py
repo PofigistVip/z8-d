@@ -35,6 +35,11 @@ public class Probe {
         if ((true ? id : map["key"]) != expected) return 7;
         if ((false ? map["key"] : id) != expected) return 8;
         if ((false ? id : map["key"]) != "stored") return 9;
+        int missing = null; int number = 42;
+        if ((missing != null ? missing : "-") != "-") return 10;
+        if ((number != null ? number : "-") != "42") return 11;
+        if ((false ? "-" : number) != "42") return 12;
+        try { string ignored = true ? missing : "-"; return 13; } catch (exception expectedError) {}
         return 0;
     }
 }
