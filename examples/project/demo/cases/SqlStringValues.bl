@@ -3,6 +3,7 @@ import org.zenframework.z8.lang.sql.sql_bool;
 import org.zenframework.z8.lang.sql.sql_int;
 import org.zenframework.z8.lang.sql.sql_decimal;
 import org.zenframework.z8.lang.sql.sql_guid;
+import org.zenframework.z8.lang.sql.sql_date;
 public class SqlStringValues {
     public static sql_string literal() { return "O'Reilly 😀"; }
     public static sql_string concatenation() { sql_string value = "alpha"; return (value + " β").toUpper(); }
@@ -45,6 +46,11 @@ public class SqlStringValues {
     public static sql_guid guidChoice() { sql_bool condition = true; sql_guid value = sqlGuid(); return condition.IIF(value, value); }
     public static sql_bool guidEqual() { sql_guid value = sqlGuid(); return value == '00112233-4455-6677-8899-AABBCCDDEEFF'; }
     public static sql_string guidText() { sql_guid value = sqlGuid(); return value.toString(); }
+    public static sql_date sqlDate() { date value = 0; return value; }
+    public static sql_date dateChoice() { sql_bool condition = true; sql_date value = sqlDate(); return condition.IIF(value, value); }
+    public static sql_date parsedDate() { sql_string value = "01.01.2020"; return value.toDate(); }
+    public static sql_int dateTicks() { sql_date value = sqlDate(); return value.toInt(); }
+    public static sql_string dateText() { sql_date value = sqlDate(); return value.toString(); }
     public static int run() {
         sql_string value = concatenation();
         if (value == null) return 1;

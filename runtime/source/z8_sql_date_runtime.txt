@@ -1,0 +1,40 @@
+enum Z8SqlDateKind { constant, group, choose, fromString }
+class Z8SqlDate {
+    Z8SqlDateKind kind;
+    Z8Date constant;
+    Z8SqlDate left, right;
+    Z8SqlBool condition;
+    Z8SqlString textOperand;
+    this(Z8SqlDateKind kind, Z8Date constant = null, Z8SqlDate left = null,
+         Z8SqlDate right = null, Z8SqlBool condition = null) {
+        this.kind = kind; this.constant = constant; this.left = left; this.right = right; this.condition = condition;
+    }
+}
+Z8SqlDate z8_sql_date_const(Z8Date value) { return new Z8SqlDate(Z8SqlDateKind.constant, z8_nonnull(value)); }
+Z8SqlDate z8_sql_date_group(Z8SqlDate value) { return new Z8SqlDate(Z8SqlDateKind.group, null, z8_nonnull(value)); }
+Z8SqlDate z8_sql_date_iif(Z8SqlBool condition, Z8SqlDate yes, Z8SqlDate no) {
+    return new Z8SqlDate(Z8SqlDateKind.choose, null, yes, no, z8_nonnull(condition));
+}
+Z8SqlDate z8_sql_string_toDate(Z8SqlString value) {
+    auto result = new Z8SqlDate(Z8SqlDateKind.fromString);
+    result.textOperand = z8_nonnull(value); return result;
+}
+Z8SqlInt z8_sql_date_toInt(Z8SqlDate value) {
+    auto result = new Z8SqlInt(Z8SqlIntKind.dateToInt);
+    result.dateOperand = z8_nonnull(value); return result;
+}
+wstring z8_sql_date_format(Z8SqlDate value, Z8SqlVendor vendor = Z8SqlVendor.Postgres) {
+    z8_nonnull(value);
+    final switch (value.kind) {
+        case Z8SqlDateKind.constant: return z8_date_ticks(value.constant).to!wstring;
+        case Z8SqlDateKind.group: return "("w ~ z8_sql_date_format(value.left, vendor) ~ ")"w;
+        case Z8SqlDateKind.choose:
+            return z8_sql_bool_case(z8_sql_bool_format(value.condition, true, vendor), z8_sql_date_format(value.left, vendor), z8_sql_date_format(value.right, vendor));
+        case Z8SqlDateKind.fromString:
+            auto text = z8_sql_string_format(value.textOperand, vendor);
+            if (vendor == Z8SqlVendor.Oracle) return text;
+            if (vendor == Z8SqlVendor.Postgres) return text ~ "::timestamp with time zone"w;
+            if (vendor == Z8SqlVendor.SqlServer) return "CONVERT([datetime],"w ~ text ~ ",(103))"w;
+            throw new Exception("unsupported SQL database vendor");
+    }
+}

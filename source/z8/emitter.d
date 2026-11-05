@@ -52,6 +52,7 @@ private string dType(ValueType type, Program objectClass = null) {
         case ValueType.sqlDecimalType: return "Z8SqlDecimal";
         case ValueType.sqlStringType: return "Z8SqlString";
         case ValueType.sqlGuidType: return "Z8SqlGuid";
+        case ValueType.sqlDateType: return "Z8SqlDate";
         case ValueType.guidType: return "Z8Guid";
         case ValueType.binaryType: return "Z8Binary";
         case ValueType.datespanType: return "Z8Datespan";
@@ -276,6 +277,10 @@ private string emitExpr(Expression e) {
         auto count = e.parenthesisCount - (e.firstParenthesisIsConditional ? 1 : 0);
         foreach (_; 0 .. count) value = "z8_sql_guid_group(" ~ value ~ ")";
     }
+    if (!e.emittedOverride.length && e.sqlDatePriority) {
+        auto count = e.parenthesisCount - (e.firstParenthesisIsConditional ? 1 : 0);
+        foreach (_; 0 .. count) value = "z8_sql_date_group(" ~ value ~ ")";
+    }
     if (e.userConversion !is null) value = "z8_nonnull(" ~ value ~ ")." ~ methodDName(e.userConversion) ~ "()";
     if (e.nonNullStringResult) value = "z8_string_or_empty(" ~ value ~ ")";
     if (e.optionalRequired) value = "z8_optional_require(" ~ value ~ ")";
@@ -285,6 +290,7 @@ private string emitExpr(Expression e) {
     if (e.convertSqlIntToDecimal) value = "z8_sql_decimal_from_int(" ~ value ~ ")";
     if (e.convertToSqlString) value = "z8_sql_string_const(" ~ value ~ ")";
     if (e.convertToSqlGuid) value = "z8_sql_guid_const(" ~ value ~ ")";
+    if (e.convertToSqlDate) value = "z8_sql_date_const(" ~ value ~ ")";
     if (e.nullableStringMode == NullableStringMode.required) value = "z8_string_required(" ~ value ~ ")";
     if (e.nullableStringMode == NullableStringMode.nullAsEmpty) value = "z8_string_or_empty(" ~ value ~ ")";
     if (e.kind == ExprKind.conditional && isNullableReference(e.inferredType))
@@ -355,6 +361,7 @@ private string emitExprRaw(Expression e) {
             if (e.inferredType == ValueType.sqlDecimalType) return "z8_sql_decimal_const(z8_decimal_from_int(0))";
             if (e.inferredType == ValueType.sqlStringType) return "z8_sql_string_const(z8_string_new(\"\"w))";
             if (e.inferredType == ValueType.sqlGuidType) return "z8_sql_guid_const(z8_guid_zero())";
+            if (e.inferredType == ValueType.sqlDateType) return "z8_sql_date_const(z8_date_now())";
             return "z8_new!(" ~ e.objectClass.emittedName ~ ")(" ~ (e.newHasContainer ? "this" : "") ~ ")";
         case ExprKind.field:
             if (e.nativeField.length) return "z8_nonnull(" ~ emitExpr(e.left) ~ ")." ~ e.nativeField;
@@ -574,6 +581,7 @@ private string emitStatement(Statement s, ControlContext context = ControlContex
             if (s.sqlDecimalReturnPriority) returned = "z8_sql_decimal_group(" ~ returned ~ ")";
             if (s.sqlStringReturnPriority) returned = "z8_sql_string_group(" ~ returned ~ ")";
             if (s.sqlGuidReturnPriority) returned = "z8_sql_guid_group(" ~ returned ~ ")";
+            if (s.sqlDateReturnPriority) returned = "z8_sql_date_group(" ~ returned ~ ")";
             if (context.enabled) return s.expression is null ? "throw new Z8ReturnVoid();\n" :
                 "throw new Z8Return!(" ~ dStorageType(context.returnType, context.returnClass) ~ ")(" ~ returned ~ ");\n";
             return "return" ~ (s.expression is null ? "" : " " ~ returned) ~ ";\n";
@@ -673,6 +681,7 @@ private string defaultValue(ValueType type, Program objectClass = null, bool has
     if (type == ValueType.sqlDecimalType) return "z8_sql_decimal_const(z8_decimal_from_int(0))";
     if (type == ValueType.sqlStringType) return "z8_sql_string_const(z8_string_new(\"\"w))";
     if (type == ValueType.sqlGuidType) return "z8_sql_guid_const(z8_guid_zero())";
+    if (type == ValueType.sqlDateType) return "z8_sql_date_const(z8_date_now())";
     if (type == ValueType.enumType) return "null";
     if (type == ValueType.primaryType) return "null";
     if (type == ValueType.guidType) return "z8_guid_zero()";

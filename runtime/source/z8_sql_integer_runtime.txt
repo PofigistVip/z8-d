@@ -1,4 +1,4 @@
-enum Z8SqlIntKind { constant, group, negate, bitNot, add, subtract, multiply, divide, modulo, bitAnd, bitOr, bitXor, sign, abs, power, choose, decimalSign, decimalCeil, decimalFloor, textLength, textIndex, textRegIndex, textToInt }
+enum Z8SqlIntKind { constant, group, negate, bitNot, add, subtract, multiply, divide, modulo, bitAnd, bitOr, bitXor, sign, abs, power, choose, decimalSign, decimalCeil, decimalFloor, textLength, textIndex, textRegIndex, textToInt, dateToInt }
 class Z8SqlInt : Z8SqlNumeric {
     Z8SqlIntKind kind;
     long constant;
@@ -7,6 +7,7 @@ class Z8SqlInt : Z8SqlNumeric {
     Z8SqlNumeric decimalOperand;
     Z8SqlString textOperand;
     Z8SqlString textPattern;
+    Z8SqlDate dateOperand;
     Z8SqlInt textPosition;
     this(Z8SqlIntKind kind, long constant = 0, Z8SqlInt left = null, Z8SqlInt right = null, Z8SqlBool condition = null) {
         this.kind = kind; this.constant = constant; this.left = left; this.right = right; this.condition = condition;
@@ -120,5 +121,8 @@ wstring z8_sql_int_format(Z8SqlInt value, Z8SqlVendor vendor = Z8SqlVendor.Postg
             if (vendor == Z8SqlVendor.Oracle) return "TO_NUMBER("w ~ text ~ ")"w;
             if (vendor == Z8SqlVendor.SqlServer) return "CONVERT(int, "w ~ text ~ ")"w;
             return text ~ "::bigint"w;
+        case Z8SqlIntKind.dateToInt:
+            if (vendor != Z8SqlVendor.Oracle && vendor != Z8SqlVendor.Postgres) throw new Exception("unsupported SQL database vendor");
+            return z8_sql_date_format(value.dateOperand, vendor);
     }
 }

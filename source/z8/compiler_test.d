@@ -229,6 +229,10 @@ unittest {
     compile(q{class A { static sql_bool f(sql_guid x, guid y) { return x == y; } }});
     compile(q{class A { static sql_string f(sql_guid x) { return x.toString(); } }});
     compile(q{class A { static sql_decimal f(sql_decimal x) { return +x; } static sql_int g(sql_int x) { return +x; } }});
+    compile(q{class A { static sql_date f(date x, sql_bool test) { sql_date a = x; return test.IIF(a, x); } }});
+    compile(q{class A { static sql_string f(sql_date x) { return x.toString(); } static sql_int g(sql_date x) { return x.toInt(); } }});
+    compile(q{class A { static sql_date f(sql_string x) { return x.toDate(); } }});
+    rejects(q{class A { static date f(sql_date x) { return x; } }});
     rejects(q{class A { static guid f(sql_guid x) { return x; } }});
     rejects(q{class A { static sql_string f(sql_string x) { return x.json(null); } }});
     rejects(q{class A { static void f() { sql_string a = "x"; string b = a; } }});
