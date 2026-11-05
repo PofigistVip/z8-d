@@ -70,6 +70,10 @@ public class Probe {
     public static string objectRender(JsonObject object) { return (string)object; }
     public static string objectText(JsonObject object, string key) { return object.getString(key); }
     public static void assignObject(JsonObject object, string text) { object = text; }
+    public static JsonObject mergeObjects(JsonObject left, JsonObject right) { return left + right; }
+    public static int objectSize(JsonObject object) { return object.size(); }
+    public static JsonObject fromMap(primary[primary] values) { return JsonObject.fromPrimaryMap(values); }
+    public static bool objectHas(JsonObject object, string key) { return object.has(key); }
     public static string render(JsonArray array) { return (string)array; }
     public static string display(JsonArray array) { return array.toString(); }
 }
@@ -179,6 +183,20 @@ class JsonArrayOracle {
         System.out.println("shift:" + container.string().get() + ":" + container.z8_getJsonArray(new integer(1)).get().string().get());
         System.out.println("missing:" + (outerClass.get().z8_getJsonObject(new string("absent")) == null));
         try { container.z8_getJsonObject(new integer(0)); System.out.println("bad"); } catch (RuntimeException expected) { System.out.println("type:error"); }
+        org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> leftClass = org.zenframework.z8.server.base.json.parser.JsonObject.z8_parse(new string("{a:[1],b:2}"));
+        org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> rightObjectClass = org.zenframework.z8.server.base.json.parser.JsonObject.z8_parse(new string("{b:3,c:[4]}"));
+        org.zenframework.z8.server.base.json.parser.JsonObject leftObject = leftClass.get(), rightObject = rightObjectClass.get();
+        leftObject.z8_set(new string("b"), new decimal("1.2500"));
+        org.zenframework.z8.server.base.json.parser.JsonObject combinedObject = leftObject.operatorAdd(rightObjectClass).get();
+        leftObject.z8_getJsonArray(new string("a")).get().z8_add(new integer(5));
+        rightObject.z8_getJsonArray(new string("c")).get().z8_add(new integer(6));
+        leftObject.z8_set(new string("b"), new integer(8)); rightObject.z8_set(new string("b"), new integer(9));
+        System.out.println("merge:" + combinedObject.z8_length().get() + ":" + combinedObject.z8_getString(new string("a")).get() + ":" + combinedObject.z8_getString(new string("b")).get() + ":" + combinedObject.z8_getString(new string("c")).get());
+        org.zenframework.z8.server.runtime.RLinkedHashMap<primary, primary> map = new org.zenframework.z8.server.runtime.RLinkedHashMap<>();
+        map.put(new integer(7), new decimal("1.2500")); map.put(new string("absent"), null); map.put(new bool(true), decimal.NaN);
+        org.zenframework.z8.server.base.json.parser.JsonObject mapped = org.zenframework.z8.server.base.json.parser.JsonObject.z8_fromPrimaryMap(map).get();
+        System.out.println("map:" + mapped.z8_getString(new string("7")).get() + ":" + mapped.z8_has(new string("absent")).get() + ":" + mapped.z8_has(new string("true")).get());
+        System.out.println("mapnull:" + (org.zenframework.z8.server.base.json.parser.JsonObject.z8_fromPrimaryMap(null) == null));
         for (String input : new String[] {"", "1,2", " [1,2]", "[1,]", "[1,,2]", "[1", "{x:1}"}) {
             try { System.out.println("p:" + parse(input).string().get()); } catch (RuntimeException expected) { System.out.println("p:error"); }
         }
@@ -302,6 +320,18 @@ void main() {
     writeln("shift:", P.m_render(container).to!string, ":", P.m_render(P.m_arrayArray(container, 1)).to!string);
     writeln("missing:", P.m_objectObject(outer, "absent"w) is null);
     try { P.m_arrayObject(container, 0); writeln("bad"); } catch (Exception) { writeln("type:error"); }
+    auto leftObject = P.m_parseObject("{a:[1],b:2}"w); auto rightObject = P.m_parseObject("{b:3,c:[4]}"w);
+    P.m_objectPut(leftObject, "b"w, z8_primary_box(z8_decimal_parse("1.2500"w)));
+    auto combinedObject = P.m_mergeObjects(leftObject, rightObject);
+    P.m_add(P.m_objectArray(leftObject, "a"w), z8_primary_box(5L)); P.m_add(P.m_objectArray(rightObject, "c"w), z8_primary_box(6L));
+    P.m_objectPut(leftObject, "b"w, z8_primary_box(8L)); P.m_objectPut(rightObject, "b"w, z8_primary_box(9L));
+    writeln("merge:", z8_optional_require(P.m_objectSize(combinedObject)), ":", P.m_objectText(combinedObject, "a"w).to!string, ":", P.m_objectText(combinedObject, "b"w).to!string, ":", P.m_objectText(combinedObject, "c"w).to!string);
+    auto map = new Z8PrimaryKeyMap!Z8Primary();
+    map.z8_add(z8_primary_box(7L), z8_primary_box(z8_decimal_parse("1.2500"w)));
+    map.z8_add(z8_primary_box("absent"w), null); map.z8_add(z8_primary_box(true), z8_primary_box(z8_decimal_nan()));
+    auto mapped = P.m_fromMap(map);
+    writeln("map:", P.m_objectText(mapped, "7"w).to!string, ":", z8_optional_require(P.m_objectHas(mapped, "absent"w)), ":", z8_optional_require(P.m_objectHas(mapped, "true"w)));
+    writeln("mapnull:", P.m_fromMap(null) is null);
     foreach (input; [""w, "1,2"w, " [1,2]"w, "[1,]"w, "[1,,2]"w, "[1"w, "{x:1}"w]) {
         try { writeln("p:", P.m_render(P.m_parse(input)).to!string); } catch (Exception) { writeln("p:error"); }
     }

@@ -173,6 +173,9 @@ private Z8Optional!bool z8_json_object_has(Z8Object self, wstring name) {
 private Z8Optional!bool z8_json_object_empty(Z8Object self) {
     return z8_optional_wrap(z8_json_object_state(self).value.object.length == 0);
 }
+private Z8Optional!long z8_json_object_size(Z8Object self) {
+    return z8_optional_wrap(cast(long)z8_json_object_state(self).value.object.length);
+}
 private Z8Array!wstring z8_json_object_names(Z8Object self) {
     auto result = new Z8Array!wstring();
     foreach (name; z8_json_object_state(self).value.object.byKey)
@@ -304,15 +307,46 @@ private Z8Object z8_json_object_set_nested(Z8Object self, wstring name, Z8Object
     state.children[key] = child;
     return self;
 }
+private Z8Object z8_json_object_add_object(Z8Object self, Z8Object other) {
+    auto left = z8_json_object_state(self), right = z8_json_object_state(other);
+    foreach (key, value; left.value.object)
+        if ((value.type == JSONType.array || value.type == JSONType.object) && (key in left.children) is null)
+            left.children[key] = z8_json_new_state(value);
+    foreach (key, value; right.value.object)
+        if ((value.type == JSONType.array || value.type == JSONType.object) && (key in right.children) is null)
+            right.children[key] = z8_json_new_state(value);
+    auto state = new Z8JsonObjectState(z8_json_empty_object());
+    foreach (key, value; left.value.object) state.value.object[key] = value;
+    foreach (key, value; right.value.object) state.value.object[key] = value;
+    foreach (key, value; left.decimals) if ((key in right.value.object) is null) state.decimals[key] = value;
+    foreach (key, value; right.decimals) state.decimals[key] = value;
+    foreach (key, child; left.children) if ((key in right.value.object) is null) state.children[key] = child;
+    foreach (key, child; right.children) state.children[key] = child;
+    return z8_json_wrap_state(state);
+}
+private Z8Object z8_json_object_from_primary_map(Z8PrimaryKeyMap!Z8Primary map) {
+    if (map is null) return null;
+    auto result = z8_json_wrap_state(new Z8JsonObjectState(z8_json_empty_object()));
+    auto keys = map.z8_keys();
+    foreach (i; 0 .. keys.z8_size()) {
+        auto key = keys.z8_get(i);
+        auto value = map.z8_get(key);
+        if (value !is null) z8_json_object_set_primary(result, z8_primary_to_string(key), value);
+    }
+    return result;
+}
 void z8_bind_builtin_json_object() {
     enum prefix = z8_json_object_name ~ "."w;
     z8_native_bind(prefix ~ "m_parse"w, &z8_json_object_parse);
+    z8_native_bind(prefix ~ "m_fromPrimaryMap"w, &z8_json_object_from_primary_map);
     z8_native_bind(prefix ~ "z8cast_string"w, &z8_json_object_to_string);
     z8_native_bind(prefix ~ "m_toString"w, &z8_json_object_to_string);
     z8_native_bind(prefix ~ "z8op_assign"w, &z8_json_object_assign);
+    z8_native_bind(prefix ~ "z8op_add"w, &z8_json_object_add_object);
     z8_native_bind(prefix ~ "m_getString"w, &z8_json_object_get_string);
     z8_native_bind(prefix ~ "m_has"w, &z8_json_object_has);
     z8_native_bind(prefix ~ "m_isEmpty"w, &z8_json_object_empty);
+    z8_native_bind(prefix ~ "m_size"w, &z8_json_object_size);
     z8_native_bind(prefix ~ "m_getNames"w, &z8_json_object_names);
     z8_native_bind(prefix ~ "m_getBool"w, &z8_json_object_get_bool);
     z8_native_bind(prefix ~ "m_getInt"w, &z8_json_object_get_int);
