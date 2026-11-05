@@ -31,7 +31,7 @@ need specialized adapters and are not handled by this function.
 Alternatively, a handler can call `z8_application_dispatch_request()` in
 application response mode. It resolves the `request` parameter, verifies the
 session user's request permission, and routes ordinary objects or the supported
-table `read`, `create`, `update` and `destroy` operations to the corresponding adapter. Before a table action, the
+table `read`, `create`, `copy`, `update` and `destroy` operations to the corresponding adapter. Before a table action, the
 host must install a database backend for the worker thread and restore the
 previous backend afterward. The authority is responsible for providing a
 current privilege snapshot. Executable jobs and other query actions still need

@@ -53,7 +53,7 @@ class Authority : IZ8HttpAuthority {
     Z8ApplicationSession authorize(Z8HttpRequest request, wstring id, wstring server) {
         if (server != "test"w || (id != "full"w && id != "limited"w && id != "denied"w)) return null;
         auto user = new Z8UserData(); user.id = z8_guid_create(1);
-        user.privileges = new Z8Privileges(Z8Access(true, true, true, false, true, true));
+        user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
         if (id == "limited"w) {
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.Title"w), Z8Access.init);
             user.privileges.setTableAccess(z8_guid_create_name("Sample"w), Z8Access(true, false, false, false, false, true));
@@ -131,12 +131,17 @@ void main(string[] args) {
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(action="create", data=new_record)
             assert result["success"] and result["data"][0]["title"] == "Third", result
+            copy_record = '[{"recordId":"00000000-0000-0000-0000-000000000004","title":"Copied"}]'
+            result = request(session="limited", action="copy", recordId="00000000-0000-0000-0000-000000000003", data=copy_record)
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = request(action="copy", recordId="00000000-0000-0000-0000-000000000003", data=copy_record)
+            assert result["success"] and result["data"][0]["title"] == "Copied" and result["data"][0]["amount"] == 25, result
             change = '[{"recordId":"00000000-0000-0000-0000-000000000002","title":"Updated","amount":12}]'
             result = request(session="limited", action="update", data=change)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(action="update", data=change)
             assert result["success"] and result["data"][0]["title"] == "Updated" and result["data"][0]["amount"] == 12, result
-            data = '["00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000003"]'
+            data = '["00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000003","00000000-0000-0000-0000-000000000004"]'
             result = request(session="limited", action="destroy", data=data)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(action="destroy", data=data)

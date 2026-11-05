@@ -1,0 +1,60 @@
+// Transactional subset of CopyAction for direct table records.
+void z8_application_dispatch_query_copy(wstring className) {
+    z8_application_dispatch_query_copy_target(className, null);
+}
+private void z8_application_dispatch_query_copy_target(wstring className, Z8Object query) {
+    auto request = z8_application_require_request();
+    auto session = z8_nonnull(request.session);
+    auto params = z8_nonnull(request.parameters);
+    if (request.writer.scopes.length != 2) throw new Exception("response object is not open");
+    if (params.z8_get("action"w) != "copy"w) throw new Exception("unsupported query action");
+    if (!z8_application_may_execute(session, className, "copy"w)) throw new Exception("request access denied");
+    auto keys = params.z8_keys();
+    for (long i; i < keys.z8_size(); ++i) {
+        auto name = keys.z8_get(i);
+        if (name is null) throw new Exception("invalid query copy parameter");
+        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w ||
+            name == "data"w || name == "fields"w || name == "recordId"w) continue;
+        if (params.z8_get(name).length) throw new Exception("unsupported query copy parameter: " ~ name.to!string);
+    }
+    if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
+    if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, query))
+        throw new Exception("query copy requires a Table");
+    auto privileges = z8_nonnull(session.user).privileges;
+    auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
+    if (privileges is null || !privileges.getTableAccess(queryKey).copy) throw new Exception("query copy access denied");
+    foreach (field; z8_query_declared_fields(query, true)) {
+        auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
+        if (!privileges.getFieldAccess(queryKey, fieldKey).write) throw new Exception("query copy field access denied");
+    }
+    auto selected = z8_application_query_fields(query, privileges, params);
+    auto data = params.z8_get("data"w), sourceIds = params.z8_get("recordId"w);
+    if (data is null || !data.length || sourceIds is null || !sourceIds.length) throw new Exception("query copy requires records and record ids");
+    auto records = z8_json_parse(data.to!string);
+    auto json = sourceIds[0] == '[' ? sourceIds : sourceIds[0] == '"' ? "["w ~ sourceIds ~ "]"w : "[\""w ~ sourceIds ~ "\"]"w;
+    auto originals = z8_json_parse(json.to!string);
+    if (records.type != JSONType.array || originals.type != JSONType.array || !originals.array.length || records.array.length < originals.array.length)
+        throw new Exception("query copy requires matching records and record ids");
+    auto connection = z8_connection_current_backend();
+    if (connection is null) throw new Exception("no current database connection");
+    Z8Guid[] ids;
+    connection.beginTransaction();
+    scope(failure) connection.rollback();
+    foreach (index, source; originals.array) {
+        if (source.type != JSONType.string || !source.str.length) throw new Exception("invalid query copy record id");
+        auto id = z8_guid_parse(source.str.to!wstring);
+        if (id is null) throw new Exception("invalid query copy record id");
+        auto record = records.array[index];
+        if (record.type != JSONType.object) throw new Exception("invalid query copy record");
+        foreach (name, value; record.object) {
+            auto field = z8_query_find_field_id(query, name.to!wstring);
+            if (field.z8_get_owner() !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
+                throw new Exception("linked and computed fields are not supported by query copy");
+            z8_application_query_set_value(field, value);
+        }
+        if (z8_query_user_events_enabled()) query.z8_query_virtual_onCopyAction(id);
+        ids ~= z8_query_copy(query, id);
+    }
+    connection.commit();
+    z8_application_query_write_affected(query, selected, ids, request.writer);
+}

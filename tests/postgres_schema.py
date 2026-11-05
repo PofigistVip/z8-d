@@ -725,6 +725,25 @@ void main(string[] args) {
     createdJson = parseJSON(createResult.to!string);
     assert(createdJson["data"].array.length == 1 && createdJson["data"][0]["recordId"].str != "00000000-0000-0000-0000-000000000000");
     queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
+    bool copy(wstring sourceIds, wstring data, out wstring output) {
+        auto request = new Z8ApplicationRequest(); request.session = querySession; request.monitor = new Z8RequestMonitor();
+        request.parameters.z8_add("request"w, "Sample"w); request.parameters.z8_add("action"w, "copy"w);
+        request.parameters.z8_add("fields"w, `["title","amount"]`w); request.parameters.z8_add("data"w, data); request.parameters.z8_add("recordId"w, sourceIds);
+        z8_application_set_request(request); z8_application_start_response(request, "Sample"w);
+        try { z8_application_dispatch_request(); } catch (Exception) { return false; }
+        z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); output = z8_application_response_text(request); return true;
+    }
+    wstring copyResult;
+    assert(copy("00000000-0000-0000-0000-000000000133"w, `[{"title":"Copy","amount":99}]`w, copyResult));
+    auto copyJson = parseJSON(copyResult.to!string);
+    assert(copyJson["data"].array.length == 1 && copyJson["data"][0]["title"].str == "Copy" && copyJson["data"][0]["amount"].integer == 99);
+    assert(copyJson["data"][0]["recordId"].str != "00000000-0000-0000-0000-000000000133");
+    auto countBeforeFailedCopy = db.execute(`SELECT count(*) FROM "z8_bootstrap"."Sample;--"`).rows[0][0].text;
+    assert(!copy(`["00000000-0000-0000-0000-000000000133","invalid"]`w, `[{},{}]`w, copyResult));
+    assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."Sample;--"`).rows[0][0].text == countBeforeFailedCopy);
+    queryUser.privileges.setFieldAccess(bootFieldKey, Z8Access(true, false, false, false, false, false));
+    assert(!copy("00000000-0000-0000-0000-000000000133"w, `[{}]`w, copyResult));
+    queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
     db.execute(`CREATE TABLE "z8_bootstrap"."DeleteRef" ("Target" uuid REFERENCES "z8_bootstrap"."Sample;--" ("RecordId"))`);
     db.execute(`INSERT INTO "z8_bootstrap"."DeleteRef" VALUES ('00000000-0000-0000-0000-00000000012E')`);
     bool destroy(wstring data) {
