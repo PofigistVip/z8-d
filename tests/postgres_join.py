@@ -673,7 +673,7 @@ void main(string[] args) {
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     auto session = new Z8ApplicationSession("join"w, user, user);
     auto priorBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "pg_temp"w));
-    wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null, wstring className = "HttpOrder"w, wstring action = "read"w, wstring groupSession = null, wstring having = null, wstring values = null, wstring totals = null, wstring count = null, wstring queryId = null) {
+    wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null, wstring className = "HttpOrder"w, wstring action = "read"w, wstring groupSession = null, wstring having = null, wstring values = null, wstring totals = null, wstring count = null, wstring queryId = null, wstring linkId = null) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, className); request.parameters.z8_add("action"w, action); request.parameters.z8_add("fields"w, fields);
         if (filter !is null) request.parameters.z8_add("filter"w, filter);
@@ -686,6 +686,7 @@ void main(string[] args) {
         if (totals !is null) request.parameters.z8_add("totals"w, totals);
         if (count !is null) request.parameters.z8_add("count"w, count);
         if (queryId !is null) request.parameters.z8_add("query"w, queryId);
+        if (linkId !is null) request.parameters.z8_add("link"w, linkId);
         auto priorRequest = z8_application_set_request(request); scope(exit) z8_application_set_request(priorRequest);
         z8_application_start_response(request, "HttpOrder"w); z8_application_dispatch_request();
         z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
@@ -831,6 +832,9 @@ void main(string[] args) {
     auto nestedResponse = parseJSON(requestFields(`["customer.label"]`w, null, `[ {"property":"customer.label"} ]`w,
         null, null, "HttpOrder"w, "read"w, null, null, null, null, null, "customer"w).to!string);
     assert(nestedResponse["data"].array.length == 3 && nestedResponse["data"][0]["customer.label"].str == "Alice");
+    auto viaLink = parseJSON(requestFields(`["customer.label"]`w, null, null, null, null, "HttpOrder"w,
+        "read"w, null, null, null, null, null, "ignored"w, "customerId"w).to!string);
+    assert(viaLink["data"].array.length == 3);
     auto nestedDefault = parseJSON(requestFields(`["customer.label"]`w, null, null, null, null,
         "HttpOrder"w, null, null, null, null, null, null, "customer"w).to!string);
     assert(nestedDefault["isQuery"].boolean && nestedDefault["id"].str == "customer" && nestedDefault["data"].array.length == 3);
@@ -935,6 +939,9 @@ void main(string[] args) {
     blocked = false; try { requestFields(`["customer.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
     blocked = false;
     try { requestFields(`["customer.label"]`w, null, null, null, null, "HttpOrder"w, "read"w, null, null, null, null, null, "customer"w); } catch (Exception) { blocked = true; }
+    assert(blocked);
+    blocked = false;
+    try { requestFields(`["customer.label"]`w, null, null, null, null, "HttpOrder"w, "read"w, null, null, null, null, null, null, "customerId"w); } catch (Exception) { blocked = true; }
     assert(blocked);
     foreach (action; ["create"w, "update"w, "destroy"w]) {
         blocked = false; try { nestedWrite(action, `[]`w); } catch (Exception error) { blocked = error.msg == "nested query relation access denied"; }

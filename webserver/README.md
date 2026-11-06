@@ -74,7 +74,8 @@ uses the table's declared fields as a convenience fallback. Field dependencies
 are included in the selection, subject to the same access checks.
 Read, create, update and destroy requests can select a nested table using
 `query`; the root request, containing tables, their connecting relations and
-the selected table are checked.
+the selected table are checked. A read can also select the target of a `link`;
+as in the original action factory, a nonempty `link` takes precedence over `query`.
 With no
 `action` parameter, the same metadata is followed by the table read response.
 
