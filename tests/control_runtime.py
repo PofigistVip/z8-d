@@ -66,6 +66,19 @@ import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.form.Section;
 public class CyclicTable extends Table { Section section; section.controls = {section}; controls = {section}; }
 ''', encoding="utf-8")
+    (source / "ListboxDetail.bl").write_text('''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+public class ListboxDetail extends Table { public Table parent; [name "Parent"] public Link parentId = parent; }
+''', encoding="utf-8")
+    (source / "ListboxTable.bl").write_text('''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.form.Listbox;
+public class ListboxTable extends Table {
+    ListboxDetail detail; Listbox list;
+    list.query = detail; list.link = detail.parentId; list.columns = {detail.parentId}; controls = {list};
+}
+''', encoding="utf-8")
     (source / "SingleAction.bl").write_text('''
 import org.zenframework.z8.base.form.action.Action;
 import org.zenframework.z8.base.query.Query;
@@ -207,6 +220,20 @@ void main() {
     assert(meta["controls"][3]["isListbox"].boolean && meta["controls"][3]["editable"].boolean);
     assert(meta["controls"][3]["query"]["name"].str == "destination" && meta["controls"][3]["query"]["primaryKey"].str == "destination.recordId");
     assert(meta["controls"][3]["query"]["columns"][0]["name"].str == "destination.recordId");
+    auto linkedRequest = new Z8ApplicationRequest(); linkedRequest.session = request.session;
+    linkedRequest.parameters.z8_add("request"w, "ListboxTable"w); linkedRequest.parameters.z8_add("action"w, "meta"w);
+    z8_application_set_request(linkedRequest); z8_application_start_response(linkedRequest, "ListboxTable"w);
+    z8_application_dispatch_request(); z8_application_finish_response(linkedRequest, new Z8RequestMonitor());
+    auto linkedList = parseJSON(z8_application_response_text(linkedRequest).to!string)["controls"][0]["query"];
+    assert(linkedList["name"].str == "detail" && linkedList["link"]["name"].str == "detail.parentId");
+    user.privileges.setFieldAccess(z8_guid_create_name("ListboxDetail.Parent"w), Z8Access.init);
+    linkedRequest = new Z8ApplicationRequest(); linkedRequest.session = request.session;
+    linkedRequest.parameters.z8_add("request"w, "ListboxTable"w); linkedRequest.parameters.z8_add("action"w, "meta"w);
+    z8_application_set_request(linkedRequest); z8_application_start_response(linkedRequest, "ListboxTable"w);
+    bool linkDenied; try { z8_application_dispatch_request(); } catch (Exception error) { linkDenied = error.msg == "Listbox link access denied"; }
+    assert(linkDenied);
+    user.privileges = new Z8Privileges(Z8Access(true, false, false, false, false, true));
+    z8_application_set_request(request);
     assert(meta["actions"][0]["name"].str == "publish" && meta["actions"][0]["isAction"].boolean && meta["actions"][0]["type"].str == "primary");
     assert(meta["actions"][0]["request"].str == "CustomTable" && meta["actions"][0]["parameters"].array.length == 6);
     auto parameters = meta["actions"][0]["parameters"].array;

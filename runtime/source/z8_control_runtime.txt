@@ -411,7 +411,6 @@ private void z8_control_write_meta_tree(Z8Object item, Z8Object query, Z8Object 
     if (z8_native_is_instance(z8_listbox_name, item)) {
         auto state = z8_listbox_state(item);
         auto target = z8_nonnull(state.query);
-        if (state.link !is null) throw new Exception("Listbox link metadata is not supported yet");
         auto control = z8_control_state(item), queryState = z8_query_state(target);
         auto savedReadOnly = control.readOnly;
         control.readOnly = z8_optional_wrap((savedReadOnly.present && savedReadOnly.value) || (queryState.readOnly.present && queryState.readOnly.value));
@@ -462,6 +461,19 @@ private void z8_control_write_meta_tree(Z8Object item, Z8Object query, Z8Object 
             writer.start('[', "actions"w);
             foreach (action; actions) { writer.start('{'); z8_action_write_meta(action, target, context, privileges); writer.finish('}'); }
             writer.finish(']');
+        }
+        if (state.link !is null) {
+            auto link = state.link;
+            if (!z8_native_is_instance("org.zenframework.z8.server.base.table.value.Link"w, link) ||
+                !z8_application_query_field_readable(target, link, privileges)) throw new Exception("Listbox link access denied");
+            auto linked = z8_link_query(link);
+            if (linked !is null && z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, linked)) {
+                auto linkedKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, linked);
+                if (!privileges.getTableAccess(linkedKey).read) throw new Exception("Listbox linked table access denied");
+            }
+            if (linked !is null && z8_native_is_instance("org.zenframework.z8.server.base.table.TreeTable"w, linked))
+                throw new Exception("Listbox tree link metadata is not supported yet");
+            writer.start('{', "link"w); z8_control_write_field_meta(link, target, context, privileges); writer.finish('}');
         }
         writer.finish('}');
         return;
