@@ -202,7 +202,7 @@ private void z8_application_query_write_rows(Z8Object query, Z8JsonWriterState w
 void z8_application_dispatch_query_read(wstring className) {
     z8_application_dispatch_query_read_target(className, null);
 }
-private void z8_application_dispatch_query_read_target(wstring className, Z8Object query) {
+private void z8_application_dispatch_query_read_target(wstring className, Z8Object query, bool defaultAction = false) {
     import std.json : JSONType;
     auto request = z8_application_require_request();
     auto session = z8_nonnull(request.session);
@@ -210,7 +210,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     auto writer = request.writer;
     if (writer.scopes.length != 2) throw new Exception("response object is not open");
     auto action = params.z8_get("action"w);
-    if (action != "read"w) throw new Exception("unsupported query action");
+    if (action != "read"w && !(defaultAction && action is null)) throw new Exception("unsupported query action");
     if (!z8_application_may_execute(session, className, action)) throw new Exception("request access denied");
     auto parameterKeys = params.z8_keys();
     for (long i; i < parameterKeys.z8_size(); ++i) {
@@ -281,8 +281,12 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
             read.byRecordIds = true;
         }
     }
-    Z8Object[] groupOrder;
+    Z8Object[] groupOrder, defaultGroups;
     auto group = params.z8_get("group"w);
+    if (defaultAction && group !is null && group.length) throw new Exception("group parameter requires an explicit read action");
+    if (defaultAction) foreach (field; z8_query_array(query, "groupFields"w)) {
+        foreach (item; selected) if (item is field) { defaultGroups ~= field; break; }
+    }
     if (group !is null && group.length) {
         auto parsed = z8_json_parse(group.to!string);
         JSONValue[] entries;
@@ -300,6 +304,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         }
     }
     auto sorting = params.z8_get("sort"w);
+    if (defaultAction && sorting !is null && sorting.length) throw new Exception("sort parameter requires an explicit read action");
     if (sorting !is null && sorting.length) {
         auto parsed = z8_json_parse(sorting.to!string);
         if (parsed.type != JSONType.array) throw new Exception("query sort must be a JSON array");
@@ -316,6 +321,19 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
             if (!exists) read.sortFields ~= field;
         }
     }
+    if (defaultAction) {
+        groupOrder = null;
+        foreach (field; defaultGroups) {
+            bool exists;
+            foreach (existing; groupOrder) if (existing is field) { exists = true; break; }
+            if (!exists) groupOrder ~= field;
+        }
+        foreach (field; z8_query_array(query, "sortFields"w)) {
+            bool selectedField;
+            foreach (item; selected) if (item is field) { selectedField = true; break; }
+            if (selectedField) read.sortFields ~= field;
+        }
+    }
     foreach (field; read.sortFields) {
         bool exists;
         foreach (existing; groupOrder) if (existing is field) { exists = true; break; }
@@ -324,6 +342,12 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     read.sortFields = groupOrder;
     foreach (field; read.sortFields) {
         if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("query sort field access denied");
+    }
+    auto defaultSort = read.sortFields.dup;
+    void writeDefaultMetadata() {
+        if (!defaultAction) return;
+        z8_application_query_write_meta(query, selected, groups, privileges);
+        z8_application_query_write_order(defaultSort, defaultGroups);
     }
     auto lookupFields = params.z8_get("lookupFields"w), lookup = params.z8_get("lookup"w);
     if (!read.byRecordIds && lookupFields !is null && lookupFields.length) {
@@ -420,6 +444,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
                 throw new Exception("query having is not supported for totals");
             foreach (i, field; fields) if (z8_field_aggregation(field) != aggregations[i])
                 throw new Exception("changing query aggregations during beforeRead is not supported");
+            writeDefaultMetadata();
         } catch (Throwable error) {
             if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();
             throw error;
@@ -439,7 +464,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         if (counter is null) throw new Exception("query executor does not support count");
         z8_query_prepare_read(query, read);
         long total;
-        try { verifyGroups(); total = counter.count(query, read); }
+        try { verifyGroups(); writeDefaultMetadata(); total = counter.count(query, read); }
         catch (Throwable error) {
             if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();
             throw error;
@@ -458,7 +483,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     }
     if (!prepared) {
         z8_query_prepare_read(query, read);
-        try { verifyGroups(); }
+        try { verifyGroups(); writeDefaultMetadata(); }
         catch (Throwable error) {
             if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();
             throw error;

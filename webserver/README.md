@@ -40,8 +40,8 @@ adapters; selecting this handler is explicit rather than automatic.
 The initial `meta` adapter writes query attributes, access rights, keys and
 metadata for direct fields, including basic presentation, dependencies,
 permitted source information and BL `writeMeta` overrides. Non-field controls,
-linked field metadata, actions and reports are rejected for now. The default
-action combining metadata and data is still pending.
+linked field metadata, actions and reports are rejected for now. With no
+`action` parameter, the same metadata is followed by the table read response.
 
 An optional `IZ8HttpAuthority` constructor argument connects a host authority
 to the transport. With an authority present, each request must have a session

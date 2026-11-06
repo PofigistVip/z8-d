@@ -107,7 +107,9 @@ void main(string[] args) {
                 query = dict(request="Sample", action="read", session=session, server="test",
                              fields='["title","amount"]')
                 query.update(params)
-                if query["action"] == "destroy":
+                if query["action"] is None:
+                    query.pop("action")
+                if query.get("action") == "destroy":
                     query.pop("fields")
                 conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
                 try:
@@ -126,6 +128,10 @@ void main(string[] args) {
             assert {field["name"] for field in result["fields"]} == {"title", "amount", "recordId", "lock"}, result
             result = request(session="limited", action="meta")
             assert result["success"] and "title" not in {field["name"] for field in result["fields"]}, result
+            result = request(action=None)
+            assert result["success"] and result["isQuery"] and len(result["data"]) == 2, result
+            result = request(action=None, count="true")
+            assert result["success"] and result["isQuery"] and result["total"] == 2 and "data" not in result, result
             result = request(session="limited", filter='{"property":"title","value":"First"}')
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(session="denied")

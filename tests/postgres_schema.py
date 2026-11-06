@@ -33,6 +33,7 @@ import org.zenframework.z8.base.table.value.TextField;
 import org.zenframework.z8.base.table.value.BinaryField;
 import org.zenframework.z8.base.table.value.IntExpression;
 import org.zenframework.z8.base.table.value.Aggregation;
+import org.zenframework.z8.base.table.SortDirection;
 import org.zenframework.z8.base.application.Application;
 [name "Sample;--"] public class Sample extends Table {
     [name "Title"] public StringField title; title.defaultValue = "O'Reilly 😀";
@@ -54,6 +55,7 @@ import org.zenframework.z8.base.application.Application;
     virtual protected void onDestroyAction(guid id) { actionEvents = "D"; }
     virtual protected sql_bool scope() {
         if (Application.isRequest() && Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "write-values") return amount >= amount.get();
+        if (Application.isRequest() && Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "default-events") return amount >= amount.get();
         return amount >= 0;
     }
     virtual protected void onReadAction() {
@@ -62,6 +64,11 @@ import org.zenframework.z8.base.application.Application;
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-group") { groupBy = {flag}; amount.aggregation = Aggregation.Sum; }
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-group-average") { groupBy = {flag}; amount.aggregation = Aggregation.Average; }
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-average") amount.aggregation = Aggregation.Average;
+        if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "default-events") amount = amount.get() + 1;
+        if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "default-order") { groupFields = {flag}; sortFields = {amount}; amount.sortDirection = SortDirection.Desc; }
+    }
+    virtual protected void beforeRead() {
+        if (Application.isRequest() && Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "default-events") amount = amount.get() + 1;
     }
 }
 ''', encoding="utf-8")
@@ -728,6 +735,15 @@ void main(string[] args) {
     assert(orderedJson["data"].array.length == 2 && orderedJson["data"][0]["amount"].integer == 10 && orderedJson["data"][1]["amount"].integer == 42);
     orderedJson = parseJSON(orderedGroup(`[{"property":"flag"}]`w, `[{"property":"flag","direction":"DESC"}]`w).to!string);
     assert(orderedJson["data"][0]["amount"].integer == 42 && orderedJson["data"][1]["amount"].integer == 10);
+    auto defaultOrder = new Z8ApplicationRequest(); defaultOrder.session = querySession; defaultOrder.monitor = new Z8RequestMonitor();
+    defaultOrder.parameters.z8_add("request"w, "Sample"w); defaultOrder.parameters.z8_add("session"w, "default-order"w);
+    defaultOrder.parameters.z8_add("fields"w, `["flag","amount"]`w);
+    z8_application_set_request(defaultOrder); z8_application_start_response(defaultOrder, "Sample"w); z8_application_dispatch_request();
+    z8_application_finish_response(defaultOrder, cast(Z8RequestMonitor)defaultOrder.monitor);
+    auto defaultOrderJson = parseJSON(z8_application_response_text(defaultOrder).to!string);
+    assert(defaultOrderJson["group"][0].str == "flag" && defaultOrderJson["sort"].array.length == 2);
+    assert(defaultOrderJson["sort"][0]["property"].str == "flag" && defaultOrderJson["sort"][1]["direction"].str == "desc");
+    assert(defaultOrderJson["data"][0]["amount"].integer == 10 && defaultOrderJson["data"][1]["amount"].integer == 42);
     queryUser.privileges.setFieldAccess(z8_guid_create_name("Sample;--.Flag"w), Z8Access.init);
     groupDenied = false;
     try { orderedGroup(`{"property":"flag"}`w, `[]`w); } catch (Exception) { groupDenied = true; }
@@ -791,6 +807,13 @@ void main(string[] args) {
     z8_application_finish_response(hooked, cast(Z8RequestMonitor)hooked.monitor);
     auto hookedJson = parseJSON(z8_application_response_text(hooked).to!string);
     assert(hookedJson["data"].array.length == 1 && hookedJson["data"][0]["amount"].integer == 42);
+    auto defaultRead = new Z8ApplicationRequest(); defaultRead.session = querySession; defaultRead.monitor = new Z8RequestMonitor();
+    defaultRead.parameters.z8_add("request"w, "Sample"w); defaultRead.parameters.z8_add("fields"w, `["amount"]`w);
+    defaultRead.parameters.z8_add("session"w, "default-events"w); defaultRead.parameters.z8_add("values"w, `{"amount":40}`w);
+    z8_application_set_request(defaultRead); z8_application_start_response(defaultRead, "Sample"w); z8_application_dispatch_request();
+    z8_application_finish_response(defaultRead, cast(Z8RequestMonitor)defaultRead.monitor);
+    auto defaultJson = parseJSON(z8_application_response_text(defaultRead).to!string);
+    assert(defaultJson["isQuery"].boolean && defaultJson["data"].array.length == 1 && defaultJson["data"][0]["amount"].integer == 42);
     auto contextRead = new Z8ApplicationRequest(); contextRead.session = querySession; contextRead.monitor = new Z8RequestMonitor();
     contextRead.parameters.z8_add("action"w, "read"w); contextRead.parameters.z8_add("fields"w, `["amount"]`w);
     contextRead.parameters.z8_add("session"w, "with-values"w); contextRead.parameters.z8_add("values"w, `[{"amount":40}]`w);

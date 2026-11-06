@@ -40,6 +40,11 @@ private void z8_application_dispatch_query_meta_target(wstring className, Z8Obje
     auto actualGroups = z8_query_array(query, "groupBy"w);
     if (actualGroups.length != groups.length) throw new Exception("changing query groups during beforeRead is not supported");
     foreach (i, field; actualGroups) if (field !is groups[i]) throw new Exception("changing query groups during beforeRead is not supported");
+    z8_application_query_write_meta(query, selected, groups, privileges);
+}
+private void z8_application_query_write_meta(Z8Object query, Z8Object[] selected, Z8Object[] groups, Z8Privileges privileges) {
+    auto writer = z8_application_require_request().writer;
+    auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
     if (z8_query_array(query, "actions"w).length || z8_query_array(query, "reports"w).length || z8_query_array(query, "aggregateBy"w).length)
         throw new Exception("query actions, reports and aggregateBy metadata are not supported");
     void fields(wstring property, Z8Object[] values) {
@@ -87,4 +92,20 @@ private void z8_application_dispatch_query_meta_target(wstring className, Z8Obje
     z8_monitor_property(writer, "limit"w, z8_query_limit(query));
     z8_monitor_property(writer, "totals"w, state.totals);
     z8_monitor_property(writer, "colCount"w, state.colCount);
+}
+private void z8_application_query_write_order(Z8Object[] sort, Z8Object[] group) {
+    auto writer = z8_application_require_request().writer;
+    if (sort.length) {
+        writer.start('[', "sort"w);
+        foreach (field; sort) {
+            writer.start('{'); z8_monitor_property(writer, "property"w, field.z8_id());
+            z8_monitor_property(writer, "direction"w, z8_field_sort_direction(field)); writer.finish('}');
+        }
+        writer.finish(']');
+    }
+    if (group.length) {
+        writer.start('[', "group"w);
+        foreach (field; group) writer.raw(z8_json_quote(field.z8_id()));
+        writer.finish(']');
+    }
 }
