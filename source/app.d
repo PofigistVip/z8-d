@@ -90,7 +90,25 @@ private string responseArgument(string value) {
     return "\"" ~ value.replace("\"", "\\\"") ~ "\"";
 }
 
+private string dmdVersion() {
+    import std.string : splitLines, strip;
+    auto result = execute(["dmd", "--version"]);
+    auto lines = result.output.splitLines();
+    if (result.status != 0 || !lines.length || !lines[0].strip().length)
+        throw new Exception("could not determine DMD version");
+    return lines[0].strip().idup;
+}
+private void checkLibraryCompilers(CompiledLibrary[] libraries, string version_) {
+    foreach (library; libraries) {
+        if (!library.compilerVersion.length)
+            throw new Exception("BL library has no DMD version; rebuild " ~ library.id);
+        if (library.compilerVersion != version_)
+            throw new Exception("BL library DMD version differs; rebuild " ~ library.id ~ " with " ~ version_);
+    }
+}
+
 private int buildExecutable(GeneratedModule[] modules, string outputPath, CompiledLibrary[] libraries = null) {
+    if (libraries.length) checkLibraryCompilers(libraries, dmdVersion());
     auto tempRoot = dirName(absolutePath(buildPath(tempDir(), "z8d-probe")));
     auto temporary = absolutePath(buildPath(tempRoot, "z8d-" ~ randomUUID().to!string));
     if (dirName(temporary) != tempRoot || !baseName(temporary).startsWith("z8d-"))
@@ -163,6 +181,8 @@ private CompilationOptions configureLibraries(ref SourceUnit[] units, CompiledLi
 // this command may be replaced, and a failed installation restores the old one.
 private int buildLibrary(SourceUnit[] owned, CompiledLibrary[] libraries, string outputPath, string id) {
     if (!validLibraryId(id)) throw new Exception("library id must contain only ASCII letters, digits and underscores");
+    auto compilerVersion = dmdVersion();
+    checkLibraryCompilers(libraries, compilerVersion);
     import std.uni : toLower;
     foreach (library; libraries) if (library.id.toLower == id.toLower) throw new Exception("library id conflicts with a dependency: " ~ id);
     auto units = owned.dup;
@@ -227,7 +247,7 @@ private int buildLibrary(SourceUnit[] owned, CompiledLibrary[] libraries, string
     auto interfacesRevision = libraryTreeRevision(dRoot, [".d"]);
     auto archiveRevision = libraryFileRevision(binary);
     writeFile(fileSystemPath(buildPath(staging, "z8-library.json")),
-        serializeLibrary(id, owned, options.exportedTypes, libraries, runtimeRevision, interfacesRevision, archiveRevision));
+        serializeLibrary(id, owned, options.exportedTypes, libraries, runtimeRevision, interfacesRevision, archiveRevision, compilerVersion));
     bool backedUp;
     if (exists(fileSystemPath(output))) { rename(fileSystemPath(output), fileSystemPath(backup)); backedUp = true; }
     try { rename(fileSystemPath(staging), fileSystemPath(output)); installed = true; }

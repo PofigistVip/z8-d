@@ -13,7 +13,7 @@ import z8.compiler_model : SourceUnit, LibraryType;
 /// A compiled library keeps the BL declarations needed for semantic analysis,
 /// its generated D interfaces, and a separately compiled static library.
 struct CompiledLibrary {
-    string id, prefix, directory, binary, dRoot, revision, runtimeRevision;
+    string id, prefix, directory, binary, dRoot, revision, runtimeRevision, compilerVersion;
     SourceUnit[] sources;
     LibraryType[string] types;
     string[string] requirements;
@@ -90,6 +90,10 @@ CompiledLibrary loadLibrary(string directory, bool requireCurrentRegistry = true
     library.directory = root; library.dRoot = buildPath(root, "d");
     library.revision = libraryRevision(text);
     library.runtimeRevision = field("runtime", JSONType.string).str;
+    if (auto compiler = "compiler" in document.object) {
+        if (compiler.type != JSONType.string || !compiler.str.length) throw new Exception("invalid BL library compiler version");
+        library.compilerVersion = compiler.str;
+    }
     version (Windows) auto binaryName = "z8-library.lib";
     else auto binaryName = "libz8-library.a";
     library.binary = buildPath(root, binaryName);
@@ -164,7 +168,7 @@ string[] libraryRoots(CompiledLibrary[] libraries) {
 }
 
 string serializeLibrary(string id, SourceUnit[] sources, LibraryType[string] types, CompiledLibrary[] dependencies,
-                        string runtimeRevision, string interfacesRevision, string archiveRevision) {
+                        string runtimeRevision, string interfacesRevision, string archiveRevision, string compilerVersion) {
     import std.algorithm.sorting : sort;
     JSONValue[] sourceItems, typeItems, requirements;
     foreach (source; sources) sourceItems ~= JSONValue(["name": JSONValue(source.name), "source": JSONValue(source.source)]);
@@ -176,6 +180,6 @@ string serializeLibrary(string id, SourceUnit[] sources, LibraryType[string] typ
     foreach (dependency; dependencies)
         requirements ~= JSONValue(["id": JSONValue(dependency.id), "revision": JSONValue(dependency.revision)]);
     return JSONValue(["format": JSONValue("z8-d-library-1"), "id": JSONValue(id), "target": JSONValue(libraryTarget()), "registryApi": JSONValue(2L),
-        "runtime": JSONValue(runtimeRevision), "interfaces": JSONValue(interfacesRevision), "archive": JSONValue(archiveRevision),
+        "runtime": JSONValue(runtimeRevision), "interfaces": JSONValue(interfacesRevision), "archive": JSONValue(archiveRevision), "compiler": JSONValue(compilerVersion),
         "sources": JSONValue(sourceItems), "types": JSONValue(typeItems), "requires": JSONValue(requirements)]).toPrettyString();
 }

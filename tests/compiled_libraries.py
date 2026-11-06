@@ -64,6 +64,24 @@ void main() {
     assert incompatible_api.returncode and "registry API changed; rebuild first" in incompatible_api.stderr, incompatible_api.stderr
     subprocess.run([str(compiler), "library", str(alpha), str(one), "first"], check=True)
 
+    original_manifest = manifest_path.read_bytes()
+    altered = json.loads(original_manifest)
+    altered["compiler"] = "DMD from a different build"
+    manifest_path.write_text(json.dumps(altered), encoding="utf-8")
+    project_env = os.environ.copy()
+    project_env["PATH"] = str(Path(os.environ.get("SystemRoot", "C:/Windows")) / "System32") if os.name == "nt" else ""
+    subprocess.run([str(compiler), "project", str(app), str(temp / "other-dmd-generated"), *libraries], env=project_env, check=True)
+    mismatch = subprocess.run([str(compiler), "build", str(app), "demo.Main.run", str(executable), *libraries], capture_output=True, text=True)
+    assert mismatch.returncode and "DMD version differs; rebuild first" in mismatch.stderr, mismatch.stderr
+    mismatch = subprocess.run([str(compiler), "library", str(beta), str(temp / "wrong-dmd-library"), "wrong", "--library", str(one)], capture_output=True, text=True)
+    assert mismatch.returncode and "DMD version differs; rebuild first" in mismatch.stderr, mismatch.stderr
+    del altered["compiler"]
+    manifest_path.write_text(json.dumps(altered), encoding="utf-8")
+    missing_dmd = subprocess.run([str(compiler), "build", str(app), "demo.Main.run", str(executable), *libraries], capture_output=True, text=True)
+    assert missing_dmd.returncode and "has no DMD version; rebuild first" in missing_dmd.stderr, missing_dmd.stderr
+    subprocess.run([str(compiler), "library", str(alpha), str(one), "first"], check=True)
+    assert json.loads(manifest_path.read_text(encoding="utf-8"))["compiler"]
+
     interface = one / "d/z8lib/l_first/alpha/Value.d"
     original_interface = interface.read_bytes()
     interface.write_bytes(original_interface + b"\n// changed\n")
