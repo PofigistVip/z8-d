@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package z8.authority.v1;
+
+import "z8/authority/v1/common.proto";
+import "z8/authority/v1/primary.proto";
+import "z8/authority/v1/privileges.proto";
+
+message Role {
+  Guid id = 1;
+  optional string name = 2;
+}
+
+message Entry {
+  Guid id = 1;
+  optional string class_id = 2;
+  optional string title = 3;
+}
+
+message Parameter {
+  oneof key_kind {
+    string key = 1;
+    bool null_key = 3;
+  }
+  Primary value = 2;
+}
+
+message UserSnapshot {
+  Guid id = 1;
+  optional string login = 2;
+  optional string first_name = 3;
+  optional string middle_name = 4;
+  optional string last_name = 5;
+  optional string description = 6;
+  optional string phone = 7;
+  optional string email = 8;
+  optional string settings = 9;
+  repeated Role roles = 10;
+  repeated Entry entries = 11;
+  Privileges privileges = 12;
+  bool administrator = 13;
+  bool builtin_administrator = 14;
+  bool builtin_system = 15;
+  bool change_password = 16;
+  bool has_roles = 17;
+  repeated Parameter parameters = 18;
+}
+
+message SessionSnapshot {
+  string session_id = 1;
+  string schema = 2;
+  UserSnapshot user = 3;
+  UserSnapshot system = 4;
+}

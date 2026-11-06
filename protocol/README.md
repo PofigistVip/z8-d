@@ -18,6 +18,14 @@ decimals, strings, GUIDs, dates and durations. The `oneof` preserves the
 difference between null and default scalar values. Decimal coefficient and
 scale are preserved separately. Binary, geometry, file and user-defined primary
 values are currently rejected instead of being silently dropped.
+`session.proto` and `z8.authority.session` serialize a session ID, schema,
+user and system identities, roles, entry points, privilege snapshots and typed
+parameters. Optional identity strings distinguish null from empty; parameters
+also distinguish null and empty keys and values. Decoding requires both users,
+their IDs and privileges, and rejects duplicate parameter keys. Conversion to
+runtime objects intentionally discards unknown fields; it is not a wire-message
+proxy. Parameters using the primary types listed above as unsupported cause the
+operation to fail.
 `Z8ProtobufAuthorityNotifier` implements the runtime's user and role notifier
 interfaces and forwards encoded events to a host-provided
 `IZ8AuthorityChangePublisher`. A receiving host dispatches them with
@@ -35,6 +43,7 @@ Transport, endpoint authentication, delivery guarantees and the rest of the
 original RMI interfaces remain to be implemented. Do not accept these messages
 from an untrusted peer without an authenticated transport.
 
-Run `python tests/protobuf_notifications.py`, `python tests/protobuf_privileges.py`
-and `python tests/protobuf_primary.py` to cross-check serialization with Google's
-Python protobuf runtime; the tests require the `protobuf` Python package.
+Run `python tests/protobuf_notifications.py`, `python tests/protobuf_privileges.py`,
+`python tests/protobuf_primary.py` and `python tests/protobuf_session.py` to
+cross-check serialization with Google's Python protobuf runtime; the tests require
+the `protobuf` Python package.
