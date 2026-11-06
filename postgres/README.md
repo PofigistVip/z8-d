@@ -178,6 +178,9 @@ is installed in the database. File and attachment field values are stored
 as text metadata; binary fields accept an index into the request's uploaded
 files. Linked or computed fields and additional write options are rejected.
 Persisting attachment files separately is not implemented.
+The native `SystemFiles` table's fields and creation timestamps are available
+when the host includes it in schema bootstrap. File storage and the
+`AttachmentProcessor` workflow are not yet connected to that table.
 Optional `values` are checked before a create, update or copy transaction and
 applied as readable context fields when selecting its response.
 The direct-table `copy` action accepts source GUIDs in `recordId` and one

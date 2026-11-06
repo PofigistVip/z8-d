@@ -229,6 +229,7 @@ import org.zenframework.z8.base.table.system.UserEntries;
 import org.zenframework.z8.base.table.system.Jobs;
 import org.zenframework.z8.base.table.system.ScheduledJobs;
 import org.zenframework.z8.base.table.system.ScheduledJobLogs;
+import org.zenframework.z8.base.table.system.Files;
 import org.zenframework.z8.base.security.User;
 import org.zenframework.z8.base.table.value.Field;
 public class Probe {
@@ -255,6 +256,8 @@ public class Probe {
     public static Jobs jobs() { Jobs value; return value; }
     public static ScheduledJobs scheduledJobs() { ScheduledJobs value; return value; }
     public static ScheduledJobLogs scheduledJobLogs() { ScheduledJobLogs value; return value; }
+    public static Files files() { Files value; return value; }
+    public static void createFile(Files value, guid id) { value.name = "hello.txt"; value.path = "storage/hello.txt"; value.create(id); }
     public static void createSchedule(ScheduledJobs value, guid id, guid job) { value.job = job; value.create(id); }
     public static void createScheduleLog(ScheduledJobLogs value, guid id, guid schedule) { value.scheduledJob = schedule; value.errors = true; value.create(id); }
     public static void setScheduleCron(ScheduledJobs value, guid id, string cron) { value.cron = cron; value.update(id); }
@@ -786,6 +789,17 @@ void main(string[] args) {
     z8_postgres_create_tables(db, "z8_test"w, [jobs]);
     db.execute(`INSERT INTO "z8_test"."SystemJobs" ("RecordId", "Name", "Class") VALUES ('00000000-0000-0000-0000-000000000088', 'Daily', 'example.Daily')`);
     assert(db.execute(`SELECT "Name", "Class" FROM "z8_test"."SystemJobs" WHERE "RecordId" = '00000000-0000-0000-0000-000000000088'`).rows[0][1].text == "example.Daily");
+    auto systemFiles = P.m_files(); auto filesDDL = z8_postgres_create_table_sql("z8_test"w, systemFiles);
+    assert(filesDDL.canFind(`"SystemFiles"`) && filesDDL.canFind(`"Name" character varying`) && filesDDL.canFind(`"Path" character varying`));
+    assert(filesDDL.canFind(`"File" bytea`) && filesDDL.canFind(`"Last modified" bigint`) && filesDDL.canFind(`"Location" bigint`));
+    foreach (field; z8_query_declared_fields(systemFiles, true)) if (field.z8_index() == "name"w || field.z8_index() == "path"w)
+        assert(z8_optional_require(z8_native_field!(Z8Optional!long)("org.zenframework.z8.server.base.table.value.StringField.f_length"w, field)) == 512);
+    z8_postgres_create_tables(db, "z8_test"w, [systemFiles]);
+    auto savedFilesBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "z8_test"w));
+    P.m_createFile(systemFiles, z8_guid_create(0x887));
+    z8_connection_set_current(savedFilesBackend);
+    auto fileRow = db.execute(`SELECT "Name", "Path", "Time"::text, "Last modified"::text FROM "z8_test"."SystemFiles" WHERE "RecordId" = '00000000-0000-0000-0000-000000000887'`).rows[0];
+    assert(fileRow[0].text == "hello.txt" && fileRow[1].text == "storage/hello.txt" && fileRow[2].text == fileRow[3].text && fileRow[2].text.to!long > 0);
     auto sequences = P.m_sequences();
     auto sequenceDDL = z8_postgres_create_table_sql("z8_test"w, sequences);
     assert(sequenceDDL.canFind(`"Description" bytea`) && sequenceDDL.canFind(`"Key" character varying`) && sequenceDDL.canFind(`"Value" bigint`));

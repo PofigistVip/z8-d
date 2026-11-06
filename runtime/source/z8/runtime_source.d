@@ -52,6 +52,7 @@ package enum string runtimeSource = import("z8_core_runtime.txt") ~ import("z8_n
     import("z8_system_jobs_runtime.txt") ~ "\n" ~
     import("z8_scheduled_jobs_runtime.txt") ~ "\n" ~
     import("z8_scheduled_job_logs_runtime.txt") ~ "\n" ~
+    import("z8_system_files_runtime.txt") ~ "\n" ~
     import("z8_sequencer_runtime.txt") ~ "\n" ~
     import("z8_system_tables_runtime.txt") ~ "\n" ~
     import("z8_system_requests_runtime.txt") ~ "\n" ~

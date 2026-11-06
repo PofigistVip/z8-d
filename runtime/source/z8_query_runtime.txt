@@ -286,6 +286,7 @@ private void z8_query_on_new(Z8Object self) {
         }
     }
     if (z8_native_is_instance(z8_users_name, self)) z8_users_on_new(self);
+    if (z8_native_is_instance(z8_system_files_name, self)) z8_system_files_on_new(self);
 }
 private Z8Guid z8_query_insert_id(Z8Object self, Z8Guid id) {
     auto writer = z8_query_writer(self);

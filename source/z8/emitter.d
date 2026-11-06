@@ -1238,6 +1238,12 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 result ~= "this.f_objects().z8_add(this.f_" ~ name ~ "());\n";
             result ~= "}\n";
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Files"w) {
+            result ~= "override void z8_init_members() {\nsuper.z8_init_members();\n";
+            foreach (name; ["name", "data", "path", "size", "time", "lastModified", "location"])
+                result ~= "this.f_objects().z8_add(this.f_" ~ name ~ "());\n";
+            result ~= "}\n";
+        }
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Tables"w) {
             result ~= "override void z8_init_members() {\nsuper.z8_init_members();\n";
             foreach (name; ["name", "description", "classId", "displayName"])
@@ -1303,6 +1309,8 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
             result ~= "z8_scheduled_jobs_configure(this);\n";
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.ScheduledJobLogs"w)
             result ~= "z8_scheduled_job_logs_configure(this);\n";
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Files"w)
+            result ~= "z8_system_files_configure(this);\n";
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Tables"w)
             result ~= "z8_system_tables_configure(this);\n";
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Requests"w)

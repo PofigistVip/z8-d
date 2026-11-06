@@ -1,0 +1,38 @@
+// Native members of the framework's SystemFiles table (Files.java).
+private enum z8_system_files_name = "org.zenframework.z8.server.base.table.system.Files"w;
+private class Z8SystemFilesState { Z8Object[7] fields; }
+private void z8_system_files_new(Z8Object self) {
+    enum base = "org.zenframework.z8.server.base.table.value."w;
+    enum kinds = ["StringField"w, "BinaryField"w, "StringField"w, "IntegerField"w,
+        "DatetimeField"w, "DatetimeField"w, "IntegerField"w];
+    enum indexes = ["name"w, "data"w, "path"w, "size"w, "time"w, "lastModified"w, "location"w];
+    enum names = ["Name"w, "File"w, "Path"w, "Size"w, "Time"w, "Last modified"w, "Location"w];
+    auto state = new Z8SystemFilesState();
+    foreach (i; 0 .. state.fields.length)
+        state.fields[i] = z8_table_system_field(self, base ~ kinds[i], indexes[i], names[i]);
+    self.z8_set_native_state(z8_system_files_name, state);
+}
+private Z8SystemFilesState z8_system_files_state(Z8Object self) {
+    auto state = cast(Z8SystemFilesState)z8_nonnull(self).z8_get_native_state(z8_system_files_name);
+    if (state is null) throw new Exception("SystemFiles members are not initialized");
+    return state;
+}
+private Z8Object* z8_system_files_field_address(size_t index)(Z8Object self) {
+    return &z8_system_files_state(self).fields[index];
+}
+void z8_system_files_configure(Z8Object self) {
+    auto fields = z8_system_files_state(self).fields;
+    z8_field_state(fields[0]).length = z8_optional_wrap(512L);
+    z8_field_state(fields[2]).length = z8_optional_wrap(512L);
+}
+private void z8_system_files_on_new(Z8Object self) {
+    auto fields = z8_system_files_state(self).fields;
+    auto now = z8_date_now();
+    z8_field_set(fields[4], z8_primary_box(now));
+    z8_field_set(fields[5], z8_primary_box(now));
+}
+shared static this() {
+    z8_native_bind(z8_system_files_name ~ ".m_new"w, &z8_system_files_new);
+    static foreach (i, name; ["name"w, "data"w, "path"w, "size"w, "time"w, "lastModified"w, "location"w])
+        z8_native_bind_field(z8_system_files_name ~ ".f_"w ~ name, &z8_system_files_field_address!i);
+}
