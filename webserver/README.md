@@ -64,8 +64,12 @@ access are checked.
 Actions and their parameters are described in metadata and can execute with a
 direct or nested query, respecting their `useTransaction` setting. Report metadata
 and custom BL report hooks are supported; built-in BIRT and POI engines remain
-unimplemented. Table export supports Excel-compatible XLSX for the client's
-`xls` or `xlsx` format request; PDF export is not yet implemented. Fields reached through a custom Join are exposed as read-only
+unimplemented. Table export supports PDF and Excel-compatible XLSX for the
+client's `xls` or `xlsx` format request. A host must call
+`z8_export_configure_pdf_font` with a Unicode TrueType font before PDF export;
+the template supplies the original Roboto font. PDF export lays out a simple
+table and clips long cells; it does not reproduce BIRT print formatting.
+Fields reached through a custom Join are exposed as read-only
 text controls after checking the relation and target permissions. Grouping with
 `aggregateBy` is supported by the PostgreSQL executor for its documented subset.
 Other control types and unsupported grouping combinations are rejected.

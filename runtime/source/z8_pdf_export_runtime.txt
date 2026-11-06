@@ -1,0 +1,188 @@
+// A TrueType font is supplied by the host, rather than taken from an OS path.
+// The template uses the same Roboto font as the original Z8 distribution.
+private __gshared ubyte[] z8_pdf_font_data;
+private __gshared Object z8_pdf_font_lock;
+shared static this() { z8_pdf_font_lock = new Object(); }
+void z8_export_configure_pdf_font(string path) {
+    import std.file : read;
+    auto bytes = cast(ubyte[])read(path, 16 * 1024 * 1024);
+    auto font = new Z8PdfFont(bytes); // Validate before publishing it.
+    synchronized (z8_pdf_font_lock) z8_pdf_font_data = bytes.dup;
+}
+
+private class Z8PdfFont {
+    ubyte[] data;
+    uint cmap, hmtx, head, hhea, glyphs;
+    ushort units, metrics;
+    this(ubyte[] bytes) {
+        data = bytes;
+        if (u32(0) != 0x00010000) throw new Exception("PDF font must be a TrueType font");
+        auto count = u16(4);
+        uint cmapTable;
+        foreach (i; 0 .. count) {
+            auto at = 12 + i * 16;
+            auto tag = u32(at), offset = u32(at + 8), length = u32(at + 12);
+            check(offset, length);
+            switch (tag) {
+                case 0x636d6170: cmapTable = offset; break; // cmap
+                case 0x68656164: head = offset; break;
+                case 0x68686561: hhea = offset; break;
+                case 0x686d7478: hmtx = offset; break;
+                case 0x6d617870: glyphs = offset; break;
+                default: break;
+            }
+        }
+        if (!cmapTable || !head || !hhea || !hmtx || !glyphs) throw new Exception("PDF font is missing required tables");
+        units = u16(head + 18); metrics = u16(hhea + 34);
+        if (!units || !metrics || metrics > u16(glyphs + 4)) throw new Exception("invalid PDF font metrics");
+        auto cmapCount = u16(cmapTable + 2);
+        foreach (i; 0 .. cmapCount) {
+            auto record = cmapTable + 4 + i * 8;
+            auto platform = u16(record), encoding = u16(record + 2), subtable = cmapTable + u32(record + 4);
+            if (platform == 3 && encoding == 10 && u16(subtable) == 12) { cmap = subtable; break; }
+        }
+        if (!cmap) throw new Exception("PDF font requires a Unicode format 12 cmap");
+        check(cmap, u32(cmap + 4));
+    }
+    void check(size_t offset, size_t length) {
+        if (offset > data.length || length > data.length - offset) throw new Exception("invalid PDF font");
+    }
+    ushort u16(size_t offset) { check(offset, 2); return cast(ushort)((cast(uint)data[offset] << 8) | data[offset + 1]); }
+    uint u32(size_t offset) { return (cast(uint)u16(offset) << 16) | u16(offset + 2); }
+    short s16(size_t offset) { return cast(short)u16(offset); }
+    ushort glyph(dchar ch) {
+        auto n = u32(cmap + 12);
+        size_t low, high = n;
+        while (low < high) {
+            auto mid = low + (high - low) / 2, at = cmap + 16 + mid * 12;
+            auto start = u32(at), finish = u32(at + 4);
+            if (ch < start) high = mid;
+            else if (ch > finish) low = mid + 1;
+            else {
+                auto result = u32(at + 8) + ch - start;
+                if (result >= u16(glyphs + 4)) throw new Exception("invalid PDF font glyph");
+                return cast(ushort)result;
+            }
+        }
+        return 0;
+    }
+    int width(ushort glyph) {
+        auto metric = glyph < metrics ? glyph : metrics - 1;
+        return cast(int)((cast(long)u16(hmtx + metric * 4) * 1000 + units / 2) / units);
+    }
+    int scaled(short value) { return cast(int)(cast(long)value * 1000 / units); }
+}
+
+private string z8_pdf_hex(uint value, size_t digits) {
+    enum hex = "0123456789ABCDEF";
+    char[] result = new char[digits];
+    foreach_reverse (i; 0 .. digits) { result[i] = hex[value & 15]; value >>= 4; }
+    return cast(string)result;
+}
+
+private ubyte[] z8_export_pdf(wstring[] ids, wstring[] headers, JSONValue rows) {
+    import std.json : JSONType;
+    ubyte[] bytes;
+    synchronized (z8_pdf_font_lock) bytes = z8_pdf_font_data;
+    if (bytes is null) throw new Exception("PDF export font is not configured");
+    auto font = new Z8PdfFont(bytes);
+    ushort[dchar] cids;
+    dchar[] characters = [cast(dchar)0];
+    string text(wstring value) {
+        string result;
+        foreach (dchar ch; value) {
+            auto found = ch in cids;
+            ushort cid;
+            if (found is null) {
+                if (characters.length >= 65536) throw new Exception("too many PDF characters");
+                cid = cast(ushort)characters.length; characters ~= ch; cids[ch] = cid;
+            } else cid = *found;
+            result ~= z8_pdf_hex(cid, 4);
+        }
+        return result;
+    }
+    // Use landscape pages when there are many columns. Each cell is clipped,
+    // so one long value cannot overwrite its neighbors.
+    int pageWidth = ids.length > 4 ? 842 : 595, pageHeight = ids.length > 4 ? 595 : 842;
+    int margin = 30, rowHeight = 18, columns = cast(int)ids.length;
+    int rowLimit = (pageHeight - 2 * margin) / rowHeight - 1;
+    int cellWidth = (pageWidth - 2 * margin) / columns;
+    if (cellWidth < 8) throw new Exception("too many PDF columns");
+    string[] contents;
+    size_t position;
+    do {
+        string content;
+        void line(wstring[] values, int row) {
+            foreach (i, value; values) {
+                auto x = margin + cast(int)i * cellWidth, y = pageHeight - margin - (row + 1) * rowHeight;
+                content ~= "q " ~ x.to!string ~ " " ~ y.to!string ~ " " ~ cellWidth.to!string ~ " " ~ rowHeight.to!string ~
+                    " re W n BT /F1 9 Tf " ~ (x + 2).to!string ~ " " ~ (y + 5).to!string ~ " Td <" ~ text(value) ~ "> Tj ET Q\n";
+            }
+        }
+        line(headers, 0);
+        size_t end = position + rowLimit; if (end > rows.array.length) end = rows.array.length;
+        int lineNumber = 1;
+        for (; position < end; ++position) {
+            auto row = rows.array[position];
+            if (row.type != JSONType.object) throw new Exception("invalid export row");
+            wstring[] values;
+            foreach (id; ids) {
+                auto value = id.to!string in row.object;
+                values ~= value is null ? ""w : z8_json_value_text(*value);
+            }
+            line(values, lineNumber++);
+        }
+        contents ~= content;
+    } while (position < rows.array.length);
+
+    string cidMap = "\0\0", widths;
+    string unicode = "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /Z8Unicode def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n";
+    for (size_t start = 1; start < characters.length;) {
+        auto end = start + 100; if (end > characters.length) end = characters.length;
+        unicode ~= (end - start).to!string ~ " beginbfchar\n";
+        foreach (i; start .. end) {
+            auto ch = characters[i], glyph = font.glyph(ch);
+            cidMap ~= cast(char)(glyph >> 8); cidMap ~= cast(char)(glyph & 255);
+            widths ~= font.width(glyph).to!string ~ " ";
+            string target = ch <= 0xffff ? z8_pdf_hex(ch, 4) :
+                z8_pdf_hex(0xd800 + ((ch - 0x10000) >> 10), 4) ~ z8_pdf_hex(0xdc00 + ((ch - 0x10000) & 1023), 4);
+            unicode ~= "<" ~ z8_pdf_hex(cast(uint)i, 4) ~ "> <" ~ target ~ ">\n";
+        }
+        unicode ~= "endbfchar\n"; start = end;
+    }
+    unicode ~= "endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n";
+    string stream(string data, string attributes = "") {
+        return "<< /Length " ~ data.length.to!string ~ " " ~ attributes ~ " >>\nstream\n" ~ data ~ "\nendstream";
+    }
+    string[] objects = new string[8 + contents.length * 2];
+    objects[0] = "<< /Type /Catalog /Pages 2 0 R >>";
+    string kids;
+    foreach (i; 0 .. contents.length) kids ~= (9 + i * 2).to!string ~ " 0 R ";
+    objects[1] = "<< /Type /Pages /Count " ~ contents.length.to!string ~ " /Kids [" ~ kids ~ "] >>";
+    objects[2] = "<< /Type /Font /Subtype /Type0 /BaseFont /Z8Roboto /Encoding /Identity-H /DescendantFonts [4 0 R] /ToUnicode 8 0 R >>";
+    objects[3] = "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /Z8Roboto /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor 5 0 R /CIDToGIDMap 7 0 R /W [1 [" ~ widths ~ "]] >>";
+    objects[4] = "<< /Type /FontDescriptor /FontName /Z8Roboto /Flags 32 /FontBBox [" ~
+        font.scaled(font.s16(font.head + 36)).to!string ~ " " ~ font.scaled(font.s16(font.head + 38)).to!string ~ " " ~
+        font.scaled(font.s16(font.head + 40)).to!string ~ " " ~ font.scaled(font.s16(font.head + 42)).to!string ~
+        "] /ItalicAngle 0 /Ascent " ~ font.scaled(font.s16(font.hhea + 4)).to!string ~ " /Descent " ~
+        font.scaled(font.s16(font.hhea + 6)).to!string ~ " /CapHeight 700 /StemV 80 /FontFile2 6 0 R >>";
+    objects[5] = stream(cast(string)bytes, "/Length1 " ~ bytes.length.to!string);
+    objects[6] = stream(cidMap); objects[7] = stream(unicode);
+    foreach (i, content; contents) {
+        objects[8 + i * 2] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " ~ pageWidth.to!string ~ " " ~ pageHeight.to!string ~
+            "] /Resources << /Font << /F1 3 0 R >> >> /Contents " ~ (10 + i * 2).to!string ~ " 0 R >>";
+        objects[9 + i * 2] = stream(content);
+    }
+    string pdf = "%PDF-1.4\n%\xe2\xe3\xcf\xd3\n", offsets;
+    foreach (i, object; objects) {
+        auto offset = pdf.length.to!string;
+        if (offset.length > 10) throw new Exception("PDF is too large");
+        offsets ~= "0000000000"[0 .. 10 - offset.length] ~ offset ~ " 00000 n \n";
+        pdf ~= (i + 1).to!string ~ " 0 obj\n" ~ object ~ "\nendobj\n";
+    }
+    auto xref = pdf.length;
+    pdf ~= "xref\n0 " ~ (objects.length + 1).to!string ~ "\n0000000000 65535 f \n" ~ offsets ~
+        "trailer\n<< /Size " ~ (objects.length + 1).to!string ~ " /Root 1 0 R >>\nstartxref\n" ~ xref.to!string ~ "\n%%EOF\n";
+    if (pdf.length > z8_temporary_archives_bytes_limit) throw new Exception("PDF is too large");
+    return cast(ubyte[])pdf;
+}
