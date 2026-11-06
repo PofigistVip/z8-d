@@ -37,6 +37,7 @@ import org.zenframework.z8.base.form.action.ActionType;
 import org.zenframework.z8.base.form.action.Parameter;
 import org.zenframework.z8.base.form.action.ParameterSource;
 import org.zenframework.z8.base.table.value.FieldType;
+import org.zenframework.z8.base.form.report.Report;
 public class CustomTable extends Table {
     [name "Label"] CustomField label;
     label.required = true; label.width = 120; label.colSpan = 2;
@@ -52,6 +53,7 @@ public class CustomTable extends Table {
         Parameter.create("Default", ParameterSource.create(destination, destination.recordId)),
         Parameter.create("By name", "fallback", ParameterSource.create(destination, destination.recordId))};
     actions = {publish};
+    Report monthly; monthly.template = "monthly"; monthly.format = Report.Excel; Report daily; reports = {monthly, daily};
 }
 ''', encoding="utf-8")
     (source / "CyclicTable.bl").write_text('''
@@ -167,6 +169,9 @@ void main() {
     assert(parameters[3]["field"]["query"]["fields"].array.length == 2);
     assert(parameters[4]["type"].str == "guid" && "fields" !in parameters[4]["field"]["query"].object);
     assert(parameters[5]["type"].str == "string" && parameters[5]["value"].str == "fallback");
+    assert(meta["reports"].array.length == 2 && meta["reports"][0]["id"].str == "monthly" && meta["reports"][0]["format"].str == "xls");
+    assert(meta["reports"][1]["id"].str == "daily" && meta["reports"][1]["format"].str == "pdf");
+    assert(table.f_monthly.f_engine == "birt"w && table.f_monthly.f_template == "monthly"w);
     auto records = new Z8Array!Z8Guid([z8_guid_create(1), z8_guid_create(2)]);
     auto selectedRecords = new Z8Array!Z8Guid();
     z8_nonnull(P.m_single()).z8_action_virtual_execute_many(records, table, selectedRecords, table);

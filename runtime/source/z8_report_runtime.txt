@@ -1,0 +1,46 @@
+// Scalar properties and query metadata for base.form.report.Report.
+private enum z8_report_name = "org.zenframework.z8.server.base.form.report.Report"w;
+private __gshared wstring z8_report_birt = "birt"w, z8_report_poi = "poi"w,
+    z8_report_pdf = "pdf"w, z8_report_excel = "xls"w, z8_report_word = "doc"w,
+    z8_report_wordx = "docx"w, z8_report_html = "html"w, z8_report_powerpoint = "ppt"w;
+private class Z8ReportState { wstring engine = "birt"w, name, templateName, format; }
+private Z8ReportState z8_report_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_report_name, self)) throw new Exception("invalid Report object");
+    auto state = cast(Z8ReportState)self.z8_get_native_state(z8_report_name);
+    if (state is null) { state = new Z8ReportState(); self.z8_set_native_state(z8_report_name, state); }
+    return state;
+}
+private auto z8_report_address(string member)(Z8Object self) { return &__traits(getMember, z8_report_state(self), member); }
+private wstring* z8_report_constant(string name)() {
+    static if (name == "BIRT") return &z8_report_birt;
+    else static if (name == "POI") return &z8_report_poi;
+    else static if (name == "Pdf") return &z8_report_pdf;
+    else static if (name == "Excel") return &z8_report_excel;
+    else static if (name == "Word") return &z8_report_word;
+    else static if (name == "WordX") return &z8_report_wordx;
+    else static if (name == "Html") return &z8_report_html;
+    else static if (name == "Powerpoint") return &z8_report_powerpoint;
+    else static assert(0, "unknown Report constant");
+}
+private void z8_report_write_meta(Z8Object report, Z8JsonWriterState writer) {
+    auto state = z8_report_state(report);
+    writer.start('{');
+    z8_monitor_property(writer, "request"w, report.z8_class_id());
+    z8_monitor_property(writer, "text"w, report.z8_get_attribute("displayName"w));
+    z8_monitor_property(writer, "description"w, report.z8_get_attribute("description"w));
+    z8_monitor_property(writer, "icon"w, report.z8_get_attribute("icon"w));
+    z8_monitor_property(writer, "url"w, report.z8_get_attribute("url"w));
+    z8_monitor_property(writer, "id"w, report.z8_id());
+    z8_monitor_property(writer, "format"w, state.format is null ? z8_report_pdf : state.format);
+    writer.finish('}');
+}
+void z8_bind_builtin_report() {
+    z8_native_bind_field(z8_report_name ~ ".f_engine"w, &z8_report_address!"engine");
+    z8_native_bind_field(z8_report_name ~ ".f_name"w, &z8_report_address!"name");
+    z8_native_bind_field(z8_report_name ~ ".f_template"w, &z8_report_address!"templateName");
+    z8_native_bind_field(z8_report_name ~ ".f_format"w, &z8_report_address!"format");
+    static foreach (name; ["BIRT", "POI", "Pdf", "Excel", "Word", "WordX", "Html", "Powerpoint"])
+        z8_native_bind_field(z8_report_name ~ ".f_"w ~ name.to!wstring, &z8_report_constant!name);
+}
+shared static this() { z8_bind_builtin_report(); }
