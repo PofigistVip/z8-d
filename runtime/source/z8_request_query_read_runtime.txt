@@ -216,10 +216,7 @@ private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges priv
         }
     }
     if (!requested.length && !explicitFields) {
-        bool configured;
-        foreach (name; ["controls"w, "names"w, "columns"w, "extraFields"w])
-            if (z8_query_array(query, name).length) { configured = true; break; }
-        requested = configured ? formFields : z8_query_declared_fields(query);
+        requested = formFields;
     }
     if (includeKeys) {
         if (key !is null) requested ~= key;

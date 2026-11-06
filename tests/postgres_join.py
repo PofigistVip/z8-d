@@ -302,6 +302,11 @@ import org.zenframework.z8.base.application.Application;
     }
 }
 ''',
+        "BareOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.StringField;
+[name "BareOrders"] public class BareOrder extends Table { [name "Title"] public StringField title; }
+''',
         "HttpRightOrder": '''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.StringField;
@@ -949,7 +954,12 @@ void main(string[] args) {
     db.execute(`CREATE TEMP TABLE "RightOrders" AS SELECT * FROM "Orders"`);
     db.execute(`CREATE TEMP TABLE "JoinOrders" AS SELECT * FROM "Orders"`);
     db.execute(`CREATE TEMP TABLE "DependencyOrders" AS SELECT * FROM "Orders"`);
+    db.execute(`CREATE TEMP TABLE "BareOrders" AS SELECT * FROM "Orders"`);
     auto response = parseJSON(requestFields(`["title","customer.label","customer.city.label"]`w).to!string);
+    auto bareDefault = parseJSON(requestFields(null, null, null, null, null, "BareOrder"w).to!string);
+    assert(bareDefault["data"].array.length == 4 && "recordId" in bareDefault["data"][0].object && "title" !in bareDefault["data"][0].object);
+    auto bareEmpty = parseJSON(requestFields(`[]`w, null, null, null, null, "BareOrder"w).to!string);
+    assert(bareEmpty["data"].array.length == 4 && "title" !in bareEmpty["data"][0].object);
     wstring readPagination(wstring start, wstring limit, bool unlimited = false) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, "HttpOrder"w); request.parameters.z8_add("action"w, "read"w);

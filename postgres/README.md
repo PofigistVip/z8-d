@@ -432,7 +432,8 @@ the same single-table field types. As in Z8, `update(null)` updates every row;
 the SQL transaction is controlled by the connection's caller.
 
 An empty field list selects fields in sections, forms and tabs, together with
-the query's names, columns and extra fields. Cyclic control trees are rejected.
+the query's names, columns and extra fields. With none configured, only the
+applicable system keys are selected. Cyclic control trees are rejected.
 Listbox-dependent forms bind to the list query and add their fields to its extra
 fields; chained forms and separate requests for nested tables preserve this binding.
 The BL `Period` helper parses active JSON date bounds and builds inclusive SQL
