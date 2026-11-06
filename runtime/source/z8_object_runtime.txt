@@ -55,26 +55,51 @@ private Z8Guid z8_object_key(Z8Object self) {
     }
     return self.z8_key(name);
 }
-// Generated project class symbols encode their BL qualified name as UTF-8 hex.
-// Looking through linked ModuleInfo avoids introducing dependency cycles between
-// generated D modules or an additional registry module for every project.
-private string z8_object_class_symbol_name(string symbol) {
-    import std.string : startsWith, replace;
+// Recover a generated class's BL identity without running constructors or
+// introducing initialization cycles between generated D modules.
+private string z8_object_class_symbol_name(string symbol, string moduleName = null) {
+    import std.string : startsWith, replace, split;
+    import std.array : join;
+    int digit(char c) {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        return -1;
+    }
+    string decodePart(string encoded) {
+        char[] decoded;
+        for (size_t i; i < encoded.length; ++i) {
+            if (encoded[i] != '_') { decoded ~= encoded[i]; continue; }
+            if (i + 2 >= encoded.length) return null;
+            auto high = digit(encoded[i + 1]), low = digit(encoded[i + 2]);
+            if (high < 0 || low < 0) return null;
+            decoded ~= cast(char)((high << 4) | low); i += 2;
+        }
+        return cast(string)decoded;
+    }
     if (symbol.startsWith("Z8p_")) {
         auto encoded = symbol[4 .. $];
         if (!encoded.length || encoded.length % 2) return null;
         char[] decoded;
-        int digit(char c) {
-            if (c >= '0' && c <= '9') return c - '0';
-            if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-            return -1;
-        }
         for (size_t i; i < encoded.length; i += 2) {
             auto high = digit(encoded[i]), low = digit(encoded[i + 1]);
             if (high < 0 || low < 0) return null;
             decoded ~= cast(char)((high << 4) | low);
         }
         return (cast(string)decoded).replace("$", ".");
+    }
+    if (symbol.startsWith("Z8q_")) {
+        auto decoded = decodePart(symbol[4 .. $]);
+        return decoded is null ? null : decoded.replace("$", ".");
+    }
+    if (symbol.startsWith("Z8_") && moduleName.startsWith("z8gen.")) {
+        string[] names;
+        foreach (part; moduleName[6 .. $].split(".")) {
+            if (!part.startsWith("p_")) return null;
+            auto decoded = decodePart(part[2 .. $]);
+            if (decoded is null || !decoded.length) return null;
+            names ~= decoded;
+        }
+        return names.join(".");
     }
     if (symbol.startsWith("Z8_")) return symbol[3 .. $];
     return null;
@@ -89,7 +114,8 @@ Z8Object z8_object_new_instance(wstring className) {
         if (info is null) continue;
         auto dot = info.name.lastIndexOf('.');
         auto symbol = dot < 0 ? info.name : info.name[dot + 1 .. $];
-        if (z8_object_class_symbol_name(symbol) != wanted) continue;
+        auto moduleName = dot < 0 ? "" : info.name[0 .. dot];
+        if (z8_object_class_symbol_name(symbol, moduleName) != wanted) continue;
         if (selected !is null && selected !is info) throw new Exception("BL class name is ambiguous: " ~ wanted);
         selected = info;
     }

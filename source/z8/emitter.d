@@ -1627,7 +1627,7 @@ package GeneratedModule[] emitProjectModules(Program[] programs) {
         moduleByClass[program.emittedName] = name;
         groupsByModule[name] ~= program;
     }
-    auto symbolPattern = regex(`Z8p_[0-9A-F]+`);
+    auto symbolPattern = regex(`\bZ8(?:_|q_)[A-Za-z0-9_]+\b`);
     GeneratedModule[] modules;
     Program[] nativePrograms;
     foreach (program; programs) if (program.isNative && !program.isEnum) nativePrograms ~= program;
@@ -1651,6 +1651,14 @@ package GeneratedModule[] emitProjectModules(Program[] programs) {
         foreach (dependency; dependencies) source ~= "import " ~ dependency ~ ";\n";
         if (dependencies.length) source ~= "\n";
         source ~= body;
+        // Preserve the previously published generated names for D hosts and
+        // clients compiled against the old project emitter.
+        foreach (item; groupsByModule[name]) {
+            string legacy = "Z8p_";
+            foreach (ubyte c; item.qualifiedName) legacy ~= format("%02X", c);
+            source ~= "\n// Compatibility with the original z8-d generated identifier.\n" ~
+                "alias " ~ legacy ~ " = " ~ item.emittedName ~ ";\n";
+        }
         modules ~= GeneratedModule(name, name.replace(".", "/") ~ ".d", program.sourceName, source);
     }
     if (nativePrograms.length) {

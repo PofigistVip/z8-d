@@ -62,7 +62,7 @@ private bool z8_is_system_tools(Z8Object value) {
     for (auto type = value.classinfo; type !is null; type = type.base) {
         auto dot = type.name.lastIndexOf('.');
         auto symbol = dot < 0 ? type.name : type.name[dot + 1 .. $];
-        if (z8_object_class_symbol_name(symbol) == className) return true;
+        if (z8_object_class_symbol_name(symbol, dot < 0 ? "" : type.name[0 .. dot]) == className) return true;
     }
     return false;
 }

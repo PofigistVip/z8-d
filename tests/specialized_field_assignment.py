@@ -47,6 +47,8 @@ void main() {
     assert(z8_optional_require(Z8p_50726F6265.m_run()) == 0);
     auto value = z8_nonnull(z8_new!Z8p_50726F6265());
     assert(value.f_replaced is value.f_other);
+    auto specialized = z8_object_new_instance(value.f_item.z8_class_id());
+    assert(specialized.z8_class_id() == value.f_item.z8_class_id());
 }
 ''', encoding="utf-8")
     executable = temp / ("specialized-field.exe" if os.name == "nt" else "specialized-field")

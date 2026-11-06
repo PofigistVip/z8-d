@@ -430,7 +430,7 @@ unittest {
     auto a = SourceUnit("pkg.A", "A.bl", "import other.B; class A { public static int f() { return B.g(2); } }");
     auto b = SourceUnit("other.B", "B.bl", "class B { public static int g(int x) { return x; } }");
     auto output = compileSources([a, b]);
-    assert(output.length == 2 && output[0].source.canFind("Z8p_6F746865722E42.m_g"));
+    assert(output.length == 2 && output[0].source.canFind("Z8_B.m_g"));
     assert(output[0].source.canFind("import z8gen.p_other.p_B;"));
     auto withEntry = compileSources([a, b], "pkg.A.f");
     assert(withEntry.length == 3 && withEntry[$-1].source.canFind("int main()"));

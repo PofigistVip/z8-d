@@ -9,6 +9,18 @@ public import z8.compiler_model;
 public import z8.parser : Parser;
 public import z8.semantic : Checker;
 
+// Encode only characters that cannot be used directly in a D identifier.
+// Underscores are escaped too, making this mapping reversible.
+private string identifierPart(string name) {
+    string result;
+    foreach (ubyte c; name) {
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))
+            result ~= cast(char)c;
+        else result ~= format("_%02X", c);
+    }
+    return result;
+}
+
 string compile(string source) {
     auto program = (new Parser(source)).parse();
     program.qualifiedName = program.name.text;
@@ -76,16 +88,12 @@ GeneratedModule[] compileSources(SourceUnit[] units, string entry = "") {
         program.sourceName = unit.path;
         program.sourceIndex = sourceIndex;
         program.qualifiedName = unit.name;
-        program.emittedName = "Z8p_";
-        foreach (i; 0 .. unit.name.length) program.emittedName ~= format("%02X", cast(ubyte)unit.name[i]);
         programs[unit.name] = program;
         ordered ~= program;
     }
     void addNested(Program owner) {
         foreach (nested; owner.nestedPrograms) {
             nested.qualifiedName = owner.qualifiedName ~ "$" ~ nested.name.text;
-            nested.emittedName = "Z8p_";
-            foreach (i; 0 .. nested.qualifiedName.length) nested.emittedName ~= format("%02X", cast(ubyte)nested.qualifiedName[i]);
             nested.sourceName = owner.sourceName;
             nested.sourceIndex = owner.sourceIndex;
             programs[nested.qualifiedName] = nested;
@@ -96,6 +104,14 @@ GeneratedModule[] compileSources(SourceUnit[] units, string entry = "") {
     // Keep each specialization in its containing BL source module.
     auto roots = ordered.dup;
     foreach (program; roots) addNested(program);
+    // Use short readable names when they uniquely identify a type in the
+    // project. The qualified fallback is reversible and globally unique.
+    size_t[string] nameCounts;
+    foreach (program; ordered) ++nameCounts[program.name.text];
+    foreach (program; ordered) {
+        program.emittedName = program.lexicalOwner is null && nameCounts[program.name.text] == 1 ?
+            "Z8_" ~ identifierPart(program.name.text) : "Z8q_" ~ identifierPart(program.qualifiedName);
+    }
     prepareInheritance(ordered, programs);
     foreach (program; ordered) {
         try { (new Checker).prepareDeclarations(program, programs); }
