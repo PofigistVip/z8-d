@@ -104,6 +104,16 @@ private void z8_users_notify_change(Z8Guid id, bool force = false, Z8Object tabl
     request.userChangeNotifier.userChanged(id, z8_notification_schema(table));
 }
 private void z8_users_notify_change_native(Z8Guid id) { z8_users_notify_change(id); }
+private Z8Optional!bool z8_users_default_parameters_legacy(Z8Object self, Z8Guid id, wstring login, Z8PrimaryMap parameters) {
+    z8_nonnull(self); z8_nonnull(parameters); return z8_optional_wrap(true);
+}
+private Z8Optional!bool z8_users_default_parameters(Z8Object self, Z8Object login, Z8PrimaryMap parameters) {
+    return z8_nonnull(self).z8_users_virtual_parameters_legacy(z8_login_parameters_user_id(login), z8_login_parameters_login(login), z8_nonnull(parameters));
+}
+bool z8_users_extra_parameters(Z8Object self, Z8LoginParametersData login, Z8PrimaryMap parameters) {
+    if (!z8_native_is_instance(z8_users_name, z8_nonnull(self))) throw new Exception("invalid Users object");
+    return z8_optional_require(self.z8_users_virtual_parameters(z8_login_parameters_from_data(z8_nonnull(login)), z8_nonnull(parameters)));
+}
 void z8_users_after_update(Z8Object self, Z8Guid id) {
     auto field = z8_users_state(self).fields[12];
     auto force = z8_field_is_changed(field) && z8_optional_require(z8_primary_cast!bool(z8_field_primary(field)));
@@ -116,6 +126,8 @@ shared static this() {
     z8_user_administrator = z8_guid_literal("00000000-0000-0000-0000-000000000002");
     z8_native_bind(z8_users_name ~ ".m_new"w, &z8_users_new);
     z8_native_bind(z8_users_name ~ ".m_notifyUserChange"w, &z8_users_notify_change_native);
+    z8_native_bind(z8_users_name ~ ".m_getParameters"w, &z8_users_default_parameters_legacy);
+    z8_native_bind(z8_users_name ~ ".m_getParameters"w, &z8_users_default_parameters);
     static foreach (i, name; ["name"w, "description"w, "password"w, "firstName"w, "middleName"w, "lastName"w,
         "phone"w, "email"w, "company"w, "position"w, "banned"w, "bannedUntil"w, "changePassword"w,
         "settings"w, "verification"w, "verificationModAt"w, "failedAuthCount"w])

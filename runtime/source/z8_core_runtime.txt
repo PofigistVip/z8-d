@@ -136,6 +136,8 @@ class Z8Object {
     void z8_user_virtual_on_before_load(wstring login) {}
     Z8Optional!bool z8_user_virtual_authenticate(wstring password) { return z8_optional_wrap(false); }
     void z8_user_virtual_on_load() {}
+    Z8Optional!bool z8_users_virtual_parameters_legacy(Z8Guid id, wstring login, Z8PrimaryMap parameters) { return z8_optional_wrap(true); }
+    Z8Optional!bool z8_users_virtual_parameters(Z8Object loginParameters, Z8PrimaryMap parameters) { return z8_optional_wrap(true); }
     void z8_query_virtual_onCopy(Z8Guid id) {}
     void z8_query_virtual_beforeRead() {}
     void z8_query_virtual_afterRead() {}

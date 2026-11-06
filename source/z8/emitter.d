@@ -1031,6 +1031,14 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                     result ~= "override void z8_user_virtual_on_load() { this.m_onLoad(); }\n";
             }
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Users"w) {
+            foreach (method; program.methods) if (!method.isStatic && method.name.text == "getParameters" && method.returnType == ValueType.boolType) {
+                if (method.parameters.length == 3 && method.parameters[0].type == ValueType.guidType && method.parameters[1].type == ValueType.stringType)
+                    result ~= "override Z8Optional!bool z8_users_virtual_parameters_legacy(Z8Guid id, wstring login, Z8PrimaryMap parameters) { return this.m_getParameters(id, login, parameters); }\n";
+                else if (method.parameters.length == 2 && method.parameters[0].objectClass !is null)
+                    result ~= "override Z8Optional!bool z8_users_virtual_parameters(Z8Object login, Z8PrimaryMap parameters) { return this.m_getParameters(cast(" ~ method.parameters[0].objectClass.emittedName ~ ")login, parameters); }\n";
+            }
+        }
         if (extendsBuiltinPrimary(program)) {
             if (program.isNative) {
                 auto stringBinding = emitRawWStringLiteral(program.nativeName ~ ".m_toString"w);
