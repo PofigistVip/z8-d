@@ -158,6 +158,10 @@ public class Probe {
     public static Entries entries() { Entries value; return value; }
     public static UserEntries userEntries() { UserEntries value; return value; }
     public static void deleteEntry(Entries value, guid id) { value.destroy(id); }
+    public static string entryName(Entries value, guid id) { Field[] fields = {value.name}; if (value.readRecord(id, fields)) return value.name.get(); return "missing"; }
+    public static string requestName(Requests value, guid id) { Field[] fields = {value.name}; if (value.readRecord(id, fields)) return value.name.get(); return "missing"; }
+    public static int entryNameDependencies(Entries value) { return value.name.usedFields.size(); }
+    public static void clearEntryNameDependencies(Entries value) { value.name.usedFields.clear(); }
     public static void deleteUserRole(UserRoles value, guid id) { value.destroy(id); }
     public static string accessRoleName(RoleTableAccess value) { Field[] fields = {value.roles.name}; value.read(fields); if (value.next()) return value.roles.name.get(); return "missing"; }
     public static void setFieldRead(RoleFieldAccess value, guid id, bool flag) { value.read = flag; value.update(id); }
@@ -603,6 +607,18 @@ void main(string[] args) {
     readRequest.parameters.z8_add("limit"w, "1"w);
     auto priorReadRequest = z8_application_set_request(readRequest);
     auto priorReadBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "z8_bootstrap"w));
+    auto previousRegistry = z8_runtime_set_registry(bootstrapRegistry);
+    bootstrapSample.z8_set_attribute("displayName"w, "Localized request"w); bootstrapRegistry.registerRequest(bootstrapSample);
+    auto dynamicEntries = P.m_entries(), dynamicRequests = P.m_systemRequests();
+    assert(z8_field_fields(dynamicEntries.f_name).length == 2 && z8_field_fields(dynamicRequests.f_name).length == 2);
+    auto mutableDependencies = P.m_entries();
+    assert(z8_optional_require(P.m_entryNameDependencies(mutableDependencies)) == 1);
+    P.m_clearEntryNameDependencies(mutableDependencies); assert(z8_field_fields(mutableDependencies.f_name).length == 1);
+    assert(P.m_entryName(dynamicEntries, z8_guid_create_name("Sample"w)) == "Renamed entry"w);
+    assert(P.m_requestName(dynamicRequests, z8_guid_create_name("Sample"w)) == "Localized request"w);
+    db.execute(`INSERT INTO "z8_bootstrap"."SystemEntries" ("RecordId", "Name", "Class") VALUES ('00000000-0000-0000-0000-000000000444', 'stale', 'Missing.Entry')`);
+    assert(P.m_entryName(P.m_entries(), z8_guid_create(0x444)) == "<entry removed>"w);
+    z8_runtime_set_registry(previousRegistry);
     z8_application_start_response(readRequest, "Sample"w); z8_application_dispatch_request();
     z8_application_finish_response(readRequest, cast(Z8RequestMonitor)readRequest.monitor);
     auto readJson = parseJSON(z8_application_response_text(readRequest).to!string);

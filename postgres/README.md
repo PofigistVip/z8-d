@@ -88,6 +88,8 @@ any required system tables that were not registered by the generated project.
 Registered entry points are inserted or refreshed in `SystemEntries` when that
 table is present; existing user assignments are retained and obsolete entries
 are not deleted by the additive synchronizer.
+`SystemEntries.Name` and `SystemRequests.Name` resolve their display names through
+the active runtime registry, with `Class` included as a field dependency.
 `UserRoles` provides links to users and roles, built-in administrator
 assignments, a read-only flag based on the current user and protection against
 removing the built-in assignments. The flag is metadata; general access

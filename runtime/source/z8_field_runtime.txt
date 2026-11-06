@@ -91,6 +91,9 @@ class Z8FieldState {
     private wstring initialSort = "asc"w;
     private IZ8FieldOrderCell orderCell;
     private IZ8FieldOrderCell usedFieldsCell, columnsCell;
+    private Z8Object[] nativeDependencies;
+    private Z8Object registryNameClassId;
+    private bool registryNameIsEntry;
     private Z8FieldAggregation initialAggregation;
     private Z8Primary originalValue;
     Z8SqlPrimary sqlExpression;
@@ -128,6 +131,13 @@ class Z8FieldState {
 private auto z8_field_metadata_address(string member)(Z8Object self) {
     return &__traits(getMember, z8_field_state(self), member);
 }
+private void z8_field_add_native_dependency(Z8Object self, Z8Object dependency) {
+    auto state = z8_field_state(self);
+    dependency = z8_nonnull(dependency);
+    auto view = state.usedFieldsCell is null ? null : state.usedFieldsCell.view();
+    if (view is null) state.nativeDependencies ~= dependency;
+    else view.z8_erased_data().z8_add(dependency);
+}
 ref T z8_field_sort_ref(T)(Z8Object self) {
     auto state = z8_field_state(self);
     auto cell = cast(Z8FieldSortCell!T)state.sortCell;
@@ -148,6 +158,11 @@ ref Z8ObjectArray!T z8_field_array_ref(T, string name)(Z8Object self) if (is(T :
     if (cell is null) {
         if (*cellSlot !is null) throw new Exception("incompatible field array type");
         cell = new Z8FieldOrderCell!T(); *cellSlot = cell;
+        static if (name == "usedFields") foreach (dependency; state.nativeDependencies) {
+            auto item = cast(T)dependency;
+            if (item is null) throw new Exception("incompatible native field dependency");
+            cell.value.z8_add(item);
+        }
     }
     return cell.value;
 }
@@ -161,7 +176,9 @@ Z8Object[] z8_field_fields(Z8Object self) {
         result ~= item;
     }
     auto used = state.usedFieldsCell is null ? null : state.usedFieldsCell.view();
-    if (used !is null) {
+    if (state.usedFieldsCell is null) {
+        foreach (dependency; state.nativeDependencies) add(z8_nonnull(dependency));
+    } else if (used !is null) {
         auto items = used.z8_erased_data();
         for (long i; i < items.z8_size(); ++i) add(z8_nonnull(cast(Z8Object)items.z8_get(i)));
     }
@@ -299,6 +316,19 @@ private Z8Primary z8_field_internal_get(Z8Object self) {
 }
 private Z8Primary z8_field_current(Z8Object self) {
     auto state = z8_field_state(self);
+    if (state.registryNameClassId !is null) {
+        // Entries/Requests NameField performs the normal read to maintain
+        // wasNull, then resolves the current display name from the registry.
+        z8_field_internal_get(self);
+        auto classId = z8_primary_cast!wstring(z8_field_current(state.registryNameClassId));
+        auto registry = z8_runtime_get_registry();
+        if (registry is null) throw new Exception("runtime registry is not configured");
+        auto candidates = state.registryNameIsEntry ? registry.entries() : registry.requests();
+        foreach (candidate; candidates) if (candidate.classId == classId)
+            return z8_primary_box(z8_string_new(candidate.displayName));
+        if (state.registryNameIsEntry) return z8_primary_box("<entry removed>"w);
+        throw new Exception("request is not registered: " ~ z8_string_or_empty(classId).to!string);
+    }
     if (z8_field_is_array(state)) {
         enum prefix = "org.zenframework.z8.server.base.table.value."w;
         bool isString = z8_native_is_instance(prefix ~ "StringField"w, self) ||

@@ -1,4 +1,4 @@
-// Native physical fields and built-in entry from Entries.java.
+// Native fields, registry-backed names and built-in entry from Entries.java.
 private enum z8_system_entries_name = "org.zenframework.z8.server.base.table.system.Entries"w;
 private enum z8_system_tools_class = "org.zenframework.z8.server.base.table.system.SystemTools"w;
 private class Z8SystemEntriesState { Z8Object[2] fields; }
@@ -18,6 +18,9 @@ private Z8Object* z8_system_entries_field_address(size_t index)(Z8Object self) {
 void z8_system_entries_configure(Z8Object self) {
     auto state = z8_system_entries_state(self);
     foreach (field; state.fields) z8_field_state(z8_nonnull(field)).length = z8_optional_wrap(1024L);
+    auto name = z8_field_state(state.fields[0]);
+    name.registryNameClassId = state.fields[1]; name.registryNameIsEntry = true;
+    z8_field_add_native_dependency(state.fields[0], state.fields[1]);
 }
 void z8_system_entries_initialize_static_records(Z8Object self) {
     auto state = z8_system_entries_state(self);

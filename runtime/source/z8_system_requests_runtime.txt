@@ -1,5 +1,4 @@
-// Physical metadata fields from Requests.java. Dynamic localized names require
-// the application request registry and are not supplied by this adapter yet.
+// Physical metadata fields and registry-backed names from Requests.java.
 private enum z8_system_requests_name = "org.zenframework.z8.server.base.table.system.Requests"w;
 private class Z8SystemRequestsState { Z8Object[2] fields; }
 private void z8_system_requests_new(Z8Object self) {
@@ -19,6 +18,9 @@ void z8_system_requests_configure(Z8Object self) {
     auto state = z8_system_requests_state(self);
     z8_field_state(z8_nonnull(state.fields[0])).length = z8_optional_wrap(256L);
     z8_field_state(z8_nonnull(state.fields[1])).length = z8_optional_wrap(1024L);
+    auto name = z8_field_state(state.fields[0]);
+    name.registryNameClassId = state.fields[1];
+    z8_field_add_native_dependency(state.fields[0], state.fields[1]);
 }
 shared static this() {
     z8_native_bind(z8_system_requests_name ~ ".m_new"w, &z8_system_requests_new);
