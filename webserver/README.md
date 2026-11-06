@@ -62,6 +62,8 @@ For `request=login`, the dispatcher writes the authenticated session, user
 profile, roles, parameters and available entry descriptors. Authentication is
 still supplied by `IZ8HttpAuthority`. Login-time password/email changes and the
 experimental dashboard are not implemented.
+`request=settings` saves `data` to the current session user's `SystemUsers`
+record through the active database backend.
 
 An optional `IZ8HttpAuthority` constructor argument connects a host authority
 to the transport. With an authority present, each request must have a session

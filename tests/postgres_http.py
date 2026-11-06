@@ -176,6 +176,8 @@ void main(string[] args) {
     auto setup = new Z8PostgresConnection(databaseInfo);
     setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Blob" bytea, "ChildLink" uuid, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     setup.execute(`CREATE TABLE "ContentLog" (value integer)`);
+    setup.execute(`CREATE TABLE "SystemUsers" ("RecordId" uuid PRIMARY KEY, "Settings" bytea, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
+    setup.execute(`INSERT INTO "SystemUsers" ("RecordId", "Settings") VALUES ('00000000-0000-0000-0000-000000000002', convert_to('{}','UTF8'))`);
     setup.execute(`INSERT INTO "Sample" ("RecordId", "Title", "Amount") VALUES ('00000000-0000-0000-0000-000000000001', 'First', 5), ('00000000-0000-0000-0000-000000000002', 'Second', 10)`);
     setup.close();
     auto server = new Z8CivetServer("127.0.0.1:0", (Z8HttpRequest request) {
@@ -192,6 +194,7 @@ void main(string[] args) {
     assert(row.rows.length == 1 && row.rows[0][0].text == "00ff4100");
     row = verify.execute(`SELECT "CreatedAt" FROM "Sample" WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
     assert(row.rows.length == 1 && row.rows[0][0].text == "10");
+    assert(verify.execute(`SELECT convert_from("Settings", 'UTF8') FROM "SystemUsers" WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`).rows[0][0].text == `{"theme":"ночь"}`);
     assert(verify.execute(`SELECT count(*) FROM "ContentLog"`).rows[0][0].text == "2"); verify.close();
 }
 ''', encoding="utf-8")
@@ -222,6 +225,20 @@ void main(string[] args) {
                 assert login["user"]["roles"][0]["name"] == "Operators" and login["user"]["parameters"]["theme"] == "dark", login
                 assert len(login["user"]["entries"]) == 1 and login["user"]["entries"][0]["request"] == "Sample", login
                 assert login["maxUploadSize"] == 5 and "password" not in login["user"], login
+            finally:
+                conn.close()
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            try:
+                conn.request("GET", "/request.json?" + urlencode(dict(request="settings", session="full", server="test", data='{"theme":"ночь"}')))
+                response = conn.getresponse(); settings = json.loads(response.read())
+                assert response.status == 200 and settings["success"], settings
+            finally:
+                conn.close()
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            try:
+                conn.request("GET", "/request.json?" + urlencode(dict(request="settings", session="limited", server="test", id="00000000-0000-0000-0000-000000000002", data="attacker")))
+                response = conn.getresponse(); settings = json.loads(response.read())
+                assert response.status == 200 and settings["success"], settings
             finally:
                 conn.close()
             def request(session="full", **params):

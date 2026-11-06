@@ -56,3 +56,17 @@ private void z8_dashboard_login_info() {
     }
     writer.finish('}'); writer.finish('}');
 }
+private void z8_dashboard_save_settings() {
+    auto request = z8_application_require_request();
+    auto user = z8_nonnull(z8_nonnull(request.session).user);
+    if (request.writer.scopes.length != 2) throw new Exception("response object is not open");
+    auto settings = z8_nonnull(request.parameters).z8_get("data"w);
+    auto registry = z8_runtime_get_registry();
+    auto users = registry is null ? null : registry.newTableByName("SystemUsers"w);
+    if (users is null) users = z8_native_new(z8_users_name);
+    if (!z8_native_is_instance(z8_users_name, users)) throw new Exception("SystemUsers is not a Users table");
+    auto field = z8_nonnull(z8_users_state(users).fields[13]);
+    z8_field_set(field, z8_primary_box(settings));
+    z8_query_update_id_run(users, z8_nonnull(user.id), true);
+    user.settings = settings;
+}
