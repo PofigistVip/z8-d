@@ -85,13 +85,20 @@ void z8_postgres_sync_registry(Z8PostgresConnection db, wstring schema, Z8Runtim
         // Jobs.java is optional until its framework table is included in the
         // bootstrap. Preserve obsolete rows until scheduled jobs and logs can
         // be migrated together, rather than orphaning user configuration.
-        auto jobsTable = db.execute("SELECT pg_catalog.to_regclass($1::text) IS NOT NULL",
-            [Z8PostgresParameter.value(ns ~ `."SystemJobs"`)]);
-        if (jobsTable.rows[0][0].text == "t") foreach (job; registry.jobs()) {
+        auto jobTables = db.execute("SELECT pg_catalog.to_regclass($1::text) IS NOT NULL, pg_catalog.to_regclass($2::text) IS NOT NULL",
+            [Z8PostgresParameter.value(ns ~ `."SystemJobs"`), Z8PostgresParameter.value(ns ~ `."SystemScheduledJobs"`)]);
+        if (jobTables.rows[0][0].text == "t") foreach (job; registry.jobs()) {
             auto params = [guidParameter(job.key), textParameter(job.displayName), textParameter(job.classId)];
             db.execute("INSERT INTO " ~ ns ~ `."SystemJobs" ("RecordId", "Name", "Class", "Lock") ` ~
                 `VALUES ($1::uuid, $2::text, $3::text, 3) ON CONFLICT ("RecordId") DO UPDATE ` ~
                 `SET "Name" = EXCLUDED."Name", "Class" = EXCLUDED."Class", "Lock" = 3`, params);
+            if (job.hasSchedule && jobTables.rows[0][1].text == "t") {
+                auto schedule = [guidParameter(z8_guid_create_random()), guidParameter(job.key), textParameter(job.cron),
+                    Z8PostgresParameter.value(job.cron.length ? "1" : "0")];
+                db.execute("INSERT INTO " ~ ns ~ `."SystemScheduledJobs" ("RecordId", "Job", "Cron", "Active") ` ~
+                    `SELECT $1::uuid, $2::uuid, $3::text, $4::smallint WHERE NOT EXISTS ` ~
+                    `(SELECT 1 FROM ` ~ ns ~ `."SystemScheduledJobs" WHERE "Job" = $2::uuid)`, schedule);
+            }
         }
         if (ownsTransaction) db.commit();
     } catch (Throwable failure) {

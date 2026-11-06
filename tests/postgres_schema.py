@@ -25,6 +25,14 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
 import org.zenframework.z8.base.Executable;
 [job "*/5 * * * *"] [displayName "Daily task"] public class DailyJob extends Executable {}
 ''', encoding="utf-8")
+    (source / "DisabledJob.bl").write_text('''
+import org.zenframework.z8.base.Executable;
+[job] public class DisabledJob extends Executable {}
+''', encoding="utf-8")
+    (source / "ManualJob.bl").write_text('''
+import org.zenframework.z8.base.Executable;
+public class ManualJob extends Executable {}
+''', encoding="utf-8")
     (source / "Sample.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.StringField;
@@ -148,6 +156,8 @@ import org.zenframework.z8.base.security.User;
 import org.zenframework.z8.base.table.value.Field;
 public class Probe {
     public static DailyJob dailyJob() { DailyJob value; return value; }
+    public static DisabledJob disabledJob() { DisabledJob value; return value; }
+    public static ManualJob manualJob() { ManualJob value; return value; }
     public static bool lookupSystemUser() {
         User user = User.get(guid.create(1));
         return user != null && user.login == "System" && user.isBuiltinSystem()
@@ -589,6 +599,7 @@ void main(string[] args) {
     assert(rolesUnavailable);
     auto bootstrapRegistry = new Z8RuntimeRegistry(); auto bootstrapSample = P.m_make();
     auto bootstrapJob = P.m_dailyJob(); bootstrapRegistry.registerJob(bootstrapJob);
+    bootstrapRegistry.registerJob(P.m_disabledJob()); bootstrapRegistry.registerJob(P.m_manualJob());
     bootstrapRegistry.registerTable(bootstrapSample); bootstrapRegistry.registerRequest(bootstrapSample); bootstrapRegistry.registerEntry(bootstrapSample);
     Z8Object[] bootstrapTables = [P.m_scheduledJobs(), P.m_jobs(), P.m_userRoles(), P.m_userEntries(), P.m_entries(), P.m_roles(), P.m_users(), P.m_sequences(), P.m_systemTables(), P.m_systemFields(),
         P.m_systemRequests(), P.m_roleTableAccess(), P.m_roleFieldAccess(), P.m_roleRequestAccess(), P.m_target()];
@@ -601,6 +612,12 @@ void main(string[] args) {
     auto jobRows = db.execute(`SELECT "RecordId"::text, "Name", "Lock" FROM "z8_bootstrap"."SystemJobs" WHERE "Class" = 'DailyJob'`);
     assert(jobRows.rows.length == 1 && z8_guid_literal(jobRows.rows[0][0].text) == z8_guid_create_name("DailyJob"w));
     assert(jobRows.rows[0][1].text == "Daily task" && jobRows.rows[0][2].text == "3");
+    auto generatedSchedules = db.execute(`SELECT j."Class", s."Cron", s."Active", s."User"::text FROM "z8_bootstrap"."SystemScheduledJobs" s JOIN "z8_bootstrap"."SystemJobs" j ON s."Job" = j."RecordId" WHERE s."RecordId" <> '00000000-0000-0000-0000-000000000000' ORDER BY j."Class"`);
+    assert(generatedSchedules.rows.length == 2 && generatedSchedules.rows[0][0].text == "DailyJob" && generatedSchedules.rows[0][1].text == "*/5 * * * *" && generatedSchedules.rows[0][2].text == "1");
+    assert(generatedSchedules.rows[0][3].text == "00000000-0000-0000-0000-000000000001");
+    assert(generatedSchedules.rows[1][0].text == "DisabledJob" && generatedSchedules.rows[1][1].text == "" && generatedSchedules.rows[1][2].text == "0");
+    db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "Cron" = '*/30 * * * *', "Active" = 0 WHERE "Job" = $1::uuid`,
+        [Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("DailyJob"w)).to!string)]);
     auto schedule = P.m_scheduledJobs();
     assert(z8_postgres_create_foreign_keys_sql("z8_bootstrap"w, schedule).length == 2);
     auto savedScheduleConnection = z8_connection_set_current(new Z8PostgresDatabase(db, "z8_bootstrap"w));
@@ -632,6 +649,11 @@ void main(string[] args) {
     assert(z8_guid_literal(userEntries.rows[0][1].text) == z8_guid_create_name("org.zenframework.z8.server.base.table.system.SystemTools"w) && userEntries.rows[0][2].text == "3");
     bootstrapSample.z8_set_attribute("displayName"w, "Renamed entry"w); bootstrapRegistry.registerEntry(bootstrapSample);
     z8_postgres_sync_registry(db, "z8_bootstrap"w, bootstrapRegistry);
+    generatedSchedules = db.execute(`SELECT "Cron", "Active" FROM "z8_bootstrap"."SystemScheduledJobs" WHERE "Job" = $1::uuid ORDER BY "RecordId"`,
+        [Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("DailyJob"w)).to!string)]);
+    assert(generatedSchedules.rows.length == 2);
+    bool savedSchedule; foreach (row; generatedSchedules.rows) if (row[0].text == "*/30 * * * *" && row[1].text == "0") savedSchedule = true;
+    assert(savedSchedule);
     assert(db.execute(`SELECT "Name" FROM "z8_bootstrap"."SystemJobs" WHERE "Class" = 'DailyJob'`).rows[0][0].text == "Renamed job");
     assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemJobs" WHERE "Class" = 'OldJob'`).rows[0][0].text == "1");
     bootstrapJob.z8_set_attribute("displayName"w, "Rolled back"w); bootstrapRegistry.registerJob(bootstrapJob);
