@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from urllib.parse import quote, urlencode
 import zipfile
 
@@ -41,6 +42,9 @@ with tempfile.TemporaryDirectory() as directory:
                        env=environment, capture_output=True, check=True)
         subprocess.run([str(executable), connection, "public", "--initialize", "--config", str(config)], env=environment,
                        capture_output=True, text=True, encoding="utf-8", check=True)
+        subprocess.run([str(psql), "-v", "ON_ERROR_STOP=1", "-c",
+                        '''UPDATE "SystemScheduledJobs" SET "Cron"='* * * * *', "Active"=1, "Log errors only"=0 WHERE "Job"=(SELECT "RecordId" FROM "SystemJobs" WHERE "Class"='TasksJob')''', connection],
+                       env=environment, capture_output=True, check=True)
 
         def start(explicit_config=False):
             command = [str(executable), connection, "public", "--public-dir", str(public)]
@@ -117,6 +121,14 @@ with tempfile.TemporaryDirectory() as directory:
 
         process, port = start(explicit_config=True)
         try:
+            deadline = time.monotonic() + 15
+            while True:
+                count = subprocess.check_output([str(psql), "-tAc", 'SELECT count(*) FROM "SystemScheduledJobLogs" WHERE "Errors"=0 AND "ScheduledJob" <> \'00000000-0000-0000-0000-000000000000\'', connection], env=environment, text=True).strip()
+                if int(count) > 0:
+                    break
+                if time.monotonic() >= deadline:
+                    raise AssertionError("Scheduled job did not finish successfully")
+                time.sleep(0.2)
             client = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
             try:
                 client.request("GET", "/index.html")

@@ -43,6 +43,9 @@ endpoint is `/request.json`, and authenticated file downloads use
 `/storage/...`. Restarting the host reconciles additive schema changes and
 refreshes declared static records while preserving ordinary data. The automated test checks delivery of the original
 client files and the client's login request, not the entire browser UI.
+The host also starts the local scheduled-job service and stops it on shutdown.
+`TasksJob` is a disabled example until its `SystemScheduledJobs` row has an
+active CRON expression. Scheduler errors are written to stderr.
 
 Optionally add `--config C:/path/to/server.properties` to initialization and
 server commands. The example applies the configured working and storage paths,

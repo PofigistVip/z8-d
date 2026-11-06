@@ -1,0 +1,7 @@
+import org.zenframework.z8.base.Executable;
+
+// Disabled until an administrator assigns a CRON expression in ScheduledJobs.
+[job] [displayName "Tasks scheduled example"]
+public class TasksJob extends Executable {
+    virtual protected void execute() { info("Tasks scheduled job ran"); }
+}

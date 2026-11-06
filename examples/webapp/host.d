@@ -3,16 +3,23 @@ module webapp_host;
 
 import std.conv : to;
 import std.file : exists;
-import std.stdio : readln, stdout, writeln;
+import std.stdio : readln, stdout, stderr, writeln;
 import std.string : startsWith, replace;
 import z8.runtime;
 import z8.database.authentication;
 import z8.database.bootstrap;
 import z8.database.connection;
 import z8.database.postgres;
+import z8.database.scheduler : Z8ScheduledRun;
+import z8.database.scheduler_service;
 import z8.integration.postgres_authority;
 import z8.webserver.civetweb;
 import z8gen.project_registry;
+
+class SchedulerObserver : IZ8SchedulerObserver {
+    void onRuns(Z8ScheduledRun[] runs) { }
+    void onError(wstring message) { stderr.writeln("Scheduler: ", message.to!string); }
+}
 
 void main(string[] args) {
     if (args.length < 3) throw new Exception("usage: webapp-host <postgres-connection> <schema> [--initialize] [--public-dir <path>] [--config <path>]");
@@ -33,7 +40,8 @@ void main(string[] args) {
     enum prefix = "org.zenframework.z8.server.base.table.system."w;
     Z8Object[] systemTables;
     foreach (name; ["Users"w, "Roles"w, "UserRoles"w, "Entries"w, "UserEntries"w, "Sequences"w,
-        "Tables"w, "Fields"w, "Requests"w, "RoleTableAccess"w, "RoleFieldAccess"w, "RoleRequestAccess"w, "Files"w, "Settings"w]) {
+        "Tables"w, "Fields"w, "Requests"w, "RoleTableAccess"w, "RoleFieldAccess"w, "RoleRequestAccess"w, "Files"w, "Settings"w,
+        "Jobs"w, "ScheduledJobs"w, "ScheduledJobLogs"w]) {
         auto table = z8_native_new(prefix ~ name); table.z8_ensure(); systemTables ~= table;
     }
     z8_postgres_reconcile_registered(db, schema, registry, systemTables);
@@ -60,6 +68,8 @@ void main(string[] args) {
     auto securityLog = z8_security_log_file_from_config();
     auto sessions = new Z8SessionManager(cast(long)applicationConfig.sessionTimeoutMinutes * 60_000, applicationConfig.oneSessionPerUser);
     auto authority = new Z8PostgresHttpAuthority(db, schema, registry, config, sessions, "example"w);
+    auto scheduler = new Z8PostgresSchedulerService(db, schema, registry, 1000, new SchedulerObserver(), authority, authority);
+    scheduler.start(); scope(exit) scheduler.stop();
     auto server = new Z8CivetServer("127.0.0.1:0", (Z8HttpRequest request) {
         auto connection = db.openSibling(); scope(exit) connection.close();
         auto previous = z8_connection_set_current(new Z8PostgresDatabase(connection, schema, registry));
