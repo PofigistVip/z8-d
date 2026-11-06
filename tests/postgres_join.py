@@ -288,6 +288,7 @@ import org.zenframework.z8.base.application.Application;
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "group") groupBy = {customer.label};
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "context-filter") addWhere(customer.label == customer.label.get());
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "changed-link") customer.label = "Changed in hook";
+        if (Application.requestParameters().containsKey("customCustomer")) addWhere(customer.label == Application.requestParameters()["customCustomer"]);
     }
 }
 ''',
@@ -908,6 +909,18 @@ void main(string[] args) {
     db.execute(`CREATE TEMP TABLE "JoinOrders" AS SELECT * FROM "Orders"`);
     db.execute(`CREATE TEMP TABLE "DependencyOrders" AS SELECT * FROM "Orders"`);
     auto response = parseJSON(requestFields(`["title","customer.label","customer.city.label"]`w).to!string);
+    wstring readCustomCustomer(wstring customer) {
+        auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
+        request.parameters.z8_add("request"w, "HttpOrder"w); request.parameters.z8_add("action"w, "read"w);
+        request.parameters.z8_add("fields"w, `["title","customer.label"]`w); request.parameters.z8_add("customCustomer"w, customer);
+        auto previous = z8_application_set_request(request); scope(exit) z8_application_set_request(previous);
+        z8_application_start_response(request, "HttpOrder"w); z8_application_dispatch_request();
+        z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
+    }
+    auto customResponse = parseJSON(readCustomCustomer("Bob"w).to!string);
+    assert(customResponse["data"].array.length == 1 && customResponse["data"][0]["customer.label"].str == "Bob");
+    customResponse = parseJSON(readCustomCustomer("' OR 1=1 --"w).to!string);
+    assert(customResponse["data"].array.length == 0);
     wstring readAggregateIds(wstring ids) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, "AggregateOrder"w); request.parameters.z8_add("action"w, "read"w);
