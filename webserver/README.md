@@ -31,21 +31,32 @@ need specialized adapters and are not handled by this function.
 Alternatively, a handler can call `z8_application_dispatch_request()` in
 application response mode. It resolves the `request` parameter, verifies the
 session user's request permission, and routes ordinary objects or the supported
-table `meta`, `read`, `create`, `copy`, `update` and `destroy` operations to the corresponding adapter. Before a table action, the
+table `meta`, `read`, `create`, `copy`, `update`, `destroy`, `action`, `report`
+and `content` operations to the corresponding adapter. Before a table action, the
 host must install a database backend for the worker thread and restore the
 previous backend afterward. The authority is responsible for providing a
-current privilege snapshot. Executable jobs and other query actions still need
-adapters; selecting this handler is explicit rather than automatic.
+current privilege snapshot. The dispatcher also runs executable jobs and handles
+their status polling; selecting this handler is explicit rather than automatic.
 
 The initial `meta` adapter writes query attributes, access rights, keys and
 metadata for direct and linked fields, including basic presentation, dependencies,
 permitted source information and BL `writeMeta` overrides. Nested sections,
 fieldsets, field groups, tab controls, independent forms and forms with a readable Link are also supported.
-Actions without parameters are described in metadata and can execute against
-the direct query context, respecting their `useTransaction` setting. Parameter
-metadata and parameterized action execution are still pending. Other controls, custom Join metadata and
-reports are rejected for now. With no
+Actions and their parameters are described in metadata and can execute with a
+direct or nested query, respecting their `useTransaction` setting. Report metadata
+and custom BL report hooks are supported; built-in BIRT and POI engines remain
+unimplemented. Other controls, custom Join metadata and `aggregateBy` are rejected.
+With no
 `action` parameter, the same metadata is followed by the table read response.
+
+Executable requests with `scheduled` run synchronously; other executable requests
+return a job ID and run in a background thread. Poll with the `job` parameter to
+receive progress and new messages. The active job monitor is accessible only to the
+user that started it and is removed after its completed status is read. Asynchronous
+database work requires a backend implementing `IZ8BackgroundDatabaseConnection`;
+the PostgreSQL backend opens an independent connection. Job user switching requires
+the built-in administrator and an `IZ8JobUserResolver`: the HTTP authority can
+implement it, or the PostgreSQL backend can resolve standard users and privileges.
 
 An optional `IZ8HttpAuthority` constructor argument connects a host authority
 to the transport. With an authority present, each request must have a session

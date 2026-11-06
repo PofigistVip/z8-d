@@ -111,8 +111,10 @@ text fields; multiple fields are combined with OR.
 An active JSON `period` filters a readable direct `period` date field between
 the optional inclusive `start` and `finish` boundaries.
 BL-defined direct `groupBy` fields and JSON `having` conditions are supported;
-all participating fields must be readable. Group arrays and distinct arrays,
-linked groups and changes to `groupBy` from `beforeRead` are not supported.
+all participating fields must be readable. Array and distinct aggregations are
+accepted; the serialized value follows the original field's `get()` and
+`wasNull()` semantics, and BL code can retrieve elements with `array()`.
+Linked groups and changes to `groupBy` from `beforeRead` are not supported.
 The client `group` parameter places its fields first in the sort order; it
 does not turn ordinary rows into SQL aggregates.
 `totals=true` returns a `data` object with supported sum and average totals over
@@ -133,11 +135,21 @@ the CivetWeb host must explicitly call the dispatcher and install a backend for
 the worker thread. The separately supported write actions are described below.
 The initial `meta` action describes table fields, authorized Link paths, query
 access and nested sections, fieldsets, field groups, tab controls, independent
-forms and forms with a readable Link. Other controls, custom Join metadata,
-action parameters, reports and `aggregateBy` are rejected. Actions without
-parameters are included in metadata and can execute with `action=action`,
-`name`, `records` and `selection`; `useTransaction` controls the transaction.
+forms and forms with a readable Link. Action parameters, their query-backed
+sources, and report definitions are included. Other controls, custom Join metadata
+and `aggregateBy` are rejected. Actions can execute with `action=action`,
+`name`, `records`, `selection` and a JSON `parameters` array; `query` or `link`
+selects the query passed to the action, and `useTransaction` controls the transaction.
+Custom BL reports can run through `action=report`, while the BIRT and POI engines
+remain unimplemented. `action=content` runs the selected query's binary callback
+inside a transaction.
 An omitted action combines this metadata with the corresponding table read.
+Executable jobs support synchronous `scheduled` requests and asynchronous jobs
+with `job` status polling. Their JSON `parameters` are an object keyed by parameter
+ID. An asynchronous job uses an independent PostgreSQL connection, and only its
+owner can poll its active monitor. Hosts can implement `IZ8JobUserResolver` for
+custom identity parameters; otherwise the PostgreSQL backend resolves the standard
+user fields and role privileges from the system tables.
 The direct-table `create` action accepts a nonempty `data` array of objects,
 checks table create access, and inserts the records in a transaction with the
 BL creation hooks. Missing or zero primary keys receive random GUIDs. As in
