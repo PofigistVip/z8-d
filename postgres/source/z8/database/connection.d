@@ -8,7 +8,7 @@ import z8.database.privileges : z8_postgres_read_user;
 import z8.database.plan : quoteIdentifier;
 
 // Adapter for the request-local BL Connection and Query.setConnection APIs.
-class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection, IZ8JobUserResolver, IZ8UserPasswordVerifier, IZ8UserProfileReader, IZ8DatabaseSchema {
+class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8RawSqlConnection, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection, IZ8JobUserResolver, IZ8UserPasswordVerifier, IZ8UserProfileReader, IZ8DatabaseSchema {
     private Z8PostgresConnection connection;
     private wstring schema;
     private Z8RuntimeRegistry registry;
@@ -22,6 +22,11 @@ class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection, IZ8Back
     void commit() { connection.commit(); }
     void rollback() { connection.rollback(); }
     void execute(wstring sql) { connection.execute(sql.to!string); }
+    IZ8RawSqlCursor openSql(wstring sql) {
+        auto result = connection.execute(z8_string_required(sql).to!string);
+        if (!result.columns.length) throw new Z8PostgresException("SQL cursor requires a result set");
+        return new Z8PostgresRawCursor(result);
+    }
     void call(wstring name, Z8Array!Z8Primary values) {
         string sql = "CALL " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(name) ~ "(";
         Z8PostgresParameter[] parameters;
@@ -111,6 +116,34 @@ class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection, IZ8Back
         auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, query);
         return new Z8PostgresQueryExecutor(connection, schema, name, registry);
     }
+}
+
+private class Z8PostgresRawCursor : IZ8RawSqlCursor {
+    private Z8PostgresResult result;
+    private size_t nextRow, currentRow;
+    private bool positioned, closed;
+    this(Z8PostgresResult result) { this.result = result; }
+    bool next() {
+        if (closed) throw new Z8PostgresException("SQL cursor is closed");
+        positioned = nextRow < result.rows.length;
+        if (positioned) currentRow = nextRow++;
+        return positioned;
+    }
+    Z8RawSqlValue value(long position) {
+        if (closed) throw new Z8PostgresException("SQL cursor is closed");
+        if (!positioned) throw new Z8PostgresException("SQL cursor is not positioned on a row");
+        if (position < 1 || position > result.columns.length) throw new Z8PostgresException("SQL cursor column out of bounds");
+        auto index = cast(size_t)(position - 1);
+        auto cell = result.rows[currentRow][index];
+        if (cell.isNull) return Z8RawSqlValue(null, true);
+        auto raw = Z8RawSqlValue(cell.text.to!wstring, false);
+        if (result.columnTypes[index] == 17) {
+            raw.binary = true;
+            raw.bytes = z8_postgres_unescape_bytea(cell.text);
+        }
+        return raw;
+    }
+    void close() { closed = true; positioned = false; result = Z8PostgresResult.init; }
 }
 
 // The embedding host installs one catalog per thread and closes it after use.

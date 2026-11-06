@@ -29,6 +29,7 @@ import org.zenframework.z8.base.table.value.IntField;
 import org.zenframework.z8.base.sql.Connection;
 import org.zenframework.z8.base.sql.Transaction;
 import org.zenframework.z8.base.sql.Database;
+import org.zenframework.z8.base.sql.Cursor;
 import org.zenframework.z8.base.json.JsonObject;
 public class Probe {
     public static Connection current() { return Connection.get(); }
@@ -50,6 +51,7 @@ public class Probe {
     public static JsonObject databaseJson(Database database) { return database.toJson(); }
     public static string databaseSchema(Database database) { return database.schema(); }
     public static Connection databaseConnection(Database database) { return database.connection(); }
+    public static Cursor cursor(Database database, string sql) { return Cursor.open(database, sql); }
     public static void insert(Report report, guid id, int amount) { report.amount = amount; report.create(id); }
     public static int count(Report report) { return report.count(); }
 }
@@ -93,6 +95,36 @@ void main(string[] args) {
     auto previous = z8_connection_set_current(db1);
     auto defaultDatabase = P.m_database();
     assert(P.m_databaseSchema(defaultDatabase) == "pg_temp"w);
+    auto cursor = P.m_cursor(defaultDatabase, `SELECT 'hello'::text, 42::bigint, 12.50::numeric, '00000000-0000-0000-0000-000000000007'::uuid,
+        decode('00ff','hex'), -1000::bigint, TIMESTAMPTZ '2024-01-02 03:04:05.123456+00' UNION ALL
+        SELECT NULL, NULL, NULL, NULL, NULL, NULL, NULL`w);
+    bool unpositioned; try { cursor.m_string(1); } catch (Exception) { unpositioned = true; } assert(unpositioned);
+    assert(z8_optional_require(cursor.m_next()));
+    assert(cursor.m_string(1) == "hello"w && z8_optional_require(cursor.m_integer(2)) == 42);
+    assert(z8_optional_require(cursor.m_decimal(3)).z8_string() == "12.50"w);
+    assert(z8_guid_to_string(cursor.m_guid(4)) == "00000000-0000-0000-0000-000000000007"w);
+    assert(cursor.m_binary(5).data == [cast(ubyte)0, 255] && z8_date_ticks(cursor.m_date(6)) == -1000);
+    assert(z8_date_ticks(cursor.m_timestamp(7)) == z8_date_ticks(z8_date_parse("2024-01-02 03:04:05.123+00:00"w)));
+    bool badPosition; try { cursor.m_string(0); } catch (Exception) { badPosition = true; } assert(badPosition);
+    assert(z8_optional_require(cursor.m_next()));
+    assert(cursor.m_string(1) == ""w && z8_optional_require(cursor.m_integer(2)) == 0);
+    assert(z8_optional_require(cursor.m_decimal(3)).z8_string() == "0"w);
+    assert(z8_guid_to_string(cursor.m_guid(4)) == "00000000-0000-0000-0000-000000000000"w);
+    assert(cursor.m_binary(5).data.length == 0 && z8_date_ticks(cursor.m_date(6)) == z8_date_ticks(z8_date_min));
+    assert(!z8_optional_require(cursor.m_next())); cursor.m_close();
+    bool cursorClosed; try { cursor.m_next(); } catch (Exception) { cursorClosed = true; } assert(cursorClosed);
+    auto arrays = P.m_cursor(defaultDatabase, `SELECT '["abc",null,123]'::text, '[1,null,-7,4294967296]'::text,
+        '[1.25,null,2.5]'::text, '["1000",null]'::text, '["00000000-0000-0000-0000-000000000007",null]'::text, NULL::text`w);
+    assert(z8_optional_require(arrays.m_next()));
+    auto strings = arrays.m_string_array(1); assert(strings.z8_size() == 3 && strings.z8_get(0) == "abc"w && strings.z8_get(1) == ""w && strings.z8_get(2) == "123"w);
+    auto integers = arrays.m_integer_array(2); assert(integers.z8_size() == 4 && z8_optional_require(integers.z8_get(1)) == 0 && z8_optional_require(integers.z8_get(3)) == 4294967296L);
+    auto decimals = arrays.m_decimal_array(3); assert(z8_optional_require(decimals.z8_get(0)).z8_string() == "1.25"w && z8_optional_require(decimals.z8_get(1)).z8_string() == "0"w);
+    auto dates = arrays.m_date_array(4); assert(z8_date_ticks(dates.z8_get(0)) == 1000 && z8_date_ticks(dates.z8_get(1)) == z8_date_ticks(z8_date_min));
+    auto guids = arrays.m_guid_array(5); assert(z8_guid_to_string(guids.z8_get(0)) == "00000000-0000-0000-0000-000000000007"w && z8_guid_to_string(guids.z8_get(1)) == "00000000-0000-0000-0000-000000000000"w);
+    assert(arrays.m_string_array(6).z8_size() == 0); arrays.m_close();
+    first.execute(`SET bytea_output = 'escape'`);
+    auto escaped = P.m_cursor(defaultDatabase, `SELECT decode('00ff5c','hex')`w); assert(z8_optional_require(escaped.m_next()));
+    assert(escaped.m_binary(1).data == [cast(ubyte)0, 255, 92]); escaped.m_close(); first.execute(`SET bytea_output = 'hex'`);
     auto catalog = new Catalog(db2);
     auto previousCatalog = z8_database_set_catalog(catalog);
     auto currentDatabase = P.m_database(); auto currentJson = P.m_databaseJson(currentDatabase);

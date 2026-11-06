@@ -1,0 +1,128 @@
+// Raw SQL cursors are provided by the selected database backend.
+private enum z8_cursor_name = "org.zenframework.z8.server.base.sql.Cursor"w;
+private class Z8CursorState { IZ8RawSqlCursor cursor; }
+private IZ8RawSqlCursor z8_cursor_backend(Z8Object self) {
+    self = z8_nonnull(self);
+    auto state = cast(Z8CursorState)self.z8_get_native_state(z8_cursor_name);
+    if (state is null || state.cursor is null) throw new Exception("SQL cursor is not open");
+    return state.cursor;
+}
+private Z8Object z8_cursor_open(Z8Object database, wstring sql) {
+    auto backend = cast(IZ8RawSqlConnection)z8_database_backend(database);
+    if (backend is null) throw new Exception("database does not support SQL cursors");
+    auto cursor = backend.openSql(z8_string_required(sql));
+    if (cursor is null) throw new Exception("database returned a null SQL cursor");
+    auto value = z8_native_new(z8_cursor_name);
+    auto state = new Z8CursorState(); state.cursor = cursor;
+    value.z8_set_native_state(z8_cursor_name, state);
+    return value;
+}
+private Z8Optional!bool z8_cursor_next(Z8Object self) { return z8_optional_wrap(z8_cursor_backend(self).next()); }
+private void z8_cursor_close(Z8Object self) { z8_cursor_backend(self).close(); }
+private Z8RawSqlValue z8_cursor_value(Z8Object self, Z8Optional!long position) {
+    return z8_cursor_backend(self).value(cast(int)z8_optional_require(position));
+}
+private wstring z8_cursor_string(Z8Object self, Z8Optional!long position) {
+    auto value = z8_cursor_value(self, position);
+    return z8_string_new(value.isNull ? ""w : value.text);
+}
+private Z8Optional!long z8_cursor_integer(Z8Object self, Z8Optional!long position) {
+    auto value = z8_cursor_value(self, position);
+    if (value.isNull) return z8_optional_wrap(0L);
+    return z8_optional_wrap(z8_json_bigdecimal_long(z8_decimal_parse(value.text)));
+}
+private Z8Optional!Z8Decimal z8_cursor_decimal(Z8Object self, Z8Optional!long position) {
+    auto value = z8_cursor_value(self, position);
+    return z8_optional_wrap(value.isNull ? z8_decimal_from_int(0) : z8_decimal_parse(value.text));
+}
+private Z8Guid z8_cursor_guid(Z8Object self, Z8Optional!long position) {
+    auto value = z8_cursor_value(self, position);
+    return value.isNull ? z8_guid_zero() : z8_guid_parse(value.text);
+}
+private Z8Binary z8_cursor_binary(Z8Object self, Z8Optional!long position) {
+    auto value = z8_cursor_value(self, position);
+    return new Z8Binary(value.isNull ? null : value.binary ? value.bytes.dup : z8_encoding_encode(value.text, z8_encoding_by_id(0)));
+}
+private Z8Date z8_cursor_date(Z8Object self, Z8Optional!long position) {
+    auto value = z8_cursor_value(self, position);
+    if (value.isNull) return z8_date_min;
+    try { return z8_date_from_ticks(z8_int_parse(value.text)); }
+    catch (Exception) { return z8_date_parse(value.text); }
+}
+private Z8Date z8_cursor_timestamp(Z8Object self, Z8Optional!long position) {
+    auto value = z8_cursor_value(self, position);
+    if (value.isNull) return z8_date_min;
+    auto text = value.text;
+    // PostgreSQL emits microseconds and may abbreviate a numeric zone to +HH.
+    if (text.length > 19 && text[19] == '.') {
+        size_t end = 20;
+        while (end < text.length && text[end] >= '0' && text[end] <= '9') ++end;
+        auto fraction = text[20 .. end];
+        if (fraction.length > 3) fraction = fraction[0 .. 3];
+        while (fraction.length < 3) fraction ~= '0';
+        text = text[0 .. 20] ~ fraction ~ text[end .. $];
+    }
+    if (text.length >= 3 && (text[$ - 3] == '+' || text[$ - 3] == '-')) text ~= ":00"w;
+    return z8_date_parse(text);
+}
+private JSONValue[] z8_cursor_array(Z8Object self, Z8Optional!long position) {
+    return z8_json_array_read(z8_cursor_string(self, position)).array;
+}
+private Z8Array!wstring z8_cursor_string_array(Z8Object self, Z8Optional!long position) {
+    auto result = new Z8Array!wstring();
+    foreach (entry; z8_cursor_array(self, position)) result.z8_add(z8_string_new(z8_json_value_text(entry)));
+    return result;
+}
+private Z8Array!long z8_cursor_integer_array(Z8Object self, Z8Optional!long position) {
+    auto result = new Z8Array!long();
+    foreach (entry; z8_cursor_array(self, position)) {
+        long value;
+        switch (entry.type) {
+            case JSONType.null_: break;
+            case JSONType.integer: value = entry.integer; break;
+            case JSONType.uinteger: value = cast(long)entry.uinteger; break;
+            case JSONType.float_: value = z8_json_bigdecimal_long(z8_decimal_parse(z8_json_value_text(entry))); break;
+            case JSONType.string: value = z8_int_parse(z8_json_value_text(entry)); break;
+            default: throw new Exception("invalid JSON integer");
+        }
+        result.z8_add(value);
+    }
+    return result;
+}
+private Z8Array!Z8Decimal z8_cursor_decimal_array(Z8Object self, Z8Optional!long position) {
+    auto result = new Z8Array!Z8Decimal();
+    foreach (entry; z8_cursor_array(self, position))
+        result.z8_add(entry.type == JSONType.null_ ? z8_decimal_from_int(0) : z8_json_value_decimal(entry));
+    return result;
+}
+private Z8Array!Z8Date z8_cursor_date_array(Z8Object self, Z8Optional!long position) {
+    auto result = new Z8Array!Z8Date();
+    foreach (entry; z8_cursor_array(self, position))
+        result.z8_add(entry.type == JSONType.null_ ? z8_date_min : z8_date_parse(z8_json_value_text(entry)));
+    return result;
+}
+private Z8Array!Z8Guid z8_cursor_guid_array(Z8Object self, Z8Optional!long position) {
+    auto result = new Z8Array!Z8Guid();
+    foreach (entry; z8_cursor_array(self, position))
+        result.z8_add(entry.type == JSONType.null_ ? z8_guid_zero() : z8_guid_parse(z8_json_value_text(entry)));
+    return result;
+}
+void z8_bind_builtin_cursor() {
+    enum prefix = z8_cursor_name ~ ".m_"w;
+    z8_native_bind(prefix ~ "open"w, &z8_cursor_open);
+    z8_native_bind(prefix ~ "next"w, &z8_cursor_next);
+    z8_native_bind(prefix ~ "close"w, &z8_cursor_close);
+    z8_native_bind(prefix ~ "string"w, &z8_cursor_string);
+    z8_native_bind(prefix ~ "integer"w, &z8_cursor_integer);
+    z8_native_bind(prefix ~ "decimal"w, &z8_cursor_decimal);
+    z8_native_bind(prefix ~ "guid"w, &z8_cursor_guid);
+    z8_native_bind(prefix ~ "binary"w, &z8_cursor_binary);
+    z8_native_bind(prefix ~ "date"w, &z8_cursor_date);
+    z8_native_bind(prefix ~ "timestamp"w, &z8_cursor_timestamp);
+    z8_native_bind(prefix ~ "string_array"w, &z8_cursor_string_array);
+    z8_native_bind(prefix ~ "integer_array"w, &z8_cursor_integer_array);
+    z8_native_bind(prefix ~ "decimal_array"w, &z8_cursor_decimal_array);
+    z8_native_bind(prefix ~ "date_array"w, &z8_cursor_date_array);
+    z8_native_bind(prefix ~ "guid_array"w, &z8_cursor_guid_array);
+}
+shared static this() { z8_bind_builtin_cursor(); }

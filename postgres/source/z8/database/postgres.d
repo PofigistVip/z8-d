@@ -22,9 +22,12 @@ extern(C) {
     private int PQntuples(const(PGresult)* result);
     private int PQnfields(const(PGresult)* result);
     private const(char)* PQfname(const(PGresult)* result, int column);
+    private uint PQftype(const(PGresult)* result, int column);
     private int PQgetisnull(const(PGresult)* result, int row, int column);
     private int PQgetlength(const(PGresult)* result, int row, int column);
     private const(char)* PQgetvalue(const(PGresult)* result, int row, int column);
+    private ubyte* PQunescapeBytea(const(ubyte)* value, size_t* length);
+    private void PQfreemem(void* ptr);
     private const(char)* PQcmdTuples(PGresult* result);
     private void PQclear(PGresult* result);
 }
@@ -44,6 +47,7 @@ struct Z8PostgresValue {
 }
 struct Z8PostgresResult {
     string[] columns;
+    uint[] columnTypes;
     Z8PostgresValue[][] rows;
     long affectedRows = -1;
 }
@@ -53,6 +57,14 @@ private void z8PgValidate(string value) {
     foreach (c; value) if (c == '\0') throw new Z8PostgresException("PostgreSQL text contains a NUL byte");
     try { validate(value); }
     catch (Exception e) { throw new Z8PostgresException("PostgreSQL text is not valid UTF-8"); }
+}
+ubyte[] z8_postgres_unescape_bytea(string value) {
+    z8PgValidate(value);
+    size_t length;
+    auto bytes = PQunescapeBytea(cast(const(ubyte)*)value.toStringz, &length);
+    if (bytes is null) throw new Z8PostgresException("invalid PostgreSQL bytea");
+    scope(exit) PQfreemem(bytes);
+    return bytes[0 .. length].dup;
 }
 
 // The connection uses libpq's synchronous text protocol. A result owns its
@@ -169,7 +181,10 @@ class Z8PostgresConnection {
                 throw new Z8PostgresException(message.length ? message : "unsupported PostgreSQL result");
             }
             Z8PostgresResult copy;
-            foreach (column; 0 .. PQnfields(result)) copy.columns ~= z8PgCString(PQfname(result, column));
+            foreach (column; 0 .. PQnfields(result)) {
+                copy.columns ~= z8PgCString(PQfname(result, column));
+                copy.columnTypes ~= PQftype(result, column);
+            }
             foreach (row; 0 .. PQntuples(result)) {
                 Z8PostgresValue[] cells;
                 foreach (column; 0 .. PQnfields(result)) {

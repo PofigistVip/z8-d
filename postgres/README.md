@@ -41,6 +41,10 @@ connection strings and PostgreSQL JDBC URLs, opens and reuses connections for
 descriptors on its thread, and accepts separate user and password values. The host
 must restore the previous catalog and call `close()` when those connections are
 no longer needed. JDBC-specific URL options unsupported by libpq are not translated.
+BL `Cursor.open` executes SQL through a database descriptor and supports row
+iteration, one-based scalar access, and arrays encoded as JSON text. PostgreSQL
+results are currently materialized in memory. Timestamp conversion covers common
+PostgreSQL text formats; full JDBC conversion compatibility is not yet verified.
 `Query.setConnection` binds a query to a specific connection. `flush()` is a
 no-op because this client executes statements immediately. `Connection.call`
 invokes a procedure in the configured schema with parameterized scalar, GUID,

@@ -63,12 +63,13 @@ private Z8Object z8_database_get() {
     return z8_database_wrap(state);
 }
 private wstring z8_database_schema(Z8Object self) { return z8_string_new(z8_database_state(self).descriptor.schema); }
-private Z8Object z8_database_connection(Z8Object self) {
+private IZ8DatabaseConnection z8_database_backend(Z8Object self) {
     auto state = z8_database_state(self);
-    if (state.current !is null) return z8_connection_wrap(state.current);
+    if (state.current !is null) return state.current;
     if (state.catalog is null) throw new Exception("database connection catalog is not configured");
-    return z8_connection_wrap(state.catalog.connectionFor(state.descriptor));
+    return state.catalog.connectionFor(state.descriptor);
 }
+private Z8Object z8_database_connection(Z8Object self) { return z8_connection_wrap(z8_database_backend(self)); }
 private Z8Object z8_database_to_json(Z8Object self) {
     auto info = z8_database_state(self).descriptor;
     auto json = z8_native_new(z8_json_object_name);

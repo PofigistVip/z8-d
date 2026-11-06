@@ -9,6 +9,13 @@ interface IZ8DatabaseConnection {
     void flush();
     IZ8QueryExecutor queryExecutor(Z8Object query);
 }
+struct Z8RawSqlValue { wstring text; bool isNull; bool binary; ubyte[] bytes; }
+interface IZ8RawSqlCursor {
+    bool next();
+    Z8RawSqlValue value(long position);
+    void close();
+}
+interface IZ8RawSqlConnection { IZ8RawSqlCursor openSql(wstring sql); }
 // Optional database capability used by Sequencer; transaction behavior belongs
 // to the backend rather than the generated BL application.
 interface IZ8SequenceConnection {
