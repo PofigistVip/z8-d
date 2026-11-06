@@ -82,6 +82,8 @@ private string z8_pdf_hex(uint value, size_t digits) {
 
 private struct Z8PdfPageLayout {
     int width, height, left, right, top, bottom;
+    int detailHeight = 18;
+    string detailAlign = "middle";
 }
 // PrintOptions and PageFormat in the Java server use millimeters.
 private Z8PdfPageLayout z8_pdf_page_layout(wstring options) {
@@ -90,6 +92,8 @@ private Z8PdfPageLayout z8_pdf_page_layout(wstring options) {
     import std.string : strip, toLower;
     double width = 210, height = 297, left = 10, right = 10, top = 10, bottom = 10;
     bool portrait;
+    int detailHeight = 18;
+    string detailAlign = "middle";
     if (options !is null && options.length) {
         auto json = z8_json_parse(options.to!string);
         if (json.type != JSONType.object) throw new Exception("invalid print options");
@@ -129,10 +133,41 @@ private Z8PdfPageLayout z8_pdf_page_layout(wstring options) {
         }
         left = margin("leftMargin", left); right = margin("rightMargin", right);
         top = margin("topMargin", top); bottom = margin("bottomMargin", bottom);
+        if (auto alignment = "detailVertAlign" in json.object) {
+            if (alignment.type != JSONType.string) throw new Exception("invalid detail alignment");
+            detailAlign = alignment.str.toLower();
+            if (detailAlign != "top" && detailAlign != "middle" && detailAlign != "bottom")
+                throw new Exception("unknown detail alignment");
+        }
+        if (auto row = "detailRowHeight" in json.object) {
+            if (row.type != JSONType.null_) {
+                if (row.type != JSONType.string && row.type != JSONType.integer &&
+                    row.type != JSONType.uinteger && row.type != JSONType.float_)
+                    throw new Exception("invalid detail row height");
+                auto value = z8_json_value_text(*row).to!string.strip().toLower();
+                size_t split = value.length;
+                while (split && value[split - 1] >= 'a' && value[split - 1] <= 'z') --split;
+                auto units = value[split .. $];
+                auto number = value[0 .. split].strip().to!double;
+                double factor;
+                switch (units) {
+                    case "": case "pt": case "px": factor = 1; break;
+                    case "pc": factor = 12; break;
+                    case "in": factor = 72; break;
+                    case "mm": factor = 72.0 / 25.4; break;
+                    case "cm": factor = 72.0 / 2.54; break;
+                    default: throw new Exception("invalid detail row height unit");
+                }
+                number *= factor;
+                if (!isFinite(number) || number < 1 || number > 10000) throw new Exception("invalid detail row height");
+                detailHeight = cast(int)round(number);
+            }
+        }
     }
     if (!portrait) { auto temporary = width; width = height; height = temporary; }
     int points(double millimeters) { return cast(int)round(millimeters * 72.0 / 25.4); }
     auto result = Z8PdfPageLayout(points(width), points(height), points(left), points(right), points(top), points(bottom));
+    result.detailHeight = detailHeight; result.detailAlign = detailAlign;
     if (result.left + result.right >= result.width || result.top + result.bottom >= result.height)
         throw new Exception("page margins exceed page size");
     return result;
@@ -161,8 +196,8 @@ private ubyte[] z8_export_pdf(wstring[] ids, wstring[] headers, wstring[] types,
     }
     // Each cell is clipped so a long value cannot overwrite its neighbors.
     auto layout = z8_pdf_page_layout(options);
-    int pageWidth = layout.width, pageHeight = layout.height, rowHeight = 18, columns = cast(int)ids.length;
-    int rowLimit = (pageHeight - layout.top - layout.bottom) / rowHeight - 1;
+    int pageWidth = layout.width, pageHeight = layout.height, headerHeight = 18, columns = cast(int)ids.length;
+    int rowLimit = (pageHeight - layout.top - layout.bottom - headerHeight) / layout.detailHeight;
     int cellWidth = (pageWidth - layout.left - layout.right) / columns;
     if (rowLimit < 1) throw new Exception("page has no room for export rows");
     if (cellWidth < 8) throw new Exception("too many PDF columns");
@@ -171,10 +206,14 @@ private ubyte[] z8_export_pdf(wstring[] ids, wstring[] headers, wstring[] types,
     do {
         string content;
         void line(wstring[] values, int row) {
+            auto height = row == 0 ? headerHeight : layout.detailHeight;
             foreach (i, value; values) {
-                auto x = layout.left + cast(int)i * cellWidth, y = pageHeight - layout.top - (row + 1) * rowHeight;
-                content ~= "q " ~ x.to!string ~ " " ~ y.to!string ~ " " ~ cellWidth.to!string ~ " " ~ rowHeight.to!string ~
-                    " re W n BT /F1 9 Tf " ~ (x + 2).to!string ~ " " ~ (y + 5).to!string ~ " Td <" ~ text(value) ~ "> Tj ET Q\n";
+                auto x = layout.left + cast(int)i * cellWidth;
+                auto y = pageHeight - layout.top - headerHeight - row * layout.detailHeight;
+                auto baseline = row == 0 ? 5 : layout.detailAlign == "top" ? height - 12 :
+                    layout.detailAlign == "bottom" ? 3 : (height - 9) / 2 + 1;
+                content ~= "q " ~ x.to!string ~ " " ~ y.to!string ~ " " ~ cellWidth.to!string ~ " " ~ height.to!string ~
+                    " re W n BT /F1 9 Tf " ~ (x + 2).to!string ~ " " ~ (y + baseline).to!string ~ " Td <" ~ text(value) ~ "> Tj ET Q\n";
             }
         }
         line(headers, 0);
