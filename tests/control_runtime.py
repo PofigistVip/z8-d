@@ -237,9 +237,13 @@ void main() {
     z8_application_dispatch_request(); z8_application_finish_response(linkedRequest, new Z8RequestMonitor());
     auto linkedList = parseJSON(z8_application_response_text(linkedRequest).to!string)["controls"][0]["query"];
     assert(linkedList["name"].str == "detail" && linkedList["link"]["name"].str == "detail.parentId");
+    assert(linkedList["link"]["isLink"].boolean && linkedList["link"]["owner"].str == "detail");
+    assert(linkedList["link"]["query"]["primaryKey"].str == "detail.parent.recordId");
     auto selector = parseJSON(z8_application_response_text(linkedRequest).to!string)["controls"][0]["selector"];
     assert(selector["isSelector"].boolean && selector["copy"].boolean && selector["multiselect"].boolean);
     assert(selector["link"]["name"].str == "sourceId" && selector["columns"][0]["name"].str == "sourceId");
+    assert(selector["link"]["isLink"].boolean && selector["link"]["query"]["name"].str == "source");
+    assert(selector["link"]["query"]["primaryKey"].str == "source.recordId");
     user.privileges.setFieldAccess(z8_guid_create_name("ListboxTable.Source"w), Z8Access.init);
     linkedRequest = new Z8ApplicationRequest(); linkedRequest.session = request.session;
     linkedRequest.parameters.z8_add("request"w, "ListboxTable"w); linkedRequest.parameters.z8_add("action"w, "meta"w);

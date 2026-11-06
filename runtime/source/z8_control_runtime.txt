@@ -274,6 +274,20 @@ void z8_control_write_field_meta(Z8Object field, Z8Object query, Z8Object contex
     if (fieldState.writingMetadata) return;
     fieldState.writingMetadata = true;
     scope(exit) fieldState.writingMetadata = false;
+    bool isLink = z8_native_is_instance("org.zenframework.z8.server.base.table.value.Link"w, field);
+    Z8Object linkTarget;
+    if (isLink) {
+        linkTarget = z8_link_query(field);
+        auto parent = field.z8_get_attribute("parentKey"w);
+        if (linkTarget is null && parent !is null && z8_str_compareNoCase(parent, "false"w) != 0) linkTarget = field.z8_get_owner();
+        if (linkTarget is null) throw new Exception("Link target is not configured");
+        if (z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, linkTarget)) {
+            auto linkedKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, linkTarget);
+            if (!privileges.getTableAccess(linkedKey).read) throw new Exception("link target access denied");
+        }
+        z8_monitor_property(writer, "isLink"w, true);
+        z8_monitor_property(writer, "owner"w, z8_nonnull(field.z8_get_owner()).z8_id());
+    }
     auto type = z8_field_type_id(field);
     if (type == "text"w && fieldState.singleLine.present && fieldState.singleLine.value) type = "string"w;
     z8_monitor_property(writer, "type"w, type);
@@ -352,6 +366,15 @@ void z8_control_write_field_meta(Z8Object field, Z8Object query, Z8Object contex
     control.required = z8_optional_wrap(!readOnly && required);
     scope(exit) { control.readOnly = previousReadOnly; control.required = previousRequired; }
     z8_control_write_base_meta(field, query, context, privileges);
+    if (isLink) {
+        auto primary = z8_nonnull(z8_query_primary_key(linkTarget));
+        writer.start('{', "query"w);
+        z8_monitor_property(writer, "name"w, linkTarget.z8_id());
+        z8_monitor_property(writer, "primaryKey"w, primary.z8_id());
+        z8_monitor_property(writer, "text"w, linkTarget.z8_get_attribute("displayName"w));
+        z8_monitor_property(writer, "icon"w, linkTarget.z8_get_attribute("icon"w));
+        writer.finish('}');
+    }
 }
 private void z8_control_write_base_meta(Z8Object item, Z8Object query, Z8Object context, Z8Privileges privileges) {
     auto writer = z8_application_require_request().writer;
