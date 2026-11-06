@@ -497,7 +497,10 @@ void main(string[] args) {
                              data=json.dumps([{"recordId": "00000000-0000-0000-0000-000000000001", "nested.documents": []}]))
             assert not result["success"], result
             result = request(action="create", data='[{"undefined":"unexpected"}]')
-            assert not result["success"], result
+            assert result["success"] and result["data"][0]["title"] is None, result
+            unknown_record = result["data"][0]["recordId"]
+            result = request(action="destroy", data=json.dumps([unknown_record]))
+            assert result["success"], result
             result = request(action=None, count="true")
             assert result["success"] and result["isQuery"] and result["total"] == 2 and "data" not in result, result
             result = request(session="limited", filter='{"property":"title","value":"First"}')
@@ -703,6 +706,10 @@ void main(string[] args) {
             assert result["success"] and result["data"][0]["nested.title"] == "Changed", result
             result = request(action="export", link="nestedLink", format="xls", columns='[{"id":"nested.title"}]')
             assert result["success"] and result["info"]["files"][0]["name"].endswith(".xlsx"), result
+            result = request(action="export", link="nestedLink", format="doc", columns='[{"id":"nested.missing"},{"id":"nested.title"}]')
+            assert result["success"] and result["info"]["files"][0]["name"] == "export.docx", result
+            result = request(action="export", link="nestedLink", format="xls", columns='[{"id":"nested.missing"}]')
+            assert not result["success"], result
             result = request(session="relation-denied", action="export", link="nestedLink", format="xls", columns='[{"id":"nested.title"}]')
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             parts = {"request": "Sample", "session": "full", "server": "test", "action": "update",

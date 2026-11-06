@@ -20,7 +20,8 @@ private void z8_application_dispatch_query_export_target(wstring className, Z8Ob
         if (column.type != JSONType.object) throw new Exception("invalid export column");
         auto id = "id" in column.object;
         if (id is null || id.type != JSONType.string || !id.str.length) throw new Exception("invalid export column ID");
-        auto field = z8_query_find_field_id(query, id.str.to!wstring);
+        auto field = z8_query_try_find_field_id(query, id.str.to!wstring);
+        if (field is null) continue;
         if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("query field access denied");
         ids ~= id.str.to!wstring;
         auto header = field.z8_get_attribute("columnHeader"w);
@@ -28,6 +29,7 @@ private void z8_application_dispatch_query_export_target(wstring className, Z8Ob
         headers ~= header is null || !header.length ? ids[$ - 1] : header;
         types ~= z8_field_type_id(field);
     }
+    if (!ids.length) throw new Exception("no known export columns");
     auto params = new Z8StringMap(); params.z8_add(original);
     params.z8_add("action"w, "read"w);
     params.z8_add("columns"w, ""w); params.z8_add("format"w, ""w);
