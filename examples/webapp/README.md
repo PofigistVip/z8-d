@@ -49,7 +49,8 @@ active CRON expression. Scheduler errors are written to stderr; task logs are
 stored under `logs/scheduler` in the configured working directory.
 Set `scheduler.enabled=false` to disable the service.
 The administrator's SystemTools entry includes users, role permissions, jobs,
-tables, files and sequences. The users form rejects duplicate role assignments
+tables, files, sequences and the runtime version comparison with CSV export.
+The users form rejects duplicate role assignments
 and excludes assigned roles from the selection list. Its scheduler action wakes
 the local service to reload schedules immediately.
 The administrator can run the schema generator as a background job. It adds

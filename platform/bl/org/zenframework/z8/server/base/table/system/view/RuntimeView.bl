@@ -1,0 +1,31 @@
+import org.zenframework.z8.base.json.JsonArray;
+import org.zenframework.z8.base.query.Query;
+import org.zenframework.z8.base.table.value.BoolField;
+import org.zenframework.z8.base.table.value.GuidField;
+import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.server.base.table.system.view.RuntimeVersionData;
+import org.zenframework.z8.server.base.table.system.view.RuntimeVersionExport;
+
+[request] [displayName "$RuntimeView.title$"]
+public class RuntimeView extends Query {
+    [displayName "$RuntimeView.id$"] GuidField recordId;
+    [displayName "$RuntimeView.className$"] StringField className;
+    [displayName "$RuntimeView.name$"] StringField name;
+    [displayName "$RuntimeView.displayName$"] StringField displayName;
+    [displayName "$RuntimeView.controlSum$"] StringField controlSum;
+    [displayName "$RuntimeView.newName$"] StringField newName;
+    [displayName "$RuntimeView.newDisplayName$"] StringField newDisplayName;
+    [displayName "$RuntimeView.newControlSum$"] StringField newControlSum;
+    [displayName "$RuntimeView.changed$"] BoolField changed;
+    RuntimeVersionExport export;
+
+    readOnly = true;
+    colCount = 2;
+    className.colSpan = 2;
+    controls = {recordId, changed, className, name, newName, displayName, newDisplayName, controlSum, newControlSum};
+    names = {className, changed};
+    columns = {recordId, className, name, newName, displayName, newDisplayName, controlSum, newControlSum, changed};
+    actions = {export};
+
+    virtual protected JsonArray getData(string[string] parameters) { return RuntimeVersionData.read(); }
+}

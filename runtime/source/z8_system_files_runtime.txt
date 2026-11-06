@@ -115,9 +115,10 @@ void z8_application_dispatch_file_download(wstring requestPath) {
     if (!requestPath.startsWith("/storage/"w)) throw new Exception("file was not found");
     auto text = request.parameters.z8_get("id"w);
     if (text is null || !text.length) {
-        auto data = z8_temporary_archive_get(requestPath[1 .. $]);
+        wstring name;
+        auto data = z8_temporary_archive_get(requestPath[1 .. $], name);
         if (data is null) throw new Exception("file was not found");
-        z8_application_set_response_file(request, data, "archive.zip"w); return;
+        z8_application_set_response_file(request, data, name); return;
     }
     auto file = z8_system_files_get_id(z8_guid_parse(text));
     if (file is null || file.path != requestPath[1 .. $]) throw new Exception("file was not found");

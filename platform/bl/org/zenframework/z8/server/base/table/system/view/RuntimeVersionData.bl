@@ -1,0 +1,7 @@
+import org.zenframework.z8.base.json.JsonArray;
+
+[native "org.zenframework.z8.server.base.table.system.view.RuntimeVersionData"]
+public class RuntimeVersionData {
+    public static JsonArray read();
+    public static file export();
+}

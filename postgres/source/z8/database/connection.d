@@ -9,7 +9,7 @@ import z8.database.plan : quoteIdentifier;
 import z8.database.bootstrap : z8_postgres_reconcile_registered;
 
 // Adapter for the request-local BL Connection and Query.setConnection APIs.
-class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8RawSqlConnection, IZ8SystemInstallation, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection, IZ8JobUserResolver, IZ8UserPasswordVerifier, IZ8UserProfileReader, IZ8DatabaseSchema, IZ8SchemaOperations, IZ8SchemaReconciler, IZ8AfterCommit {
+class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8RawSqlConnection, IZ8SystemInstallation, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection, IZ8JobUserResolver, IZ8UserPasswordVerifier, IZ8UserProfileReader, IZ8DatabaseSchema, IZ8SchemaOperations, IZ8SchemaReconciler, IZ8RuntimeVersionSource, IZ8AfterCommit {
     private Z8PostgresConnection connection;
     private wstring schema;
     private Z8RuntimeRegistry registry;
@@ -23,11 +23,18 @@ class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8RawSqlConnection, IZ8System
     void beginTransaction() { connection.beginTransaction(); }
     void afterCommit(void delegate() callback) { connection.afterCommit(callback); }
     wstring databaseSchema() { return schema; }
-    void reconcileSchema() {
-        if (registry is null) throw new Z8PostgresException("application registry is required for schema generation");
+    private Z8Object[] newPlatformTables() {
         Z8Object[] tables;
         foreach (name; platformTables) tables ~= z8_object_new_instance(z8_string_required(name));
-        z8_postgres_reconcile_registered(connection, schema, registry, tables);
+        return tables;
+    }
+    void reconcileSchema() {
+        if (registry is null) throw new Z8PostgresException("application registry is required for schema generation");
+        z8_postgres_reconcile_registered(connection, schema, registry, newPlatformTables());
+    }
+    Z8RuntimeVersion currentRuntimeVersion() {
+        if (registry is null) throw new Z8PostgresException("application registry is required for schema version");
+        return z8_runtime_version(registry, newPlatformTables());
     }
     bool tableExists(wstring table) {
         auto rows = connection.execute(`SELECT 1 FROM information_schema.tables WHERE table_schema =

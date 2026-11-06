@@ -3,6 +3,7 @@ from pathlib import Path
 import http.client
 import io
 import json
+import csv
 import os
 import re
 import subprocess
@@ -164,6 +165,7 @@ with tempfile.TemporaryDirectory() as directory:
             jobs_view = "org.zenframework.z8.server.base.table.system.view.JobsView"
             roles_view = "org.zenframework.z8.server.base.table.system.view.RoleTableAccessView"
             users_view = "org.zenframework.z8.server.base.table.system.view.UsersView"
+            runtime_view = "org.zenframework.z8.server.base.table.system.view.RuntimeView"
             generator_class = "org.zenframework.z8.server.db.generator.SchemaGenerator"
             assert any(entry["request"] == tools_class for entry in login["user"]["entries"]), login
             assert any(item.get("request") == files_view for group in login["user"]["data"] for item in group.get("items", [])), login
@@ -172,14 +174,43 @@ with tempfile.TemporaryDirectory() as directory:
             assert any(item.get("request") == jobs_view for group in login["user"]["data"] for item in group.get("items", [])), login
             assert any(item.get("request") == roles_view for group in login["user"]["data"] for item in group.get("items", [])), login
             assert any(item.get("request") == users_view for group in login["user"]["data"] for item in group.get("items", [])), login
+            assert any(item.get("request") == runtime_view for group in login["user"]["data"] for item in group.get("items", [])), login
             assert any(item.get("request") == generator_class for group in login["user"]["data"] for item in group.get("items", [])), login
             session = login["session"]
             status, replacement = browser_login(port, "Admin", password)
             assert status == 200 and replacement["success"] and replacement["session"] != session
             assert request(port, request="login", session=session)[0] == 401
             session = replacement["session"]
+            status, runtime = request(port, request=runtime_view, session=session)
+            assert status == 200 and runtime.get("success") and runtime.get("isQuery") and runtime.get("readOnly"), str(runtime)[:2000]
+            assert runtime["data"] and all(not row["changed"] for row in runtime["data"]), str(runtime)[:2000]
+            assert any(action["name"] == "export" for action in runtime.get("actions", [])), str(runtime)[:2000]
+            status, exported = request(port, request=runtime_view, session=session, action="action", name="export", records="[]", selection="[]", parameters="[]")
+            assert status == 200 and exported.get("success") and len(exported["info"]["files"]) == 1, str(exported)[:2000]
+            csv_file = exported["info"]["files"][0]
+            assert csv_file["name"] == "runtime.csv" and csv_file["id"] is None, csv_file
+            csv_data = download(port, csv_file["path"], session).decode("utf-8")
+            csv_rows = list(csv.reader(io.StringIO(csv_data), delimiter=";"))
+            assert csv_rows[0] == ["recordId", "className", "name", "newName", "displayName", "newDisplayName", "controlSum", "newControlSum", "changed"]
+            assert len(csv_rows) == len(runtime["data"]) + 1 and any(row[1] == "Tasks" for row in csv_rows[1:]), csv_rows
+            status, replacement = browser_login(port, "Admin", password)
+            assert status == 200 and replacement["success"]
+            session = replacement["session"]
+            client = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            try:
+                client.request("GET", "/" + quote(csv_file["path"], safe="/") + "?&" + urlencode({"session": session}))
+                response = client.getresponse(); response.read()
+                assert response.status == 404
+            finally:
+                client.close()
+            subprocess.run([str(psql), "-v", "ON_ERROR_STOP=1", "-c", '''UPDATE "SystemSettings" SET "Value"=convert_to('[]','UTF8') WHERE "Name"='Version details' ''', connection],
+                           env=environment, capture_output=True, check=True)
+            status, changed_runtime = request(port, request=runtime_view, session=session, action="read")
+            assert status == 200 and changed_runtime.get("success") and changed_runtime["data"] and all(row["changed"] for row in changed_runtime["data"]), str(changed_runtime)[:2000]
             status, generation = request(port, request=generator_class, session=session, scheduled="true")
             assert status == 200 and generation.get("success") and not generation["info"]["messages"], str(generation)[:2000]
+            status, runtime = request(port, request=runtime_view, session=session, action="read")
+            assert status == 200 and runtime.get("success") and all(not row["changed"] for row in runtime["data"]), str(runtime)[:2000]
             subprocess.run([str(psql), "-v", "ON_ERROR_STOP=1", "-c", 'ALTER TABLE "Tasks" DROP COLUMN "Done"', connection],
                            env=environment, capture_output=True, check=True)
             status, generation = request(port, request=generator_class, session=session)

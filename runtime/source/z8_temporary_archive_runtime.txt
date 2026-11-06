@@ -1,7 +1,7 @@
-// Short-lived archive data for the servlet-style download after ArchiveAction.
+// Short-lived generated files for servlet-style downloads.
 // It is process-local, bound to a session and schema, and never stored in SystemFiles.
 private struct Z8TemporaryArchive {
-    wstring path, session, schema, user;
+    wstring path, session, schema, user, name;
     MonoTime expires;
     ubyte[] data;
 }
@@ -22,7 +22,11 @@ private void z8_temporary_archive_prune(MonoTime now) {
     foreach (i; keep .. z8_temporary_archives.length) z8_temporary_archives[i] = Z8TemporaryArchive.init;
     z8_temporary_archives.length = keep;
 }
-private wstring z8_temporary_archive_store(ubyte[] data) {
+private wstring z8_temporary_archive_store(ubyte[] data, wstring name = "archive.zip"w) {
+    import std.algorithm.searching : canFind;
+    name = z8_string_required(name);
+    if (!name.length || name.canFind("/"w) || name.canFind("\\"w) || name.canFind("\r"w) || name.canFind("\n"w))
+        throw new Exception("invalid temporary file name");
     auto session = z8_nonnull(z8_application_require_request().session);
     auto user = z8_nonnull(z8_nonnull(session.user).id);
     auto schema = z8_temporary_archive_schema();
@@ -41,25 +45,29 @@ private wstring z8_temporary_archive_store(ubyte[] data) {
         }
         wstring path;
         do {
-            path = "storage/z8-archive/"w ~ z8_guid_to_string(z8_guid_create_random()) ~ ".zip"w;
+            auto token = z8_guid_to_string(z8_guid_create_random());
+            path = name == "archive.zip"w ? "storage/z8-archive/"w ~ token ~ ".zip"w :
+                "storage/z8-generated/"w ~ token ~ "/"w ~ name;
             bool duplicate;
             foreach (entry; z8_temporary_archives) if (entry.path == path) { duplicate = true; break; }
             if (!duplicate) break;
         } while (true);
         z8_temporary_archives ~= Z8TemporaryArchive(path, session.id.idup, schema.idup,
-            z8_guid_to_string(user), now + dur!"minutes"(10), data.dup);
+            z8_guid_to_string(user), name.idup, now + dur!"minutes"(10), data.dup);
         return path;
     }
 }
-private Z8Binary z8_temporary_archive_get(wstring path) {
+private Z8Binary z8_temporary_archive_get(wstring path, out wstring name) {
     auto session = z8_nonnull(z8_application_require_request().session);
     auto user = z8_nonnull(z8_nonnull(session.user).id);
     auto schema = z8_temporary_archive_schema();
     synchronized (z8_temporary_archives_lock) {
         z8_temporary_archive_prune(MonoTime.currTime);
         foreach (entry; z8_temporary_archives)
-            if (entry.path == path && entry.session == session.id && entry.schema == schema && entry.user == z8_guid_to_string(user))
+            if (entry.path == path && entry.session == session.id && entry.schema == schema && entry.user == z8_guid_to_string(user)) {
+                name = entry.name;
                 return new Z8Binary(entry.data.dup);
+            }
     }
     return null;
 }

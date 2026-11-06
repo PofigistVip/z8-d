@@ -170,6 +170,44 @@ wstring z8_runtime_version_diff(wstring savedDetails, Z8RuntimeVersion current) 
     }
     return z8_json_render(JSONValue(rows));
 }
+private Z8Object z8_runtime_version_view_data() {
+    auto registry = z8_runtime_get_registry();
+    if (registry is null) throw new Exception("application registry is not configured");
+    auto provider = cast(IZ8RuntimeVersionSource)z8_connection_current_backend();
+    auto current = provider is null ? z8_runtime_version(registry) : provider.currentRuntimeVersion();
+    auto saved = z8_settings_string_default(z8_guid_create_name("system.version.details"w), "[]"w);
+    return z8_json_array_parse(z8_runtime_version_diff(saved, current));
+}
+private Z8File z8_runtime_version_export() {
+    import std.string : replace;
+    enum wstring[] fields = ["recordId"w, "className"w, "name"w, "newName"w, "displayName"w,
+        "newDisplayName"w, "controlSum"w, "newControlSum"w, "changed"w];
+    auto rows = z8_json_array_state(z8_runtime_version_view_data()).value.array;
+    wstring csv;
+    if (rows.length) {
+        foreach (i, field; fields) {
+            if (i) csv ~= ";"w;
+            csv ~= "\""w ~ field.replace("\""w, "\"\""w) ~ "\""w;
+        }
+        foreach (row; rows) {
+            csv ~= "\n"w;
+            foreach (i, field; fields) {
+                if (i) csv ~= ";"w;
+                auto value = z8_version_json_text(row, field.to!string);
+                csv ~= "\""w ~ (value.present ? value.text.replace("\""w, "\"\""w) : ""w) ~ "\""w;
+            }
+        }
+    }
+    auto bytes = z8_encoding_encode(csv, z8_encoding_by_id(0));
+    auto file = new Z8File(); file.id = null; file.name = "runtime.csv"w;
+    file.path = z8_temporary_archive_store(bytes, file.name);
+    file.size = z8_optional_wrap(cast(long)bytes.length);
+    return file;
+}
+shared static this() {
+    z8_native_bind("org.zenframework.z8.server.base.table.system.view.RuntimeVersionData.m_read"w, &z8_runtime_version_view_data);
+    z8_native_bind("org.zenframework.z8.server.base.table.system.view.RuntimeVersionData.m_export"w, &z8_runtime_version_export);
+}
 class Z8RuntimeRegistry {
     private Z8RuntimeRegistration[] tableEntries, requestEntries, jobEntries, entryEntries, executableEntries, namedEntries;
     private Z8Object[wstring] namedSingletons;

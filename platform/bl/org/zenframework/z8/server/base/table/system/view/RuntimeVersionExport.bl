@@ -1,0 +1,11 @@
+import org.zenframework.z8.base.application.Application;
+import org.zenframework.z8.base.form.action.Action;
+import org.zenframework.z8.base.query.Query;
+import org.zenframework.z8.server.base.table.system.view.RuntimeVersionData;
+
+[displayName "$RuntimeView.export$"]
+public class RuntimeVersionExport extends Action {
+    virtual protected void execute(guid[] recordIds, Query context, guid[] selected, Query query) {
+        Application.print(RuntimeVersionData.export());
+    }
+}
