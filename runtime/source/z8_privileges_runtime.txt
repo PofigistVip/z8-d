@@ -10,6 +10,11 @@ struct Z8Access {
             copy && other.copy, destroy && other.destroy, execute && other.execute);
     }
 }
+struct Z8PrivilegeEntry { Z8Guid id; Z8Access access; }
+struct Z8PrivilegesSnapshot {
+    Z8Access defaultAccess;
+    Z8PrivilegeEntry[] tables, fields, requests;
+}
 class Z8Privileges {
     private Z8Access defaultAccess;
     private Z8Access[wstring] tables, fields, requests;
@@ -33,4 +38,31 @@ class Z8Privileges {
         if (id is null) return defaultAccess;
         auto access = key(id) in requests; return access is null ? defaultAccess : *access;
     }
+    // Preserve raw overrides (including explicit denies), rather than the
+    // effective field access that is intersected with its table's access.
+    Z8PrivilegesSnapshot snapshot() {
+        import std.algorithm.sorting : sort;
+        Z8PrivilegeEntry[] entries(ref Z8Access[wstring] values) {
+            Z8PrivilegeEntry[] result;
+            auto keys = values.keys; sort(keys);
+            foreach (key; keys) result ~= Z8PrivilegeEntry(z8_guid_parse(key), values[key]);
+            return result;
+        }
+        return Z8PrivilegesSnapshot(defaultAccess, entries(tables), entries(fields), entries(requests));
+    }
+}
+Z8Privileges z8_privileges_from_snapshot(Z8PrivilegesSnapshot snapshot) {
+    auto result = new Z8Privileges(snapshot.defaultAccess);
+    void apply(Z8PrivilegeEntry[] entries, void delegate(Z8Guid, Z8Access) setter) {
+        bool[wstring] seen;
+        foreach (entry; entries) {
+            auto key = z8_guid_to_string(z8_nonnull(entry.id));
+            if (key in seen) throw new Exception("duplicate privilege key");
+            seen[key] = true; setter(entry.id, entry.access);
+        }
+    }
+    apply(snapshot.tables, &result.setTableAccess);
+    apply(snapshot.fields, &result.setFieldAccess);
+    apply(snapshot.requests, &result.setRequestAccess);
+    return result;
 }
