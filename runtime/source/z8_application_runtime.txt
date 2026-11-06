@@ -38,6 +38,8 @@ interface IZ8ApplicationMonitor {
 }
 // Optional capability for monitors that expose job progress.
 interface IZ8JobProgress { void setWorked(long percent); }
+// The host resolves a complete identity and privilege snapshot for job impersonation.
+interface IZ8JobUserResolver { Z8UserData resolveJobUser(Z8Guid id); }
 struct Z8MonitorEntry {
     Z8MonitorLevel level;
     wstring text, source;
@@ -141,6 +143,7 @@ class Z8ApplicationRequest {
     Z8StringMap parameters;
     Z8Array!Z8File files;
     IZ8ApplicationMonitor monitor;
+    IZ8JobUserResolver jobUserResolver;
     Z8ApplicationSession session;
     private Z8EventsLevel[] eventLevels;
     void setEventsLevel(Z8EventsLevel level) { eventLevels ~= level; }

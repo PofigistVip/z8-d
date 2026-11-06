@@ -322,6 +322,7 @@ class Z8CivetServer {
             request.body = readBody(connection, info.contentLength, transfer == "chunked", bodyLimit);
             auto type = request.contentType.toLower();
             auto application = new Z8ApplicationRequest();
+            application.jobUserResolver = cast(IZ8JobUserResolver)authority;
             request.monitor = new Z8RequestMonitor();
             application.monitor = request.monitor;
             if (type.startsWith("multipart/form-data")) addMultipart(application, request.contentType, request.body);

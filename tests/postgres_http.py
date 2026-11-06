@@ -98,6 +98,17 @@ public class UpdateJob extends Executable {
     (source / "NonTransactionalJob.bl").write_text('''
 public class NonTransactionalJob extends UpdateJob { useTransaction = false; }
 ''', encoding="utf-8")
+    (source / "ImpersonateJob.bl").write_text('''
+import org.zenframework.z8.base.Executable;
+import org.zenframework.z8.base.application.Application;
+public class ImpersonateJob extends Executable {
+    useTransaction = false;
+    virtual protected void execute() {
+        switchUser('00000000-0000-0000-0000-000000000004'); info(Application.userId().toString());
+        resetUser(); info(Application.userId().toString());
+    }
+}
+''', encoding="utf-8")
     (source / "Sample.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.IntField;
@@ -126,10 +137,11 @@ import z8.webserver.civetweb;
 import std.stdio : writeln, stdout, readln;
 __gshared string databaseInfo;
 
-class Authority : IZ8HttpAuthority {
+class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
     Z8ApplicationSession authorize(Z8HttpRequest request, wstring id, wstring server) {
         if (server != "test"w || (id != "full"w && id != "limited"w && id != "denied"w)) return null;
-        auto user = new Z8UserData(); user.id = z8_guid_create(id == "limited"w ? 3 : 1);
+        auto user = new Z8UserData(); user.id = z8_guid_create(id == "full"w ? 2 : 3);
+        user.builtinAdministrator = id == "full"w;
         user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
         if (id == "limited"w) {
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.Title"w), Z8Access.init);
@@ -139,6 +151,12 @@ class Authority : IZ8HttpAuthority {
         return new Z8ApplicationSession(id, user, user);
     }
     Z8ApplicationSession login(Z8HttpRequest request, wstring login, wstring password) { return null; }
+    Z8UserData resolveJobUser(Z8Guid id) {
+        if (id != z8_guid_create(4)) return null;
+        auto user = new Z8UserData(); user.id = id;
+        user.privileges = new Z8Privileges(Z8Access(true, false, false, false, false, true));
+        return user;
+    }
 }
 void main(string[] args) {
     databaseInfo = args[1];
@@ -188,7 +206,7 @@ void main(string[] args) {
                     query.pop("action")
                 if query.get("action") in ("destroy", "action", "report"):
                     query.pop("fields")
-                if query["request"] in ("UpdateJob", "NonTransactionalJob"):
+                if query["request"] in ("UpdateJob", "NonTransactionalJob", "ImpersonateJob"):
                     query.pop("fields", None)
                 conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
                 try:
@@ -271,6 +289,23 @@ void main(string[] args) {
             assert result["success"] and "job failed" in result["info"]["messages"][-1]["text"], result
             result = request(request="UpdateJob", action=None, scheduled="true", parameters='{"missing":1}')
             assert not result["success"], result
+            result = request(request="ImpersonateJob", action=None, scheduled="true")
+            assert result["success"] and [m["text"] for m in result["info"]["messages"]] == [
+                "00000000-0000-0000-0000-000000000004", "00000000-0000-0000-0000-000000000002"], result
+            result = request(session="limited", request="ImpersonateJob", action=None, scheduled="true")
+            assert result["success"] and "switch access denied" in result["info"]["messages"][-1]["text"], result
+            result = request(request="ImpersonateJob", action=None)
+            assert result["success"] and result["id"], result
+            impersonate_id = result["id"]; impersonate_messages = []
+            for _ in range(100):
+                result = request(request="ImpersonateJob", action=None, job=impersonate_id)
+                impersonate_messages.extend(entry["text"] for entry in result["info"]["messages"])
+                if result["done"]:
+                    break
+                time.sleep(0.02)
+            else:
+                raise AssertionError("impersonating job did not finish")
+            assert impersonate_messages == ["00000000-0000-0000-0000-000000000004", "00000000-0000-0000-0000-000000000002"], result
             result = request(request="UpdateJob", action=None, parameters='{"amount":3,"wait":true}')
             assert result["success"] and result["id"], result
             job = result["id"]

@@ -90,6 +90,7 @@ private void z8_application_start_job(Z8Object executable) {
     for (long i; i < names.z8_size(); ++i) worker.parameters.z8_add(names.z8_get(i), request.parameters.z8_get(names.z8_get(i)));
     worker.files.z8_addAll(request.files);
     worker.session = new Z8ApplicationSession(session.id, user, session.system);
+    worker.jobUserResolver = request.jobUserResolver;
     worker.monitor = monitor; worker.setEventsLevel(request.eventsLevel());
     synchronized (z8_job_lock) z8_job_monitors[id] = monitor;
     scope(failure) if (!started) synchronized (z8_job_lock) z8_job_monitors.remove(id);

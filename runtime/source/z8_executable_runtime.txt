@@ -1,5 +1,29 @@
 // Core Executable callbacks, shared by job hosts and generated BL classes.
 private enum z8_executable_name = "org.zenframework.z8.server.base.Executable"w;
+private class Z8ExecutableState { Z8ApplicationSession defaultSession; }
+private Z8ExecutableState z8_executable_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_executable_name, self)) throw new Exception("invalid Executable object");
+    auto state = cast(Z8ExecutableState)self.z8_get_native_state(z8_executable_name);
+    if (state is null) { state = new Z8ExecutableState(); self.z8_set_native_state(z8_executable_name, state); }
+    return state;
+}
+private void z8_executable_switch_user(Z8Object self, Z8Guid id) {
+    auto request = z8_application_require_request();
+    auto original = z8_nonnull(z8_executable_state(self).defaultSession);
+    if (!z8_nonnull(original.user).builtinAdministrator) throw new Exception("job user switch access denied");
+    id = z8_nonnull(id);
+    if (z8_nonnull(z8_nonnull(request.session).user).id == id) return;
+    auto resolver = request.jobUserResolver;
+    if (resolver is null) throw new Exception("job user resolver is not configured");
+    auto user = z8_nonnull(resolver.resolveJobUser(id));
+    if (user.id is null || user.id != id || user.privileges is null) throw new Exception("invalid resolved job user");
+    request.session = new Z8ApplicationSession(""w, user, original.system);
+}
+private void z8_executable_reset_user(Z8Object self) {
+    auto request = z8_application_require_request();
+    request.session = z8_nonnull(z8_executable_state(self).defaultSession);
+}
 private void z8_executable_default_execute(Z8Object self) {
     z8_nonnull(self).z8_executable_virtual_execute_parameters();
 }
@@ -25,7 +49,10 @@ bool z8_executable_run(Z8Object self) {
     auto request = z8_application_require_request();
     auto session = z8_nonnull(request.session);
     auto originalUser = session.user;
-    scope(exit) { request.session = session; session.user = originalUser; }
+    auto state = z8_executable_state(self);
+    auto previousSession = state.defaultSession;
+    state.defaultSession = session;
+    scope(exit) { request.session = session; session.user = originalUser; state.defaultSession = previousSession; }
     IZ8DatabaseConnection connection;
     bool begun;
     try {
@@ -49,6 +76,8 @@ bool z8_executable_run(Z8Object self) {
 void z8_bind_builtin_executable() {
     z8_native_bind(z8_executable_name ~ ".m_execute"w, &z8_executable_default_execute);
     z8_native_bind(z8_executable_name ~ ".m_execute"w, &z8_executable_default_parameters);
+    z8_native_bind(z8_executable_name ~ ".m_switchUser"w, &z8_executable_switch_user);
+    z8_native_bind(z8_executable_name ~ ".m_resetUser"w, &z8_executable_reset_user);
     z8_native_bind(z8_executable_name ~ ".m_progress"w, &z8_executable_progress);
     z8_native_bind(z8_executable_name ~ ".m_info"w, &z8_executable_message!(Z8MonitorLevel.info));
     z8_native_bind(z8_executable_name ~ ".m_warning"w, &z8_executable_message!(Z8MonitorLevel.warning));
