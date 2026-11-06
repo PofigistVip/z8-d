@@ -1,0 +1,1 @@
+public enum SortColor { Red, Blue, Green }

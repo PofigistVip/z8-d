@@ -1,0 +1,20 @@
+public class EnumArraySort {
+    public static SortColor[] colors() { return SortColor[] {SortColor.Blue, SortColor.Red}; }
+    public static int run() {
+        SortColor[] values = {SortColor.Green, SortColor.Red, SortColor.Blue, SortColor.Red};
+        SortColor[] sorted = values.sort();
+        if (sorted[0] != SortColor.Red || sorted[1] != SortColor.Red ||
+            sorted[2] != SortColor.Blue || sorted[3] != SortColor.Green) return 1;
+        sorted.add(SortColor.Blue);
+        if (values.size() != 5) return 2;
+        SortColor[] empty = {};
+        if (!empty.sort().isEmpty()) return 3;
+        SortColor[] single = {null};
+        if (single.sort().size() != 1) return 4;
+        SortColor[] invalid = {SortColor.Red, null};
+        try { invalid.sort(); return 5; } catch (exception expected) {}
+        if (colors().sort().first() != SortColor.Red) return 6;
+        try { for (SortColor item : values) values.sort(); return 7; } catch (exception expectedModification) {}
+        return 0;
+    }
+}

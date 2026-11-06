@@ -1882,7 +1882,9 @@ class Checker {
                         auto guidSort = receiver == ValueType.guidArray && e.token.text == "sort";
                         auto objectSort = receiver == ValueType.selfArray && e.token.text == "sort" &&
                             e.left.objectClass !is null && !isPrimaryClass(e.left.objectClass);
-                        if (!primaryJoin && !guidSort && !objectSort && !["size", "isEmpty", "clear", "first", "last", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
+                        auto enumSort = receiver == ValueType.enumArray && e.token.text == "sort" &&
+                            e.left.objectClass !is null && !e.left.objectClass.isNative;
+                        if (!primaryJoin && !guidSort && !objectSort && !enumSort && !["size", "isEmpty", "clear", "first", "last", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
                             fail("this method is not yet supported for object arrays", e.token);
                     }
                     switch (e.token.text) {

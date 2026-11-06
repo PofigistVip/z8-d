@@ -1,3 +1,26 @@
+// User-defined BL enums compile to singleton objects; their declaration order
+// is supplied by generated code, so separately compiled enums remain usable.
+Z8Array!T z8_enum_array_sort(T)(Z8Array!T array, T[] order) if (is(T == class)) {
+    import std.algorithm.sorting : sort;
+    import std.algorithm.mutation : SwapStrategy;
+    array = z8_nonnull(array);
+    if (array.z8_size() > 1) {
+        struct Entry { T value; size_t ordinal; }
+        Entry[] entries;
+        foreach (i; 0 .. array.z8_size()) {
+            auto value = z8_nonnull(array.z8_get(i));
+            size_t ordinal; bool found;
+            foreach (index, candidate; order) if (value is candidate) { ordinal = index; found = true; break; }
+            if (!found) throw new Exception("invalid enum array element");
+            entries ~= Entry(value, ordinal);
+        }
+        sort!((a, b) => a.ordinal < b.ordinal, SwapStrategy.stable)(entries);
+        foreach (index, entry; entries) array.z8_set(cast(long)index, entry.value);
+    }
+    ++array.z8_version;
+    return array;
+}
+
 class Z8Array(T) {
     enum isPrimitive = is(T == long) || is(T == bool) || is(T == Z8Decimal);
     enum sharePrimary = isPrimitive || is(T == wstring) || is(T == Z8Guid) || is(T == Z8File);
