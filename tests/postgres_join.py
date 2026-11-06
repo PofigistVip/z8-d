@@ -322,6 +322,9 @@ import org.zenframework.z8.base.table.TreeTable;
 import org.zenframework.z8.base.table.value.StringField;
 [name "TreeNodes"] public class NativeTree extends TreeTable { [name "Title"] public StringField title; }
 ''',
+        "TreeLimited": '''
+public class TreeLimited extends NativeTree { limit = 1; }
+''',
         "ConditionOrder": '''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.Link;
@@ -766,8 +769,10 @@ void main(string[] args) {
     db.execute(`CREATE TEMP TABLE "JoinOrders" AS SELECT * FROM "Orders"`);
     db.execute(`CREATE TEMP TABLE "DependencyOrders" AS SELECT * FROM "Orders"`);
     auto response = parseJSON(requestFields(`["title","customer.label","customer.city.label"]`w).to!string);
-    auto treeResponse = parseJSON(requestFields(`["path"]`w, null, null, null, null, "NativeTree"w,
+    auto treeResponse = parseJSON(requestFields(`["path"]`w, null, null, null, null, "TreeLimited"w,
         "read"w, null, null, null, null, null, null, null, "1"w).to!string);
+    assert(treeResponse["data"].array.length == 2);
+    treeResponse = parseJSON(requestFields(`["path"]`w, null, null, null, null, "TreeLimited"w).to!string);
     assert(treeResponse["data"].array.length == 2);
     foreach (row; treeResponse["data"].array) assert("parentId" in row.object);
     assert(response["data"].array.length == 1 && response["data"][0]["customer.label"].str == "Alice" && response["data"][0]["customer.city.label"].str == "Moscow");

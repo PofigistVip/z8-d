@@ -539,6 +539,8 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     // the cursor, then restores them after writing the rows.
     auto saved = new Z8QuerySavedState(query, contextFields ~ selected);
     scope(exit) saved.restore();
-    z8_query_open(query, read, true, true);
+    // Pagination was already resolved above; a TreeTable deliberately uses
+    // an unlimited read even when the query has a configured default limit.
+    z8_query_open(query, read, false, true);
     z8_application_query_write_rows(query, writer, selected);
 }
