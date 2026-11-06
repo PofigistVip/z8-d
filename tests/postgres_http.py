@@ -71,6 +71,15 @@ public class ContextAction extends Action {
     }
 }
 ''', encoding="utf-8")
+    (source / "CustomReport.bl").write_text('''
+import org.zenframework.z8.base.form.report.Report;
+public class CustomReport extends Report {
+    virtual protected void prepare(guid id) {
+        if (id != '00000000-0000-0000-0000-000000000001') throw "invalid report record";
+    }
+    virtual protected file execute(guid id) { file result = name + "." + format; return result; }
+}
+''', encoding="utf-8")
     (source / "Sample.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.IntField;
@@ -84,6 +93,7 @@ public class Sample extends Table {
     Table child; [name "ChildLink"] Link childLink = child;
     ApplyAction apply; NoTransactionAction noTransaction; IncrementAction increment; ContextAction inspect;
     actions = {apply, noTransaction, increment, inspect};
+    CustomReport exported; reports = {exported};
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -156,7 +166,7 @@ void main(string[] args) {
                 query.update(params)
                 if query["action"] is None:
                     query.pop("action")
-                if query.get("action") in ("destroy", "action"):
+                if query.get("action") in ("destroy", "action", "report"):
                     query.pop("fields")
                 conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
                 try:
@@ -225,6 +235,12 @@ void main(string[] args) {
             assert result["success"] and result["info"]["messages"][0]["text"] == "child", result
             result = request(action="action", name="inspect", records=one, query="missing")
             assert not result["success"], result
+            result = request(action="report", id="exported", recordId="00000000-0000-0000-0000-000000000001", name="invoice", format="pdf")
+            assert result["success"] and result["info"]["files"][0]["name"] == "invoice.pdf", result
+            result = request(action="report", id="missing", recordId="00000000-0000-0000-0000-000000000001")
+            assert not result["success"], result
+            result = request(session="denied", action="report", id="exported", recordId="00000000-0000-0000-0000-000000000001")
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(sort='[{"property":"amount"}]')
             assert [row["amount"] for row in result["data"]] == [11, 11], result
             new_record = '[{"recordId":"00000000-0000-0000-0000-000000000003","title":"Third","amount":25}]'

@@ -1,0 +1,29 @@
+// ReportAction: find the report in the context and publish its generated file.
+void z8_application_dispatch_query_report(wstring className) {
+    z8_application_dispatch_query_report_target(className, null);
+}
+private void z8_application_dispatch_query_report_target(wstring className, Z8Object query) {
+    auto request = z8_application_require_request();
+    auto params = z8_nonnull(request.parameters);
+    if (request.writer.scopes.length != 2) throw new Exception("response object is not open");
+    if (params.z8_get("action"w) != "report"w) throw new Exception("unsupported query action");
+    if (!z8_application_may_execute(z8_nonnull(request.session), className, "report"w)) throw new Exception("request access denied");
+    auto keys = params.z8_keys();
+    for (long i; i < keys.z8_size(); ++i) {
+        auto key = keys.z8_get(i);
+        if (key == "request"w || key == "session"w || key == "server"w || key == "ip"w || key == "action"w ||
+            key == "id"w || key == "format"w || key == "name"w || key == "recordId"w) continue;
+        if (key is null || params.z8_get(key).length) throw new Exception("unsupported report parameter");
+    }
+    if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
+    if (!z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, query)) throw new Exception("report requires a Query");
+    auto report = z8_action_find_member(query, params.z8_get("id"w));
+    if (!z8_native_is_instance(z8_report_name, report)) throw new Exception("report not found");
+    auto state = z8_report_state(report);
+    auto format = params.z8_get("format"w), name = params.z8_get("name"w);
+    if (format !is null) state.format = format;
+    if (name !is null) state.name = name;
+    auto id = params.z8_get("recordId"w);
+    auto result = z8_report_run(report, id is null ? null : z8_guid_parse(id));
+    z8_nonnull(request.monitor).print(z8_nonnull(result));
+}
