@@ -6,6 +6,7 @@ import z8.database.connection : Z8PostgresDatabase;
 import z8.database.plan : quoteIdentifier;
 import z8.database.postgres;
 import z8.database.privileges : z8_postgres_read_user;
+import z8.database.scheduler_logs : IZ8SchedulerLogStore;
 
 // A host calls runDue periodically, on a connection owned by the calling
 // thread. Session-level advisory locks prevent two hosts running the same
@@ -26,13 +27,16 @@ class Z8PostgresScheduler {
     private Z8RuntimeRegistry registry;
     private IZ8UserChangeNotifier userNotifier;
     private IZ8RoleChangeNotifier roleNotifier;
+    private IZ8SchedulerLogStore logStore;
     private string ns;
     this(Z8PostgresConnection db, wstring schema, Z8RuntimeRegistry registry,
-         IZ8UserChangeNotifier userNotifier = null, IZ8RoleChangeNotifier roleNotifier = null) {
+         IZ8UserChangeNotifier userNotifier = null, IZ8RoleChangeNotifier roleNotifier = null,
+         IZ8SchedulerLogStore logStore = null) {
         if (db is null || db.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
         if (registry is null) throw new Z8PostgresException("application registry is required");
         this.db = db; this.schema = schema.idup; this.registry = registry;
         this.userNotifier = userNotifier; this.roleNotifier = roleNotifier;
+        this.logStore = logStore;
         ns = quoteIdentifier(schema);
     }
     private Z8PostgresParameter guidParameter(Z8Guid id) {
@@ -70,19 +74,20 @@ class Z8PostgresScheduler {
         return results;
     }
     private bool runOne(Z8Guid id, Z8Date now, out Z8ScheduledRun result) {
-        wstring classId, cron;
+        wstring classId, cron, jobName;
         Z8Guid userId;
         bool errorsOnly;
         db.beginTransaction();
         try {
             auto rows = db.execute("SELECT j.\"Class\", s.\"User\"::text, s.\"Cron\", s.\"LastStart\"::text, " ~
-                `s."Log errors only"::text FROM ` ~ ns ~ `."SystemScheduledJobs" s JOIN ` ~ ns ~
+                `s."Log errors only"::text, j."Name" FROM ` ~ ns ~ `."SystemScheduledJobs" s JOIN ` ~ ns ~
                 `."SystemJobs" j ON j."RecordId" = s."Job" WHERE s."RecordId" = $1::uuid AND s."Active" <> 0 AND s."Cron" <> '' FOR UPDATE OF s`,
                 [guidParameter(id)]);
             if (!rows.rows.length) { db.commit(); return false; }
             auto row = rows.rows[0];
             classId = row[0].text.to!wstring; userId = z8_guid_literal(row[1].text); cron = row[2].text.to!wstring;
             errorsOnly = row[4].text != "0";
+            jobName = row[5].isNull ? classId : row[5].text.to!wstring;
             auto last = row[3].isNull ? z8_date_min : z8_date_from_ticks(row[3].text.to!long);
             if (z8_date_ticks(nextDate(last, cron)) >= z8_date_ticks(now)) { db.commit(); return false; }
             auto next = nextDate(now, cron);
@@ -122,10 +127,22 @@ class Z8PostgresScheduler {
         try {
             db.execute("UPDATE " ~ ns ~ `."SystemScheduledJobs" SET "LastFinish" = $2::bigint WHERE "RecordId" = $1::uuid`,
                 [guidParameter(id), Z8PostgresParameter.value(z8_date_ticks(finished).to!string)]);
-            if (!errorsOnly || monitor.hasErrors()) db.execute("INSERT INTO " ~ ns ~
-                `."SystemScheduledJobLogs" ("RecordId", "ScheduledJob", "Start", "Finish", "Errors") VALUES ($1::uuid, $2::uuid, $3::bigint, $4::bigint, $5::smallint)`,
-                [guidParameter(z8_guid_create_random()), guidParameter(id), Z8PostgresParameter.value(z8_date_ticks(now).to!string),
-                 Z8PostgresParameter.value(z8_date_ticks(finished).to!string), Z8PostgresParameter.value(monitor.hasErrors() ? "1" : "0")]);
+            if (!errorsOnly || monitor.hasErrors()) {
+                Z8File log;
+                if (logStore !is null && monitor.logs().length) {
+                    log = logStore.writeLog(schema, jobName, monitor.logs());
+                    if (log is null || !log.size.present) throw new Z8PostgresException("scheduler log store returned an invalid file");
+                }
+                auto file = log is null ? Z8PostgresParameter.nullValue() :
+                    Z8PostgresParameter.value(("["w ~ z8_file_to_string(log) ~ "]"w).to!string);
+                auto size = log is null ? "0" : log.size.value.to!string;
+                db.execute("INSERT INTO " ~ ns ~
+                    `."SystemScheduledJobLogs" ("RecordId", "ScheduledJob", "Start", "Finish", "Errors", "Files", "File size") ` ~
+                    `VALUES ($1::uuid, $2::uuid, $3::bigint, $4::bigint, $5::smallint, convert_to($6::text,'UTF8'), $7::bigint)`,
+                    [guidParameter(z8_guid_create_random()), guidParameter(id), Z8PostgresParameter.value(z8_date_ticks(now).to!string),
+                     Z8PostgresParameter.value(z8_date_ticks(finished).to!string), Z8PostgresParameter.value(monitor.hasErrors() ? "1" : "0"),
+                     file, Z8PostgresParameter.value(size)]);
+            }
             db.commit();
         } catch (Throwable failure) {
             if (db.inTransaction()) db.rollback();

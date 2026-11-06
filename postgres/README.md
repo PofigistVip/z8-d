@@ -248,7 +248,10 @@ The caller supplies periodic calls and connection lifetime. Alternatively,
 thread with its own sibling connection. `start()` and `stop()` are idempotent;
 `stop()` waits for a running job to finish. An optional thread-safe observer
 receives run results and service errors on the scheduler thread. Neither API
-persists the monitor's text and files. Start time is committed
+persists monitor text unless an `IZ8SchedulerLogStore` is supplied.
+`Z8FileSchedulerLogStore` stores logs under an explicitly configured directory;
+the scheduler records their file metadata and size in `SystemScheduledJobLogs`.
+Filesystem writes are outside the PostgreSQL transaction. Start time is committed
 before execution, so a process crash after claiming a run does not retry that
 occurrence automatically.
 Both scheduler APIs accept optional user and role change notifiers, allowing

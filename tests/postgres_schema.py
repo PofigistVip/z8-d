@@ -272,12 +272,16 @@ import z8.database.bootstrap;
 import z8.database.privileges;
 import z8.database.scheduler;
 import z8.database.scheduler_service;
+import z8.database.scheduler_logs;
 import z8.database.authentication;
 import z8gen.p_Probe;
 import z8gen.p_CustomUser;
 import std.algorithm.searching : canFind;
 import std.conv : to;
 import std.json : parseJSON;
+import std.file : readText, getSize;
+import std.process : environment;
+import std.string : startsWith;
 import core.sync.mutex : Mutex;
 import core.sync.condition : Condition;
 import core.time : dur;
@@ -698,7 +702,9 @@ void main(string[] args) {
     auto sibling = db.openSibling();
     auto lock = Z8PostgresParameter.value("z8.schedule.z8_bootstrap." ~ dailyScheduleRow.rows[0][0].text);
     sibling.execute("SELECT pg_catalog.pg_advisory_lock(pg_catalog.hashtextextended($1::text, 0))", [lock]);
-    auto scheduler = new Z8PostgresScheduler(db, "z8_bootstrap"w, bootstrapRegistry);
+    auto logsRoot = environment["Z8_SCHEDULER_TEST_DIR"];
+    auto logStore = new Z8FileSchedulerLogStore(logsRoot);
+    auto scheduler = new Z8PostgresScheduler(db, "z8_bootstrap"w, bootstrapRegistry, null, null, logStore);
     auto runs = scheduler.runDue(z8_date_from_ticks(1700000000000));
     assert(runs.length == 1 && runs[0].classId == "FailingJob"w && !runs[0].success && runs[0].messages.length == 1);
     sibling.execute("SELECT pg_catalog.pg_advisory_unlock(pg_catalog.hashtextextended($1::text, 0))", [lock]); sibling.close();
@@ -713,6 +719,21 @@ void main(string[] args) {
     assert(scheduler.runDue(z8_date_from_ticks(1700000000000)).length == 0);
     auto completedLogs = db.execute(`SELECT "Errors", count(*) FROM "z8_bootstrap"."SystemScheduledJobLogs" WHERE "RecordId" NOT IN ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000998') GROUP BY "Errors" ORDER BY "Errors"`);
     assert(completedLogs.rows.length == 2 && completedLogs.rows[0][0].text == "0" && completedLogs.rows[0][1].text == "1" && completedLogs.rows[1][0].text == "1" && completedLogs.rows[1][1].text == "1");
+    auto storedLogs = db.execute(`SELECT "Errors", convert_from("Files", 'UTF8'), "File size"::text FROM "z8_bootstrap"."SystemScheduledJobLogs" WHERE "RecordId" NOT IN ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000998') ORDER BY "Errors"`);
+    foreach (row; storedLogs.rows) {
+        auto metadata = parseJSON(row[1].text).array[0].object; auto path = metadata["path"].str;
+        assert(path.startsWith(logsRoot) && getSize(path) == row[2].text.to!ulong);
+        assert(readText(path).canFind(row[0].text == "1" ? "scheduled failure" : "daily ran"));
+    }
+    auto sanitized = logStore.writeLog("../../outside"w, "../job"w, [Z8MonitorEntry(Z8MonitorLevel.info, "safe"w, null, z8_date_now())]);
+    assert(sanitized.path.to!string.startsWith(logsRoot) && readText(sanitized.path.to!string).canFind("safe"));
+    db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "Active" = 1, "Cron" = '* * * * *', "LastStart" = 1699999700000, "Log errors only" = 1 WHERE "RecordId" = $1::uuid`,
+        [Z8PostgresParameter.value(z8_guid_to_string(scheduleId).to!string)]);
+    runs = scheduler.runDue(z8_date_from_ticks(1700000000000)); assert(runs.length == 1 && runs[0].success);
+    assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemScheduledJobLogs" WHERE "ScheduledJob" = $1::uuid`,
+        [Z8PostgresParameter.value(z8_guid_to_string(scheduleId).to!string)]).rows[0][0].text == "1");
+    db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "Active" = 0 WHERE "RecordId" = $1::uuid`,
+        [Z8PostgresParameter.value(z8_guid_to_string(scheduleId).to!string)]);
     db.execute(`INSERT INTO "z8_bootstrap"."SystemUsers" ("RecordId", "Name") VALUES ('00000000-0000-0000-0000-000000000054', 'No rights')`);
     db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "User" = '00000000-0000-0000-0000-000000000054', "LastStart" = 1699999700000 WHERE "RecordId" = $1::uuid`,
         [Z8PostgresParameter.value(dailyScheduleRow.rows[0][0].text)]);
@@ -729,7 +750,7 @@ void main(string[] args) {
     auto serviceSessions = new Z8SessionManager();
     auto serviceVictim = new Z8UserData(); serviceVictim.id = z8_guid_create(119);
     serviceSessions.create("job-victim"w, serviceVictim, bootstrapUser, "z8_bootstrap"w);
-    auto service = new Z8PostgresSchedulerService(db, "z8_bootstrap"w, bootstrapRegistry, 50, observer, serviceSessions, serviceSessions);
+    auto service = new Z8PostgresSchedulerService(db, "z8_bootstrap"w, bootstrapRegistry, 50, observer, serviceSessions, serviceSessions, logStore);
     service.start(); service.start();
     assert(observer.waitForSuccess());
     auto concurrentStop = new Thread({ service.stop(); }); concurrentStop.start();
@@ -1640,6 +1661,7 @@ void main(string[] args) {
     command += [str(bin_dir.parent / "lib/libpq.lib")] if os.name == "nt" else ["-L-lpq"]
     subprocess.run([*command, "-of=" + str(exe)], cwd=temp, check=True)
     with temporary_postgres(bin_dir) as (connection, environment):
+        environment["Z8_SCHEDULER_TEST_DIR"] = str(temp / "scheduler-logs")
         result = subprocess.run([str(exe), connection], env=environment, cwd=temp, capture_output=True, text=True,
                                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
         if result.returncode:

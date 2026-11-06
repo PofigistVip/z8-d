@@ -8,6 +8,7 @@ import std.conv : to;
 import z8.runtime : Z8RuntimeRegistry, IZ8UserChangeNotifier, IZ8RoleChangeNotifier;
 import z8.database.postgres : Z8PostgresConnection, Z8PostgresException;
 import z8.database.scheduler : Z8PostgresScheduler, Z8ScheduledRun;
+import z8.database.scheduler_logs : IZ8SchedulerLogStore;
 
 // Observer methods run on the scheduler thread and must be thread-safe.
 interface IZ8SchedulerObserver {
@@ -22,6 +23,7 @@ class Z8PostgresSchedulerService {
     private IZ8SchedulerObserver observer;
     private IZ8UserChangeNotifier userNotifier;
     private IZ8RoleChangeNotifier roleNotifier;
+    private IZ8SchedulerLogStore logStore;
     private long intervalMilliseconds;
     private Mutex gate;
     private Condition wake;
@@ -31,13 +33,14 @@ class Z8PostgresSchedulerService {
 
     this(Z8PostgresConnection source, wstring schema, Z8RuntimeRegistry registry,
          long intervalMilliseconds = 1000, IZ8SchedulerObserver observer = null,
-         IZ8UserChangeNotifier userNotifier = null, IZ8RoleChangeNotifier roleNotifier = null) {
+         IZ8UserChangeNotifier userNotifier = null, IZ8RoleChangeNotifier roleNotifier = null, IZ8SchedulerLogStore logStore = null) {
         if (source is null || source.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
         if (schema is null || !schema.length || registry is null) throw new Z8PostgresException("scheduler schema and registry are required");
         if (intervalMilliseconds <= 0) throw new Z8PostgresException("scheduler interval must be positive");
         this.source = source; this.schema = schema.idup; this.registry = registry;
         this.intervalMilliseconds = intervalMilliseconds; this.observer = observer;
         this.userNotifier = userNotifier; this.roleNotifier = roleNotifier;
+        this.logStore = logStore;
         gate = new Mutex(); wake = new Condition(gate);
     }
     bool isRunning() { synchronized (gate) return worker !is null && alive && !stopping; }
@@ -78,7 +81,7 @@ class Z8PostgresSchedulerService {
     private void run(Z8PostgresConnection connection) {
         scope(exit) synchronized (gate) { alive = false; wake.notifyAll(); }
         try {
-            auto scheduler = new Z8PostgresScheduler(connection, schema, registry, userNotifier, roleNotifier);
+            auto scheduler = new Z8PostgresScheduler(connection, schema, registry, userNotifier, roleNotifier, logStore);
             for (;;) {
                 synchronized (gate) if (stopping) break;
                 try {
