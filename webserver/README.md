@@ -64,7 +64,8 @@ access are checked.
 Actions and their parameters are described in metadata and can execute with a
 direct or nested query, respecting their `useTransaction` setting. Report metadata
 and custom BL report hooks are supported; built-in BIRT and POI engines remain
-unimplemented. Fields reached through a custom Join are exposed as read-only
+unimplemented. Table export supports Excel-compatible XLSX for the client's
+`xls` or `xlsx` format request; PDF export is not yet implemented. Fields reached through a custom Join are exposed as read-only
 text controls after checking the relation and target permissions. Grouping with
 `aggregateBy` is supported by the PostgreSQL executor for its documented subset.
 Other control types and unsupported grouping combinations are rejected.

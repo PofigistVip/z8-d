@@ -1,0 +1,107 @@
+// ExportAction in Z8 is a ReadAction: run the same authorized query, then
+// render the selected columns into a file returned through the monitor.
+private void z8_application_dispatch_query_export_target(wstring className, Z8Object context) {
+    import std.json : JSONType, JSONValue;
+    auto request = z8_application_require_request();
+    auto original = request.parameters;
+    auto format = original.z8_get("format"w);
+    if (format != "xls"w && format != "xlsx"w) throw new Exception("unsupported export format");
+    auto input = original.z8_get("columns"w);
+    if (input is null || !input.length) throw new Exception("export columns are required");
+    auto columns = z8_json_parse(input.to!string);
+    if (columns.type != JSONType.array || !columns.array.length || columns.array.length > 16384)
+        throw new Exception("invalid export columns");
+    auto privileges = z8_nonnull(z8_nonnull(request.session).user).privileges;
+    if (privileges is null) throw new Exception("query read access denied");
+    auto query = z8_application_nested_query(context, privileges, original.z8_get("query"w));
+    wstring[] ids, headers, types;
+    foreach (column; columns.array) {
+        if (column.type != JSONType.object) throw new Exception("invalid export column");
+        auto id = "id" in column.object;
+        if (id is null || id.type != JSONType.string || !id.str.length) throw new Exception("invalid export column ID");
+        auto field = z8_query_find_field_id(query, id.str.to!wstring);
+        if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("query field access denied");
+        ids ~= id.str.to!wstring;
+        auto header = field.z8_get_attribute("columnHeader"w);
+        if (header is null || !header.length) header = field.z8_get_attribute("displayName"w);
+        headers ~= header is null || !header.length ? ids[$ - 1] : header;
+        types ~= z8_field_type_id(field);
+    }
+    auto params = new Z8StringMap(); params.z8_add(original);
+    params.z8_add("action"w, "read"w);
+    params.z8_add("columns"w, ""w); params.z8_add("format"w, ""w);
+    params.z8_add("options"w, ""w);
+    params.z8_add("start"w, "0"w); params.z8_add("limit"w, int.max.to!wstring);
+    auto fields = new Z8JsonWriterState(); fields.start('[');
+    foreach (id; ids) fields.raw(z8_json_quote(id));
+    fields.finish(']'); params.z8_add("fields"w, fields.stream);
+    auto oldWriter = request.writer;
+    JSONValue data;
+    {
+        request.parameters = params; request.writer = new Z8JsonWriterState();
+        scope(exit) { request.parameters = original; request.writer = oldWriter; }
+        request.writer.start('{');
+        z8_application_dispatch_query_read_target(className, context);
+        request.writer.finish('}');
+        auto response = z8_json_parse(request.writer.stream.to!string);
+        auto rows = "data" in response.object;
+        if (rows is null || rows.type != JSONType.array) throw new Exception("invalid export data");
+        data = *rows;
+    }
+    auto bytes = z8_export_spreadsheet(ids, headers, types, data);
+    auto file = new Z8File(); file.id = null; file.name = "export.xlsx"w;
+    file.path = z8_temporary_archive_store(bytes, file.name);
+    file.size = z8_optional_wrap(cast(long)bytes.length);
+    z8_application_print(file);
+}
+
+private string z8_export_xml(wstring value) {
+    string result;
+    foreach (dchar ch; value) {
+        if (ch == '&') result ~= "&amp;";
+        else if (ch == '<') result ~= "&lt;";
+        else if (ch == '>') result ~= "&gt;";
+        else if (ch == '"') result ~= "&quot;";
+        else if (ch == '\'') result ~= "&apos;";
+        else if (ch == 9 || ch == 10 || ch == 13 || (ch >= 32 && ch != 0xfffe && ch != 0xffff)) result ~= ch.to!string;
+    }
+    return result;
+}
+
+private ubyte[] z8_export_spreadsheet(wstring[] ids, wstring[] headers, wstring[] types, JSONValue rows) {
+    import std.json : JSONType;
+    import std.zip : ZipArchive, ArchiveMember, CompressionMethod;
+    auto archive = new ZipArchive();
+    void add(string name, string content) {
+        auto member = new ArchiveMember(); member.name = name;
+        member.expandedData = cast(ubyte[])content.dup; member.compressionMethod = CompressionMethod.deflate;
+        archive.addMember(member);
+    }
+    add("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`);
+    add("_rels/.rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
+    add("xl/workbook.xml", `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Export" sheetId="1" r:id="rId1"/></sheets></workbook>`);
+    add("xl/_rels/workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`);
+    string sheet = `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row>`;
+    void textCell(wstring text) { sheet ~= `<c t="inlineStr"><is><t xml:space="preserve">` ~ z8_export_xml(text) ~ `</t></is></c>`; }
+    foreach (header; headers) textCell(header);
+    sheet ~= "</row>";
+    foreach (row; rows.array) {
+        if (row.type != JSONType.object) throw new Exception("invalid export row");
+        sheet ~= "<row>";
+        foreach (i, id; ids) {
+            auto value = id.to!string in row.object;
+            if (value is null || value.type == JSONType.null_) { sheet ~= "<c/>"; continue; }
+            if ((types[i] == "integer"w || types[i] == "decimal"w) &&
+                (value.type == JSONType.integer || value.type == JSONType.uinteger || value.type == JSONType.float_))
+                sheet ~= "<c><v>" ~ z8_json_value_text(*value).to!string ~ "</v></c>";
+            else if (value.type == JSONType.true_ || value.type == JSONType.false_)
+                sheet ~= `<c t="b"><v>` ~ (value.type == JSONType.true_ ? "1" : "0") ~ "</v></c>";
+            else textCell(z8_json_value_text(*value));
+        }
+        sheet ~= "</row>";
+    }
+    sheet ~= "</sheetData></worksheet>";
+    if (sheet.length > z8_temporary_archives_bytes_limit) throw new Exception("export is too large");
+    add("xl/worksheets/sheet1.xml", sheet);
+    return cast(ubyte[])archive.build();
+}
