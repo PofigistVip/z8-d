@@ -286,11 +286,14 @@ class Z8CivetServer {
     private IZ8HttpAuthority authority;
     private wstring accessDeniedMessage;
     private bool storageDownloads;
+    private IZ8SecurityLogSink securityLogSink;
+    private Z8Object delegate() securityLogFactory;
 
     this(string listening, void delegate(Z8HttpRequest request) handler, size_t bodyLimit = 1024 * 1024,
          Z8ResponseMode responseMode = Z8ResponseMode.raw, wstring serverId = null,
          IZ8HttpAuthority authority = null, wstring accessDeniedMessage = "Incorrect login or password"w,
-         string documentRoot = null, string requestPath = "/", bool storageDownloads = false) {
+         string documentRoot = null, string requestPath = "/", bool storageDownloads = false,
+         IZ8SecurityLogSink securityLogSink = null, Z8Object delegate() securityLogFactory = null) {
         import std.file : isDir;
         import std.path : absolutePath;
         if (handler is null) throw new Exception("HTTP request handler is required");
@@ -307,6 +310,7 @@ class Z8CivetServer {
         this.handler = handler; this.bodyLimit = bodyLimit; this.responseMode = responseMode; this.serverId = serverId;
         this.authority = authority; this.accessDeniedMessage = accessDeniedMessage;
         this.storageDownloads = storageDownloads;
+        this.securityLogSink = securityLogSink; this.securityLogFactory = securityLogFactory;
         const(char)*[] options = ["listening_ports\0".ptr, listening.toStringz,
             "num_threads\0".ptr, "4\0".ptr, "enable_keep_alive\0".ptr, "no\0".ptr];
         if (documentRoot.length) options ~= ["document_root\0".ptr, documentRoot.toStringz,
@@ -350,6 +354,8 @@ class Z8CivetServer {
             request.body = readBody(connection, info.contentLength, transfer == "chunked", bodyLimit);
             auto type = request.contentType.toLower();
             auto application = new Z8ApplicationRequest();
+            application.securityLogSink = securityLogSink;
+            if (securityLogFactory !is null) application.securityLog = securityLogFactory();
             application.jobUserResolver = cast(IZ8JobUserResolver)authority;
             application.userChangeNotifier = cast(IZ8UserChangeNotifier)authority;
             application.roleChangeNotifier = cast(IZ8RoleChangeNotifier)authority;
@@ -373,7 +379,19 @@ class Z8CivetServer {
                 if (application.session is null && requestId == "login"w) {
                     auto login = application.parameters.z8_get("login"w);
                     auto password = application.parameters.z8_get("password"w);
-                    if (login !is null) application.session = authority.login(request, login, password is null ? ""w : password);
+                    auto audit = application.securityLog !is null || application.securityLogSink !is null;
+                    if (audit) {
+                        application.securityLogin = login;
+                        z8_security_events_add(application, ""w, z8_guid_zero(), ""w, "login"w);
+                    }
+                    try {
+                        if (login !is null) application.session = authority.login(request, login, password is null ? ""w : password);
+                        if (audit) z8_security_events_set_result(application, application.session !is null,
+                            application.session is null ? accessDeniedMessage : ""w);
+                    } catch (Throwable error) {
+                        if (audit) z8_security_events_set_result(application, false, z8_message(error));
+                        throw error;
+                    } finally if (audit) z8_security_events_commit(application);
                 }
                 if (application.session is null) {
                     auto monitor = new Z8RequestMonitor();

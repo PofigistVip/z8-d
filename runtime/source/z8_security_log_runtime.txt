@@ -4,6 +4,8 @@ private Z8StringMap z8_security_log_parameters(Z8ApplicationRequest request) {
     auto result = new Z8StringMap();
     foreach (key; ["session"w, "action"w, "ip"w, "user"w, "schema"w])
         if (request.parameters.z8_containsKey(key)) result.z8_add(key, request.parameters.z8_get(key));
+    if (!result.z8_containsKey("user"w) && request.securityLogin !is null)
+        result.z8_add("user"w, request.securityLogin);
     return result;
 }
 void z8_security_log_default_write(Z8Object event) {
@@ -20,6 +22,9 @@ private void z8_security_log_write(Z8Object self, Z8Object event) {
 private void z8_security_log_object_event(Z8Object object, wstring action) {
     auto request = z8_application_require_request();
     request.securityEvents ~= z8_security_event_new(z8_nonnull(object), action);
+}
+void z8_security_events_add(Z8ApplicationRequest request, wstring type, Z8Guid id, wstring name, wstring action) {
+    z8_nonnull(request).securityEvents ~= z8_security_event_new(z8_security_object_new(type, id, name), action);
 }
 private void z8_security_log_named_event(wstring type, Z8Guid id, wstring name, wstring action) {
     z8_security_log_object_event(z8_security_object_new(type, id, name), action);

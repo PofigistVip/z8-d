@@ -153,6 +153,7 @@ class Z8ApplicationRequest {
     IZ8RoleChangeNotifier roleChangeNotifier;
     Z8Object securityLog;
     IZ8SecurityLogSink securityLogSink;
+    wstring securityLogin;
     private Z8Object[] securityEvents;
     Z8ApplicationSession session;
     private Z8EventsLevel[] eventLevels;

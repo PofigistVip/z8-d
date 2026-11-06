@@ -146,6 +146,20 @@ import std.stdio : writeln, stdout, readln;
 import core.memory : GC;
 import std.string : indexOf;
 __gshared string binaryPath;
+class Audit : IZ8SecurityLogSink {
+    long successful, failed, requests; bool leaked, wrongUser;
+    void write(Z8Object event, Z8StringMap parameters) {
+        auto action = z8_native_call!wstring("org.zenframework.z8.server.base.security.SecurityEvent.m_getAction"w, event);
+        auto success = z8_optional_require(z8_native_call!(Z8Optional!bool)("org.zenframework.z8.server.base.security.SecurityEvent.m_isSuccess"w, event));
+        synchronized (this) {
+            leaked |= parameters.z8_containsKey("password"w);
+            if (action == "login"w) {
+                wrongUser |= parameters.z8_get("user"w) != "alice"w;
+                if (success) ++successful; else ++failed;
+            } else ++requests;
+        }
+    }
+}
 class Authority : IZ8HttpAuthority {
     Z8SessionManager sessions;
     this() {
@@ -196,7 +210,9 @@ void main(string[] args) {
     binaryPath = args[2];
     auto server = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048);
     auto protocol = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048, Z8ResponseMode.application, "server-1"w);
-    auto auth = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048, Z8ResponseMode.application, "server-1"w, new Authority());
+    auto audit = new Audit();
+    auto auth = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048, Z8ResponseMode.application, "server-1"w,
+        new Authority(), "Denied"w, null, "/", false, audit);
     auto web = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048, Z8ResponseMode.application,
         "server-1"w, null, "Denied"w, args[1], "/request.json");
     scope(exit) server.stop();
@@ -205,6 +221,8 @@ void main(string[] args) {
     scope(exit) web.stop();
     writeln(server.port(), " ", protocol.port(), " ", auth.port(), " ", web.port()); stdout.flush();
     readln();
+    auth.stop();
+    assert(audit.successful == 2 && audit.failed == 1 && audit.requests >= 2 && !audit.leaked && !audit.wrongUser);
     server.stop(); server.stop();
     bool stopped; try { server.port(); } catch (Exception) { stopped = true; }
     assert(stopped);

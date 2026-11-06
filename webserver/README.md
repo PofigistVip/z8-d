@@ -38,7 +38,7 @@ previous backend afterward. The authority is responsible for providing a
 current privilege snapshot. The dispatcher also runs executable jobs and handles
 their status polling; selecting this handler is explicit rather than automatic.
 
-For database-backed attachments, the optional final `storageDownloads` argument
+For database-backed attachments, the optional `storageDownloads` argument
 to `Z8CivetServer` registers `/storage` in application mode. It requires an
 authority and a separate application request path. The host's existing handler
 must install the database backend, then route requests whose path starts with
@@ -107,6 +107,11 @@ receive the Z8 error envelope with HTTP 401. The authority supplies the
 `Z8ApplicationSession` used by `Application.user()` and related methods. With
 no authority, the host handler is responsible for access control. Providers
 must handle concurrent calls and decide how to synchronize session state.
+Optional `securityLogSink` and `securityLogFactory` constructor arguments install
+security event handling per HTTP request. Authentication attempts produce login
+events; application request events are delivered when the handler calls
+`z8_application_dispatch_request`. A sink shared by workers and a supplied factory
+must support concurrent calls. The sink receives only the permitted log parameters.
 For a single PostgreSQL schema, the optional integration module
 `z8.integration.postgres_authority` supplies `Z8PostgresHttpAuthority`. Add
 `integrations/postgres_webserver/source`, `postgres/source` and
