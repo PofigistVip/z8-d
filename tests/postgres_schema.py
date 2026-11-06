@@ -1065,6 +1065,26 @@ void main(string[] args) {
     auto refreshedRecords = db.execute(`SELECT "Label", "Other" FROM "z8_reconcile"."StaticSample" WHERE "RecordId" = '00000000-0000-0000-0000-000000000031'`);
     assert(refreshedRecords.rows[0][0].text == "Seed" && refreshedRecords.rows[0][1].text == "Preserved");
     assert(db.execute(`SELECT count(*) FROM "z8_reconcile"."StaticSample"`).rows[0][0].text == "3");
+    db.execute(`INSERT INTO "z8_reconcile"."Sample;--" ("RecordId", "Title", "Amount") VALUES ('00000000-0000-0000-0000-000000000084', 'kept', 123)`);
+    db.execute(`ALTER TABLE "z8_reconcile"."Sample;--" ALTER COLUMN "Title" TYPE varchar(20), ALTER COLUMN "Amount" TYPE integer`);
+    bool strictWideningRejected;
+    try { z8_postgres_apply_additive_migration(db, "z8_reconcile"w, [P.m_make()]); } catch (Z8PostgresException) { strictWideningRejected = true; }
+    assert(strictWideningRejected);
+    db.execute(`ALTER TABLE "z8_reconcile"."StaticSample" ALTER COLUMN "Counter" DROP DEFAULT, ALTER COLUMN "Counter" TYPE text USING "Counter"::text`);
+    bool unsafeWideningRejected;
+    try { z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables); } catch (Z8PostgresException) { unsafeWideningRejected = true; }
+    assert(unsafeWideningRejected);
+    auto beforeWidening = z8_postgres_describe_table(db, "z8_reconcile"w, "Sample;--"w);
+    foreach (column; beforeWidening.columns) if (column.name == "Amount") assert(column.type == "integer");
+    db.execute(`ALTER TABLE "z8_reconcile"."StaticSample" ALTER COLUMN "Counter" TYPE bigint USING "Counter"::bigint, ALTER COLUMN "Counter" SET DEFAULT 0`);
+    auto widened = z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables);
+    assert(widened.length == 2 && z8_postgres_compare_table(P.m_make(), z8_postgres_describe_table(db, "z8_reconcile"w, "Sample;--"w)).length == 0);
+    auto preserved = db.execute(`SELECT "Title", "Amount"::text FROM "z8_reconcile"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-000000000084'`);
+    assert(preserved.rows.length == 1 && preserved.rows[0][0].text == "kept" && preserved.rows[0][1].text == "123");
+    db.execute(`ALTER TABLE "z8_reconcile"."Sample;--" ALTER COLUMN "Title" TYPE text, ALTER COLUMN "Amount" TYPE smallint`);
+    assert(z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables).length == 2);
+    preserved = db.execute(`SELECT "Title", "Amount"::text FROM "z8_reconcile"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-000000000084'`);
+    assert(preserved.rows[0][0].text == "kept" && preserved.rows[0][1].text == "123");
     auto reconcilePriorRequest = z8_application_set_request(null);
     assert(z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables).length == 0 && z8_application_request() is null);
     z8_application_set_request(reconcilePriorRequest);

@@ -32,7 +32,7 @@ the same current-thread connection and its transaction nesting semantics.
 BL `Database.get`, `fromJson`, `schema`, `toJson` and `connection` are supported.
 For schema reconciliation, `Z8PostgresDatabase` accepts a registry and an
 optional list of additional platform table class IDs. `IZ8SchemaReconciler`
-creates fresh instances and applies the existing additive reconciliation; the
+creates fresh instances and applies the existing schema reconciliation; the
 same configuration is retained by background connections. The host must supply
 all required platform table classes.
 An embedding host may install a thread-local `IZ8DatabaseCatalog` with
@@ -299,7 +299,7 @@ records in existing tables alone. Both functions return DDL statements after
 commit; record initialization is not included in that list. Creating the Roles
 table requires a registry and its access tables. Registry metadata synchronization
 remains a separate operation for these two APIs.
-`z8_postgres_reconcile_registered` combines this additive schema update with
+`z8_postgres_reconcile_registered` combines schema updates with
 `z8_postgres_sync_registry` in the same transaction. It takes the runtime registry
 and any additional platform tables, creates missing registered tables, and
 updates table, field, request, entry and job metadata. Existing permission
@@ -307,7 +307,10 @@ settings and schedules are preserved; obsolete entries are not removed. As in
 the original schema generator, null and declared static records are checked for
 all tables, including existing ones: missing records are created and declared
 values are refreshed. Protected built-in user and role settings are retained.
-The returned list contains DDL, not static-record or registry changes.
+It also widens `smallint` or `integer` to `bigint`, and bounded `varchar` or
+`text` to unbounded `varchar`, preserving existing values. Other incompatible
+type changes are rejected. The returned list contains DDL, not static-record
+or registry changes.
 Table creation, additive migration and registry synchronization take a
 transaction-scoped PostgreSQL advisory lock per schema, so cooperating hosts
 do not race while creating or updating the same schema. The lock is released

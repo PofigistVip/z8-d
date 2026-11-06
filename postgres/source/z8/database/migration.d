@@ -113,6 +113,19 @@ string[] z8_postgres_plan_add_indexes(wstring schema, Z8Object table, Z8Postgres
     return result;
 }
 
+// These PostgreSQL conversions preserve all existing values. More complex
+// conversions still require an explicit migration rather than an implicit cast.
+private bool safeWidening(Z8SchemaDifference difference) {
+    import std.algorithm.searching : startsWith;
+    if (difference.kind != Z8SchemaDifferenceKind.columnType) return false;
+    if (difference.expected == "bigint" && (difference.actual == "integer" || difference.actual == "smallint")) return true;
+    if (difference.expected != "character varying") return false;
+    if (difference.actual == "text") return true;
+    enum prefix = "character varying(";
+    if (!difference.actual.startsWith(prefix) || difference.actual.length <= prefix.length + 1 || difference.actual[$ - 1] != ')') return false;
+    foreach (ch; difference.actual[prefix.length .. $ - 1]) if (ch < '0' || ch > '9') return false;
+    return true;
+}
 private string[] applyAdditiveSchema(Z8PostgresConnection db, wstring schema, Z8Object[] tables,
                                       bool createMissing, Z8RuntimeRegistry registry, bool syncRegistry) {
     if (db is null || db.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
@@ -139,14 +152,22 @@ private string[] applyAdditiveSchema(Z8PostgresConnection db, wstring schema, Z8
             db.execute(sql); applied ~= sql; created ~= table;
         }
         // Reject incompatible tables before altering any existing columns.
+        // Full registry reconciliation also widens a small set of lossless types.
+        string[] widenings;
         foreach (index, table; tables) {
             auto actual = z8_postgres_describe_table(db, schema, names[index]);
             foreach (difference; z8_postgres_compare_table(table, actual)) {
+                if (syncRegistry && safeWidening(difference)) {
+                    widenings ~= "ALTER TABLE " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(names[index]) ~
+                        " ALTER COLUMN " ~ quoteIdentifier(difference.column.to!wstring) ~ " TYPE " ~ difference.expected;
+                    continue;
+                }
                 if (difference.kind == Z8SchemaDifferenceKind.columnType || difference.kind == Z8SchemaDifferenceKind.nullability ||
                     difference.kind == Z8SchemaDifferenceKind.primaryKey)
                     throw new Z8PostgresException("additive migration found an incompatible existing table");
             }
         }
+        foreach (sql; widenings) { db.execute(sql); applied ~= sql; }
         // Re-read catalog state between stages, including index names used by
         // other tables in this same migration.
         foreach (index, table; tables) {
