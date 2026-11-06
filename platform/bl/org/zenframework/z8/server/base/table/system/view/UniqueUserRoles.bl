@@ -1,0 +1,13 @@
+import org.zenframework.z8.base.table.system.UserRoles;
+import org.zenframework.z8.base.table.value.Field;
+
+// UserForm's original nested UserRoles rejects duplicate user/role pairs.
+public class UniqueUserRoles extends UserRoles {
+    virtual protected void beforeCreate(guid recordId) {
+        super.beforeCreate(recordId);
+        UserRoles existing;
+        Field[] selected = {existing.roles.name};
+        if (existing.readFirst(selected, existing.user.sql_guid() == user.get().sql_guid() && existing.role.sql_guid() == role.get().sql_guid()))
+            throw "$Exception.duplicateRole$".format({existing.roles.name.get()});
+    }
+}

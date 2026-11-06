@@ -219,6 +219,13 @@ with tempfile.TemporaryDirectory() as directory:
             assert status == 200 and reset["success"], reset
             reset_value = subprocess.check_output([str(psql), "-tAc", '''SELECT "Password" || ':' || "Change Password"::text FROM "SystemUsers" WHERE "RecordId"=''' + "'" + user_id + "'", connection], env=environment, text=True).strip()
             assert reset_value == "d41d8cd98f00b204e9800998ecf8427e:1", reset_value
+            assignment = json.dumps([{"form.userRoles.user": user_id, "form.userRoles.role": "421a8413-a8ec-4dab-9235-9a5ff83341c5"}])
+            status, assigned = request(port, request=users_view, session=session, action="create", query="form.userRoles", fields='["form.userRoles.user","form.userRoles.role"]', data=assignment)
+            assert status == 200 and assigned["success"], assigned
+            status, duplicate = request(port, request=users_view, session=session, action="create", query="form.userRoles", fields='["form.userRoles.user","form.userRoles.role"]', data=assignment)
+            assert status == 200 and not duplicate["success"], duplicate
+            assigned_count = subprocess.check_output([str(psql), "-tAc", '''SELECT count(*) FROM "SystemUserRoles" WHERE "User"=''' + "'" + user_id + "'", connection], env=environment, text=True).strip()
+            assert assigned_count == "1", assigned_count
             status, metadata = request(port, request="Tasks", session=session, action="meta")
             assert status == 200 and metadata["success"], metadata
             assert [control["name"] for control in metadata["controls"]] == ["title", "done", "documents"], metadata

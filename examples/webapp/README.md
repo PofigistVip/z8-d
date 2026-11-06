@@ -49,8 +49,9 @@ active CRON expression. Scheduler errors are written to stderr; task logs are
 stored under `logs/scheduler` in the configured working directory.
 Set `scheduler.enabled=false` to disable the service.
 The administrator's SystemTools entry includes users, role permissions, jobs,
-tables, files and sequences. The users form does not yet filter or reject
-duplicate role assignments. Its scheduler action wakes the local service to reload schedules immediately.
+tables, files and sequences. The users form rejects duplicate role assignments;
+filtering assigned roles from the selection list is not yet implemented. Its
+scheduler action wakes the local service to reload schedules immediately.
 The tables report and other original system tools remain to be implemented.
 
 Optionally add `--config C:/path/to/server.properties` to initialization and

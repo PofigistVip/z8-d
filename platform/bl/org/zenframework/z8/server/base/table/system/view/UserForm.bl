@@ -5,15 +5,15 @@ import org.zenframework.z8.base.form.Listbox;
 import org.zenframework.z8.base.form.Section;
 import org.zenframework.z8.base.form.action.ActionType;
 import org.zenframework.z8.base.table.system.UserEntries;
-import org.zenframework.z8.base.table.system.UserRoles;
 import org.zenframework.z8.base.table.system.Users;
 import org.zenframework.z8.server.base.table.system.view.ResetPasswordAction;
 import org.zenframework.z8.server.base.table.system.view.RoleTableAccessView;
+import org.zenframework.z8.server.base.table.system.view.UniqueUserRoles;
 
 public class UserForm extends Form {
     public Users users;
     UserEntries userEntries;
-    UserRoles userRoles;
+    UniqueUserRoles userRoles;
     Listbox entriesListbox;
     Listbox rolesListbox;
     RoleTableAccessView rolesSource;
