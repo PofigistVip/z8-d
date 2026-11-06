@@ -400,7 +400,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     }
     auto having = params.z8_get("having"w);
     if (!read.byRecordIds && having !is null && having.length) {
-        if (!groups.length) throw new Exception("query having requires grouped results");
+        if (!groups.length && !aggregates.length) throw new Exception("query having requires grouped results");
         read.having = z8_application_query_filter(query, having);
         foreach (field; z8_sql_collect_fields(read.having)) {
             if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("query having field access denied");

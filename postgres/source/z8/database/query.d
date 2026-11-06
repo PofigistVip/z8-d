@@ -256,6 +256,8 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         return uniqueFields(fields);
     }
     private bool hasLinkedAggregateFields(Z8Object query, Z8QueryReadRequest request, bool counting) {
+        // A group filter runs against the grouped root in the outer SELECT.
+        if (!trivialTrue(request.having) || !trivialTrue(request.queryHaving)) return true;
         auto declared = z8_query_declared_fields(query);
         auto fields = aggregateRequestedFields(query, request);
         if (!counting) fields ~= request.sortFields;
@@ -268,8 +270,12 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         auto declared = z8_query_declared_fields(query);
         auto groups = uniqueFields(z8_query_array(query, "aggregateBy"w));
         auto requested = aggregateRequestedFields(query, request);
+        Z8Object[] filterFields;
+        foreach (condition; [request.having, request.queryHaving])
+            if (!trivialTrue(condition)) filterFields ~= z8_sql_collect_fields(condition);
+        auto candidates = requested ~ (counting ? null : request.sortFields) ~ filterFields;
         Z8Object[] linked;
-        foreach (field; requested ~ (counting ? null : request.sortFields)) {
+        foreach (field; candidates) {
             if (field is null) throw new Z8PostgresException("null aggregateBy field");
             if (containsField(declared, field)) continue;
             bool reachable;
@@ -285,15 +291,17 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         }
         auto innerRequest = request;
         innerRequest.fields = null;
-        foreach (field; requested ~ (counting ? null : request.sortFields))
+        foreach (field; candidates)
             if (containsField(declared, field)) innerRequest.fields ~= field;
         // An empty list means default fields to rootAggregation, so provide the
         // grouping keys explicitly if all requested fields belong to targets.
         if (!innerRequest.fields.length) innerRequest.fields = groups.dup;
         innerRequest.sortFields = null; innerRequest.start = 0; innerRequest.limit = -1;
+        innerRequest.having = null; innerRequest.queryHaving = null;
         auto inner = rootAggregation(query, innerRequest, false);
         auto plan = new Z8PostgresQueryPlan(query, schema, table);
         foreach (field; linked) plan.includeField(field);
+        foreach (condition; [request.having, request.queryHaving]) if (!trivialTrue(condition)) plan.includeExpression(condition);
         plan.finish(true);
         if (plan.having.length) throw new Z8PostgresException("aggregateBy linked HAVING is not implemented");
         Z8Object[] checked;
@@ -304,7 +312,8 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                 throw new Z8PostgresException("aggregateBy linked expression requires an unprojected root field");
             foreach (dependency; z8_field_query_dependencies(field)) if (dependency !is field) checkDependency(dependency);
         }
-        foreach (condition; plan.where ~ plan.joinConditions()) foreach (field; z8_sql_collect_fields(condition)) checkDependency(field);
+        foreach (condition; plan.where ~ plan.joinConditions() ~ [request.having, request.queryHaving])
+            foreach (field; z8_sql_collect_fields(condition)) checkDependency(field);
         foreach (index, field; inner.fields) z8_field_bind_sql(field, "t"w, ("z8_" ~ index.to!string).to!wstring);
         Z8PostgresRootAggregation result;
         result.fields = uniqueFields(inner.fields ~ (counting ? null : requested));
@@ -328,7 +337,8 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         }
         sql ~= " FROM " ~ plan.fromClause(inner.sql);
         string[] filters;
-        foreach (condition; plan.where) if (condition !is null) filters ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
+        foreach (condition; plan.where ~ [request.having, request.queryHaving])
+            if (!trivialTrue(condition)) filters ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
         if (filters.length) { sql ~= " WHERE "; foreach (index, filter; filters) { if (index) sql ~= " AND "; sql ~= filter; } }
         if (!counting && request.sortFields.length) {
             sql ~= " ORDER BY ";

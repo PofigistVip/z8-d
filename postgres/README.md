@@ -302,7 +302,9 @@ The executor supports `aggregateBy` grouping over root Link fields with numeric
 sum, average, minimum and maximum. Filters can reference linked tables, and a
 subselect joins target fields, including chained links, after grouping. Linked
 expressions and joins that require unprojected root fields are rejected, as are
-a second grouping, HAVING, totals and row locks on these queries.
+a second grouping, totals and row locks on these queries. `HAVING` filters over
+projected root aggregates and linked fields run after the initial grouping;
+HAVING defined by a linked query itself is not yet supported.
 Nontrivial HAVING without grouping is also rejected. Filter-based updates and deletes select
 matching records and invoke the BL events for each record. Record copying reads
 the source through the executor and preserves an active query cursor. Table audit

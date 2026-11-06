@@ -231,6 +231,8 @@ public class Probe {
     public static bool nextAggregate(AggregateOrder order) { return order.next(); }
     public static guid aggregateCustomer(AggregateOrder order) { return order.customerId.get(); }
     public static int aggregateAmount(AggregateOrder order) { return order.amount.get(); }
+    public static void aggregateHavingAmount(AggregateOrder order) { order.addHaving(order.amount > 9); }
+    public static void aggregateHavingName(AggregateOrder order) { order.addHaving(order.customer.label == "Alice"); }
     public static string aggregateName(AggregateOrder order) { return order.customer.label.get(); }
     public static string aggregateCity(AggregateOrder order) { return order.customer.city.label.get(); }
     public static Field aggregateNameField(AggregateOrder order) { return order.customer.label; }
@@ -381,6 +383,20 @@ void main(string[] args) {
     try { P.m_readAggregateJoin(aggregateJoin); } catch (Z8PostgresException) { unprojectedRootRejected = true; }
     assert(unprojectedRootRejected);
     assert(aggregateExecutor.count(aggregate, countLinked) == 2); // Inner join drops the unmatched group.
+    auto aggregateHaving = P.m_aggregateOrder();
+    z8_query_set_executor(aggregateHaving, new Z8PostgresQueryExecutor(db, "pg_temp"w, "AggregateOrders"w));
+    P.m_aggregateHavingAmount(aggregateHaving);
+    assert(z8_optional_require(P.m_aggregateCount(aggregateHaving)) == 2); // Alice and missing customer.
+    P.m_readAggregate(aggregateHaving); int havingRows;
+    while (z8_optional_require(P.m_nextAggregate(aggregateHaving))) { assert(z8_optional_require(P.m_aggregateAmount(aggregateHaving)) > 9); ++havingRows; }
+    assert(havingRows == 2);
+    auto aggregateNameHaving = P.m_aggregateOrder();
+    z8_query_set_executor(aggregateNameHaving, new Z8PostgresQueryExecutor(db, "pg_temp"w, "AggregateOrders"w));
+    P.m_aggregateHavingName(aggregateNameHaving);
+    assert(z8_optional_require(P.m_aggregateCount(aggregateNameHaving)) == 1);
+    P.m_readAggregate(aggregateNameHaving);
+    assert(z8_optional_require(P.m_nextAggregate(aggregateNameHaving)) && z8_optional_require(P.m_aggregateAmount(aggregateNameHaving)) == 10);
+    assert(!z8_optional_require(P.m_nextAggregate(aggregateNameHaving)));
     auto aggregateFiltered = P.m_aggregateFilteredOrder();
     z8_query_set_executor(aggregateFiltered, new Z8PostgresQueryExecutor(db, "pg_temp"w, "AggregateOrders"w));
     P.m_readAggregateFiltered(aggregateFiltered);
@@ -459,6 +475,12 @@ void main(string[] args) {
     assert(aggregateResponse["data"].array.length == 2);
     assert(aggregateResponse["data"][0]["customer.label"].str == "Alice" && aggregateResponse["data"][0]["amount"].integer == 10);
     assert(aggregateResponse["data"][1]["customer.label"].str == "Bob" && aggregateResponse["data"][1]["amount"].integer == 7);
+    aggregateResponse = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "AggregateOrder"w, "read"w, null,
+        `{"property":"amount","operator":"gt","value":"9"}`w).to!string);
+    assert(aggregateResponse["data"].array.length == 1 && aggregateResponse["data"][0]["customer.label"].str == "Alice");
+    aggregateResponse = parseJSON(requestFields(`["amount"]`w, null, null, null, null, "AggregateOrder"w, "read"w, null,
+        `{"property":"customer.label","value":"Alice"}`w).to!string);
+    assert(aggregateResponse["data"].array.length == 1 && aggregateResponse["data"][0]["amount"].integer == 10);
     auto aggregateMeta = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "AggregateOrder"w, "meta"w).to!string);
     assert(aggregateMeta["isQuery"].boolean && aggregateMeta["readOnly"].boolean && "primaryKey" !in aggregateMeta.object);
     aggregateResponse = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "AggregateOrder"w, null).to!string);
