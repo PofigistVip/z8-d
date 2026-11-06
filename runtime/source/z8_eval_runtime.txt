@@ -1,0 +1,114 @@
+// Eval's per-instance context and the atomic expression/text subset.
+private enum z8_eval_name = "org.zenframework.z8.server.base.eval.Eval"w;
+private struct Z8EvalVariable { Z8Primary primary; Z8Object json; }
+private class Z8EvalState {
+    Z8EvalVariable[wstring] variables;
+    Z8JavaMapOrder!wstring order;
+    wstring[] errors;
+    this() { order = new Z8JavaMapOrder!wstring(); }
+}
+private struct Z8EvalValue { bool evaluated; Z8Primary primary; Z8Object json; wstring expression; }
+private Z8EvalState z8_eval_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_eval_name, self)) throw new Exception("invalid Eval object");
+    auto state = cast(Z8EvalState)self.z8_get_native_state(z8_eval_name);
+    if (state is null) { state = new Z8EvalState(); self.z8_set_native_state(z8_eval_name, state); }
+    return state;
+}
+private Z8Object z8_eval_set_primary(Z8Object self, wstring name, Z8Primary value) {
+    auto state = z8_eval_state(self); name = z8_string_required(name);
+    if ((name in state.variables) is null) state.order.add(name);
+    state.variables[name] = Z8EvalVariable(value, null); return self;
+}
+private Z8Object z8_eval_set_json(Z8Object self, wstring name, Z8Object value) {
+    auto state = z8_eval_state(self); name = z8_string_required(name); z8_nonnull(value);
+    if (!z8_native_is_instance(z8_json_object_name, value) && !z8_native_is_instance(z8_json_array_name, value))
+        throw new Exception("invalid Eval JSON value");
+    if ((name in state.variables) is null) state.order.add(name);
+    state.variables[name] = Z8EvalVariable(null, value); return self;
+}
+private Z8Object z8_eval_clear(Z8Object self) {
+    auto state = z8_eval_state(self); state.variables.clear(); state.order.clear(); state.errors = null; return self;
+}
+private Z8Array!wstring z8_eval_errors(Z8Object self) { return new Z8Array!wstring(z8_eval_state(self).errors.dup); }
+private wstring z8_eval_value_text(Z8EvalValue value) {
+    if (!value.evaluated) return value.expression;
+    if (value.json !is null) return z8_native_is_instance(z8_json_object_name, value.json) ?
+        z8_json_object_to_string(value.json) : z8_json_array_string(value.json);
+    return value.primary is null ? "null"w : z8_primary_to_string(value.primary);
+}
+private wstring z8_eval_context_info(Z8Object self) {
+    auto state = z8_eval_state(self); wstring result = "variables: {"w;
+    foreach (i, name; state.order.ordered()) {
+        if (i) result ~= ", "w;
+        auto value = state.variables[name];
+        result ~= name ~ "="w ~ z8_eval_value_text(Z8EvalValue(true, value.primary, value.json, null));
+    }
+    return result ~ "}, functions: {}"w;
+}
+private Z8EvalValue z8_eval_atom(Z8EvalState state, wstring source) {
+    import std.string : strip;
+    auto text = z8_string_required(source).strip();
+    if (!text.length) throw new Exception("empty Eval expression");
+    if (text == "true"w || text == "false"w)
+        return Z8EvalValue(true, z8_primary_box(text == "true"w), null, null);
+    if (text.length >= 2 && (text[0] == '\'' || text[0] == '"') && text[$ - 1] == text[0])
+        return Z8EvalValue(true, z8_primary_box(z8_string_new(text[1 .. $ - 1])), null, null);
+    bool digits = true, decimal;
+    foreach (c; text) {
+        if (c == '.' && !decimal) decimal = true;
+        else if (c < '0' || c > '9') { digits = false; break; }
+    }
+    if (digits) {
+        if (decimal) return Z8EvalValue(true, z8_primary_box(z8_decimal_parse(text)), null, null);
+        return Z8EvalValue(true, z8_primary_box(z8_int_parse(text)), null, null);
+    }
+    import std.uni : isAlpha, isNumber;
+    foreach (i, c; text) if (!(isAlpha(c) || c == '_' || (i && isNumber(c))))
+        throw new Exception("unsupported Eval expression");
+    auto found = text in state.variables;
+    if (found !is null) return Z8EvalValue(true, found.primary, found.json, null);
+    auto pattern = z8_string_new("$Expression.variableIsNotSet$"w);
+    state.errors ~= z8_string_format(pattern, new Z8Array!Z8Primary([z8_primary_box(text)]));
+    return Z8EvalValue(false, null, null, text.idup);
+}
+private Z8Optional!bool z8_eval_boolean(Z8Object self, wstring expression) {
+    auto value = z8_eval_atom(z8_eval_state(self), expression);
+    if (!value.evaluated) throw new Exception("Eval expression is not evaluated");
+    if (value.primary is null || value.primary.kind != Z8PrimaryKind.boolean) throw new Exception("Eval boolean result expected");
+    return z8_optional_wrap(value.primary.booleanValue);
+}
+private wstring z8_eval_text(Z8Object self, wstring source) {
+    import std.string : indexOf;
+    auto state = z8_eval_state(self);
+    if (source is null) return "null"w;
+    auto first = source.indexOf("${"w);
+    if (first < 0) return z8_string_new(source);
+    auto end = source[cast(size_t)first + 2 .. $].indexOf('}');
+    if (end < 0) throw new Exception("unterminated Eval text expression");
+    auto last = cast(size_t)first + 2 + cast(size_t)end;
+    auto value = z8_eval_atom(state, source[cast(size_t)first + 2 .. last]);
+    if (first == 0 && last + 1 == source.length) return z8_string_new(z8_eval_value_text(value));
+    wstring result = source[0 .. cast(size_t)first];
+    for (;;) {
+        result ~= value.evaluated ? (value.primary is null && value.json is null ? "<null>"w : z8_eval_value_text(value)) :
+            "${"w ~ value.expression ~ "}"w;
+        auto remaining = source[last + 1 .. $];
+        auto next = remaining.indexOf("${"w);
+        if (next < 0) return z8_string_new(result ~ remaining);
+        result ~= remaining[0 .. cast(size_t)next];
+        auto start = last + 1 + cast(size_t)next;
+        end = source[start + 2 .. $].indexOf('}');
+        if (end < 0) throw new Exception("unterminated Eval text expression");
+        last = start + 2 + cast(size_t)end;
+        value = z8_eval_atom(state, source[start + 2 .. last]);
+    }
+}
+void z8_bind_builtin_eval() {
+    enum p = z8_eval_name ~ ".m_"w;
+    z8_native_bind(p ~ "setVariable"w, &z8_eval_set_primary); z8_native_bind(p ~ "setVariable"w, &z8_eval_set_json);
+    z8_native_bind(p ~ "clear"w, &z8_eval_clear); z8_native_bind(p ~ "getErrors"w, &z8_eval_errors);
+    z8_native_bind(p ~ "getContextInfo"w, &z8_eval_context_info);
+    z8_native_bind(p ~ "evaluateBoolean"w, &z8_eval_boolean); z8_native_bind(p ~ "evaluateText"w, &z8_eval_text);
+}
+shared static this() { z8_bind_builtin_eval(); }

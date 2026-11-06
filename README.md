@@ -118,6 +118,7 @@ python tests/entity_parser.py path/to/original-z8
 python tests/json_object_expression.py path/to/original-z8
 python tests/action_report.py path/to/original-z8
 python tests/report_source.py path/to/original-z8
+python tests/eval_oracle.py path/to/original-z8
 python tests/map_initializers.py
 python tests/integer_maps.py
 python tests/guid_maps.py
@@ -603,6 +604,10 @@ Gson; поля объекта со значением `null` при этом п�
 `Sorter.sort` стабильно сортирует объектный массив на месте, вызывая
 переопределённый BL-метод `compare`; порядок вызовов сравнения может отличаться
 от используемого в Java алгоритма.
+У `Eval` доступны контекст переменных, очистка и ошибки, текст с подстановкой
+простых литералов и переменных и проверка простых логических значений. Операторы,
+доступ к свойствам и вызовы функций ещё переносятся. Проверка сопоставляет этот
+набор с текущими Java-исходниками вычислителя.
 Хост может передать настройки BL-классу `ServerConfig` через
 `z8_server_config_replace` с отображением `wstring[wstring]`. Перегрузка
 со строковым значением по умолчанию, как в Java-обёртке оригинала, его игнорирует.
