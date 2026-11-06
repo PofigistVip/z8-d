@@ -5,7 +5,7 @@ private void z8_application_dispatch_query_export_target(wstring className, Z8Ob
     auto request = z8_application_require_request();
     auto original = request.parameters;
     auto format = original.z8_get("format"w);
-    if (format != "xls"w && format != "xlsx"w && format != "pdf"w && format != "doc"w && format != "docx"w)
+    if (format != "xls"w && format != "xlsx"w && format != "pdf"w && format != "doc"w && format != "docx"w && format != "html"w)
         throw new Exception("unsupported export format");
     auto input = original.z8_get("columns"w);
     if (input is null || !input.length) throw new Exception("export columns are required");
@@ -53,9 +53,11 @@ private void z8_application_dispatch_query_export_target(wstring className, Z8Ob
     }
     auto word = format == "doc"w || format == "docx"w;
     auto bytes = format == "pdf"w ? z8_export_pdf(ids, headers, types, data) :
-        word ? z8_export_word(ids, headers, types, data) : z8_export_spreadsheet(ids, headers, types, data);
+        word ? z8_export_word(ids, headers, types, data) : format == "html"w ?
+        z8_export_html(ids, headers, types, data) : z8_export_spreadsheet(ids, headers, types, data);
     auto file = new Z8File(); file.id = null;
-    file.name = format == "pdf"w ? "export.pdf"w : word ? "export.docx"w : "export.xlsx"w;
+    file.name = format == "pdf"w ? "export.pdf"w : word ? "export.docx"w :
+        format == "html"w ? "export.html"w : "export.xlsx"w;
     file.path = z8_temporary_archive_store(bytes, file.name);
     file.size = z8_optional_wrap(cast(long)bytes.length);
     z8_application_print(file);
@@ -99,6 +101,26 @@ private string z8_export_xml(wstring value) {
         else if (ch == 9 || ch == 10 || ch == 13 || (ch >= 32 && ch != 0xfffe && ch != 0xffff)) result ~= ch.to!string;
     }
     return result;
+}
+
+private ubyte[] z8_export_html(wstring[] ids, wstring[] headers, wstring[] types, JSONValue rows) {
+    import std.json : JSONType;
+    string html = `<!doctype html><html><head><meta charset="utf-8"><title>Export</title><style>table{border-collapse:collapse}th,td{border:1px solid #888;padding:4px;white-space:pre-wrap;text-align:left}</style></head><body><table><thead><tr>`;
+    foreach (header; headers) html ~= "<th>" ~ z8_export_xml(header) ~ "</th>";
+    html ~= "</tr></thead><tbody>";
+    foreach (row; rows.array) {
+        if (row.type != JSONType.object) throw new Exception("invalid export row");
+        html ~= "<tr>";
+        foreach (i, id; ids) {
+            auto value = id.to!string in row.object;
+            html ~= "<td>" ~ (value is null ? "" : z8_export_xml(z8_export_display_value(types[i], *value))) ~ "</td>";
+        }
+        html ~= "</tr>";
+        if (html.length > z8_temporary_archives_bytes_limit) throw new Exception("export is too large");
+    }
+    html ~= "</tbody></table></body></html>";
+    if (html.length > z8_temporary_archives_bytes_limit) throw new Exception("export is too large");
+    return cast(ubyte[])html;
 }
 
 // WordprocessingML keeps the export independent of the optional office engine.
