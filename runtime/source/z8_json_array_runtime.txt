@@ -254,10 +254,15 @@ private wstring z8_json_render_state(Object state) {
         auto text = z8_geometry_to_string(geometry);
         return text.length ? z8_json_quote(text) : "null"w;
     }
+    if (auto primary = cast(Z8Object)state) {
+        auto text = z8_user_primary_string(primary);
+        return text is null ? "null"w : z8_json_quote(text);
+    }
     throw new Exception("invalid JSON state");
 }
 private wstring z8_json_child_text(Object state) {
     if (auto geometry = cast(Z8Geometry)state) return z8_geometry_to_string(geometry);
+    if (auto primary = cast(Z8Object)state) return z8_user_primary_string(primary);
     return z8_json_render_state(state);
 }
 private Object z8_json_state_from_object(Z8Object value) {

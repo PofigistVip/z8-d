@@ -271,7 +271,9 @@ private Z8JsonPrimaryValue z8_json_from_primary(Z8Primary value) {
             result.child = value.geometryValue;
             break;
         case Z8PrimaryKind.user:
-            throw new Exception("JSON value type is not supported yet");
+            result.value = JSONValue("");
+            result.child = value.userValue;
+            break;
     }
     return result;
 }

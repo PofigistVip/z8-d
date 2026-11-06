@@ -110,6 +110,11 @@ public class Probe {
 import org.zenframework.z8.server.base.json.parser.JsonArray;
 import org.zenframework.z8.server.types.*;
 class JsonArrayOracle {
+    static class Custom extends primary {
+        String text = "first";
+        public int compareTo(primary value) { return 0; }
+        public String toString() { return text; }
+    }
     static JsonArray parse(String value) { return JsonArray.z8_parse(new string(value)).get(); }
     public static void main(String[] args) throws Exception {
         org.zenframework.z8.server.config.ServerConfig.load(args[0]);
@@ -175,6 +180,10 @@ class JsonArrayOracle {
         System.out.println("geometry:nested:" + geometryParent.string().get());
         System.out.println("geometry:from:" + fromShapes.string().get());
         shape.set(new geometry()); System.out.println("geometry:empty:" + shapes.string().get());
+        Custom custom = new Custom(); shapes.z8_add(custom); custom.text = "changed";
+        System.out.println("custom:" + shapes.z8_getString(new integer(1)).get() + ":" + shapes.string().get());
+        try { org.zenframework.z8.server.base.json.parser.JsonPath.z8_path(new string("[1]")).get().z8_getString(shapesClass); System.out.println("bad"); }
+        catch (RuntimeException expected) { System.out.println("custom:path:error"); }
         file attachment = new file(); attachment.name = new string("report.txt"); attachment.size = new integer(42);
         attachment.time = new date(0L); attachment.details.put(new string("key"), new string("value"));
         JsonArray attachments = parse("[]"); attachments.z8_add(attachment);
@@ -317,6 +326,10 @@ import z8gen.Probe;
 import std.stdio : writeln;
 import std.conv : to;
 import std.traits : Parameters;
+class Custom : Z8Object {
+    wstring text = "first"w;
+    override wstring z8_user_primary_string_impl() { return text; }
+}
 void main() {
     alias P = Z8p_50726F6265;
     auto value = P.m_parse("[1,2147483648,3.9,'-9',true,'yes',null,'00112233-4455-6677-8899-aabbccddeeff']"w);
@@ -383,6 +396,9 @@ void main() {
     writeln("geometry:nested:", P.m_objectRender(geometryParent).to!string);
     writeln("geometry:from:", P.m_render(fromShapes).to!string);
     shape.shape = -1; shape.rawHex = null; writeln("geometry:empty:", P.m_render(shapes).to!string);
+    auto custom = new Custom(); P.m_add(shapes, z8_primary_box(custom)); custom.text = "changed"w;
+    writeln("custom:", P.m_text(shapes, 1).to!string, ":", P.m_render(shapes).to!string);
+    try { P.m_pathStringArray(P.m_path("[1]"w), shapes); writeln("bad"); } catch (Exception) { writeln("custom:path:error"); }
     auto attachment = new Z8File(); attachment.name = "report.txt"w; attachment.size = z8_optional_wrap(42L);
     attachment.time = z8_date_from_ticks(0); attachment.details.z8_add("key"w, "value"w);
     auto attachments = P.m_parse("[]"w); P.m_add(attachments, z8_primary_box(attachment));

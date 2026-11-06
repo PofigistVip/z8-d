@@ -61,6 +61,11 @@ import java.util.*;
 import org.zenframework.z8.server.base.json.parser.JsonObject;
 import org.zenframework.z8.server.types.string;
 class JsonObjectOracle {
+    static class Custom extends org.zenframework.z8.server.types.primary {
+        String text = "first";
+        public int compareTo(org.zenframework.z8.server.types.primary value) { return 0; }
+        public String toString() { return text; }
+    }
     public static void main(String[] args) throws Exception {
         org.zenframework.z8.server.config.ServerConfig.load(args[0]);
         String source = "{name:'Привет',count:'-9',fraction:12.75,precise:7413.04345526901443,suffix:'1L',flag:true,word:'true',empty:null,id:'00112233-4455-6677-8899-aabbccddeeff',day:'2024-02-29T12:34:56',nested:{k:1},list:[1.0,2]}";
@@ -120,6 +125,11 @@ class JsonObjectOracle {
         System.out.println("geometry:empty:" + geometryObject.z8_getString(new string("shape")).get() + ":" + geometryObject.string().get());
         geometryObject.z8_set(new string("shape"), new string("replacement"));
         System.out.println("geometry:replaced:" + geometryObject.string().get());
+        Custom custom = new Custom();
+        geometryObject.z8_set(new string("shape"), custom);
+        System.out.println("custom:" + geometryObject.z8_getString(new string("shape")).get() + ":" + geometryObject.string().get());
+        custom.text = "changed"; System.out.println("custom:changed:" + geometryObject.string().get());
+        custom.text = null; System.out.println("custom:null:" + geometryObject.string().get());
         for (String input : new String[] {"12345678901234567890.2500", "1E+3", "1E-7", "-18446744073709551617.99"}) {
             value.z8_set(new string("decimal"), new org.zenframework.z8.server.types.decimal(input));
             System.out.println(value.z8_getString(new string("decimal")).get() + ":" + value.z8_getInt(new string("decimal")).get());
@@ -191,6 +201,10 @@ import std.stdio : writeln;
 import std.conv : to;
 import std.algorithm : sort;
 import std.array : join;
+class Custom : Z8Object {
+    wstring text = "first"w;
+    override wstring z8_user_primary_string_impl() { return text; }
+}
 void main() {
     alias P = Z8p_50726F6265;
     auto value = P.m_parse("{name:'Привет',count:'-9',fraction:12.75,precise:7413.04345526901443,suffix:'1L',flag:true,word:'true',empty:null,id:'00112233-4455-6677-8899-aabbccddeeff',day:'2024-02-29T12:34:56',nested:{k:1},list:[1.0,2]}"w);
@@ -248,6 +262,10 @@ void main() {
     writeln("geometry:empty:", P.m_text(geometryObject, "shape"w).to!string, ":", P.m_render(geometryObject).to!string);
     P.m_put(geometryObject, "shape"w, z8_primary_box("replacement"w));
     writeln("geometry:replaced:", P.m_render(geometryObject).to!string);
+    auto custom = new Custom(); P.m_put(geometryObject, "shape"w, z8_primary_box(custom));
+    writeln("custom:", P.m_text(geometryObject, "shape"w).to!string, ":", P.m_render(geometryObject).to!string);
+    custom.text = "changed"w; writeln("custom:changed:", P.m_render(geometryObject).to!string);
+    custom.text = null; writeln("custom:null:", P.m_render(geometryObject).to!string);
     foreach (input; ["12345678901234567890.2500"w, "1E+3"w, "1E-7"w, "-18446744073709551617.99"w]) {
         P.m_put(value, "decimal"w, z8_primary_box(z8_decimal_parse(input)));
         writeln(P.m_text(value, "decimal"w).to!string, ":", z8_optional_require(P.m_integer(value, "decimal"w)));
