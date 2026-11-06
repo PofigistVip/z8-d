@@ -72,6 +72,8 @@ void main(string[] args) {
     auto image = z8_file_from_path(buildPath(args[1], "image.png").to!wstring);
     auto imagePdf = z8_file_from_path(buildPath(args[1], "result", "image.pdf").to!wstring);
     assert(z8_file_exists(P.m_convert(image, imagePdf)));
+    auto imageArchive = z8_file_from_path(buildPath(args[1], "result", "image-archive.pdf").to!wstring);
+    assert(z8_file_exists(P.m_convertWithOptions(image, imageArchive, pdfOptions)));
     auto invalidImage = z8_file_from_path(buildPath(args[1], "invalid.png").to!wstring);
     auto invalidPdf = z8_file_from_path(buildPath(args[1], "result", "invalid.pdf").to!wstring);
     bool invalidFailed;
@@ -107,4 +109,6 @@ void main(string[] args) {
         assert b"Hello from Z8" in document.read("content.xml")
     image_pdf = (temp / "result" / "image.pdf").read_bytes()
     assert image_pdf.startswith(b"%PDF-") and b"/Subtype/Image" in image_pdf
+    image_archive = (temp / "result" / "image-archive.pdf").read_bytes()
+    assert b"pdfaid:part" in image_archive and b"/Subtype/Image" in image_archive
 print("FileConverter office and PDF conversion passed")
