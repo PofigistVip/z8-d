@@ -245,6 +245,7 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
         if (id == "relation-denied"w) {
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.NestedLink"w), Z8Access.init);
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.OtherJoin"w), Z8Access.init);
+            user.privileges.setFieldAccess(z8_guid_create_name("Sample.MemoryLink"w), Z8Access.init);
         }
         if (id == "target-denied"w) user.privileges.setTableAccess(z8_guid_create_name("NestedAttachment"w), Z8Access.init);
         if (id == "query-denied"w) user.privileges.setTableAccess(z8_guid_create_name("MemoryQuery"w), Z8Access.init);
@@ -433,6 +434,17 @@ void main(string[] args) {
             assert result["success"] and any(field["name"] == "nested.title" for field in result["fields"]), result
             result = request(session="relation-denied", action="meta", link="nestedLink", fields='["nested.title"]')
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            for target in ({"link": "memoryLink", "query": "missing"}, {"query": "embedded"}):
+                result = request(action="meta", fields='["embedded.title"]', **target)
+                assert result["success"] and any(field["name"] == "embedded.title" for field in result["fields"]), result
+                result = request(action="read", fields='["embedded.title"]', **target)
+                assert result["success"] and result["data"][0]["title"] == "row", result
+                result = request(action=None, fields='["embedded.title"]', **target)
+                assert result["success"] and result["isQuery"] and result["data"][0]["title"] == "row", result
+                for action in ("meta", "read"):
+                    for session in ("query-denied", "relation-denied"):
+                        result = request(session=session, action=action, fields='["embedded.title"]', **target)
+                        assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(action=None)
             assert result["success"] and result["isQuery"] and len(result["data"]) == 2, result
             # A Z8 form sends its FileField value as a JSON array in the

@@ -320,7 +320,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     auto privileges = z8_nonnull(session.user).privileges;
     if (privileges is null) throw new Exception("query read access denied");
     auto context = query;
-    query = z8_application_action_query(context, privileges, params.z8_get("query"w), params.z8_get("link"w));
+    query = z8_application_action_query(context, privileges, params.z8_get("query"w), params.z8_get("link"w), false);
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
     if (!privileges.getTableAccess(queryKey).read) throw new Exception("query read access denied");
     if (!z8_native_is_instance(z8_table_name, query)) {
