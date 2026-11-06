@@ -115,6 +115,7 @@ import org.zenframework.z8.base.table.value.IntField;
 import org.zenframework.z8.base.table.value.StringField;
 import org.zenframework.z8.base.table.value.BinaryField;
 import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.sql.Connection;
 public class Sample extends Table {
     [name "Title"] public StringField title;
     [name "Amount"] public IntField amount;
@@ -123,6 +124,12 @@ public class Sample extends Table {
     ApplyAction apply; NoTransactionAction noTransaction; IncrementAction increment; ContextAction inspect;
     actions = {apply, noTransaction, increment, inspect};
     CustomReport exported; reports = {exported};
+    virtual protected binary processContentRequest(string[string] params, file[] files) {
+        Connection.get().execute("INSERT INTO \\"ContentLog\\" VALUES (1)");
+        if (params.containsKey("fail")) throw "content failed";
+        if (params.containsKey("empty")) return null;
+        return '0, 255, 65, 0';
+    }
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -162,6 +169,7 @@ void main(string[] args) {
     databaseInfo = args[1];
     auto setup = new Z8PostgresConnection(databaseInfo);
     setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Blob" bytea, "ChildLink" uuid, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
+    setup.execute(`CREATE TABLE "ContentLog" (value integer)`);
     setup.execute(`INSERT INTO "Sample" ("RecordId", "Title", "Amount") VALUES ('00000000-0000-0000-0000-000000000001', 'First', 5), ('00000000-0000-0000-0000-000000000002', 'Second', 10)`);
     setup.close();
     auto server = new Z8CivetServer("127.0.0.1:0", (Z8HttpRequest request) {
@@ -177,7 +185,8 @@ void main(string[] args) {
     auto row = verify.execute(`SELECT encode("Blob", 'hex') FROM "Sample" WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
     assert(row.rows.length == 1 && row.rows[0][0].text == "00ff4100");
     row = verify.execute(`SELECT "CreatedAt" FROM "Sample" WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
-    assert(row.rows.length == 1 && row.rows[0][0].text == "10"); verify.close();
+    assert(row.rows.length == 1 && row.rows[0][0].text == "10");
+    assert(verify.execute(`SELECT count(*) FROM "ContentLog"`).rows[0][0].text == "2"); verify.close();
 }
 ''', encoding="utf-8")
     exe = temp / ("postgres-http.exe" if os.name == "nt" else "postgres-http")
@@ -280,6 +289,19 @@ void main(string[] args) {
             result = request(action="report", id="missing", recordId="00000000-0000-0000-0000-000000000001")
             assert not result["success"], result
             result = request(session="denied", action="report", id="exported", recordId="00000000-0000-0000-0000-000000000001")
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            try:
+                conn.request("GET", "/request.json?" + urlencode(dict(request="Sample", session="full", server="test", action="content")))
+                response = conn.getresponse()
+                assert response.status == 200 and response.read() == bytes([0, 255, 65, 0])
+            finally:
+                conn.close()
+            result = request(action="content", empty="true")
+            assert result["success"], result
+            result = request(action="content", fail="true")
+            assert not result["success"] and "content failed" in result["info"]["messages"][-1]["text"], result
+            result = request(session="denied", action="content")
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(request="UpdateJob", action=None, scheduled="true", parameters='{"amount":5}')
             assert result["success"] and result["info"]["messages"][-1]["text"] == "job complete", result

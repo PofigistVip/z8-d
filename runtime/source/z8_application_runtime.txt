@@ -265,6 +265,7 @@ void z8_application_dispatch_request() {
         else if (action == "copy"w) z8_application_dispatch_query_copy_target(className, target);
         else if (action == "action"w) z8_application_dispatch_query_action_target(className, target);
         else if (action == "report"w) z8_application_dispatch_query_report_target(className, target);
+        else if (action == "content"w) z8_application_dispatch_query_content_target(className, target);
         else z8_application_dispatch_query_read_target(className, target);
     }
     else if (z8_native_is_instance(z8_executable_name, target)) z8_application_dispatch_scheduled_job(target);

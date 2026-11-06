@@ -1,0 +1,30 @@
+// ContentAction executes a query's custom binary response inside a transaction.
+void z8_application_dispatch_query_content(wstring className) {
+    z8_application_dispatch_query_content_target(className, null);
+}
+private void z8_application_dispatch_query_content_target(wstring className, Z8Object context) {
+    auto request = z8_application_require_request();
+    auto params = z8_nonnull(request.parameters);
+    if (request.writer.scopes.length != 2) throw new Exception("response object is not open");
+    if (params.z8_get("action"w) != "content"w) throw new Exception("unsupported query action");
+    if (!z8_application_may_execute(z8_nonnull(request.session), className, "content"w)) throw new Exception("request access denied");
+    if (context is null) context = z8_object_new_instance_native(z8_string_required(className));
+    if (!z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, context)) throw new Exception("content requires a Query");
+    auto query = context;
+    auto linkId = params.z8_get("link"w), queryId = params.z8_get("query"w);
+    if (linkId !is null && linkId.length) {
+        auto link = z8_action_find_member(context, linkId);
+        if (!z8_native_is_instance("org.zenframework.z8.server.base.table.value.Link"w, link)) throw new Exception("content link not found");
+        query = z8_nonnull(z8_link_query(link));
+    } else if (queryId !is null && queryId.length) {
+        query = z8_action_find_member(context, queryId);
+        if (!z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, query)) throw new Exception("content query not found");
+    }
+    auto connection = z8_connection_current_backend();
+    if (connection is null) throw new Exception("no current database connection");
+    connection.beginTransaction();
+    scope(failure) connection.rollback();
+    auto result = query.z8_object_process_content(params, request.files);
+    connection.commit();
+    if (result !is null) z8_application_set_response_binary(request, result);
+}
