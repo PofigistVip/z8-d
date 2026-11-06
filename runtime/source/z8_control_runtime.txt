@@ -117,7 +117,7 @@ private wstring z8_control_aggregation_name(Z8FieldAggregation value) {
         case Z8FieldAggregation.bitwiseAnd: return "bitwise_and"w;
     }
 }
-// Field.writeMeta for direct fields and authorized Link paths.
+// Field.writeMeta for direct fields and authorized Link/Join paths.
 void z8_control_write_field_meta(Z8Object field, Z8Object query, Z8Object context, Z8Privileges privileges) {
     field = z8_nonnull(field); query = z8_nonnull(query); privileges = z8_nonnull(privileges);
     if (!z8_native_is_instance(z8_field_name, field)) throw new Exception("metadata control is not a Field");
@@ -138,7 +138,9 @@ void z8_control_write_field_meta(Z8Object field, Z8Object query, Z8Object contex
     z8_monitor_property(writer, "width"w, fieldState.width.present ? fieldState.width.value : 0L);
     auto aggregation = z8_field_aggregation(field);
     if (aggregation != Z8FieldAggregation.none) z8_monitor_property(writer, "aggregation"w, z8_control_aggregation_name(aggregation));
-    if (path.length) {
+    bool hasJoin;
+    foreach (link; path) if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Join"w, link)) hasJoin = true;
+    if (path.length && !hasJoin) {
         auto first = path[0], last = path[$ - 1], target = z8_nonnull(z8_link_query(first));
         auto primary = z8_nonnull(z8_query_primary_key(target));
         z8_monitor_property(writer, "isCombobox"w, true);
@@ -188,11 +190,11 @@ void z8_control_write_field_meta(Z8Object field, Z8Object query, Z8Object contex
     }
     if (fieldState.valueFrom !is null) z8_monitor_property(writer, "valueFrom"w, fieldState.valueFrom.z8_id());
     if (fieldState.valueFor !is null) z8_monitor_property(writer, "valueFor"w, fieldState.valueFor.z8_id());
-    auto accessField = path.length ? path[0] : field;
+    auto accessField = path.length && !hasJoin ? path[0] : field;
     auto accessOwner = z8_nonnull(accessField.z8_get_owner());
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, accessOwner);
     auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, accessField);
-    bool readOnly = (control.readOnly.present && control.readOnly.value) ||
+    bool readOnly = hasJoin || (control.readOnly.present && control.readOnly.value) ||
         (!path.length && z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field)) ||
         !privileges.getFieldAccess(queryKey, fieldKey).write;
     bool required = control.required.present && control.required.value;

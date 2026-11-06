@@ -61,7 +61,10 @@ fieldsets, field groups, tab controls, independent forms and forms with a readab
 Actions and their parameters are described in metadata and can execute with a
 direct or nested query, respecting their `useTransaction` setting. Report metadata
 and custom BL report hooks are supported; built-in BIRT and POI engines remain
-unimplemented. Other controls, custom Join metadata and `aggregateBy` are rejected.
+unimplemented. Fields reached through a custom Join are exposed as read-only
+text controls after checking the relation and target permissions. Grouping with
+`aggregateBy` is supported by the PostgreSQL executor for its documented subset.
+Other control types and unsupported grouping combinations are rejected.
 With no
 `action` parameter, the same metadata is followed by the table read response.
 

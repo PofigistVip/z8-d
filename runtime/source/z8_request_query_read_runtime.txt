@@ -30,8 +30,8 @@ private Z8SqlBool z8_application_query_filter(Z8Object query, wstring json) {
     return z8_sql_bool_group(result);
 }
 
-// Follow the same first-Link path used by the PostgreSQL planner, checking
-// each table and link before exposing a field from a related query.
+// Follow the planner's first Link/Join path, checking each table and relation
+// before exposing a field from a related query.
 private Z8Object[] z8_application_query_field_path(Z8Object root, Z8Object field, Z8Privileges privileges) {
     enum queryName = "org.zenframework.z8.server.base.query.Query"w;
     enum tableName = "org.zenframework.z8.server.base.table.Table"w;
@@ -58,7 +58,7 @@ private Z8Object[] z8_application_query_field_path(Z8Object root, Z8Object field
             if ((z8_native_is_instance(linkName, candidate) || z8_native_is_instance(joinName, candidate)) && z8_link_query(candidate) is target) {
                 link = candidate; break;
             }
-        if (link is null || z8_native_is_instance(joinName, link)) throw new Exception("linked query requires a direct Link");
+        if (link is null) throw new Exception("linked query requires a Link or Join");
         auto parentKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, parent);
         auto linkKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, link);
         auto targetKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, target);
@@ -134,6 +134,8 @@ private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges priv
     }
     Z8Object[] selected;
     foreach (field; requested) {
+        // Join is a relation expression, not a data field (ReadAction.addSelectField).
+        if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Join"w, field)) continue;
         bool duplicate;
         foreach (existing; selected) if (existing is field) { duplicate = true; break; }
         if (duplicate) continue;
@@ -142,7 +144,7 @@ private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges priv
         foreach (link; path) {
             bool present;
             foreach (existing; selected) if (existing is link) { present = true; break; }
-            if (!present) selected ~= link;
+            if (!present && !z8_native_is_instance("org.zenframework.z8.server.base.table.value.Join"w, link)) selected ~= link;
             if (z8_link_join_type(link) == Z8JoinType.right) {
                 auto target = z8_nonnull(z8_link_query(link));
                 auto targetKey = z8_nonnull(z8_query_primary_key(target));

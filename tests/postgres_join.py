@@ -313,6 +313,20 @@ public class ConditionOrder extends Table {
     public Customer customer; public Join matchingCustomer = customer;
 }
 ''',
+        "HttpJoinOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.Join;
+import org.zenframework.z8.base.table.value.StringField;
+[name "JoinOrders"] public class HttpJoinOrder extends Table {
+    [name "Title"] public StringField title;
+    public City city; [name "CityId"] public Link cityId = city;
+    public Customer customer; public Join matchingCustomer = customer;
+    virtual protected void onReadAction() {
+        matchingCustomer = customer.cityId.sql_guid() == city.recordId.sql_guid();
+    }
+}
+''',
         "CyclicOrder": '''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.Join;
@@ -326,6 +340,7 @@ import org.zenframework.z8.base.table.value.Field;
 import org.zenframework.z8.base.table.value.Aggregation;
 import org.zenframework.z8.base.table.SortDirection;
 public class Probe {
+    public static HttpJoinOrder httpJoinOrder() { HttpJoinOrder value; return value; }
     public static AggregateOrder aggregateOrder() { AggregateOrder value; return value; }
     public static AggregateLeftOrder aggregateLeftOrder() { AggregateLeftOrder value; return value; }
     public static AggregateFilteredOrder aggregateFilteredOrder() { AggregateFilteredOrder value; return value; }
@@ -624,6 +639,7 @@ void main(string[] args) {
         z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
     }
     db.execute(`CREATE TEMP TABLE "RightOrders" AS SELECT * FROM "Orders"`);
+    db.execute(`CREATE TEMP TABLE "JoinOrders" AS SELECT * FROM "Orders"`);
     auto response = parseJSON(requestFields(`["title","customer.label","customer.city.label"]`w).to!string);
     assert(response["data"].array.length == 1 && response["data"][0]["customer.label"].str == "Alice" && response["data"][0]["customer.city.label"].str == "Moscow");
     assert(response["data"][0]["customerId"].str == "00000000-0000-0000-0000-000000000201");
@@ -731,6 +747,21 @@ void main(string[] args) {
         }
     }
     assert(customerMeta && cityMeta);
+    auto joinMeta = parseJSON(requestFields(`["customer.label"]`w, null, null, null, null, "HttpJoinOrder"w, "meta"w).to!string);
+    bool joinedText;
+    foreach (field; joinMeta["fields"].array) if (field["name"].str == "customer.label") {
+        joinedText = field["isText"].boolean && field["readOnly"].boolean && "isCombobox" !in field.object;
+    }
+    assert(joinedText);
+    auto joinResponse = parseJSON(requestFields(`["title","customer.label"]`w, null, null, null, null, "HttpJoinOrder"w).to!string);
+    assert(joinResponse["data"].array.length == 1 && joinResponse["data"][0]["title"].str == "First" && joinResponse["data"][0]["customer.label"].str == "Alice");
+    joinMeta = parseJSON(requestFields(`["customer.city.label"]`w, null, null, null, null, "HttpJoinOrder"w, "meta"w).to!string);
+    joinedText = false;
+    foreach (field; joinMeta["fields"].array) if (field["name"].str == "customer.city.label")
+        joinedText = field["isText"].boolean && field["readOnly"].boolean && "isCombobox" !in field.object;
+    assert(joinedText);
+    joinResponse = parseJSON(requestFields(`["customer.city.label"]`w, null, null, null, null, "HttpJoinOrder"w).to!string);
+    assert(joinResponse["data"].array.length == 1 && joinResponse["data"][0]["customer.city.label"].str == "Moscow");
     assert(linkedMeta["controls"][0]["isForm"].boolean && linkedMeta["controls"][0]["link"]["name"].str == "customerId");
     assert(linkedMeta["controls"][0]["link"]["primaryKey"].str == "recordId" && linkedMeta["controls"][0]["link"]["query"]["primaryKey"].str == "customer.recordId");
     assert(linkedMeta["controls"][0]["controls"][0]["name"].str == "customer.label");
@@ -771,6 +802,24 @@ void main(string[] args) {
     }
     assert(unmatched);
     auto denied = Z8Access.init;
+    user.privileges.setTableAccess(z8_guid_create_name("Customers"w), denied);
+    bool joinBlocked;
+    try { requestFields(`["customer.label"]`w, null, null, null, null, "HttpJoinOrder"w); } catch (Exception) { joinBlocked = true; }
+    assert(joinBlocked);
+    joinBlocked = false;
+    try { requestFields(`["customer.label"]`w, null, null, null, null, "HttpJoinOrder"w, "meta"w); } catch (Exception) { joinBlocked = true; }
+    assert(joinBlocked);
+    user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
+    auto securedJoin = P.m_httpJoinOrder();
+    Z8Object joinField;
+    foreach (field; z8_query_declared_fields(securedJoin)) if (field.z8_index() == "matchingCustomer"w) joinField = field;
+    assert(joinField !is null);
+    auto joinKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, joinField);
+    user.privileges.setFieldAccess(joinKey, denied);
+    joinBlocked = false;
+    try { requestFields(`["customer.label"]`w, null, null, null, null, "HttpJoinOrder"w); } catch (Exception) { joinBlocked = true; }
+    assert(joinBlocked);
+    user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     user.privileges.setFieldAccess(z8_guid_create_name("AggregateOrders.CustomerId"w), denied);
     bool aggregateBlocked;
     try { requestFields(`["amount"]`w, null, null, null, null, "AggregateOrder"w); } catch (Exception) { aggregateBlocked = true; }
