@@ -32,19 +32,31 @@ private void z8_system_files_on_new(Z8Object self) {
     z8_field_set(fields[5], z8_primary_box(now));
 }
 // AttachmentProcessor uses these operations within its caller's transaction.
-// Database-backed storage has the same location value as Java's Files table.
+// Content can be stored in the database or under the configured storage root.
 void z8_system_files_write(Z8File file, bool create = true) {
     file = z8_nonnull(file);
     if (file.id is null || file.id == z8_guid_zero()) throw new Exception("file ID is required");
     auto table = z8_native_new(z8_system_files_name); table.z8_ensure();
     auto fields = z8_system_files_state(table).fields;
     z8_field_set(fields[0], z8_primary_box(file.name));
-    z8_field_set(fields[1], z8_primary_box(z8_file_to_binary(file)));
+    auto binary = z8_file_to_binary(file);
+    if (z8_application_configuration().filesSaveOnDisk) {
+        import std.file : mkdirRecurse, write;
+        import std.path : dirName;
+        ubyte[] bytes;
+        { scope(exit) z8_binary_close(binary); bytes = z8_binary_snapshot(binary, size_t.max); }
+        auto path = z8_file_system_path(file); auto parent = dirName(path);
+        if (parent.length) mkdirRecurse(parent);
+        write(path, bytes);
+        z8_field_set(fields[6], z8_primary_box(1L));
+    } else {
+        z8_field_set(fields[1], z8_primary_box(binary));
+        z8_field_set(fields[6], z8_primary_box(0L));
+    }
     z8_field_set(fields[2], z8_primary_box(file.path));
     z8_field_set(fields[3], z8_primary_box(file.size));
     z8_field_set(fields[4], z8_primary_box(file.time));
     z8_field_set(fields[5], z8_primary_box(file.time));
-    z8_field_set(fields[6], z8_primary_box(0L));
     if (create) z8_query_create_id(table, file.id);
     else if (!z8_query_update_id_run(table, file.id, true)) throw new Exception("file was not updated");
 }

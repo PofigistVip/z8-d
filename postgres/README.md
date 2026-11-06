@@ -202,9 +202,12 @@ when the host includes it in schema bootstrap. `Files.get(id)` reads file path
 metadata, and `Files.get(file)` reads existing local content or database content,
 checking a nonzero recorded size. Database content is currently held in memory
 rather than copied to the filesystem cache. The runtime's
-`z8_system_files_write` and `z8_system_files_remove` operations store binary
-data and metadata in the current database transaction; their callers own commit
-and rollback. The BL `FileField.getAttachmentProcessor()` supports parsing,
+`z8_system_files_write` and `z8_system_files_remove` operations store metadata
+in the current database transaction; their callers own commit and rollback.
+By default content is stored in PostgreSQL. With `files.saveOnDisk=true`, content
+is written under the configured storage path and the row records its location;
+as in the original, filesystem writes are not undone by a database rollback.
+The BL `FileField.getAttachmentProcessor()` supports parsing,
 reading, adding and removing attachment metadata and database content in the
 caller's transaction. The direct-table HTTP `attach` and `detach` actions use
 that processor, require table and field permissions, and lock the target record

@@ -4,6 +4,7 @@ enum Z8MonitorLevel { info, warning, error }
 class Z8ApplicationConfig {
     bool multitenant;
     bool clientHashesPasswords = true;
+    bool filesSaveOnDisk;
     int uploadMaxMiB = 5, downloadMaxMiB = 1;
     wstring[] textExtensions = ["txt"w, "xml"w];
     wstring[] imageExtensions = ["tif"w, "tiff"w, "jpg"w, "jpeg"w, "gif"w, "png"w, "bmp"w];
@@ -13,6 +14,7 @@ class Z8ApplicationConfig {
     Z8ApplicationConfig copy() {
         auto result = new Z8ApplicationConfig();
         result.multitenant = multitenant; result.clientHashesPasswords = clientHashesPasswords; result.uploadMaxMiB = uploadMaxMiB; result.downloadMaxMiB = downloadMaxMiB;
+        result.filesSaveOnDisk = filesSaveOnDisk;
         result.textExtensions = textExtensions.dup; result.imageExtensions = imageExtensions.dup;
         result.emailExtensions = emailExtensions.dup; result.officeExtensions = officeExtensions.dup;
         return result;
@@ -40,6 +42,7 @@ void z8_application_configure_from_server() {
     wstring property(wstring key) { auto found = key in properties; return found is null ? null : *found; }
     config.multitenant = z8_optional_require(z8_server_config_parse_bool(property("application.multitenancy"w), z8_optional_wrap(false)));
     config.clientHashesPasswords = z8_optional_require(z8_server_config_parse_bool(property("web.client.hashPassword"w), z8_optional_wrap(true)));
+    config.filesSaveOnDisk = z8_optional_require(z8_server_config_parse_bool(property("files.saveOnDisk"w), z8_optional_wrap(false)));
     config.uploadMaxMiB = cast(int)z8_optional_require(z8_server_config_parse_int(property("web.server.upload.max"w), z8_optional_wrap(5L)));
     config.downloadMaxMiB = cast(int)z8_optional_require(z8_server_config_parse_int(property("web.client.download.max"w), z8_optional_wrap(1L)));
     wstring[] extensions(wstring key, wstring[] defaults) {
