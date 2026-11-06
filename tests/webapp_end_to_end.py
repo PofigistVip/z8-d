@@ -162,11 +162,13 @@ with tempfile.TemporaryDirectory() as directory:
             sequences_view = "org.zenframework.z8.server.base.table.system.view.SequencesView"
             tables_view = "org.zenframework.z8.server.base.table.system.view.TablesView"
             jobs_view = "org.zenframework.z8.server.base.table.system.view.JobsView"
+            roles_view = "org.zenframework.z8.server.base.table.system.view.RoleTableAccessView"
             assert any(entry["request"] == tools_class for entry in login["user"]["entries"]), login
             assert any(item.get("request") == files_view for group in login["user"]["data"] for item in group.get("items", [])), login
             assert any(item.get("request") == sequences_view for group in login["user"]["data"] for item in group.get("items", [])), login
             assert any(item.get("request") == tables_view for group in login["user"]["data"] for item in group.get("items", [])), login
             assert any(item.get("request") == jobs_view for group in login["user"]["data"] for item in group.get("items", [])), login
+            assert any(item.get("request") == roles_view for group in login["user"]["data"] for item in group.get("items", [])), login
             session = login["session"]
             status, replacement = browser_login(port, "Admin", password)
             assert status == 200 and replacement["success"] and replacement["session"] != session
@@ -189,6 +191,21 @@ with tempfile.TemporaryDirectory() as directory:
             assert any(action["name"] == "restartScheduler" for action in jobs_metadata["actions"]), jobs_metadata
             status, restarted = request(port, request=jobs_view, session=session, action="action", name="restartScheduler", records="[]", selection="[]", parameters="[]")
             assert status == 200 and restarted["success"], restarted
+            status, roles_metadata = request(port, request=roles_view, session=session, action="meta")
+            assert status == 200 and roles_metadata.get("success") and [item["name"] for item in roles_metadata.get("controls", [])] == ["name", "tablesListbox", "fieldsListbox", "requestsListbox"], roles_metadata
+            tables_rights = roles_metadata["controls"][1]["query"]
+            fields_rights = roles_metadata["controls"][2]["query"]
+            requests_rights = roles_metadata["controls"][3]["query"]
+            assert tables_rights["name"] == "rta" and tables_rights["link"]["name"] == "rta.role", tables_rights
+            assert fields_rights["name"] == "rfa" and fields_rights["link"]["name"] == "rfa.role", fields_rights
+            assert requests_rights["name"] == "rra" and requests_rights["link"]["name"] == "rra.role", requests_rights
+            role_access_id = subprocess.check_output([str(psql), "-tAc", '''SELECT a."RecordId" FROM "SystemRoleTableAccess" a JOIN "SystemTables" t ON t."RecordId"=a."Table" WHERE t."Name"='Tasks' AND a."Role"='421A8413-A8EC-4DAB-9235-9A5FF83341C5' ''', connection], env=environment, text=True).strip()
+            assert role_access_id
+            status, rights_changed = request(port, request=roles_view, session=session, action="update", query="rta",
+                                             fields='["rta.read"]', data=json.dumps([{"rta.recordId": role_access_id, "rta.read": False}]))
+            assert status == 200 and rights_changed["success"] and not rights_changed["data"][0]["rta.read"], rights_changed
+            updated_right = subprocess.check_output([str(psql), "-tAc", '''SELECT "Read" FROM "SystemRoleTableAccess" WHERE "RecordId"=''' + "'" + role_access_id + "'", connection], env=environment, text=True).strip()
+            assert updated_right == "0", updated_right
             status, metadata = request(port, request="Tasks", session=session, action="meta")
             assert status == 200 and metadata["success"], metadata
             assert [control["name"] for control in metadata["controls"]] == ["title", "done", "documents"], metadata

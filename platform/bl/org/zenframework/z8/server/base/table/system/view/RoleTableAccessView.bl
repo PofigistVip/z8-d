@@ -1,0 +1,69 @@
+import org.zenframework.z8.base.form.Control;
+import org.zenframework.z8.base.form.Listbox;
+import org.zenframework.z8.base.table.system.RoleFieldAccess;
+import org.zenframework.z8.base.table.system.RoleRequestAccess;
+import org.zenframework.z8.base.table.system.RoleTableAccess;
+import org.zenframework.z8.base.table.system.Roles;
+
+[request] [displayName "$Roles.title$"]
+public class RoleTableAccessView extends Roles {
+    RoleTableAccess rta;
+    RoleFieldAccess rfa;
+    RoleRequestAccess rra;
+    Listbox tablesListbox;
+    Listbox fieldsListbox;
+    Listbox requestsListbox;
+
+    colCount = 2;
+    name.colSpan = 2;
+    tablesListbox.query = rta;
+    tablesListbox.link = rta.role;
+    tablesListbox.flex = 1;
+    tablesListbox.sortFields = {rta.tables.name};
+    rta.read.editable = true;
+    rta.write.editable = true;
+    rta.create.editable = true;
+    rta.copy.editable = true;
+    rta.destroy.editable = true;
+    rta.columns = {rta.tables.name, rta.tables.displayName, rta.read, rta.write, rta.create, rta.copy, rta.destroy};
+
+    fieldsListbox.query = rfa;
+    fieldsListbox.link = rfa.role;
+    fieldsListbox.flex = 1;
+    fieldsListbox.sortFields = {rfa.fields.position};
+    rfa.fields.name.width = 150;
+    rfa.fields.displayName.width = 150;
+    rfa.fields.type.width = 90;
+    rfa.read.editable = true;
+    rfa.write.editable = true;
+    rfa.columns = {rfa.fields.name, rfa.fields.displayName, rfa.fields.type, rfa.read, rfa.write};
+    tablesListbox.dependencies = {fieldsListbox};
+    fieldsListbox.dependency = rfa.fields.table;
+    fieldsListbox.dependsOn = rta.table;
+
+    requestsListbox.query = rra;
+    requestsListbox.link = rra.role;
+    requestsListbox.flex = 1;
+    requestsListbox.colSpan = 2;
+    requestsListbox.sortFields = {rra.requests.name};
+    rra.execute.editable = true;
+    rra.columns = {rra.requests.name, rra.requests.classId, rra.execute};
+    controls = viewControls();
+    sortFields = {name};
+
+    private Control[] viewControls() {
+        rta.read.setAttribute("icon", "fa-eye");
+        rta.write.setAttribute("icon", "fa-pencil");
+        rta.create.setAttribute("icon", "fa-file-o");
+        rta.copy.setAttribute("icon", "fa-copy");
+        rta.destroy.setAttribute("icon", "fa-trash");
+        rfa.read.setAttribute("icon", "fa-eye");
+        rfa.write.setAttribute("icon", "fa-pencil");
+        rra.execute.setAttribute("icon", "fa-eye");
+        tablesListbox.setDisplayName("$RoleTableAccess.title$");
+        fieldsListbox.setDisplayName("$Fields.title$");
+        requestsListbox.setDisplayName("$RoleRequestAccess.title$");
+        Control[] result = {name, tablesListbox, fieldsListbox, requestsListbox};
+        return result;
+    }
+}

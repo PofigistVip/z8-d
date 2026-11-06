@@ -83,10 +83,6 @@ Z8Object z8_object_new_instance(wstring className) {
     import std.string : lastIndexOf;
     className = z8_string_required(className);
     Z8Object value;
-    if (z8_native_try_new(className, value)) {
-        value.z8_ensure();
-        return value;
-    }
     auto wanted = className.to!string;
     TypeInfo_Class selected;
     foreach (moduleInfo; ModuleInfo) if (moduleInfo !is null) foreach (info; moduleInfo.localClasses) {
@@ -97,7 +93,10 @@ Z8Object z8_object_new_instance(wstring className) {
         if (selected !is null && selected !is info) throw new Exception("BL class name is ambiguous: " ~ wanted);
         selected = info;
     }
-    if (selected is null) throw new Exception("BL class not found: " ~ wanted);
+    if (selected is null) {
+        if (z8_native_try_new(className, value)) { value.z8_ensure(); return value; }
+        throw new Exception("BL class not found: " ~ wanted);
+    }
     value = cast(Z8Object)selected.create();
     if (value is null) throw new Exception("cannot instantiate BL class: " ~ wanted);
     value.z8_init_type_attributes();

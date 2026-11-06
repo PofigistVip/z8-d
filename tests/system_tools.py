@@ -39,6 +39,8 @@ void main() {
     assert(!z8_optional_require(z8_native_field!(Z8Optional!bool)("org.zenframework.z8.server.base.query.Query.f_readOnly"w, view)));
     jobs = z8_object_new_instance("org.zenframework.z8.server.base.table.system.view.JobsView"w);
     assert(!z8_optional_require(z8_native_field!(Z8Optional!bool)("org.zenframework.z8.server.base.query.Query.f_readOnly"w, jobs)));
+    auto roles = z8_object_new_instance("org.zenframework.z8.server.base.table.system.view.RoleTableAccessView"w);
+    assert(z8_query_array(roles, "controls"w).length == 4);
     auto action = z8_object_new_instance("org.zenframework.z8.server.base.table.system.view.RestartSchedulerAction"w);
     auto records = new Z8Array!Z8Guid(); bool missing;
     try { action.z8_action_virtual_execute_many(records, jobs, records, jobs); } catch (Exception) { missing = true; }
