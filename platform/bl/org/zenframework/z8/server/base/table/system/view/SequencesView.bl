@@ -1,0 +1,17 @@
+import org.zenframework.z8.base.application.Application;
+import org.zenframework.z8.base.table.system.Sequences;
+import org.zenframework.z8.base.table.value.Field;
+
+// Sequences' Java-only view uses the system table's existing physical fields.
+[request] [displayName "$Sequences.title$"]
+public class SequencesView extends Sequences {
+    readOnly = Application.isRequest() ? !Application.user().isAdministrator() : true;
+    controls = viewControls();
+    sortFields = {getFieldByIndex("description")};
+    private Field[] viewControls() {
+        Field description = getFieldByIndex("description");
+        description.colSpan = 4;
+        Field[] result = {getFieldByIndex("key"), getFieldByIndex("value"), description};
+        return result;
+    }
+}
