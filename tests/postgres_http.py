@@ -124,6 +124,40 @@ import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.AttachmentField;
 public class NestedAttachment extends Table { [name "Documents"] public AttachmentField documents; }
 ''', encoding="utf-8")
+    (source / "MemoryQuery.bl").write_text('''
+import org.zenframework.z8.base.query.Query;
+import org.zenframework.z8.base.table.value.GuidField;
+import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.json.JsonArray;
+import org.zenframework.z8.base.application.Application;
+[request] public class MemoryQuery extends Query {
+    GuidField recordId; StringField title;
+    controls = {title}; columns = {recordId, title}; readOnly = true;
+    virtual protected void beforeRead() { Application.info("before data"); }
+    virtual protected void afterRead() { Application.info("after data"); }
+    virtual protected JsonArray getData(string[string] parameters) {
+        if (parameters.containsKey("lookup") && parameters["lookup"] == "empty") return null;
+        return JsonArray.parse("[{recordId:'00000000-0000-0000-0000-000000000001',title:'row'}]");
+    }
+}
+''', encoding="utf-8")
+    (source / "MemoryTable.bl").write_text('''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.table.value.IntField;
+import org.zenframework.z8.base.json.JsonArray;
+import org.zenframework.z8.base.application.Application;
+[name "Sample"] [request] public class MemoryTable extends Table {
+    [name "Title"] StringField title; [name "Amount"] IntField amount;
+    columns = {title, amount};
+    virtual protected void beforeRead() { Application.info("table before"); }
+    virtual protected void afterRead() { Application.info("table after"); }
+    virtual protected JsonArray getData(string[string] parameters) {
+        if (parameters.containsKey("lookup") && parameters["lookup"] == "database") return null;
+        return JsonArray.parse("[{title:'custom',amount:42}]");
+    }
+}
+''', encoding="utf-8")
     (source / "Sample.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.IntField;
@@ -180,7 +214,10 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.Title"w), Z8Access.init);
             user.privileges.setTableAccess(z8_guid_create_name("Sample"w), Z8Access(true, false, false, false, false, true));
         }
-        if (id == "denied"w) user.privileges.setRequestAccess(z8_guid_create_name("Sample"w), Z8Access.init);
+        if (id == "denied"w) {
+            user.privileges.setRequestAccess(z8_guid_create_name("Sample"w), Z8Access.init);
+            user.privileges.setRequestAccess(z8_guid_create_name("MemoryQuery"w), Z8Access.init);
+        }
         if (id == "field-denied"w) {
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.Documents"w), Z8Access.init);
             user.privileges.setFieldAccess(z8_guid_create_name("NestedAttachment.Documents"w), Z8Access.init);
@@ -302,6 +339,8 @@ void main(string[] args) {
                 query = dict(request="Sample", action="read", session=session, server="test",
                              fields='["title","amount"]')
                 query.update(params)
+                if query["request"] == "MemoryQuery" and "fields" not in params:
+                    query.pop("fields", None)
                 if query["action"] is None:
                     query.pop("action")
                 if query.get("action") in ("destroy", "action", "report", "archive"):
@@ -316,6 +355,24 @@ void main(string[] args) {
                     return json.loads(response.read())
                 finally:
                     conn.close()
+            result = request(request="MemoryQuery", action="meta")
+            assert result["success"] and result["isQuery"] and result["readOnly"], result
+            assert [field["name"] for field in result["columns"]] == ["recordId", "title"], result
+            result = request(request="MemoryQuery", action=None)
+            assert result["success"] and result["isQuery"] and result["data"][0]["title"] == "row", result
+            assert [message["text"] for message in result["info"]["messages"]] == ["before data", "after data"], result
+            result = request(request="MemoryQuery", lookup="empty")
+            assert not result["success"] and "requires JSON data" in result["info"]["messages"][-1]["text"], result
+            result = request(session="denied", request="MemoryQuery")
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = request(request="MemoryTable")
+            assert result["success"] and result["data"] == [{"title": "custom", "amount": 42}], result
+            assert [message["text"] for message in result["info"]["messages"]] == ["table before", "table after"], result
+            result = request(request="MemoryTable", lookup="database")
+            assert result["success"] and len(result["data"]) == 2 and result["data"][0]["amount"] in (5, 10), result
+            assert [message["text"] for message in result["info"]["messages"]] == ["table before", "table after"], result
+            result = request(request="MemoryTable", count="true")
+            assert result["success"] and result["data"][0]["amount"] == 42 and "total" not in result, result
             result = request(request="login", action=None, password="wrong", newPassword="newhash")
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(request="login", action=None, password="oldhash", newPassword="newhash")

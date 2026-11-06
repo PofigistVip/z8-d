@@ -153,7 +153,7 @@ private Z8Object[] z8_application_query_context_values(Z8Object query, Z8Privile
 // Shared by read and mutation responses; field selection is checked before a
 // mutation starts, so malformed response options cannot fail after commit.
 private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges privileges, Z8StringMap params, bool includeKeys = true) {
-    auto key = z8_nonnull(z8_query_primary_key(query));
+    auto key = z8_query_primary_key(query);
     Z8Object[] requested;
     // Resolve dependent forms even when the client supplies an explicit field list.
     auto formFields = z8_query_form_fields(query);
@@ -179,7 +179,7 @@ private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges priv
         requested = configured ? formFields : z8_query_declared_fields(query);
     }
     if (includeKeys) {
-        requested ~= key;
+        if (key !is null) requested ~= key;
         foreach (field; z8_query_declared_fields(query)) {
             auto parent = field.z8_get_attribute("parentKey"w);
             if (field.z8_get_attribute("lockKey"w) !is null ||
@@ -281,8 +281,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         if (params.z8_get(name).length) throw new Exception("unsupported query read parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
-    if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, query))
-        throw new Exception("query read requires a Table");
+    if (!z8_native_is_instance(z8_query_name, query)) throw new Exception("query read requires a Query");
     auto privileges = z8_nonnull(session.user).privileges;
     if (privileges is null) throw new Exception("query read access denied");
     auto context = query;
@@ -298,6 +297,21 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     } else query = z8_application_nested_query(context, privileges, params.z8_get("query"w));
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
     if (!privileges.getTableAccess(queryKey).read) throw new Exception("query read access denied");
+    if (!z8_native_is_instance(z8_table_name, query)) {
+        z8_application_query_context_values(query, privileges, params, true, context);
+        if (z8_query_user_events_enabled()) query.z8_query_virtual_onReadAction();
+        auto selected = z8_application_query_fields(query, privileges, params);
+        Z8QueryReadRequest read;
+        z8_query_prepare_read(query, read);
+        scope(exit) if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();
+        if (defaultAction) z8_application_query_write_meta(query, selected, null, privileges, context);
+        auto data = query.z8_object_get_data(params);
+        if (data is null || !z8_native_is_instance(z8_json_array_name, data))
+            throw new Exception("non-table query requires JSON data");
+        writer.property("data"w);
+        writer.raw(z8_json_array_render_state(z8_json_array_state(data)));
+        return;
+    }
     auto key = z8_query_primary_key(query);
     if (key is null) throw new Exception("query has no primary key");
     auto contextFields = z8_application_query_context_values(query, privileges, params, true, context);
@@ -485,9 +499,10 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         }
     }
     auto totals = params.z8_get("totals"w);
-    if (totals !is null && z8_bool_parse(totals)) {
-        Z8Object[] fields;
-        Z8FieldAggregation[] aggregations;
+    bool isTotals = totals !is null && z8_bool_parse(totals);
+    Z8Object[] totalsFields;
+    Z8FieldAggregation[] aggregations;
+    if (isTotals) {
         foreach (field; selected) {
             auto fieldState = z8_field_state(field);
             auto aggregation = z8_field_aggregation(field);
@@ -496,17 +511,35 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
             if (aggregation == Z8FieldAggregation.count) { aggregation = Z8FieldAggregation.sum; z8_field_set_aggregation(field, aggregation); }
             if (aggregation != Z8FieldAggregation.sum && aggregation != Z8FieldAggregation.average)
                 throw new Exception("unsupported query totals aggregation");
-            fields ~= field; aggregations ~= aggregation;
+            totalsFields ~= field; aggregations ~= aggregation;
         }
         read.aggregateSourceFields = selected.dup;
-        read.fields = fields; read.sortFields = null; read.start = 0; read.limit = -1;
+        read.fields = totalsFields; read.sortFields = null; read.start = 0; read.limit = -1;
         read.aggregateAll = true;
-        z8_query_prepare_read(query, read);
+    }
+    z8_query_prepare_read(query, read);
+    Z8Object customData;
+    try {
+        customData = query.z8_object_get_data(params);
+        if (customData !is null) {
+            if (!z8_native_is_instance(z8_json_array_name, customData)) throw new Exception("invalid query response data");
+            verifyGroups(); writeDefaultMetadata();
+            writer.property("data"w); writer.raw(z8_json_array_render_state(z8_json_array_state(customData)));
+        }
+    } catch (Throwable error) {
+        if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();
+        throw error;
+    }
+    if (customData !is null) {
+        if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();
+        return;
+    }
+    if (isTotals) {
         try {
             verifyGroups();
             if (!groups.length && !aggregates.length && read.queryHaving !is null && (read.queryHaving.kind != Z8SqlBoolKind.constant || !read.queryHaving.constant))
                 throw new Exception("query having is not supported for totals");
-            foreach (i, field; fields) if (z8_field_aggregation(field) != aggregations[i])
+            foreach (i, field; totalsFields) if (z8_field_aggregation(field) != aggregations[i])
                 throw new Exception("changing query aggregations during beforeRead is not supported");
             writeDefaultMetadata();
         } catch (Throwable error) {
@@ -517,7 +550,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         scope(exit) saved.restore();
         z8_query_open(query, read, false, true);
         writer.start('{', "data"w);
-        if (z8_optional_require(z8_query_next(query))) z8_application_query_write_fields(query, writer, fields);
+        if (z8_optional_require(z8_query_next(query))) z8_application_query_write_fields(query, writer, totalsFields);
         writer.finish('}');
         return;
     }
@@ -525,8 +558,10 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     auto count = params.z8_get("count"w);
     if (count !is null && z8_bool_parse(count)) {
         auto counter = cast(IZ8QueryCounter)z8_query_executor(query);
-        if (counter is null) throw new Exception("query executor does not support count");
-        z8_query_prepare_read(query, read);
+        if (counter is null) {
+            if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();
+            throw new Exception("query executor does not support count");
+        }
         long total;
         try { verifyGroups(); writeDefaultMetadata(); total = counter.count(query, read); }
         catch (Throwable error) {
@@ -546,7 +581,6 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         prepared = true;
     }
     if (!prepared) {
-        z8_query_prepare_read(query, read);
         try { verifyGroups(); writeDefaultMetadata(); }
         catch (Throwable error) {
             if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();

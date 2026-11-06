@@ -19,8 +19,7 @@ private void z8_application_dispatch_query_meta_target(wstring className, Z8Obje
         if (params.z8_get(name).length) throw new Exception("unsupported query metadata parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
-    if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, query))
-        throw new Exception("query metadata requires a Table");
+    if (!z8_native_is_instance(z8_query_name, query)) throw new Exception("query metadata requires a Query");
     auto privileges = z8_nonnull(session.user).privileges;
     if (privileges is null) throw new Exception("query metadata access denied");
     auto context = query;
