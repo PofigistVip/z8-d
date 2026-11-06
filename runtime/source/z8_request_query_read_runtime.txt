@@ -154,8 +154,12 @@ private bool z8_application_query_field_readable(Z8Object root, Z8Object field, 
     }
     return check(field);
 }
-private Z8Object z8_application_context_field(Z8Object context, Z8Privileges privileges, wstring name, bool allowNonTable = false) {
-    auto field = z8_query_find_field_id(context, name);
+private Z8Object z8_application_context_field(Z8Object context, Z8Privileges privileges, wstring name, bool allowNonTable = false, bool allowMissing = false) {
+    auto field = z8_query_try_find_field_id(context, name);
+    if (field is null) {
+        if (allowMissing) return null;
+        throw new Exception("query field not found");
+    }
     auto owner = z8_object_container(field);
     while (owner !is null && !z8_native_is_instance(z8_query_name, owner)) owner = z8_object_container(owner);
     if (owner is null) throw new Exception("query context field has no owner");
@@ -175,8 +179,9 @@ private Z8Object[] z8_application_query_context_values(Z8Object query, Z8Privile
     if (parsed.type == JSONType.null_) return applied;
     if (parsed.type != JSONType.object) throw new Exception("query values must be an object");
     foreach (name, value; parsed.object) {
-        auto field = context is null ? z8_query_find_field_id(query, name.to!wstring) :
-            z8_application_context_field(context, privileges, name.to!wstring, allowNonTable);
+        auto field = context is null ? z8_query_try_find_field_id(query, name.to!wstring) :
+            z8_application_context_field(context, privileges, name.to!wstring, allowNonTable, true);
+        if (field is null) continue;
         if (context is null && !z8_application_query_field_readable(query, field, privileges)) throw new Exception("query context field access denied");
         if (z8_field_type_id(field) == "binary"w) continue;
         auto boxed = z8_application_query_parse_value(field, value);

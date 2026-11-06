@@ -245,6 +245,7 @@ The current archive and download paths authorize the session and request but do
 not infer field-level access from a file ID.
 Optional `values` are checked before a create, update or copy transaction and
 applied as readable context fields when selecting its response.
+Unknown `values` fields are ignored; known fields still require read access.
 The direct-table `copy` action accepts source GUIDs in `recordId` and one
 override object per source in `data`. It requires copy access and write access
 to every primary field, invokes the BL copy hooks, and returns the copied

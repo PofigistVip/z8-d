@@ -1852,12 +1852,13 @@ void main(string[] args) {
     assert(defaultJson["isQuery"].boolean && defaultJson["data"].array.length == 1 && defaultJson["data"][0]["amount"].integer == 42);
     auto contextRead = new Z8ApplicationRequest(); contextRead.session = querySession; contextRead.monitor = new Z8RequestMonitor();
     contextRead.parameters.z8_add("action"w, "read"w); contextRead.parameters.z8_add("fields"w, `["amount"]`w);
-    contextRead.parameters.z8_add("session"w, "with-values"w); contextRead.parameters.z8_add("values"w, `[{"amount":40}]`w);
+    contextRead.parameters.z8_add("session"w, "with-values"w); contextRead.parameters.z8_add("values"w, `[{"amount":40,"unknown.field":"ignored"}]`w);
     z8_application_set_request(contextRead); z8_application_start_response(contextRead, "Sample"w); z8_application_dispatch_query_read("Sample"w);
     z8_application_finish_response(contextRead, cast(Z8RequestMonitor)contextRead.monitor);
     auto contextJson = parseJSON(z8_application_response_text(contextRead).to!string);
     assert(contextJson["data"].array.length == 1 && contextJson["data"][0]["amount"].integer == 42);
     assert(!rejectedRead("values"w, `[]`w));
+    assert(!rejectedRead("values"w, `{"missing":"ignored"}`w));
     assert(rejectedRead("values"w, `[42]`w));
     queryUser.privileges.setFieldAccess(bootFieldKey, Z8Access.init);
     assert(rejectedRead("values"w, `{"title":"Hidden"}`w));
@@ -1876,6 +1877,7 @@ void main(string[] args) {
     assert(update(`[{"recordId":"00000000-0000-0000-0000-00000000012D","title":"Updated","amount":44}]`w, updateResult));
     auto updatedJson = parseJSON(updateResult.to!string);
     assert(updatedJson["data"].array.length == 1 && updatedJson["data"][0]["title"].str == "Updated" && updatedJson["data"][0]["amount"].integer == 44);
+    assert(update(`[{"recordId":"00000000-0000-0000-0000-00000000012D","title":"Updated"}]`w, updateResult, `{"missing":"ignored"}`w));
     assert(update(`[{"recordId":"00000000-0000-0000-0000-00000000012D","flag":false,"price":"17.25","reference":"00000000-0000-0000-0000-000000000063","moment":"2024-01-02T03:04:05Z","duration":"01:02:03","details":"Данные"}]`w, updateResult));
     auto scalars = db.execute(`SELECT "Flag", "Price", "Reference", "Moment", "Duration", convert_from("Details", 'UTF8') FROM "z8_bootstrap"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-00000000012D'`);
     assert(scalars.rows[0][0].text == "0" && scalars.rows[0][1].text == "17.25" && scalars.rows[0][2].text == "00000000-0000-0000-0000-000000000063");
