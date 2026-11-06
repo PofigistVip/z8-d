@@ -77,6 +77,14 @@ import org.zenframework.z8.base.table.value.IntExpression;
     public IntExpression nameLength = customer.label.sql_string().length();
 }
 ''',
+        "HttpRightOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.StringField;
+[name "RightOrders"] public class HttpRightOrder extends Table {
+    [name "Title"] public StringField title;
+    public Customer customer; [name "CustomerId"] public RightLink customerId = customer;
+}
+''',
         "LeftOrder": '''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.StringField;
@@ -265,9 +273,9 @@ void main(string[] args) {
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     auto session = new Z8ApplicationSession("join"w, user, user);
     auto priorBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "pg_temp"w));
-    wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null) {
+    wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null, wstring className = "HttpOrder"w) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
-        request.parameters.z8_add("request"w, "HttpOrder"w); request.parameters.z8_add("action"w, "read"w); request.parameters.z8_add("fields"w, fields);
+        request.parameters.z8_add("request"w, className); request.parameters.z8_add("action"w, "read"w); request.parameters.z8_add("fields"w, fields);
         if (filter !is null) request.parameters.z8_add("filter"w, filter);
         if (sort !is null) request.parameters.z8_add("sort"w, sort);
         if (lookup !is null) request.parameters.z8_add("lookup"w, lookup);
@@ -276,6 +284,7 @@ void main(string[] args) {
         z8_application_start_response(request, "HttpOrder"w); z8_application_dispatch_request();
         z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
     }
+    db.execute(`CREATE TEMP TABLE "RightOrders" AS SELECT * FROM "Orders"`);
     auto response = parseJSON(requestFields(`["title","customer.label","customer.city.label"]`w).to!string);
     assert(response["data"].array.length == 1 && response["data"][0]["customer.label"].str == "Alice" && response["data"][0]["customer.city.label"].str == "Moscow");
     assert(response["data"][0]["customerId"].str == "00000000-0000-0000-0000-000000000201");
@@ -290,6 +299,14 @@ void main(string[] args) {
     assert(response["data"].array.length == 1 && response["data"][0]["title"].str == "First" && response["data"][0]["nameLength"].integer == 5);
     response = parseJSON(requestFields(`["title"]`w, null, `[{"property":"nameLength"}]`w).to!string);
     assert(response["data"].array.length == 2 && response["data"][0]["title"].str == "Second");
+    response = parseJSON(requestFields(`["title","customer.label"]`w, null, null, null, null, "HttpRightOrder"w).to!string);
+    bool unmatched;
+    foreach (row; response["data"].array) if (row["customer.label"].str == "Ghost") {
+        unmatched = true;
+        assert(row["customerId"].str == "00000000-0000-0000-0000-000000000203");
+        assert(row["customer.recordId"].str == "00000000-0000-0000-0000-000000000203");
+    }
+    assert(unmatched);
     auto denied = Z8Access.init;
     user.privileges.setTableAccess(z8_guid_create_name("Customers"w), denied);
     bool blocked; try { requestFields(`["customer.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);

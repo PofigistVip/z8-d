@@ -146,6 +146,13 @@ private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges priv
             bool present;
             foreach (existing; selected) if (existing is link) { present = true; break; }
             if (!present) selected ~= link;
+            if (z8_link_join_type(link) == Z8JoinType.right) {
+                auto target = z8_nonnull(z8_link_query(link));
+                auto targetKey = z8_nonnull(z8_query_primary_key(target));
+                present = false;
+                foreach (existing; selected) if (existing is targetKey) { present = true; break; }
+                if (!present) selected ~= targetKey;
+            }
         }
         selected ~= field;
     }
@@ -160,7 +167,19 @@ private void z8_application_query_write_fields(Z8Object query, Z8JsonWriterState
         auto value = z8_field_primary(field);
         auto wasNull = z8_optional_require(z8_field_was_null(field));
         if (field is key && wasNull) continue;
-        if (wasNull) value = field.z8_field_virtual_default();
+        if (wasNull) {
+            enum fieldPrefix = "org.zenframework.z8.server.base.table.value."w;
+            if (z8_native_is_instance(fieldPrefix ~ "IntegerField"w, field)) value = z8_primary_box(0L);
+            else if (z8_native_is_instance(fieldPrefix ~ "DecimalField"w, field)) value = z8_primary_box(z8_decimal_from_int(0));
+            else if (z8_native_is_instance(fieldPrefix ~ "StringField"w, field)) value = z8_primary_box(""w);
+            else if (z8_native_is_instance(fieldPrefix ~ "Link"w, field)) {
+                auto target = z8_link_query(field);
+                auto parent = field.z8_get_attribute("parentKey"w);
+                if (target is null && parent !is null && z8_str_compareNoCase(parent, "false"w) != 0) target = field.z8_get_owner();
+                auto referer = target is null ? null : z8_query_primary_key(target);
+                value = referer is null ? z8_primary_box(z8_guid_zero()) : z8_field_primary(referer);
+            } else value = field.z8_field_virtual_default();
+        }
         writer.property(field.z8_id());
         if (value !is null && value.kind == Z8PrimaryKind.geometry &&
             (wasNull || (value.geometryValue !is null && value.geometryValue.rawHex is null && value.geometryValue.shape == -1)))
