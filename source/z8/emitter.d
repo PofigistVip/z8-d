@@ -987,6 +987,14 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                     result ~= "override void z8_query_virtual_" ~ method.name.text ~ "(Z8Guid id) { this.m_" ~ method.name.text ~ "(id); }\n";
             }
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.form.report.CustomData"w) {
+            foreach (method; program.methods) if (!method.parameters.length) {
+                if (method.name.text == "count" && method.returnType == ValueType.intType)
+                    result ~= "override Z8Optional!long z8_report_custom_virtual_count() { return this.m_count(); }\n";
+                if ((method.name.text == "open" || method.name.text == "close") && method.returnType == ValueType.voidType)
+                    result ~= "override void z8_report_custom_virtual_" ~ method.name.text ~ "() { this.m_" ~ method.name.text ~ "(); }\n";
+            }
+        }
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.entity.EntityParser"w) {
             foreach (method; program.methods) if (!method.parameters.length && method.returnObjectClass !is null) {
                 if (method.name.text == "read" || method.name.text == "write")
@@ -1535,6 +1543,14 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                     if (nativeType == "org.zenframework.z8.server.base.entity.Entity"w) bindingName = "m_set_entity"w;
                     else if (nativeType == "org.zenframework.z8.server.base.json.parser.JsonObject"w) bindingName = "m_set_json_object"w;
                     else if (nativeType == "org.zenframework.z8.server.base.json.parser.JsonArray"w) bindingName = "m_set_json_array"w;
+                }
+                if (program.nativeName == "org.zenframework.z8.server.base.form.report.DataSource"w && m.operatorSymbol == "=" &&
+                    m.parameters.length == 1 && m.parameters[0].objectClass !is null) {
+                    auto nativeType = m.parameters[0].objectClass.nativeName;
+                    if (nativeType == "org.zenframework.z8.server.base.query.Query"w) bindingName = "z8op_assign_query"w;
+                    else if (nativeType == "org.zenframework.z8.server.base.json.parser.JsonArray"w) bindingName = "z8op_assign_json"w;
+                    else if (nativeType == "org.zenframework.z8.server.base.form.report.CustomData"w) bindingName = "z8op_assign_custom"w;
+                    else bindingName = "z8op_assign_object"w;
                 }
                 auto binding = emitRawWStringLiteral(program.nativeName ~ "."w ~ bindingName);
                 auto call = "z8_native_call!(" ~ dStorageType(m.returnType, m.returnObjectClass, m.returnKeyObjectClasses) ~ ")(" ~ binding ~

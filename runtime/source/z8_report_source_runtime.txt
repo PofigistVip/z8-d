@@ -1,0 +1,88 @@
+// BL report data sources and host-facing iteration, adapted from POI sources.
+private enum z8_report_source_name = "org.zenframework.z8.server.base.form.report.DataSource"w;
+private enum z8_report_custom_name = "org.zenframework.z8.server.base.form.report.CustomData"w;
+enum Z8ReportSourceKind { simple, json, custom, query }
+private class Z8ReportSourceState {
+    Z8Object source;
+    Z8ReportSourceKind kind;
+    long index, sheet;
+    bool initialized;
+}
+private class Z8ReportCustomState { long index, sheet; bool initialized; }
+private Z8ReportSourceState z8_report_source_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_report_source_name, self)) throw new Exception("invalid report data source");
+    auto state = cast(Z8ReportSourceState)self.z8_get_native_state(z8_report_source_name);
+    if (state is null) { state = new Z8ReportSourceState(); self.z8_set_native_state(z8_report_source_name, state); }
+    return state;
+}
+private Z8ReportCustomState z8_report_custom_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_report_custom_name, self)) throw new Exception("invalid custom report data");
+    auto state = cast(Z8ReportCustomState)self.z8_get_native_state(z8_report_custom_name);
+    if (state is null) { state = new Z8ReportCustomState(); self.z8_set_native_state(z8_report_custom_name, state); }
+    return state;
+}
+private void z8_report_source_assign(Z8ReportSourceKind kind)(Z8Object self, Z8Object source) {
+    auto state = z8_report_source_state(self);
+    state.source = z8_nonnull(source); state.kind = kind; state.initialized = false;
+}
+Z8Object z8_report_source_object(Z8Object self) { return z8_nonnull(z8_report_source_state(self).source); }
+private Z8Optional!long z8_report_source_index(Z8Object self) {
+    auto state = z8_report_source_state(self);
+    if (!state.initialized) throw new Exception("report data source is not open");
+    return z8_optional_wrap(state.index);
+}
+private Z8Optional!long z8_report_custom_index(Z8Object self) {
+    auto state = z8_report_custom_state(self);
+    if (!state.initialized) throw new Exception("custom report data is not open");
+    return z8_optional_wrap(state.index);
+}
+private Z8Optional!long z8_report_custom_sheet(Z8Object self) {
+    auto state = z8_report_custom_state(self);
+    if (!state.initialized) throw new Exception("custom report data is not open");
+    return z8_optional_wrap(state.sheet);
+}
+private Z8Optional!long z8_report_custom_default_count(Z8Object self) { z8_nonnull(self); return z8_optional_wrap(0L); }
+private void z8_report_custom_default_hook(Z8Object self) { z8_nonnull(self); }
+void z8_report_source_open(Z8Object self, long sheet) {
+    auto state = z8_report_source_state(self); auto source = z8_nonnull(state.source);
+    if (state.kind == Z8ReportSourceKind.query) throw new Exception("query report data source requires a report engine");
+    state.index = -1; state.sheet = sheet; state.initialized = true;
+    if (state.kind == Z8ReportSourceKind.custom) {
+        auto custom = z8_report_custom_state(source); custom.index = -1; custom.sheet = sheet; custom.initialized = true;
+        source.z8_report_custom_virtual_open();
+    }
+}
+long z8_report_source_count(Z8Object self) {
+    auto state = z8_report_source_state(self); auto source = z8_nonnull(state.source);
+    final switch (state.kind) {
+        case Z8ReportSourceKind.simple: return 1;
+        case Z8ReportSourceKind.json: return z8_optional_require(z8_json_array_size(source));
+        case Z8ReportSourceKind.custom: return z8_optional_require(source.z8_report_custom_virtual_count());
+        case Z8ReportSourceKind.query: return z8_optional_require(z8_query_count(source));
+    }
+}
+bool z8_report_source_next(Z8Object self) {
+    auto state = z8_report_source_state(self);
+    if (!state.initialized) throw new Exception("report data source is not open");
+    ++state.index;
+    if (state.kind == Z8ReportSourceKind.custom) z8_report_custom_state(state.source).index = state.index;
+    return state.index < z8_report_source_count(self);
+}
+void z8_report_source_close(Z8Object self) {
+    auto state = z8_report_source_state(self);
+    if (state.kind == Z8ReportSourceKind.custom && state.initialized) state.source.z8_report_custom_virtual_close();
+}
+void z8_bind_builtin_report_sources() {
+    enum p = z8_report_source_name ~ "."w, c = z8_report_custom_name ~ ".m_"w;
+    z8_native_bind(p ~ "z8op_assign_object"w, &z8_report_source_assign!(Z8ReportSourceKind.simple));
+    z8_native_bind(p ~ "z8op_assign_json"w, &z8_report_source_assign!(Z8ReportSourceKind.json));
+    z8_native_bind(p ~ "z8op_assign_custom"w, &z8_report_source_assign!(Z8ReportSourceKind.custom));
+    z8_native_bind(p ~ "z8op_assign_query"w, &z8_report_source_assign!(Z8ReportSourceKind.query));
+    z8_native_bind(p ~ "m_getIndex"w, &z8_report_source_index);
+    z8_native_bind(c ~ "getIndex"w, &z8_report_custom_index); z8_native_bind(c ~ "getSheet"w, &z8_report_custom_sheet);
+    z8_native_bind(c ~ "count"w, &z8_report_custom_default_count);
+    z8_native_bind(c ~ "open"w, &z8_report_custom_default_hook); z8_native_bind(c ~ "close"w, &z8_report_custom_default_hook);
+}
+shared static this() { z8_bind_builtin_report_sources(); }

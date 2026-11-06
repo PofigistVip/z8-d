@@ -117,6 +117,7 @@ python tests/compound_assignment.py
 python tests/entity_parser.py path/to/original-z8
 python tests/json_object_expression.py path/to/original-z8
 python tests/action_report.py path/to/original-z8
+python tests/report_source.py path/to/original-z8
 python tests/map_initializers.py
 python tests/integer_maps.py
 python tests/guid_maps.py
@@ -616,6 +617,10 @@ Gson; поля объекта со значением `null` при этом п�
 `Resources.loadResource` возвращает файл относительно корня приложения,
 задаваемого хостом через `z8_resources_set_application_root`; по умолчанию
 используется текущий рабочий каталог процесса.
+Для `DataSource` поддерживаются назначения простого объекта, JSON-массива,
+запроса и `CustomData`; хост может открывать источники простого объекта, JSON
+и пользовательских данных, перебирать записи и закрывать их, вызывая BL-хуки.
+Запуск источника на основе запроса ожидает интеграции с движком отчётов.
 Для `FileConverter` реализованы получение расширения и проверка форматов;
 списки расширений задаются параметрами `file.converter.*` при применении настроек приложения. Копирование PDF в PDF
 поддерживается для файлов и бинарных потоков; другие преобразования документов,
