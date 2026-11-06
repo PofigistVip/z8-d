@@ -42,15 +42,19 @@ class Z8PostgresHttpAuthority : IZ8HttpAuthority, IZ8UserChangeNotifier, IZ8Role
     private Z8RuntimeRegistry registry;
     private Z8PostgresAuthenticationConfig config;
     private Z8SessionManager sessions;
+    private IZ8UserChangeNotifier remoteUsers;
+    private IZ8RoleChangeNotifier remoteRoles;
 
     this(Z8PostgresConnection source, wstring schema, Z8RuntimeRegistry registry,
          Z8PostgresAuthenticationConfig config = Z8PostgresAuthenticationConfig.init,
-         Z8SessionManager sessions = null, wstring serverId = null) {
+         Z8SessionManager sessions = null, wstring serverId = null,
+         IZ8UserChangeNotifier remoteUsers = null, IZ8RoleChangeNotifier remoteRoles = null) {
         if (source is null || source.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
         if (schema is null || !schema.length || registry is null) throw new Z8PostgresException("authority schema and registry are required");
         new Z8PostgresAuthenticator(source, schema, registry, config);
         this.source = source; this.schema = schema.idup; this.registry = registry; this.config = config;
         this.sessions = sessions is null ? new Z8SessionManager() : sessions; this.serverId = serverId;
+        this.remoteUsers = remoteUsers; this.remoteRoles = remoteRoles;
     }
     Z8ApplicationSession authorize(Z8HttpRequest request, wstring id, wstring server) {
         if (serverId !is null && server !is null && server.length && server != serverId) return null;
@@ -67,8 +71,14 @@ class Z8PostgresHttpAuthority : IZ8HttpAuthority, IZ8UserChangeNotifier, IZ8Role
         if (system is null) throw new Z8PostgresException("system user is missing");
         return sessions.create(newSessionToken(), user, system, schema);
     }
-    void userChanged(Z8Guid id, wstring schema) { sessions.dropUserSessions(id, schema); }
-    void roleChanged(Z8Guid id, wstring schema) { sessions.dropRoleSessions(id, schema); }
+    void userChanged(Z8Guid id, wstring schema) {
+        sessions.dropUserSessions(id, schema);
+        if (remoteUsers !is null) remoteUsers.userChanged(id, schema);
+    }
+    void roleChanged(Z8Guid id, wstring schema) {
+        sessions.dropRoleSessions(id, schema);
+        if (remoteRoles !is null) remoteRoles.roleChanged(id, schema);
+    }
     void logout(wstring id) {
         sessions.dropSessionInSchema(id, schema);
     }

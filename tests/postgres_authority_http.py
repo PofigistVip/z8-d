@@ -81,11 +81,17 @@ import z8.database.bootstrap;
 import z8.database.authentication;
 import z8.webserver.civetweb;
 import z8.integration.postgres_authority;
+import z8.authority.notifications;
 import z8gen.p_Probe;
 import z8gen.p_CustomUser;
 import std.stdio : writeln, stdout, readln;
 import std.string : strip;
 import std.conv : to;
+class LoopbackPublisher : IZ8AuthorityChangePublisher {
+    Z8SessionManager sessions;
+    this(Z8SessionManager sessions) { this.sessions = sessions; }
+    void publish(Z8AuthorityChangeKind kind, const(ubyte)[] payload) { z8_apply_authority_change(sessions, kind, payload); }
+}
 void main(string[] args) {
     alias P = Z8p_50726F6265;
     auto connection = new Z8PostgresConnection(args[1]);
@@ -99,7 +105,11 @@ void main(string[] args) {
     auto applicationConfig = z8_application_configuration(); applicationConfig.clientHashesPasswords = false; z8_application_configure(applicationConfig);
     Z8PostgresAuthenticationConfig config; config.clientHashesPasswords = false;
     auto sessions = new Z8SessionManager(60_000, true);
-    auto authority = new Z8PostgresHttpAuthority(connection, "public"w, registry, config, sessions, "test"w);
+    auto remoteSessions = new Z8SessionManager();
+    auto remoteBob = new Z8UserData(); remoteBob.id = z8_guid_create(85); remoteBob.roles = [z8_guid_literal("421A8413-A8EC-4DAB-9235-9A5FF83341C5")];
+    remoteSessions.create("remote-bob"w, remoteBob, remoteBob, "public"w);
+    auto notifier = new Z8ProtobufAuthorityNotifier(new LoopbackPublisher(remoteSessions));
+    auto authority = new Z8PostgresHttpAuthority(connection, "public"w, registry, config, sessions, "test"w, notifier, notifier);
     auto expiredUser = new Z8UserData(); expiredUser.id = z8_guid_create(500);
     auto expired = sessions.create("expired"w, expiredUser, expiredUser, "public"w); expired.lastAccessTime = 0;
     assert(authority.authorize(null, "expired"w, "test"w) is null);
@@ -112,6 +122,7 @@ void main(string[] args) {
     }, 8192, Z8ResponseMode.application, "test"w, authority);
     writeln(server.port()); stdout.flush(); readln();
     authority.roleChanged(z8_guid_literal("421A8413-A8EC-4DAB-9235-9A5FF83341C5"), "public"w);
+    assert(remoteSessions.getSession("remote-bob"w) is null);
     writeln("invalidated"); stdout.flush();
     authority.logout(readln().strip().to!wstring); writeln("logged out"); stdout.flush(); readln();
     server.stop(); connection.close();
@@ -119,11 +130,12 @@ void main(string[] args) {
 ''', encoding="utf-8")
     exe = temp / ("authority.exe" if os.name == "nt" else "authority")
     args = ["dmd", "-I" + str(generated), "-I" + str(root / "postgres/source"),
-            "-I" + str(root / "webserver/source"), "-I" + str(root / "integrations/postgres_webserver/source"),
+            "-I" + str(root / "webserver/source"), "-I" + str(root / "integrations/postgres_webserver/source"), "-I" + str(root / "protocol/source"),
             *import_args(), *map(str, generated.rglob("*.d")),
             *map(str, (root / "postgres/source/z8/database").glob("*.d")),
             str(root / "webserver/source/z8/webserver/civetweb.d"),
             str(root / "integrations/postgres_webserver/source/z8/integration/postgres_authority.d"),
+            str(root / "protocol/source/z8/protobuf/wire.d"), str(root / "protocol/source/z8/authority/notifications.d"),
             str(harness), str(civet), str(runtime), "-of=" + str(exe)]
     args += [str(bin_dir.parent / "lib/libpq.lib")] if os.name == "nt" else ["-L-lpq", "-L-lpthread", "-L-ldl"]
     response = temp / "dmd.rsp"

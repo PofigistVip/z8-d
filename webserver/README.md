@@ -88,6 +88,8 @@ open; each login opens an independent sibling connection. The authority's
 password-hashing configuration must match `Z8ApplicationConfig` for login-time
 password changes. `logout(sessionId)` revokes a session; an HTTP logout endpoint
 and cross-server session synchronization remain to be implemented.
+Optional remote user and role notifiers can forward local changes; the protobuf
+adapter in `protocol` provides a transport-independent publisher interface.
 An authority may also implement `IZ8UserChangeNotifier`. User updates, deletion,
 and the BL `Users.notifyUserChange` call then notify it with the user ID and
 database schema, so it can invalidate cached sessions for the correct tenant.

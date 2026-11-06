@@ -8,6 +8,13 @@ same wire layout but must be routed to their respective handlers.
 
 `z8.authority.notifications` provides D encoding, decoding and application to a
 `Z8SessionManager`; `z8.protobuf.wire` contains the necessary wire primitives.
+`Z8ProtobufAuthorityNotifier` implements the runtime's user and role notifier
+interfaces and forwards encoded events to a host-provided
+`IZ8AuthorityChangePublisher`. A receiving host dispatches them with
+`z8_apply_authority_change` and the matching event kind.
+`Z8PostgresHttpAuthority` accepts optional remote user and role notifiers, so
+the protobuf notifier can forward local changes. Apply received messages to the
+session manager directly to avoid sending the same event back to its origin.
 Application rejects missing identifiers or empty schemas. The decoder accepts
 and retains unknown fields, checks UTF-8, limits messages to 1 MiB, and handles
 deprecated groups for forward compatibility. The wire representation follows

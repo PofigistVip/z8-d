@@ -35,6 +35,14 @@ import z8.runtime;
 import z8.authority.notifications;
 import z8.protobuf.wire;
 import std.file : read, write;
+class LoopbackPublisher : IZ8AuthorityChangePublisher {
+    Z8SessionManager sessions;
+    Z8AuthorityChangeKind[] calls;
+    this(Z8SessionManager sessions) { this.sessions = sessions; }
+    void publish(Z8AuthorityChangeKind kind, const(ubyte)[] payload) {
+        calls ~= kind; z8_apply_authority_change(sessions, kind, payload);
+    }
+}
 void main(string[] args) {
     Z8AuthorityChange change;
     change.id = new Z8Guid(0xFEDCBA9876543210UL, 0x8877665544332211UL);
@@ -69,6 +77,18 @@ void main(string[] args) {
     change.schema = ""w;
     bool rejected; try { z8_apply_user_changed(manager, z8_encode_authority_change(change)); } catch (Z8ProtobufException) { rejected = true; }
     assert(rejected && manager.getSession("other"w) !is null);
+    auto publisher = new LoopbackPublisher(manager);
+    auto notifier = new Z8ProtobufAuthorityNotifier(publisher);
+    manager.create("loopback"w, user, system, "schema"w);
+    (cast(IZ8UserChangeNotifier)notifier).userChanged(user.id, "schema"w);
+    assert(manager.getSession("loopback"w) is null && publisher.calls.length == 1 && publisher.calls[0] == Z8AuthorityChangeKind.user);
+    manager.create("loopback-role"w, user, system, "schema"w);
+    (cast(IZ8RoleChangeNotifier)notifier).roleChanged(z8_guid_create(8), "schema"w);
+    assert(manager.getSession("loopback-role"w) is null && publisher.calls.length == 2 && publisher.calls[1] == Z8AuthorityChangeKind.role);
+    rejected = false; try { notifier.userChanged(user.id, ""w); } catch (Z8ProtobufException) { rejected = true; }
+    assert(rejected && publisher.calls.length == 2);
+    rejected = false; try { z8_apply_authority_change(manager, cast(Z8AuthorityChangeKind)42, []); } catch (Z8ProtobufException) { rejected = true; }
+    assert(rejected);
 }
 ''', encoding="utf-8")
     exe = temp / ("protobuf.exe" if os.name == "nt" else "protobuf")
