@@ -119,6 +119,57 @@ wstring z8_runtime_version_details_json(Z8RuntimeVersion revision) {
     writer.finish(']');
     return writer.stream;
 }
+private struct Z8VersionText { bool present; wstring text; }
+private Z8VersionText z8_version_json_text(JSONValue record, string name) {
+    if (record.type != JSONType.object) throw new Exception("version detail must be an object");
+    auto value = name in record.object;
+    if (value is null || value.type == JSONType.null_) return Z8VersionText.init;
+    return Z8VersionText(true, z8_json_value_text(*value));
+}
+private JSONValue z8_version_json_value(Z8VersionText value) {
+    return value.present ? JSONValue(value.text.to!string) : JSONValue.init;
+}
+// Implements Version.getVersionDiff, retaining removed records and appending
+// new ones in their current order, including any original extra properties.
+wstring z8_runtime_version_diff(wstring savedDetails, Z8RuntimeVersion current) {
+    auto old = z8_json_array_read(savedDetails);
+    auto newer = z8_json_array_read(z8_runtime_version_details_json(current));
+    bool[] used; used.length = newer.array.length;
+    auto rows = old.array.dup;
+    foreach (ref record; rows) {
+        auto className = z8_version_json_text(record, "className");
+        if (!className.present) throw new Exception("version detail has no class name");
+        foreach (index, candidate; newer.array) {
+            if (used[index] || z8_version_json_text(candidate, "className").text != className.text) continue;
+            used[index] = true;
+            auto name = z8_version_json_text(candidate, "name");
+            auto displayName = z8_version_json_text(candidate, "displayName");
+            auto control = z8_version_json_text(candidate, "controlSum");
+            auto previous = z8_version_json_text(record, "controlSum");
+            record.object["newName"] = z8_version_json_value(name);
+            record.object["newDisplayName"] = z8_version_json_value(displayName);
+            record.object["newControlSum"] = z8_version_json_value(control);
+            record.object["changed"] = JSONValue(previous.present != control.present ||
+                (previous.present && previous.text != control.text));
+            break;
+        }
+    }
+    foreach (index, candidate; newer.array) {
+        if (used[index]) continue;
+        auto name = z8_version_json_text(candidate, "name");
+        auto displayName = z8_version_json_text(candidate, "displayName");
+        auto control = z8_version_json_text(candidate, "controlSum");
+        candidate.object["newName"] = z8_version_json_value(name);
+        candidate.object["name"] = JSONValue("");
+        candidate.object["newDisplayName"] = z8_version_json_value(displayName);
+        candidate.object["displayName"] = JSONValue("");
+        candidate.object["newControlSum"] = z8_version_json_value(control);
+        candidate.object["controlSum"] = JSONValue("");
+        candidate.object["changed"] = JSONValue(true);
+        rows ~= candidate;
+    }
+    return z8_json_render(JSONValue(rows));
+}
 class Z8RuntimeRegistry {
     private Z8RuntimeRegistration[] tableEntries, requestEntries, jobEntries, entryEntries, executableEntries, namedEntries;
     private Z8Object[wstring] namedSingletons;

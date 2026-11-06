@@ -109,6 +109,21 @@ void main() {
     }
     auto excluded = new Z8RuntimeRegistry(); excluded.registerEntry(z8_object_new_instance("DerivedTools"w));
     assert(z8_runtime_version(excluded).details.length == 1 && z8_runtime_version(excluded).number == "0.000.000.000"w);
+    Z8RuntimeVersion changedRevision;
+    changedRevision.details = [Z8VersionRecord(z8_guid_create(1), "A"w, "new A"w, "new display"w, "10"w),
+        Z8VersionRecord(z8_guid_create(2), "B"w, "new B"w, "display B"w, "20"w),
+        Z8VersionRecord(z8_guid_create(3), "C"w, "new C"w, "display C"w, "30"w)];
+    auto diff = parseJSON(z8_runtime_version_diff(`[{'className':'A','name':'old A','displayName':'old display','controlSum':'10','extra':'kept'},
+        {'className':'B','name':'old B','controlSum':'19'}, {'className':'Removed','name':'old'}]`w, changedRevision).to!string).array;
+    assert(diff.length == 4 && diff[0].object["extra"].str == "kept" && diff[0].object["changed"].type == JSONType.false_);
+    assert(diff[0].object["newName"].str == "new A" && diff[1].object["changed"].type == JSONType.true_);
+    assert(diff[1].object["newControlSum"].str == "20" && !("changed" in diff[2].object));
+    assert(diff[3].object["className"].str == "C" && diff[3].object["name"].str == "" &&
+           diff[3].object["newName"].str == "new C" && diff[3].object["changed"].type == JSONType.true_);
+    assert(parseJSON(z8_runtime_version_diff("[]"w, changedRevision).to!string).array.length == 3);
+    bool invalidRevision;
+    try { z8_runtime_version_diff("[{}]"w, changedRevision); } catch (Exception) { invalidRevision = true; }
+    assert(invalidRevision);
     bool disabledSchedule, activeSchedule;
     foreach (job; registry.jobs()) {
         if (job.classId == "DailyJob"w) disabledSchedule = job.hasSchedule && job.cron !is null && job.cron.length == 0;
