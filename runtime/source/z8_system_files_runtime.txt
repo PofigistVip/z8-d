@@ -111,9 +111,9 @@ private Z8File z8_system_files_get_file(Z8File value) {
 // not need conversion. Unknown extensions retain its text/plain fallback.
 private wstring z8_application_preview_mime(wstring extension) {
     switch (extension) {
-        case "html"w: case "htm"w: return "text/html; charset=UTF-8"w;
-        case "css"w: return "text/css; charset=UTF-8"w;
-        case "csv"w: return "text/csv; charset=UTF-8"w;
+        case "html"w: case "htm"w: return "text/html"w;
+        case "css"w: return "text/css"w;
+        case "csv"w: return "text/csv"w;
         case "json"w: return "application/json"w;
         case "svg"w: return "image/svg+xml"w;
         case "webp"w: return "image/webp"w;
@@ -126,8 +126,28 @@ private wstring z8_application_preview_mime(wstring extension) {
         case "wav"w: return "audio/wav"w;
         case "mp4"w: return "video/mp4"w;
         case "webm"w: return "video/webm"w;
-        default: return "text/plain; charset=UTF-8"w;
+        default: return "text/plain"w;
     }
+}
+// The original uses UniversalDetector. Detect explicit Unicode byte-order
+// marks here without consuming the stream; unmarked text defaults to UTF-8.
+private wstring z8_application_preview_charset(Z8Binary data) {
+    import std.algorithm.comparison : min;
+    auto remaining = z8_binary_remaining(z8_nonnull(data));
+    ubyte[4] prefix;
+    auto count = cast(size_t)min(remaining, 4UL);
+    if (data.fileInput is null) prefix[0 .. count] = data.data[data.position .. data.position + count];
+    else {
+        auto stream = data.fileInput.stream;
+        auto position = stream.tell;
+        scope(exit) stream.seek(position);
+        count = stream.rawRead(prefix[0 .. count]).length;
+    }
+    if (count >= 4 && prefix[] == [0x00, 0x00, 0xFE, 0xFF]) return "UTF-32BE"w;
+    if (count >= 4 && prefix[] == [0xFF, 0xFE, 0x00, 0x00]) return "UTF-32LE"w;
+    if (count >= 2 && prefix[0 .. 2] == [0xFE, 0xFF]) return "UTF-16BE"w;
+    if (count >= 2 && prefix[0 .. 2] == [0xFF, 0xFE]) return "UTF-16LE"w;
+    return "UTF-8"w;
 }
 private void z8_application_preview_file(Z8ApplicationRequest request, Z8Binary data, wstring name) {
     auto extension = z8_file_converter_extension(name);
@@ -151,7 +171,10 @@ private void z8_application_preview_file(Z8ApplicationRequest request, Z8Binary 
         z8_application_set_response_inline(request, new Z8Binary(content), "application/pdf"w);
         return;
     }
-    z8_application_set_response_inline(request, data, z8_application_preview_mime(extension));
+    import std.string : startsWith;
+    auto mime = z8_application_preview_mime(extension);
+    if (mime.startsWith("text/"w)) mime ~= "; charset="w ~ z8_application_preview_charset(data);
+    z8_application_set_response_inline(request, data, mime);
 }
 void z8_application_dispatch_file_download(wstring requestPath) {
     import std.string : startsWith;
