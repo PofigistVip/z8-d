@@ -402,6 +402,7 @@ public class Probe {
     public static void directCountStringGroup(CountStringOrder order) { order.aggregateBy.clear(); order.groupBy = {order.customerId}; }
     public static void readSortedCountBinary(CountStringOrder order) { order.payload.sortDirection = SortDirection.Desc; Field[] fields = {order.customer.label, order.payload}; Field[] sort = {order.payload}; order.read(fields, sort); }
     public static void readSortedCountText(CountStringOrder order) { order.description.sortDirection = SortDirection.Desc; Field[] fields = {order.customer.label, order.description}; Field[] sort = {order.description}; order.read(fields, sort); }
+    public static void havingCountText(CountStringOrder order) { order.addHaving(order.description > "2"); }
     public static bool nextCountString(CountStringOrder order) { return order.next(); }
     public static guid countStringCustomer(CountStringOrder order) { return order.customerId.get(); }
     public static string countStringTitle(CountStringOrder order) { return order.title.get(); }
@@ -682,6 +683,12 @@ void main(string[] args) {
     P.m_readSortedCountText(sortedCount);
     assert(z8_optional_require(P.m_nextCountString(sortedCount)) && P.m_countStringName(sortedCount) == "Alice"w && P.m_countStringDescription(sortedCount) == "12"w);
     assert(z8_optional_require(P.m_nextCountString(sortedCount)) && P.m_countStringName(sortedCount) == "Bob"w && P.m_countStringDescription(sortedCount) == "2"w);
+    auto havingCount = P.m_countStringOrder();
+    z8_query_set_executor(havingCount, new Z8PostgresQueryExecutor(db, "pg_temp"w, "CountStringOrders"w));
+    bool rejectedCountHaving;
+    try { P.m_havingCountText(havingCount); P.m_readSortedCountText(havingCount); }
+    catch (Z8PostgresException) { rejectedCountHaving = true; }
+    assert(rejectedCountHaving);
     db.execute(`UPDATE "CountStringOrders" SET "Flag" = 1 WHERE "CustomerId" = '00000000-0000-0000-0000-000000000201'`);
     auto countBoolean = P.m_countStringOrder();
     z8_query_set_executor(countBoolean, new Z8PostgresQueryExecutor(db, "pg_temp"w, "CountStringOrders"w));

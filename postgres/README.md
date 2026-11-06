@@ -450,6 +450,8 @@ As with JDBC, a boolean count can be read only when its result is 0 or 1; tempor
 fields interpret the count as milliseconds, and binary fields receive the decimal
 count as bytes. Binary count conversion also applies to ordinary `groupBy` queries;
 linked aggregate results are sorted by the numerical count.
+`HAVING` expressions over byte-backed text or binary count aggregates are
+rejected until their SQL behavior is reproduced.
 For geometry fields, Z8 reads the decimal count as a raw geometry string; it is
 not valid WKB and geometry operations on it fail when the value is decoded.
 To check those conversions against a PostgreSQL JDBC driver, run

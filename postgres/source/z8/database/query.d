@@ -336,6 +336,15 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         foreach (index, condition; inner.deferredHaving)
             if (!containsField(plan.havingOwners, inner.deferredHavingOwners[index])) groupFilters ~= condition;
         groupFilters ~= [request.having, request.queryHaving];
+        // The Java subquery produces a number for Count. Do not silently
+        // compare our bytea-backed intermediate as text or bytes in HAVING.
+        foreach (condition; groupFilters) if (!trivialTrue(condition))
+            foreach (field; z8_sql_collect_fields(condition)) {
+                auto kind = z8_field_type_id(field);
+                if (containsField(declared, field) && z8_field_aggregation(field) == Z8FieldAggregation.count &&
+                    (kind == "text"w || kind == "binary"w))
+                    throw new Z8PostgresException("HAVING on byte-backed count aggregates is not supported");
+            }
         Z8Object[] checked;
         void checkDependency(Z8Object field) {
             if (containsField(checked, field)) return;
