@@ -9,7 +9,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from postgres_support import postgres_bin, temporary_postgres
 from runtime_support import import_args, runtime_library
@@ -152,6 +152,8 @@ import z8.database.postgres;
 import z8.database.connection;
 import z8.webserver.civetweb;
 import std.stdio : writeln, stdout, readln;
+import std.string : startsWith;
+import std.conv : to;
 __gshared string databaseInfo;
 
 class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
@@ -200,8 +202,9 @@ void main(string[] args) {
         scope(exit) connection.close();
         auto previous = z8_connection_set_current(new Z8PostgresDatabase(connection, "public"w));
         scope(exit) z8_connection_set_current(previous);
-        z8_application_dispatch_request();
-    }, 2048, Z8ResponseMode.application, "test"w, authority, "Denied"w, null, "/request.json");
+        if (request.path.startsWith("/storage/")) z8_application_dispatch_file_download(request.path.to!wstring);
+        else z8_application_dispatch_request();
+    }, 2048, Z8ResponseMode.application, "test"w, authority, "Denied"w, null, "/request.json", true);
     scope(exit) server.stop();
     writeln(server.port()); stdout.flush(); readln(); server.stop();
     auto verify = new Z8PostgresConnection(databaseInfo);
@@ -501,11 +504,27 @@ void main(string[] args) {
             assert not result["success"] and "invalid attachment detail" in result["info"]["messages"][-1]["text"], result
             result = attach_file("full", "00000000-0000-0000-0000-000000000099", "missing.txt", b"no")
             assert not result["success"], result
-            result = attach_file("full", target, "first.txt", bytes([0, 255, 65]))
+            result = attach_file("full", target, "данные.txt", bytes([0, 255, 65]))
             assert result["success"], result
             metadata = json.loads(result["data"][0]["documents"])
-            assert len(metadata) == 1 and metadata[0]["name"] == "first.txt" and metadata[0]["details"]["kind"] == "document", result
+            assert len(metadata) == 1 and metadata[0]["name"] == "данные.txt" and metadata[0]["details"]["kind"] == "document", result
             first_id = metadata[0]["id"]
+            download_path = "/" + quote(metadata[0]["path"], safe="/")
+            def download(path, session, file_id, method="GET"):
+                client = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+                try:
+                    client.request(method, path + "?" + urlencode({"session": session, "id": file_id}))
+                    response = client.getresponse(); body = response.read()
+                    return response.status, dict(response.getheaders()), body
+                finally:
+                    client.close()
+            status, headers, content = download(download_path, "full", first_id)
+            assert status == 200 and content == bytes([0, 255, 65]), (status, headers, content)
+            assert headers["Content-Type"] == "application/octet-stream" and "filename*=UTF-8''" + quote("данные.txt") in headers["Content-Disposition"], headers
+            assert download(download_path, "unknown", first_id)[0] == 401
+            assert download(download_path, "full", "00000000-0000-0000-0000-000000000099")[0] == 404
+            assert download(download_path + "-other", "full", first_id)[0] == 404
+            assert download(download_path, "full", first_id, "POST")[0] == 405
             result = request(action="detach", field="documents", fields='["documents"]', recordId=target,
                              data=json.dumps(["00000000-0000-0000-0000-000000000099"]))
             assert not result["success"] and "does not belong" in result["info"]["messages"][-1]["text"], result

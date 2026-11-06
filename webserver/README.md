@@ -31,12 +31,25 @@ need specialized adapters and are not handled by this function.
 Alternatively, a handler can call `z8_application_dispatch_request()` in
 application response mode. It resolves the `request` parameter, verifies the
 session user's request permission, and routes ordinary objects or the supported
-table `meta`, `read`, `create`, `copy`, `update`, `destroy`, `action`, `report`
+table `meta`, `read`, `create`, `copy`, `update`, `destroy`, `attach`, `detach`, `action`, `report`
 and `content` operations to the corresponding adapter. Before a table action, the
 host must install a database backend for the worker thread and restore the
 previous backend afterward. The authority is responsible for providing a
 current privilege snapshot. The dispatcher also runs executable jobs and handles
 their status polling; selecting this handler is explicit rather than automatic.
+
+For database-backed attachments, the optional final `storageDownloads` argument
+to `Z8CivetServer` registers `/storage` in application mode. It requires an
+authority and a separate application request path. The host's existing handler
+must install the database backend, then route requests whose path starts with
+`/storage/` to `z8_application_dispatch_file_download(request.path.to!wstring)`;
+other requests continue to `z8_application_dispatch_request()`. Downloads use
+the original client's `session` and `id` parameters and require the stored
+`SystemFiles` path to match the requested path. The authority validates the
+session; as with the original converter, the URL does not identify a table or
+record for a per-field permission check. Files are returned as attachments with
+UTF-8 filenames. Preview conversion and files outside `SystemFiles` are not yet
+handled by this route.
 
 The initial `meta` adapter writes query attributes, access rights, keys and
 metadata for direct and linked fields, including basic presentation, dependencies,

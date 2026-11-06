@@ -191,7 +191,8 @@ that processor, require table and field permissions, and lock the target record
 while changing its attachments. Detach only accepts files belonging to that
 record. A `FileField` represents a single current file; an `AttachmentField`
 reads the existing list before appending. Page-count extraction remains
-unimplemented.
+unimplemented. An opt-in CivetWeb `/storage` route downloads `SystemFiles`
+content for authenticated sessions; see `webserver/README.md` for host setup.
 Optional `values` are checked before a create, update or copy transaction and
 applied as readable context fields when selecting its response.
 The direct-table `copy` action accepts source GUIDs in `recordId` and one

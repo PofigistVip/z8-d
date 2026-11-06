@@ -90,6 +90,21 @@ private Z8File z8_system_files_get_file(Z8File value) {
     value.size = z8_optional_wrap(cast(long)bytes.length);
     return value;
 }
+// The path must match the database record, never a caller-selected local file.
+// As in ConverterAdapter, session authorization is provided by the host.
+void z8_application_dispatch_file_download(wstring requestPath) {
+    import std.string : startsWith;
+    auto request = z8_application_require_request();
+    z8_nonnull(request.session);
+    requestPath = z8_string_required(requestPath);
+    if (!requestPath.startsWith("/storage/"w)) throw new Exception("file was not found");
+    auto text = request.parameters.z8_get("id"w);
+    if (text is null || !text.length) throw new Exception("file was not found");
+    auto file = z8_system_files_get_id(z8_guid_parse(text));
+    if (file is null || file.path != requestPath[1 .. $]) throw new Exception("file was not found");
+    file = z8_system_files_get_file(file);
+    z8_application_set_response_file(request, z8_file_to_binary(file), file.name);
+}
 shared static this() {
     z8_native_bind(z8_system_files_name ~ ".m_new"w, &z8_system_files_new);
     z8_native_bind(z8_system_files_name ~ ".m_get"w, &z8_system_files_get_id);

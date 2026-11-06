@@ -159,6 +159,7 @@ class Z8ApplicationRequest {
     bool eventsEnabled(Z8EventsLevel level) { return eventsLevel() <= level; }
     private Z8JsonWriterState writer;
     private Z8Binary binaryResponse;
+    private wstring binaryFileName;
     private bool hasBinaryResponse;
     private bool hasInfoOverride;
     private Z8MonitorEntry[] overrideMessages;
@@ -175,10 +176,15 @@ wstring z8_application_response_text(Z8ApplicationRequest request) {
 }
 void z8_application_set_response_binary(Z8ApplicationRequest request, Z8Binary content) {
     request = z8_nonnull(request);
-    request.binaryResponse = content; request.hasBinaryResponse = true;
+    request.binaryResponse = content; request.binaryFileName = null; request.hasBinaryResponse = true;
+}
+void z8_application_set_response_file(Z8ApplicationRequest request, Z8Binary content, wstring name) {
+    request = z8_nonnull(request); request.binaryResponse = content;
+    request.binaryFileName = z8_string_required(name); request.hasBinaryResponse = true;
 }
 bool z8_application_has_binary_response(Z8ApplicationRequest request) { return z8_nonnull(request).hasBinaryResponse; }
 Z8Binary z8_application_response_binary(Z8ApplicationRequest request) { return z8_nonnull(request).binaryResponse; }
+wstring z8_application_response_file_name(Z8ApplicationRequest request) { return z8_nonnull(request).binaryFileName; }
 // Host-side equivalents of RequestTarget.processRequest and its error path.
 // BL handlers write properties into the open response object.
 void z8_application_start_response(Z8ApplicationRequest request, wstring requestId, bool success = true) {

@@ -213,10 +213,23 @@ private int respond(MgConnection* connection, int status, string description, st
 private void closeBinary(Z8Binary content) {
     if (content !is null) try { z8_binary_close(content); } catch (Throwable) { }
 }
-private int respondBinary(MgConnection* connection, Z8Binary content) {
+private string attachmentDisposition(wstring name) {
+    immutable digits = "0123456789ABCDEF";
+    auto bytes = name.to!string;
+    string encoded;
+    foreach (ubyte b; cast(const(ubyte)[])bytes) {
+        if ((b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') ||
+            b == '-' || b == '_' || b == '.' || b == '~') encoded ~= cast(char)b;
+        else { encoded ~= '%'; encoded ~= digits[b >> 4]; encoded ~= digits[b & 15]; }
+    }
+    return "Content-Disposition: attachment; filename=\"download\"; filename*=UTF-8''" ~ encoded ~ "\r\n";
+}
+private int respondBinary(MgConnection* connection, Z8Binary content, wstring filename = null) {
     scope(exit) closeBinary(content);
     auto length = content is null ? 0UL : z8_binary_remaining(content);
-    auto header = "HTTP/1.1 200 OK\r\nContent-Type: application/xml; charset=UTF-8\r\nConnection: close\r\nContent-Length: " ~
+    auto header = "HTTP/1.1 200 OK\r\nContent-Type: " ~
+        (filename is null ? "application/xml; charset=UTF-8\r\n" : "application/octet-stream\r\n" ~ attachmentDisposition(filename)) ~
+        "Connection: close\r\nContent-Length: " ~
         length.to!string ~ "\r\n\r\n";
     if (!writeAll(connection, header)) return 200;
     if (content !is null) {
@@ -266,15 +279,18 @@ class Z8CivetServer {
     private wstring serverId;
     private IZ8HttpAuthority authority;
     private wstring accessDeniedMessage;
+    private bool storageDownloads;
 
     this(string listening, void delegate(Z8HttpRequest request) handler, size_t bodyLimit = 1024 * 1024,
          Z8ResponseMode responseMode = Z8ResponseMode.raw, wstring serverId = null,
          IZ8HttpAuthority authority = null, wstring accessDeniedMessage = "Incorrect login or password"w,
-         string documentRoot = null, string requestPath = "/") {
+         string documentRoot = null, string requestPath = "/", bool storageDownloads = false) {
         import std.file : isDir;
         import std.path : absolutePath;
         if (handler is null) throw new Exception("HTTP request handler is required");
         if (!bodyLimit) throw new Exception("HTTP body limit must be positive");
+        if (storageDownloads && (authority is null || responseMode != Z8ResponseMode.application || requestPath == "/storage" || requestPath.startsWith("/storage/") || requestPath == "/"))
+            throw new Exception("storage downloads require an authority and a separate application request path");
         if (!requestPath.startsWith("/") || requestPath.indexOf('?') >= 0 || requestPath.indexOf('#') >= 0)
             throw new Exception("invalid request path");
         if (documentRoot.length) {
@@ -284,6 +300,7 @@ class Z8CivetServer {
         }
         this.handler = handler; this.bodyLimit = bodyLimit; this.responseMode = responseMode; this.serverId = serverId;
         this.authority = authority; this.accessDeniedMessage = accessDeniedMessage;
+        this.storageDownloads = storageDownloads;
         const(char)*[] options = ["listening_ports\0".ptr, listening.toStringz,
             "num_threads\0".ptr, "4\0".ptr, "enable_keep_alive\0".ptr, "no\0".ptr];
         if (documentRoot.length) options ~= ["document_root\0".ptr, documentRoot.toStringz,
@@ -298,6 +315,7 @@ class Z8CivetServer {
         context = mg_start(&callbacks, null, options.ptr);
         if (context is null) { GC.removeRoot(cast(void*)this); throw new Exception("CivetWeb could not start"); }
         mg_set_request_handler(context, requestPath.toStringz, &dispatch, cast(void*)this);
+        if (storageDownloads) mg_set_request_handler(context, "/storage\0".ptr, &dispatch, cast(void*)this);
     }
     int port() {
         if (context is null) throw new Exception("CivetWeb server is stopped");
@@ -316,6 +334,8 @@ class Z8CivetServer {
             if (info is null) throw new BadRequest("missing request information");
             auto request = new Z8HttpRequest();
             request.method = cString(info.requestMethod); request.path = cString(info.localUri);
+            auto isDownload = storageDownloads && (request.path == "/storage" || request.path.startsWith("/storage/"));
+            if (isDownload && request.method != "GET") return respond(connection, 405, "Method Not Allowed", `{"error":"method not allowed"}`);
             request.query = cString(info.queryString); request.remoteAddress = cString(info.remoteAddress.ptr);
             request.contentType = cString(mg_get_header(connection, "Content-Type\0".ptr));
             request.host = cString(mg_get_header(connection, "Host\0".ptr));
@@ -338,8 +358,12 @@ class Z8CivetServer {
             auto requestId = application.parameters.z8_get("request"w);
             if (authority !is null) {
                 auto sessionId = application.parameters.z8_get("session"w);
-                if (sessionId !is null)
-                    application.session = authority.authorize(request, sessionId, application.parameters.z8_get("server"w));
+                if (sessionId !is null) {
+                    auto requestedServer = application.parameters.z8_get("server"w);
+                    if (isDownload && requestedServer is null) requestedServer = application.parameters.z8_get("serverId"w);
+                    if (isDownload && requestedServer is null) requestedServer = serverId;
+                    application.session = authority.authorize(request, sessionId, requestedServer);
+                }
                 if (application.session is null && requestId == "login"w) {
                     auto login = application.parameters.z8_get("login"w);
                     auto password = application.parameters.z8_get("password"w);
@@ -369,12 +393,14 @@ class Z8CivetServer {
             } catch (Z8Redirect redirect) { throw redirect; }
             catch (Throwable error) {
                 if (responseMode == Z8ResponseMode.raw) throw error;
+                if (isDownload) return respond(connection, 404, "Not Found", `{"error":"file not found"}`);
                 auto message = error.msg.length ? error.msg.to!wstring : "Internal server error."w;
                 request.monitor.message(Z8MonitorLevel.error, message);
                 return respond(connection, 200, "OK", z8_application_error_response(requestId, request.monitor, serverId).to!string);
             }
             if (z8_application_has_binary_response(application))
-                return respondBinary(connection, z8_application_response_binary(application));
+                return respondBinary(connection, z8_application_response_binary(application), z8_application_response_file_name(application));
+            if (isDownload) return respond(connection, 404, "Not Found", `{"error":"file not found"}`);
             return respond(connection, 200, "OK", z8_application_response_text(application).to!string);
         } catch (Z8Redirect redirect) {
             JSONValue[string] data;
