@@ -51,6 +51,8 @@ record for a per-field permission check. Files are returned as attachments with
 UTF-8 filenames. A `preview` parameter serves PDFs inline; supported document
 and image formats are converted to PDF using the configured `office.home`,
 including temporary files produced by exports.
+Other previewable files use common MIME types, with a `text/plain` fallback;
+inline HTML and SVG previews are sandboxed by Content Security Policy.
 Files outside `SystemFiles` are not handled by this route, except short-lived
 archives created by `action=archive` and generated exports.
 The archive URL is bound to its session, user and database schema; archive data

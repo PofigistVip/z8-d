@@ -236,6 +236,9 @@ private int respondBinary(MgConnection* connection, Z8Binary content, wstring fi
     auto header = "HTTP/1.1 200 OK\r\nContent-Type: " ~
         (contentType !is null ? contentType.to!string ~ "\r\n" :
          filename is null ? "application/xml; charset=UTF-8\r\n" : "application/octet-stream\r\n" ~ attachmentDisposition(filename)) ~
+        (contentType == "text/html; charset=UTF-8"w || contentType == "image/svg+xml"w ?
+         "Content-Security-Policy: sandbox; default-src 'none'; style-src 'unsafe-inline'\r\n" : "") ~
+        (contentType !is null ? "X-Content-Type-Options: nosniff\r\n" : "") ~
         "Connection: close\r\nContent-Length: " ~
         length.to!string ~ "\r\n\r\n";
     if (!writeAll(connection, header)) return 200;

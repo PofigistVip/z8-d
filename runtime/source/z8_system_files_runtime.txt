@@ -107,6 +107,28 @@ private Z8File z8_system_files_get_file(Z8File value) {
 }
 // The path must match the database record, never a caller-selected local file.
 // As in ConverterAdapter, session authorization is provided by the host.
+// ConverterAdapter asks the servlet container for the type of formats that do
+// not need conversion. Unknown extensions retain its text/plain fallback.
+private wstring z8_application_preview_mime(wstring extension) {
+    switch (extension) {
+        case "html"w: case "htm"w: return "text/html; charset=UTF-8"w;
+        case "css"w: return "text/css; charset=UTF-8"w;
+        case "csv"w: return "text/csv; charset=UTF-8"w;
+        case "json"w: return "application/json"w;
+        case "svg"w: return "image/svg+xml"w;
+        case "webp"w: return "image/webp"w;
+        case "ico"w: return "image/x-icon"w;
+        case "zip"w: return "application/zip"w;
+        case "gz"w: return "application/gzip"w;
+        case "7z"w: return "application/x-7z-compressed"w;
+        case "mp3"w: return "audio/mpeg"w;
+        case "ogg"w: return "audio/ogg"w;
+        case "wav"w: return "audio/wav"w;
+        case "mp4"w: return "video/mp4"w;
+        case "webm"w: return "video/webm"w;
+        default: return "text/plain; charset=UTF-8"w;
+    }
+}
 private void z8_application_preview_file(Z8ApplicationRequest request, Z8Binary data, wstring name) {
     auto extension = z8_file_converter_extension(name);
     if (z8_file_converter_pdf(extension).value && !request.parameters.z8_containsKey("stamps"w)) {
@@ -129,7 +151,7 @@ private void z8_application_preview_file(Z8ApplicationRequest request, Z8Binary 
         z8_application_set_response_inline(request, new Z8Binary(content), "application/pdf"w);
         return;
     }
-    z8_application_set_response_inline(request, data, "text/plain; charset=UTF-8"w);
+    z8_application_set_response_inline(request, data, z8_application_preview_mime(extension));
 }
 void z8_application_dispatch_file_download(wstring requestPath) {
     import std.string : startsWith;
