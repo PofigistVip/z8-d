@@ -1,0 +1,24 @@
+// Sorter delegates comparisons to the overridable BL method, as in the Java runtime.
+private Z8Optional!long z8_sorter_compare(Z8Object self, Z8Object left, Z8Object right) {
+    return z8_optional_wrap(0L);
+}
+private void z8_sorter_sort(Z8Object self, Z8ObjectArray!Z8Object array) {
+    import std.algorithm.sorting : sort;
+    import std.algorithm.mutation : SwapStrategy;
+    auto storage = z8_nonnull(array).z8_erased_data();
+    auto expected = storage.z8_version;
+    auto items = storage.items.dup;
+    sort!((a, b) {
+        auto compared = cast(int)z8_optional_require(z8_nonnull(self).z8_sorter_virtual_compare(cast(Z8Object)a, cast(Z8Object)b));
+        if (storage.z8_version != expected) throw new Exception("array modified during sort");
+        return compared < 0;
+    }, SwapStrategy.stable)(items);
+    if (storage.z8_version != expected) throw new Exception("array modified during sort");
+    storage.items = items;
+    ++storage.z8_version;
+}
+void z8_bind_builtin_sorter() {
+    z8_native_bind("org.zenframework.z8.server.utils.Sorter.m_compare"w, &z8_sorter_compare);
+    z8_native_bind("org.zenframework.z8.server.utils.Sorter.m_sort"w, &z8_sorter_sort);
+}
+shared static this() { z8_bind_builtin_sorter(); }

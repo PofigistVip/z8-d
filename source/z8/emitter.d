@@ -986,6 +986,14 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                     result ~= "override void z8_query_virtual_" ~ method.name.text ~ "(Z8Guid id) { this.m_" ~ method.name.text ~ "(id); }\n";
             }
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.utils.Sorter"w) {
+            foreach (method; program.methods) if (method.name.text == "compare" && method.returnType == ValueType.intType &&
+                method.parameters.length == 2 && method.parameters[0].objectClass !is null && method.parameters[1].objectClass !is null) {
+                result ~= "override Z8Optional!long z8_sorter_virtual_compare(Z8Object left, Z8Object right) { return this.m_compare(cast(" ~
+                    method.parameters[0].objectClass.emittedName ~ ")left, cast(" ~ method.parameters[1].objectClass.emittedName ~ ")right); }\n";
+                break;
+            }
+        }
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.form.Control"w) {
             foreach (method; program.methods) if (method.name.text == "writeMeta" && method.returnType == ValueType.voidType && method.parameters.length == 3 &&
                 method.parameters[0].objectClass !is null && method.parameters[1].objectClass !is null && method.parameters[2].objectClass !is null) {

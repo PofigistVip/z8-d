@@ -127,6 +127,7 @@ class Z8Object {
     void z8_query_virtual_onUpdateAction(Z8Guid id) {}
     void z8_query_virtual_onDestroyAction(Z8Guid id) {}
     void z8_control_virtual_write_meta(Z8Object writer, Z8Object query, Z8Object context) {}
+    Z8Optional!long z8_sorter_virtual_compare(Z8Object left, Z8Object right) { return z8_optional_wrap(0L); }
     void z8_action_virtual_execute_many(Z8Array!Z8Guid records, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) {}
     void z8_action_virtual_execute_one(Z8Guid record, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) {}
     void z8_report_virtual_prepare(Z8Guid record) {}
