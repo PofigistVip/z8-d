@@ -289,6 +289,7 @@ public class Probe {
     public static UserEntries userEntries() { UserEntries value; return value; }
     public static void deleteEntry(Entries value, guid id) { value.destroy(id); }
     public static string entryName(Entries value, guid id) { Field[] fields = {value.name}; if (value.readRecord(id, fields)) return value.name.get(); return "missing"; }
+    public static string tableDisplayName(Tables value, guid id) { Field[] fields = {value.displayName}; if (value.readRecord(id, fields)) return value.displayName.get(); return "missing"; }
     public static string requestName(Requests value, guid id) { Field[] fields = {value.name}; if (value.readRecord(id, fields)) return value.name.get(); return "missing"; }
     public static int entryNameDependencies(Entries value) { return value.name.usedFields.size(); }
     public static void clearEntryNameDependencies(Entries value) { value.name.usedFields.clear(); }
@@ -1366,14 +1367,20 @@ void main(string[] args) {
     auto priorReadRequest = z8_application_set_request(readRequest);
     auto priorReadBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "z8_bootstrap"w));
     auto previousRegistry = z8_runtime_set_registry(bootstrapRegistry);
-    bootstrapSample.z8_set_attribute("displayName"w, "Localized request"w); bootstrapRegistry.registerRequest(bootstrapSample);
-    auto dynamicEntries = P.m_entries(), dynamicRequests = P.m_systemRequests();
+    bootstrapSample.z8_set_attribute("displayName"w, "Localized request"w); bootstrapRegistry.registerRequest(bootstrapSample); bootstrapRegistry.registerTable(bootstrapSample);
+    auto dynamicEntries = P.m_entries(), dynamicRequests = P.m_systemRequests(), dynamicTables = P.m_systemTables();
     assert(z8_field_fields(dynamicEntries.f_name).length == 2 && z8_field_fields(dynamicRequests.f_name).length == 2);
+    assert(z8_field_fields(dynamicTables.f_displayName).length == 2);
     auto mutableDependencies = P.m_entries();
     assert(z8_optional_require(P.m_entryNameDependencies(mutableDependencies)) == 1);
     P.m_clearEntryNameDependencies(mutableDependencies); assert(z8_field_fields(mutableDependencies.f_name).length == 1);
     assert(P.m_entryName(dynamicEntries, z8_guid_create_name("Sample"w)) == "Renamed entry"w);
     assert(P.m_requestName(dynamicRequests, z8_guid_create_name("Sample"w)) == "Localized request"w);
+    assert(P.m_tableDisplayName(dynamicTables, z8_guid_create_name("Sample;--"w)) == "Localized request"w);
+    db.execute(`INSERT INTO "z8_bootstrap"."SystemTables" ("RecordId", "Class") VALUES ('00000000-0000-0000-0000-000000000445', 'Missing.Table')`);
+    bool missingTableName;
+    try { P.m_tableDisplayName(P.m_systemTables(), z8_guid_create(0x445)); } catch (Exception) { missingTableName = true; }
+    assert(missingTableName);
     db.execute(`INSERT INTO "z8_bootstrap"."SystemEntries" ("RecordId", "Name", "Class") VALUES ('00000000-0000-0000-0000-000000000444', 'stale', 'Missing.Entry')`);
     assert(P.m_entryName(P.m_entries(), z8_guid_create(0x444)) == "<entry removed>"w);
     z8_runtime_set_registry(previousRegistry);

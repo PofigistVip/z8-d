@@ -79,8 +79,9 @@ User and role changes invalidate affected local sessions. PostgreSQL defers
 these notifications until the outermost transaction commits and discards them
 on rollback; notifications outside a transaction are delivered immediately.
 Physical fields of the system `Tables`, `Fields` and `Requests` metadata tables
-are available, including the `Fields` link to `Tables`. Registry-based localized
-display values remain unimplemented.
+are available, including the `Fields` link to `Tables`. `Tables.Display Name`
+uses the registered table's current display name and includes `Class` as a field
+dependency; the `Fields` display name remains stored metadata.
 The native `RoleTableAccess`, `RoleFieldAccess` and `RoleRequestAccess` fields
 and their table links are available. `RoleFieldAccess` keeps read and write
 permissions consistent during user-level updates. `RoleTableAccess` also

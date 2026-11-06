@@ -94,6 +94,7 @@ class Z8FieldState {
     private Z8Object[] nativeDependencies;
     private Z8Object registryNameClassId;
     private bool registryNameIsEntry;
+    private bool registryNameIsTable;
     private Z8FieldAggregation initialAggregation;
     private Z8Primary originalValue;
     Z8SqlPrimary sqlExpression;
@@ -329,16 +330,17 @@ private Z8Primary z8_field_internal_get(Z8Object self) {
 private Z8Primary z8_field_current(Z8Object self) {
     auto state = z8_field_state(self);
     if (state.registryNameClassId !is null) {
-        // Entries/Requests NameField performs the normal read to maintain
+        // The native display field performs the normal read to maintain
         // wasNull, then resolves the current display name from the registry.
         z8_field_internal_get(self);
         auto classId = z8_primary_cast!wstring(z8_field_current(state.registryNameClassId));
         auto registry = z8_runtime_get_registry();
         if (registry is null) throw new Exception("runtime registry is not configured");
-        auto candidates = state.registryNameIsEntry ? registry.entries() : registry.requests();
+        auto candidates = state.registryNameIsTable ? registry.tables() : state.registryNameIsEntry ? registry.entries() : registry.requests();
         foreach (candidate; candidates) if (candidate.classId == classId)
             return z8_primary_box(z8_string_new(candidate.displayName));
         if (state.registryNameIsEntry) return z8_primary_box("<entry removed>"w);
+        if (state.registryNameIsTable) throw new Exception("table is not registered: " ~ z8_string_or_empty(classId).to!string);
         throw new Exception("request is not registered: " ~ z8_string_or_empty(classId).to!string);
     }
     if (z8_field_is_array(state)) {

@@ -1,5 +1,4 @@
-// Physical metadata fields from Tables.java. Dynamic localized display names
-// require the application registry and are not supplied by this adapter yet.
+// Physical metadata and registry-backed display names from Tables.java.
 private enum z8_system_tables_name = "org.zenframework.z8.server.base.table.system.Tables"w;
 private class Z8SystemTablesState { Z8Object[4] fields; }
 private void z8_system_tables_new(Z8Object self) {
@@ -21,6 +20,9 @@ private Z8Object* z8_system_tables_field_address(size_t index)(Z8Object self) { 
 void z8_system_tables_configure(Z8Object self) {
     auto state = z8_system_tables_state(self);
     foreach (i; [0, 2, 3]) z8_field_state(z8_nonnull(state.fields[i])).length = z8_optional_wrap(256L);
+    auto displayName = z8_field_state(state.fields[3]);
+    displayName.registryNameClassId = state.fields[2]; displayName.registryNameIsTable = true;
+    z8_field_add_native_dependency(state.fields[3], state.fields[2]);
 }
 shared static this() {
     z8_native_bind(z8_system_tables_name ~ ".m_new"w, &z8_system_tables_new);
