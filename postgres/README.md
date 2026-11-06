@@ -371,8 +371,9 @@ An empty field list selects fields in sections, forms and tabs, together with
 the query's names, columns and extra fields. Cyclic control trees are rejected.
 `TreeTable` exposes its parent and path fields, schema indexes and path lookup
 methods. Reads include the parent key and are not limited by the page size.
-Creating tree records or changing their parent with system events enabled is
-rejected until hierarchy maintenance is implemented.
+Creating a tree record calculates its path and ancestor columns. Changing a
+record's parent with system events enabled is rejected until subtree updates
+are implemented.
 
 The executor supports `aggregateBy` grouping over root Link fields with numeric
 sum, average, count, minimum and maximum, and scalar minimum/maximum for strings, text,

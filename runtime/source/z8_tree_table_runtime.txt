@@ -40,9 +40,29 @@ private wstring z8_tree_table_path_to(Z8Object self, Z8Guid id) {
     if (id == z8_guid_zero()) return ""w;
     auto path = z8_tree_table_state(self).fields[1];
     auto saved = new Z8QuerySavedState(self, [path]); scope(exit) saved.restore();
+    auto request = z8_application_request();
+    if (request !is null) request.setEventsLevel(Z8EventsLevel.system);
+    scope(exit) if (request !is null) request.restoreEventsLevel();
     auto fields = new Z8ObjectArray!Z8Object(); fields.z8_add(path);
     if (!z8_optional_require(z8_query_read_record(self, id, fields))) throw new Exception("TreeTable record was not found");
     return z8_string_or_empty(z8_primary_cast!wstring(z8_field_primary(path)));
+}
+private void z8_tree_table_set_path(Z8Object self, wstring path) {
+    auto fields = z8_tree_table_state(self).fields;
+    auto parents = z8_tree_table_parse_path(path);
+    foreach (i; 0 .. 6) {
+        auto value = i < parents.z8_size() ? parents.z8_get(i) : z8_guid_zero();
+        z8_field_set(fields[i + 2], z8_primary_box(value));
+    }
+    z8_field_set(fields[1], z8_primary_box(path));
+}
+private void z8_tree_table_before_create(Z8Object self) {
+    auto fields = z8_tree_table_state(self).fields;
+    auto recordId = z8_primary_cast!Z8Guid(z8_field_primary(z8_nonnull(z8_query_primary_key(self))));
+    if (recordId is null || recordId == z8_guid_zero()) return;
+    auto parent = z8_field_is_changed(fields[0]) ? z8_primary_cast!Z8Guid(z8_field_primary(fields[0])) : z8_guid_zero();
+    auto path = z8_tree_table_path_to(self, z8_nonnull(parent));
+    z8_tree_table_set_path(self, path ~ (path.length ? "."w : ""w) ~ z8_guid_to_string(recordId));
 }
 private Z8Array!Z8Guid z8_tree_table_path_to_array(Z8Object self, Z8Guid id) {
     return z8_tree_table_parse_path(z8_tree_table_path_to(self, id));

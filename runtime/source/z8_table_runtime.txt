@@ -50,9 +50,11 @@ private void z8_table_before_write(Z8Object self, bool create) {
     auto request = z8_application_request();
     // An embedding program may use a standalone executor without a request.
     if (request is null || !request.eventsEnabled(Z8EventsLevel.system)) return;
-    if (z8_native_is_instance(z8_tree_table_name, self) &&
-        (create || z8_field_is_changed(z8_tree_table_state(self).fields[0])))
-        throw new Exception("TreeTable hierarchy updates are not implemented yet");
+    if (z8_native_is_instance(z8_tree_table_name, self)) {
+        if (create) z8_tree_table_before_create(self);
+        else if (z8_field_is_changed(z8_tree_table_state(self).fields[0]))
+            throw new Exception("TreeTable hierarchy updates are not implemented yet");
+    }
     auto user = z8_nonnull(z8_nonnull(request.session).user);
     if (create) {
         z8_field_set(table.createdAt, z8_primary_box(z8_date_now()));

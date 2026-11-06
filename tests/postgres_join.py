@@ -376,7 +376,7 @@ public class Probe {
     public static guid[] treeCurrent(NativeTree tree) { return tree.getPath(); }
     public static void readTree(NativeTree tree) { Field[] fields = {tree.path}; tree.read(fields); }
     public static bool nextTree(NativeTree tree) { return tree.next(); }
-    public static guid createTree(NativeTree tree) { return tree.create(); }
+    public static guid createTree(NativeTree tree, guid id, guid parent) { tree.parentId = parent; return tree.create(id); }
     public static NestedAggregateOrder nestedAggregate() { NestedAggregateOrder value; return value; }
     public static void readNestedAggregate(NestedAggregateOrder order) { Field[] fields; order.read(fields); }
     public static bool nextNestedAggregate(NestedAggregateOrder order) { return order.next(); }
@@ -524,7 +524,7 @@ void main(string[] args) {
     db.execute(`CREATE TEMP TABLE "GroupedHavingOrders" AS SELECT * FROM "GroupedOrders"`);
     db.execute(`CREATE TEMP TABLE "Nodes" ("RecordId" uuid PRIMARY KEY, "ParentId" uuid)`);
     db.execute(`INSERT INTO "Nodes" VALUES ('00000000-0000-0000-0000-000000000401','00000000-0000-0000-0000-000000000402'), ('00000000-0000-0000-0000-000000000402',NULL), ('00000000-0000-0000-0000-000000000403','00000000-0000-0000-0000-000000000401')`);
-    db.execute(`CREATE TEMP TABLE "TreeNodes" ("RecordId" uuid PRIMARY KEY, "ParentId" uuid, "Path" text, "Parent1" uuid, "Parent2" uuid, "Parent3" uuid, "Parent4" uuid, "Parent5" uuid, "Parent6" uuid, "Lock" bigint DEFAULT 0)`);
+    db.execute(`CREATE TEMP TABLE "TreeNodes" ("RecordId" uuid PRIMARY KEY, "ParentId" uuid, "Path" text, "Parent1" uuid, "Parent2" uuid, "Parent3" uuid, "Parent4" uuid, "Parent5" uuid, "Parent6" uuid, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     db.execute(`INSERT INTO "TreeNodes" ("RecordId","ParentId","Path") VALUES ` ~
         `('00000000-0000-0000-0000-000000000401',NULL,'00000000-0000-0000-0000-000000000401'),` ~
         `('00000000-0000-0000-0000-000000000402','00000000-0000-0000-0000-000000000401','00000000-0000-0000-0000-000000000401.00000000-0000-0000-0000-000000000402')`);
@@ -707,10 +707,19 @@ void main(string[] args) {
     auto session = new Z8ApplicationSession("join"w, user, user);
     auto treeRequest = new Z8ApplicationRequest(); treeRequest.session = session;
     auto oldTreeRequest = z8_application_set_request(treeRequest);
-    bool hierarchyRejected;
-    try { P.m_createTree(tree); } catch (Exception error) { hierarchyRejected = error.msg == "TreeTable hierarchy updates are not implemented yet"; }
+    db.beginTransaction();
+    auto newRoot = z8_guid_create(0x411), newChild = z8_guid_create(0x412);
+    assert(P.m_createTree(tree, newRoot, z8_guid_zero()) == newRoot);
+    assert(P.m_createTree(tree, newChild, newRoot) == newChild);
+    auto createdPath = P.m_treePath(tree, newChild);
+    assert(createdPath.z8_size() == 2 && createdPath.z8_get(0) == newRoot && createdPath.z8_get(1) == newChild);
+    auto hierarchyRow = db.execute(`SELECT "Parent1"::text, "Parent2"::text FROM "TreeNodes" WHERE "RecordId" = '00000000-0000-0000-0000-000000000412'`);
+    assert(hierarchyRow.rows[0][0].text == "00000000-0000-0000-0000-000000000411" && hierarchyRow.rows[0][1].text == "00000000-0000-0000-0000-000000000412");
+    bool missingParent;
+    try { P.m_createTree(tree, z8_guid_create(0x413), z8_guid_create(0x499)); } catch (Exception) { missingParent = true; }
+    assert(missingParent);
+    db.rollback();
     z8_application_set_request(oldTreeRequest);
-    assert(hierarchyRejected);
     auto priorBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "pg_temp"w));
     wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null, wstring className = "HttpOrder"w, wstring action = "read"w, wstring groupSession = null, wstring having = null, wstring values = null, wstring totals = null, wstring count = null, wstring queryId = null, wstring linkId = null, wstring limit = null) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
