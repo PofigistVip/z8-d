@@ -28,6 +28,62 @@ private Z8Optional!bool z8_file_converter_convertible(wstring extension) {
     return z8_optional_wrap(z8_file_converter_pdf(extension).value || z8_file_converter_text(extension).value ||
         z8_file_converter_image(extension).value || z8_file_converter_email(extension).value || z8_file_converter_office(extension).value);
 }
+// The Java implementation delegates office documents to LibreOffice. Run an
+// isolated headless instance so concurrent conversions do not share its profile.
+private void z8_file_converter_office_convert(Z8Binary source, wstring extension, string target, Z8StringMap parameters) {
+    import std.file : copy, exists, mkdir, mkdirRecurse, rmdirRecurse, tempDir;
+    import std.path : absolutePath, buildPath, dirName;
+    import std.process : execute;
+    import std.string : replace, toLower;
+    import std.uri : encode;
+    import std.uuid : randomUUID;
+    auto officeHome = z8_server_config_value("office.home"w);
+    if (officeHome is null || !officeHome.length) throw new Exception("office.home is not configured");
+    version (Windows) auto executable = buildPath(officeHome.to!string, "program", "soffice.com");
+    else auto executable = buildPath(officeHome.to!string, "program", "soffice");
+    if (!exists(executable)) throw new Exception("LibreOffice executable not found: " ~ executable);
+    string safeExtension(wstring value) {
+        if (value is null) return "";
+        auto result = value.to!string.toLower();
+        if (result.length > 24) throw new Exception("invalid document extension");
+        foreach (c; result)
+            if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))) throw new Exception("invalid document extension");
+        return result;
+    }
+    auto inputExtension = safeExtension(extension);
+    auto outputExtension = safeExtension(z8_file_extension(target.to!wstring));
+    if (!outputExtension.length) throw new Exception("target has no document extension");
+    auto requestedFormat = parameters is null ? null : parameters.z8_get("format"w);
+    string filter = outputExtension;
+    if (requestedFormat == "PDF/A-1b"w) {
+        outputExtension = "pdf";
+        // Current LibreOffice uses 1 for PDF/A-1; Java's old constants are
+        // not interchangeable with the command-line export filter's values.
+        filter = `pdf:writer_pdf_Export:{"SelectPdfVersion":{"type":"long","value":"1"}}`;
+    } else if (requestedFormat == "PDF/X"w || requestedFormat == "PDF/X-1a:2001"w ||
+               requestedFormat == "PDF/X-3:2002"w || requestedFormat == "PDF/A-1a"w)
+        throw new Exception("requested PDF conformance is not supported by the LibreOffice converter");
+    auto temporary = buildPath(absolutePath(tempDir()), "z8-office-" ~ randomUUID().toString());
+    mkdir(temporary);
+    scope(exit) if (exists(temporary)) rmdirRecurse(temporary);
+    auto inputDir = buildPath(temporary, "input"), outputDir = buildPath(temporary, "output"), profile = buildPath(temporary, "profile");
+    mkdir(inputDir); mkdir(outputDir);
+    auto input = buildPath(inputDir, "document" ~ (inputExtension.length ? "." ~ inputExtension : ""));
+    {
+        import std.stdio : File;
+        auto stream = File(input, "wb");
+        scope(exit) stream.close();
+        z8_binary_copy_to(source, stream);
+    }
+    version (Windows) auto profileUrl = "file:///" ~ encode(absolutePath(profile).replace("\\", "/"));
+    else auto profileUrl = "file://" ~ encode(absolutePath(profile));
+    auto result = execute([executable, "-env:UserInstallation=" ~ profileUrl, "--headless", "--convert-to", filter, "--outdir", outputDir, input]);
+    auto output = buildPath(outputDir, "document." ~ outputExtension);
+    if (result.status != 0 || !exists(output)) throw new Exception("LibreOffice conversion failed: " ~ result.output);
+    auto parent = dirName(target);
+    if (parent.length) mkdirRecurse(parent);
+    copy(output, target);
+}
 // PDF-to-PDF conversion is a byte copy in the original implementation.
 private Z8File z8_file_converter_copy(Z8Binary source, wstring extension, Z8File target, Z8StringMap parameters) {
     import std.file : exists, mkdirRecurse;
@@ -47,7 +103,10 @@ private Z8File z8_file_converter_copy(Z8Binary source, wstring extension, Z8File
             throw new Exception("PDF stamps are not implemented");
     }
     if (!exists(path) || reset) {
-        if (!pdf || !z8_file_converter_pdf(extension).value) throw new Exception("file conversion engine is not implemented");
+        if (!pdf || !z8_file_converter_pdf(extension).value) {
+            z8_file_converter_office_convert(source, extension, path, parameters);
+            return z8_file_from_disk(absolutePath(path));
+        }
         auto parent = dirName(path);
         if (parent.length) mkdirRecurse(parent);
         auto output = File(path, "wb");
