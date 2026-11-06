@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package z8.authority.v1;
+
+import "z8/authority/v1/common.proto";
+
+message Decimal {
+  string coefficient = 1;
+  sint32 scale = 2;
+  bool nan = 3;
+}
+
+// Null and default scalar values remain distinct through oneof presence.
+message Primary {
+  oneof value {
+    bool null_value = 1;
+    sint64 integer_value = 2;
+    bool boolean_value = 3;
+    Decimal decimal_value = 4;
+    string text_value = 5;
+    Guid guid_value = 6;
+    sint64 date_ticks = 7;
+    sint64 datespan_milliseconds = 8;
+  }
+}

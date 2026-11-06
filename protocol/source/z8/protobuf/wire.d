@@ -14,6 +14,8 @@ void z8_proto_tag(ref ubyte[] output, uint field, uint wire) {
 void z8_proto_fixed64(ref ubyte[] output, ulong value) {
     foreach (i; 0 .. 8) output ~= cast(ubyte)(value >> (i * 8));
 }
+ulong z8_proto_zigzag(long value) { return (cast(ulong)value << 1) ^ cast(ulong)(value >> 63); }
+long z8_proto_unzigzag(ulong value) { return cast(long)((value >> 1) ^ cast(ulong)-cast(long)(value & 1)); }
 void z8_proto_bytes(ref ubyte[] output, const(ubyte)[] value) {
     z8_proto_varint(output, value.length); output ~= value;
 }

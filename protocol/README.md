@@ -13,6 +13,11 @@ the original, uncombined table, field and request overrides. Explicit denies
 remain present. Conversion into runtime privileges rejects duplicate IDs and
 entries without an ID or access; an omitted default grants nothing. The wire
 representation preserves unknown fields and limits the number of entries.
+`primary.proto` and `z8.authority.primary` encode null, integers, booleans,
+decimals, strings, GUIDs, dates and durations. The `oneof` preserves the
+difference between null and default scalar values. Decimal coefficient and
+scale are preserved separately. Binary, geometry, file and user-defined primary
+values are currently rejected instead of being silently dropped.
 `Z8ProtobufAuthorityNotifier` implements the runtime's user and role notifier
 interfaces and forwards encoded events to a host-provided
 `IZ8AuthorityChangePublisher`. A receiving host dispatches them with
@@ -30,6 +35,6 @@ Transport, endpoint authentication, delivery guarantees and the rest of the
 original RMI interfaces remain to be implemented. Do not accept these messages
 from an untrusted peer without an authenticated transport.
 
-Run `python tests/protobuf_notifications.py` and `python tests/protobuf_privileges.py`
-to cross-check serialization with Google's Python protobuf runtime; the tests
-require the `protobuf` Python package.
+Run `python tests/protobuf_notifications.py`, `python tests/protobuf_privileges.py`
+and `python tests/protobuf_primary.py` to cross-check serialization with Google's
+Python protobuf runtime; the tests require the `protobuf` Python package.
