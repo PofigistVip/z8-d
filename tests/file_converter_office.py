@@ -30,6 +30,7 @@ public class OfficeProbe {
     public static file convert(file source, file target) { return FileConverter.convert(source, target); }
     public static file convertWithOptions(file source, file target, string[string] options) { return FileConverter.convert(source, target, options); }
     public static file convertBinary(binary source, string extension, file target) { return FileConverter.convert(source, extension, target); }
+    public static file convertUnknown(binary source, file target) { return FileConverter.convert(source, target); }
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -55,6 +56,8 @@ void main(string[] args) {
     auto binaryOutput = z8_file_from_path(buildPath(args[1], "result", "binary.odt").to!wstring);
     auto rtf = z8_binary_from_string(`{\\rtf1\\ansi Z8 binary}`w);
     assert(z8_file_exists(P.m_convertBinary(rtf, "rtf"w, binaryOutput)));
+    auto inferred = z8_file_from_path(buildPath(args[1], "result", "inferred.odt").to!wstring);
+    assert(z8_file_exists(P.m_convertUnknown(z8_file_to_binary(document), inferred)));
     auto unsupported = z8_file_from_path(buildPath(args[1], "result", "unsupported.pdf").to!wstring);
     auto unsupportedOptions = new Z8StringMap(); unsupportedOptions.z8_add("format"w, "PDF/X-3:2002"w);
     bool unsupportedFailed;
@@ -81,4 +84,6 @@ void main(string[] args) {
     assert archive.startswith(b"%PDF-") and b"pdfaid:part" in archive
     with zipfile.ZipFile(temp / "result" / "binary.odt") as document:
         assert b"Z8 binary" in document.read("content.xml")
+    with zipfile.ZipFile(temp / "result" / "inferred.odt") as document:
+        assert b"Hello from Z8" in document.read("content.xml")
 print("FileConverter office and PDF conversion passed")
