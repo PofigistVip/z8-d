@@ -867,6 +867,23 @@ void main(string[] args) {
     auto uploaded = P.m_fileContent(P.m_fileById(storedUpload.id));
     { auto binary = z8_file_to_binary(uploaded); scope(exit) z8_binary_close(binary);
       assert(z8_binary_snapshot(binary, 3) == [cast(ubyte)0, 0xff, 0x7f]); }
+    {
+        auto previousConfig = z8_application_configuration();
+        scope(exit) z8_application_configure(previousConfig);
+        auto diskConfig = z8_application_configuration(); diskConfig.filesSaveOnDisk = true;
+        z8_application_configure(diskConfig);
+        auto diskFile = z8_file_from_upload("disk.bin"w, [cast(ubyte)0x41, 0x42, 0x43]);
+        diskFile.id = z8_guid_create(0x88A); diskFile.path = "storage/on-disk/disk.bin"w;
+        db.beginTransaction(); z8_system_files_write(diskFile); db.commit();
+        assert(db.execute(`SELECT "Location"::text FROM "z8_test"."SystemFiles" WHERE "RecordId" = '00000000-0000-0000-0000-00000000088a'`).rows[0][0].text == "1");
+        auto fromDisk = P.m_fileContent(P.m_fileById(diskFile.id));
+        { auto binary = z8_file_to_binary(fromDisk); scope(exit) z8_binary_close(binary);
+          assert(z8_binary_snapshot(binary, 3) == [cast(ubyte)0x41, 0x42, 0x43]); }
+        // Updating from the existing path must not truncate the source first.
+        db.beginTransaction(); z8_system_files_write(fromDisk, false); db.commit();
+        { auto binary = z8_file_to_binary(fromDisk); scope(exit) z8_binary_close(binary);
+          assert(z8_binary_snapshot(binary, 3) == [cast(ubyte)0x41, 0x42, 0x43]); }
+    }
     auto replacement = z8_file_from_upload("new.bin"w, [cast(ubyte)0x42]);
     replacement.id = storedUpload.id; replacement.path = "storage/missing-889/new.bin"w;
     db.beginTransaction(); z8_system_files_write(replacement, false); db.commit();

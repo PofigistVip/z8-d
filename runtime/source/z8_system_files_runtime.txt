@@ -31,6 +31,44 @@ private void z8_system_files_on_new(Z8Object self) {
     z8_field_set(fields[4], z8_primary_box(now));
     z8_field_set(fields[5], z8_primary_box(now));
 }
+// Write into an owned sibling directory and publish only a complete file.
+// A cache reader may accept a concurrent winner; a write/update must not.
+private long z8_system_files_publish(Z8Binary data, string path, bool checkSize = false, long expectedSize = 0, bool acceptExisting = false) {
+    import std.file : exists, isFile, getSize, mkdir, mkdirRecurse, remove, rename, rmdir, FileException;
+    import std.path : buildPath, dirName;
+    import std.stdio : File;
+    import std.uuid : randomUUID;
+    data = z8_nonnull(data);
+    scope(exit) z8_binary_close(data);
+    auto parent = dirName(path); if (parent.length) mkdirRecurse(parent);
+    auto temporary = buildPath(parent, ".z8-cache-" ~ randomUUID().toString());
+    mkdir(temporary);
+    auto pending = buildPath(temporary, "content");
+    scope(exit) { if (exists(pending)) remove(pending); rmdir(temporary); }
+    ulong copied;
+    {
+        auto output = File(pending, "wb");
+        scope(exit) output.close();
+        z8_binary_copy_to(data, output);
+        copied = output.tell;
+    }
+    if (copied > long.max || (checkSize && expectedSize != 0 && (expectedSize < 0 || cast(ulong)expectedSize != copied)))
+        throw new Exception("stored file size does not match its content");
+    if (!acceptExisting) rename(pending, path);
+    else {
+        // Never replace a cache file that another reader has already opened.
+        // On Windows replacing it can temporarily deny concurrent opens.
+        version (Windows) {
+            import core.sys.windows.winbase : MoveFileExW;
+            import std.utf : toUTF16z;
+            if (!MoveFileExW(pending.toUTF16z(), path.toUTF16z(), 0)) {
+                auto failure = new FileException(path);
+                if (!exists(path) || !isFile(path) || getSize(path) != copied) throw failure;
+            }
+        } else rename(pending, path); // POSIX permits readers to keep an open file across replacement.
+    }
+    return cast(long)copied;
+}
 // AttachmentProcessor uses these operations within its caller's transaction.
 // Content can be stored in the database or under the configured storage root.
 void z8_system_files_write(Z8File file, bool create = true) {
@@ -41,13 +79,7 @@ void z8_system_files_write(Z8File file, bool create = true) {
     z8_field_set(fields[0], z8_primary_box(file.name));
     auto binary = z8_file_to_binary(file);
     if (z8_application_configuration().filesSaveOnDisk) {
-        import std.file : mkdirRecurse, write;
-        import std.path : dirName;
-        ubyte[] bytes;
-        { scope(exit) z8_binary_close(binary); bytes = z8_binary_snapshot(binary, size_t.max); }
-        auto path = z8_file_system_path(file); auto parent = dirName(path);
-        if (parent.length) mkdirRecurse(parent);
-        write(path, bytes);
+        z8_system_files_publish(binary, z8_file_system_path(file));
         z8_field_set(fields[6], z8_primary_box(1L));
     } else {
         z8_field_set(fields[1], z8_primary_box(binary));
@@ -79,10 +111,7 @@ private Z8File z8_system_files_get_id(Z8Guid id) {
     return result;
 }
 private Z8File z8_system_files_get_file(Z8File value) {
-    import std.file : exists, isFile, getSize, mkdir, mkdirRecurse, remove, rename, rmdir, FileException;
-    import std.path : buildPath, dirName;
-    import std.stdio : File;
-    import std.uuid : randomUUID;
+    import std.file : exists, isFile, getSize;
     value = z8_nonnull(value);
     auto path = z8_file_system_path(value);
     if (exists(path) && isFile(path)) {
@@ -99,31 +128,9 @@ private Z8File z8_system_files_get_file(Z8File value) {
     if (!z8_optional_require(z8_query_read_record(table, value.id, fields))) throw new Exception("file was not found");
     auto size = z8_optional_require(z8_primary_cast!long(z8_field_primary(members[3])));
     auto data = z8_nonnull(z8_primary_cast!Z8Binary(z8_field_primary(members[1])));
-    scope(exit) z8_binary_close(data);
-    auto parent = dirName(path); if (parent.length) mkdirRecurse(parent);
-    // Publish the complete file at once: another request must never observe a
-    // cache entry while it is still being copied from PostgreSQL.
-    auto temporary = buildPath(parent, ".z8-cache-" ~ randomUUID().toString());
-    mkdir(temporary);
-    auto pending = buildPath(temporary, "content");
-    scope(exit) { if (exists(pending)) remove(pending); rmdir(temporary); }
-    ulong copied;
-    {
-        auto output = File(pending, "wb");
-        scope(exit) output.close();
-        z8_binary_copy_to(data, output);
-        copied = output.tell;
-    }
-    if (copied > long.max || (size != 0 && (size < 0 || cast(ulong)size != copied)))
-        throw new Exception("stored file size does not match its content");
-    try rename(pending, path);
-    catch (FileException failure) {
-        // Windows can refuse replacement if another request already opened the
-        // winner. Its complete file is usable if it has the expected length.
-        if (!exists(path) || !isFile(path) || getSize(path) != copied) throw failure;
-    }
+    auto copied = z8_system_files_publish(data, path, true, size, true);
     value.hasUpload = false; value.upload = null;
-    value.size = z8_optional_wrap(cast(long)copied);
+    value.size = z8_optional_wrap(copied);
     return value;
 }
 // The path must match the database record, never a caller-selected local file.
