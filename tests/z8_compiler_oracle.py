@@ -481,6 +481,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         System.out.println("RESULT:" + demo.cases.IntegerMaps.z8_run().get());
         System.out.println("RESULT:" + demo.cases.QualifiedNames.z8_run().get());
         System.out.println("RESULT:" + demo.cases.MapInitializers.z8_run().get());
+        System.out.println("GUIDARRAYSORT:" + demo.cases.GuidArraySort.z8_run().get());
         System.out.println("RESULT:" + demo.cases.CompoundCases.z8_run().get());
         System.out.println("RESULT:" + demo.cases.FinalDeclarations.z8_run().get());
         System.out.println("RESULT:" + demo.cases.AutoCases.z8_run().get());
@@ -831,6 +832,8 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
                         "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes)] + generated_sources + [str(runner)], cwd=temp, check=True)
         output = subprocess.check_output(["java", "-cp", str(generated_classes) + os.pathsep + run_classpath, "ProjectRunner", str(config)], cwd=temp, text=True, encoding="utf-8")
+        if "GUIDARRAYSORT:0" not in output.splitlines():
+            raise SystemExit("Original Z8 GUID-array sorting differs:\n" + output)
         original_results = [line[7:] for line in output.splitlines() if line.startswith("RESULT:")]
         z8d = root / ("z8d.exe" if os.name == "nt" else "z8d")
         d_root = temp / "generated-d"

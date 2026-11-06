@@ -1,0 +1,19 @@
+public class GuidArraySort {
+    public static int run() {
+        guid[] values = {guid.create(0, 2), guid.create(-1, 0), guid.create(0, -1), guid.create(1, 0)};
+        guid[] sorted = values.sort();
+        if (sorted[0] != guid.create(-1, 0) || sorted[1] != guid.create(0, -1)) return 1;
+        if (sorted[2] != guid.create(0, 2) || sorted[3] != guid.create(1, 0)) return 2;
+        sorted.add(guid.create(0, 3));
+        if (values.size() != 5) return 3;
+        guid[] empty = {};
+        if (!empty.sort().isEmpty()) return 4;
+        guid[] single = {};
+        single.add(null);
+        if (single.sort().size() != 1) return 5;
+        guid[] invalid = {guid.create(1)};
+        invalid.add(null);
+        try { invalid.sort(); return 6; } catch (exception expected) {}
+        return 0;
+    }
+}
