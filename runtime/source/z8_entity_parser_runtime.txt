@@ -127,6 +127,41 @@ private Z8Object z8_entity_parser_read_values(Z8Object self, Z8Array!wstring key
     if (keys !is null) for (long i; i < keys.z8_size(); ++i) z8_entity_parser_read_value(self, keys.z8_get(i));
     return z8_nonnull(self);
 }
+private bool z8_entity_parser_is_empty(Z8Primary value) {
+    if (value is null) return true;
+    final switch (value.kind) {
+        case Z8PrimaryKind.boolean: return !value.booleanValue;
+        case Z8PrimaryKind.integer: return value.integerValue == 0;
+        case Z8PrimaryKind.decimal: return value.decimalValue == z8_decimal_from_int(0);
+        case Z8PrimaryKind.text: return !z8_string_required(value.textValue).length;
+        case Z8PrimaryKind.guid: return value.guidValue == z8_guid_zero();
+        case Z8PrimaryKind.date: return z8_date_binary!"=="(value.dateValue, z8_date_min);
+        case Z8PrimaryKind.datespan: return z8_datespan_milliseconds(value.datespanValue) == 0;
+        case Z8PrimaryKind.binary: case Z8PrimaryKind.geometry: case Z8PrimaryKind.file: case Z8PrimaryKind.user: return false;
+    }
+}
+private Z8Object z8_entity_parser_write_primary(bool nonempty)(Z8Object self, wstring key, Z8Primary value) {
+    if (value !is null && (!nonempty || !z8_entity_parser_is_empty(value)))
+        z8_json_object_set_primary(z8_entity_parser_get_json(self), key, value);
+    return z8_nonnull(self);
+}
+private Z8Object z8_entity_parser_write_nested(bool nonempty)(Z8Object self, wstring key, Z8Object value) {
+    if (value !is null) {
+        bool empty;
+        if (z8_native_is_instance(z8_json_object_name, value)) empty = z8_optional_require(z8_json_object_empty(value));
+        else if (z8_native_is_instance(z8_json_array_name, value)) empty = z8_optional_require(z8_json_array_empty(value));
+        else throw new Exception("invalid nested JSON value");
+        if (!nonempty || !empty) z8_json_object_set_nested(z8_entity_parser_get_json(self), key, value);
+    }
+    return z8_nonnull(self);
+}
+private Z8Object z8_entity_parser_write_key(bool nonempty)(Z8Object self, wstring key) {
+    return z8_entity_parser_write_primary!nonempty(self, key, z8_entity_get(z8_entity_parser_get_entity(self), key));
+}
+private Z8Object z8_entity_parser_write_keys(bool nonempty)(Z8Object self, Z8Array!wstring keys) {
+    if (keys !is null) for (long i; i < keys.z8_size(); ++i) z8_entity_parser_write_key!nonempty(self, keys.z8_get(i));
+    return z8_nonnull(self);
+}
 void z8_bind_builtin_entity_parser() {
     enum p = z8_entity_parser_name ~ ".m_"w;
     z8_native_bind(p ~ "getRegistry"w, &z8_entity_parser_get_registry); z8_native_bind(p ~ "setRegistry"w, &z8_entity_parser_set_registry);
@@ -148,5 +183,13 @@ void z8_bind_builtin_entity_parser() {
     z8_native_bind(p ~ "readJsonArray"w, &z8_entity_parser_read_kind!"JsonArray");
     z8_native_bind(p ~ "readValue"w, &z8_entity_parser_read_value); z8_native_bind(p ~ "readValue"w, &z8_entity_parser_read_typed);
     z8_native_bind(p ~ "readValues"w, &z8_entity_parser_read_values);
+    z8_native_bind(p ~ "writeValue"w, &z8_entity_parser_write_primary!false);
+    z8_native_bind(p ~ "writeValue"w, &z8_entity_parser_write_nested!false);
+    z8_native_bind(p ~ "writeValue"w, &z8_entity_parser_write_key!false);
+    z8_native_bind(p ~ "writeValues"w, &z8_entity_parser_write_keys!false);
+    z8_native_bind(p ~ "writeNonEmpty"w, &z8_entity_parser_write_primary!true);
+    z8_native_bind(p ~ "writeNonEmpty"w, &z8_entity_parser_write_nested!true);
+    z8_native_bind(p ~ "writeNonEmpty"w, &z8_entity_parser_write_key!true);
+    z8_native_bind(p ~ "writeNonEmpty"w, &z8_entity_parser_write_keys!true);
 }
 shared static this() { z8_bind_builtin_entity_parser(); }

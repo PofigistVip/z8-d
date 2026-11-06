@@ -23,6 +23,8 @@ public class SampleEntity extends Entity { public int marker = 17; }
     (source / "SampleParser.bl").write_text('''
 import org.zenframework.z8.base.entity.Entity;
 import org.zenframework.z8.base.entity.EntityParser;
+import org.zenframework.z8.base.json.JsonObject;
+import org.zenframework.z8.base.json.JsonArray;
 public class SampleParser extends EntityParser {
     public int reads = 0; public int writes = 0; public int news = 0;
     virtual protected Entity newEntity() { news += 1; SampleEntity result; return result; }
@@ -36,6 +38,13 @@ public class SampleParser extends EntityParser {
         readValue("booleanText", "boolean"); readValue("text", "string");
         string[] keys = {"rawNumber", "rawBool"}; readValues(keys);
         readString("missing");
+    }
+    public void writeParts(JsonObject nested, JsonArray array, JsonObject empty) {
+        string[] keys = {"text", "number"}; writeValues(keys);
+        writeValue("explicitZero", 0); writeValue("nested", nested); writeValue("array", array);
+        writeNonEmpty("skipFalse", false); writeNonEmpty("skipZero", 0); writeNonEmpty("skipEmpty", empty);
+        writeNonEmpty("keep", "yes"); writeNonEmpty("rawBool");
+        string[] nonempty = {"rawNumber", "rawBool"}; writeNonEmpty(nonempty);
     }
 }
 ''', encoding="utf-8")
@@ -82,6 +91,13 @@ public class ParserProbe {
             entity.getJsonArray("array").getString(0) != "entry") return false;
         if ((decimal)entity.get("csv") != 1.25 || entity.getInt("integerText") != 42 ||
             !entity.getBool("booleanText") || entity.getInt("rawNumber") != 77 || entity.getBool("rawBool")) return false;
+        JsonObject empty; parser.setJson("{}"); parser.writeParts(nested, array, empty);
+        JsonObject output = parser.getJson();
+        if (output.getString("text") != "hello" || output.getInt("number") != 12 ||
+            output.getInt("explicitZero") != 0 || output.getJsonObject("nested").getString("value") != "inside" ||
+            output.getJsonArray("array").getString(0) != "entry") return false;
+        if (output.has("skipFalse") || output.has("skipZero") || output.has("skipEmpty") || output.has("rawBool") ||
+            output.getString("keep") != "yes" || output.getInt("rawNumber") != 77) return false;
         return true;
     }
     public static bool nullArray(SampleParser parser, JsonArray json) { return parser.fromJson(json).size() == 0; }
