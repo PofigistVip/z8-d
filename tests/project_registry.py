@@ -52,6 +52,18 @@ import org.zenframework.z8.base.Executable;
         "DerivedJob": '''
 public class DerivedJob extends BaseJob { virtual protected void execute() { info("derived"); } }
 ''',
+        "BaseThing": '''
+import org.zenframework.z8.lang.Object;
+[name "Thing"] public class BaseThing extends Object {}
+''',
+        "DerivedThing": 'public class DerivedThing extends BaseThing {}',
+        "NamedFactory": '''
+import org.zenframework.z8.lang.Object;
+public class NamedFactory {
+    public static Object fresh() { return Object.newNamedInstance("Thing"); }
+    public static Object singleton() { return Object.getNamedSingleton("Thing"); }
+}
+''',
         "TableFactory": '''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.lang.Object;
@@ -66,8 +78,10 @@ public class TableFactory { public static Object find(string name) { return Tabl
 import z8.runtime;
 import z8gen.project_registry;
 import z8gen.p_TableFactory;
+import z8gen.p_NamedFactory;
 import std.json : parseJSON, JSONType;
 import std.conv : to;
+import core.thread : Thread;
 void main() {
     auto registry = new Z8RuntimeRegistry(); z8_register_project(registry);
     auto tables = registry.tables(), requests = registry.requests();
@@ -97,6 +111,19 @@ void main() {
     assert(registry.newTableByName("Missing"w) is null && registry.newRequestByClass("Api"w).z8_class_id() == "Api"w);
     assert(registry.newTables().length == 2);
     auto previousRegistry = z8_runtime_set_registry(registry);
+    alias NamedFactory = Z8p_4E616D6564466163746F7279;
+    auto named = NamedFactory.m_fresh(), another = NamedFactory.m_fresh(), singleton = NamedFactory.m_singleton();
+    assert(named.z8_class_id() == "DerivedThing"w && another !is named && singleton !is named);
+    assert(singleton is NamedFactory.m_singleton());
+    z8_register_project(registry); assert(singleton is NamedFactory.m_singleton());
+    assert(registry.newNamedByName("missing"w) is null);
+    assert(z8_native_is_instance("org.zenframework.z8.server.base.table.system.Users"w, registry.newNamedByName("SystemUsers"w)));
+    Z8Object[8] values; Thread[] workers;
+    Thread makeWorker(size_t index) { return new Thread({ values[index] = registry.namedSingleton("Thing"w); }); }
+    foreach (i; 0 .. values.length) workers ~= makeWorker(i);
+    foreach (worker; workers) worker.start();
+    foreach (worker; workers) worker.join();
+    foreach (value; values) assert(value is singleton);
     auto factoryValue = Z8p_5461626C65466163746F7279.m_find("Orders"w);
     assert(factoryValue !is null && factoryValue.z8_class_id() == "Orders"w && factoryValue !is first);
     bool missing; try { Z8p_5461626C65466163746F7279.m_find("Missing"w); } catch (Exception) { missing = true; }

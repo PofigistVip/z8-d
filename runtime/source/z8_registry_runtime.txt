@@ -12,7 +12,8 @@ struct Z8RuntimeRegistration {
     private TypeInfo_Class runtimeType;
 }
 class Z8RuntimeRegistry {
-    private Z8RuntimeRegistration[] tableEntries, requestEntries, jobEntries, entryEntries, executableEntries;
+    private Z8RuntimeRegistration[] tableEntries, requestEntries, jobEntries, entryEntries, executableEntries, namedEntries;
+    private Z8Object[wstring] namedSingletons;
     private Object mutex;
     this() { mutex = new Object(); }
     private Z8RuntimeRegistration descriptor(Z8Object value, bool table) {
@@ -71,6 +72,24 @@ class Z8RuntimeRegistry {
         if (!z8_native_is_instance(z8_executable_name, executable)) throw new Exception("runtime executable registration requires an Executable");
         add(executableEntries, descriptor(executable, false), false, true);
     }
+    // Descriptors are lazy: native classes need not have their runtime adapters
+    // initialized until an application actually asks for an instance.
+    void registerNamedType(wstring name, wstring classId, TypeInfo_Class runtimeType) {
+        name = z8_string_required(name); classId = z8_string_required(classId);
+        if (!name.length || !classId.length || runtimeType is null || !typeid(Z8Object).isBaseOf(runtimeType))
+            throw new Exception("invalid named class registration");
+        Z8RuntimeRegistration entry;
+        entry.name = name.idup; entry.classId = classId.idup; entry.key = z8_guid_create_name(classId); entry.runtimeType = runtimeType;
+        synchronized (mutex) {
+            foreach (ref existing; namedEntries) {
+                if (entry.runtimeType.isBaseOf(existing.runtimeType)) return;
+                if (existing.name == entry.name) {
+                    existing = entry; namedSingletons.remove(name); return;
+                }
+            }
+            namedEntries ~= entry;
+        }
+    }
     private Z8RuntimeRegistration[] snapshot(ref Z8RuntimeRegistration[] entries) {
         Z8RuntimeRegistration[] result;
         synchronized (mutex) {
@@ -88,6 +107,7 @@ class Z8RuntimeRegistry {
     Z8RuntimeRegistration[] jobs() { return snapshot(jobEntries); }
     Z8RuntimeRegistration[] entries() { return snapshot(entryEntries); }
     Z8RuntimeRegistration[] executables() { return snapshot(executableEntries); }
+    Z8RuntimeRegistration[] named() { return snapshot(namedEntries); }
     Z8Guid[] tableKeys() { Z8Guid[] keys; foreach (item; tables()) keys ~= item.key; return keys; }
     Z8Guid[] requestKeys() { Z8Guid[] keys; foreach (item; requests()) keys ~= item.key; return keys; }
     Z8Guid[] jobKeys() { Z8Guid[] keys; foreach (item; jobs()) keys ~= item.key; return keys; }
@@ -120,6 +140,24 @@ class Z8RuntimeRegistry {
     Z8Object newExecutableByName(wstring name) {
         name = z8_string_required(name);
         foreach (item; executables()) if (item.name == name) return z8_object_new_instance(item.classId);
+        return null;
+    }
+    Z8Object newNamedByName(wstring name) {
+        name = z8_string_required(name);
+        foreach (item; named()) if (item.name == name) return z8_object_new_instance(item.classId);
+        return null;
+    }
+    Z8Object namedSingleton(wstring name) {
+        name = z8_string_required(name);
+        synchronized (mutex) {
+            auto existing = name in namedSingletons;
+            if (existing !is null) return *existing;
+            foreach (item; namedEntries) if (item.name == name) {
+                auto value = z8_object_new_instance(item.classId);
+                namedSingletons[name] = value;
+                return value;
+            }
+        }
         return null;
     }
     Z8Object[] newTables() {

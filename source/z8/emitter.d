@@ -1435,7 +1435,7 @@ package GeneratedModule[] emitProjectModules(Program[] programs) {
         source ~= "}\n";
         modules ~= GeneratedModule("z8gen.native_registry", "z8gen/native_registry.d", "", formatDSource(source));
     }
-    // StartupCodeLines registers named generatable tables, requests, jobs and entries.
+    // StartupCodeLines registers named classes, tables, requests, jobs and entries.
     // Keep the generated registry explicit so applications choose when to
     // instantiate classes and connect their runtime services.
     bool directAttribute(Program program, string name) {
@@ -1447,31 +1447,57 @@ package GeneratedModule[] emitProjectModules(Program[] programs) {
             if (directAttribute(current, name)) return true;
         return false;
     }
+    TypeAttribute inheritedAttributeValue(Program program, string name) {
+        for (auto current = program; current !is null; current = current.baseClass)
+            foreach (attribute; current.attributes) if (attribute.name.text == name) return attribute;
+        assert(0, "missing inherited attribute");
+    }
     Program[] registrations;
     foreach (program; programs) if (program.lexicalOwner is null && !program.isEnum && !isPrimaryClass(program) &&
         (directAttribute(program, "generatable") || inheritedAttribute(program, "request") ||
          directAttribute(program, "job") || directAttribute(program, "entry") ||
-         (inheritedAttribute(program, "name") && inheritedAttribute(program, "executable")))) registrations ~= program;
+         inheritedAttribute(program, "name"))) registrations ~= program;
     if (registrations.length) {
-        string source = "module z8gen.project_registry;\n\nimport z8.runtime;\n";
-        foreach (program; registrations) source ~= "import " ~ moduleByClass[program.emittedName] ~ ";\n";
-        source ~= "\nvoid z8_register_project(Z8RuntimeRegistry registry) {\nregistry = z8_nonnull(registry);\n";
+        string body = "void z8_register_project(Z8RuntimeRegistry registry) {\nregistry = z8_nonnull(registry);\n";
         foreach (program; registrations) {
-            source ~= "{\nauto value = z8_new!(" ~ program.emittedName ~ ")();\n";
+            auto named = inheritedAttribute(program, "name") && !directAttribute(program, "generatable") &&
+                !inheritedAttribute(program, "executable");
+            auto executable = !directAttribute(program, "generatable") && inheritedAttribute(program, "name") &&
+                inheritedAttribute(program, "executable");
+            auto needsValue = directAttribute(program, "generatable") || inheritedAttribute(program, "request") ||
+                directAttribute(program, "job") || directAttribute(program, "entry") || executable;
+            body ~= "{\n";
+            if (needsValue) body ~= "auto value = z8_new!(" ~ program.emittedName ~ ")();\n";
             if (directAttribute(program, "generatable"))
-                source ~= "auto tableName = value.z8_get_attribute(\"name\"w);\n" ~
+                body ~= "auto tableName = value.z8_get_attribute(\"name\"w);\n" ~
                     "if (tableName !is null && tableName.length) registry.registerTable(value);\n";
             if (inheritedAttribute(program, "request"))
-                source ~= "auto request = value.z8_get_attribute(\"request\"w);\n" ~
+                body ~= "auto request = value.z8_get_attribute(\"request\"w);\n" ~
                     "if (request !is null && (!request.length || z8_str_compareNoCase(request, \"true\"w) == 0)) registry.registerRequest(value);\n";
-            if (directAttribute(program, "job")) source ~= "registry.registerJob(value);\n";
-            if (directAttribute(program, "entry")) source ~= "registry.registerEntry(value);\n";
-            if (!directAttribute(program, "generatable") && inheritedAttribute(program, "name") && inheritedAttribute(program, "executable"))
-                source ~= "auto executableName = value.z8_get_attribute(\"name\"w);\n" ~
+            if (directAttribute(program, "job")) body ~= "registry.registerJob(value);\n";
+            if (directAttribute(program, "entry")) body ~= "registry.registerEntry(value);\n";
+            if (executable)
+                body ~= "auto executableName = value.z8_get_attribute(\"name\"w);\n" ~
                     "if (executableName !is null && executableName.length) registry.registerExecutable(value);\n";
-            source ~= "}\n";
+            if (named) {
+                auto classId = program.isNative ? program.nativeName : program.qualifiedName.replace("$", ".").to!wstring;
+                body ~= "auto namedName = " ~ emitAttributeValue(inheritedAttributeValue(program, "name")) ~ ";\n" ~
+                    "if (namedName.length) registry.registerNamedType(namedName, " ~ emitRawWStringLiteral(classId) ~
+                    ", typeid(" ~ program.emittedName ~ "));\n";
+            }
+            body ~= "}\n";
         }
-        source ~= "}\n";
+        body ~= "}\n";
+        string[] imports;
+        bool[string] seen;
+        foreach (match; matchAll(body, symbolPattern)) {
+            auto dependency = match.hit in moduleByClass;
+            if (dependency !is null && !(*dependency in seen)) { imports ~= *dependency; seen[*dependency] = true; }
+        }
+        sort(imports);
+        string source = "module z8gen.project_registry;\n\nimport z8.runtime;\n";
+        foreach (name; imports) source ~= "import " ~ name ~ ";\n";
+        source ~= "\n" ~ body;
         modules ~= GeneratedModule("z8gen.project_registry", "z8gen/project_registry.d", "", formatDSource(source));
     }
     return modules;
