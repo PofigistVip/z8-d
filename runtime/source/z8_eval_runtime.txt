@@ -7,7 +7,7 @@ private class Z8EvalState {
     wstring[] errors;
     this() { order = new Z8JavaMapOrder!wstring(); }
 }
-private enum Z8EvalContext { none, json }
+private enum Z8EvalContext { none, json, booleanType, integerType, decimalType, stringType, guidType, dateType, datespanType }
 private struct Z8EvalValue { bool evaluated; Z8Primary primary; Z8Object json; wstring expression; Z8EvalContext context; }
 private Z8EvalState z8_eval_state(Z8Object self) {
     self = z8_nonnull(self);
@@ -38,6 +38,20 @@ private Z8Object z8_eval_clear(Z8Object self) {
 private Z8Array!wstring z8_eval_errors(Z8Object self) { return new Z8Array!wstring(z8_eval_state(self).errors.dup); }
 private wstring z8_eval_value_text(Z8EvalValue value) {
     if (!value.evaluated) return value.expression;
+    if (value.context != Z8EvalContext.none && value.context != Z8EvalContext.json) {
+        wstring typeName;
+        final switch (value.context) {
+            case Z8EvalContext.booleanType: typeName = "bool"w; break;
+            case Z8EvalContext.integerType: typeName = "integer"w; break;
+            case Z8EvalContext.decimalType: typeName = "decimal"w; break;
+            case Z8EvalContext.stringType: typeName = "string"w; break;
+            case Z8EvalContext.guidType: typeName = "guid"w; break;
+            case Z8EvalContext.dateType: typeName = "date"w; break;
+            case Z8EvalContext.datespanType: typeName = "datespan"w; break;
+            case Z8EvalContext.none: case Z8EvalContext.json: break;
+        }
+        return "class org.zenframework.z8.server.types."w ~ typeName;
+    }
     if (value.json !is null) return z8_native_is_instance(z8_json_object_name, value.json) ?
         z8_json_object_to_string(value.json) : z8_json_array_string(value.json);
     return value.primary is null ? "null"w : z8_primary_to_string(value.primary);
@@ -87,14 +101,23 @@ private Z8EvalValue z8_eval_atom(Z8EvalState state, wstring source) {
         throw new Exception("unsupported Eval expression");
     auto found = text in state.variables;
     if (found !is null) return Z8EvalValue(true, found.primary, found.json, null);
-    if (text == "json"w) return Z8EvalValue(true, null, null, null, Z8EvalContext.json);
+    Z8EvalContext context;
+    if (text == "json"w) context = Z8EvalContext.json;
+    else if (text == "bool"w) context = Z8EvalContext.booleanType;
+    else if (text == "int"w) context = Z8EvalContext.integerType;
+    else if (text == "decimal"w) context = Z8EvalContext.decimalType;
+    else if (text == "string"w) context = Z8EvalContext.stringType;
+    else if (text == "guid"w) context = Z8EvalContext.guidType;
+    else if (text == "date"w) context = Z8EvalContext.dateType;
+    else if (text == "datespan"w) context = Z8EvalContext.datespanType;
+    if (context != Z8EvalContext.none) return Z8EvalValue(true, null, null, null, context);
     auto pattern = z8_string_new("$Expression.variableIsNotSet$"w);
     state.errors ~= z8_string_format(pattern, new Z8Array!Z8Primary([z8_primary_box(text)]));
     return Z8EvalValue(false, null, null, text.idup);
 }
 private wstring z8_eval_expression_repr(Z8EvalValue value) {
     if (!value.evaluated) return value.expression;
-    if (value.json !is null) {
+    if (value.json !is null || value.context != Z8EvalContext.none) {
         import std.string : replace;
         return "\""w ~ z8_eval_value_text(value).replace("\""w, "\\\""w) ~ "\""w;
     }
@@ -277,6 +300,51 @@ private Z8Primary z8_eval_number_method(Z8Primary value, wstring name, Z8EvalVal
         return z8_primary_box(number.z8_round(intArg(0), intArg(1)));
     throw new Exception("unsupported Eval numeric method");
 }
+private Z8Primary z8_eval_type_method(Z8EvalContext context, wstring name, Z8EvalValue[] arguments) {
+    Z8Primary arg(size_t i, Z8PrimaryKind kind) {
+        if (i >= arguments.length || arguments[i].primary is null || arguments[i].primary.kind != kind)
+            throw new Exception("invalid Eval type method argument");
+        return arguments[i].primary;
+    }
+    if (!arguments.length) {
+        if (context == Z8EvalContext.guidType && name == "create"w) return z8_primary_box(z8_guid_create_random());
+        if (context == Z8EvalContext.dateType) {
+            if (name == "now"w) return z8_primary_box(z8_date_now());
+            if (name == "today"w) return z8_primary_box(z8_date_today());
+            if (name == "yesterday"w) return z8_primary_box(z8_date_yesterday());
+            if (name == "tomorrow"w) return z8_primary_box(z8_date_tomorrow());
+        }
+    } else if (arguments.length == 1) {
+        if (name == "parse"w) {
+            auto text = arg(0, Z8PrimaryKind.text).textValue;
+            if (context == Z8EvalContext.booleanType) return z8_primary_box(z8_bool_parse(text));
+            if (context == Z8EvalContext.integerType) return z8_primary_box(z8_int_parse(text));
+            if (context == Z8EvalContext.decimalType) return z8_primary_box(z8_decimal_parse(text));
+            if (context == Z8EvalContext.guidType) return z8_primary_box(z8_guid_parse(text));
+            if (context == Z8EvalContext.dateType) return z8_primary_box(z8_date_parse(text));
+            if (context == Z8EvalContext.datespanType) return z8_primary_box(z8_datespan_parse(text));
+        }
+        if (context == Z8EvalContext.dateType && name == "parseIsoString"w)
+            return z8_primary_box(z8_date_parseIsoString(arg(0, Z8PrimaryKind.text).textValue));
+        if (context == Z8EvalContext.guidType && name == "create"w) {
+            auto value = arguments[0].primary;
+            if (value !is null && value.kind == Z8PrimaryKind.text) return z8_primary_box(z8_guid_create_name(value.textValue));
+            return z8_primary_box(z8_guid_create(arg(0, Z8PrimaryKind.integer).integerValue));
+        }
+    } else if (arguments.length == 2) {
+        if (context == Z8EvalContext.integerType && name == "parse"w)
+            return z8_primary_box(z8_int_parse(arg(0, Z8PrimaryKind.text).textValue, arg(1, Z8PrimaryKind.integer).integerValue));
+        if (context == Z8EvalContext.dateType && name == "parse"w)
+            return z8_primary_box(z8_date_parse(arg(0, Z8PrimaryKind.text).textValue, arg(1, Z8PrimaryKind.text).textValue));
+        if (context == Z8EvalContext.dateType && name == "isEqualDate"w)
+            return z8_primary_box(z8_date_isEqualDate(arg(0, Z8PrimaryKind.date).dateValue, arg(1, Z8PrimaryKind.date).dateValue));
+        if (context == Z8EvalContext.guidType && name == "create"w)
+            return z8_primary_box(z8_guid_create(arg(0, Z8PrimaryKind.integer).integerValue, arg(1, Z8PrimaryKind.integer).integerValue));
+        if (context == Z8EvalContext.stringType && name == "replicate"w)
+            return z8_primary_box(z8_string_new(z8_string_replicate(arg(0, Z8PrimaryKind.text).textValue, arg(1, Z8PrimaryKind.integer).integerValue)));
+    }
+    throw new Exception("unsupported Eval type method");
+}
 private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue[] arguments) {
     bool evaluated = object.evaluated;
     foreach (argument; arguments) evaluated = evaluated && argument.evaluated;
@@ -287,6 +355,27 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
     }
     if (object.context == Z8EvalContext.json && (name == "min"w || name == "max"w))
         return z8_eval_json_aggregate(name, arguments);
+    if (object.context != Z8EvalContext.none && object.context != Z8EvalContext.json)
+        return Z8EvalValue(true, z8_eval_type_method(object.context, name, arguments), null, null);
+    if (object.primary !is null) {
+        Z8EvalContext type;
+        final switch (object.primary.kind) {
+            case Z8PrimaryKind.boolean: type = Z8EvalContext.booleanType; break;
+            case Z8PrimaryKind.integer: type = Z8EvalContext.integerType; break;
+            case Z8PrimaryKind.decimal: type = Z8EvalContext.decimalType; break;
+            case Z8PrimaryKind.text: type = Z8EvalContext.stringType; break;
+            case Z8PrimaryKind.guid: type = Z8EvalContext.guidType; break;
+            case Z8PrimaryKind.date: type = Z8EvalContext.dateType; break;
+            case Z8PrimaryKind.datespan: type = Z8EvalContext.datespanType; break;
+            case Z8PrimaryKind.binary: case Z8PrimaryKind.geometry: case Z8PrimaryKind.file: case Z8PrimaryKind.user: break;
+        }
+        if ((name == "parse"w && type != Z8EvalContext.stringType && type != Z8EvalContext.none) ||
+            (name == "parseIsoString"w && type == Z8EvalContext.dateType) ||
+            (name == "create"w && type == Z8EvalContext.guidType) ||
+            (name == "replicate"w && type == Z8EvalContext.stringType) ||
+            (["now"w, "today"w, "yesterday"w, "tomorrow"w, "isEqualDate"w].canFind(name) && type == Z8EvalContext.dateType))
+            return Z8EvalValue(true, z8_eval_type_method(type, name, arguments), null, null);
+    }
     if (object.primary !is null && object.primary.kind == Z8PrimaryKind.text)
         return Z8EvalValue(true, z8_eval_string_method(object.primary.textValue, name, arguments), null, null);
     if (object.primary !is null && (object.primary.kind == Z8PrimaryKind.integer || object.primary.kind == Z8PrimaryKind.decimal))

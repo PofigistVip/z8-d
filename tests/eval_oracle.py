@@ -97,6 +97,16 @@ public class EvalOracle {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
         }
+        for (String pattern : new String[]{"${int.parse('42')}", "${int.parse('ff', 16)}", "${decimal.parse('1.25')}", "${bool.parse('yes')}", "${bool.parse(nil)}", "${string.replicate('ab', 3)}", "${guid.parse('00000000-0000-0000-0000-000000000001')}", "${guid.create(42)}", "${guid.create('abc')}", "${format(date.parse('29/02/2024'), 'yyyy-MM-dd')}", "${format(date.parse('2024-02-29', 'yyyy-MM-dd'), 'dd.MM.yyyy')}", "${int.Min}", "${int.parse(missing)}", "${int.parse('x')}"}) {
+            try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
+            catch (Exception error) { System.out.println("error"); }
+        }
+        jsonEval.z8_setVariable(new string("int"), new integer(10));
+        System.out.println(jsonEval.z8_evaluateText(new string("${int}")).get());
+        try { System.out.println(jsonEval.z8_evaluateText(new string("${int.parse('42')}")).get()); }
+        catch (Exception error) { System.out.println("error"); }
+        jsonEval.z8_clear();
+        System.out.println(jsonEval.z8_evaluateText(new string("${int.parse('42')}")).get());
     }
 }
 ''', encoding="utf-8")
@@ -123,6 +133,7 @@ public class EvalProbe {
     public static Eval make() { Eval e; e.setVariable("name", "Ada"); e.setVariable("count", 7); e.setVariable("flag", true); primary nil = null; e.setVariable("nil", nil); return e; }
     public static Eval withJson() { Eval e; JsonObject obj; JsonObject child; JsonArray arr; child.set("title", "Ada"); arr.add(3); arr.add("tail"); obj.set("count", 7); obj.set("child", child); obj.set("items", arr); obj.set("price", 1.25); obj.set("yes", true); e.setVariable("obj", obj); e.setVariable("arr", arr); primary nil = null; e.setVariable("nil", nil); obj.set("after", 42); obj = "{}"; arr = "[]"; return e; }
     public static Eval withRows(Eval e) { JsonArray rows; JsonArray decimals; JsonObject dictionary; rows = "[{\\\"n\\\":7},{\\\"n\\\":2},{\\\"n\\\":5}]"; decimals = "[{\\\"n\\\":1.75},{\\\"n\\\":1.25},{\\\"n\\\":3}]"; dictionary = "{\\\"a\\\":{\\\"n\\\":7},\\\"b\\\":{\\\"n\\\":2}}"; e.setVariable("rows", rows); e.setVariable("decimals", decimals); e.setVariable("dictionary", dictionary); date day = '29/02/2024'; e.setVariable("day", day); return e; }
+    public static void shadow(Eval e) { e.setVariable("int", 10); }
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -186,6 +197,17 @@ void main() {
                        "${(0.0 - 1.5).round()}"w, "${(1.25).abs()}"w, "${(0.1).abs()}"w, "${(1.25).ceil()}"w, "${(1.25).floor()}"w,
                        "${(5).and('x')}"w, "${(1.25).round(missing)}"w])
         try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
+    foreach (pattern; ["${int.parse('42')}"w, "${int.parse('ff', 16)}"w, "${decimal.parse('1.25')}"w, "${bool.parse('yes')}"w,
+                       "${bool.parse(nil)}"w, "${string.replicate('ab', 3)}"w, "${guid.parse('00000000-0000-0000-0000-000000000001')}"w,
+                       "${guid.create(42)}"w, "${guid.create('abc')}"w, "${format(date.parse('29/02/2024'), 'yyyy-MM-dd')}"w,
+                       "${format(date.parse('2024-02-29', 'yyyy-MM-dd'), 'dd.MM.yyyy')}"w, "${int.Min}"w,
+                       "${int.parse(missing)}"w, "${int.parse('x')}"w])
+        try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
+    Z8p_4576616C50726F6265.m_shadow(jsonEval);
+    writeln(jsonEval.m_evaluateText("${int}"w).to!string);
+    try { writeln(jsonEval.m_evaluateText("${int.parse('42')}"w).to!string); } catch (Exception) { writeln("error"); }
+    jsonEval.m_clear();
+    writeln(jsonEval.m_evaluateText("${int.parse('42')}"w).to!string);
 }
 ''', encoding="utf-8")
     executable = temp / ("eval-oracle.exe" if os.name == "nt" else "eval-oracle")
@@ -195,5 +217,8 @@ void main() {
     response.write_text("\n".join('"' + arg.replace('\\', '/') + '"' for arg in args), encoding="utf-8")
     subprocess.run(["dmd", "@" + str(response)], cwd=temp, check=True)
     actual = subprocess.check_output([str(executable)], cwd=temp, text=True, encoding="utf-8").splitlines()
-    assert expected == actual, (expected, actual)
+    assert expected == actual, [(i, expected[i] if i < len(expected) else "<missing>",
+                                actual[i] if i < len(actual) else "<missing>")
+                               for i in range(max(len(expected), len(actual)))
+                               if i >= len(expected) or i >= len(actual) or expected[i] != actual[i]]
 print("Eval variables and text match the current original Z8 sources")
