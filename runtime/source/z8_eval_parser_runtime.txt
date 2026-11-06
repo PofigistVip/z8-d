@@ -1,0 +1,142 @@
+// Expression parser and evaluation order (Z8 ExpressionTreeVisitor).
+private class Z8EvalParser {
+    Z8EvalState state; wstring text; size_t position;
+    bool evaluating = true;
+    this(Z8EvalState state, wstring text) { this.state = state; this.text = z8_string_required(text); }
+    void whitespace() { while (position < text.length && [cast(wchar)' ', '\t', '\r', '\n'].canFind(text[position])) ++position; }
+    bool take(wstring token) {
+        whitespace();
+        if (position + token.length > text.length || text[position .. position + token.length] != token) return false;
+        position += token.length; return true;
+    }
+    Z8EvalValue[] arguments() {
+        Z8EvalValue[] result;
+        if (!take(")"w)) {
+            do { result ~= conditional(); } while (take(","w));
+            if (!take(")"w)) throw new Exception("unclosed Eval arguments");
+        }
+        return result;
+    }
+    Z8EvalValue primary() {
+        import std.uni : isAlpha, isNumber;
+        whitespace();
+        if (take("("w)) {
+            auto value = conditional();
+            if (!take(")"w)) throw new Exception("unclosed Eval expression");
+            if (!value.evaluated) value.expression = "("w ~ value.expression ~ ")"w;
+            return value;
+        }
+        if (position == text.length) throw new Exception("missing Eval operand");
+        auto start = position; auto c = text[position];
+        if (c == '\'' || c == '"') {
+            ++position;
+            while (position < text.length && text[position] != c) {
+                if (text[position] == '\\' && position + 1 < text.length) ++position;
+                ++position;
+            }
+            if (position == text.length) throw new Exception("unclosed Eval string");
+            ++position;
+        } else if (c >= '0' && c <= '9') {
+            while (position < text.length && text[position] >= '0' && text[position] <= '9') ++position;
+            if (position < text.length && text[position] == '.') {
+                ++position;
+                while (position < text.length && text[position] >= '0' && text[position] <= '9') ++position;
+            }
+        } else if (isAlpha(c) || c == '_') {
+            ++position;
+            while (position < text.length && (isAlpha(text[position]) || isNumber(text[position]) || text[position] == '_')) ++position;
+            auto name = text[start .. position];
+            if (take("("w)) {
+                auto values = arguments();
+                return evaluating ? z8_eval_function(name, values) : Z8EvalValue.init;
+            }
+        } else throw new Exception("unsupported Eval expression");
+        return evaluating ? z8_eval_atom(state, text[start .. position]) : Z8EvalValue.init;
+    }
+    Z8EvalValue postfix() {
+        import std.uni : isAlpha, isNumber;
+        auto value = primary();
+        for (;;) {
+            if (take("."w)) {
+                whitespace(); auto start = position;
+                if (position == text.length || !(isAlpha(text[position]) || text[position] == '_'))
+                    throw new Exception("missing Eval property name");
+                ++position;
+                while (position < text.length && (isAlpha(text[position]) || isNumber(text[position]) || text[position] == '_')) ++position;
+                auto name = text[start .. position];
+                if (take("("w)) {
+                    auto values = arguments();
+                    if (evaluating) value = z8_eval_method(value, name, values);
+                } else if (evaluating) value = z8_eval_property(value, name);
+            } else if (take("["w)) {
+                auto index = conditional();
+                if (!take("]"w)) throw new Exception("unclosed Eval index");
+                if (evaluating) value = z8_eval_item(state, value, index);
+            } else break;
+        }
+        return value;
+    }
+    Z8EvalValue unary() {
+        if (take("!"w)) { auto value = unary(); return evaluating ? z8_eval_unary("!"w, value) : Z8EvalValue.init; }
+        if (take("+"w)) { auto value = unary(); return evaluating ? z8_eval_unary("+"w, value) : Z8EvalValue.init; }
+        if (take("-"w)) { auto value = unary(); return evaluating ? z8_eval_unary("-"w, value) : Z8EvalValue.init; }
+        return postfix();
+    }
+    Z8EvalValue binary(int minimum) {
+        auto left = unary();
+        for (;;) {
+            whitespace(); wstring op; int precedence;
+            foreach (candidate; ["&&"w, "||"w, "=="w, "!="w, "<="w, ">="w, "<"w, ">"w, "+"w, "-"w, "*"w, "/"w, "%"w]) {
+                if (position + candidate.length <= text.length && text[position .. position + candidate.length] == candidate) { op = candidate; break; }
+            }
+            if (op is null) break;
+            if (op == "||"w) precedence = 1;
+            else if (op == "&&"w) precedence = 2;
+            else if (op == "=="w || op == "!="w) precedence = 3;
+            else if (op == "<"w || op == ">"w || op == "<="w || op == ">="w) precedence = 4;
+            else if (op == "+"w || op == "-"w) precedence = 5;
+            else precedence = 6;
+            if (precedence < minimum) break;
+            position += op.length;
+            auto right = binary(precedence + 1);
+            if (evaluating) left = z8_eval_binary(op, left, right);
+        }
+        return left;
+    }
+    Z8EvalValue conditional() {
+        auto condition = binary(1);
+        auto parent = evaluating;
+        scope(exit) evaluating = parent;
+        if (take("?:"w)) {
+            bool keep = parent && condition.evaluated && (condition.primary !is null || condition.json !is null || condition.context != Z8EvalContext.none);
+            evaluating = parent && !keep;
+            auto alternative = conditional();
+            if (!parent) return Z8EvalValue.init;
+            if (keep) return condition;
+            if (condition.evaluated) return alternative;
+            return Z8EvalValue(false, null, null, z8_eval_expression_repr(condition) ~ " ?: "w ~ z8_eval_expression_repr(alternative));
+        }
+        if (!take("?"w)) return condition;
+        bool known = parent && condition.evaluated;
+        bool yes;
+        if (known) {
+            auto value = condition.primary;
+            yes = condition.json !is null || condition.context != Z8EvalContext.none || (value !is null &&
+                (value.kind == Z8PrimaryKind.integer ? value.integerValue != 0 : value.kind == Z8PrimaryKind.boolean ? value.booleanValue : true));
+        }
+        evaluating = parent && (!known || yes);
+        auto thenValue = conditional();
+        if (!take(":"w)) throw new Exception("missing Eval conditional separator");
+        evaluating = parent && (!known || !yes);
+        auto elseValue = conditional();
+        if (!parent) return Z8EvalValue.init;
+        if (known) return yes ? thenValue : elseValue;
+        return Z8EvalValue(false, null, null, z8_eval_expression_repr(condition) ~ " ?"w ~
+            z8_eval_expression_repr(thenValue) ~ " : "w ~ z8_eval_expression_repr(elseValue));
+    }
+    Z8EvalValue parse() {
+        auto value = conditional(); whitespace();
+        if (position != text.length) throw new Exception("unsupported Eval expression");
+        return value;
+    }
+}

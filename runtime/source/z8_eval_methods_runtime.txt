@@ -1,0 +1,264 @@
+// Built-in expression functions and methods (Z8 Calculator / function).
+private Z8Primary z8_eval_string_method(wstring value, wstring name, Z8EvalValue[] arguments) {
+    long intArg(size_t i) {
+        if (i >= arguments.length || arguments[i].primary is null || arguments[i].primary.kind != Z8PrimaryKind.integer)
+            throw new Exception("invalid Eval method argument");
+        return arguments[i].primary.integerValue;
+    }
+    wstring textArg(size_t i) {
+        if (i >= arguments.length || arguments[i].primary is null || arguments[i].primary.kind != Z8PrimaryKind.text)
+            throw new Exception("invalid Eval method argument");
+        return arguments[i].primary.textValue;
+    }
+    if (!arguments.length) {
+        if (name == "length"w) return z8_primary_box(cast(long)value.length);
+        if (name == "isEmpty"w) return z8_primary_box(value.length == 0);
+        if (name == "toString"w || name == "get"w) return z8_primary_box(z8_string_new(value));
+        if (name == "trim"w) return z8_primary_box(z8_string_new(z8_str_trim(value)));
+        if (name == "trimLeft"w) return z8_primary_box(z8_string_new(z8_str_trimLeft(value)));
+        if (name == "trimRight"w) return z8_primary_box(z8_string_new(z8_str_trimRight(value)));
+        if (name == "toUpperCase"w) return z8_primary_box(z8_string_new(z8_str_toUpperCase(value)));
+        if (name == "toLowerCase"w) return z8_primary_box(z8_string_new(z8_str_toLowerCase(value)));
+        if (name == "firstToUpperCase"w) return z8_primary_box(z8_str_firstToUpperCase(value));
+        if (name == "firstToLowerCase"w) return z8_primary_box(z8_str_firstToLowerCase(value));
+    } else if (arguments.length == 1) {
+        if (name == "compare"w) return z8_primary_box(z8_str_compare(value, textArg(0)));
+        if (name == "compareNoCase"w) return z8_primary_box(z8_str_compareNoCase(value, textArg(0)));
+        if (name == "indexOf"w) return z8_primary_box(z8_str_indexOf(value, textArg(0)));
+        if (name == "lastIndexOf"w) return z8_primary_box(z8_str_lastIndexOf(value, textArg(0)));
+        if (name == "startsWith"w) return z8_primary_box(z8_str_startsWith(value, textArg(0)));
+        if (name == "endsWith"w) return z8_primary_box(z8_str_endsWith(value, textArg(0)));
+        if (name == "matches"w) return z8_primary_box(z8_regex_matches(value, textArg(0)));
+        if (name == "charAt"w) return z8_primary_box(z8_string_new(z8_str_charAt(value, intArg(0))));
+        if (name == "substring"w) return z8_primary_box(z8_string_new(z8_str_substring(value, intArg(0))));
+        if (name == "left"w) return z8_primary_box(z8_string_new(z8_str_left(value, intArg(0))));
+        if (name == "right"w) return z8_primary_box(z8_string_new(z8_str_right(value, intArg(0))));
+        if (name == "padLeft"w) return z8_primary_box(z8_string_new(z8_str_padLeft(value, intArg(0))));
+        if (name == "padRight"w) return z8_primary_box(z8_string_new(z8_str_padRight(value, intArg(0))));
+    } else if (arguments.length == 2) {
+        if (name == "indexOf"w) return z8_primary_box(z8_str_indexOf(value, textArg(0), intArg(1)));
+        if (name == "lastIndexOf"w) return z8_primary_box(z8_str_lastIndexOf(value, textArg(0), intArg(1)));
+        if (name == "startsWith"w) return z8_primary_box(z8_str_startsWith(value, textArg(0), intArg(1)));
+        if (name == "substring"w) return z8_primary_box(z8_string_new(z8_str_substring(value, intArg(0), intArg(1))));
+        if (name == "padLeft"w) return z8_primary_box(z8_string_new(z8_str_padLeft(value, intArg(0), textArg(1))));
+        if (name == "padRight"w) return z8_primary_box(z8_string_new(z8_str_padRight(value, intArg(0), textArg(1))));
+        if (name == "insert"w) return z8_primary_box(z8_string_new(z8_str_insert(value, intArg(0), textArg(1))));
+        if (name == "replaceFirst"w) return z8_primary_box(z8_string_new(z8_regex_replaceFirst(value, textArg(0), textArg(1))));
+        if (name == "replaceAll"w) return z8_primary_box(z8_string_new(z8_regex_replaceAll(value, textArg(0), textArg(1))));
+    } else if (arguments.length == 3 && name == "replace"w)
+        return z8_primary_box(z8_string_new(z8_str_replace(value, intArg(0), intArg(1), textArg(2))));
+    throw new Exception("unsupported Eval string method");
+}
+private Z8Primary z8_eval_number_method(Z8Primary value, wstring name, Z8EvalValue[] arguments) {
+    long intArg(size_t i) {
+        if (i >= arguments.length || arguments[i].primary is null || arguments[i].primary.kind != Z8PrimaryKind.integer)
+            throw new Exception("invalid Eval numeric argument");
+        return arguments[i].primary.integerValue;
+    }
+    bool integral = value.kind == Z8PrimaryKind.integer;
+    auto number = integral ? z8_decimal_from_int(value.integerValue) : value.decimalValue;
+    if (!arguments.length) {
+        if (name == "toString"w) return z8_primary_box(z8_string_new(z8_primary_to_string(value)));
+        if (name == "get"w) return value;
+        if (integral) {
+            auto n = value.integerValue;
+            if (name == "abs"w) return z8_primary_box(z8_int_abs(n));
+            if (name == "signum"w) return z8_primary_box(z8_int_signum(n));
+            if (name == "not"w) return z8_primary_box(z8_int_not(n));
+            if (name == "toHexString"w) return z8_primary_box(z8_string_new(z8_int_toHexString(n)));
+            if (name == "toBinaryString"w) return z8_primary_box(z8_string_new(z8_int_toBinaryString(n)));
+        } else {
+            if (name == "signum"w) return z8_primary_box(number.z8_signum());
+            if (name == "ceil"w) return z8_primary_box(number.z8_ceil());
+            if (name == "floor"w) return z8_primary_box(number.z8_floor());
+            if (name == "round"w) return z8_primary_box(number.z8_round_int());
+        }
+        static foreach (method; ["abs", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "toRadians", "toDegrees", "exp", "ln", "log10", "sqrt", "cbrt"]) {
+            if (name == method.to!wstring) return z8_primary_box(z8_decimal_math!method(number));
+        }
+    } else if (arguments.length == 1) {
+        if (integral) {
+            auto n = value.integerValue;
+            if (name == "and"w) return z8_primary_box(z8_int_and(n, intArg(0)));
+            if (name == "or"w) return z8_primary_box(z8_int_or(n, intArg(0)));
+            if (name == "xor"w) return z8_primary_box(z8_int_xor(n, intArg(0)));
+            if (name == "leftShift"w) return z8_primary_box(z8_int_leftShift(n, intArg(0)));
+            if (name == "rightShift"w) return z8_primary_box(z8_int_rightShift(n, intArg(0)));
+            if (name == "toString"w) return z8_primary_box(z8_string_new(z8_int_toString(n, intArg(0))));
+        } else if (name == "round"w) return z8_primary_box(number.z8_round(intArg(0)));
+        if (name == "power"w) {
+            auto exponent = arguments[0].primary;
+            if (exponent is null || exponent.kind != Z8PrimaryKind.decimal) throw new Exception("invalid Eval power argument");
+            return z8_primary_box(integral ? z8_int_power(value.integerValue, exponent.decimalValue) : z8_decimal_math!"power"(number, exponent.decimalValue));
+        }
+    } else if (!integral && arguments.length == 2 && name == "round"w)
+        return z8_primary_box(number.z8_round(intArg(0), intArg(1)));
+    throw new Exception("unsupported Eval numeric method");
+}
+private Z8Primary z8_eval_type_method(Z8EvalContext context, wstring name, Z8EvalValue[] arguments) {
+    Z8Primary arg(size_t i, Z8PrimaryKind kind) {
+        if (i >= arguments.length || arguments[i].primary is null || arguments[i].primary.kind != kind)
+            throw new Exception("invalid Eval type method argument");
+        return arguments[i].primary;
+    }
+    if (!arguments.length) {
+        if (context == Z8EvalContext.guidType && name == "create"w) return z8_primary_box(z8_guid_create_random());
+        if (context == Z8EvalContext.dateType) {
+            if (name == "now"w) return z8_primary_box(z8_date_now());
+            if (name == "today"w) return z8_primary_box(z8_date_today());
+            if (name == "yesterday"w) return z8_primary_box(z8_date_yesterday());
+            if (name == "tomorrow"w) return z8_primary_box(z8_date_tomorrow());
+        }
+    } else if (arguments.length == 1) {
+        if (name == "parse"w) {
+            auto text = arg(0, Z8PrimaryKind.text).textValue;
+            if (context == Z8EvalContext.booleanType) return z8_primary_box(z8_bool_parse(text));
+            if (context == Z8EvalContext.integerType) return z8_primary_box(z8_int_parse(text));
+            if (context == Z8EvalContext.decimalType) return z8_primary_box(z8_decimal_parse(text));
+            if (context == Z8EvalContext.guidType) return z8_primary_box(z8_guid_parse(text));
+            if (context == Z8EvalContext.dateType) return z8_primary_box(z8_date_parse(text));
+            if (context == Z8EvalContext.datespanType) return z8_primary_box(z8_datespan_parse(text));
+        }
+        if (context == Z8EvalContext.dateType && name == "parseIsoString"w)
+            return z8_primary_box(z8_date_parseIsoString(arg(0, Z8PrimaryKind.text).textValue));
+        if (context == Z8EvalContext.guidType && name == "create"w) {
+            auto value = arguments[0].primary;
+            if (value !is null && value.kind == Z8PrimaryKind.text) return z8_primary_box(z8_guid_create_name(value.textValue));
+            return z8_primary_box(z8_guid_create(arg(0, Z8PrimaryKind.integer).integerValue));
+        }
+    } else if (arguments.length == 2) {
+        if (context == Z8EvalContext.integerType && name == "parse"w)
+            return z8_primary_box(z8_int_parse(arg(0, Z8PrimaryKind.text).textValue, arg(1, Z8PrimaryKind.integer).integerValue));
+        if (context == Z8EvalContext.dateType && name == "parse"w)
+            return z8_primary_box(z8_date_parse(arg(0, Z8PrimaryKind.text).textValue, arg(1, Z8PrimaryKind.text).textValue));
+        if (context == Z8EvalContext.dateType && name == "isEqualDate"w)
+            return z8_primary_box(z8_date_isEqualDate(arg(0, Z8PrimaryKind.date).dateValue, arg(1, Z8PrimaryKind.date).dateValue));
+        if (context == Z8EvalContext.guidType && name == "create"w)
+            return z8_primary_box(z8_guid_create(arg(0, Z8PrimaryKind.integer).integerValue, arg(1, Z8PrimaryKind.integer).integerValue));
+        if (context == Z8EvalContext.stringType && name == "replicate"w)
+            return z8_primary_box(z8_string_new(z8_string_replicate(arg(0, Z8PrimaryKind.text).textValue, arg(1, Z8PrimaryKind.integer).integerValue)));
+    }
+    throw new Exception("unsupported Eval type method");
+}
+private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue[] arguments) {
+    bool evaluated = object.evaluated;
+    foreach (argument; arguments) evaluated = evaluated && argument.evaluated;
+    if (!evaluated) {
+        wstring call = z8_eval_expression_repr(object) ~ "."w ~ name ~ "("w;
+        foreach (i, argument; arguments) { if (i) call ~= ", "w; call ~= z8_eval_value_text(argument); }
+        return Z8EvalValue(false, null, null, call ~ ")"w);
+    }
+    if (object.context == Z8EvalContext.json && (name == "min"w || name == "max"w))
+        return z8_eval_json_aggregate(name, arguments);
+    if (object.context != Z8EvalContext.none && object.context != Z8EvalContext.json)
+        return Z8EvalValue(true, z8_eval_type_method(object.context, name, arguments), null, null);
+    if (object.primary !is null) {
+        Z8EvalContext type;
+        final switch (object.primary.kind) {
+            case Z8PrimaryKind.boolean: type = Z8EvalContext.booleanType; break;
+            case Z8PrimaryKind.integer: type = Z8EvalContext.integerType; break;
+            case Z8PrimaryKind.decimal: type = Z8EvalContext.decimalType; break;
+            case Z8PrimaryKind.text: type = Z8EvalContext.stringType; break;
+            case Z8PrimaryKind.guid: type = Z8EvalContext.guidType; break;
+            case Z8PrimaryKind.date: type = Z8EvalContext.dateType; break;
+            case Z8PrimaryKind.datespan: type = Z8EvalContext.datespanType; break;
+            case Z8PrimaryKind.binary: case Z8PrimaryKind.geometry: case Z8PrimaryKind.file: case Z8PrimaryKind.user: break;
+        }
+        if ((name == "parse"w && type != Z8EvalContext.stringType && type != Z8EvalContext.none) ||
+            (name == "parseIsoString"w && type == Z8EvalContext.dateType) ||
+            (name == "create"w && type == Z8EvalContext.guidType) ||
+            (name == "replicate"w && type == Z8EvalContext.stringType) ||
+            (["now"w, "today"w, "yesterday"w, "tomorrow"w, "isEqualDate"w].canFind(name) && type == Z8EvalContext.dateType))
+            return Z8EvalValue(true, z8_eval_type_method(type, name, arguments), null, null);
+    }
+    if (object.primary !is null && object.primary.kind == Z8PrimaryKind.text)
+        return Z8EvalValue(true, z8_eval_string_method(object.primary.textValue, name, arguments), null, null);
+    if (object.primary !is null && (object.primary.kind == Z8PrimaryKind.integer || object.primary.kind == Z8PrimaryKind.decimal))
+        return Z8EvalValue(true, z8_eval_number_method(object.primary, name, arguments), null, null);
+    throw new Exception("unsupported Eval method");
+}
+private wstring z8_eval_format_decimal(Z8Decimal number, wstring pattern) {
+    import std.math : signbit;
+    wstring result; size_t implicitArgument, lastArgument;
+    for (size_t i; i < pattern.length; ++i) {
+        if (pattern[i] != '%') { result ~= pattern[i]; continue; }
+        if (++i == pattern.length) throw new Exception("incomplete Eval format");
+        if (pattern[i] == '%') { result ~= '%'; continue; }
+        if (pattern[i] == 'n') { version (Windows) result ~= "\r\n"w; else result ~= "\n"w; continue; }
+        size_t start = i, argument;
+        while (i < pattern.length && pattern[i] >= '0' && pattern[i] <= '9') argument = argument * 10 + pattern[i++] - '0';
+        bool explicitArgument = i > start && i < pattern.length && pattern[i] == '$';
+        if (explicitArgument) ++i; else { i = start; argument = ++implicitArgument; }
+        bool left, plus, space, zero, group, parens, alternate, reuse;
+        while (i < pattern.length) {
+            auto flag = pattern[i];
+            if (flag == '-') { if (left) throw new Exception("duplicate Eval format flag"); left = true; }
+            else if (flag == '+') { if (plus) throw new Exception("duplicate Eval format flag"); plus = true; }
+            else if (flag == ' ') { if (space) throw new Exception("duplicate Eval format flag"); space = true; }
+            else if (flag == '0') { if (zero) throw new Exception("duplicate Eval format flag"); zero = true; }
+            else if (flag == ',') { if (group) throw new Exception("duplicate Eval format flag"); group = true; }
+            else if (flag == '(') { if (parens) throw new Exception("duplicate Eval format flag"); parens = true; }
+            else if (flag == '#') { if (alternate) throw new Exception("duplicate Eval format flag"); alternate = true; }
+            else if (flag == '<') { if (reuse) throw new Exception("duplicate Eval format flag"); reuse = true; }
+            else break;
+            ++i;
+        }
+        if (reuse) { argument = lastArgument; if (!explicitArgument) --implicitArgument; }
+        size_t width;
+        while (i < pattern.length && pattern[i] >= '0' && pattern[i] <= '9') {
+            width = width * 10 + pattern[i++] - '0';
+            if (width > 1_000_000) throw new Exception("Eval format width too large");
+        }
+        size_t precision = 6;
+        if (i < pattern.length && pattern[i] == '.') {
+            precision = 0; ++i; auto digits = i;
+            while (i < pattern.length && pattern[i] >= '0' && pattern[i] <= '9') {
+                precision = precision * 10 + pattern[i++] - '0';
+                if (precision > 1000) throw new Exception("Eval format precision too large");
+            }
+            if (i == digits) throw new Exception("missing Eval format precision");
+        }
+        if (argument != 1 || i >= pattern.length || pattern[i] != 'f' || (left && zero) || (plus && space) || ((left || zero) && !width))
+            throw new Exception("unsupported Eval decimal format");
+        lastArgument = argument;
+        auto value = number.z8_as_double();
+        auto rounded = z8_math_result(value).z8_round(cast(long)precision, 4);
+        auto magnitude = rounded.z8_string();
+        bool negative = signbit(value) != 0;
+        if (magnitude.length && magnitude[0] == '-') magnitude = magnitude[1 .. $];
+        auto body = z8_message_number(magnitude, precision, group);
+        if (!precision && alternate) body ~= ',';
+        wstring prefix = negative ? (parens ? "("w : "-"w) : plus ? "+"w : space ? " "w : ""w;
+        wstring suffix = negative && parens ? ")"w : ""w;
+        auto length = prefix.length + body.length + suffix.length;
+        if (width > length) {
+            auto padding = new wchar[width - length]; padding[] = zero ? '0' : ' ';
+            if (left) suffix ~= cast(wstring)padding;
+            else if (zero) prefix ~= cast(wstring)padding;
+            else prefix = cast(wstring)padding ~ prefix;
+        }
+        result ~= prefix ~ body ~ suffix;
+    }
+    return result;
+}
+private Z8EvalValue z8_eval_function(wstring name, Z8EvalValue[] arguments) {
+    bool evaluated = true;
+    foreach (argument; arguments) evaluated = evaluated && argument.evaluated;
+    if (!evaluated) {
+        wstring call = name ~ "("w;
+        foreach (i, argument; arguments) { if (i) call ~= ", "w; call ~= z8_eval_value_text(argument); }
+        return Z8EvalValue(false, null, null, call ~ ")"w);
+    }
+    if (name != "format"w || arguments.length != 2 || arguments[0].json !is null || arguments[0].context != Z8EvalContext.none ||
+        arguments[1].json !is null || arguments[1].context != Z8EvalContext.none ||
+        (arguments[1].primary !is null && arguments[1].primary.kind != Z8PrimaryKind.text))
+        throw new Exception("unsupported Eval function or arguments");
+    auto value = arguments[0].primary;
+    auto pattern = arguments[1].primary is null ? null : arguments[1].primary.textValue;
+    wstring formatted;
+    if (value is null) formatted = "<null>"w;
+    else if (value.kind == Z8PrimaryKind.date) formatted = z8_date_toString(value.dateValue, pattern is null ? "dd.MM.yyy"w : pattern);
+    else if (value.kind == Z8PrimaryKind.decimal) formatted = pattern is null ? z8_eval_formatted_text(arguments[0]) : z8_eval_format_decimal(value.decimalValue, pattern);
+    else formatted = z8_primary_to_string(value);
+    return Z8EvalValue(true, z8_primary_box(z8_string_new(formatted)), null, null);
+}
