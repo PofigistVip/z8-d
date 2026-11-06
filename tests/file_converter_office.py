@@ -5,10 +5,12 @@ Usage: python tests/file_converter_office.py <original-z8-root> <libreoffice-hom
 from pathlib import Path
 import os
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
 import zipfile
+import zlib
 from runtime_support import import_args, runtime_library
 
 if len(sys.argv) != 3:
@@ -35,6 +37,15 @@ public class OfficeProbe {
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     (temp / "source.txt").write_text("Hello from Z8. Привет!", encoding="utf-8")
+    def png_chunk(kind, contents):
+        return struct.pack("!I", len(contents)) + kind + contents + struct.pack("!I", zlib.crc32(kind + contents) & 0xffffffff)
+    pixels = b"\0" + b"\xff\0\0" * 2 + b"\0" + b"\0\xff\0" * 2
+    png = (b"\x89PNG\r\n\x1a\n" + png_chunk(b"IHDR", struct.pack("!IIBBBBB", 2, 2, 8, 2, 0, 0, 0)) +
+           png_chunk(b"IDAT", zlib.compress(pixels)) + png_chunk(b"IEND", b""))
+    (temp / "image.png").write_bytes(png)
+    # Keep the header readable but corrupt the compressed pixels; LibreOffice
+    # may otherwise report success and emit a blank PDF.
+    (temp / "invalid.png").write_bytes(png[:-16] + b"\0" * 16)
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
@@ -58,6 +69,14 @@ void main(string[] args) {
     assert(z8_file_exists(P.m_convertBinary(rtf, "rtf"w, binaryOutput)));
     auto inferred = z8_file_from_path(buildPath(args[1], "result", "inferred.odt").to!wstring);
     assert(z8_file_exists(P.m_convertUnknown(z8_file_to_binary(document), inferred)));
+    auto image = z8_file_from_path(buildPath(args[1], "image.png").to!wstring);
+    auto imagePdf = z8_file_from_path(buildPath(args[1], "result", "image.pdf").to!wstring);
+    assert(z8_file_exists(P.m_convert(image, imagePdf)));
+    auto invalidImage = z8_file_from_path(buildPath(args[1], "invalid.png").to!wstring);
+    auto invalidPdf = z8_file_from_path(buildPath(args[1], "result", "invalid.pdf").to!wstring);
+    bool invalidFailed;
+    try { P.m_convert(invalidImage, invalidPdf); } catch (Exception) { invalidFailed = true; }
+    assert(invalidFailed && !z8_file_exists(invalidPdf));
     auto unsupported = z8_file_from_path(buildPath(args[1], "result", "unsupported.pdf").to!wstring);
     auto unsupportedOptions = new Z8StringMap(); unsupportedOptions.z8_add("format"w, "PDF/X-3:2002"w);
     bool unsupportedFailed;
@@ -86,4 +105,6 @@ void main(string[] args) {
         assert b"Z8 binary" in document.read("content.xml")
     with zipfile.ZipFile(temp / "result" / "inferred.odt") as document:
         assert b"Hello from Z8" in document.read("content.xml")
+    image_pdf = (temp / "result" / "image.pdf").read_bytes()
+    assert image_pdf.startswith(b"%PDF-") and b"/Subtype/Image" in image_pdf
 print("FileConverter office and PDF conversion passed")

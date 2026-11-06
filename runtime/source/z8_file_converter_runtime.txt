@@ -31,6 +31,7 @@ private Z8Optional!bool z8_file_converter_convertible(wstring extension) {
 // The Java implementation delegates office documents to LibreOffice. Run an
 // isolated headless instance so concurrent conversions do not share its profile.
 private void z8_file_converter_office_convert(Z8Binary source, wstring extension, string target, Z8StringMap parameters) {
+    import std.algorithm.searching : canFind;
     import std.file : copy, exists, mkdir, mkdirRecurse, rmdirRecurse, tempDir;
     import std.path : absolutePath, buildPath, dirName;
     import std.process : execute;
@@ -79,7 +80,9 @@ private void z8_file_converter_office_convert(Z8Binary source, wstring extension
     else auto profileUrl = "file://" ~ encode(absolutePath(profile));
     auto result = execute([executable, "-env:UserInstallation=" ~ profileUrl, "--headless", "--convert-to", filter, "--outdir", outputDir, input]);
     auto output = buildPath(outputDir, "document." ~ outputExtension);
-    if (result.status != 0 || !exists(output)) throw new Exception("LibreOffice conversion failed: " ~ result.output);
+    // LibreOffice may still export a blank page after libpng reports a corrupt image.
+    if (result.status != 0 || !exists(output) || result.output.canFind("libpng error:"))
+        throw new Exception("LibreOffice conversion failed: " ~ result.output);
     auto parent = dirName(target);
     if (parent.length) mkdirRecurse(parent);
     copy(output, target);
