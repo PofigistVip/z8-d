@@ -126,7 +126,13 @@ private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges priv
             requested ~= z8_query_find_field_id(query, id);
         }
     }
-    if (!requested.length) requested = z8_query_declared_fields(query);
+    if (!requested.length) {
+        auto formFields = z8_query_form_fields(query);
+        bool configured;
+        foreach (name; ["controls"w, "names"w, "columns"w, "extraFields"w])
+            if (z8_query_array(query, name).length) { configured = true; break; }
+        requested = configured ? formFields : z8_query_declared_fields(query);
+    }
     if (includeKeys) {
         requested ~= key;
         foreach (field; z8_query_declared_fields(query))

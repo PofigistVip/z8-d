@@ -803,6 +803,16 @@ void main(string[] args) {
     assert(linkedMeta["controls"][0]["isForm"].boolean && linkedMeta["controls"][0]["link"]["name"].str == "customerId");
     assert(linkedMeta["controls"][0]["link"]["primaryKey"].str == "recordId" && linkedMeta["controls"][0]["link"]["query"]["primaryKey"].str == "customer.recordId");
     assert(linkedMeta["controls"][0]["controls"][0]["name"].str == "customer.label");
+    auto defaultMeta = parseJSON(requestFields(null, null, null, null, null, "HttpOrder"w, "meta"w).to!string);
+    bool defaultCustomer, defaultTitle;
+    foreach (field; defaultMeta["fields"].array) {
+        if (field["name"].str == "customer.label") defaultCustomer = true;
+        if (field["name"].str == "title") defaultTitle = true;
+    }
+    assert(defaultCustomer && !defaultTitle);
+    auto defaultResponse = parseJSON(requestFields(null, null, null, null, null, "HttpOrder"w).to!string);
+    assert(defaultResponse["data"].array.length == 2 && defaultResponse["data"][0]["customer.label"].str.length);
+    assert("title" !in defaultResponse["data"][0].object);
     linkedMeta = parseJSON(requestFields(`["customer.label"]`w, null, null, null, null, "HttpOrder"w, null).to!string);
     assert(linkedMeta["isQuery"].boolean && linkedMeta["data"].array.length == 2);
     response = parseJSON(requestFields(`["title"]`w, `{"property":"customer.label","value":"alice"}`w).to!string);
