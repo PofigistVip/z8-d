@@ -149,6 +149,24 @@ void main(string[] args) {
     auto expired = sessions.create("expired"w, expiredUser, expiredUser, "public"w); expired.lastAccessTime = 0;
     assert(authority.authorize(null, "expired"w, "test"w) is null);
     auto service = new Z8ProtobufAuthorityService(new Z8ProtobufPostgresAuthority(authority));
+    auto trustedRequest = Z8AuthorityTrustedLogin(z8_guid_create(85), "ignored"w, "public"w, "10.0.0.1"w, false);
+    bool trustedDisabled;
+    try { service.trustedLogin(z8_encode_authority_trusted_login(trustedRequest)); } catch (Exception) { trustedDisabled = true; }
+    assert(trustedDisabled);
+    auto trustedService = new Z8ProtobufAuthorityService(new Z8ProtobufPostgresAuthority(authority, true));
+    auto trustedClient = new Z8ProtobufAuthorityClient(new LoopbackRpc(trustedService));
+    auto trustedSession = trustedClient.trustedLogin(trustedRequest);
+    assert(trustedSession !is null && trustedSession.user.id == z8_guid_create(85) && trustedSession.user.login == "Bob"w);
+    assert(z8_optional_require(z8_primary_cast!bool(trustedSession.user.parameters.z8_get("custom"w))));
+    assert(z8_primary_cast!wstring(trustedSession.user.parameters.z8_get("tenant"w)) == "public"w);
+    trustedRequest.userId = z8_guid_create(87); trustedRequest.login = null;
+    assert(trustedClient.trustedLogin(trustedRequest) is null); // Timed bans still apply.
+    trustedRequest.userId = null; trustedRequest.login = "bob"w; trustedRequest.createIfMissing = true;
+    assert(trustedClient.trustedLogin(trustedRequest) !is null);
+    trustedRequest.schema = "other"w; assert(trustedClient.trustedLogin(trustedRequest) is null);
+    trustedRequest.schema = "public"w; trustedRequest.login = "missing"w; bool trustedCreateRejected;
+    try { trustedClient.trustedLogin(trustedRequest); } catch (Exception) { trustedCreateRejected = true; }
+    assert(trustedCreateRejected);
     auto loginRequest = Z8AuthorityLogin("Bob"w, "override"w, "public"w, "10.0.0.1"w);
     auto rpcLogin = z8_decode_authority_reply(service.login(z8_encode_authority_login(loginRequest)));
     assert(!rpcLogin.denied && rpcLogin.session.session.user.login == "Bob"w);

@@ -4,8 +4,11 @@ import std.conv : to;
 import z8.authority.custom_primary;
 import z8.authority.session;
 import z8.protobuf.wire;
+import z8.protobuf.guid;
+import z8.runtime : Z8Guid, z8_guid_zero;
 
 struct Z8AuthorityLogin { wstring login, password, schema, address; }
+struct Z8AuthorityTrustedLogin { Z8Guid userId; wstring login, schema, address; bool createIfMissing; }
 struct Z8AuthorityAuthorize { wstring sessionId, schema, serverId; }
 struct Z8AuthorityLogout { wstring sessionId, schema; }
 struct Z8AuthoritySessionReply { bool denied; Z8SessionSnapshot session; }
@@ -48,6 +51,32 @@ Z8AuthorityLogin z8_decode_authority_login(const(ubyte)[] data) {
     if (result.login is null || !result.login.length || result.password is null || result.schema is null || !result.schema.length)
         throw new Z8ProtobufException("login, password and schema are required");
     return result;
+}
+private void checkTrustedLogin(Z8AuthorityTrustedLogin value) {
+    if (value.schema is null || !value.schema.length || (value.userId is null && (value.login is null || !value.login.length)) ||
+        (value.userId !is null && value.userId == z8_guid_zero()))
+        throw new Z8ProtobufException("trusted login requires a schema and a nonzero user ID or login");
+}
+ubyte[] z8_encode_authority_trusted_login(Z8AuthorityTrustedLogin value) {
+    checkTrustedLogin(value); ubyte[] output;
+    if (value.userId !is null) { z8_proto_tag(output, 1, 2); z8_proto_bytes(output, z8_proto_encode_guid(Z8ProtobufGuid(value.userId))); }
+    text(output, 2, value.login); text(output, 3, value.schema); text(output, 4, value.address);
+    if (value.createIfMissing) { z8_proto_tag(output, 5, 0); z8_proto_varint(output, 1); }
+    checkedSize(output.length); return output;
+}
+Z8AuthorityTrustedLogin z8_decode_authority_trusted_login(const(ubyte)[] data) {
+    checkedSize(data.length); auto reader = Z8ProtobufReader(data); Z8AuthorityTrustedLogin result;
+    Z8ProtobufGuid id;
+    while (!reader.empty()) {
+        uint field, wire; reader.tag(field, wire);
+        if (field == 1 && wire == 2) { z8_proto_merge_guid(id, reader.bytes()); result.userId = id.value; }
+        else if (field >= 2 && field <= 4 && wire == 2) {
+            auto value = readText(reader.bytes());
+            if (field == 2) result.login = value; else if (field == 3) result.schema = value; else result.address = value;
+        } else if (field == 5 && wire == 0) result.createIfMissing = reader.varint() != 0;
+        else reader.skip(field, wire);
+    }
+    checkTrustedLogin(result); return result;
 }
 ubyte[] z8_encode_authority_authorize(Z8AuthorityAuthorize value) {
     if (value.sessionId is null || !value.sessionId.length || value.schema is null || !value.schema.length)

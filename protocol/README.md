@@ -46,6 +46,12 @@ rebroadcasting. `Z8ProtobufAuthorityPeerNotifier` sends the latter operations.
 `IZ8AuthorityRpcTransport` supplied by the host. The client validates the
 returned schema and, for authorization, the session ID. The service's `dispatch`
 method routes the corresponding operation to its handler.
+`TrustedLogin` resolves an existing user by ID or login without a password and
+returns a normal session. The PostgreSQL adapter disables this operation by
+default; its host must explicitly enable it and authorize the calling peer for
+passwordless login at the transport boundary. User creation for an absent user
+is not yet implemented. The service and client both verify an explicitly
+requested user ID in the returned session.
 Logout is an optional `IZ8AuthorityLogout` capability. Its request requires a
 session ID and schema; the PostgreSQL adapter rejects a different schema and
 revokes the matching session. Unknown or already revoked IDs are harmless.

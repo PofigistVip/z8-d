@@ -310,7 +310,9 @@ system and administrator accounts retain the original fallback behavior.
 `authenticateTrusted` resolves an existing user by ID or case-insensitive login
 without checking a password; it still applies bans, user hooks and additional
 parameter checks. Only a host that has authenticated and authorized the caller
-may invoke it. It does not create missing users or expose an HTTP endpoint.
+may invoke it. The protobuf authority adapter can expose this capability only
+when explicitly enabled by its host; peer authorization remains the transport's
+responsibility. It does not create missing users or expose an HTTP endpoint.
 A network transport for cross-server notifications is still pending.
 The optional `z8.integration.postgres_authority`
 module connects it to CivetWeb.

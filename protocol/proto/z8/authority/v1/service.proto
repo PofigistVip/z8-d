@@ -3,6 +3,7 @@ syntax = "proto3";
 package z8.authority.v1;
 
 import "z8/authority/v1/notifications.proto";
+import "z8/authority/v1/common.proto";
 import "z8/authority/v1/session.proto";
 
 message LoginRequest {
@@ -10,6 +11,14 @@ message LoginRequest {
   optional string password = 2;
   string schema = 3;
   optional string address = 4;
+}
+
+message TrustedLoginRequest {
+  Guid user_id = 1;
+  optional string login = 2;
+  string schema = 3;
+  optional string address = 4;
+  bool create_if_missing = 5;
 }
 
 message AuthorizeRequest {
@@ -35,6 +44,7 @@ message Empty {}
 // This declares operations only; a concrete RPC transport is not selected.
 service Authority {
   rpc Login(LoginRequest) returns (SessionReply);
+  rpc TrustedLogin(TrustedLoginRequest) returns (SessionReply);
   rpc Authorize(AuthorizeRequest) returns (SessionReply);
   rpc Logout(LogoutRequest) returns (Empty);
   rpc UserChanged(.z8.authority.v1.UserChanged) returns (Empty);

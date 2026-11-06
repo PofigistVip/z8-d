@@ -4,11 +4,11 @@ import z8.runtime : Z8ApplicationSession, Z8Guid, IZ8UserChangeNotifier, IZ8Role
 import z8.authority.custom_primary;
 import z8.authority.messages;
 import z8.authority.notifications;
-import z8.authority.service : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink, IZ8AuthorityLogout;
+import z8.authority.service : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink, IZ8AuthorityLogout, IZ8AuthorityTrustedLogin;
 import z8.authority.transport;
 import z8.protobuf.wire;
 
-class Z8ProtobufAuthorityClient : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink, IZ8AuthorityLogout, IZ8UserChangeNotifier, IZ8RoleChangeNotifier {
+class Z8ProtobufAuthorityClient : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink, IZ8AuthorityLogout, IZ8AuthorityTrustedLogin, IZ8UserChangeNotifier, IZ8RoleChangeNotifier {
     private IZ8AuthorityRpcTransport transport;
     private Z8CustomPrimaryRegistry custom;
     this(IZ8AuthorityRpcTransport transport, Z8CustomPrimaryRegistry custom = null) {
@@ -25,6 +25,12 @@ class Z8ProtobufAuthorityClient : IZ8AuthorityEndpoint, IZ8AuthorityInvalidation
     }
     Z8ApplicationSession login(Z8AuthorityLogin request) {
         return sessionReply(transport.call(Z8AuthorityMethod.login, z8_encode_authority_login(request)), request.schema);
+    }
+    Z8ApplicationSession trustedLogin(Z8AuthorityTrustedLogin request) {
+        auto session = sessionReply(transport.call(Z8AuthorityMethod.trustedLogin, z8_encode_authority_trusted_login(request)), request.schema);
+        if (session !is null && request.userId !is null && (session.user is null || session.user.id != request.userId))
+            throw new Z8ProtobufException("authority returned a different user ID");
+        return session;
     }
     Z8ApplicationSession authorize(Z8AuthorityAuthorize request) {
         return sessionReply(transport.call(Z8AuthorityMethod.authorize, z8_encode_authority_authorize(request)), request.schema, request.sessionId);

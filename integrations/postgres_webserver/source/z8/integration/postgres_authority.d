@@ -68,6 +68,17 @@ class Z8PostgresHttpAuthority : IZ8HttpAuthority, IZ8HttpSessionLogout, IZ8UserC
         scope(exit) connection.close();
         auto address = request is null || request.remoteAddress is null ? null : request.remoteAddress.to!wstring;
         auto user = new Z8PostgresAuthenticator(connection, schema, registry, config, this, this).authenticate(login, password, null, address);
+        return issueSession(connection, user);
+    }
+    // This method is for an already authorized trusted caller, not public HTTP.
+    Z8ApplicationSession trustedLogin(Z8Guid id, wstring login = null, wstring address = null) {
+        sessions.check(z8_date_ticks(z8_date_now()));
+        auto connection = source.openSibling();
+        scope(exit) connection.close();
+        auto user = new Z8PostgresAuthenticator(connection, schema, registry, config, this, this).authenticateTrusted(id, login, null, address);
+        return issueSession(connection, user);
+    }
+    private Z8ApplicationSession issueSession(Z8PostgresConnection connection, Z8UserData user) {
         if (user is null) return null;
         auto system = z8_postgres_read_user(connection, schema, z8_guid_create(1), registry, null, false);
         if (system is null) throw new Z8PostgresException("system user is missing");

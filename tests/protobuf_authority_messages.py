@@ -10,19 +10,30 @@ root = Path(__file__).resolve().parents[1]
 schema = (root / "protocol/proto/z8/authority/v1/service.proto").read_text(encoding="utf-8")
 for declaration in ("optional string password = 2;", "SessionSnapshot session = 1;", "bool access_denied = 2;",
                     "rpc Login(LoginRequest) returns (SessionReply);", "rpc Authorize(AuthorizeRequest) returns (SessionReply);",
-                    "rpc Logout(LogoutRequest) returns (Empty);"):
+                    "rpc Logout(LogoutRequest) returns (Empty);", "rpc TrustedLogin(TrustedLoginRequest) returns (SessionReply);"):
     assert declaration in schema
+common_file = descriptor_pb2.FileDescriptorProto(name="z8/authority/v1/common.proto", package="z8.authority.v1", syntax="proto3")
+guid = common_file.message_type.add(name="Guid")
+guid.field.add(name="most_significant_bits", number=1, label=1, type=6); guid.field.add(name="least_significant_bits", number=2, label=1, type=6)
 session_file = descriptor_pb2.FileDescriptorProto(name="z8/authority/v1/session.proto", package="z8.authority.v1", syntax="proto3")
 session = session_file.message_type.add(name="SessionSnapshot")
 session.field.add(name="session_id", number=1, label=1, type=9); session.field.add(name="schema", number=2, label=1, type=9)
 file = descriptor_pb2.FileDescriptorProto(name="z8/authority/v1/service.proto", package="z8.authority.v1", syntax="proto3")
 file.dependency.append(session_file.name)
+file.dependency.append(common_file.name)
 login = file.message_type.add(name="LoginRequest")
 login.field.add(name="login", number=1, label=1, type=9)
 for name, number in (("password", 2), ("address", 4)):
     index = len(login.oneof_decl); login.oneof_decl.add(name="_" + name)
     login.field.add(name=name, number=number, label=1, type=9, proto3_optional=True, oneof_index=index)
 login.field.add(name="schema", number=3, label=1, type=9)
+trusted = file.message_type.add(name="TrustedLoginRequest")
+trusted.field.add(name="user_id", number=1, label=1, type=11, type_name=".z8.authority.v1.Guid")
+for name, number in (("login", 2), ("address", 4)):
+    index = len(trusted.oneof_decl); trusted.oneof_decl.add(name="_" + name)
+    trusted.field.add(name=name, number=number, label=1, type=9, proto3_optional=True, oneof_index=index)
+trusted.field.add(name="schema", number=3, label=1, type=9)
+trusted.field.add(name="create_if_missing", number=5, label=1, type=8)
 authorize = file.message_type.add(name="AuthorizeRequest")
 authorize.field.add(name="session_id", number=1, label=1, type=9); authorize.field.add(name="schema", number=2, label=1, type=9)
 authorize.oneof_decl.add(name="_server_id")
@@ -32,8 +43,9 @@ logout.field.add(name="session_id", number=1, label=1, type=9); logout.field.add
 reply = file.message_type.add(name="SessionReply"); reply.oneof_decl.add(name="result")
 reply.field.add(name="session", number=1, label=1, type=11, type_name=".z8.authority.v1.SessionSnapshot", oneof_index=0)
 reply.field.add(name="access_denied", number=2, label=1, type=8, oneof_index=0)
-pool = descriptor_pool.DescriptorPool(); pool.Add(session_file); pool.Add(file)
+pool = descriptor_pool.DescriptorPool(); pool.Add(common_file); pool.Add(session_file); pool.Add(file)
 Login = message_factory.GetMessageClass(pool.FindMessageTypeByName("z8.authority.v1.LoginRequest"))
+TrustedLogin = message_factory.GetMessageClass(pool.FindMessageTypeByName("z8.authority.v1.TrustedLoginRequest"))
 Authorize = message_factory.GetMessageClass(pool.FindMessageTypeByName("z8.authority.v1.AuthorizeRequest"))
 Logout = message_factory.GetMessageClass(pool.FindMessageTypeByName("z8.authority.v1.LogoutRequest"))
 Reply = message_factory.GetMessageClass(pool.FindMessageTypeByName("z8.authority.v1.SessionReply"))
@@ -51,7 +63,7 @@ import z8.authority.transport;
 import z8.protobuf.wire;
 import std.file : read, write;
 import std.path : buildPath;
-class Endpoint : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink, IZ8AuthorityLogout {
+class Endpoint : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink, IZ8AuthorityLogout, IZ8AuthorityTrustedLogin {
     int users, roles, appliedUsers, appliedRoles, logouts;
     Z8ApplicationSession makeSession(wstring id) {
         auto user = new Z8UserData(); user.id = z8_guid_create(42); user.privileges = new Z8Privileges();
@@ -59,6 +71,7 @@ class Endpoint : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink, IZ8Authorit
         return new Z8ApplicationSession(id, user, system);
     }
     Z8ApplicationSession login(Z8AuthorityLogin request) { return request.password == "ok"w ? makeSession("token"w) : null; }
+    Z8ApplicationSession trustedLogin(Z8AuthorityTrustedLogin request) { return makeSession("trusted"w); }
     Z8ApplicationSession authorize(Z8AuthorityAuthorize request) { return request.sessionId == "wrong"w ? makeSession("other"w) : makeSession(request.sessionId); }
     void logout(Z8AuthorityLogout request) { assert(request.sessionId == "token"w && request.schema == "схема"w); ++logouts; }
     void userChanged(Z8Guid id, wstring schema) { assert(id == z8_guid_create(42) && schema == "схема"w); ++users; }
@@ -79,6 +92,7 @@ void main(string[] args) {
     auto dir = args[1];
     if (args[2] == "generate") {
         write(buildPath(dir, "d-login.bin"), z8_encode_authority_login(Z8AuthorityLogin("Alice"w, ""w, "схема"w, "127.0.0.1"w)));
+        write(buildPath(dir, "d-trusted.bin"), z8_encode_authority_trusted_login(Z8AuthorityTrustedLogin(z8_guid_create(42), null, "схема"w, ""w, true)));
         write(buildPath(dir, "d-authorize.bin"), z8_encode_authority_authorize(Z8AuthorityAuthorize("token"w, "схема"w, ""w)));
         write(buildPath(dir, "d-logout.bin"), z8_encode_authority_logout(Z8AuthorityLogout("token"w, "схема"w)));
         auto user = new Z8UserData(); user.id = z8_guid_create(42); user.privileges = new Z8Privileges();
@@ -91,6 +105,8 @@ void main(string[] args) {
     }
     auto login = z8_decode_authority_login(cast(const(ubyte)[])read(buildPath(dir, "login.bin")));
     assert(login.login == "Alice"w && login.schema == "схема"w && login.password !is null && !login.password.length && login.address is null);
+    auto trustedRequest = z8_decode_authority_trusted_login(cast(const(ubyte)[])read(buildPath(dir, "trusted.bin")));
+    assert(trustedRequest.userId == z8_guid_create(42) && trustedRequest.login is null && trustedRequest.address == "127.0.0.1"w && trustedRequest.createIfMissing);
     auto request = z8_decode_authority_authorize(cast(const(ubyte)[])read(buildPath(dir, "authorize.bin")));
     assert(request.sessionId == "token"w && request.schema == "схема"w && request.serverId !is null && !request.serverId.length);
     auto logoutRequest = z8_decode_authority_logout(cast(const(ubyte)[])read(buildPath(dir, "logout.bin")));
@@ -120,6 +136,12 @@ void main(string[] args) {
     auto client = new Z8ProtobufAuthorityClient(new Loopback(service));
     loginRequest.password = "ok"w;
     assert(client.login(loginRequest).user.id == z8_guid_create(42));
+    assert(client.trustedLogin(trustedRequest).user.id == z8_guid_create(42));
+    rejected = false;
+    try { client.trustedLogin(Z8AuthorityTrustedLogin(z8_guid_create(43), null, "схема"w, null, false)); } catch (Z8ProtobufException) { rejected = true; }
+    assert(rejected);
+    rejected = false; try { z8_decode_authority_trusted_login([]); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
+    rejected = false; try { z8_encode_authority_trusted_login(Z8AuthorityTrustedLogin(z8_guid_zero(), "Alice"w, "схема"w)); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
     authRequest.sessionId = "token"w; assert(client.authorize(authRequest).id == "token"w);
     client.logout(Z8AuthorityLogout("token"w, "схема"w)); assert(endpoint.logouts == 1);
     rejected = false; try { client.logout(Z8AuthorityLogout(""w, "схема"w)); } catch (Z8ProtobufException) { rejected = true; } assert(rejected && endpoint.logouts == 1);
@@ -134,6 +156,8 @@ void main(string[] args) {
     try { forgedClient.login(loginRequest); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
     badReply.session = Z8SessionSnapshot("схема"w, endpoint.makeSession("other"w)); forged.response = z8_encode_authority_reply(badReply);
     rejected = false; try { forgedClient.authorize(authRequest); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
+    badReply.session.session.user.id = z8_guid_create(43); forged.response = z8_encode_authority_reply(badReply);
+    rejected = false; try { forgedClient.trustedLogin(trustedRequest); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
     forged.response = [cast(ubyte)0]; rejected = false;
     try { forgedClient.userChanged(z8_guid_create(42), "схема"w); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
 }
@@ -147,6 +171,8 @@ void main(string[] args) {
     subprocess.run([str(exe), str(temp), "generate"], cwd=temp, check=True)
     decoded_login = Login.FromString((temp / "d-login.bin").read_bytes())
     assert decoded_login.login == "Alice" and decoded_login.schema == "схема" and decoded_login.HasField("password") and decoded_login.password == ""
+    decoded_trusted = TrustedLogin.FromString((temp / "d-trusted.bin").read_bytes())
+    assert decoded_trusted.user_id.least_significant_bits == 42 and not decoded_trusted.HasField("login") and decoded_trusted.HasField("address") and decoded_trusted.create_if_missing
     decoded_authorize = Authorize.FromString((temp / "d-authorize.bin").read_bytes())
     assert decoded_authorize.session_id == "token" and decoded_authorize.HasField("server_id") and decoded_authorize.server_id == ""
     decoded_logout = Logout.FromString((temp / "d-logout.bin").read_bytes())
@@ -155,6 +181,7 @@ void main(string[] args) {
     assert decoded_reply.WhichOneof("result") == "session" and decoded_reply.session.session_id == "token"
     assert Reply.FromString((temp / "d-denied.bin").read_bytes()).access_denied
     (temp / "login.bin").write_bytes(Login(login="Alice", password="", schema="схема").SerializeToString())
+    (temp / "trusted.bin").write_bytes(TrustedLogin(user_id=dict(least_significant_bits=42), schema="схема", address="127.0.0.1", create_if_missing=True).SerializeToString())
     (temp / "missing-password.bin").write_bytes(Login(login="Alice", schema="схема").SerializeToString())
     (temp / "authorize.bin").write_bytes(Authorize(session_id="token", schema="схема", server_id="").SerializeToString())
     # Unknown length-delimited fields need not contain UTF-8.

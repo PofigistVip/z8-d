@@ -22,12 +22,14 @@ with tempfile.TemporaryDirectory() as directory:
     for file in descriptors.file: pool.AddSerializedFile(file.SerializeToString())
     service = pool.FindServiceByName("z8.authority.v1.Authority")
     assert [(m.name, m.input_type.name, m.output_type.name) for m in service.methods] == [
-        ("Login", "LoginRequest", "SessionReply"), ("Authorize", "AuthorizeRequest", "SessionReply"),
+        ("Login", "LoginRequest", "SessionReply"), ("TrustedLogin", "TrustedLoginRequest", "SessionReply"), ("Authorize", "AuthorizeRequest", "SessionReply"),
         ("Logout", "LogoutRequest", "Empty"),
         ("UserChanged", "UserChanged", "Empty"), ("RoleChanged", "RoleChanged", "Empty"),
         ("ApplyUserChanged", "UserChanged", "Empty"), ("ApplyRoleChanged", "RoleChanged", "Empty")]
     login = pool.FindMessageTypeByName("z8.authority.v1.LoginRequest")
     assert login.fields_by_name["password"].has_presence and login.fields_by_name["password"].number == 2
+    trusted = pool.FindMessageTypeByName("z8.authority.v1.TrustedLoginRequest")
+    assert trusted.fields_by_name["user_id"].message_type.name == "Guid" and trusted.fields_by_name["login"].has_presence
     session = pool.FindMessageTypeByName("z8.authority.v1.SessionSnapshot")
     assert session.fields_by_name["user"].number == 3 and session.fields_by_name["system"].number == 4
     primary = pool.FindMessageTypeByName("z8.authority.v1.Primary")

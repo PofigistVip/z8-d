@@ -22,6 +22,8 @@ interface IZ8AuthorityInvalidationSink {
 }
 // Optional capability so existing authority implementations need not support logout.
 interface IZ8AuthorityLogout { void logout(Z8AuthorityLogout request); }
+// Must be exposed only to peers explicitly authorized for passwordless login.
+interface IZ8AuthorityTrustedLogin { Z8ApplicationSession trustedLogin(Z8AuthorityTrustedLogin request); }
 
 // A transport authenticates the peer and maps its RPC methods to these calls.
 // A null session is an ordinary denial; malformed messages throw.
@@ -41,6 +43,15 @@ class Z8ProtobufAuthorityService {
     ubyte[] login(const(ubyte)[] payload) {
         auto request = z8_decode_authority_login(payload);
         return reply(endpoint.login(request), request.schema);
+    }
+    ubyte[] trustedLogin(const(ubyte)[] payload) {
+        auto target = cast(IZ8AuthorityTrustedLogin)endpoint;
+        if (target is null) throw new Z8ProtobufException("authority does not support trusted login");
+        auto request = z8_decode_authority_trusted_login(payload);
+        auto session = target.trustedLogin(request);
+        if (session !is null && request.userId !is null && (session.user is null || session.user.id != request.userId))
+            throw new Z8ProtobufException("authority returned a different user ID");
+        return reply(session, request.schema);
     }
     ubyte[] authorize(const(ubyte)[] payload) {
         auto request = z8_decode_authority_authorize(payload);
@@ -80,6 +91,7 @@ class Z8ProtobufAuthorityService {
     ubyte[] dispatch(Z8AuthorityMethod method, const(ubyte)[] payload) {
         switch (method) {
             case Z8AuthorityMethod.login: return login(payload);
+            case Z8AuthorityMethod.trustedLogin: return trustedLogin(payload);
             case Z8AuthorityMethod.authorize: return authorize(payload);
             case Z8AuthorityMethod.logout: return logout(payload);
             case Z8AuthorityMethod.userChanged: return userChanged(payload);
