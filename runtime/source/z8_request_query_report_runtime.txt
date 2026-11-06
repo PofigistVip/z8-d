@@ -12,11 +12,13 @@ private void z8_application_dispatch_query_report_target(wstring className, Z8Ob
     for (long i; i < keys.z8_size(); ++i) {
         auto key = keys.z8_get(i);
         if (key == "request"w || key == "session"w || key == "server"w || key == "ip"w || key == "action"w ||
-            key == "id"w || key == "format"w || key == "name"w || key == "recordId"w) continue;
+            key == "id"w || key == "format"w || key == "name"w || key == "recordId"w || key == "query"w || key == "link"w) continue;
         if (key is null || params.z8_get(key).length) throw new Exception("unsupported report parameter");
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
     if (!z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, query)) throw new Exception("report requires a Query");
+    auto privileges = z8_nonnull(z8_nonnull(z8_nonnull(request.session).user).privileges);
+    z8_application_accessible_action_query(query, privileges, params.z8_get("query"w), params.z8_get("link"w));
     auto report = z8_action_find_member(query, params.z8_get("id"w));
     if (!z8_native_is_instance(z8_report_name, report)) throw new Exception("report not found");
     auto state = z8_report_state(report);

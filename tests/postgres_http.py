@@ -504,6 +504,11 @@ void main(string[] args) {
             assert not result["success"], result
             result = request(action="report", id="exported", recordId="00000000-0000-0000-0000-000000000001", name="invoice", format="pdf")
             assert result["success"] and result["info"]["files"][0]["name"] == "invoice.pdf", result
+            result = request(action="report", link="otherJoin", query="missing", id="exported", recordId="00000000-0000-0000-0000-000000000001", name="invoice", format="pdf")
+            assert result["success"] and result["info"]["files"][0]["name"] == "invoice.pdf", result
+            for session in ("relation-denied", "target-denied"):
+                result = request(session=session, action="report", link="otherJoin", id="exported", recordId="00000000-0000-0000-0000-000000000001")
+                assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(action="report", id="missing", recordId="00000000-0000-0000-0000-000000000001")
             assert not result["success"], result
             result = request(session="denied", action="report", id="exported", recordId="00000000-0000-0000-0000-000000000001")

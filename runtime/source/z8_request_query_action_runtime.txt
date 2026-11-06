@@ -41,6 +41,27 @@ private Z8Array!Z8Guid z8_action_guid_list(wstring value) {
 void z8_application_dispatch_query_action(wstring className) {
     z8_application_dispatch_query_action_target(className, null);
 }
+// CommandAction, ContentAction and ReportAction permit ordinary nested Query
+// objects as well as tables. Tables and their links require read access.
+private Z8Object z8_application_accessible_action_query(Z8Object context, Z8Privileges privileges, wstring queryId, wstring linkId) {
+    auto query = context;
+    if (linkId !is null && linkId.length) {
+        auto link = z8_application_context_field(context, privileges, linkId);
+        if (!z8_native_is_instance(z8_link_name, link) && !z8_native_is_instance(z8_join_name, link))
+            throw new Exception("action link not found");
+        query = z8_nonnull(z8_link_query(link));
+        if (z8_native_is_instance(z8_table_name, query)) query = z8_application_action_query(context, privileges, queryId, linkId);
+    } else if (queryId !is null && queryId.length) {
+        query = z8_action_find_member(context, queryId);
+        if (!z8_native_is_instance(z8_query_name, query)) throw new Exception("action query not found");
+        if (z8_native_is_instance(z8_table_name, query)) query = z8_application_nested_query(context, privileges, queryId);
+    }
+    if (query !is context && z8_native_is_instance(z8_table_name, query)) {
+        auto key = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
+        if (!privileges.getTableAccess(key).read) throw new Exception("action query access denied");
+    }
+    return query;
+}
 private void z8_application_dispatch_query_action_target(wstring className, Z8Object query) {
     auto request = z8_application_require_request();
     auto session = z8_nonnull(request.session);
@@ -61,21 +82,7 @@ private void z8_application_dispatch_query_action_target(wstring className, Z8Ob
     if (!z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, query)) throw new Exception("action requires a Query");
     auto context = query;
     auto privileges = z8_nonnull(z8_nonnull(session.user).privileges);
-    auto linkId = params.z8_get("link"w), queryId = params.z8_get("query"w);
-    if (linkId !is null && linkId.length) {
-        auto link = z8_application_context_field(context, privileges, linkId);
-        if (!z8_native_is_instance(z8_link_name, link) && !z8_native_is_instance(z8_join_name, link)) throw new Exception("action link not found");
-        query = z8_nonnull(z8_link_query(link));
-        if (z8_native_is_instance(z8_table_name, query)) query = z8_application_action_query(context, privileges, queryId, linkId);
-    } else if (queryId !is null && queryId.length) {
-        query = z8_action_find_member(context, queryId);
-        if (!z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, query)) throw new Exception("action query not found");
-        if (z8_native_is_instance(z8_table_name, query)) query = z8_application_nested_query(context, privileges, queryId);
-    }
-    if (query !is context && z8_native_is_instance(z8_table_name, query)) {
-        auto key = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
-        if (!privileges.getTableAccess(key).read) throw new Exception("action query access denied");
-    }
+    query = z8_application_accessible_action_query(context, privileges, params.z8_get("query"w), params.z8_get("link"w));
     auto action = z8_action_find(context, params.z8_get("name"w));
     auto state = z8_action_state(action);
     auto parameterValues = params.z8_get("parameters"w);
