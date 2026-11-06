@@ -148,8 +148,8 @@ the worker thread. The separately supported write actions are described below.
 The initial `meta` action describes table fields, authorized Link paths, query
 access and nested sections, fieldsets, field groups, tab controls, independent
 forms and forms with a readable Link. Action parameters, their query-backed
-sources, and report definitions are included. Other controls, custom Join metadata
-and `aggregateBy` are rejected. Actions can execute with `action=action`,
+sources, and report definitions are included. `aggregateBy` metadata marks the
+query read-only. Other controls and custom Join metadata are rejected. Actions can execute with `action=action`,
 `name`, `records`, `selection` and a JSON `parameters` array; `query` or `link`
 selects the query passed to the action, and `useTransaction` controls the transaction.
 Custom BL reports can run through `action=report`, while the BIRT and POI engines
@@ -303,7 +303,6 @@ sum, average, minimum and maximum. Filters can reference linked tables, and a
 subselect joins target fields, including chained links, after grouping. Linked
 expressions and joins that require unprojected root fields are rejected, as are
 a second grouping, HAVING, totals and row locks on these queries.
-The HTTP metadata path for `aggregateBy` is not yet supported.
 Nontrivial HAVING without grouping is also rejected. Filter-based updates and deletes select
 matching records and invoke the BL events for each record. Record copying reads
 the source through the executor and preserves an active query cursor. Table audit

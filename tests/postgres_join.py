@@ -81,6 +81,17 @@ import org.zenframework.z8.base.table.value.Link;
     aggregateBy = {customerId};
 }
 ''',
+        "AggregateDynamicOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.IntField;
+[name "AggregateDynamicOrders"] public class AggregateDynamicOrder extends Table {
+    public Customer customer; [name "CustomerId"] public Link customerId = customer;
+    [name "Amount"] public IntField amount;
+    aggregateBy = {customerId};
+    virtual protected void beforeRead() { aggregateBy.clear(); }
+}
+''',
         "FilteredCustomer": '''
 public class FilteredCustomer extends Customer {
     virtual protected sql_bool scope() { return label != "Bob"; }
@@ -443,6 +454,21 @@ void main(string[] args) {
     assert(response["data"].array.length == 1 && response["data"][0]["customer.label"].str == "Alice" && response["data"][0]["customer.city.label"].str == "Moscow");
     assert(response["data"][0]["customerId"].str == "00000000-0000-0000-0000-000000000201");
     assert(response["data"][0]["customer.cityId"].str == "00000000-0000-0000-0000-000000000101");
+    auto aggregateResponse = parseJSON(requestFields(`["customer.label","amount"]`w, null,
+        `[{"property":"customer.label"}]`w, null, null, "AggregateOrder"w).to!string);
+    assert(aggregateResponse["data"].array.length == 2);
+    assert(aggregateResponse["data"][0]["customer.label"].str == "Alice" && aggregateResponse["data"][0]["amount"].integer == 10);
+    assert(aggregateResponse["data"][1]["customer.label"].str == "Bob" && aggregateResponse["data"][1]["amount"].integer == 7);
+    auto aggregateMeta = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "AggregateOrder"w, "meta"w).to!string);
+    assert(aggregateMeta["isQuery"].boolean && aggregateMeta["readOnly"].boolean && "primaryKey" !in aggregateMeta.object);
+    aggregateResponse = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "AggregateOrder"w, null).to!string);
+    assert(aggregateResponse["isQuery"].boolean && aggregateResponse["readOnly"].boolean && aggregateResponse["data"].array.length == 2);
+    bool changedGroupingRejected;
+    try { requestFields(`["amount"]`w, null, null, null, null, "AggregateDynamicOrder"w, "read"w); } catch (Exception) { changedGroupingRejected = true; }
+    assert(changedGroupingRejected);
+    changedGroupingRejected = false;
+    try { requestFields(`["amount"]`w, null, null, null, null, "AggregateDynamicOrder"w, "meta"w); } catch (Exception) { changedGroupingRejected = true; }
+    assert(changedGroupingRejected);
     auto linkedMeta = parseJSON(requestFields(`["customer.label","customer.city.label"]`w, null, null, null, null, "HttpOrder"w, "meta"w).to!string);
     bool customerMeta, cityMeta;
     foreach (field; linkedMeta["fields"].array) {
@@ -494,6 +520,14 @@ void main(string[] args) {
     }
     assert(unmatched);
     auto denied = Z8Access.init;
+    user.privileges.setFieldAccess(z8_guid_create_name("AggregateOrders.CustomerId"w), denied);
+    bool aggregateBlocked;
+    try { requestFields(`["amount"]`w, null, null, null, null, "AggregateOrder"w); } catch (Exception) { aggregateBlocked = true; }
+    assert(aggregateBlocked);
+    aggregateBlocked = false;
+    try { requestFields(`["amount"]`w, null, null, null, null, "AggregateOrder"w, "meta"w); } catch (Exception) { aggregateBlocked = true; }
+    assert(aggregateBlocked);
+    user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     user.privileges.setTableAccess(z8_guid_create_name("Customers"w), denied);
     bool blocked; try { requestFields(`["customer.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
     blocked = false; try { requestFields(`["customer.label"]`w, null, null, null, null, "HttpOrder"w, "meta"w); } catch (Exception) { blocked = true; } assert(blocked);

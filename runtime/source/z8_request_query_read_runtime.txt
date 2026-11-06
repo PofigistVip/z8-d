@@ -229,8 +229,9 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     auto contextFields = z8_application_query_context_values(query, privileges, params, true);
     if (z8_query_user_events_enabled()) query.z8_query_virtual_onReadAction();
     auto groups = z8_query_array(query, "groupBy"w);
-    auto selected = z8_application_query_fields(query, privileges, params, !groups.length);
-    foreach (field; groups) {
+    auto aggregates = z8_query_array(query, "aggregateBy"w);
+    auto selected = z8_application_query_fields(query, privileges, params, !groups.length && !aggregates.length);
+    foreach (field; groups ~ aggregates) {
         if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("query group field access denied");
         bool exists;
         foreach (existing; selected) if (existing is field) { exists = true; break; }
@@ -240,6 +241,9 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         auto actual = z8_query_array(query, "groupBy"w);
         if (actual.length != groups.length) throw new Exception("changing query groups during beforeRead is not supported");
         foreach (i, field; actual) if (field !is groups[i]) throw new Exception("changing query groups during beforeRead is not supported");
+        actual = z8_query_array(query, "aggregateBy"w);
+        if (actual.length != aggregates.length) throw new Exception("changing query aggregateBy during beforeRead is not supported");
+        foreach (i, field; actual) if (field !is aggregates[i]) throw new Exception("changing query aggregateBy during beforeRead is not supported");
     }
     long number(wstring key, long fallback) {
         auto value = params.z8_get(key);
