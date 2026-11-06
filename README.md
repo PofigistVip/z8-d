@@ -1055,6 +1055,9 @@ $env:Z8_RUNTIME_LIB = (Resolve-Path runtime/lib/z8-runtime.lib).Path
   `oda.driver` — запуск, транспорт и интеграции;
 - `js`, `resources` — веб-клиент и ресурсы.
 
+Модуль `justintime` пока не требуется переносить на D и не входит в текущий
+план разработки.
+
 Веб-сервер z8-d использует CivetWeb; первоначальный HTTP-транспорт находится в
 [webserver](webserver/README.md).
 
