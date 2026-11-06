@@ -28,6 +28,15 @@ public class SampleParser extends EntityParser {
     virtual protected Entity newEntity() { news += 1; SampleEntity result; return result; }
     virtual public EntityParser read() { reads += 1; getEntity().set("title", getJson().getString("title")); return this; }
     virtual public EntityParser write() { writes += 1; getJson().set("title", getEntity().getString("title")); return this; }
+    public void readParts() {
+        readString("text"); readInt("number"); readDecimal("amount"); readBool("flag");
+        readGuid("id"); readDate("day"); readDatespan("span");
+        readJsonObject("object"); readJsonArray("array");
+        readValue("csv", "decimal"); readValue("integerText", "integer");
+        readValue("booleanText", "boolean"); readValue("text", "string");
+        string[] keys = {"rawNumber", "rawBool"}; readValues(keys);
+        readString("missing");
+    }
 }
 ''', encoding="utf-8")
     (source / "ParserProbe.bl").write_text('''
@@ -58,6 +67,21 @@ public class ParserProbe {
         Entity[] decoded = parser.fromJson(encoded);
         if (decoded.size() != 2 || decoded[0].getString("title") != "changed" ||
             decoded[1].getString("title") != "world" || parser.reads != 3 || parser.writes != 3) return false;
+        JsonObject input;
+        input.set("text", "hello"); input.set("number", 12); input.set("amount", 3.5); input.set("flag", true);
+        input.set("id", '00000000-0000-0000-0000-000000000007'); input.set("day", "2024-02-01T00:00:00");
+        input.set("span", "1 02:03:04"); input.set("csv", "1,25"); input.set("integerText", "42");
+        input.set("booleanText", "true"); input.set("rawNumber", 77); input.set("rawBool", false);
+        JsonObject nested; nested.set("value", "inside"); input.set("object", nested);
+        JsonArray array; array.add("entry"); input.set("array", array);
+        parser.setJson(input); parser.setEntity(entity); parser.readParts();
+        if (entity.getString("text") != "hello" || entity.getInt("number") != 12 ||
+            (decimal)entity.get("amount") != 3.5 || !entity.getBool("flag") ||
+            entity.getGuid("id") != '00000000-0000-0000-0000-000000000007') return false;
+        if (entity.getJsonObject("object").getString("value") != "inside" ||
+            entity.getJsonArray("array").getString(0) != "entry") return false;
+        if ((decimal)entity.get("csv") != 1.25 || entity.getInt("integerText") != 42 ||
+            !entity.getBool("booleanText") || entity.getInt("rawNumber") != 77 || entity.getBool("rawBool")) return false;
         return true;
     }
     public static bool nullArray(SampleParser parser, JsonArray json) { return parser.fromJson(json).size() == 0; }

@@ -68,6 +68,65 @@ private Z8ObjectArray!Z8Object z8_entity_parser_from_json_array(Z8Object self, Z
         result.z8_add(z8_entity_parser_from_json(self, z8_json_array_get_object(json, z8_optional_wrap(i))));
     return result;
 }
+private Z8Object z8_entity_parser_read_kind(string kind)(Z8Object self, wstring key) {
+    if (key is null) return self;
+    auto json = z8_nonnull(z8_entity_parser_state(self).json);
+    auto value = z8_json_object_get(json, key);
+    if (value.type == JSONType.null_) return self;
+    static if (kind == "JsonObject") {
+        auto nested = z8_json_object_get_object(json, key); z8_entity_set_json_object(z8_entity_parser_get_entity(self), key, nested);
+    } else static if (kind == "JsonArray") {
+        auto nested = z8_json_object_get_array(json, key); z8_entity_set_json_array(z8_entity_parser_get_entity(self), key, nested);
+    } else {
+        Z8Primary boxed;
+        static if (kind == "String") boxed = z8_primary_box(z8_json_object_get_string(json, key));
+        else static if (kind == "Int") boxed = z8_primary_box(z8_optional_require(z8_json_object_get_int(json, key)));
+        else static if (kind == "Decimal") boxed = z8_primary_box(z8_optional_require(z8_json_object_get_decimal(json, key)));
+        else static if (kind == "Guid") boxed = z8_primary_box(z8_json_object_get_guid(json, key));
+        else static if (kind == "Bool") boxed = z8_primary_box(value.type == JSONType.true_);
+        else static if (kind == "Date") boxed = z8_primary_box(z8_json_object_get_date(json, key));
+        else static if (kind == "Datespan") boxed = z8_primary_box(z8_datespan_parse(z8_json_object_get_string(json, key)));
+        z8_entity_set(z8_entity_parser_get_entity(self), key, boxed);
+    }
+    return self;
+}
+private Z8Object z8_entity_parser_read_value(Z8Object self, wstring key) {
+    if (key is null) return self;
+    auto json = z8_nonnull(z8_entity_parser_state(self).json);
+    auto value = z8_json_object_get(json, key);
+    if (value.type == JSONType.null_) return self;
+    Z8Primary boxed;
+    if (auto exact = key.to!string in z8_json_object_state(json).decimals) boxed = z8_primary_box(*exact);
+    else final switch (value.type) {
+        case JSONType.null_: break;
+        case JSONType.true_: case JSONType.false_: boxed = z8_primary_box(value.type == JSONType.true_); break;
+        case JSONType.integer: boxed = z8_primary_box(value.integer); break;
+        case JSONType.uinteger: boxed = z8_primary_box(cast(long)value.uinteger); break;
+        case JSONType.float_: boxed = z8_primary_box(z8_decimal_parse(z8_json_object_get_string(json, key))); break;
+        case JSONType.string: boxed = z8_primary_box(z8_json_object_get_string(json, key)); break;
+        case JSONType.object: case JSONType.array: throw new Exception("JSON object or array is not a primary value");
+    }
+    z8_entity_set(z8_entity_parser_get_entity(self), key, boxed); return self;
+}
+private Z8Object z8_entity_parser_read_typed(Z8Object self, wstring key, wstring type) {
+    import std.string : replace;
+    auto json = z8_nonnull(z8_entity_parser_state(self).json);
+    auto value = z8_json_object_get(json, z8_string_required(key));
+    if (value.type == JSONType.null_) return self;
+    auto text = z8_json_object_get_string(json, key);
+    if (type != "string"w && value.type == JSONType.string && !text.length) return self;
+    Z8Primary boxed;
+    if (type == "string"w) boxed = z8_primary_box(text);
+    else if (type == "integer"w) boxed = z8_primary_box(z8_optional_require(z8_json_object_get_int(json, key)));
+    else if (type == "decimal"w) boxed = z8_primary_box(z8_decimal_parse(text.replace(","w, "."w)));
+    else if (type == "boolean"w) boxed = z8_primary_box(value.type == JSONType.true_ || (value.type != JSONType.false_ && z8_bool_parse(text)));
+    else throw new Exception("unsupported EntityParser value type");
+    z8_entity_set(z8_entity_parser_get_entity(self), key, boxed); return self;
+}
+private Z8Object z8_entity_parser_read_values(Z8Object self, Z8Array!wstring keys) {
+    if (keys !is null) for (long i; i < keys.z8_size(); ++i) z8_entity_parser_read_value(self, keys.z8_get(i));
+    return z8_nonnull(self);
+}
 void z8_bind_builtin_entity_parser() {
     enum p = z8_entity_parser_name ~ ".m_"w;
     z8_native_bind(p ~ "getRegistry"w, &z8_entity_parser_get_registry); z8_native_bind(p ~ "setRegistry"w, &z8_entity_parser_set_registry);
@@ -78,5 +137,16 @@ void z8_bind_builtin_entity_parser() {
     z8_native_bind(p ~ "newEntity"w, &z8_entity_parser_default_new);
     z8_native_bind(p ~ "toJson"w, &z8_entity_parser_to_json); z8_native_bind(p ~ "fromJson"w, &z8_entity_parser_from_json);
     z8_native_bind(p ~ "toJson"w, &z8_entity_parser_to_json_array); z8_native_bind(p ~ "fromJson"w, &z8_entity_parser_from_json_array);
+    z8_native_bind(p ~ "readString"w, &z8_entity_parser_read_kind!"String");
+    z8_native_bind(p ~ "readInt"w, &z8_entity_parser_read_kind!"Int");
+    z8_native_bind(p ~ "readDecimal"w, &z8_entity_parser_read_kind!"Decimal");
+    z8_native_bind(p ~ "readGuid"w, &z8_entity_parser_read_kind!"Guid");
+    z8_native_bind(p ~ "readBool"w, &z8_entity_parser_read_kind!"Bool");
+    z8_native_bind(p ~ "readDate"w, &z8_entity_parser_read_kind!"Date");
+    z8_native_bind(p ~ "readDatespan"w, &z8_entity_parser_read_kind!"Datespan");
+    z8_native_bind(p ~ "readJsonObject"w, &z8_entity_parser_read_kind!"JsonObject");
+    z8_native_bind(p ~ "readJsonArray"w, &z8_entity_parser_read_kind!"JsonArray");
+    z8_native_bind(p ~ "readValue"w, &z8_entity_parser_read_value); z8_native_bind(p ~ "readValue"w, &z8_entity_parser_read_typed);
+    z8_native_bind(p ~ "readValues"w, &z8_entity_parser_read_values);
 }
 shared static this() { z8_bind_builtin_entity_parser(); }
