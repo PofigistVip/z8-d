@@ -4,8 +4,9 @@ This example compiles `Tasks.bl` against the original Z8 BL library and runs
 the generated project in a single D process with PostgreSQL and CivetWeb. It
 demonstrates registry generation, additive schema initialization, local
 authentication, table actions and database-backed attachments. The host is a
-small local example: it listens on a dynamically assigned loopback port, exits
-when a line is entered on stdin, and does not serve the JavaScript client.
+small local example: it listens on a dynamically assigned loopback port and
+exits when a line is entered on stdin. It can optionally serve the original
+JavaScript client from a separately prepared public directory.
 
 Build it with DMD, DUB, Python, a C compiler supported by
 `webserver/build_civetweb.py`, and PostgreSQL client development libraries:
@@ -28,15 +29,20 @@ then start the host:
 $connection = 'host=127.0.0.1 dbname=example user=example'
 C:/path/to/tasks.exe $connection public --initialize
 # Set the Admin user's Password in public."SystemUsers" before serving requests.
-C:/path/to/tasks.exe $connection public
+python webserver/prepare_client.py C:/path/to/org.zenframework.z8 C:/path/to/empty-public-dir
+C:/path/to/tasks.exe $connection public --public-dir C:/path/to/empty-public-dir
 ```
 
 The example uses the original client-hashed password mode; an HTTP login sends
 the MD5 hash. The built-in administrator initially has the framework's empty
 password default. Configure the credential before making the example reachable.
-The host prints the assigned port; its application endpoint is `/request.json`
-and authenticated file downloads use `/storage/...`. Restarting the host
-reconciles additive schema changes and preserves existing records.
+`--initialize` assigns the example Tasks entry to the administrator if it is
+not already assigned. The host prints the assigned port; open
+`http://127.0.0.1:<port>/index.html` for the prepared client. Its application
+endpoint is `/request.json`, and authenticated file downloads use
+`/storage/...`. Restarting the host reconciles additive schema changes and
+preserves existing records. The automated test checks delivery of the original
+client files and the client's login request, not the entire browser UI.
 
 Run the full automated example, including a temporary PostgreSQL instance and
 two server runs, with:

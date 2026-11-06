@@ -25,6 +25,8 @@ with tempfile.TemporaryDirectory() as directory:
     executable = temp / ("webapp.exe" if os.name == "nt" else "webapp")
     subprocess.run([sys.executable, str(root / "examples/webapp/build.py"), str(Path(sys.argv[1]).resolve()),
                     str(executable), "--postgres-bin", str(bin_dir)], check=True)
+    public = temp / "public"
+    subprocess.run([sys.executable, str(root / "webserver/prepare_client.py"), str(Path(sys.argv[1]).resolve()), str(public)], check=True)
 
     with temporary_postgres(bin_dir) as (connection, environment):
         init = subprocess.run([str(executable), connection, "public", "--initialize"], env=environment,
@@ -34,9 +36,11 @@ with tempfile.TemporaryDirectory() as directory:
         subprocess.run([str(psql), "-v", "ON_ERROR_STOP=1", "-c",
                         '''UPDATE "SystemUsers" SET "Password"=md5('example-secret') WHERE "RecordId"='00000000-0000-0000-0000-000000000002' ''', connection],
                        env=environment, capture_output=True, check=True)
+        subprocess.run([str(executable), connection, "public", "--initialize"], env=environment,
+                       capture_output=True, text=True, encoding="utf-8", check=True)
 
         def start():
-            process = subprocess.Popen([str(executable), connection, "public"], cwd=temp, env=environment,
+            process = subprocess.Popen([str(executable), connection, "public", "--public-dir", str(public)], cwd=temp, env=environment,
                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
             line = process.stdout.readline().strip()
             if not line.isdigit():
@@ -53,6 +57,21 @@ with tempfile.TemporaryDirectory() as directory:
             client = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
             try:
                 client.request("GET", "/request.json?" + urlencode(params))
+                response = client.getresponse()
+                return response.status, json.loads(response.read())
+            finally:
+                client.close()
+
+        def browser_login(port, login, password):
+            params = {"request": "login", "login": login, "password": password, "experimental": "true"}
+            boundary = "z8-browser-login"
+            body = b""
+            for key, value in params.items():
+                body += (f'--{boundary}\r\nContent-Disposition: form-data; name="{key}"\r\n\r\n{value}\r\n').encode()
+            body += f"--{boundary}--\r\n".encode()
+            client = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            try:
+                client.request("POST", "/request.json", body, {"Content-Type": f"multipart/form-data; boundary={boundary}"})
                 response = client.getresponse()
                 return response.status, json.loads(response.read())
             finally:
@@ -92,10 +111,27 @@ with tempfile.TemporaryDirectory() as directory:
 
         process, port = start()
         try:
+            client = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            try:
+                client.request("GET", "/index.html")
+                response = client.getresponse(); page = response.read()
+                assert response.status == 200 and page == (public / "index.html").read_bytes()
+            finally:
+                client.close()
+            client = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            try:
+                client.request("GET", "/revolt.js")
+                response = client.getresponse(); script = response.read()
+                assert response.status == 200 and script == (public / "revolt.js").read_bytes()
+            finally:
+                client.close()
             password = hashlib.md5(b"example-secret").hexdigest()
-            status, login = request(port, request="login", login="Admin", password=password)
+            status, login = browser_login(port, "Admin", password)
             assert status == 200 and login["success"], login
+            assert sum(entry["request"] == "Tasks" for entry in login["user"]["entries"]) == 1, login
             session = login["session"]
+            status, metadata = request(port, request="Tasks", session=session, action="meta")
+            assert status == 200 and metadata["success"], metadata
             status, created = request(port, request="Tasks", session=session, action="create", fields='["title","done"]',
                                       data='[{"title":"First task","done":false}]')
             assert status == 200 and created["success"], created
