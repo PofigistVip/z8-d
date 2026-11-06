@@ -149,6 +149,8 @@ private struct Z8PostgresRootAggregation {
     string sql;
     Z8Object[] fields;
     wstring[] kinds;
+    Z8SqlBool[] deferredHaving;
+    Z8Object[] deferredHavingOwners;
 }
 
 // Executes queries and their required linked-table plans.
@@ -198,10 +200,10 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         if (!counting) foreach (field; request.sortFields) plan.includeField(field);
         foreach (condition; [request.where, request.queryWhere, request.queryScope]) plan.includeExpression(condition);
         plan.finish(true);
-        if (plan.having.length) throw new Z8PostgresException("aggregateBy linked HAVING is not implemented");
         auto previous = z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
         scope(exit) z8_sql_set_field_options(previous);
         Z8PostgresRootAggregation result; result.fields = selected;
+        result.deferredHaving = plan.having.dup; result.deferredHavingOwners = plan.havingOwners.dup;
         string sql = "SELECT ";
         foreach (index, field; selected) {
             if (index) sql ~= ", ";
@@ -315,8 +317,12 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         auto plan = new Z8PostgresQueryPlan(query, schema, table);
         foreach (field; linked) plan.includeField(field);
         foreach (condition; [request.having, request.queryHaving]) if (!trivialTrue(condition)) plan.includeExpression(condition);
+        foreach (condition; inner.deferredHaving) plan.includeExpression(condition);
         plan.finish(true);
-        auto groupFilters = plan.having ~ [request.having, request.queryHaving];
+        auto groupFilters = plan.having.dup;
+        foreach (index, condition; inner.deferredHaving)
+            if (!containsField(plan.havingOwners, inner.deferredHavingOwners[index])) groupFilters ~= condition;
+        groupFilters ~= [request.having, request.queryHaving];
         Z8Object[] checked;
         void checkDependency(Z8Object field) {
             if (containsField(checked, field)) return;
@@ -519,7 +525,9 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
     }
     long count(Z8Object query, Z8QueryReadRequest request) {
         if (!request.disableGrouping && z8_query_array(query, "aggregateBy"w).length) {
-            auto plan = hasLinkedAggregateFields(query, request, true) ? linkedRootAggregation(query, request, true) : rootAggregation(query, request, true);
+            auto linked = hasLinkedAggregateFields(query, request, true);
+            auto plan = linked ? linkedRootAggregation(query, request, true) : rootAggregation(query, request, true);
+            if (!linked && plan.deferredHaving.length) plan = linkedRootAggregation(query, request, true);
             auto rows = connection.execute("SELECT count(*) FROM (" ~ plan.sql ~ ") AS z8_count");
             if (rows.rows.length != 1 || rows.rows[0][0].isNull) throw new Z8PostgresException("invalid PostgreSQL count result");
             return rows.rows[0][0].text.to!long;
@@ -570,6 +578,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             if (request.aggregateAll) return aggregateRootTotals(query, request);
             auto linked = hasLinkedAggregateFields(query, request, false);
             auto plan = linked ? linkedRootAggregation(query, request, false) : rootAggregation(query, request, false);
+            if (!linked && plan.deferredHaving.length) { plan = linkedRootAggregation(query, request, false); linked = true; }
             return new Z8PostgresRows(plan.fields, plan.kinds, connection.execute(plan.sql), !linked || request.groupFields.length != 0 || z8_query_array(query, "groupBy"w).length != 0);
         }
         auto groups = request.disableGrouping ? null : request.groupFields.length ? request.groupFields : z8_query_array(query, "groupBy"w);

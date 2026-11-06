@@ -632,10 +632,16 @@ void main(string[] args) {
     assert(targetHaving["data"].array.length == 1 && targetHaving["data"][0]["customer.label"].str == "Alice" && targetHaving["data"][0]["amount"].integer == 13);
     totalResponse = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "GroupedHavingOrder"w, "read"w, null, null, null, "true"w).to!string);
     assert(totalResponse["data"]["amount"].integer == 13);
-    bool innerTargetHavingRejected;
-    try { requestFields(`["customer.label","amount"]`w, `{"property":"customer.label","value":"Alice"}`w, null, null, null, "HavingOrder"w); }
-    catch (Z8PostgresException) { innerTargetHavingRejected = true; }
-    assert(innerTargetHavingRejected);
+    targetHaving = parseJSON(requestFields(`["customer.label","amount"]`w, `{"property":"customer.label","value":"Alice"}`w, null, null, null, "HavingOrder"w).to!string);
+    assert(targetHaving["data"].array.length == 2);
+    targetHaving = parseJSON(requestFields(`["amount"]`w, `{"property":"customer.label","value":"Alice"}`w, null, null, null, "HavingOrder"w).to!string);
+    assert(targetHaving["data"].array.length == 2);
+    targetHaving = parseJSON(requestFields(`["amount"]`w, `{"property":"customer.label","value":"Alice"}`w, null, null, null, "HavingOrder"w, "read"w, null, null, null, null, "true"w).to!string);
+    assert(targetHaving["total"].integer == 2);
+    totalResponse = parseJSON(requestFields(`["amount"]`w, `{"property":"customer.label","value":"Alice"}`w, null, null, null, "HavingOrder"w, "read"w, null, null, null, "true"w).to!string);
+    assert(totalResponse["data"]["amount"].integer == 13);
+    targetHaving = parseJSON(requestFields(`["customer.label","amount"]`w, `{"property":"customer.label","value":"Alice"}`w, null, null, null, "GroupedHavingOrder"w).to!string);
+    assert(targetHaving["data"].array.length == 1 && targetHaving["data"][0]["amount"].integer == 13);
     auto aggregateMeta = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "AggregateOrder"w, "meta"w).to!string);
     assert(aggregateMeta["isQuery"].boolean && aggregateMeta["readOnly"].boolean && "primaryKey" !in aggregateMeta.object);
     aggregateResponse = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "AggregateOrder"w, null).to!string);

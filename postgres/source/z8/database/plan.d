@@ -31,6 +31,7 @@ package class Z8PostgresQueryPlan {
     private Z8Object[] visitedFields;
     private wstring schema, rootTable;
     Z8SqlBool[] where, having;
+    Z8Object[] havingOwners;
 
     this(Z8Object root, wstring schema, wstring rootTable) {
         this.schema = schema; this.rootTable = rootTable;
@@ -92,7 +93,7 @@ package class Z8PostgresQueryPlan {
                     where ~= condition; includeExpression(condition);
                 }
                 auto condition = z8_query_having(query);
-                if (!trivialTrue(condition)) { having ~= condition; includeExpression(condition); }
+                if (!trivialTrue(condition)) { having ~= condition; havingOwners ~= query; includeExpression(condition); }
             }
         }
         foreach (index, node; nodes) if (node.active) foreach (field; node.fields) {
