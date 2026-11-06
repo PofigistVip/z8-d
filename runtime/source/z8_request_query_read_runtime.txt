@@ -229,15 +229,41 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         if (name is null) throw new Exception("invalid query read parameter");
         if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "fields"w || name == "start"w || name == "limit"w ||
             name == "filter"w || name == "where"w || name == "quickFilter"w || name == "sort"w || name == "recordId"w || name == "count"w || name == "values"w ||
-            name == "lookup"w || name == "lookupFields"w || name == "period"w || name == "having"w || name == "group"w || name == "totals"w) continue;
+            name == "lookup"w || name == "lookupFields"w || name == "period"w || name == "having"w || name == "group"w || name == "totals"w || name == "query"w) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported query read parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
     if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, query))
         throw new Exception("query read requires a Table");
     auto privileges = z8_nonnull(session.user).privileges;
+    if (privileges is null) throw new Exception("query read access denied");
+    auto context = query;
+    auto queryId = params.z8_get("query"w);
+    if (queryId !is null && queryId.length) {
+        query = z8_action_find_member(context, queryId);
+        if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, query))
+            throw new Exception("nested query requires a Table");
+        auto current = query;
+        while (current !is context) {
+            auto parent = z8_object_container(current);
+            while (parent !is null && !z8_native_is_instance(z8_query_name, parent)) parent = z8_object_container(parent);
+            if (parent is null || !z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, parent))
+                throw new Exception("nested query is outside the request");
+            auto parentKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, parent);
+            if (!privileges.getTableAccess(parentKey).read) throw new Exception("nested query parent access denied");
+            foreach (relation; z8_query_declared_fields(parent)) {
+                if ((z8_native_is_instance("org.zenframework.z8.server.base.table.value.Link"w, relation) ||
+                     z8_native_is_instance("org.zenframework.z8.server.base.table.value.Join"w, relation)) && z8_link_query(relation) is current) {
+                    auto relationKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, relation);
+                    if (!privileges.getFieldAccess(parentKey, relationKey).read) throw new Exception("nested query relation access denied");
+                    break;
+                }
+            }
+            current = parent;
+        }
+    }
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
-    if (privileges is null || !privileges.getTableAccess(queryKey).read) throw new Exception("query read access denied");
+    if (!privileges.getTableAccess(queryKey).read) throw new Exception("query read access denied");
     auto key = z8_query_primary_key(query);
     if (key is null) throw new Exception("query has no primary key");
     auto contextFields = z8_application_query_context_values(query, privileges, params, true);
@@ -351,7 +377,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     auto defaultSort = read.sortFields.dup;
     void writeDefaultMetadata() {
         if (!defaultAction) return;
-        z8_application_query_write_meta(query, selected, groups, privileges);
+        z8_application_query_write_meta(query, selected, groups, privileges, context);
         z8_application_query_write_order(defaultSort, defaultGroups);
     }
     auto lookupFields = params.z8_get("lookupFields"w), lookup = params.z8_get("lookup"w);

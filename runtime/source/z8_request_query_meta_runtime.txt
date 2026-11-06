@@ -46,7 +46,8 @@ private void z8_application_dispatch_query_meta_target(wstring className, Z8Obje
     foreach (i, field; actualAggregates) if (field !is aggregates[i]) throw new Exception("changing query aggregateBy during beforeRead is not supported");
     z8_application_query_write_meta(query, selected, groups, privileges);
 }
-private void z8_application_query_write_meta(Z8Object query, Z8Object[] selected, Z8Object[] groups, Z8Privileges privileges) {
+private void z8_application_query_write_meta(Z8Object query, Z8Object[] selected, Z8Object[] groups, Z8Privileges privileges, Z8Object context = null) {
+    if (context is null) context = query;
     auto writer = z8_application_require_request().writer;
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
     void fields(wstring property, Z8Object[] values) {
@@ -55,7 +56,7 @@ private void z8_application_query_write_meta(Z8Object query, Z8Object[] selected
         if (!readable.length) return;
         writer.start('[', property);
         foreach (field; readable) {
-            writer.start('{'); z8_control_write_meta(field, query, query, privileges); writer.finish('}');
+            writer.start('{'); z8_control_write_meta(field, query, context, privileges); writer.finish('}');
         }
         writer.finish(']');
     }

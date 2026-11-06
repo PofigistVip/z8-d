@@ -513,6 +513,7 @@ void main(string[] args) {
     db.execute(`INSERT INTO "Nodes" VALUES ('00000000-0000-0000-0000-000000000401','00000000-0000-0000-0000-000000000402'), ('00000000-0000-0000-0000-000000000402',NULL), ('00000000-0000-0000-0000-000000000403','00000000-0000-0000-0000-000000000401')`);
     db.execute(`INSERT INTO "Cities" VALUES ('00000000-0000-0000-0000-000000000101','Moscow')`);
     db.execute(`INSERT INTO "Customers" VALUES ('00000000-0000-0000-0000-000000000201','Alice','00000000-0000-0000-0000-000000000101'), ('00000000-0000-0000-0000-000000000202','Bob',NULL), ('00000000-0000-0000-0000-000000000203','Ghost',NULL), ('00000000-0000-0000-0000-000000000000','Sentinel',NULL)`);
+    db.execute(`ALTER TABLE "Customers" ADD COLUMN "Lock" bigint DEFAULT 0`);
     db.execute(`INSERT INTO "Orders" ("RecordId","Title","CustomerId","CityId") VALUES ('00000000-0000-0000-0000-000000000301','First','00000000-0000-0000-0000-000000000201','00000000-0000-0000-0000-000000000101'), ('00000000-0000-0000-0000-000000000302','Second','00000000-0000-0000-0000-000000000202',NULL), ('00000000-0000-0000-0000-000000000303','No customer',NULL,NULL), ('00000000-0000-0000-0000-000000000304','Missing customer','00000000-0000-0000-0000-000000000299',NULL)`);
     auto inner = P.m_inner(); auto left = P.m_left(); auto right = P.m_right(); auto full = P.m_full(); auto filtered = P.m_filtered(); auto recursive = P.m_recursive(); auto conditional = P.m_conditional(); auto cyclic = P.m_cyclic();
     auto aggregate = P.m_aggregateOrder();
@@ -671,7 +672,7 @@ void main(string[] args) {
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     auto session = new Z8ApplicationSession("join"w, user, user);
     auto priorBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "pg_temp"w));
-    wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null, wstring className = "HttpOrder"w, wstring action = "read"w, wstring groupSession = null, wstring having = null, wstring values = null, wstring totals = null, wstring count = null) {
+    wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null, wstring className = "HttpOrder"w, wstring action = "read"w, wstring groupSession = null, wstring having = null, wstring values = null, wstring totals = null, wstring count = null, wstring queryId = null) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, className); request.parameters.z8_add("action"w, action); request.parameters.z8_add("fields"w, fields);
         if (filter !is null) request.parameters.z8_add("filter"w, filter);
@@ -683,6 +684,7 @@ void main(string[] args) {
         if (values !is null) request.parameters.z8_add("values"w, values);
         if (totals !is null) request.parameters.z8_add("totals"w, totals);
         if (count !is null) request.parameters.z8_add("count"w, count);
+        if (queryId !is null) request.parameters.z8_add("query"w, queryId);
         auto priorRequest = z8_application_set_request(request); scope(exit) z8_application_set_request(priorRequest);
         z8_application_start_response(request, "HttpOrder"w); z8_application_dispatch_request();
         z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
@@ -825,6 +827,12 @@ void main(string[] args) {
     auto defaultResponse = parseJSON(requestFields(null, null, null, null, null, "HttpOrder"w).to!string);
     assert(defaultResponse["data"].array.length == 2 && defaultResponse["data"][0]["customer.label"].str.length);
     assert("title" !in defaultResponse["data"][0].object);
+    auto nestedResponse = parseJSON(requestFields(`["customer.label"]`w, null, `[ {"property":"customer.label"} ]`w,
+        null, null, "HttpOrder"w, "read"w, null, null, null, null, null, "customer"w).to!string);
+    assert(nestedResponse["data"].array.length == 3 && nestedResponse["data"][0]["customer.label"].str == "Alice");
+    auto nestedDefault = parseJSON(requestFields(`["customer.label"]`w, null, null, null, null,
+        "HttpOrder"w, null, null, null, null, null, null, "customer"w).to!string);
+    assert(nestedDefault["isQuery"].boolean && nestedDefault["id"].str == "customer" && nestedDefault["data"].array.length == 3);
     auto dependencyResponse = parseJSON(requestFields(`["title"]`w, null, null, null, null, "HttpDependencyOrder"w).to!string);
     assert(dependencyResponse["data"].array.length == 2 && dependencyResponse["data"][0]["title"].str.length);
     assert("customer.label" in dependencyResponse["data"][0].object && "cityId" !in dependencyResponse["data"][0].object);
@@ -901,6 +909,9 @@ void main(string[] args) {
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     user.privileges.setFieldAccess(z8_guid_create_name("Orders.CustomerId"w), denied);
     blocked = false; try { requestFields(`["customer.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
+    blocked = false;
+    try { requestFields(`["customer.label"]`w, null, null, null, null, "HttpOrder"w, "read"w, null, null, null, null, null, "customer"w); } catch (Exception) { blocked = true; }
+    assert(blocked);
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     user.privileges.setFieldAccess(z8_guid_create_name("Customers.CityId"w), denied);
     blocked = false; try { requestFields(`["customer.city.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);

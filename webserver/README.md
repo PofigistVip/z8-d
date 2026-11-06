@@ -72,6 +72,8 @@ Without an explicit `fields` parameter, configured form controls, names, columns
 and extra fields determine the selected fields; if none are configured, z8-d
 uses the table's declared fields as a convenience fallback. Field dependencies
 are included in the selection, subject to the same access checks.
+Read requests can select a nested table using `query`; the root request,
+containing tables, their connecting relations and the selected table are checked.
 With no
 `action` parameter, the same metadata is followed by the table read response.
 
