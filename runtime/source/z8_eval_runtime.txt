@@ -164,6 +164,7 @@ private Z8EvalValue z8_eval_binary(wstring op, Z8EvalValue left, Z8EvalValue rig
 }
 private class Z8EvalParser {
     Z8EvalState state; wstring text; size_t position;
+    bool evaluating = true;
     this(Z8EvalState state, wstring text) { this.state = state; this.text = z8_string_required(text); }
     void whitespace() { while (position < text.length && [cast(wchar)' ', '\t', '\r', '\n'].canFind(text[position])) ++position; }
     bool take(wstring token) {
@@ -175,7 +176,7 @@ private class Z8EvalParser {
         import std.uni : isAlpha, isNumber;
         whitespace();
         if (take("("w)) {
-            auto value = binary(1);
+            auto value = conditional();
             if (!take(")"w)) throw new Exception("unclosed Eval expression");
             if (!value.evaluated) value.expression = "("w ~ value.expression ~ ")"w;
             return value;
@@ -200,12 +201,12 @@ private class Z8EvalParser {
             ++position;
             while (position < text.length && (isAlpha(text[position]) || isNumber(text[position]) || text[position] == '_')) ++position;
         } else throw new Exception("unsupported Eval expression");
-        return z8_eval_atom(state, text[start .. position]);
+        return evaluating ? z8_eval_atom(state, text[start .. position]) : Z8EvalValue.init;
     }
     Z8EvalValue unary() {
-        if (take("!"w)) return z8_eval_unary("!"w, unary());
-        if (take("+"w)) return z8_eval_unary("+"w, unary());
-        if (take("-"w)) return z8_eval_unary("-"w, unary());
+        if (take("!"w)) { auto value = unary(); return evaluating ? z8_eval_unary("!"w, value) : Z8EvalValue.init; }
+        if (take("+"w)) { auto value = unary(); return evaluating ? z8_eval_unary("+"w, value) : Z8EvalValue.init; }
+        if (take("-"w)) { auto value = unary(); return evaluating ? z8_eval_unary("-"w, value) : Z8EvalValue.init; }
         return primary();
     }
     Z8EvalValue binary(int minimum) {
@@ -224,12 +225,44 @@ private class Z8EvalParser {
             else precedence = 6;
             if (precedence < minimum) break;
             position += op.length;
-            left = z8_eval_binary(op, left, binary(precedence + 1));
+            auto right = binary(precedence + 1);
+            if (evaluating) left = z8_eval_binary(op, left, right);
         }
         return left;
     }
+    Z8EvalValue conditional() {
+        auto condition = binary(1);
+        auto parent = evaluating;
+        scope(exit) evaluating = parent;
+        if (take("?:"w)) {
+            bool keep = parent && condition.evaluated && (condition.primary !is null || condition.json !is null);
+            evaluating = parent && !keep;
+            auto alternative = conditional();
+            if (!parent) return Z8EvalValue.init;
+            if (keep) return condition;
+            if (condition.evaluated) return alternative;
+            return Z8EvalValue(false, null, null, z8_eval_expression_repr(condition) ~ " ?: "w ~ z8_eval_expression_repr(alternative));
+        }
+        if (!take("?"w)) return condition;
+        bool known = parent && condition.evaluated;
+        bool yes;
+        if (known) {
+            auto value = condition.primary;
+            yes = condition.json !is null || (value !is null &&
+                (value.kind == Z8PrimaryKind.integer ? value.integerValue != 0 : value.kind == Z8PrimaryKind.boolean ? value.booleanValue : true));
+        }
+        evaluating = parent && (!known || yes);
+        auto thenValue = conditional();
+        if (!take(":"w)) throw new Exception("missing Eval conditional separator");
+        evaluating = parent && (!known || !yes);
+        auto elseValue = conditional();
+        if (!parent) return Z8EvalValue.init;
+        if (known) return yes ? thenValue : elseValue;
+        return Z8EvalValue(false, null, null, z8_eval_expression_repr(condition) ~ " ?"w ~
+            z8_eval_expression_repr(thenValue) ~ " : "w ~ z8_eval_expression_repr(elseValue));
+    }
     Z8EvalValue parse() {
-        auto value = binary(1); whitespace();
+        auto value = conditional(); whitespace();
         if (position != text.length) throw new Exception("unsupported Eval expression");
         return value;
     }
