@@ -596,6 +596,7 @@ void main(string[] args) {
     auto loadedAdmin = z8_postgres_read_user(db, "z8_bootstrap"w, z8_guid_create(2), bootstrapRegistry);
     assert(loadedAdmin !is null && loadedAdmin.login == "Admin"w && loadedAdmin.builtinAdministrator && loadedAdmin.administrator);
     assert(loadedAdmin.privileges.getRequestAccess(bootRequestKey).execute && loadedAdmin.roles.length == 1);
+    assert(loadedAdmin.roleNames.length == 1 && loadedAdmin.roleNames[0] == "Administrator"w && loadedAdmin.changePassword);
     assert(loadedAdmin.entries.length == 2 && loadedAdmin.entries[1].classId == "Sample"w && loadedAdmin.entries[1].title == "Renamed entry"w);
     db.beginTransaction();
     db.execute(`DELETE FROM "z8_bootstrap"."SystemUserEntries" WHERE "RecordId" = 'D53F3EBE-4D11-4ACE-99D7-07608B68B6C2'`);

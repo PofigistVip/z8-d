@@ -58,6 +58,11 @@ the PostgreSQL backend opens an independent connection. Job user switching requi
 the built-in administrator and an `IZ8JobUserResolver`: the HTTP authority can
 implement it, or the PostgreSQL backend can resolve standard users and privileges.
 
+For `request=login`, the dispatcher writes the authenticated session, user
+profile, roles, parameters and available entry descriptors. Authentication is
+still supplied by `IZ8HttpAuthority`. Login-time password/email changes and the
+experimental dashboard are not implemented.
+
 An optional `IZ8HttpAuthority` constructor argument connects a host authority
 to the transport. With an authority present, each request must have a session
 accepted by `authorize`; for `request=login`, the server also tries `login`

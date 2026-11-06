@@ -4,11 +4,13 @@ struct Z8UserEntry { Z8Guid id; wstring classId, title; }
 class Z8UserData {
     Z8Guid id;
     wstring login, firstName, middleName, lastName, description, phone, email;
+    wstring settings;
     Z8PrimaryMap parameters;
     Z8Guid[] roles;
+    wstring[] roleNames;
     Z8UserEntry[] entries;
     Z8Privileges privileges;
-    bool administrator, builtinAdministrator, builtinSystem;
+    bool administrator, builtinAdministrator, builtinSystem, changePassword;
     // Java's User.initialize populates public fields only for users with roles.
     bool hasRoles = true;
     this() { parameters = new Z8PrimaryMap(); }

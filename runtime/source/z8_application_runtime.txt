@@ -252,6 +252,7 @@ void z8_application_dispatch_request() {
     auto request = z8_application_require_request();
     if (request.parameters.z8_get("job"w) !is null) { z8_application_poll_job(); return; }
     auto className = z8_string_required(request.parameters.z8_get("request"w));
+    if (className == "login"w) { z8_dashboard_login_info(); return; }
     auto action = request.parameters.z8_get("action"w);
     if (request.writer.scopes.length != 2) throw new Exception("response object is not open");
     if (!z8_application_may_execute(request.session, className, action)) throw new Exception("request access denied");

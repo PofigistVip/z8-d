@@ -149,6 +149,10 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
         if (server != "test"w || (id != "full"w && id != "limited"w && id != "denied"w)) return null;
         auto user = new Z8UserData(); user.id = z8_guid_create(id == "full"w ? 2 : 3);
         user.builtinAdministrator = id == "full"w;
+        user.login = "Alice"w; user.firstName = "Alice"w; user.settings = "{}"w; user.changePassword = true;
+        user.roles = [z8_guid_create(9)]; user.roleNames = ["Operators"w];
+        user.entries = [Z8UserEntry(z8_guid_create_name("Sample"w), "Sample"w, "Sample"w), Z8UserEntry(z8_guid_create(9), "MissingEntry"w, "Missing"w)];
+        user.parameters.z8_add("theme"w, z8_primary_box("dark"w));
         user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
         if (id == "limited"w) {
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.Title"w), Z8Access.init);
@@ -157,7 +161,9 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
         if (id == "denied"w) user.privileges.setRequestAccess(z8_guid_create_name("Sample"w), Z8Access.init);
         return new Z8ApplicationSession(id, user, user);
     }
-    Z8ApplicationSession login(Z8HttpRequest request, wstring login, wstring password) { return null; }
+    Z8ApplicationSession login(Z8HttpRequest request, wstring login, wstring password) {
+        return login == "alice"w && password == "secret"w ? authorize(request, "full"w, "test"w) : null;
+    }
     Z8UserData resolveJobUser(Z8Guid id) {
         if (id != z8_guid_create(4)) return null;
         auto user = new Z8UserData(); user.id = id;
@@ -207,6 +213,17 @@ void main(string[] args) {
             if not line.isdigit():
                 raise RuntimeError("Server did not start: " + line + process.stderr.read())
             port = int(line)
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            try:
+                conn.request("GET", "/request.json?" + urlencode(dict(request="login", login="alice", password="secret")))
+                response = conn.getresponse(); login = json.loads(response.read())
+                assert response.status == 200 and login["success"] and login["session"] == "full", login
+                assert login["user"]["login"] == "Alice" and login["user"]["administrator"] and login["user"]["changePassword"], login
+                assert login["user"]["roles"][0]["name"] == "Operators" and login["user"]["parameters"]["theme"] == "dark", login
+                assert len(login["user"]["entries"]) == 1 and login["user"]["entries"][0]["request"] == "Sample", login
+                assert login["maxUploadSize"] == 5 and "password" not in login["user"], login
+            finally:
+                conn.close()
             def request(session="full", **params):
                 query = dict(request="Sample", action="read", session=session, server="test",
                              fields='["title","amount"]')

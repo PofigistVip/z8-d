@@ -8,6 +8,7 @@ import z8.database.postgres;
 struct Z8LoadedPrivileges {
     Z8Privileges privileges;
     Z8Guid[] roleIds;
+    wstring[] roleNames;
 }
 private bool permission(Z8PostgresValue value) { return !value.isNull && value.text.to!int != 0; }
 private bool sameTablePermissions(Z8Access a, Z8Access b) {
@@ -23,12 +24,13 @@ Z8LoadedPrivileges z8_postgres_load_privileges(Z8PostgresConnection db, wstring 
     auto ns = quoteIdentifier(schema);
     auto params = [Z8PostgresParameter.value(z8_guid_to_string(userId).to!string)];
     enum nonzero = "'00000000-0000-0000-0000-000000000000'::uuid";
-    auto roles = db.execute(`SELECT DISTINCT r."RecordId"::text, r."Read", r."Write", r."Create", r."Copy", r."Destroy", r."Execute" FROM ` ~
+    auto roles = db.execute(`SELECT DISTINCT r."RecordId"::text, r."Read", r."Write", r."Create", r."Copy", r."Destroy", r."Execute", r."Name" FROM ` ~
         ns ~ `."SystemUserRoles" ur JOIN ` ~ ns ~ `."SystemRoles" r ON r."RecordId" = ur."Role" ` ~
         `WHERE ur."User" = $1::uuid AND ur."RecordId" <> ` ~ nonzero ~ ` AND r."RecordId" <> ` ~ nonzero, params);
     Z8LoadedPrivileges result; Z8Access defaults;
     foreach (row; roles.rows) {
         result.roleIds ~= z8_guid_literal(row[0].text);
+        result.roleNames ~= row[7].isNull ? ""w : row[7].text.to!wstring;
         defaults = defaults.orAccess(Z8Access(permission(row[1]), permission(row[2]), permission(row[3]), permission(row[4]), permission(row[5]), permission(row[6])));
     }
     result.privileges = new Z8Privileges(defaults);
@@ -67,7 +69,7 @@ Z8LoadedPrivileges z8_postgres_load_privileges(Z8PostgresConnection db, wstring 
 void z8_postgres_refresh_user_privileges(Z8PostgresConnection db, wstring schema, Z8UserData user) {
     if (user is null) throw new Z8PostgresException("user is required");
     auto loaded = z8_postgres_load_privileges(db, schema, user.id);
-    user.roles = loaded.roleIds; user.privileges = loaded.privileges;
+    user.roles = loaded.roleIds; user.roleNames = loaded.roleNames; user.privileges = loaded.privileges;
 }
 // Resolve the standard Users record together with its current role grants.
 // A host can supply its own resolver for project-specific user parameters.
@@ -102,7 +104,7 @@ Z8UserData z8_postgres_read_user(Z8PostgresConnection db, wstring schema, Z8Guid
     if (db is null || db.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
     if (id is null || id == z8_guid_zero()) return null;
     auto rows = db.execute(`SELECT "Name", "First Name", "Middle Name", "Last Name", "Phone", "Email", ` ~
-        `convert_from("Description", 'UTF8') FROM ` ~ quoteIdentifier(schema) ~ `."SystemUsers" WHERE "RecordId" = $1::uuid`,
+        `convert_from("Description", 'UTF8'), "Change Password", convert_from("Settings", 'UTF8') FROM ` ~ quoteIdentifier(schema) ~ `."SystemUsers" WHERE "RecordId" = $1::uuid`,
         [Z8PostgresParameter.value(z8_guid_to_string(id).to!string)]);
     if (!rows.rows.length) return null;
     if (rows.rows.length != 1) throw new Z8PostgresException("multiple users with the same id");
@@ -111,6 +113,7 @@ Z8UserData z8_postgres_read_user(Z8PostgresConnection db, wstring schema, Z8Guid
     wstring text(size_t index) { return row[index].isNull ? ""w : row[index].text.to!wstring; }
     user.login = text(0); user.firstName = text(1); user.middleName = text(2); user.lastName = text(3);
     user.phone = text(4); user.email = text(5); user.description = text(6);
+    user.changePassword = !row[7].isNull && row[7].text.to!int != 0; user.settings = text(8);
     user.builtinAdministrator = id == z8_guid_create(2); user.builtinSystem = id == z8_guid_create(1);
     z8_postgres_refresh_user_privileges(db, schema, user);
     user.entries = z8_postgres_load_user_entries(db, schema, id, registry);

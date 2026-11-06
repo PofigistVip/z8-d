@@ -1,0 +1,58 @@
+// Dashboard.writeLoginInfo for an already authenticated application session.
+private void z8_dashboard_write_entry(Z8JsonWriterState writer, Z8Object entry) {
+    writer.start('{');
+    z8_monitor_property(writer, "request"w, entry.z8_class_id());
+    z8_monitor_property(writer, "text"w, entry.z8_get_attribute("displayName"w));
+    z8_monitor_property(writer, "description"w, entry.z8_get_attribute("description"w));
+    z8_monitor_property(writer, "icon"w, entry.z8_get_attribute("icon"w));
+    z8_monitor_property(writer, "url"w, entry.z8_get_attribute("url"w));
+    z8_monitor_property(writer, "id"w, entry.z8_id());
+    if (z8_native_is_instance(z8_executable_name, entry)) {
+        z8_monitor_property(writer, "isJob"w, true);
+        writer.start('[', "parameters"w);
+        auto state = z8_action_state(entry);
+        if (state.parameters !is null && state.parameters.view() !is null) {
+            auto parameters = state.parameters.view().z8_erased_data();
+            for (long i; i < parameters.z8_size(); ++i) z8_parameter_write_meta(cast(Z8Object)parameters.z8_get(i), writer);
+        }
+        writer.finish(']');
+    }
+    writer.finish('}');
+}
+private void z8_dashboard_login_info() {
+    auto request = z8_application_require_request();
+    auto session = z8_nonnull(request.session), user = z8_nonnull(session.user);
+    auto params = z8_nonnull(request.parameters);
+    if (request.writer.scopes.length != 2) throw new Exception("response object is not open");
+    if (params.z8_get("newPassword"w) !is null || params.z8_get("email"w) !is null)
+        throw new Exception("login profile changes are not implemented");
+    if (params.z8_get("experimental"w) !is null) throw new Exception("experimental dashboard is not implemented");
+    Z8Object[] entries;
+    foreach (entry; user.entries) {
+        try { entries ~= z8_object_new_instance(entry.classId); }
+        catch (Exception) { } // Loader skips unavailable entry classes in Java.
+    }
+    auto writer = request.writer;
+    z8_monitor_property(writer, "session"w, session.id);
+    z8_monitor_property(writer, "maxUploadSize"w, cast(long)z8_application_configuration().uploadMaxMiB);
+    writer.start('{', "user"w);
+    z8_monitor_property(writer, "id"w, user.id); z8_monitor_property(writer, "login"w, user.login);
+    z8_monitor_property(writer, "administrator"w, user.id !is null && user.id == z8_guid_create(2));
+    z8_monitor_property(writer, "firstName"w, user.firstName); z8_monitor_property(writer, "middleName"w, user.middleName);
+    z8_monitor_property(writer, "lastName"w, user.lastName); z8_monitor_property(writer, "description"w, user.description);
+    z8_monitor_property(writer, "email"w, user.email); z8_monitor_property(writer, "phone"w, user.phone);
+    z8_monitor_property(writer, "changePassword"w, user.changePassword); z8_monitor_property(writer, "settings"w, user.settings);
+    writer.start('[', "entries"w); foreach (entry; entries) z8_dashboard_write_entry(writer, entry); writer.finish(']');
+    writer.start('[', "roles"w);
+    foreach (index, role; user.roles) {
+        writer.start('{'); z8_monitor_property(writer, "id"w, role);
+        z8_monitor_property(writer, "name"w, index < user.roleNames.length ? user.roleNames[index] : null); writer.finish('}');
+    }
+    writer.finish(']');
+    writer.start('{', "parameters"w);
+    auto values = z8_nonnull(user.parameters); auto keys = values.z8_keys();
+    for (long i; i < keys.z8_size(); ++i) {
+        auto key = z8_string_required(keys.z8_get(i)); writer.property(key); z8_json_writer_primary(writer, values.z8_get(key));
+    }
+    writer.finish('}'); writer.finish('}');
+}
