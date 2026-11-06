@@ -987,6 +987,14 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                     result ~= "override void z8_query_virtual_" ~ method.name.text ~ "(Z8Guid id) { this.m_" ~ method.name.text ~ "(id); }\n";
             }
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.entity.EntityParser"w) {
+            foreach (method; program.methods) if (!method.parameters.length && method.returnObjectClass !is null) {
+                if (method.name.text == "read" || method.name.text == "write")
+                    result ~= "override Z8Object z8_entity_parser_virtual_" ~ method.name.text ~ "() { return this.m_" ~ method.name.text ~ "(); }\n";
+                else if (method.name.text == "newEntity")
+                    result ~= "override Z8Object z8_entity_parser_virtual_new() { return this.m_newEntity(); }\n";
+            }
+        }
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.entity.EntityTable"w) {
             foreach (method; program.methods) {
                 if (method.name.text == "newEntity" && method.returnObjectClass !is null) {

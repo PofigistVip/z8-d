@@ -17,6 +17,7 @@ package enum string runtimeSource = import("z8_core_runtime.txt") ~ import("z8_n
     import("z8_properties_runtime.txt") ~ "\n" ~
     import("z8_entity_runtime.txt") ~ "\n" ~
     import("z8_entity_registry_runtime.txt") ~ "\n" ~
+    import("z8_entity_parser_runtime.txt") ~ "\n" ~
     import("z8_entity_filter_runtime.txt") ~ "\n" ~
     import("z8_entity_table_runtime.txt") ~ "\n" ~
     import("z8_decimal_runtime.txt") ~ "\n" ~ import("z8_string_runtime.txt") ~ "\n" ~

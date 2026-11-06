@@ -129,6 +129,9 @@ class Z8Object {
     void z8_control_virtual_write_meta(Z8Object writer, Z8Object query, Z8Object context) {}
     Z8Optional!long z8_sorter_virtual_compare(Z8Object left, Z8Object right) { return z8_optional_wrap(0L); }
     Z8Object z8_entity_virtual_copy() { return z8_entity_copy_default(this); }
+    Z8Object z8_entity_parser_virtual_read() { return z8_nonnull(this); }
+    Z8Object z8_entity_parser_virtual_write() { return z8_nonnull(this); }
+    Z8Object z8_entity_parser_virtual_new() { return z8_entity_parser_default_new(this); }
     Z8Optional!bool z8_security_log_virtual_accept(Z8Object event) { return z8_optional_wrap(true); }
     void z8_security_log_virtual_write(Z8Object event) { z8_security_log_default_write(event); }
     wstring z8_security_log_virtual_format_user(Z8Object user) { return z8_security_log_format(this, user); }

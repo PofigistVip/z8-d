@@ -1,0 +1,63 @@
+// EntityParser lifecycle follows base.entity.EntityParser in the original Z8.
+private enum z8_entity_parser_name = "org.zenframework.z8.server.base.entity.EntityParser"w;
+private class Z8EntityParserState { Z8Object registry, entity, json; }
+private Z8EntityParserState z8_entity_parser_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_entity_parser_name, self)) throw new Exception("invalid EntityParser");
+    auto state = cast(Z8EntityParserState)self.z8_get_native_state(z8_entity_parser_name);
+    if (state is null) { state = new Z8EntityParserState(); self.z8_set_native_state(z8_entity_parser_name, state); }
+    return state;
+}
+Z8Object z8_entity_parser_default_new(Z8Object self) {
+    auto entity = z8_native_new(z8_entity_name);
+    entity.z8_set_container(z8_nonnull(self).z8_container);
+    return entity;
+}
+private Z8Object z8_entity_parser_get_registry(Z8Object self) { return z8_nonnull(z8_entity_parser_state(self).registry); }
+private Z8Object z8_entity_parser_set_registry(Z8Object self, Z8Object registry) {
+    z8_entity_parser_state(self).registry = registry; return self;
+}
+private Z8Object z8_entity_parser_get_entity(Z8Object self) {
+    auto state = z8_entity_parser_state(self);
+    if (state.entity is null) state.entity = z8_entity_register_to(z8_nonnull(self.z8_entity_parser_virtual_new()), state.registry);
+    return state.entity;
+}
+private Z8Object z8_entity_parser_set_entity(Z8Object self, Z8Object entity) {
+    z8_entity_parser_state(self).entity = entity; return self;
+}
+private Z8Object z8_entity_parser_get_json(Z8Object self) {
+    auto state = z8_entity_parser_state(self);
+    if (state.json is null) { state.json = z8_native_new(z8_json_object_name); z8_json_object_state(state.json); }
+    return state.json;
+}
+private Z8Object z8_entity_parser_set_json(Z8Object self, Z8Object json) {
+    if (json !is null) z8_json_object_state(json);
+    z8_entity_parser_state(self).json = json; return self;
+}
+private Z8Object z8_entity_parser_set_json_string(Z8Object self, wstring json) {
+    return z8_entity_parser_set_json(self, json is null ? null : z8_json_object_parse(json));
+}
+private Z8Object z8_entity_parser_default_hook(Z8Object self) { return z8_nonnull(self); }
+private Z8Object z8_entity_parser_to_json(Z8Object self, Z8Object entity) {
+    z8_entity_parser_state(self);
+    if (entity is null) return null;
+    z8_entity_parser_set_entity(self, entity); z8_entity_parser_set_json(self, cast(Z8Object)null);
+    return z8_entity_parser_get_json(z8_nonnull(self.z8_entity_parser_virtual_write()));
+}
+private Z8Object z8_entity_parser_from_json(Z8Object self, Z8Object json) {
+    z8_entity_parser_state(self);
+    if (json is null) return null;
+    z8_entity_parser_set_json(self, json); z8_entity_parser_set_entity(self, null);
+    return z8_entity_parser_get_entity(z8_nonnull(self.z8_entity_parser_virtual_read()));
+}
+void z8_bind_builtin_entity_parser() {
+    enum p = z8_entity_parser_name ~ ".m_"w;
+    z8_native_bind(p ~ "getRegistry"w, &z8_entity_parser_get_registry); z8_native_bind(p ~ "setRegistry"w, &z8_entity_parser_set_registry);
+    z8_native_bind(p ~ "getEntity"w, &z8_entity_parser_get_entity); z8_native_bind(p ~ "setEntity"w, &z8_entity_parser_set_entity);
+    z8_native_bind(p ~ "getJson"w, &z8_entity_parser_get_json); z8_native_bind(p ~ "setJson"w, &z8_entity_parser_set_json);
+    z8_native_bind(p ~ "setJson"w, &z8_entity_parser_set_json_string);
+    z8_native_bind(p ~ "read"w, &z8_entity_parser_default_hook); z8_native_bind(p ~ "write"w, &z8_entity_parser_default_hook);
+    z8_native_bind(p ~ "newEntity"w, &z8_entity_parser_default_new);
+    z8_native_bind(p ~ "toJson"w, &z8_entity_parser_to_json); z8_native_bind(p ~ "fromJson"w, &z8_entity_parser_from_json);
+}
+shared static this() { z8_bind_builtin_entity_parser(); }

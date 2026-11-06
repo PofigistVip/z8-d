@@ -114,6 +114,7 @@ python tests/integration.py
 python tests/project_dependencies.py
 python tests/project_registry.py path/to/original-z8
 python tests/compound_assignment.py
+python tests/entity_parser.py path/to/original-z8
 python tests/map_initializers.py
 python tests/integer_maps.py
 python tests/guid_maps.py
@@ -639,6 +640,10 @@ Gson; поля объекта со значением `null` при этом п�
 композиция фильтров, `Visitor` и поиск по фильтру. Реализованы копирование
 сущностей с виртуальным переопределением, сортировка и методы извлечения
 значений из массивов, а также текстовое представление состояния.
+У `EntityParser` работают состояние сущности, JSON и реестра, преобразование
+отдельной сущности с переопределяемыми методами `read`, `write` и `newEntity`.
+Вспомогательные операции чтения и записи значений и обработка массивов пока
+переносятся.
 Защищённый
 `Entity.findEntities` возвращает массив согласно BL-объявлению; в Java backend
 оригинала соответствующий метод возвращает отображение. `EntityTable` поддерживает
