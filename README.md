@@ -115,6 +115,7 @@ python tests/project_dependencies.py
 python tests/project_registry.py path/to/original-z8
 python tests/compound_assignment.py
 python tests/entity_parser.py path/to/original-z8
+python tests/json_object_expression.py path/to/original-z8
 python tests/map_initializers.py
 python tests/integer_maps.py
 python tests/guid_maps.py
@@ -684,6 +685,8 @@ SQL-выражения и его ленивое кэширование. Знач
 через курсор хоста. `array()` преобразует сгруппированные JSON-результаты для
 целых, логических, десятичных, строковых, GUID, дат и геометрии; курсор должен
 возвращать JSON-строку при запросе с `asArray = true`.
+`JsonObjectExpression` строит JSON-объект из полей либо именованных SQL-выражений,
+учитывает их зависимости и возвращает объекты JSON при чтении и агрегации.
 `Query.fields()`, `primaryFields()` и поиск полей по индексу, имени и
 идентификатору работают с объявленными BL-полями. Доступны настройки и
 коллекции `Query`; хост может получить их через `z8_query_array`,

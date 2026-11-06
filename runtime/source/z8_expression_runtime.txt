@@ -39,6 +39,44 @@ private S z8_expression_default(S, Base)(Z8Object self) {
 private void z8_expression_set(S)(Z8Object self, S expression) { z8_field_state(self).sqlExpression = expression; }
 private Z8Object z8_expression_assign(S)(Z8Object self, S expression) { z8_expression_set(self, expression); return self; }
 
+// JsonObjectExpression builds its SQL token from fields or explicitly named
+// SQL expressions, and parses the selected/aggregated JSON on read.
+private enum z8_json_object_expression_name = "org.zenframework.z8.server.base.table.value.JsonObjectExpression"w;
+private void z8_json_object_expression_new(Z8Object self) {
+    auto state = new Z8FieldState(z8_primary_box(""w), false);
+    state.aggregation = Z8FieldAggregation.array; state.fts = new Z8Fts();
+    z8_field_attach(self, state);
+}
+private Z8Object z8_json_object_expression_fields(Z8Object self, Z8ObjectArray!Z8Object fields) {
+    wstring[] names; Z8SqlPrimary[] values;
+    for (long i; i < z8_nonnull(fields).z8_size(); ++i) {
+        auto field = z8_nonnull(fields.z8_get(i));
+        if (!z8_native_is_instance(z8_field_name, field)) throw new Exception("JSON expression expects fields");
+        names ~= field.z8_index(); values ~= new Z8SqlFieldToken(field);
+    }
+    z8_field_state(self).sqlExpression = z8_sql_json_build_object(names, values); return self;
+}
+private Z8Object z8_json_object_expression_map(Z8Object self, Z8StringValueMap!Z8SqlPrimary map) {
+    wstring[] names; Z8SqlPrimary[] values;
+    auto keys = z8_nonnull(map).z8_keys();
+    for (long i; i < keys.z8_size(); ++i) {
+        auto key = keys.z8_get(i); names ~= key; values ~= map.z8_get(key);
+    }
+    z8_field_state(self).sqlExpression = z8_sql_json_build_object(names, values); return self;
+}
+private Z8Object z8_json_object_expression_get(Z8Object self) {
+    return z8_json_object_parse(z8_primary_cast!wstring(z8_field_internal_get(self)));
+}
+private Z8ObjectArray!Z8Object z8_json_object_expression_array(Z8Object self) {
+    auto values = z8_json_array_read(z8_primary_cast!wstring(z8_field_internal_get(self)));
+    auto result = new Z8ObjectArray!Z8Object();
+    foreach (value; values.array) {
+        if (value.type != JSONType.object) throw new Exception("JSON object expected in expression array");
+        result.z8_add(z8_json_wrap_state(z8_json_new_state(value)));
+    }
+    return result;
+}
+
 private void z8_register_expression(S, T, Base = T)(wstring name, wstring sqlCast,
                                                      void function(Z8Object) create, S function(Z8Object) sql) {
     z8_native_bind(name ~ ".m_new"w, create);
@@ -67,5 +105,11 @@ void z8_bind_builtin_expressions() {
     z8_native_bind_field(p ~ "TextExpression.f_html"w, &z8_field_metadata_address!"html");
     z8_native_bind_field(p ~ "StringExpression.f_fts"w, &z8_field_metadata_address!"fts");
     z8_native_bind_field(p ~ "TextExpression.f_fts"w, &z8_field_metadata_address!"fts");
+    z8_native_bind(z8_json_object_expression_name ~ ".m_new"w, &z8_json_object_expression_new);
+    z8_native_bind(z8_json_object_expression_name ~ ".m_get"w, &z8_json_object_expression_get);
+    z8_native_bind(z8_json_object_expression_name ~ ".m_array"w, &z8_json_object_expression_array);
+    z8_native_bind(z8_json_object_expression_name ~ ".z8op_assign"w, &z8_json_object_expression_fields);
+    z8_native_bind(z8_json_object_expression_name ~ ".z8op_assign"w, &z8_json_object_expression_map);
+    z8_native_bind(z8_json_object_expression_name ~ ".z8cast_sql_string"w, &z8_string_field_sql);
 }
 shared static this() { z8_bind_builtin_expressions(); }

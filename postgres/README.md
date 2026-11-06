@@ -168,6 +168,8 @@ Other unsupported read options and custom request parameters are rejected. The h
 application response before calling it.
 Ordinary computed fields can be selected, filtered and sorted only when all
 their declared and SQL expression dependencies are readable.
+`JsonObjectExpression` builds JSON from field references or named SQL values;
+both ordinary reads and grouped arrays of JSON objects are supported.
 `z8_application_dispatch_request` selects this adapter for a table request;
 the CivetWeb host must explicitly call the dispatcher and install a backend for
 the worker thread. The separately supported write actions are described below.
