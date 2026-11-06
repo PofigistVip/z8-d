@@ -168,6 +168,7 @@ import org.zenframework.z8.base.table.value.TextField;
 import org.zenframework.z8.base.table.value.BoolField;
 import org.zenframework.z8.base.table.value.DatetimeField;
 import org.zenframework.z8.base.table.value.DatespanField;
+import org.zenframework.z8.base.table.value.BinaryField;
 import org.zenframework.z8.base.table.value.Aggregation;
 [name "CountStringOrders"] public class CountStringOrder extends Table {
     public Customer customer; [name "CustomerId"] public Link customerId = customer;
@@ -176,6 +177,7 @@ import org.zenframework.z8.base.table.value.Aggregation;
     [name "Flag"] public BoolField flag; flag.aggregation = Aggregation.Count;
     [name "When"] public DatetimeField instant; instant.aggregation = Aggregation.Count;
     [name "Duration"] public DatespanField duration; duration.aggregation = Aggregation.Count;
+    [name "Payload"] public BinaryField payload; payload.aggregation = Aggregation.Count;
     aggregateBy = {customerId};
 }
 ''',
@@ -394,8 +396,8 @@ import org.zenframework.z8.base.table.value.Aggregation;
 import org.zenframework.z8.base.table.SortDirection;
 public class Probe {
     public static CountStringOrder countStringOrder() { CountStringOrder value; return value; }
-    public static void readCountString(CountStringOrder order) { Field[] fields = {order.customerId, order.title, order.description, order.flag, order.instant, order.duration}; order.read(fields); }
-    public static void readCountStringLinked(CountStringOrder order) { Field[] fields = {order.customer.label, order.title, order.description, order.flag, order.instant, order.duration}; order.read(fields); }
+    public static void readCountString(CountStringOrder order) { Field[] fields = {order.customerId, order.title, order.description, order.flag, order.instant, order.duration, order.payload}; order.read(fields); }
+    public static void readCountStringLinked(CountStringOrder order) { Field[] fields = {order.customer.label, order.title, order.description, order.flag, order.instant, order.duration, order.payload}; order.read(fields); }
     public static void groupCountString(CountStringOrder order) { order.customer.label.aggregation = Aggregation.None; order.groupBy = {order.customer.label}; }
     public static bool nextCountString(CountStringOrder order) { return order.next(); }
     public static guid countStringCustomer(CountStringOrder order) { return order.customerId.get(); }
@@ -404,6 +406,7 @@ public class Probe {
     public static bool countStringFlag(CountStringOrder order) { return order.flag.get(); }
     public static int countStringInstant(CountStringOrder order) { return order.instant.get().ticks(); }
     public static int countStringDuration(CountStringOrder order) { return order.duration.get().milliseconds(); }
+    public static string countStringPayload(CountStringOrder order) { return string.fromBinary(order.payload.get()); }
     public static string countStringName(CountStringOrder order) { return order.customer.label.get(); }
     public static NativeTree tree() { NativeTree value; return value; }
     public static guid[] treePath(NativeTree tree, guid id) { return tree.getPathTo(id); }
@@ -554,8 +557,10 @@ void main(string[] args) {
     db.execute(`UPDATE "TextAggregateOrders" SET "Flag" = 1 WHERE "Title" = 'Zeta'`);
     db.execute(`CREATE TEMP TABLE "CountStringOrders" AS SELECT * FROM "TextAggregateOrders"`);
     db.execute(`ALTER TABLE "CountStringOrders" ADD COLUMN "Duration" bigint DEFAULT 100`);
+    db.execute(`ALTER TABLE "CountStringOrders" ADD COLUMN "Payload" bytea DEFAULT decode('01','hex')`);
     db.execute(`INSERT INTO "CountStringOrders" ("RecordId", "CustomerId", "Title") VALUES ('00000000-0000-0000-0000-000000000344','00000000-0000-0000-0000-000000000201',NULL)`);
     db.execute(`UPDATE "CountStringOrders" SET "Flag" = NULL WHERE "Title" = 'Alpha'`);
+    db.execute(`UPDATE "CountStringOrders" SET "Payload" = NULL WHERE "Title" = 'Beta'`);
     db.execute(`CREATE TEMP TABLE "TextGroupedOrders" AS SELECT * FROM "TextAggregateOrders"`);
     db.execute(`CREATE TEMP TABLE "GroupCustomers" ("RecordId" uuid PRIMARY KEY, "Label" text)`);
     db.execute(`INSERT INTO "GroupCustomers" VALUES ('00000000-0000-0000-0000-000000000501','Alice'), ('00000000-0000-0000-0000-000000000502','Alice'), ('00000000-0000-0000-0000-000000000503','Bob')`);
@@ -628,6 +633,7 @@ void main(string[] args) {
         assert(z8_optional_require(P.m_countStringFlag(countString)));
         assert(z8_optional_require(P.m_countStringInstant(countString)) == (customer == z8_guid_create(0x201) ? 2 : 1));
         assert(z8_optional_require(P.m_countStringDuration(countString)) == (customer == z8_guid_create(0x201) ? 3 : 1));
+        assert(P.m_countStringPayload(countString) == (customer == z8_guid_create(0x201) ? "3"w : "0"w));
         ++countStringRows;
     }
     assert(countStringRows == 2);
@@ -639,6 +645,7 @@ void main(string[] args) {
         assert(z8_optional_require(P.m_countStringFlag(countString)));
         assert(z8_optional_require(P.m_countStringInstant(countString)) == (name == "Alice"w ? 2 : 1));
         assert(z8_optional_require(P.m_countStringDuration(countString)) == (name == "Alice"w ? 3 : 1));
+        assert(P.m_countStringPayload(countString) == (name == "Alice"w ? "3"w : "0"w));
         ++countStringRows;
     }
     assert(countStringRows == 2);
@@ -647,6 +654,7 @@ void main(string[] args) {
         assert(P.m_countStringTitle(countString) == "1"w && P.m_countStringDescription(countString) == "1"w);
         assert(z8_optional_require(P.m_countStringFlag(countString)) && z8_optional_require(P.m_countStringInstant(countString)) == 1);
         assert(z8_optional_require(P.m_countStringDuration(countString)) == 1);
+        assert(P.m_countStringPayload(countString) == "1"w);
         ++countStringRows;
     }
     assert(countStringRows == 2);

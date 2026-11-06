@@ -217,7 +217,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                     kind == "date"w || kind == "datetime"w || kind == "datespan"w;
                 bool extrema = aggregation == Z8FieldAggregation.min || aggregation == Z8FieldAggregation.max;
                 bool arithmetic = aggregation == Z8FieldAggregation.sum || aggregation == Z8FieldAggregation.average;
-                bool countable = comparable && kind != "guid"w;
+                bool countable = (comparable && kind != "guid"w) || kind == "binary"w;
                 if (!(comparable && extrema) && !(numeric && arithmetic) && !(countable && aggregation == Z8FieldAggregation.count))
                     throw new Z8PostgresException("unsupported PostgreSQL aggregateBy field aggregation");
             }
@@ -227,6 +227,10 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             // TextField columns are bytea. Keep that representation across
             // the subselect so outer filters can use their normal SQL format.
             if (outerGrouping && kind == "text"w) expression = "convert_to((" ~ expression ~ ")::text, 'UTF8')";
+            if (kind == "binary"w && aggregation == Z8FieldAggregation.count) {
+                expression = "convert_to((" ~ expression ~ ")::text, 'UTF8')";
+                if (!outerGrouping) expression = "encode(" ~ expression ~ ", 'hex')";
+            }
             sql ~= expression ~ " AS " ~ quoteIdentifier(("z8_" ~ index.to!string).to!wstring);
         }
         z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
@@ -369,7 +373,11 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             auto expression = z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string;
             if ((containsField(declared, field) || outerGroups.length) && kind == "int"w && z8_field_aggregation(field) == Z8FieldAggregation.average && !preserveAverage)
                 expression = "trunc(" ~ expression ~ ")::bigint";
-            if (kind == "binary"w) expression = "encode(" ~ expression ~ ", 'hex')";
+            if (kind == "binary"w) {
+                if (outerGroups.length && z8_field_aggregation(field) == Z8FieldAggregation.count)
+                    expression = "convert_to((" ~ expression ~ ")::text, 'UTF8')";
+                expression = "encode(" ~ expression ~ ", 'hex')";
+            }
             else if (kind == "geometry"w) expression = "encode(ST_AsEWKB(" ~ expression ~ ", 'NDR'), 'hex')";
             else if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.TextField"w, field) &&
                 (!outerGroups.length || z8_field_aggregation(field) == Z8FieldAggregation.none))
