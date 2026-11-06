@@ -164,10 +164,12 @@ import org.zenframework.z8.base.table.value.Aggregation;
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.Link;
 import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.table.value.TextField;
 import org.zenframework.z8.base.table.value.Aggregation;
 [name "CountStringOrders"] public class CountStringOrder extends Table {
     public Customer customer; [name "CustomerId"] public Link customerId = customer;
     [name "Title"] public StringField title; title.aggregation = Aggregation.Count;
+    [name "Description"] public TextField description; description.aggregation = Aggregation.Count;
     aggregateBy = {customerId};
 }
 ''',
@@ -386,10 +388,14 @@ import org.zenframework.z8.base.table.value.Aggregation;
 import org.zenframework.z8.base.table.SortDirection;
 public class Probe {
     public static CountStringOrder countStringOrder() { CountStringOrder value; return value; }
-    public static void readCountString(CountStringOrder order) { Field[] fields = {order.customerId, order.title}; order.read(fields); }
+    public static void readCountString(CountStringOrder order) { Field[] fields = {order.customerId, order.title, order.description}; order.read(fields); }
+    public static void readCountStringLinked(CountStringOrder order) { Field[] fields = {order.customer.label, order.title, order.description}; order.read(fields); }
+    public static void groupCountString(CountStringOrder order) { order.customer.label.aggregation = Aggregation.None; order.groupBy = {order.customer.label}; }
     public static bool nextCountString(CountStringOrder order) { return order.next(); }
     public static guid countStringCustomer(CountStringOrder order) { return order.customerId.get(); }
     public static string countStringTitle(CountStringOrder order) { return order.title.get(); }
+    public static string countStringDescription(CountStringOrder order) { return order.description.get(); }
+    public static string countStringName(CountStringOrder order) { return order.customer.label.get(); }
     public static NativeTree tree() { NativeTree value; return value; }
     public static guid[] treePath(NativeTree tree, guid id) { return tree.getPathTo(id); }
     public static guid[] treeParents(NativeTree tree, guid id) { return tree.getParentsOf(id); }
@@ -606,8 +612,22 @@ void main(string[] args) {
     P.m_readCountString(countString); int countStringRows;
     while (z8_optional_require(P.m_nextCountString(countString))) {
         auto customer = P.m_countStringCustomer(countString);
-        if (customer == z8_guid_create(0x201)) assert(P.m_countStringTitle(countString) == "2"w);
-        else { assert(customer == z8_guid_create(0x202)); assert(P.m_countStringTitle(countString) == "1"w); }
+        if (customer == z8_guid_create(0x201)) assert(P.m_countStringTitle(countString) == "2"w && P.m_countStringDescription(countString) == "2"w);
+        else { assert(customer == z8_guid_create(0x202)); assert(P.m_countStringTitle(countString) == "1"w && P.m_countStringDescription(countString) == "1"w); }
+        ++countStringRows;
+    }
+    assert(countStringRows == 2);
+    P.m_readCountStringLinked(countString); countStringRows = 0;
+    while (z8_optional_require(P.m_nextCountString(countString))) {
+        auto name = P.m_countStringName(countString);
+        if (name == "Alice"w) assert(P.m_countStringTitle(countString) == "2"w && P.m_countStringDescription(countString) == "2"w);
+        else { assert(name == "Bob"w); assert(P.m_countStringTitle(countString) == "1"w && P.m_countStringDescription(countString) == "1"w); }
+        ++countStringRows;
+    }
+    assert(countStringRows == 2);
+    P.m_groupCountString(countString); P.m_readCountStringLinked(countString); countStringRows = 0;
+    while (z8_optional_require(P.m_nextCountString(countString))) {
+        assert(P.m_countStringTitle(countString) == "1"w && P.m_countStringDescription(countString) == "1"w);
         ++countStringRows;
     }
     assert(countStringRows == 2);

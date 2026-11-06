@@ -217,7 +217,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                     kind == "date"w || kind == "datetime"w || kind == "datespan"w;
                 bool extrema = aggregation == Z8FieldAggregation.min || aggregation == Z8FieldAggregation.max;
                 bool arithmetic = aggregation == Z8FieldAggregation.sum || aggregation == Z8FieldAggregation.average;
-                bool countable = numeric || kind == "string"w;
+                bool countable = numeric || kind == "string"w || kind == "text"w;
                 if (!(comparable && extrema) && !(numeric && arithmetic) && !(countable && aggregation == Z8FieldAggregation.count))
                     throw new Z8PostgresException("unsupported PostgreSQL aggregateBy field aggregation");
             }
@@ -226,7 +226,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             if (kind == "int"w && z8_field_aggregation(field) == Z8FieldAggregation.average && !preserveAverage) expression = "trunc(" ~ expression ~ ")::bigint";
             // TextField columns are bytea. Keep that representation across
             // the subselect so outer filters can use their normal SQL format.
-            if (outerGrouping && kind == "text"w) expression = "convert_to(" ~ expression ~ ", 'UTF8')";
+            if (outerGrouping && kind == "text"w) expression = "convert_to((" ~ expression ~ ")::text, 'UTF8')";
             sql ~= expression ~ " AS " ~ quoteIdentifier(("z8_" ~ index.to!string).to!wstring);
         }
         z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
