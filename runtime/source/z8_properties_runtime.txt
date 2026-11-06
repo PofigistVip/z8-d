@@ -89,5 +89,6 @@ void z8_server_configure_from_file(string path, string applicationRoot = "", wst
     auto storage = z8_server_config_value("storage.path"w);
     z8_resources_set_application_root(root);
     z8_file_set_roots(workingPath, storage is null || !storage.length ? "" : storage.to!string);
+    z8_string_configure_nls(root, z8_server_config_value("application.language"w));
     z8_application_configure_from_server();
 }
