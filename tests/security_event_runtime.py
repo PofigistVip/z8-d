@@ -156,8 +156,13 @@ void main(string[] args) {
     previous = z8_application_set_request(request); P.m_add(id); z8_security_events_commit(request);
     z8_application_set_request(previous);
     assert(exists(rotatePath) && exists(rotatePath ~ ".1") && !exists(rotatePath ~ ".2"));
-    z8_file_set_roots(args[1]); z8_server_config_replace(["security.log.file"w:"configured.log"w]);
-    assert(z8_security_log_file_from_config() !is null);
+    z8_file_set_roots(args[1]); z8_server_config_replace(["security.log.file"w:"configured.log"w,
+        "security.log.format"w:"[%1$tF %1$tT.%1$tL] %5$s/%<s %7$b %8$s %% %n"w]);
+    request.securityLogSink = z8_security_log_file_from_config();
+    previous = z8_application_set_request(request); P.m_add(id); z8_security_events_set_result(request, false, "denied"w);
+    z8_security_events_commit(request); z8_application_set_request(previous);
+    auto custom = readText(buildPath(args[1], "configured.log"));
+    assert(custom.indexOf("skip/skip true") >= 0 && custom.indexOf("update/update false denied %") >= 0);
 }
 ''', encoding="utf-8")
     executable = temp / ("security-event.exe" if os.name == "nt" else "security-event")

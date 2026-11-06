@@ -115,7 +115,8 @@ must support concurrent calls. The sink receives only the permitted log paramete
 `Z8FileSecurityLogSink` writes a rotating file and uses overridden BL user and
 object formatters when a security log is installed. The host can construct it
 directly or call `z8_security_log_file_from_config()` after supplying server
-configuration; the custom Java `security.log.format` is not implemented.
+configuration. The `security.log.format` setting supports the default format and common positional string, boolean and date
+conversions, rather than every Java formatter flag or date conversion.
 For a single PostgreSQL schema, the optional integration module
 `z8.integration.postgres_authority` supplies `Z8PostgresHttpAuthority`. Add
 `integrations/postgres_webserver/source`, `postgres/source` and
