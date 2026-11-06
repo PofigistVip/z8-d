@@ -45,6 +45,25 @@ import org.zenframework.z8.base.table.value.IntField;
     aggregateBy = {customerId};
 }
 ''',
+        "AggregateLeftOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.IntField;
+[name "AggregateLeftOrders"] public class AggregateLeftOrder extends Table {
+    public Customer customer; [name "CustomerId"] public LeftLink customerId = customer;
+    [name "Amount"] public IntField amount;
+    aggregateBy = {customerId};
+}
+''',
+        "AggregateFilteredOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.IntField;
+[name "AggregateFilteredOrders"] public class AggregateFilteredOrder extends Table {
+    public FilteredCustomer customer; [name "CustomerId"] public Link customerId = customer;
+    [name "Amount"] public IntField amount;
+    aggregateBy = {customerId};
+}
+''',
         "FilteredCustomer": '''
 public class FilteredCustomer extends Customer {
     virtual protected sql_bool scope() { return label != "Bob"; }
@@ -167,15 +186,29 @@ import org.zenframework.z8.base.table.value.Aggregation;
 import org.zenframework.z8.base.table.SortDirection;
 public class Probe {
     public static AggregateOrder aggregateOrder() { AggregateOrder value; return value; }
+    public static AggregateLeftOrder aggregateLeftOrder() { AggregateLeftOrder value; return value; }
+    public static AggregateFilteredOrder aggregateFilteredOrder() { AggregateFilteredOrder value; return value; }
     public static void readAggregate(AggregateOrder order) { Field[] fields = {order.customerId, order.amount}; order.read(fields); }
     public static void readAggregateSorted(AggregateOrder order) { order.amount.sortDirection = SortDirection.Desc; Field[] fields = {order.customerId, order.amount}; Field[] sort = {order.amount}; order.read(fields, sort); }
     public static void readAggregateAverage(AggregateOrder order) { order.amount.aggregation = Aggregation.Average; Field[] fields = {order.customerId, order.amount}; Field[] sort = {order.amount}; order.read(fields, sort, null, 1, 1); }
     public static void readAggregateLinked(AggregateOrder order) { Field[] fields = {order.customer.label}; order.read(fields); }
+    public static void readAggregateLinkedSorted(AggregateOrder order) { Field[] fields = {order.customer.label, order.amount}; Field[] sort = {order.customer.label}; order.read(fields, sort); }
+    public static void readAggregateSortOnly(AggregateOrder order) { Field[] fields = {order.amount}; Field[] sort = {order.customer.label}; order.read(fields, sort); }
+    public static void readAggregateNested(AggregateOrder order) { Field[] fields = {order.customer.city.label}; order.read(fields); }
     public static int aggregateCount(AggregateOrder order) { return order.count(); }
     public static int aggregateAlice(AggregateOrder order) { return order.count(order.customer.label == "Alice"); }
     public static bool nextAggregate(AggregateOrder order) { return order.next(); }
     public static guid aggregateCustomer(AggregateOrder order) { return order.customerId.get(); }
     public static int aggregateAmount(AggregateOrder order) { return order.amount.get(); }
+    public static string aggregateName(AggregateOrder order) { return order.customer.label.get(); }
+    public static Field aggregateNameField(AggregateOrder order) { return order.customer.label; }
+    public static void readAggregateLeft(AggregateLeftOrder order) { Field[] fields = {order.customer.label, order.amount}; order.read(fields); }
+    public static bool nextAggregateLeft(AggregateLeftOrder order) { return order.next(); }
+    public static string aggregateLeftName(AggregateLeftOrder order) { return order.customer.label.get(); }
+    public static int aggregateLeftAmount(AggregateLeftOrder order) { return order.amount.get(); }
+    public static void readAggregateFiltered(AggregateFilteredOrder order) { Field[] fields = {order.customer.label}; order.read(fields); }
+    public static bool nextAggregateFiltered(AggregateFilteredOrder order) { return order.next(); }
+    public static string aggregateFilteredName(AggregateFilteredOrder order) { return order.customer.label.get(); }
     public static InnerOrder inner() { InnerOrder value; return value; }
     public static LeftOrder left() { LeftOrder value; return value; }
     public static RightOrder right() { RightOrder value; return value; }
@@ -257,7 +290,8 @@ void main(string[] args) {
     db.execute(`INSERT INTO "Orders" ("RecordId","Title","CustomerId","CityId") VALUES ('00000000-0000-0000-0000-000000000301','First','00000000-0000-0000-0000-000000000201','00000000-0000-0000-0000-000000000101'), ('00000000-0000-0000-0000-000000000302','Second','00000000-0000-0000-0000-000000000202',NULL), ('00000000-0000-0000-0000-000000000303','No customer',NULL,NULL), ('00000000-0000-0000-0000-000000000304','Missing customer','00000000-0000-0000-0000-000000000299',NULL)`);
     auto inner = P.m_inner(); auto left = P.m_left(); auto right = P.m_right(); auto full = P.m_full(); auto filtered = P.m_filtered(); auto recursive = P.m_recursive(); auto conditional = P.m_conditional(); auto cyclic = P.m_cyclic();
     auto aggregate = P.m_aggregateOrder();
-    z8_query_set_executor(aggregate, new Z8PostgresQueryExecutor(db, "pg_temp"w, "AggregateOrders"w));
+    auto aggregateExecutor = new Z8PostgresQueryExecutor(db, "pg_temp"w, "AggregateOrders"w);
+    z8_query_set_executor(aggregate, aggregateExecutor);
     assert(z8_optional_require(P.m_aggregateCount(aggregate)) == 2);
     assert(z8_optional_require(P.m_aggregateAlice(aggregate)) == 1);
     P.m_readAggregate(aggregate); long sum; int aggregateRows;
@@ -274,8 +308,37 @@ void main(string[] args) {
     P.m_readAggregateAverage(aggregate);
     assert(z8_optional_require(P.m_nextAggregate(aggregate)) && z8_optional_require(P.m_aggregateAmount(aggregate)) == 5);
     assert(!z8_optional_require(P.m_nextAggregate(aggregate)));
-    bool linkedAggregateRejected; try { P.m_readAggregateLinked(aggregate); } catch (Z8PostgresException) { linkedAggregateRejected = true; }
-    assert(linkedAggregateRejected);
+    P.m_readAggregateLinked(aggregate); int linkedAggregateRows;
+    while (z8_optional_require(P.m_nextAggregate(aggregate))) { assert(P.m_aggregateName(aggregate).length); ++linkedAggregateRows; }
+    assert(linkedAggregateRows == 2);
+    P.m_readAggregateLinkedSorted(aggregate);
+    assert(z8_optional_require(P.m_nextAggregate(aggregate)) && P.m_aggregateName(aggregate) == "Alice"w && z8_optional_require(P.m_aggregateAmount(aggregate)) == 5);
+    assert(z8_optional_require(P.m_nextAggregate(aggregate)) && P.m_aggregateName(aggregate) == "Bob"w && z8_optional_require(P.m_aggregateAmount(aggregate)) == 7);
+    assert(!z8_optional_require(P.m_nextAggregate(aggregate)));
+    P.m_readAggregateSortOnly(aggregate);
+    assert(z8_optional_require(P.m_nextAggregate(aggregate)) && z8_optional_require(P.m_aggregateAmount(aggregate)) == 5);
+    assert(z8_optional_require(P.m_nextAggregate(aggregate)) && z8_optional_require(P.m_aggregateAmount(aggregate)) == 7);
+    Z8QueryReadRequest countLinked; countLinked.fields = [cast(Z8Object)P.m_aggregateNameField(aggregate)];
+    assert(countLinked.fields[0] !is null && aggregateExecutor.count(aggregate, countLinked) == 2);
+    bool nestedAggregateRejected; try { P.m_readAggregateNested(aggregate); } catch (Z8PostgresException) { nestedAggregateRejected = true; }
+    assert(nestedAggregateRejected);
+    db.execute(`INSERT INTO "AggregateOrders" VALUES ('00000000-0000-0000-0000-000000000314','00000000-0000-0000-0000-000000000299',11)`);
+    auto aggregateLeft = P.m_aggregateLeftOrder();
+    z8_query_set_executor(aggregateLeft, new Z8PostgresQueryExecutor(db, "pg_temp"w, "AggregateOrders"w));
+    P.m_readAggregateLeft(aggregateLeft); int leftAggregateRows, leftAggregateMissing;
+    while (z8_optional_require(P.m_nextAggregateLeft(aggregateLeft))) {
+        if (P.m_aggregateLeftName(aggregateLeft) == ""w) {
+            ++leftAggregateMissing; assert(z8_optional_require(P.m_aggregateLeftAmount(aggregateLeft)) == 11);
+        }
+        ++leftAggregateRows;
+    }
+    assert(leftAggregateRows == 3 && leftAggregateMissing == 1);
+    assert(aggregateExecutor.count(aggregate, countLinked) == 2); // Inner join drops the unmatched group.
+    auto aggregateFiltered = P.m_aggregateFilteredOrder();
+    z8_query_set_executor(aggregateFiltered, new Z8PostgresQueryExecutor(db, "pg_temp"w, "AggregateOrders"w));
+    P.m_readAggregateFiltered(aggregateFiltered);
+    assert(z8_optional_require(P.m_nextAggregateFiltered(aggregateFiltered)) && P.m_aggregateFilteredName(aggregateFiltered) == "Alice"w);
+    assert(!z8_optional_require(P.m_nextAggregateFiltered(aggregateFiltered)));
     foreach (query; [cast(Z8Object)inner, cast(Z8Object)left, cast(Z8Object)right, cast(Z8Object)full, cast(Z8Object)filtered, cast(Z8Object)conditional, cast(Z8Object)cyclic])
         z8_query_set_executor(query, new Z8PostgresQueryExecutor(db, "pg_temp"w, "Orders"w));
     z8_query_set_executor(recursive, new Z8PostgresQueryExecutor(db, "pg_temp"w, "Nodes"w));

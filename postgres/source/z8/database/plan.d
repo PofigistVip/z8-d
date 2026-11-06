@@ -116,8 +116,8 @@ package class Z8PostgresQueryPlan {
         }
         return keys;
     }
-    string fromClause() {
-        string result = quoteIdentifier(schema) ~ "." ~ quoteIdentifier(rootTable) ~ " AS t";
+    string fromClause(string rootSelect = null) {
+        string result = rootSelect is null ? quoteIdentifier(schema) ~ "." ~ quoteIdentifier(rootTable) ~ " AS t" : "(" ~ rootSelect ~ ") AS t";
         Z8JoinType[] effective = [Z8JoinType.inner];
         foreach (index; 1 .. nodes.length) {
             auto kind = z8_link_join_type(nodes[index].link);
