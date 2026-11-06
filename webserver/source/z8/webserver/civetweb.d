@@ -210,6 +210,12 @@ private int respond(MgConnection* connection, int status, string description, st
     writeAll(connection, header); writeAll(connection, body);
     return status;
 }
+private int respondDownloadError(MgConnection* connection, int status, string description, wstring message, wstring server) {
+    auto monitor = new Z8RequestMonitor(); monitor.message(Z8MonitorLevel.error, message);
+    auto result = parseJSON(z8_application_error_response(null, monitor, server).to!string);
+    result.object["status"] = JSONValue(status);
+    return respond(connection, status, description, result.toString());
+}
 private void closeBinary(Z8Binary content) {
     if (content !is null) try { z8_binary_close(content); } catch (Throwable) { }
 }
@@ -335,7 +341,7 @@ class Z8CivetServer {
             auto request = new Z8HttpRequest();
             request.method = cString(info.requestMethod); request.path = cString(info.localUri);
             auto isDownload = storageDownloads && (request.path == "/storage" || request.path.startsWith("/storage/"));
-            if (isDownload && request.method != "GET") return respond(connection, 405, "Method Not Allowed", `{"error":"method not allowed"}`);
+            if (isDownload && request.method != "GET") return respondDownloadError(connection, 405, "Method Not Allowed", "Method not allowed"w, serverId);
             request.query = cString(info.queryString); request.remoteAddress = cString(info.remoteAddress.ptr);
             request.contentType = cString(mg_get_header(connection, "Content-Type\0".ptr));
             request.host = cString(mg_get_header(connection, "Host\0".ptr));
@@ -393,14 +399,14 @@ class Z8CivetServer {
             } catch (Z8Redirect redirect) { throw redirect; }
             catch (Throwable error) {
                 if (responseMode == Z8ResponseMode.raw) throw error;
-                if (isDownload) return respond(connection, 404, "Not Found", `{"error":"file not found"}`);
+                if (isDownload) return respondDownloadError(connection, 404, "Not Found", "File not found"w, serverId);
                 auto message = error.msg.length ? error.msg.to!wstring : "Internal server error."w;
                 request.monitor.message(Z8MonitorLevel.error, message);
                 return respond(connection, 200, "OK", z8_application_error_response(requestId, request.monitor, serverId).to!string);
             }
             if (z8_application_has_binary_response(application))
                 return respondBinary(connection, z8_application_response_binary(application), z8_application_response_file_name(application));
-            if (isDownload) return respond(connection, 404, "Not Found", `{"error":"file not found"}`);
+            if (isDownload) return respondDownloadError(connection, 404, "Not Found", "File not found"w, serverId);
             return respond(connection, 200, "OK", z8_application_response_text(application).to!string);
         } catch (Z8Redirect redirect) {
             JSONValue[string] data;

@@ -513,7 +513,7 @@ void main(string[] args) {
             def download(path, session, file_id, method="GET"):
                 client = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
                 try:
-                    client.request(method, path + "?" + urlencode({"session": session, "id": file_id}))
+                    client.request(method, path + "?&" + urlencode({"session": session, "id": file_id}))
                     response = client.getresponse(); body = response.read()
                     return response.status, dict(response.getheaders()), body
                 finally:
@@ -522,7 +522,8 @@ void main(string[] args) {
             assert status == 200 and content == bytes([0, 255, 65]), (status, headers, content)
             assert headers["Content-Type"] == "application/octet-stream" and "filename*=UTF-8''" + quote("данные.txt") in headers["Content-Disposition"], headers
             assert download(download_path, "unknown", first_id)[0] == 401
-            assert download(download_path, "full", "00000000-0000-0000-0000-000000000099")[0] == 404
+            status, headers, content = download(download_path, "full", "00000000-0000-0000-0000-000000000099")
+            assert status == 404 and json.loads(content)["info"]["messages"][-1]["text"] == "File not found"
             assert download(download_path + "-other", "full", first_id)[0] == 404
             assert download(download_path, "full", first_id, "POST")[0] == 405
             result = request(action="detach", field="documents", fields='["documents"]', recordId=target,
