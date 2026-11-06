@@ -40,9 +40,12 @@ public class EvalOracle {
         eval.z8_setVariable(new string("name"), new string("Ada"));
         eval.z8_setVariable(new string("count"), new integer(7));
         eval.z8_setVariable(new string("flag"), bool.True);
-        String[] patterns = {"plain text", "${name}", "Hello ${name}!", "${count}", "Count ${count}", "${true}", "${missing}", "before ${missing} after", "${'literal'}"};
+        String[] patterns = {"plain text", "${name}", "Hello ${name}!", "${count}", "Count ${count}", "${true}", "${missing}", "before ${missing} after", "${'literal'}", "${count + 2}", "twice ${count * 2}", "${'Hi ' + name}", "${missing + 2}", "${(missing)}", "result ${true && false}!"};
         for (String pattern : patterns) System.out.println(eval.z8_evaluateText(new string(pattern)).get());
-        for (String expression : new String[]{"flag", "true", "false"}) System.out.println(eval.z8_evaluateBoolean(new string(expression)).get());
+        for (String expression : new String[]{"flag", "true", "false", "count > 5", "count + 2 == 9", "count + 2 == 9 && flag", "!(count < 3)", "'abc' + name == 'abcAda'", "-count + 10 == 3", "true || false && false"}) {
+            try { System.out.println(eval.z8_evaluateBoolean(new string(expression)).get()); }
+            catch (Exception error) { System.out.println("error"); }
+        }
         System.out.println(eval.z8_getContextInfo().get());
         System.out.println("errors=" + eval.z8_getErrors().size());
         eval.z8_clear(); System.out.println("clear=" + eval.z8_getErrors().size());
@@ -73,9 +76,13 @@ import z8.runtime; import z8gen.p_EvalProbe; import std.stdio : writeln; import 
 void main() {
     auto eval = Z8p_4576616C50726F6265.m_make();
     foreach (pattern; ["plain text"w, "${name}"w, "Hello ${name}!"w, "${count}"w, "Count ${count}"w,
-                       "${true}"w, "${missing}"w, "before ${missing} after"w, "${'literal'}"w])
+                       "${true}"w, "${missing}"w, "before ${missing} after"w, "${'literal'}"w,
+                       "${count + 2}"w, "twice ${count * 2}"w, "${'Hi ' + name}"w, "${missing + 2}"w, "${(missing)}"w,
+                       "result ${true && false}!"w])
         writeln(eval.m_evaluateText(pattern).to!string);
-    foreach (expression; ["flag"w, "true"w, "false"w]) writeln(z8_optional_require(eval.m_evaluateBoolean(expression)));
+    foreach (expression; ["flag"w, "true"w, "false"w, "count > 5"w, "count + 2 == 9"w, "count + 2 == 9 && flag"w,
+                          "!(count < 3)"w, "'abc' + name == 'abcAda'"w, "-count + 10 == 3"w, "true || false && false"w])
+        try { writeln(z8_optional_require(eval.m_evaluateBoolean(expression))); } catch (Exception) { writeln("error"); }
     writeln(eval.m_getContextInfo().to!string);
     writeln("errors=", eval.m_getErrors().z8_size()); eval.m_clear(); writeln("clear=", eval.m_getErrors().z8_size());
 }

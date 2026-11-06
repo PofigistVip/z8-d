@@ -72,8 +72,138 @@ private Z8EvalValue z8_eval_atom(Z8EvalState state, wstring source) {
     state.errors ~= z8_string_format(pattern, new Z8Array!Z8Primary([z8_primary_box(text)]));
     return Z8EvalValue(false, null, null, text.idup);
 }
+private wstring z8_eval_expression_repr(Z8EvalValue value) {
+    if (!value.evaluated) return value.expression;
+    if (value.primary !is null && value.primary.kind == Z8PrimaryKind.text) {
+        import std.string : replace;
+        return "\""w ~ z8_string_required(value.primary.textValue).replace("\""w, "\\\""w) ~ "\""w;
+    }
+    return z8_eval_value_text(value);
+}
+private Z8EvalValue z8_eval_unary(wstring op, Z8EvalValue value) {
+    if (!value.evaluated) return Z8EvalValue(false, null, null, op ~ z8_eval_expression_repr(value));
+    auto item = z8_nonnull(value.primary);
+    if (item.kind == Z8PrimaryKind.boolean && op == "!"w)
+        return Z8EvalValue(true, z8_primary_box(!item.booleanValue), null, null);
+    if (item.kind == Z8PrimaryKind.integer && (op == "+"w || op == "-"w))
+        return Z8EvalValue(true, z8_primary_box(op == "+"w ? item.integerValue : -item.integerValue), null, null);
+    throw new Exception("unsupported Eval unary operands");
+}
+private Z8EvalValue z8_eval_binary(wstring op, Z8EvalValue left, Z8EvalValue right) {
+    if (!left.evaluated || !right.evaluated)
+        return Z8EvalValue(false, null, null, z8_eval_expression_repr(left) ~ " "w ~
+            (op == "&&"w || op == "||"w || op == "%"w ? "null"w : op) ~ " "w ~ z8_eval_expression_repr(right));
+    // The current Java lexer accepts &&, || and %, but Operator.parse does
+    // not recognize those spellings and the evaluator fails on them.
+    if (op == "&&"w || op == "||"w || op == "%"w) throw new Exception("unsupported Eval operator");
+    auto a = z8_nonnull(left.primary), b = right.primary;
+    Z8Primary result;
+    if (a.kind == Z8PrimaryKind.integer && b !is null && b.kind == Z8PrimaryKind.integer) {
+        auto x = a.integerValue, y = b.integerValue;
+        if (op == "+"w) result = z8_primary_box(x + y);
+        else if (op == "-"w) result = z8_primary_box(x - y);
+        else if (op == "*"w) result = z8_primary_box(x * y);
+        else if (op == "/"w) result = z8_primary_box(z8_div(x, y));
+        else if (op == "=="w) result = z8_primary_box(x == y);
+        else if (op == "!="w) result = z8_primary_box(x != y);
+        else if (op == "<"w) result = z8_primary_box(x < y);
+        else if (op == ">"w) result = z8_primary_box(x > y);
+        else if (op == "<="w) result = z8_primary_box(x <= y);
+        else if (op == ">="w) result = z8_primary_box(x >= y);
+    } else if (a.kind == Z8PrimaryKind.boolean && b !is null && b.kind == Z8PrimaryKind.boolean) {
+        if (op == "=="w) result = z8_primary_box(a.booleanValue == b.booleanValue);
+        else if (op == "!="w) result = z8_primary_box(a.booleanValue != b.booleanValue);
+    } else if (a.kind == Z8PrimaryKind.text) {
+        auto x = z8_string_required(a.textValue);
+        if (op == "+"w) result = z8_primary_box(z8_string_new(x ~ (b is null ? ""w : z8_primary_to_string(b))));
+        else if (b !is null && b.kind == Z8PrimaryKind.text) {
+            auto compare = z8_str_compare(x, b.textValue);
+            if (op == "=="w) result = z8_primary_box(compare == 0);
+            else if (op == "!="w) result = z8_primary_box(compare != 0);
+            else if (op == "<"w) result = z8_primary_box(compare < 0);
+            else if (op == ">"w) result = z8_primary_box(compare > 0);
+            else if (op == "<="w) result = z8_primary_box(compare <= 0);
+            else if (op == ">="w) result = z8_primary_box(compare >= 0);
+        }
+    }
+    if (result is null) throw new Exception("unsupported Eval binary operands");
+    return Z8EvalValue(true, result, null, null);
+}
+private class Z8EvalParser {
+    Z8EvalState state; wstring text; size_t position;
+    this(Z8EvalState state, wstring text) { this.state = state; this.text = z8_string_required(text); }
+    void whitespace() { while (position < text.length && [cast(wchar)' ', '\t', '\r', '\n'].canFind(text[position])) ++position; }
+    bool take(wstring token) {
+        whitespace();
+        if (position + token.length > text.length || text[position .. position + token.length] != token) return false;
+        position += token.length; return true;
+    }
+    Z8EvalValue primary() {
+        import std.uni : isAlpha, isNumber;
+        whitespace();
+        if (take("("w)) {
+            auto value = binary(1);
+            if (!take(")"w)) throw new Exception("unclosed Eval expression");
+            if (!value.evaluated) value.expression = "("w ~ value.expression ~ ")"w;
+            return value;
+        }
+        if (position == text.length) throw new Exception("missing Eval operand");
+        auto start = position; auto c = text[position];
+        if (c == '\'' || c == '"') {
+            ++position;
+            while (position < text.length && text[position] != c) {
+                if (text[position] == '\\' && position + 1 < text.length) ++position;
+                ++position;
+            }
+            if (position == text.length) throw new Exception("unclosed Eval string");
+            ++position;
+        } else if (c >= '0' && c <= '9') {
+            while (position < text.length && text[position] >= '0' && text[position] <= '9') ++position;
+            if (position < text.length && text[position] == '.') {
+                ++position;
+                while (position < text.length && text[position] >= '0' && text[position] <= '9') ++position;
+            }
+        } else if (isAlpha(c) || c == '_') {
+            ++position;
+            while (position < text.length && (isAlpha(text[position]) || isNumber(text[position]) || text[position] == '_')) ++position;
+        } else throw new Exception("unsupported Eval expression");
+        return z8_eval_atom(state, text[start .. position]);
+    }
+    Z8EvalValue unary() {
+        if (take("!"w)) return z8_eval_unary("!"w, unary());
+        if (take("+"w)) return z8_eval_unary("+"w, unary());
+        if (take("-"w)) return z8_eval_unary("-"w, unary());
+        return primary();
+    }
+    Z8EvalValue binary(int minimum) {
+        auto left = unary();
+        for (;;) {
+            whitespace(); wstring op; int precedence;
+            foreach (candidate; ["&&"w, "||"w, "=="w, "!="w, "<="w, ">="w, "<"w, ">"w, "+"w, "-"w, "*"w, "/"w, "%"w]) {
+                if (position + candidate.length <= text.length && text[position .. position + candidate.length] == candidate) { op = candidate; break; }
+            }
+            if (op is null) break;
+            if (op == "||"w) precedence = 1;
+            else if (op == "&&"w) precedence = 2;
+            else if (op == "=="w || op == "!="w) precedence = 3;
+            else if (op == "<"w || op == ">"w || op == "<="w || op == ">="w) precedence = 4;
+            else if (op == "+"w || op == "-"w) precedence = 5;
+            else precedence = 6;
+            if (precedence < minimum) break;
+            position += op.length;
+            left = z8_eval_binary(op, left, binary(precedence + 1));
+        }
+        return left;
+    }
+    Z8EvalValue parse() {
+        auto value = binary(1); whitespace();
+        if (position != text.length) throw new Exception("unsupported Eval expression");
+        return value;
+    }
+}
+private Z8EvalValue z8_eval_expression(Z8EvalState state, wstring text) { return (new Z8EvalParser(state, text)).parse(); }
 private Z8Optional!bool z8_eval_boolean(Z8Object self, wstring expression) {
-    auto value = z8_eval_atom(z8_eval_state(self), expression);
+    auto value = z8_eval_expression(z8_eval_state(self), expression);
     if (!value.evaluated) throw new Exception("Eval expression is not evaluated");
     if (value.primary is null || value.primary.kind != Z8PrimaryKind.boolean) throw new Exception("Eval boolean result expected");
     return z8_optional_wrap(value.primary.booleanValue);
@@ -86,22 +216,32 @@ private wstring z8_eval_text(Z8Object self, wstring source) {
     if (first < 0) return z8_string_new(source);
     auto end = source[cast(size_t)first + 2 .. $].indexOf('}');
     if (end < 0) throw new Exception("unterminated Eval text expression");
-    auto last = cast(size_t)first + 2 + cast(size_t)end;
-    auto value = z8_eval_atom(state, source[cast(size_t)first + 2 .. last]);
-    if (first == 0 && last + 1 == source.length) return z8_string_new(z8_eval_value_text(value));
+    auto start = cast(size_t)first, last = start + 2 + cast(size_t)end;
+    auto single = first == 0 && last + 1 == source.length;
+    Z8EvalValue value; bool failed;
+    void evaluatePart() {
+        failed = false;
+        try { value = z8_eval_expression(state, source[start + 2 .. last]); }
+        catch (Exception error) {
+            if (single) throw error;
+            state.errors ~= error.msg.to!wstring; failed = true;
+        }
+    }
+    evaluatePart();
+    if (single) return z8_string_new(z8_eval_value_text(value));
     wstring result = source[0 .. cast(size_t)first];
     for (;;) {
-        result ~= value.evaluated ? (value.primary is null && value.json is null ? "<null>"w : z8_eval_value_text(value)) :
-            "${"w ~ value.expression ~ "}"w;
+        result ~= failed ? source[start .. last + 1] : value.evaluated ?
+            (value.primary is null && value.json is null ? "<null>"w : z8_eval_value_text(value)) : "${"w ~ value.expression ~ "}"w;
         auto remaining = source[last + 1 .. $];
         auto next = remaining.indexOf("${"w);
         if (next < 0) return z8_string_new(result ~ remaining);
         result ~= remaining[0 .. cast(size_t)next];
-        auto start = last + 1 + cast(size_t)next;
+        start = last + 1 + cast(size_t)next;
         end = source[start + 2 .. $].indexOf('}');
         if (end < 0) throw new Exception("unterminated Eval text expression");
         last = start + 2 + cast(size_t)end;
-        value = z8_eval_atom(state, source[start + 2 .. last]);
+        evaluatePart();
     }
 }
 void z8_bind_builtin_eval() {
