@@ -57,8 +57,13 @@ private Z8Guid z8_object_key(Z8Object self) {
 }
 // Recover a generated class's BL identity without running constructors or
 // introducing initialization cycles between generated D modules.
+// Referencing every exported TypeInfo from a library registry also ensures
+// that static linkers retain modules used only by dynamic BL lookup.
+void z8_link_generated_class(TypeInfo_Class type) {
+    if (type is null) throw new Exception("invalid generated class metadata");
+}
 private string z8_object_class_symbol_name(string symbol, string moduleName = null) {
-    import std.string : startsWith, replace, split;
+    import std.string : startsWith, replace, split, indexOf;
     import std.array : join;
     int digit(char c) {
         if (c >= '0' && c <= '9') return c - '0';
@@ -94,9 +99,16 @@ private string z8_object_class_symbol_name(string symbol, string moduleName = nu
         auto decoded = decodePart(symbol[4 .. $]);
         return decoded is null ? null : decoded.replace("$", ".");
     }
-    if (symbol.startsWith("Z8_") && moduleName.startsWith("z8gen.")) {
+    string moduleTail;
+    if (moduleName.startsWith("z8gen.")) moduleTail = moduleName[6 .. $];
+    else if (moduleName.startsWith("z8lib.")) {
+        auto rest = moduleName[6 .. $];
+        auto separator = rest.indexOf('.');
+        if (separator > 0) moduleTail = rest[separator + 1 .. $];
+    }
+    if (symbol.startsWith("Z8_") && moduleTail !is null) {
         string[] names;
-        auto parts = moduleName[6 .. $].split(".");
+        auto parts = moduleTail.split(".");
         foreach (part; parts) {
             string decoded;
             if (part.startsWith("_z8_")) decoded = decodeHex(part[4 .. $]);

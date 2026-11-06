@@ -1669,8 +1669,10 @@ package string[string] projectModuleNames(Program[] programs) {
 }
 
 /// Produce one module per Z8 type, importing only referenced generated types.
-package GeneratedModule[] emitProjectModules(Program[] programs, string[string] moduleNames) {
+package GeneratedModule[] emitProjectModules(Program[] programs, string[string] moduleNames, CompilationOptions options = null) {
     string[string] moduleByClass;
+    LibraryType[string] externalBySymbol;
+    bool external(Program program) { return options !is null && (program.qualifiedName in options.externalTypes) !is null; }
     Program rootOf(Program program) {
         while (program.lexicalOwner !is null) program = program.lexicalOwner;
         return program;
@@ -1679,7 +1681,8 @@ package GeneratedModule[] emitProjectModules(Program[] programs, string[string] 
     foreach (program; programs) {
         auto name = moduleNames[rootOf(program).qualifiedName];
         moduleByClass[program.emittedName] = name;
-        groupsByModule[name] ~= program;
+        if (external(program)) externalBySymbol[program.emittedName] = options.externalTypes[program.qualifiedName];
+        else groupsByModule[name] ~= program;
     }
     // Scan UTF-8 identifier bytes; generated short class names can contain
     // Unicode letters and ordinary underscores.
@@ -1691,8 +1694,11 @@ package GeneratedModule[] emitProjectModules(Program[] programs, string[string] 
             auto end = i;
             while (end < body.length && identifierByte(cast(ubyte)body[end])) ++end;
             auto dependency = body[i .. end] in moduleByClass;
-            if (dependency !is null && *dependency != ownModule && !(*dependency in seen)) {
-                seen[*dependency] = true; dependencies ~= *dependency;
+            if (dependency !is null && *dependency != ownModule) {
+                auto externalType = body[i .. end] in externalBySymbol;
+                auto declaration = externalType is null ? "import " ~ *dependency ~ ";\n" :
+                    "import " ~ *dependency ~ " : " ~ body[i .. end] ~ " = " ~ externalType.symbol ~ ";\n";
+                if (!(declaration in seen)) { seen[declaration] = true; dependencies ~= declaration; }
             }
             i = end;
         }
@@ -1701,15 +1707,17 @@ package GeneratedModule[] emitProjectModules(Program[] programs, string[string] 
     }
     GeneratedModule[] modules;
     Program[] nativePrograms;
-    foreach (program; programs) if (program.isNative && !program.isEnum) nativePrograms ~= program;
+    foreach (program; programs) if (!external(program) && program.isNative && !program.isEnum) nativePrograms ~= program;
+    auto prefix = options is null ? "z8gen" : options.modulePrefix;
+    auto nativeRegistry = prefix ~ ".native_registry";
     foreach (program; programs) {
-        if (program.lexicalOwner !is null) continue;
+        if (program.lexicalOwner !is null || external(program)) continue;
         auto body = emitPrograms(groupsByModule[moduleByClass[program.emittedName]], true);
         auto dependencies = referencedModules(body, moduleByClass[program.emittedName]);
         auto name = moduleByClass[program.emittedName];
         string source = "module " ~ name ~ ";\n\n";
-        if (nativePrograms.length) source ~= "import z8gen.native_registry;\n";
-        foreach (dependency; dependencies) source ~= "import " ~ dependency ~ ";\n";
+        if (nativePrograms.length) source ~= "import " ~ nativeRegistry ~ ";\n";
+        foreach (dependency; dependencies) source ~= dependency;
         if (dependencies.length) source ~= "\n";
         source ~= body;
         // Preserve the previously published generated names for D hosts and
@@ -1723,7 +1731,7 @@ package GeneratedModule[] emitProjectModules(Program[] programs, string[string] 
         modules ~= GeneratedModule(name, name.replace(".", "/") ~ ".d", program.sourceName, source);
     }
     if (nativePrograms.length) {
-        string source = "module z8gen.native_registry;\n\n";
+        string source = "module " ~ nativeRegistry ~ ";\n\n";
         bool[string] imported;
         foreach (program; nativePrograms) {
             auto name = moduleByClass[program.emittedName];
@@ -1733,8 +1741,8 @@ package GeneratedModule[] emitProjectModules(Program[] programs, string[string] 
         }
         source ~= "\nshared static this() {\n";
         foreach (program; nativePrograms) source ~= program.emittedName ~ ".z8_register_native_factory();\n";
-        source ~= "}\n";
-        modules ~= GeneratedModule("z8gen.native_registry", "z8gen/native_registry.d", "", formatDSource(source));
+        source ~= "}\nvoid z8_link_native_registry() {}\n";
+        modules ~= GeneratedModule(nativeRegistry, nativeRegistry.replace(".", "/") ~ ".d", "", formatDSource(source));
     }
     // StartupCodeLines registers named classes, tables, requests, jobs and entries.
     // Keep the generated registry explicit so applications choose when to
@@ -1754,12 +1762,19 @@ package GeneratedModule[] emitProjectModules(Program[] programs, string[string] 
         assert(0, "missing inherited attribute");
     }
     Program[] registrations;
-    foreach (program; programs) if (program.lexicalOwner is null && !program.isEnum && !isPrimaryClass(program) &&
+    foreach (program; programs) if (!external(program) && program.lexicalOwner is null && !program.isEnum && !isPrimaryClass(program) &&
         (directAttribute(program, "generatable") || inheritedAttribute(program, "request") ||
          directAttribute(program, "job") || directAttribute(program, "entry") ||
          inheritedAttribute(program, "name"))) registrations ~= program;
-    if (registrations.length) {
+    if (registrations.length || (options !is null && (options.libraryOutput || options.libraryPrefixes.length))) {
         string body = "void z8_register_project(Z8RuntimeRegistry registry) {\nregistry = z8_nonnull(registry);\n";
+        if (options !is null) foreach (i, library; options.libraryPrefixes)
+            body ~= "z8_dependency_" ~ i.to!string ~ "(registry);\n";
+        if (options !is null && options.libraryOutput) {
+            if (nativePrograms.length) body ~= "z8_link_native_registry();\n";
+            foreach (program; programs) if (!external(program))
+                body ~= "z8_link_generated_class(typeid(" ~ program.emittedName ~ "));\n";
+        }
         foreach (program; registrations) {
             auto named = inheritedAttribute(program, "name") && !directAttribute(program, "generatable") &&
                 !inheritedAttribute(program, "executable");
@@ -1790,10 +1805,14 @@ package GeneratedModule[] emitProjectModules(Program[] programs, string[string] 
         }
         body ~= "}\n";
         auto imports = referencedModules(body);
-        string source = "module z8gen.project_registry;\n\nimport z8.runtime;\n";
-        foreach (name; imports) source ~= "import " ~ name ~ ";\n";
+        auto registryModule = prefix ~ ".project_registry";
+        string source = "module " ~ registryModule ~ ";\n\nimport z8.runtime;\n";
+        if (options !is null && options.libraryOutput && nativePrograms.length) source ~= "import " ~ nativeRegistry ~ " : z8_link_native_registry;\n";
+        if (options !is null) foreach (i, library; options.libraryPrefixes)
+            source ~= "import " ~ library ~ ".project_registry : z8_dependency_" ~ i.to!string ~ " = z8_register_project;\n";
+        foreach (name; imports) source ~= name;
         source ~= "\n" ~ body;
-        modules ~= GeneratedModule("z8gen.project_registry", "z8gen/project_registry.d", "", formatDSource(source));
+        modules ~= GeneratedModule(registryModule, registryModule.replace(".", "/") ~ ".d", "", formatDSource(source));
     }
     return modules;
 }

@@ -556,6 +556,30 @@ unittest {
 }
 
 unittest {
+    auto library = SourceUnit("lib.Value", "Value.bl", "public class Value { public static int get() { return 7; } }");
+    auto config = new CompilationOptions(); config.modulePrefix = "z8lib.example"; config.libraryOutput = true;
+    auto built = compileSources([library], "", config);
+    assert(config.exportedTypes["lib.Value"].moduleName == "z8lib.example.lib.Value");
+    assert(config.exportedTypes["lib.Value"].symbol == "Z8_Value");
+    bool hasRegistry;
+    foreach (module_; built) if (module_.moduleName == "z8lib.example.project_registry") hasRegistry = true;
+    assert(hasRegistry);
+    auto app = SourceUnit("app.Main", "Main.bl", "import lib.Value; class Main { public static int run() { return Value.get(); } }");
+    auto consumer = new CompilationOptions(); consumer.externalTypes = config.exportedTypes; consumer.libraryPrefixes = ["z8lib.example"];
+    auto output = compileSources([app, library], "app.Main.run", consumer);
+    bool appModule, appRegistry;
+    foreach (module_; output) {
+        assert(module_.moduleName != "z8lib.example.lib.Value");
+        if (module_.moduleName == "z8gen.app.Main") {
+            appModule = module_.source.canFind("import z8lib.example.lib.Value : Z8q_lib_2EValue = Z8_Value;");
+        }
+        if (module_.moduleName == "z8gen.project_registry")
+            appRegistry = module_.source.canFind("z8lib.example.project_registry : z8_dependency_0 = z8_register_project");
+    }
+    assert(appModule && appRegistry);
+}
+
+unittest {
     rejects("class A { static int f() { return true; } }");
     rejects("class A { static int f() { if (true) return 1; } }");
     rejects("class A { static int f() { return missing; } }");

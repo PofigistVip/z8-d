@@ -1,6 +1,6 @@
 module app;
 
-import std.file : readText, dirEntries, SpanMode, tempDir, mkdir, mkdirRecurse, exists, remove, copy, rmdirRecurse, thisExePath, writeFile = write;
+import std.file : readText, dirEntries, SpanMode, tempDir, mkdir, mkdirRecurse, exists, remove, copy, rename, rmdirRecurse, thisExePath, writeFile = write;
 import std.conv : to;
 import std.algorithm : sort, canFind;
 import std.array : join;
@@ -11,8 +11,10 @@ import std.uuid : randomUUID;
 import std.json : JSONValue;
 import std.stdio : stderr, write, writeln;
 import z8.lexer;
-import z8.compiler : compile, compileSources, SourceUnit, GeneratedModule, CompileException;
+import z8.compiler : compile, compileSources, SourceUnit, GeneratedModule, CompileException, CompilationOptions;
 import z8.nls : checkResources;
+import z8.library : CompiledLibrary, validLibraryId, loadLibrary, validateLibraries, libraryRoots, serializeLibrary,
+    libraryTreeRevision, libraryFileRevision;
 
 private SourceUnit[] readProject(string root) {
     root = fileSystemPath(absolutePath(root));
@@ -88,7 +90,7 @@ private string responseArgument(string value) {
     return "\"" ~ value.replace("\"", "\\\"") ~ "\"";
 }
 
-private int buildExecutable(GeneratedModule[] modules, string outputPath) {
+private int buildExecutable(GeneratedModule[] modules, string outputPath, CompiledLibrary[] libraries = null) {
     auto tempRoot = dirName(absolutePath(buildPath(tempDir(), "z8d-probe")));
     auto temporary = absolutePath(buildPath(tempRoot, "z8d-" ~ randomUUID().to!string));
     if (dirName(temporary) != tempRoot || !baseName(temporary).startsWith("z8d-"))
@@ -121,7 +123,9 @@ private int buildExecutable(GeneratedModule[] modules, string outputPath) {
     version (Windows) if (target.length >= 240) linkerOutput = buildPath(temporary, "z8d-output.exe");
     auto arguments = writeModules(modules, generatedRoot);
     arguments ~= ["-I" ~ generatedRoot, "-I" ~ runtime, "-J" ~ runtime,
-                  "-oq", library, "-od=" ~ temporary, "-of=" ~ linkerOutput];
+                  "-oq", "-od=" ~ temporary, "-of=" ~ linkerOutput];
+    foreach (dependency; libraries) arguments ~= ["-I" ~ dependency.dRoot, dependency.binary];
+    arguments ~= library;
     string[] quoted;
     foreach (argument; arguments) quoted ~= responseArgument(argument);
     auto response = buildPath(temporary, "dmd.rsp");
@@ -132,30 +136,137 @@ private int buildExecutable(GeneratedModule[] modules, string outputPath) {
     return 0;
 }
 
+private CompilationOptions configureLibraries(ref SourceUnit[] units, CompiledLibrary[] libraries) {
+    auto options = new CompilationOptions();
+    options.libraryPrefixes = libraryRoots(libraries);
+    if (libraries.length) {
+        auto expectedRuntime = libraryTreeRevision(buildPath(runtimeRoot(), "source"), [".d", ".txt"]);
+        foreach (library; libraries) if (library.runtimeRevision != expectedRuntime)
+            throw new Exception("BL library runtime changed; rebuild " ~ library.id);
+    }
+    bool[string] sourceNames;
+    foreach (unit; units) sourceNames[unit.name] = true;
+    foreach (library; libraries) {
+        foreach (unit; library.sources) {
+            if (unit.name in sourceNames) throw new Exception("BL class occurs in more than one project or library: " ~ unit.name);
+            sourceNames[unit.name] = true; units ~= unit;
+        }
+        foreach (name, descriptor; library.types) {
+            if (name in options.externalTypes) throw new Exception("BL class occurs in more than one library: " ~ name);
+            options.externalTypes[name] = descriptor;
+        }
+    }
+    return options;
+}
+
+// Assemble in a fresh sibling directory. Only an existing package produced by
+// this command may be replaced, and a failed installation restores the old one.
+private int buildLibrary(SourceUnit[] owned, CompiledLibrary[] libraries, string outputPath, string id) {
+    if (!validLibraryId(id)) throw new Exception("library id must contain only ASCII letters, digits and underscores");
+    import std.uni : toLower;
+    foreach (library; libraries) if (library.id.toLower == id.toLower) throw new Exception("library id conflicts with a dependency: " ~ id);
+    auto units = owned.dup;
+    auto options = configureLibraries(units, libraries);
+    options.modulePrefix = "z8lib.l_" ~ id; options.libraryOutput = true;
+    auto modules = compileSources(units, "", options);
+    auto output = absolutePath(outputPath);
+    auto parent = dirName(output), name = baseName(output);
+    if (!name.length || name == "." || name == ".." || parent == output) throw new Exception("invalid BL library output path");
+    bool insideOutput(string path) {
+        import std.path : isAbsolute;
+        version (Windows) {
+            if (path.startsWith(`\\?\UNC\`)) path = `\\` ~ path[8 .. $];
+            else if (path.startsWith(`\\?\`)) path = path[4 .. $];
+        }
+        auto rel = relativePath(absolutePath(path), output).replace("\\", "/");
+        return rel == "." || (!isAbsolute(rel) && rel != ".." && !rel.startsWith("../"));
+    }
+    foreach (unit; owned) if (insideOutput(unit.path)) throw new Exception("library output cannot contain its source files");
+    foreach (library; libraries) if (insideOutput(library.directory)) throw new Exception("library output cannot contain a dependency");
+    if (insideOutput(runtimeRoot()) || insideOutput(thisExePath())) throw new Exception("library output cannot contain the compiler or runtime");
+    if (exists(fileSystemPath(output))) {
+        import std.file : isSymlink;
+        if (isSymlink(fileSystemPath(output))) throw new Exception("library output cannot be a symbolic link");
+        auto previous = loadLibrary(output);
+        if (previous.id != id) throw new Exception("library output belongs to another library: " ~ previous.id);
+        foreach (item; dirEntries(fileSystemPath(output), SpanMode.shallow)) {
+            auto child = baseName(item.name);
+            if (!["d", "z8-library.json", "z8-library.lib", "libz8-library.a", ".source-fingerprint"].canFind(child) || item.isSymlink)
+                throw new Exception("library output contains an unmanaged file: " ~ child);
+        }
+        foreach (item; dirEntries(fileSystemPath(buildPath(output, "d")), SpanMode.depth))
+            if (item.isSymlink || (!item.isDir && extension(item.name) != ".d"))
+                throw new Exception("library output contains an unmanaged file: " ~ item.name);
+    }
+    mkdirRecurse(fileSystemPath(parent));
+    auto suffix = randomUUID().to!string;
+    auto staging = buildPath(parent, ".z8d-library-" ~ suffix);
+    auto backup = buildPath(parent, ".z8d-library-backup-" ~ suffix);
+    if (dirName(staging) != parent || dirName(backup) != parent) throw new Exception("invalid library staging directory");
+    mkdir(fileSystemPath(staging));
+    bool installed;
+    scope(exit) if (!installed && exists(fileSystemPath(staging))) rmdirRecurse(fileSystemPath(staging));
+    auto dRoot = buildPath(staging, "d");
+    auto files = writeModules(modules, dRoot);
+    auto runtime = buildPath(runtimeRoot(), "source");
+    version (Windows) auto binaryName = "z8-library.lib";
+    else auto binaryName = "libz8-library.a";
+    auto binary = buildPath(staging, binaryName);
+    auto objects = buildPath(staging, "objects"); mkdir(fileSystemPath(objects));
+    string[] arguments = ["-lib", "-I" ~ dRoot, "-I" ~ runtime, "-J" ~ runtime, "-od=" ~ objects, "-of=" ~ binary];
+    foreach (dependency; libraries) arguments ~= "-I" ~ dependency.dRoot;
+    arguments ~= files;
+    string[] quoted;
+    foreach (argument; arguments) quoted ~= responseArgument(argument);
+    auto response = buildPath(staging, "dmd.rsp");
+    writeFile(fileSystemPath(response), quoted.join("\n") ~ "\n");
+    auto result = execute(["dmd", "@" ~ response]);
+    if (result.status != 0) { stderr.write(result.output); return 1; }
+    remove(fileSystemPath(response)); rmdirRecurse(fileSystemPath(objects));
+    auto runtimeRevision = libraryTreeRevision(runtime, [".d", ".txt"]);
+    auto interfacesRevision = libraryTreeRevision(dRoot, [".d"]);
+    auto archiveRevision = libraryFileRevision(binary);
+    writeFile(fileSystemPath(buildPath(staging, "z8-library.json")),
+        serializeLibrary(id, owned, options.exportedTypes, libraries, runtimeRevision, interfacesRevision, archiveRevision));
+    bool backedUp;
+    if (exists(fileSystemPath(output))) { rename(fileSystemPath(output), fileSystemPath(backup)); backedUp = true; }
+    try { rename(fileSystemPath(staging), fileSystemPath(output)); installed = true; }
+    catch (Exception error) { if (backedUp) rename(fileSystemPath(backup), fileSystemPath(output)); throw error; }
+    if (backedUp) rmdirRecurse(fileSystemPath(backup));
+    writeln("Built BL library ", id, " in ", output);
+    return 0;
+}
+
 int main(string[] args) {
     size_t required;
     if (args.length > 1) {
         if (args[1] == "lex" || args[1] == "compile") required = 3;
         else if (args[1] == "project") required = 4;
-        else if (args[1] == "build" || args[1] == "check-resources") required = 5;
+        else if (args[1] == "build" || args[1] == "check-resources" || args[1] == "library") required = 5;
     }
     bool valid = required && args.length >= required;
-    string[] dependencies;
+    string[] dependencies, libraryPaths;
     if (valid && (args[1] == "lex" || args[1] == "compile")) valid = args.length == required;
     else if (valid) {
         for (size_t i = required; i < args.length; i += 2) {
-            if (args[i] != "--dependency" || i + 1 >= args.length || !args[i + 1].length) { valid = false; break; }
-            dependencies ~= args[i + 1];
+            if (i + 1 >= args.length || !args[i + 1].length) { valid = false; break; }
+            if (args[i] == "--dependency") dependencies ~= args[i + 1];
+            else if (args[i] == "--library") libraryPaths ~= args[i + 1];
+            else { valid = false; break; }
         }
     }
     if (!valid) {
-        stderr.writeln("Usage: z8d <lex|compile> <file.bl> | z8d project <source-root> <output-dir> [--dependency <source-root>]... | z8d build <source-root> <class.method> <output> [--dependency <source-root>]... | z8d check-resources <source-root> <resources-dir> <language> [--dependency <source-root>]...");
+        stderr.writeln("Usage: z8d <lex|compile> <file.bl> | z8d project <source-root> <output-dir> [--dependency <source-root>]... [--library <library-dir>]... | z8d build <source-root> <class.method> <output> [--dependency <source-root>]... [--library <library-dir>]... | z8d library <source-root> <output-dir> <id> [--dependency <source-root>]... [--library <library-dir>]... | z8d check-resources <source-root> <resources-dir> <language> [--dependency <source-root>]... [--library <library-dir>]...");
         return 2;
     }
     try {
+        CompiledLibrary[] libraries;
+        foreach (path; libraryPaths) libraries ~= loadLibrary(path);
+        libraries = validateLibraries(libraries);
         if (args[1] == "check-resources") {
             auto units = readProjectWithDependencies(args[2], dependencies);
-            compileSources(units);
+            auto options = libraries.length ? configureLibraries(units, libraries) : null;
+            compileSources(units, "", options);
             size_t count;
             auto missing = checkResources(units, args[3], args[4], count);
             foreach (item; missing)
@@ -166,13 +277,20 @@ int main(string[] args) {
             return 0;
         }
         if (args[1] == "compile") { write(compile(readText(fileSystemPath(args[2])))); return 0; }
+        if (args[1] == "library") return buildLibrary(readProjectWithDependencies(args[2], dependencies), libraries, args[3], args[4]);
         if (args[1] == "project") {
-            auto modules = compileSources(readProjectWithDependencies(args[2], dependencies));
+            auto units = readProjectWithDependencies(args[2], dependencies);
+            auto options = libraries.length ? configureLibraries(units, libraries) : null;
+            auto modules = compileSources(units, "", options);
             writeModules(modules, args[3]);
             writeln("Generated ", modules.length, " D modules in ", absolutePath(args[3]));
             return 0;
         }
-        if (args[1] == "build") return buildExecutable(compileSources(readProjectWithDependencies(args[2], dependencies), args[3]), args[4]);
+        if (args[1] == "build") {
+            auto units = readProjectWithDependencies(args[2], dependencies);
+            auto options = libraries.length ? configureLibraries(units, libraries) : null;
+            return buildExecutable(compileSources(units, args[3], options), args[4], libraries);
+        }
         auto lexer = new Lexer(readText(fileSystemPath(args[2])));
         while (true) {
             auto t = lexer.next();

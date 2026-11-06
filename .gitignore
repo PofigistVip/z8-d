@@ -1,4 +1,5 @@
 .dub/
+/build/
 z8d.exe
 z8-d-test-unittest.exe
 z8d

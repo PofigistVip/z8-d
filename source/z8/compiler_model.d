@@ -252,3 +252,14 @@ struct SourceUnit { string name, path, source; }
 /// One generated D module and its path relative to the output directory.
 struct GeneratedModule { string moduleName, relativePath, sourceName, source; }
 
+/// Stable exported D symbol recorded in a compiled BL library.
+struct LibraryType { string moduleName, symbol; }
+/// Optional separate-compilation settings; ordinary project compilation keeps
+/// the existing single-project behavior when these settings are absent.
+class CompilationOptions {
+    string modulePrefix = "z8gen";
+    bool libraryOutput;
+    LibraryType[string] externalTypes, exportedTypes;
+    string[] libraryPrefixes;
+}
+
