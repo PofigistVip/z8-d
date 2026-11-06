@@ -909,9 +909,9 @@ void main(string[] args) {
     db.execute(`CREATE TEMP TABLE "JoinOrders" AS SELECT * FROM "Orders"`);
     db.execute(`CREATE TEMP TABLE "DependencyOrders" AS SELECT * FROM "Orders"`);
     auto response = parseJSON(requestFields(`["title","customer.label","customer.city.label"]`w).to!string);
-    wstring readCustomCustomer(wstring customer) {
+    wstring readCustomCustomer(wstring customer, wstring action = "read"w) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
-        request.parameters.z8_add("request"w, "HttpOrder"w); request.parameters.z8_add("action"w, "read"w);
+        request.parameters.z8_add("request"w, "HttpOrder"w); if (action !is null) request.parameters.z8_add("action"w, action);
         request.parameters.z8_add("fields"w, `["title","customer.label"]`w); request.parameters.z8_add("customCustomer"w, customer);
         auto previous = z8_application_set_request(request); scope(exit) z8_application_set_request(previous);
         z8_application_start_response(request, "HttpOrder"w); z8_application_dispatch_request();
@@ -921,6 +921,10 @@ void main(string[] args) {
     assert(customResponse["data"].array.length == 1 && customResponse["data"][0]["customer.label"].str == "Bob");
     customResponse = parseJSON(readCustomCustomer("' OR 1=1 --"w).to!string);
     assert(customResponse["data"].array.length == 0);
+    customResponse = parseJSON(readCustomCustomer("Bob"w, "meta"w).to!string);
+    assert(customResponse["isQuery"].boolean && "fields" in customResponse.object && "data" !in customResponse.object);
+    customResponse = parseJSON(readCustomCustomer("Bob"w, null).to!string);
+    assert(customResponse["isQuery"].boolean && customResponse["data"].array.length == 1 && customResponse["data"][0]["customer.label"].str == "Bob");
     wstring readAggregateIds(wstring ids) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, "AggregateOrder"w); request.parameters.z8_add("action"w, "read"w);
