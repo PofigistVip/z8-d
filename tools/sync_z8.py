@@ -121,11 +121,21 @@ def native_snapshot(original):
                 path = matches[0] if matches else None
                 entries[key] = {"java": path.relative_to(original).as_posix() if path else None,
                                 "sha256": digest(path.read_bytes()) if path else None}
-    return entries
+    # Conservatively monitor helper classes in modules containing native code.
+    # The explicitly deferred justintime module is intentionally excluded.
+    direct = {value["java"] for value in entries.values() if value["java"]}
+    modules = {name.split("/", 1)[0] for name in direct if name.split("/", 1)[0] != "org.zenframework.z8.justintime"}
+    supporting = {}
+    for module in sorted(modules):
+        for path in sorted((original / module / "src/main/java").rglob("*.java")):
+            name = path.relative_to(original).as_posix()
+            if name not in direct:
+                supporting[name] = digest(path.read_bytes())
+    return entries, supporting
 
 
 def native_report(original, accept):
-    current = native_snapshot(original)
+    current, supporting = native_snapshot(original)
     baseline = load(NATIVE, {"format": 1, "entries": {}})
     if baseline.get("format") != 1:
         raise ValueError("Unsupported native baseline")
@@ -142,10 +152,17 @@ def native_report(original, accept):
     print(f"Native bindings: {len(current)}, changed: {len(changed)}, unresolved: {len(missing)}")
     for key in missing:
         print("unresolved: " + key)
+    old_supporting = baseline.get("supporting", {})
+    changed_supporting = [name for name in sorted(set(old_supporting) | set(supporting))
+                          if old_supporting.get(name) != supporting.get(name)]
+    for name in changed_supporting:
+        kind = "added" if name not in old_supporting else "removed" if name not in supporting else "changed"
+        print(f"{kind} supporting Java source: {name}")
+    print(f"Supporting Java sources: {len(supporting)}, changed: {len(changed_supporting)}")
     if accept:
-        save(NATIVE, {"format": 1, "entries": current})
+        save(NATIVE, {"format": 1, "entries": current, "supporting": supporting})
         print("Native baseline updated; review the corresponding D implementations separately.")
-    return bool(changed)
+    return bool(changed or changed_supporting)
 
 
 def main():

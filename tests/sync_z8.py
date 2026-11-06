@@ -19,12 +19,14 @@ with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):
     sync.NATIVE = temp / "vendor/z8-native-baseline.json"
     bl = original / sync.TREES["bl"][0] / "example/Value.bl"
     java = original / "org.zenframework.z8.server/src/main/java/example/Value.java"
+    helper = java.parent / "Helper.java"
     web = original / sync.TREES["web"][0] / "js/Z8.js"
     html = original / sync.TREES["web"][1] / "index.html"
     for path in (bl, java, web, html):
         path.parent.mkdir(parents=True, exist_ok=True)
     bl.write_bytes(b'[native "example.Value"]\r\nclass Value {}\r\n')
     java.write_bytes(b'class Value { int n = 1; }\n')
+    helper.write_bytes(b'class Helper {}\n')
     web.write_bytes(b'// bytes \xef\xbb\xbf\r\n')
     html.write_bytes(b'<html>\r\n')
     assert sync.synchronize(original, "bl", True)
@@ -33,6 +35,9 @@ with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):
     assert (sync.VENDOR / bl.relative_to(original)).read_bytes() == bl.read_bytes()
     assert sync.native_report(original, True)
     assert not sync.native_report(original, False)
+    helper.write_bytes(b'class Helper { int n; }\n')
+    assert sync.native_report(original, False)
+    sync.native_report(original, True)
     platform = temp / "platform/bl/example/System.bl"
     platform.parent.mkdir(parents=True)
     platform.write_text('[native "example.Value"] public class System {}', encoding="utf-8")
