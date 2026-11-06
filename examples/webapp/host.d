@@ -82,7 +82,7 @@ void main(string[] args) {
     if (applicationConfig.schedulerEnabled) scheduler.start();
     scope(exit) if (applicationConfig.schedulerEnabled) scheduler.stop();
     IZ8SchedulerControl schedulerControl = applicationConfig.schedulerEnabled ? cast(IZ8SchedulerControl)scheduler : new DisabledSchedulerControl();
-    auto server = new Z8CivetServer("127.0.0.1:0", (Z8HttpRequest request) {
+    auto server = new Z8CivetServer(z8_server_http_listen_address(), (Z8HttpRequest request) {
         auto connection = db.openSibling(); scope(exit) connection.close();
         auto previous = z8_connection_set_current(new Z8PostgresDatabase(connection, schema, registry, systemTableTypes));
         scope(exit) z8_connection_set_current(previous);

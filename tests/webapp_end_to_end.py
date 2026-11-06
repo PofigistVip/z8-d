@@ -29,9 +29,9 @@ with tempfile.TemporaryDirectory() as directory:
                     str(executable), "--postgres-bin", str(bin_dir)], check=True)
     public = temp / "public"
     config = temp / "custom.properties"
-    config.write_text("application.working.path=work\nstorage.path=storage-data\nstorage.path.format=yyyy/MM\nsecurity.log.file=logs/security.log\nweb.client.hashPassword=false\nfiles.saveOnDisk=true\nauth.fails.limit=2\nauth.fails.banSeconds=60\nauthority.center.session.onePerUser=true\nauthority.center.session.timeout=10\n", encoding="ascii")
+    config.write_text("web.server.http.port=19081\napplication.working.path=work\nstorage.path=storage-data\nstorage.path.format=yyyy/MM\nsecurity.log.file=logs/security.log\nweb.client.hashPassword=false\nfiles.saveOnDisk=true\nauth.fails.limit=2\nauth.fails.banSeconds=60\nauthority.center.session.onePerUser=true\nauthority.center.session.timeout=10\n", encoding="ascii")
     default_config = temp / "server.properties"
-    default_config.write_text("web.client.hashPassword=true\n", encoding="ascii")
+    default_config.write_text("web.server.http.port=19081\nweb.client.hashPassword=true\n", encoding="ascii")
     subprocess.run([sys.executable, str(root / "webserver/prepare_client.py"), str(Path(sys.argv[1]).resolve()), str(public)], check=True)
 
     with temporary_postgres(bin_dir) as (connection, environment):
@@ -57,6 +57,7 @@ with tempfile.TemporaryDirectory() as directory:
             line = process.stdout.readline().strip()
             if not line.isdigit():
                 raise RuntimeError("Example server did not start: " + line + process.stderr.read())
+            assert int(line) == 19081, line
             return process, int(line)
 
         def stop(process):

@@ -4,7 +4,7 @@ This example compiles `Tasks.bl` against the original Z8 BL library and runs
 the generated project in a single D process with PostgreSQL and CivetWeb. It
 demonstrates registry generation, additive schema initialization, local
 authentication, table actions and database- or disk-backed attachments. The host is a
-small local example: it listens on a dynamically assigned loopback port and
+small local example: it listens on `127.0.0.1:9080` by default and
 exits when a line is entered on stdin. It can optionally serve the original
 JavaScript client from a separately prepared public directory.
 
@@ -63,7 +63,9 @@ server commands. The example applies the configured working and storage paths,
 upload limit, password hashing mode, login-failure limits, session timeout and
 single-session policy, disk storage mode, language and supported file extensions. Setting
 `security.log.file` also enables a rotating request and login security log.
-The properties file's directory is used as the application root. Without
+The HTTP listener can be set with `web.server.http.host` and
+`web.server.http.port`, for example `web.server.http.port=9080`. The properties
+file's directory is used as the application root. Without
 `--config`, the host uses `server.properties` in its working directory if present.
 
 Run the full automated example, including a temporary PostgreSQL instance and
