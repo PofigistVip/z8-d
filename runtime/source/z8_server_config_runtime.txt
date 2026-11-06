@@ -37,8 +37,9 @@ private Z8Optional!long z8_server_config_get_int(wstring key, Z8Optional!long de
     if (position == value.length) return z8_optional_wrap(cast(long)fallback);
     long number;
     foreach (c; value[position .. $]) {
-        if (c < '0' || c > '9') return z8_optional_wrap(cast(long)fallback);
-        number = number * 10 + (c - '0');
+        auto digit = z8_java_digit(c);
+        if (digit < 0 || digit > 9) return z8_optional_wrap(cast(long)fallback);
+        number = number * 10 + digit;
         if (number > (negative ? 2147483648L : 2147483647L)) return z8_optional_wrap(cast(long)fallback);
     }
     return z8_optional_wrap(negative ? -number : number);

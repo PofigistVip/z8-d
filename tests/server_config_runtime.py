@@ -35,7 +35,7 @@ void main() {
     z8_string_set_resource("greeting"w, "hello"w);
     z8_server_config_replace(["plain"w:"value"w, "empty"w:""w, "resource"w:"$greeting$"w,
         "true"w:"TrUe"w, "false"w:"yes"w, "min"w:"-2147483648"w,
-        "overflow"w:"2147483648"w, "space"w:" 9"w, "signed"w:"+17"w]);
+        "overflow"w:"2147483648"w, "space"w:" 9"w, "signed"w:"+17"w, "unicode"w:"١٢"w]);
     assert(P.m_get("plain"w) == "value"w && P.m_get("missing"w) is null);
     assert(P.m_getDefault("missing"w) is null && P.m_get("empty"w) !is null);
     assert(P.m_get("resource"w) == "hello"w);
@@ -44,6 +44,7 @@ void main() {
     assert(z8_optional_require(P.m_getBool("empty"w, true)));
     assert(z8_optional_require(P.m_getInt("min"w, 2)) == -2147483648L);
     assert(z8_optional_require(P.m_getInt("signed"w, 2)) == 17);
+    assert(z8_optional_require(P.m_getInt("unicode"w, 2)) == 12);
     assert(z8_optional_require(P.m_getInt("overflow"w, 7)) == 7);
     assert(z8_optional_require(P.m_getInt("space"w, 8)) == 8);
     z8_server_config_replace(["plain"w:"updated"w]);
