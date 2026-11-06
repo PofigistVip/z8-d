@@ -245,9 +245,6 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     if (groups.length) foreach (field; selected) {
         if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
             throw new Exception("computed fields in grouped results are not supported");
-        auto aggregation = z8_field_aggregation(field);
-        if (aggregation == Z8FieldAggregation.array || aggregation == Z8FieldAggregation.distinct)
-            throw new Exception("group array serialization is not supported");
     }
     void verifyGroups() {
         auto actual = z8_query_array(query, "groupBy"w);

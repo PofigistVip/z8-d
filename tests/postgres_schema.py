@@ -63,6 +63,7 @@ import org.zenframework.z8.base.application.Application;
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-values") addWhere(amount >= amount.get());
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-group") { groupBy = {flag}; amount.aggregation = Aggregation.Sum; }
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-group-average") { groupBy = {flag}; amount.aggregation = Aggregation.Average; }
+        if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-group-arrays") { groupBy = {flag}; amount.aggregation = Aggregation.Array; title.aggregation = Aggregation.Distinct; }
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-average") amount.aggregation = Aggregation.Average;
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "default-events") amount = amount.get() + 1;
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "default-order") { groupFields = {flag}; sortFields = {amount}; amount.sortDirection = SortDirection.Desc; }
@@ -718,6 +719,17 @@ void main(string[] args) {
     assert(parseJSON(groupedRead(`{"property":"amount","operator":"gt","value":"60"}`w).to!string)["data"].array.length == 0);
     assert(parseJSON(groupedRead(`{"property":"amount","operator":"ge","value":"50"}`w, true).to!string)["total"].integer == 1);
     assert(parseJSON(groupedRead(`{"property":"amount","operator":"gt","value":"60"}`w, true).to!string)["total"].integer == 0);
+    auto arrayRequest = new Z8ApplicationRequest(); arrayRequest.session = querySession; arrayRequest.monitor = new Z8RequestMonitor();
+    arrayRequest.parameters.z8_add("action"w, "read"w); arrayRequest.parameters.z8_add("session"w, "with-group-arrays"w);
+    arrayRequest.parameters.z8_add("fields"w, `["flag","amount","title"]`w);
+    z8_application_set_request(arrayRequest); z8_application_start_response(arrayRequest, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+    z8_application_finish_response(arrayRequest, cast(Z8RequestMonitor)arrayRequest.monitor);
+    auto arrayJson = parseJSON(z8_application_response_text(arrayRequest).to!string);
+    // IntegerField.get() returns null for arrays; its initially true wasNull flag
+    // makes Field.writeData emit the Java null replacement, zero.
+    assert(arrayJson["data"].array.length == 1 && arrayJson["data"][0]["amount"].integer == 0, arrayJson.toString());
+    auto titles = parseJSON(arrayJson["data"][0]["title"].str).array;
+    assert(titles.length == 2 && titles[0].str == "Second" && titles[1].str == "Visible");
     queryUser.privileges.setFieldAccess(z8_guid_create_name("Sample;--.Flag"w), Z8Access.init);
     bool groupDenied;
     try { groupedRead(`{"property":"amount","operator":"ge","value":"50"}`w); } catch (Exception) { groupDenied = true; }
