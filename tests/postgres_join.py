@@ -115,6 +115,39 @@ import org.zenframework.z8.base.table.value.DecimalField;
     aggregateBy = {customerId};
 }
 ''',
+        "TextAggregateOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.table.value.TextField;
+import org.zenframework.z8.base.table.value.DatetimeField;
+import org.zenframework.z8.base.table.value.GuidField;
+import org.zenframework.z8.base.table.value.BoolField;
+import org.zenframework.z8.base.table.value.Aggregation;
+[name "TextAggregateOrders"] public class TextAggregateOrder extends Table {
+    public Customer customer; [name "CustomerId"] public Link customerId = customer;
+    [name "Title"] public StringField title;
+    [name "Description"] public TextField description; description.aggregation = Aggregation.Max;
+    [name "When"] public DatetimeField instant;
+    [name "Token"] public GuidField token;
+    [name "Flag"] public BoolField flag;
+    aggregateBy = {customerId};
+}
+''',
+        "TextGroupedOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.table.value.TextField;
+import org.zenframework.z8.base.table.value.Aggregation;
+[name "TextGroupedOrders"] public class TextGroupedOrder extends Table {
+    public Customer customer; [name "CustomerId"] public Link customerId = customer;
+    [name "Title"] public StringField title;
+    [name "Description"] public TextField description; description.aggregation = Aggregation.Max;
+    customer.label.aggregation = Aggregation.None;
+    aggregateBy = {customerId}; groupBy = {customer.label};
+}
+''',
         "GroupCustomer": '''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.StringField;
@@ -401,6 +434,11 @@ void main(string[] args) {
     db.execute(`INSERT INTO "AverageOrders" VALUES ('00000000-0000-0000-0000-000000000321','00000000-0000-0000-0000-000000000201',1), ('00000000-0000-0000-0000-000000000322','00000000-0000-0000-0000-000000000201',2), ('00000000-0000-0000-0000-000000000323','00000000-0000-0000-0000-000000000202',2), ('00000000-0000-0000-0000-000000000324','00000000-0000-0000-0000-000000000202',3)`);
     db.execute(`CREATE TEMP TABLE "DecimalOrders" ("RecordId" uuid PRIMARY KEY, "CustomerId" uuid, "Amount" numeric)`);
     db.execute(`INSERT INTO "DecimalOrders" VALUES ('00000000-0000-0000-0000-000000000331','00000000-0000-0000-0000-000000000201',1.25), ('00000000-0000-0000-0000-000000000332','00000000-0000-0000-0000-000000000201',2.5), ('00000000-0000-0000-0000-000000000333','00000000-0000-0000-0000-000000000202',3.125)`);
+    db.execute(`CREATE TEMP TABLE "TextAggregateOrders" ("RecordId" uuid PRIMARY KEY, "CustomerId" uuid, "Title" text, "Description" bytea, "When" bigint, "Token" uuid)`);
+    db.execute(`INSERT INTO "TextAggregateOrders" VALUES ('00000000-0000-0000-0000-000000000341','00000000-0000-0000-0000-000000000201','Alpha',convert_to('first','UTF8'),100,'00000000-0000-0000-0000-000000000001'), ('00000000-0000-0000-0000-000000000342','00000000-0000-0000-0000-000000000201','Zeta',convert_to('second','UTF8'),200,'00000000-0000-0000-0000-000000000002'), ('00000000-0000-0000-0000-000000000343','00000000-0000-0000-0000-000000000202','Beta',convert_to('third','UTF8'),300,'00000000-0000-0000-0000-000000000003')`);
+    db.execute(`ALTER TABLE "TextAggregateOrders" ADD COLUMN "Flag" smallint DEFAULT 0`);
+    db.execute(`UPDATE "TextAggregateOrders" SET "Flag" = 1 WHERE "Title" = 'Zeta'`);
+    db.execute(`CREATE TEMP TABLE "TextGroupedOrders" AS SELECT * FROM "TextAggregateOrders"`);
     db.execute(`CREATE TEMP TABLE "GroupCustomers" ("RecordId" uuid PRIMARY KEY, "Label" text)`);
     db.execute(`INSERT INTO "GroupCustomers" VALUES ('00000000-0000-0000-0000-000000000501','Alice'), ('00000000-0000-0000-0000-000000000502','Alice'), ('00000000-0000-0000-0000-000000000503','Bob')`);
     db.execute(`CREATE TEMP TABLE "GroupedOrders" ("RecordId" uuid PRIMARY KEY, "CustomerId" uuid, "Amount" bigint)`);
@@ -591,6 +629,18 @@ void main(string[] args) {
     aggregateResponse = parseJSON(requestFields(`["amount"]`w, null, null, null, null, "AggregateOrder"w, "read"w, null,
         `{"property":"customer.label","value":"Alice"}`w).to!string);
     assert(aggregateResponse["data"].array.length == 1 && aggregateResponse["data"][0]["amount"].integer == 10);
+    auto scalarAggregate = parseJSON(requestFields(`["customer.label","title","description","token","instant","flag"]`w, null,
+        `[{"property":"customer.label"}]`w, null, null, "TextAggregateOrder"w).to!string);
+    assert(scalarAggregate["data"].array.length == 2 && scalarAggregate["data"][0]["title"].str == "Zeta" && scalarAggregate["data"][0]["description"].str == "second");
+    assert(scalarAggregate["data"][0]["token"].str == "00000000-0000-0000-0000-000000000002");
+    assert(scalarAggregate["data"][0]["flag"].boolean && !scalarAggregate["data"][1]["flag"].boolean);
+    assert("instant" in scalarAggregate["data"][0].object);
+    scalarAggregate = parseJSON(requestFields(`["title","description"]`w, null, null, null, null, "TextAggregateOrder"w, "read"w, null,
+        `{"property":"description","value":"second"}`w).to!string);
+    assert(scalarAggregate["data"].array.length == 1 && scalarAggregate["data"][0]["title"].str == "Zeta");
+    scalarAggregate = parseJSON(requestFields(`["customer.label","title","description"]`w, null, null, null, null, "TextGroupedOrder"w, "read"w, null,
+        `{"property":"description","value":"second"}`w).to!string);
+    assert(scalarAggregate["data"].array.length == 1 && scalarAggregate["data"][0]["title"].str == "Zeta" && scalarAggregate["data"][0]["description"].str == "second");
     aggregateResponse = parseJSON(requestFields(`["amount"]`w, null, null, null, null, "AggregateOrder"w, "read"w, null,
         `{"property":"customer.labelLength","operator":"gt","value":"3"}`w).to!string);
     assert(aggregateResponse["data"].array.length == 1 && aggregateResponse["data"][0]["amount"].integer == 10);

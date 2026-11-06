@@ -231,6 +231,11 @@ wstring z8_sql_string_format(Z8SqlString value, Z8SqlVendor vendor = Z8SqlVendor
         case Z8SqlStringKind.field: return z8_field_sql_format(value.field, vendor);
         case Z8SqlStringKind.textField:
             auto field = z8_field_sql_format(value.field, vendor);
+            // MIN/MAX on a text field already converts the underlying bytea
+            // before applying the aggregate; do not convert the result again.
+            auto aggregation = z8_field_aggregation(value.field);
+            if (vendor == Z8SqlVendor.Postgres && z8_sql_field_options.normalizedAggregatedText && z8_sql_field_options.aggregation &&
+                (aggregation == Z8FieldAggregation.min || aggregation == Z8FieldAggregation.max)) return field;
             if (vendor == Z8SqlVendor.Oracle) return "UTL_RAW.CAST_TO_NVARCHAR2("w ~ field ~ ")"w;
             if (vendor == Z8SqlVendor.Postgres) return "CONVERT_FROM("w ~ field ~ ", 'UTF8')"w;
             if (vendor == Z8SqlVendor.SqlServer) return "Cast("w ~ field ~ " as nvarchar(max))"w;

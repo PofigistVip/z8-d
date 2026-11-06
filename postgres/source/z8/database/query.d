@@ -210,13 +210,21 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             auto kind = z8_field_type_id(field); result.kinds ~= kind;
             if (kind == "none"w) throw new Z8PostgresException("unsupported PostgreSQL aggregateBy field type");
             auto aggregation = z8_field_aggregation(field);
-            if (!containsField(groups, field) && ((kind != "int"w && kind != "float"w) ||
-                (aggregation != Z8FieldAggregation.sum && aggregation != Z8FieldAggregation.average &&
-                 aggregation != Z8FieldAggregation.min && aggregation != Z8FieldAggregation.max)))
-                throw new Z8PostgresException("unsupported PostgreSQL aggregateBy field aggregation");
+            if (!containsField(groups, field)) {
+                bool numeric = kind == "int"w || kind == "float"w;
+                bool comparable = numeric || kind == "string"w || kind == "text"w || kind == "guid"w || kind == "boolean"w ||
+                    kind == "date"w || kind == "datetime"w || kind == "datespan"w;
+                bool extrema = aggregation == Z8FieldAggregation.min || aggregation == Z8FieldAggregation.max;
+                bool arithmetic = aggregation == Z8FieldAggregation.sum || aggregation == Z8FieldAggregation.average;
+                if (!(comparable && extrema) && !(numeric && arithmetic))
+                    throw new Z8PostgresException("unsupported PostgreSQL aggregateBy field aggregation");
+            }
             z8_sql_set_field_options(Z8SqlFieldFormatOptions(true, false));
             auto expression = z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string;
             if (kind == "int"w && z8_field_aggregation(field) == Z8FieldAggregation.average && !preserveAverage) expression = "trunc(" ~ expression ~ ")::bigint";
+            // TextField columns are bytea. Keep that representation across
+            // the subselect so outer filters can use their normal SQL format.
+            if (outerGrouping && kind == "text"w) expression = "convert_to(" ~ expression ~ ", 'UTF8')";
             sql ~= expression ~ " AS " ~ quoteIdentifier(("z8_" ~ index.to!string).to!wstring);
         }
         z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
@@ -352,7 +360,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         auto previous = z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
         scope(exit) z8_sql_set_field_options(previous);
         string sql = "SELECT ";
-        z8_sql_set_field_options(Z8SqlFieldFormatOptions(outerGroups.length != 0, false));
+        z8_sql_set_field_options(Z8SqlFieldFormatOptions(outerGroups.length != 0, false, outerGroups.length != 0));
         foreach (index, field; result.fields) {
             if (index) sql ~= ", ";
             auto kind = z8_field_type_id(field); result.kinds ~= kind;
@@ -362,7 +370,8 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                 expression = "trunc(" ~ expression ~ ")::bigint";
             if (kind == "binary"w) expression = "encode(" ~ expression ~ ", 'hex')";
             else if (kind == "geometry"w) expression = "encode(ST_AsEWKB(" ~ expression ~ ", 'NDR'), 'hex')";
-            else if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.TextField"w, field))
+            else if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.TextField"w, field) &&
+                (!outerGroups.length || z8_field_aggregation(field) == Z8FieldAggregation.none))
                 expression = "convert_from(" ~ expression ~ ", 'UTF8')";
             sql ~= expression ~ " AS " ~ quoteIdentifier(("z8_" ~ index.to!string).to!wstring);
         }
@@ -379,14 +388,14 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                 if (index) sql ~= ", ";
                 sql ~= z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string;
             }
-            z8_sql_set_field_options(Z8SqlFieldFormatOptions(true, false));
+            z8_sql_set_field_options(Z8SqlFieldFormatOptions(true, false, true));
             string[] having;
             foreach (condition; groupFilters) if (!trivialTrue(condition))
                 having ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
             if (having.length) { sql ~= " HAVING "; foreach (index, filter; having) { if (index) sql ~= " AND "; sql ~= filter; } }
         }
         if (!counting && request.sortFields.length) {
-            z8_sql_set_field_options(Z8SqlFieldFormatOptions(outerGroups.length != 0, true));
+            z8_sql_set_field_options(Z8SqlFieldFormatOptions(outerGroups.length != 0, true, outerGroups.length != 0));
             sql ~= " ORDER BY ";
             foreach (index, field; request.sortFields) {
                 if (containsField(declared, field) && !containsField(inner.fields, field))

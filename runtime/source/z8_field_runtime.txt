@@ -11,7 +11,7 @@ interface IZ8FieldCursor {
 }
 // Like FormatOptions, this affects the current formatting operation, not the
 // stored expression. Keep it thread-local for concurrent HTTP requests.
-struct Z8SqlFieldFormatOptions { bool aggregation, orderBy; }
+struct Z8SqlFieldFormatOptions { bool aggregation, orderBy, normalizedAggregatedText; }
 private Z8SqlFieldFormatOptions z8_sql_field_options;
 Z8SqlFieldFormatOptions z8_sql_set_field_options(Z8SqlFieldFormatOptions value) {
     auto previous = z8_sql_field_options; z8_sql_field_options = value; return previous;
