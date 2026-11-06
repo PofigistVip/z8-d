@@ -1,7 +1,8 @@
 """Run the executable integer probes from bl-standard against generated D.
 
 Usage: python tests/bl_standard_runtime_probes.py <bl-standard-root>
-Cases with unresolved external dependencies and Java generation errors are skipped.
+Standard-library imports use the vendored BL sources; cases ending in Java
+generation errors are skipped.
 """
 from pathlib import Path
 import importlib.util
@@ -45,16 +46,20 @@ void main() {
     count = 0
     rejected = 0
     for name, value, code, stage, expected in module.CASES:
-        if stage not in ("run", "run-error", "bl-error") or "import org." in (value or "") or "import org." in code:
+        if stage not in ("run", "run-error", "bl-error"):
             continue
         (source / "Value.bl").write_text(value or module.DEFAULT_VALUE, encoding="utf-8")
         (source / "SpecProbe.bl").write_text(code, encoding="utf-8")
         generated = temp / f"generated-{count}"
-        result = subprocess.run([str(compiler), "project", str(source), str(generated)],
+        dependency = ["--dependency", str(root / "vendor/z8/org.zenframework.z8.lang/src/bl")] if (
+            "import org." in (value or "") or "import org." in code) else []
+        result = subprocess.run([str(compiler), "project", str(source), str(generated), *dependency],
                                 capture_output=True, text=True, encoding="utf-8", errors="replace")
         if stage == "bl-error":
             if result.returncode == 0:
                 raise SystemExit(f"Probe {name!r} should have failed BL compilation")
+            if dependency and expected.lower() not in result.stderr.lower():
+                raise SystemExit(f"Probe {name!r} failed for the wrong reason:\n{result.stderr}")
             rejected += 1
             continue
         if result.returncode:
