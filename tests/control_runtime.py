@@ -23,7 +23,17 @@ import org.zenframework.z8.base.table.value.StringField;
 import org.zenframework.z8.base.json.JsonWriter;
 import org.zenframework.z8.base.query.Query;
 public class CustomField extends StringField {
-    virtual protected void writeMeta(JsonWriter writer, Query query, Query context) { writer.writeProperty("custom", "enabled"); }
+    virtual protected void writeMeta(JsonWriter writer, Query query, Query context) { writer.writeProperty("custom", "enabled"); writer.writeProperty("customReadOnly", readOnly); }
+}
+''', encoding="utf-8")
+    (source / "CustomTable.bl").write_text('''
+import org.zenframework.z8.base.table.Table;
+public class CustomTable extends Table {
+    [name "Label"] CustomField label;
+    label.required = true; label.width = 120; label.colSpan = 2;
+    Table destination;
+    label.source = destination; label.source.valueFrom = recordId; label.source.filterField = destination.recordId;
+    label.dependency = recordId; label.dependsOn = recordId; label.dependencies = {recordId};
 }
 ''', encoding="utf-8")
     (source / "ControlProbe.bl").write_text('''
@@ -32,6 +42,7 @@ import org.zenframework.z8.base.table.value.GuidField;
 import org.zenframework.z8.base.table.value.StringField;
 public class ControlProbe {
     public static CustomField makeCustom() { CustomField value; return value; }
+    public static CustomTable makeTable() { CustomTable value; return value; }
     public static bool verify() {
         StringField field; GuidField key; Table target;
         if (field.colSpan != 1 || field.flex != 0 || field.readOnly || field.required || field.editable || field.important) return false;
@@ -60,6 +71,23 @@ void main() {
     z8_control_write_custom_meta(P.m_makeCustom(), null, null);
     z8_application_finish_response(request, monitor);
     assert(parseJSON(z8_application_response_text(request).to!string)["custom"].str == "enabled");
+    request = new Z8ApplicationRequest(); monitor = new Z8RequestMonitor(); request.monitor = monitor;
+    z8_application_set_request(request); z8_application_start_response(request, "meta"w);
+    auto table = z8_nonnull(P.m_makeTable()); auto privileges = new Z8Privileges(Z8Access(true, false, false, false, false, true));
+    z8_control_write_field_meta(table.f_label, table, table, privileges);
+    z8_application_finish_response(request, monitor);
+    auto meta = parseJSON(z8_application_response_text(request).to!string);
+    assert(meta["type"].str == "string" && meta["name"].str == "label" && meta["header"].str == "Label");
+    assert(meta["length"].integer == 30 && meta["width"].integer == 120 && meta["colSpan"].integer == 2);
+    assert(meta["readOnly"].boolean && !meta["required"].boolean && meta["custom"].str == "enabled");
+    assert(meta["customReadOnly"].boolean && !z8_optional_require(table.f_label.f_readOnly));
+    assert(meta["source"]["field"].str == "recordId" && meta["source"]["link"].str == "recordId");
+    assert(meta["dependency"].str == "recordId" && meta["dependencies"][0].str == "recordId");
+    privileges.setRequestAccess(z8_guid_create_name(table.f_destination.z8_class_id()), Z8Access.init);
+    request = new Z8ApplicationRequest(); monitor = new Z8RequestMonitor(); request.monitor = monitor;
+    z8_application_set_request(request); z8_application_start_response(request, "meta"w);
+    z8_control_write_field_meta(table.f_label, table, table, privileges); z8_application_finish_response(request, monitor);
+    assert("source" !in parseJSON(z8_application_response_text(request).to!string).object);
     z8_application_set_request(null);
 }
 ''', encoding="utf-8")

@@ -37,6 +37,11 @@ previous backend afterward. The authority is responsible for providing a
 current privilege snapshot. Executable jobs and other query actions still need
 adapters; selecting this handler is explicit rather than automatic.
 
+`z8_control_write_field_meta` can write metadata for a direct field into the
+current response object, including basic presentation, dependencies, permitted
+source information and a BL `writeMeta` override. Complete query/form metadata
+and automatic `meta` or default action responses are still pending.
+
 An optional `IZ8HttpAuthority` constructor argument connects a host authority
 to the transport. With an authority present, each request must have a session
 accepted by `authorize`; for `request=login`, the server also tries `login`
