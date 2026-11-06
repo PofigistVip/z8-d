@@ -1074,6 +1074,14 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 field.name.text == "tabs" && !field.isStatic && field.type == ValueType.selfArray && field.objectClass !is null) {
                 result ~= "@property ref " ~ storageType ~ " f_tabs() { return z8_tab_control_tabs_ref!(" ~
                     field.objectClass.emittedName ~ ")(this); }\n";
+            } else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.form.action.Action"w &&
+                field.name.text == "parameters" && !field.isStatic && field.type == ValueType.selfArray && field.objectClass !is null) {
+                result ~= "@property ref " ~ storageType ~ " f_parameters() { return z8_action_parameters_ref!(" ~
+                    field.objectClass.emittedName ~ ")(this); }\n";
+            } else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.form.action.Action"w &&
+                field.name.text == "type" && !field.isStatic && field.type == ValueType.enumType && field.objectClass !is null) {
+                result ~= "@property ref " ~ storageType ~ " f_type() { return z8_action_type_ref!(" ~
+                    field.objectClass.emittedName ~ ")(this); }\n";
             } else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.query.Query"w &&
                 field.name.text == "readLock" && !field.isStatic && field.type == ValueType.enumType && field.objectClass !is null) {
                 result ~= "@property ref " ~ storageType ~ " f_readLock() { return z8_query_lock_ref!(" ~

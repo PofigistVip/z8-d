@@ -45,8 +45,8 @@ private void z8_application_dispatch_query_meta_target(wstring className, Z8Obje
 private void z8_application_query_write_meta(Z8Object query, Z8Object[] selected, Z8Object[] groups, Z8Privileges privileges) {
     auto writer = z8_application_require_request().writer;
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
-    if (z8_query_array(query, "actions"w).length || z8_query_array(query, "reports"w).length || z8_query_array(query, "aggregateBy"w).length)
-        throw new Exception("query actions, reports and aggregateBy metadata are not supported");
+    if (z8_query_array(query, "reports"w).length || z8_query_array(query, "aggregateBy"w).length)
+        throw new Exception("query reports and aggregateBy metadata are not supported");
     void fields(wstring property, Z8Object[] values) {
         Z8Object[] readable;
         foreach (field; values) if (z8_control_metadata_visible(field, query, privileges)) readable ~= field;
@@ -69,6 +69,7 @@ private void z8_application_query_write_meta(Z8Object query, Z8Object[] selected
     foreach (name; ["controls"w, "columns"w, "names"w, "quickFilters"w, "filterFields"w])
         fields(name == "names"w ? "nameFields"w : name, z8_query_array(query, name));
     fields("fields"w, selected);
+    fields("actions"w, z8_query_array(query, "actions"w));
     auto access = privileges.getTableAccess(queryKey);
     writer.start('{', "access"w);
     z8_monitor_property(writer, "read"w, access.read); z8_monitor_property(writer, "write"w, access.write);

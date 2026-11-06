@@ -261,6 +261,7 @@ private bool z8_control_metadata_visible(Z8Object item, Z8Object query, Z8Privil
         z8_application_query_field_path(query, item, privileges);
         return z8_application_query_field_readable(query, item, privileges);
     }
+    if (z8_native_is_instance(z8_action_name, item)) return true;
     if (z8_native_is_instance(z8_tab_control_name, item)) return true;
     if (!z8_native_is_instance(z8_section_name, item)) throw new Exception("unsupported control metadata");
     if (z8_native_is_instance("org.zenframework.z8.server.base.form.Form"w, item)) {
@@ -283,6 +284,7 @@ private void z8_control_write_meta_tree(Z8Object item, Z8Object query, Z8Object 
     path ~= item;
     scope(exit) path.length = path.length - 1;
     auto writer = z8_application_require_request().writer;
+    if (z8_native_is_instance(z8_action_name, item)) { z8_action_write_meta(item, query, context, privileges); return; }
     if (z8_native_is_instance(z8_tab_control_name, item)) {
         z8_control_write_base_meta(item, query, context, privileges);
         z8_monitor_property(writer, "isTabControl"w, true);

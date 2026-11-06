@@ -1,0 +1,58 @@
+// Native form Action state; individual parameter support is added separately.
+private enum z8_action_name = "org.zenframework.z8.server.base.form.action.Action"w;
+private interface IZ8ActionTypeCell { wstring text(); }
+private class Z8ActionTypeCell(T) : IZ8ActionTypeCell {
+    T value;
+    this() { value = T.e_Default; }
+    wstring text() {
+        if (value is T.e_Default) return "default"w;
+        if (value is T.e_Danger) return "danger"w;
+        if (value is T.e_Primary) return "primary"w;
+        if (value is T.e_Success) return "success"w;
+        throw new Exception("invalid action type");
+    }
+}
+private class Z8ActionState {
+    IZ8FieldOrderCell parameters;
+    IZ8ActionTypeCell type;
+    Z8Optional!bool useTransaction = z8_optional_wrap(true);
+}
+private Z8ActionState z8_action_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_action_name, self)) throw new Exception("invalid Action object");
+    auto state = cast(Z8ActionState)self.z8_get_native_state(z8_action_name);
+    if (state is null) { state = new Z8ActionState(); self.z8_set_native_state(z8_action_name, state); }
+    return state;
+}
+ref Z8ObjectArray!T z8_action_parameters_ref(T)(Z8Object self) if (is(T : Z8Object)) {
+    auto state = z8_action_state(self);
+    auto cell = cast(Z8FieldOrderCell!T)state.parameters;
+    if (cell is null) {
+        if (state.parameters !is null) throw new Exception("incompatible action parameters array");
+        cell = new Z8FieldOrderCell!T(); state.parameters = cell;
+    }
+    return cell.value;
+}
+ref T z8_action_type_ref(T)(Z8Object self) {
+    auto state = z8_action_state(self);
+    auto cell = cast(Z8ActionTypeCell!T)state.type;
+    if (cell is null) {
+        if (state.type !is null) throw new Exception("incompatible action type enum");
+        cell = new Z8ActionTypeCell!T(); state.type = cell;
+    }
+    return cell.value;
+}
+private Z8Optional!bool* z8_action_use_transaction(Z8Object self) { return &z8_action_state(self).useTransaction; }
+private void z8_action_write_meta(Z8Object item, Z8Object query, Z8Object context, Z8Privileges privileges) {
+    auto state = z8_action_state(item);
+    if (state.parameters !is null && state.parameters.view() !is null && state.parameters.view().z8_erased_data().z8_size())
+        throw new Exception("action parameter metadata is not supported");
+    z8_control_write_base_meta(item, query, context, privileges);
+    auto writer = z8_application_require_request().writer;
+    z8_monitor_property(writer, "isAction"w, true);
+    z8_monitor_property(writer, "request"w, z8_nonnull(context).z8_class_id());
+    z8_monitor_property(writer, "type"w, state.type is null ? "default"w : state.type.text());
+    writer.start('[', "parameters"w); writer.finish(']');
+}
+void z8_bind_builtin_action() { z8_native_bind_field(z8_action_name ~ ".f_useTransaction"w, &z8_action_use_transaction); }
+shared static this() { z8_bind_builtin_action(); }

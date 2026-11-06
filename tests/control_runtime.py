@@ -32,6 +32,8 @@ import org.zenframework.z8.base.form.Fieldset;
 import org.zenframework.z8.base.form.Section;
 import org.zenframework.z8.base.form.Tab;
 import org.zenframework.z8.base.form.TabControl;
+import org.zenframework.z8.base.form.action.Action;
+import org.zenframework.z8.base.form.action.ActionType;
 public class CustomTable extends Table {
     [name "Label"] CustomField label;
     label.required = true; label.width = 120; label.colSpan = 2;
@@ -41,6 +43,7 @@ public class CustomTable extends Table {
     Fieldset panel; Section nested; TabControl tabControl; Tab tab;
     panel.controls = {nested}; nested.controls = {label};
     tabControl.tabs = {tab}; tab.controls = {label}; controls = {panel, tabControl};
+    Action publish; publish.type = ActionType.Primary; actions = {publish};
 }
 ''', encoding="utf-8")
     (source / "CyclicTable.bl").write_text('''
@@ -53,22 +56,25 @@ import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.GuidField;
 import org.zenframework.z8.base.table.value.StringField;
 import org.zenframework.z8.base.form.Section;
+import org.zenframework.z8.base.form.action.Action;
 public class ControlProbe {
     public static CustomField makeCustom() { CustomField value; return value; }
     public static CustomTable makeTable() { CustomTable value; return value; }
     public static bool verify() {
-        StringField field; GuidField key; Table target; Section section;
+        StringField field; GuidField key; Table target; Section section; Action action;
         if (field.colSpan != 1 || field.flex != 0 || field.readOnly || field.required || field.editable || field.important) return false;
         field.colSpan = 3; field.flex = 2; field.height = 45;
         field.readOnly = true; field.required = true; field.editable = true; field.important = true;
         field.dependency = key; field.dependsOn = key; field.dependencies.add(field);
         field.source = target; field.source.valueFrom = key; field.source.filterField = key;
         if (section.colCount != 3) return false;
+        if (!action.useTransaction || action.parameters.size() != 0) return false;
+        action.useTransaction = false;
         section.colCount = 2; section.controls.add(field);
         return field.colSpan == 3 && field.flex == 2 && field.height == 45 && field.readOnly && field.required && field.editable && field.important &&
             field.dependency == key && field.dependsOn == key && field.dependencies.size() == 1 && field.dependencies.first() == field &&
             field.source.query == target && field.source.valueFrom == key && field.source.filterField == key &&
-            section.colCount == 2 && section.controls.size() == 1 && section.controls.first() == field;
+            section.colCount == 2 && section.controls.size() == 1 && section.controls.first() == field && !action.useTransaction;
     }
 }
 ''', encoding="utf-8")
@@ -120,6 +126,8 @@ void main() {
     assert(meta["controls"][0]["controls"][0]["isSection"].boolean && meta["controls"][0]["controls"][0]["controls"][0]["name"].str == "label");
     assert(meta["controls"][1]["isTabControl"].boolean && meta["controls"][1]["tabs"][0]["isTab"].boolean);
     assert(meta["controls"][1]["tabs"][0]["colCount"].integer == 1 && meta["controls"][1]["tabs"][0]["controls"][0]["name"].str == "label");
+    assert(meta["actions"][0]["name"].str == "publish" && meta["actions"][0]["isAction"].boolean && meta["actions"][0]["type"].str == "primary");
+    assert(meta["actions"][0]["request"].str == "CustomTable" && meta["actions"][0]["parameters"].array.length == 0);
     user.privileges.setFieldAccess(z8_guid_create_name("CustomTable.Label"w), Z8Access.init);
     request = new Z8ApplicationRequest(); monitor = new Z8RequestMonitor(); request.monitor = monitor;
     request.session = new Z8ApplicationSession("test"w, user, user); request.parameters.z8_add("request"w, "CustomTable"w);

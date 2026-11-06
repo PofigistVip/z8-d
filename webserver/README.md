@@ -41,7 +41,9 @@ The initial `meta` adapter writes query attributes, access rights, keys and
 metadata for direct and linked fields, including basic presentation, dependencies,
 permitted source information and BL `writeMeta` overrides. Nested sections,
 fieldsets, field groups, tab controls, independent forms and forms with a readable Link are also supported.
-Other controls, custom Join metadata, actions and reports are rejected for now. With no
+Actions without parameters are described in metadata; action execution and
+parameter metadata are still pending. Other controls, custom Join metadata and
+reports are rejected for now. With no
 `action` parameter, the same metadata is followed by the table read response.
 
 An optional `IZ8HttpAuthority` constructor argument connects a host authority
