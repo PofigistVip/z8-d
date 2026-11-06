@@ -27,6 +27,8 @@ BL `Connection` API. Install it for the current thread with
 `z8_connection_set_current`, and restore the returned previous backend when the
 request ends. `Connection.get()` uses that backend; queries without an explicit
 executor use it and derive the table name from the BL query's `name` attribute.
+The static BL `Transaction.begin`, `commit`, `rollback` and `flush` methods use
+the same current-thread connection and its transaction nesting semantics.
 `Query.setConnection` binds a query to a specific connection. `flush()` is a
 no-op because this client executes statements immediately. `Connection.call`
 invokes a procedure in the configured schema with parameterized scalar, GUID,

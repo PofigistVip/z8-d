@@ -27,6 +27,7 @@ import org.zenframework.z8.base.table.value.IntField;
 ''', encoding="utf-8")
     (source / "Probe.bl").write_text('''
 import org.zenframework.z8.base.sql.Connection;
+import org.zenframework.z8.base.sql.Transaction;
 public class Probe {
     public static Connection current() { return Connection.get(); }
     public static Report make() { Report value; return value; }
@@ -37,6 +38,10 @@ public class Probe {
     public static void flush() { Connection.get().flush(); }
     public static void execute(string sql) { Connection.get().execute(sql); }
     public static void call(string name, primary[] parameters) { Connection.get().call(name, parameters); }
+    public static void transactionBegin() { Transaction.begin(); }
+    public static void transactionCommit() { Transaction.commit(); }
+    public static void transactionRollback() { Transaction.rollback(); }
+    public static void transactionFlush() { Transaction.flush(); }
     public static void insert(Report report, guid id, int amount) { report.amount = amount; report.create(id); }
     public static int count(Report report) { return report.count(); }
 }
@@ -52,6 +57,7 @@ import core.thread : Thread;
 void main(string[] args) {
     alias P = Z8p_50726F6265;
     bool missing; try { P.m_current(); } catch (Exception) { missing = true; } assert(missing);
+    missing = false; try { P.m_transactionBegin(); } catch (Exception) { missing = true; } assert(missing);
     auto first = new Z8PostgresConnection(args[1]); auto second = new Z8PostgresConnection(args[1]);
     immutable createSql = `CREATE TEMP TABLE "Reports" ("RecordId" uuid PRIMARY KEY, "CreatedAt" bigint, "ModifiedAt" bigint, "CreatedBy" uuid, "ModifiedBy" uuid, "Lock" bigint, "Amount" bigint)`;
     first.execute(createSql); second.execute(createSql);
@@ -90,10 +96,15 @@ void main(string[] args) {
     P.m_flush(); P.m_commit(); assert(!first.inTransaction());
     P.m_begin(); P.m_begin(); P.m_insert(report, z8_guid_create(3), z8_optional_wrap(33L));
     P.m_commit(); P.m_rollback(); assert(z8_optional_require(P.m_count(report)) == 2);
+    P.m_transactionBegin(); P.m_insert(report, z8_guid_create(4), z8_optional_wrap(44L));
+    P.m_transactionBegin(); P.m_insert(report, z8_guid_create(5), z8_optional_wrap(55L));
+    P.m_transactionCommit(); P.m_transactionRollback(); assert(z8_optional_require(P.m_count(report)) == 2);
+    P.m_transactionBegin(); P.m_insert(report, z8_guid_create(6), z8_optional_wrap(66L));
+    P.m_transactionFlush(); P.m_transactionCommit(); assert(z8_optional_require(P.m_count(report)) == 3);
     P.m_execute(`UPDATE "Reports" SET "Amount"=40 WHERE "RecordId"='00000000-0000-0000-0000-000000000001'`w);
     assert(first.execute(`SELECT "Amount" FROM "Reports" WHERE "RecordId"='00000000-0000-0000-0000-000000000001'`).rows[0][0].text == "40");
     P.m_attach(report, wrapper); z8_connection_set_current(db2);
-    assert(z8_optional_require(P.m_count(report)) == 2);
+    assert(z8_optional_require(P.m_count(report)) == 3);
     auto other = P.m_make(); assert(z8_optional_require(P.m_count(other)) == 0);
     z8_connection_set_current(previous); first.close(); second.close();
 }

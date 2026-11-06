@@ -57,6 +57,15 @@ private void z8_connection_flush(Z8Object self) { z8_connection_backend(self).fl
 private void z8_connection_call(Z8Object self, wstring name, Z8Array!Z8Primary parameters) {
     z8_connection_backend(self).call(z8_string_required(name), z8_nonnull(parameters));
 }
+private IZ8DatabaseConnection z8_transaction_backend() {
+    auto backend = z8_connection_current_backend();
+    if (backend is null) throw new Exception("no current database connection");
+    return backend;
+}
+private void z8_transaction_begin() { z8_transaction_backend().beginTransaction(); }
+private void z8_transaction_commit() { z8_transaction_backend().commit(); }
+private void z8_transaction_rollback() { z8_transaction_backend().rollback(); }
+private void z8_transaction_flush() { z8_transaction_backend().flush(); }
 private void z8_query_set_connection(Z8Object self, Z8Object connection) {
     auto executor = z8_connection_backend(connection).queryExecutor(z8_nonnull(self));
     if (executor is null) throw new Exception("database connection returned a null query executor");
@@ -76,6 +85,11 @@ void z8_bind_builtin_connection() {
     z8_native_bind(z8_connection_name ~ ".m_execute"w, &z8_connection_execute);
     z8_native_bind(z8_connection_name ~ ".m_flush"w, &z8_connection_flush);
     z8_native_bind(z8_connection_name ~ ".m_call"w, &z8_connection_call);
+    enum transaction = "org.zenframework.z8.server.base.sql.Transaction.m_"w;
+    z8_native_bind(transaction ~ "begin"w, &z8_transaction_begin);
+    z8_native_bind(transaction ~ "commit"w, &z8_transaction_commit);
+    z8_native_bind(transaction ~ "rollback"w, &z8_transaction_rollback);
+    z8_native_bind(transaction ~ "flush"w, &z8_transaction_flush);
     z8_native_bind(z8_query_name ~ ".m_setConnection"w, &z8_query_set_connection);
 }
 shared static this() { z8_bind_builtin_connection(); }
