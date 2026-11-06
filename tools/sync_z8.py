@@ -178,13 +178,14 @@ def main():
     if not original.is_dir():
         parser.error("Original checkout not found")
     try:
-        changed = native_report(original, args.accept) if args.group == "native" else synchronize(original, args.group, args.apply)
         if args.group == "bl":
             print("Checking Java sources for BL native bindings:")
             native_changed = native_report(original, False)
+            changed = synchronize(original, args.group, args.apply)
             if native_changed:
                 print("Java native changes require review; BL sync does not accept the native baseline.")
             return 1 if native_changed or (changed and not args.apply) else 0
+        changed = native_report(original, args.accept) if args.group == "native" else synchronize(original, args.group, args.apply)
         return 1 if changed and not (args.apply or args.accept) else 0
     except (OSError, ValueError, KeyError) as error:
         print(f"sync_z8: {error}", file=sys.stderr)

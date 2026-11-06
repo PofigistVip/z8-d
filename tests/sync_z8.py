@@ -1,5 +1,5 @@
 """Exercise byte-exact upstream sync, conflict protection and native tracking."""
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 import importlib.util
 import io
 import sys
@@ -57,6 +57,20 @@ with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):
     assert not sync.native_report(original, False)
     with patch.object(sys, "argv", ["sync_z8.py", "bl", str(original), "--apply"]):
         assert sync.main() == 0
+    previous_bl = (sync.VENDOR / bl.relative_to(original)).read_bytes()
+    bl.write_bytes(b'[native "example.Value"]\r\nclass Value { int later; }\r\n')
+    java_root = original / "org.zenframework.z8.server/src/main/java"
+    offline_java = temp / "offline-java"
+    java_root.rename(offline_java)
+    try:
+        with patch.object(sys, "argv", ["sync_z8.py", "bl", str(original), "--apply"]), redirect_stderr(io.StringIO()):
+            assert sync.main() == 2
+        assert (sync.VENDOR / bl.relative_to(original)).read_bytes() == previous_bl
+    finally:
+        offline_java.rename(java_root)
+    with patch.object(sys, "argv", ["sync_z8.py", "bl", str(original), "--apply"]):
+        assert sync.main() == 0
+    assert (sync.VENDOR / bl.relative_to(original)).read_bytes() == bl.read_bytes()
     target = sync.VENDOR / web.relative_to(original)
     target.write_bytes(b'local edit')
     web.write_bytes(b'upstream edit')
