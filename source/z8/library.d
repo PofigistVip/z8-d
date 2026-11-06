@@ -64,7 +64,7 @@ string libraryTreeRevision(string root, string[] extensions) {
     return digest.finish().toHexString.idup;
 }
 
-CompiledLibrary loadLibrary(string directory) {
+CompiledLibrary loadLibrary(string directory, bool requireCurrentRegistry = true) {
     auto root = absolutePath(directory);
     auto manifestPath = buildPath(root, "z8-library.json");
     if (!exists(manifestPath)) throw new Exception("BL library manifest not found: " ~ manifestPath);
@@ -81,6 +81,11 @@ CompiledLibrary loadLibrary(string directory) {
     CompiledLibrary library;
     library.id = field("id", JSONType.string).str;
     if (!validLibraryId(library.id)) throw new Exception("invalid BL library id");
+    if (requireCurrentRegistry) {
+        auto api = "registryApi" in document.object;
+        if (api is null || api.type != JSONType.integer || api.integer != 2)
+            throw new Exception("BL library registry API changed; rebuild " ~ library.id);
+    }
     library.prefix = "z8lib.l_" ~ library.id;
     library.directory = root; library.dRoot = buildPath(root, "d");
     library.revision = libraryRevision(text);
@@ -170,7 +175,7 @@ string serializeLibrary(string id, SourceUnit[] sources, LibraryType[string] typ
     }
     foreach (dependency; dependencies)
         requirements ~= JSONValue(["id": JSONValue(dependency.id), "revision": JSONValue(dependency.revision)]);
-    return JSONValue(["format": JSONValue("z8-d-library-1"), "id": JSONValue(id), "target": JSONValue(libraryTarget()),
+    return JSONValue(["format": JSONValue("z8-d-library-1"), "id": JSONValue(id), "target": JSONValue(libraryTarget()), "registryApi": JSONValue(2L),
         "runtime": JSONValue(runtimeRevision), "interfaces": JSONValue(interfacesRevision), "archive": JSONValue(archiveRevision),
         "sources": JSONValue(sourceItems), "types": JSONValue(typeItems), "requires": JSONValue(requirements)]).toPrettyString();
 }

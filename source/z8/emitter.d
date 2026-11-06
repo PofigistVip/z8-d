@@ -1767,9 +1767,12 @@ package GeneratedModule[] emitProjectModules(Program[] programs, string[string] 
          directAttribute(program, "job") || directAttribute(program, "entry") ||
          inheritedAttribute(program, "name"))) registrations ~= program;
     if (registrations.length || (options !is null && (options.libraryOutput || options.libraryPrefixes.length))) {
-        string body = "void z8_register_project(Z8RuntimeRegistry registry) {\nregistry = z8_nonnull(registry);\n";
+        string body = "void z8_register_project(Z8RuntimeRegistry registry) {\nbool[wstring] visited;\nz8_register_project_tree(registry, visited);\n}\n" ~
+            "void z8_register_project_tree(Z8RuntimeRegistry registry, ref bool[wstring] visited) {\nregistry = z8_nonnull(registry);\n";
+        if (options !is null && options.libraryOutput)
+            body ~= "if (" ~ emitRawWStringLiteral(prefix.to!wstring) ~ " in visited) return;\nvisited[" ~ emitRawWStringLiteral(prefix.to!wstring) ~ "] = true;\n";
         if (options !is null) foreach (i, library; options.libraryPrefixes)
-            body ~= "z8_dependency_" ~ i.to!string ~ "(registry);\n";
+            body ~= "z8_dependency_" ~ i.to!string ~ "(registry, visited);\n";
         if (options !is null && options.libraryOutput) {
             if (nativePrograms.length) body ~= "z8_link_native_registry();\n";
             foreach (program; programs) if (!external(program))
@@ -1809,7 +1812,7 @@ package GeneratedModule[] emitProjectModules(Program[] programs, string[string] 
         string source = "module " ~ registryModule ~ ";\n\nimport z8.runtime;\n";
         if (options !is null && options.libraryOutput && nativePrograms.length) source ~= "import " ~ nativeRegistry ~ " : z8_link_native_registry;\n";
         if (options !is null) foreach (i, library; options.libraryPrefixes)
-            source ~= "import " ~ library ~ ".project_registry : z8_dependency_" ~ i.to!string ~ " = z8_register_project;\n";
+            source ~= "import " ~ library ~ ".project_registry : z8_dependency_" ~ i.to!string ~ " = z8_register_project_tree;\n";
         foreach (name; imports) source ~= name;
         source ~= "\n" ~ body;
         modules ~= GeneratedModule(registryModule, registryModule.replace(".", "/") ~ ".d", "", formatDSource(source));

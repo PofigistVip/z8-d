@@ -187,7 +187,7 @@ private int buildLibrary(SourceUnit[] owned, CompiledLibrary[] libraries, string
     if (exists(fileSystemPath(output))) {
         import std.file : isSymlink;
         if (isSymlink(fileSystemPath(output))) throw new Exception("library output cannot be a symbolic link");
-        auto previous = loadLibrary(output);
+        auto previous = loadLibrary(output, false);
         if (previous.id != id) throw new Exception("library output belongs to another library: " ~ previous.id);
         foreach (item; dirEntries(fileSystemPath(output), SpanMode.shallow)) {
             auto child = baseName(item.name);

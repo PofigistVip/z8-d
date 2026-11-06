@@ -56,6 +56,14 @@ void main() {
     subprocess.run(["dmd", "@" + str(response)], cwd=temp, check=True)
     subprocess.run([str(binary)], check=True)
 
+    manifest_path = one / "z8-library.json"
+    old_api = json.loads(manifest_path.read_text(encoding="utf-8"))
+    del old_api["registryApi"]
+    manifest_path.write_text(json.dumps(old_api), encoding="utf-8")
+    incompatible_api = subprocess.run([str(compiler), "project", str(app), str(temp / "old-api"), *libraries], capture_output=True, text=True)
+    assert incompatible_api.returncode and "registry API changed; rebuild first" in incompatible_api.stderr, incompatible_api.stderr
+    subprocess.run([str(compiler), "library", str(alpha), str(one), "first"], check=True)
+
     interface = one / "d/z8lib/l_first/alpha/Value.d"
     original_interface = interface.read_bytes()
     interface.write_bytes(original_interface + b"\n// changed\n")
