@@ -48,8 +48,10 @@ the original client's `session` and `id` parameters and require the stored
 `SystemFiles` path to match the requested path. The authority validates the
 session; as with the original converter, the URL does not identify a table or
 record for a per-field permission check. Files are returned as attachments with
-UTF-8 filenames. Preview conversion and files outside `SystemFiles` are not yet
-handled by this route, except short-lived archives created by `action=archive`.
+UTF-8 filenames. A `preview` parameter serves PDFs inline; supported document
+and image formats are converted to PDF using the configured `office.home`.
+Files outside `SystemFiles` are not handled by this route, except short-lived
+archives created by `action=archive` and generated exports.
 The archive URL is bound to its session, user and database schema; archive data
 is retained in the same server process for at most ten minutes, so its download
 must be routed to that process. The archive cache has size and count limits.

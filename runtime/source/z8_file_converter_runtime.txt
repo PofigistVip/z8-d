@@ -34,7 +34,7 @@ private void z8_file_converter_office_convert(Z8Binary source, wstring extension
     import std.algorithm.searching : canFind;
     import std.file : copy, exists, mkdir, mkdirRecurse, rmdirRecurse, tempDir;
     import std.path : absolutePath, buildPath, dirName;
-    import std.process : execute, Config;
+    import std.process : pipeProcess, wait, Redirect, Config;
     import std.string : replace, toLower;
     import std.uri : encode;
     import std.uuid : randomUUID;
@@ -79,12 +79,24 @@ private void z8_file_converter_office_convert(Z8Binary source, wstring extension
     version (Windows) auto profileUrl = "file:///" ~ encode(absolutePath(profile).replace("\\", "/"));
     else auto profileUrl = "file://" ~ encode(absolutePath(profile));
     enum size_t maxOutput = 1024 * 1024;
-    auto result = execute([executable, "-env:UserInstallation=" ~ profileUrl, "--headless", "--convert-to", filter, "--outdir", outputDir, input],
-                          null, Config.suppressConsole, maxOutput);
+    // The server may keep stdin open for shutdown commands; LibreOffice must
+    // receive EOF instead of inheriting that pipe and waiting indefinitely.
+    auto process = pipeProcess([executable, "-env:UserInstallation=" ~ profileUrl, "--headless", "--convert-to", filter, "--outdir", outputDir, input],
+                               Redirect.stdin | Redirect.stdout | Redirect.stderrToStdout, null, Config.suppressConsole);
+    process.stdin.close();
+    import std.array : appender;
+    import std.algorithm.comparison : min;
+    auto captured = appender!string();
+    foreach (ubyte[] chunk; process.stdout.byChunk(4096)) {
+        auto remaining = maxOutput - captured.data.length;
+        captured.put(chunk[0 .. min(remaining, chunk.length)]);
+    }
+    auto status = wait(process.pid);
+    auto outputText = captured.data;
     auto output = buildPath(outputDir, "document." ~ outputExtension);
     // LibreOffice may still export a blank page after libpng reports a corrupt image.
-    if (result.status != 0 || !exists(output) || result.output.length >= maxOutput || result.output.canFind("libpng error:"))
-        throw new Exception("LibreOffice conversion failed: " ~ result.output);
+    if (status != 0 || !exists(output) || outputText.length >= maxOutput || outputText.canFind("libpng error:"))
+        throw new Exception("LibreOffice conversion failed: " ~ outputText);
     auto parent = dirName(target);
     if (parent.length) mkdirRecurse(parent);
     copy(output, target);

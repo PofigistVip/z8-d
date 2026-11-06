@@ -52,6 +52,7 @@ import z8.runtime;
 import z8gen.OfficeProbe;
 import std.conv : to;
 import std.path : buildPath;
+import core.thread : Thread;
 void main(string[] args) {
     alias P = Z8p_4F666669636550726F6265;
     z8_server_config_replace(["office.home"w: args[2].to!wstring]);
@@ -72,6 +73,10 @@ void main(string[] args) {
     auto image = z8_file_from_path(buildPath(args[1], "image.png").to!wstring);
     auto imagePdf = z8_file_from_path(buildPath(args[1], "result", "image.pdf").to!wstring);
     assert(z8_file_exists(P.m_convert(image, imagePdf)));
+    auto threadedPdf = z8_file_from_path(buildPath(args[1], "result", "threaded.pdf").to!wstring);
+    auto worker = new Thread({ P.m_convert(input, threadedPdf); });
+    worker.start(); worker.join();
+    assert(z8_file_exists(threadedPdf));
     auto imageArchive = z8_file_from_path(buildPath(args[1], "result", "image-archive.pdf").to!wstring);
     assert(z8_file_exists(P.m_convertWithOptions(image, imageArchive, pdfOptions)));
     auto invalidImage = z8_file_from_path(buildPath(args[1], "invalid.png").to!wstring);

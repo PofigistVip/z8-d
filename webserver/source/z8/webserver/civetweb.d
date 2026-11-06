@@ -230,11 +230,12 @@ private string attachmentDisposition(wstring name) {
     }
     return "Content-Disposition: attachment; filename=\"download\"; filename*=UTF-8''" ~ encoded ~ "\r\n";
 }
-private int respondBinary(MgConnection* connection, Z8Binary content, wstring filename = null) {
+private int respondBinary(MgConnection* connection, Z8Binary content, wstring filename = null, wstring contentType = null) {
     scope(exit) closeBinary(content);
     auto length = content is null ? 0UL : z8_binary_remaining(content);
     auto header = "HTTP/1.1 200 OK\r\nContent-Type: " ~
-        (filename is null ? "application/xml; charset=UTF-8\r\n" : "application/octet-stream\r\n" ~ attachmentDisposition(filename)) ~
+        (contentType !is null ? contentType.to!string ~ "\r\n" :
+         filename is null ? "application/xml; charset=UTF-8\r\n" : "application/octet-stream\r\n" ~ attachmentDisposition(filename)) ~
         "Connection: close\r\nContent-Length: " ~
         length.to!string ~ "\r\n\r\n";
     if (!writeAll(connection, header)) return 200;
@@ -423,7 +424,8 @@ class Z8CivetServer {
                 return respond(connection, 200, "OK", z8_application_error_response(requestId, request.monitor, serverId).to!string);
             }
             if (z8_application_has_binary_response(application))
-                return respondBinary(connection, z8_application_response_binary(application), z8_application_response_file_name(application));
+                return respondBinary(connection, z8_application_response_binary(application), z8_application_response_file_name(application),
+                                     z8_application_response_content_type(application));
             if (isDownload) return respondDownloadError(connection, 404, "Not Found", "File not found"w, serverId);
             return respond(connection, 200, "OK", z8_application_response_text(application).to!string);
         } catch (Z8Redirect redirect) {

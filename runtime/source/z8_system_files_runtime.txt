@@ -111,6 +111,7 @@ void z8_application_dispatch_file_download(wstring requestPath) {
     import std.string : startsWith;
     auto request = z8_application_require_request();
     z8_nonnull(request.session);
+    auto preview = request.parameters.z8_containsKey("preview"w);
     requestPath = z8_string_required(requestPath);
     if (!requestPath.startsWith("/storage/"w)) throw new Exception("file was not found");
     auto text = request.parameters.z8_get("id"w);
@@ -118,11 +119,38 @@ void z8_application_dispatch_file_download(wstring requestPath) {
         wstring name;
         auto data = z8_temporary_archive_get(requestPath[1 .. $], name);
         if (data is null) throw new Exception("file was not found");
-        z8_application_set_response_file(request, data, name); return;
+        if (preview && z8_file_converter_pdf(z8_file_converter_extension(name)).value)
+            z8_application_set_response_inline(request, data, "application/pdf"w);
+        else z8_application_set_response_file(request, data, name);
+        return;
     }
     auto file = z8_system_files_get_id(z8_guid_parse(text));
     if (file is null || file.path != requestPath[1 .. $]) throw new Exception("file was not found");
     file = z8_system_files_get_file(file);
+    if (preview) {
+        auto extension = z8_file_extension_instance(file);
+        if (z8_file_converter_pdf(extension).value && !request.parameters.z8_containsKey("stamps"w)) {
+            z8_application_set_response_inline(request, z8_file_to_binary(file), "application/pdf"w);
+            return;
+        }
+        if (z8_file_converter_convertible(extension).value) {
+            import std.file : exists, mkdir, rmdirRecurse, tempDir;
+            import std.path : absolutePath, buildPath;
+            import std.uuid : randomUUID;
+            auto temporary = buildPath(absolutePath(tempDir()), "z8-preview-" ~ randomUUID().toString());
+            mkdir(temporary);
+            scope(exit) if (exists(temporary)) rmdirRecurse(temporary);
+            auto target = z8_file_from_path(buildPath(temporary, "preview.pdf").to!wstring);
+            auto converted = z8_file_converter_files(file, target, request.parameters);
+            auto stream = z8_file_to_binary(converted);
+            ubyte[] content;
+            { scope(exit) z8_binary_close(stream); content = z8_binary_snapshot(stream, z8_temporary_archives_bytes_limit); }
+            z8_application_set_response_inline(request, new Z8Binary(content), "application/pdf"w);
+            return;
+        }
+        z8_application_set_response_inline(request, z8_file_to_binary(file), "text/plain; charset=UTF-8"w);
+        return;
+    }
     z8_application_set_response_file(request, z8_file_to_binary(file), file.name);
 }
 shared static this() {
