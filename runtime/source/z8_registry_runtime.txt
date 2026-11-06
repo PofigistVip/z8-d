@@ -1,4 +1,4 @@
-// Host-populated subset of AbstractRuntime's table and request registry.
+// Host-populated subset of AbstractRuntime's application registry.
 // Keys use table names for tables and class IDs for requests, as in Java.
 struct Z8RuntimeFieldRegistration {
     wstring index, name, displayName, description, type;
@@ -12,7 +12,7 @@ struct Z8RuntimeRegistration {
     private TypeInfo_Class runtimeType;
 }
 class Z8RuntimeRegistry {
-    private Z8RuntimeRegistration[] tableEntries, requestEntries;
+    private Z8RuntimeRegistration[] tableEntries, requestEntries, jobEntries, entryEntries;
     private Object mutex;
     this() { mutex = new Object(); }
     private Z8RuntimeRegistration descriptor(Z8Object value, bool table) {
@@ -62,10 +62,14 @@ class Z8RuntimeRegistry {
     }
     void registerTable(Z8Object table) { add(tableEntries, descriptor(table, true), true); }
     void registerRequest(Z8Object request) { add(requestEntries, descriptor(request, false), false); }
-    private Z8RuntimeRegistration[] snapshot(bool table) {
+    void registerJob(Z8Object job) {
+        if (!z8_native_is_instance(z8_executable_name, job)) throw new Exception("runtime job registration requires an Executable");
+        add(jobEntries, descriptor(job, false), false);
+    }
+    void registerEntry(Z8Object entry) { add(entryEntries, descriptor(entry, false), false); }
+    private Z8RuntimeRegistration[] snapshot(ref Z8RuntimeRegistration[] entries) {
         Z8RuntimeRegistration[] result;
         synchronized (mutex) {
-            auto entries = table ? tableEntries : requestEntries;
             foreach (entry; entries) {
                 entry.key = new Z8Guid(entry.key.majorBits, entry.key.minorBits);
                 entry.fields = entry.fields.dup;
@@ -75,10 +79,14 @@ class Z8RuntimeRegistry {
         }
         return result;
     }
-    Z8RuntimeRegistration[] tables() { return snapshot(true); }
-    Z8RuntimeRegistration[] requests() { return snapshot(false); }
+    Z8RuntimeRegistration[] tables() { return snapshot(tableEntries); }
+    Z8RuntimeRegistration[] requests() { return snapshot(requestEntries); }
+    Z8RuntimeRegistration[] jobs() { return snapshot(jobEntries); }
+    Z8RuntimeRegistration[] entries() { return snapshot(entryEntries); }
     Z8Guid[] tableKeys() { Z8Guid[] keys; foreach (item; tables()) keys ~= item.key; return keys; }
     Z8Guid[] requestKeys() { Z8Guid[] keys; foreach (item; requests()) keys ~= item.key; return keys; }
+    Z8Guid[] jobKeys() { Z8Guid[] keys; foreach (item; jobs()) keys ~= item.key; return keys; }
+    Z8Guid[] entryKeys() { Z8Guid[] keys; foreach (item; entries()) keys ~= item.key; return keys; }
     Z8Object newTableByName(wstring name) {
         name = z8_string_required(name);
         foreach (item; tables()) if (item.name == name) return z8_object_new_instance(item.classId);
@@ -92,6 +100,16 @@ class Z8RuntimeRegistry {
     Z8Object newRequestByClass(wstring classId) {
         classId = z8_string_required(classId);
         foreach (item; requests()) if (item.classId == classId) return z8_object_new_instance(item.classId);
+        return null;
+    }
+    Z8Object newJobByClass(wstring classId) {
+        classId = z8_string_required(classId);
+        foreach (item; jobs()) if (item.classId == classId) return z8_object_new_instance(item.classId);
+        return null;
+    }
+    Z8Object newEntryByClass(wstring classId) {
+        classId = z8_string_required(classId);
+        foreach (item; entries()) if (item.classId == classId) return z8_object_new_instance(item.classId);
         return null;
     }
     Z8Object[] newTables() {

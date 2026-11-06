@@ -37,6 +37,11 @@ import org.zenframework.z8.base.table.Table;
 [generatable] public class UnnamedTable extends Table {}
 ''',
         "Other": 'public class Other {}',
+        "DailyJob": '''
+import org.zenframework.z8.base.Executable;
+[job] [request] public class DailyJob extends Executable {}
+''',
+        "MenuEntry": '[entry] public class MenuEntry {}',
         "TableFactory": '''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.lang.Object;
@@ -56,7 +61,7 @@ import std.conv : to;
 void main() {
     auto registry = new Z8RuntimeRegistry(); z8_register_project(registry);
     auto tables = registry.tables(), requests = registry.requests();
-    assert(tables.length == 2 && requests.length == 3);
+    assert(tables.length == 2 && requests.length == 4 && registry.jobs().length == 1 && registry.entries().length == 1);
     bool orders, inherited, api, child, orderRequest;
     foreach (table; tables) {
         if (table.name == "Orders"w) orders = table.classId == "Orders"w && table.fields.length == 7;
@@ -71,7 +76,9 @@ void main() {
     assert(orders && inherited && api && child && orderRequest);
     registry.registerTable(z8_object_new_instance("BaseTable"w));
     assert(registry.newTableByName("Inherited"w).z8_class_id() == "DerivedTable"w);
-    z8_register_project(registry); assert(registry.tables().length == 2 && registry.requests().length == 3);
+    z8_register_project(registry); assert(registry.tables().length == 2 && registry.requests().length == 4 && registry.jobs().length == 1 && registry.entries().length == 1);
+    assert(registry.newJobByClass("DailyJob"w).z8_class_id() == "DailyJob"w && registry.jobKeys()[0] == z8_guid_create_name("DailyJob"w));
+    assert(registry.newEntryByClass("MenuEntry"w).z8_class_id() == "MenuEntry"w && registry.entryKeys()[0] == z8_guid_create_name("MenuEntry"w));
     auto first = registry.newTableByName("Orders"w), second = registry.newTableByClass("Orders"w);
     assert(first !is null && second !is null && first !is second && first.z8_class_id() == "Orders"w);
     assert(registry.newTableByName("Missing"w) is null && registry.newRequestByClass("Api"w).z8_class_id() == "Api"w);

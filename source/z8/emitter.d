@@ -1435,7 +1435,7 @@ package GeneratedModule[] emitProjectModules(Program[] programs) {
         source ~= "}\n";
         modules ~= GeneratedModule("z8gen.native_registry", "z8gen/native_registry.d", "", formatDSource(source));
     }
-    // StartupCodeLines registers named generatable tables and request classes.
+    // StartupCodeLines registers named generatable tables, requests, jobs and entries.
     // Keep the generated registry explicit so applications choose when to
     // instantiate classes and connect their runtime services.
     bool directAttribute(Program program, string name) {
@@ -1449,7 +1449,8 @@ package GeneratedModule[] emitProjectModules(Program[] programs) {
     }
     Program[] registrations;
     foreach (program; programs) if (program.lexicalOwner is null && !program.isEnum && !isPrimaryClass(program) &&
-        (directAttribute(program, "generatable") || inheritedAttribute(program, "request"))) registrations ~= program;
+        (directAttribute(program, "generatable") || inheritedAttribute(program, "request") ||
+         directAttribute(program, "job") || directAttribute(program, "entry"))) registrations ~= program;
     if (registrations.length) {
         string source = "module z8gen.project_registry;\n\nimport z8.runtime;\n";
         foreach (program; registrations) source ~= "import " ~ moduleByClass[program.emittedName] ~ ";\n";
@@ -1462,6 +1463,8 @@ package GeneratedModule[] emitProjectModules(Program[] programs) {
             if (inheritedAttribute(program, "request"))
                 source ~= "auto request = value.z8_get_attribute(\"request\"w);\n" ~
                     "if (request !is null && (!request.length || z8_str_compareNoCase(request, \"true\"w) == 0)) registry.registerRequest(value);\n";
+            if (directAttribute(program, "job")) source ~= "registry.registerJob(value);\n";
+            if (directAttribute(program, "entry")) source ~= "registry.registerEntry(value);\n";
             source ~= "}\n";
         }
         source ~= "}\n";
