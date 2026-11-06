@@ -244,10 +244,12 @@ override object per source in `data`. It requires copy access and write access
 to every primary field, invokes the BL copy hooks, and returns the copied
 records after commit. Overrides use the same supported scalar types as create
 and update. A missing or empty source list is rejected.
-The direct-table `destroy` action accepts a nonempty `data` array of GUID
+The `destroy` action accepts a nonempty `data` array of GUID
 strings or objects containing the primary-key field. It checks request execute
 and table destroy access, invokes the BL destroy hooks, and processes all records
-in a transaction. Linked-query deletion and additional options are not supported.
+in a transaction. A nested table can be selected with `query` or `link`; a
+nonempty `link` takes precedence. Parent, relationship and target table
+permissions are checked. Other destroy options are not supported.
 As with the Java connection manager, nested transactions share the outer
 transaction; callers must propagate failures to the outermost rollback.
 The native `Users.onNew` defaults mirror the Java implementation, including its

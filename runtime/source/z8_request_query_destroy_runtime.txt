@@ -1,4 +1,4 @@
-// Transactional subset of the Java DestroyAction for direct table records.
+// Transactional DestroyAction for records of a root or nested table.
 void z8_application_dispatch_query_destroy(wstring className) {
     z8_application_dispatch_query_destroy_target(className, null);
 }
@@ -13,7 +13,7 @@ private void z8_application_dispatch_query_destroy_target(wstring className, Z8O
     for (long i; i < keys.z8_size(); ++i) {
         auto name = keys.z8_get(i);
         if (name is null) throw new Exception("invalid query destroy parameter");
-        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "data"w || name == "query"w) continue;
+        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "data"w || name == "query"w || name == "link"w) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported query destroy parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
@@ -21,7 +21,7 @@ private void z8_application_dispatch_query_destroy_target(wstring className, Z8O
         throw new Exception("query destroy requires a Table");
     auto privileges = z8_nonnull(session.user).privileges;
     if (privileges is null) throw new Exception("query destroy access denied");
-    query = z8_application_nested_query(query, privileges, params.z8_get("query"w));
+    query = z8_application_action_query(query, privileges, params.z8_get("query"w), params.z8_get("link"w));
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
     if (!privileges.getTableAccess(queryKey).destroy) throw new Exception("query destroy access denied");
     auto key = z8_query_primary_key(query);

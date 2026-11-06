@@ -122,7 +122,12 @@ public class HiddenJob extends Executable {}
     (source / "NestedAttachment.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.AttachmentField;
-public class NestedAttachment extends Table { [name "Documents"] public AttachmentField documents; }
+public class NestedAttachment extends Table {
+    [name "Documents"] public AttachmentField documents;
+    virtual protected void onDestroyAction(guid id) {
+        if (id == '00000000-0000-0000-0000-000000000091') throw "nested delete blocked";
+    }
+}
 ''', encoding="utf-8")
     (source / "MemoryQuery.bl").write_text('''
 import org.zenframework.z8.base.query.Query;
@@ -248,7 +253,7 @@ void main(string[] args) {
     auto setup = new Z8PostgresConnection(databaseInfo);
     setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Blob" bytea, "Documents" bytea, "ChildLink" uuid, "NestedLink" uuid, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     setup.execute(`CREATE TABLE "NestedAttachment" ("RecordId" uuid PRIMARY KEY, "Documents" bytea, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
-    setup.execute(`INSERT INTO "NestedAttachment" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000088')`);
+    setup.execute(`INSERT INTO "NestedAttachment" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000088'), ('00000000-0000-0000-0000-000000000089'), ('00000000-0000-0000-0000-000000000090'), ('00000000-0000-0000-0000-000000000091')`);
     setup.execute(`CREATE TABLE "SystemFiles" ("RecordId" uuid PRIMARY KEY, "Name" text, "File" bytea, "Path" text, "Size" bigint, "Time" bigint, "Last modified" bigint, "Location" bigint, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     setup.execute(`CREATE TABLE "ContentLog" (value integer)`);
     setup.execute(`CREATE TABLE "SystemUsers" ("RecordId" uuid PRIMARY KEY, "Settings" bytea, "Password" text, "Change Password" smallint, "Email" text, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
@@ -276,6 +281,7 @@ void main(string[] args) {
     assert(row.rows[0][0].text == "newhash" && row.rows[0][1].text == "0" && row.rows[0][2].text == "new@example.org");
     assert(verify.execute(`SELECT count(*) FROM "ContentLog"`).rows[0][0].text == "2");
     assert(verify.execute(`SELECT count(*) FROM "SystemFiles"`).rows[0][0].text == "0");
+    assert(verify.execute(`SELECT count(*) FROM "NestedAttachment" WHERE "RecordId" IN ('00000000-0000-0000-0000-000000000089', '00000000-0000-0000-0000-000000000090')`).rows[0][0].text == "0");
     verify.execute(`UPDATE "SystemUsers" SET "Password" = md5('old secret') WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
     auto originalConfig = z8_application_configuration(), plainConfig = z8_application_configuration();
     plainConfig.clientHashesPasswords = false; z8_application_configure(plainConfig);
@@ -691,6 +697,19 @@ void main(string[] args) {
             result = request(action="detach", field="documents", fields='["documents"]', recordId=new_target, data=json.dumps([new_file]))
             assert result["success"], result
             result = request(action="destroy", data=json.dumps([new_target]))
+            assert result["success"], result
+            nested_one = "00000000-0000-0000-0000-000000000089"
+            nested_two = "00000000-0000-0000-0000-000000000090"
+            nested_blocked = "00000000-0000-0000-0000-000000000091"
+            result = request(session="relation-denied", action="destroy", link="nestedLink", data=json.dumps([nested_one]))
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = request(action="destroy", link="nestedLink", data=json.dumps([nested_one, nested_blocked]))
+            assert not result["success"] and "nested delete blocked" in result["info"]["messages"][-1]["text"], result
+            result = request(action="read", query="nested", fields='["nested.recordId"]', recordId=nested_one)
+            assert result["success"] and len(result["data"]) == 1, result
+            result = request(action="destroy", query="nested", data=json.dumps([{"nested.recordId": nested_one}]))
+            assert result["success"], result
+            result = request(action="destroy", query="missing", link="nestedLink", data=json.dumps([nested_two]))
             assert result["success"], result
             data = '["00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000003","00000000-0000-0000-0000-000000000004"]'
             result = request(session="limited", action="destroy", data=data)

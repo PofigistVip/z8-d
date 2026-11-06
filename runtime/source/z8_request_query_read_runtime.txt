@@ -126,6 +126,18 @@ private Z8Object z8_application_nested_query(Z8Object context, Z8Privileges priv
     foreach_reverse (parent; parents) z8_query_form_fields(parent);
     return query;
 }
+// ActionFactory gives a nonempty link precedence over the query parameter.
+private Z8Object z8_application_action_query(Z8Object context, Z8Privileges privileges, wstring queryId, wstring linkId) {
+    if (linkId is null || !linkId.length) return z8_application_nested_query(context, privileges, queryId);
+    auto link = z8_application_context_field(context, privileges, linkId);
+    if (!z8_native_is_instance("org.zenframework.z8.server.base.table.value.Link"w, link))
+        throw new Exception("query link access denied");
+    auto target = z8_link_query(link);
+    if (target is null) throw new Exception("query link has no target");
+    auto query = target is context ? context : z8_application_nested_query(context, privileges, target.z8_id());
+    if (query !is target) throw new Exception("query link target is outside the request");
+    return query;
+}
 private bool z8_application_query_field_readable(Z8Object root, Z8Object field, Z8Privileges privileges) {
     Z8Object[] seen;
     bool check(Z8Object candidate) {
@@ -308,16 +320,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     auto privileges = z8_nonnull(session.user).privileges;
     if (privileges is null) throw new Exception("query read access denied");
     auto context = query;
-    auto linkId = params.z8_get("link"w);
-    if (linkId !is null && linkId.length) {
-        auto link = z8_application_context_field(context, privileges, linkId);
-        if (!z8_native_is_instance("org.zenframework.z8.server.base.table.value.Link"w, link))
-            throw new Exception("query link access denied");
-        auto target = z8_link_query(link);
-        if (target is null) throw new Exception("query link has no target");
-        query = target is context ? context : z8_application_nested_query(context, privileges, target.z8_id());
-        if (query !is target) throw new Exception("query link target is outside the request");
-    } else query = z8_application_nested_query(context, privileges, params.z8_get("query"w));
+    query = z8_application_action_query(context, privileges, params.z8_get("query"w), params.z8_get("link"w));
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
     if (!privileges.getTableAccess(queryKey).read) throw new Exception("query read access denied");
     if (!z8_native_is_instance(z8_table_name, query)) {
