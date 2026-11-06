@@ -29,6 +29,29 @@ private Z8SqlBool z8_application_query_filter(Z8Object query, wstring json) {
     foreach (node; root.array) result = z8_filter_combine(result, z8_application_query_filter_node(query, node));
     return z8_sql_bool_group(result);
 }
+private Z8SqlBool z8_application_query_where(Z8Object context, Z8Object query, wstring json) {
+    auto root = z8_json_parse(json.to!string);
+    if (context !is query && root.type == JSONType.array && root.array.length == 2) {
+        auto first = root.array[0], second = root.array[1];
+        if (first.type == JSONType.object && first.object.length == 1 && ("value" in first.object) !is null &&
+            second.type == JSONType.object && ("property" in second.object) !is null && ("value" in second.object) !is null) {
+            auto property = second.object["property"];
+            if (property.type == JSONType.string) {
+                auto field = z8_query_find_field_id(query, property.str.to!wstring);
+                foreach (control; z8_query_array(context, "controls"w)) {
+                    if (!z8_native_is_instance(z8_listbox_name, control)) continue;
+                    auto list = z8_listbox_state(control);
+                    // The original Listbox emits a value-only dependency when
+                    // no dependency field is configured. Java Filter ignores
+                    // it; retain the list's actual parent-link filter.
+                    if (list.query is query && list.link is field && z8_control_state(control).dependency is null)
+                        return z8_application_query_filter_node(query, second);
+                }
+            }
+        }
+    }
+    return z8_application_query_filter(query, json);
+}
 
 // Follow the planner's first Link/Join path, checking each table and relation
 // before exposing a field from a related query.
@@ -483,7 +506,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         if (read.byRecordIds) break;
         auto json = params.z8_get(name);
         if (json is null || !json.length) continue;
-        auto filter = z8_application_query_filter(query, json);
+        auto filter = name == "where"w ? z8_application_query_where(context, query, json) : z8_application_query_filter(query, json);
         if (filter is null) continue; // An explicit empty array means no filter.
         foreach (field; z8_sql_collect_fields(filter)) {
             if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("query filter field access denied");

@@ -2,7 +2,12 @@
 // binary content and GeoJSON geometry values.
 private Z8Primary z8_application_query_parse_value(Z8Object field, JSONValue value, bool acceptBinary = false) {
     auto type = z8_field_type_id(field);
-    if (value.type == JSONType.array || (value.type == JSONType.object && type != "geometry"w)) throw new Exception("invalid query field value");
+    // QueryUtils passes JsonObject.getString to string-like fields; arrays and
+    // objects become their JSON text. The web client sends FileField context
+    // values as arrays, including [] before any file has been attached.
+    bool structured = value.type == JSONType.array || value.type == JSONType.object;
+    if (structured && !["string"w, "text"w, "file"w, "attachments"w, "geometry"w].canFind(type))
+        throw new Exception("invalid query field value");
     auto text = z8_json_value_text(value);
     Z8Primary boxed;
     if (type == "string"w || type == "text"w || type == "file"w || type == "attachments"w) boxed = z8_primary_box(text);
@@ -96,8 +101,17 @@ private void z8_application_dispatch_query_update_target(wstring className, Z8Ob
         foreach (name, value; record.object) {
             auto field = z8_query_find_field_id(query, name.to!wstring);
             if (field is key) continue;
-            if (field.z8_get_owner() !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
-                throw new Exception("linked and computed fields are not supported by query update");
+            if (field.z8_get_owner() !is query) {
+                // UpdateAction also sets values of linked fields from the
+                // client, but only persists fields owned by the target query.
+                // Selectors send both the link id and the displayed value.
+                if (!z8_application_query_field_readable(query, field, privileges))
+                    throw new Exception("query update field access denied");
+                z8_application_query_set_value(field, value, true);
+                continue;
+            }
+            if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
+                throw new Exception("computed fields are not supported by query update");
             auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
             if (!privileges.getFieldAccess(queryKey, fieldKey).write) throw new Exception("query update field access denied");
             z8_application_query_set_value(field, value, true);

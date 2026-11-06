@@ -392,6 +392,17 @@ void main(string[] args) {
             assert result["success"] and "title" not in {field["name"] for field in result["fields"]}, result
             result = request(action=None)
             assert result["success"] and result["isQuery"] and len(result["data"]) == 2, result
+            # A Z8 form sends its FileField value as a JSON array in the
+            # context of nested selector requests, even when it is empty.
+            result = request(values=json.dumps({"documents": [], "title": {"label": "context"}}))
+            assert result["success"] and len(result["data"]) == 2, result
+            result = request(values=json.dumps({"amount": []}))
+            assert not result["success"], result
+            result = request(where=json.dumps([{"value": "missing field"}, {"property": "amount", "value": 5}]))
+            assert not result["success"], result
+            result = request(session="relation-denied", action="update",
+                             data=json.dumps([{"recordId": "00000000-0000-0000-0000-000000000001", "nested.documents": []}]))
+            assert not result["success"], result
             result = request(action=None, count="true")
             assert result["success"] and result["isQuery"] and result["total"] == 2 and "data" not in result, result
             result = request(session="limited", filter='{"property":"title","value":"First"}')
