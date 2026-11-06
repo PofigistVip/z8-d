@@ -739,10 +739,18 @@ void main(string[] args) {
     auto computedRequest = new Z8ApplicationRequest(); computedRequest.session = querySession; computedRequest.monitor = new Z8RequestMonitor();
     computedRequest.parameters.z8_add("action"w, "read"w); computedRequest.parameters.z8_add("session"w, "with-group"w);
     computedRequest.parameters.z8_add("fields"w, `["flag","computed"]`w);
+    computedRequest.parameters.z8_add("having"w, `{"property":"computed","operator":"ge","value":"54"}`w);
     z8_application_set_request(computedRequest); z8_application_start_response(computedRequest, "Sample"w); z8_application_dispatch_query_read("Sample"w);
     z8_application_finish_response(computedRequest, cast(Z8RequestMonitor)computedRequest.monitor);
     auto computedJson = parseJSON(z8_application_response_text(computedRequest).to!string);
     assert(computedJson["data"].array.length == 1 && computedJson["data"][0]["computed"].integer == 54, computedJson.toString());
+    computedRequest = new Z8ApplicationRequest(); computedRequest.session = querySession; computedRequest.monitor = new Z8RequestMonitor();
+    computedRequest.parameters.z8_add("action"w, "read"w); computedRequest.parameters.z8_add("session"w, "with-group"w);
+    computedRequest.parameters.z8_add("fields"w, `["flag","computed"]`w);
+    computedRequest.parameters.z8_add("having"w, `{"property":"computed","operator":"ge","value":"55"}`w);
+    z8_application_set_request(computedRequest); z8_application_start_response(computedRequest, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+    z8_application_finish_response(computedRequest, cast(Z8RequestMonitor)computedRequest.monitor);
+    assert(parseJSON(z8_application_response_text(computedRequest).to!string)["data"].array.length == 0);
     queryUser.privileges.setFieldAccess(amountKey, Z8Access.init);
     computedRequest = new Z8ApplicationRequest(); computedRequest.session = querySession; computedRequest.monitor = new Z8RequestMonitor();
     computedRequest.parameters.z8_add("action"w, "read"w); computedRequest.parameters.z8_add("session"w, "with-group"w);
@@ -751,6 +759,13 @@ void main(string[] args) {
     z8_application_finish_response(computedRequest, cast(Z8RequestMonitor)computedRequest.monitor);
     computedJson = parseJSON(z8_application_response_text(computedRequest).to!string);
     assert("computed" !in computedJson["data"][0].object);
+    computedRequest = new Z8ApplicationRequest(); computedRequest.session = querySession; computedRequest.monitor = new Z8RequestMonitor();
+    computedRequest.parameters.z8_add("action"w, "read"w); computedRequest.parameters.z8_add("session"w, "with-group"w);
+    computedRequest.parameters.z8_add("fields"w, `["flag"]`w);
+    computedRequest.parameters.z8_add("having"w, `{"property":"computed","operator":"ge","value":"54"}`w);
+    z8_application_set_request(computedRequest); z8_application_start_response(computedRequest, "Sample"w);
+    bool havingDenied; try { z8_application_dispatch_query_read("Sample"w); } catch (Exception) { havingDenied = true; }
+    assert(havingDenied);
     queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
     queryUser.privileges.setFieldAccess(z8_guid_create_name("Sample;--.Flag"w), Z8Access.init);
     bool groupDenied;

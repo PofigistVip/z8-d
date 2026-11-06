@@ -405,10 +405,8 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         if (!groups.length) throw new Exception("query having requires grouped results");
         read.having = z8_application_query_filter(query, having);
         foreach (field; z8_sql_collect_fields(read.having)) {
-            if (field.z8_get_owner() !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
-                throw new Exception("linked and computed having fields are not supported");
-            auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
-            if (!privileges.getFieldAccess(queryKey, fieldKey).read) throw new Exception("query having field access denied");
+            if (field.z8_get_owner() !is query) throw new Exception("linked having fields are not supported");
+            if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("query having field access denied");
         }
     }
     auto totals = params.z8_get("totals"w);
