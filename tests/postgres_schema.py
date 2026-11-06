@@ -150,6 +150,14 @@ import org.zenframework.z8.base.table.value.IntField;
     [name "Search"] public StringField search; search.trigram = true;
 }
 ''', encoding="utf-8")
+    (source / "QuotedIndexSample.bl").write_text('''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.StringField;
+[name "Index Quote"] public class QuotedIndexSample extends Table {
+    [name "имя поля"] public StringField title; title.unique = true; title.caseInsensitive = true;
+    [name "order"] public StringField other; other.indexed = true; other.caseInsensitive = true;
+}
+''', encoding="utf-8")
     (source / "ReferenceTarget.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.StringField;
@@ -216,6 +224,7 @@ public class Probe {
     public static GeoSample geo() { GeoSample value; return value; }
     public static IndexSample indexes() { IndexSample value; return value; }
     public static SimpleIndexSample simpleIndexes() { SimpleIndexSample value; return value; }
+    public static QuotedIndexSample quotedIndexes() { QuotedIndexSample value; return value; }
     public static ReferenceSource references() { ReferenceSource value; return value; }
     public static ReferenceTarget target() { ReferenceTarget value; return value; }
     public static StaticSample statics() { StaticSample value; return value; }
@@ -410,8 +419,7 @@ void main(string[] args) {
     assert(uniqueIndex && trigramIndex && amountIndex);
     auto indexInfo = z8_postgres_describe_table(db, "pg_temp"w, "IndexSample"w);
     auto indexDifferences = z8_postgres_compare_indexes(indexedTable, indexInfo);
-    assert(indexDifferences.length == 2); // Both case-insensitive expression indexes are explicit unsupported cases.
-    foreach (difference; indexDifferences) assert(difference.kind == Z8SchemaIndexDifferenceKind.unsupportedIndex);
+    assert(indexDifferences.length == 0);
     db.execute(`DROP INDEX "pg_temp"."Idx2IndexSample"`);
     db.execute(`CREATE TEMP TABLE "IndexOther" ("Value" integer)`);
     db.execute(`CREATE INDEX "z8_idx_0" ON "IndexOther" ("Value")`);
@@ -429,7 +437,7 @@ void main(string[] args) {
     db.execute(indexPlan[0]);
     indexInfo = z8_postgres_describe_table(db, "pg_temp"w, "IndexSample"w);
     assert(z8_postgres_plan_add_indexes("pg_temp"w, indexedTable, indexInfo).length == 0);
-    assert(z8_postgres_compare_indexes(indexedTable, indexInfo).length == 2);
+    assert(z8_postgres_compare_indexes(indexedTable, indexInfo).length == 0);
     bool wrongIndexSchema;
     try { z8_postgres_plan_add_indexes("other"w, indexedTable, indexInfo); } catch (Z8PostgresException) { wrongIndexSchema = true; }
     assert(wrongIndexSchema);
@@ -437,6 +445,35 @@ void main(string[] args) {
     bool missingIndexColumn;
     try { z8_postgres_plan_add_indexes("pg_temp"w, indexedTable, emptyIndexes); } catch (Z8PostgresException) { missingIndexColumn = true; }
     assert(missingIndexColumn);
+    db.execute(`DROP INDEX "pg_temp"."Unq0IndexSample", "pg_temp"."Idx1IndexSample"`);
+    db.execute(`CREATE UNIQUE INDEX "WrongLowerTitle" ON "IndexSample" (lower(trim("Title")))`);
+    db.execute(`CREATE INDEX "WrongLowerSearch" ON "IndexSample" USING gin (lower(trim("Search")) gin_trgm_ops)`);
+    db.execute(`CREATE SCHEMA "evil"`);
+    db.execute(`CREATE FUNCTION "evil".lower(text) RETURNS text LANGUAGE SQL IMMUTABLE AS 'SELECT reverse($1)'`);
+    db.execute(`CREATE UNIQUE INDEX "EvilLowerTitle" ON "IndexSample" ("evil".lower("Title"::text))`);
+    indexInfo = z8_postgres_describe_table(db, "pg_temp"w, "IndexSample"w);
+    indexDifferences = z8_postgres_compare_indexes(indexedTable, indexInfo);
+    assert(indexDifferences.length == 2);
+    auto expressionPlan = z8_postgres_plan_add_indexes("pg_temp"w, indexedTable, indexInfo);
+    assert(expressionPlan.length == 2);
+    bool lowerUnique, lowerTrigram;
+    foreach (sql; expressionPlan) {
+        if (sql.canFind(`CREATE UNIQUE INDEX`) && sql.canFind(`pg_catalog.lower("Title")`)) lowerUnique = true;
+        if (sql.canFind(`USING gin (pg_catalog.lower("Search") gin_trgm_ops)`)) lowerTrigram = true;
+        db.execute(sql);
+    }
+    assert(lowerUnique && lowerTrigram);
+    assert(z8_postgres_compare_indexes(indexedTable, z8_postgres_describe_table(db, "pg_temp"w, "IndexSample"w)).length == 0);
+    db.execute(`SET search_path = evil, pg_catalog, public`);
+    assert(z8_postgres_compare_indexes(indexedTable, z8_postgres_describe_table(db, "pg_temp"w, "IndexSample"w)).length == 0);
+    db.execute(`RESET search_path`);
+    auto quotedIndexes = P.m_quotedIndexes();
+    db.execute(z8_postgres_create_table_sql("pg_temp"w, quotedIndexes));
+    auto quotedIndexInfo = z8_postgres_describe_table(db, "pg_temp"w, "Index Quote"w);
+    auto quotedIndexPlan = z8_postgres_plan_add_indexes("pg_temp"w, quotedIndexes, quotedIndexInfo);
+    assert(quotedIndexPlan.length == 2);
+    foreach (sql; quotedIndexPlan) db.execute(sql);
+    assert(z8_postgres_compare_indexes(quotedIndexes, z8_postgres_describe_table(db, "pg_temp"w, "Index Quote"w)).length == 0);
     auto simpleIndexes = P.m_simpleIndexes();
     db.execute(z8_postgres_create_table_sql("pg_temp"w, simpleIndexes));
     db.execute(`CREATE UNIQUE INDEX "WrongOperatorClass" ON "SimpleIndexSample" ("Title" varchar_pattern_ops)`);

@@ -222,15 +222,18 @@ or extra foreign keys. Foreign keys are compared by their columns, target and
 PostgreSQL constraint behavior. It does not yet compare defaults, and never
 changes the schema. `z8_postgres_compare_indexes` separately compares
 single-column indexes by method, uniqueness, operator class, collation and
-validity. Case-insensitive expression indexes are reported as unsupported;
-extra indexes are left untouched.
+validity, including the standard `lower(column)` expression used for
+case-insensitive indexes. Recognition checks the built-in PostgreSQL function
+and the catalog's canonical expression; unrecognized expressions are not
+assumed equivalent. Extra indexes are left untouched.
 `z8_postgres_plan_add_columns` in `z8.database.migration` returns SQL for
 missing non-primary columns with their BL defaults and nullability.
 `z8_postgres_plan_add_foreign_keys` plans missing single-column BL foreign keys;
 it avoids existing constraint names and rejects missing source columns or
 conflicting foreign keys. `z8_postgres_plan_add_indexes` plans supported missing
-indexes, avoids index names already used anywhere in the schema, and skips
-unsupported expressions. Creating a unique index may fail if existing data
+indexes and avoids index names already used anywhere in the schema. The
+generated `lower` calls explicitly use `pg_catalog`.
+Creating a unique index may fail if existing data
 contains duplicates; trigram indexes require `pg_trgm`. The caller reviews and
 executes these statements; other differences require separate handling.
 

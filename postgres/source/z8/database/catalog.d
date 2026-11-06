@@ -14,7 +14,7 @@ struct Z8PostgresIndexDescription {
     bool unique, primary;
     string method, column, operatorClass;
     int columns, options;
-    bool valid, ready, partial, defaultOperatorClass, immediate, exclusion, columnCollation;
+    bool valid, ready, partial, defaultOperatorClass, immediate, exclusion, columnCollation, lowerExpression;
 }
 struct Z8PostgresForeignKeyDescription {
     string name, definition;
@@ -65,13 +65,18 @@ Z8PostgresTableDescription z8_postgres_describe_table(Z8PostgresConnection db, w
         JOIN pg_catalog.pg_constraint k ON k.conrelid = c.oid` ~ whereTable ~ ` ORDER BY k.conname`, params);
     foreach (row; constraints.rows) description.constraintNames ~= row[0].text;
     auto indexes = db.execute(`SELECT i.relname, pg_catalog.pg_get_indexdef(i.oid), x.indisunique, x.indisprimary,
-        am.amname, a.attname, op.opcname, x.indnatts::text, x.indoption[0]::text,
+        am.amname, COALESCE(a.attname, e.attname), op.opcname, x.indnatts::text, x.indoption[0]::text,
         x.indisvalid, x.indisready, x.indpred IS NOT NULL, op.opcdefault,
-        x.indimmediate, x.indisexclusion, COALESCE(x.indcollation[0] = a.attcollation, false)
+        x.indimmediate, x.indisexclusion, COALESCE(x.indcollation[0] = COALESCE(a.attcollation, e.attcollation), false), e.attname IS NOT NULL
         FROM pg_catalog.pg_class c JOIN pg_catalog.pg_index x ON x.indrelid = c.oid
         JOIN pg_catalog.pg_class i ON i.oid = x.indexrelid
         JOIN pg_catalog.pg_am am ON am.oid = i.relam
         LEFT JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = x.indkey[0]
+        LEFT JOIN pg_catalog.pg_attribute e ON e.attrelid = c.oid AND e.attnum > 0 AND NOT e.attisdropped
+          AND x.indkey[0] = 0
+          AND x.indexprs::text LIKE ('({FUNCEXPR :funcid ' || 'pg_catalog.lower(text)'::regprocedure::oid::text || ' :%')
+          AND pg_catalog.pg_get_indexdef(i.oid, 1, true) IN
+            ('lower(' || pg_catalog.quote_ident(e.attname) || '::text)', 'pg_catalog.lower(' || pg_catalog.quote_ident(e.attname) || '::text)')
         LEFT JOIN pg_catalog.pg_opclass op ON op.oid = x.indclass[0]` ~ whereTable ~ ` ORDER BY i.relname`, params);
     foreach (row; indexes.rows) {
         Z8PostgresIndexDescription item;
@@ -80,6 +85,7 @@ Z8PostgresTableDescription z8_postgres_describe_table(Z8PostgresConnection db, w
         item.columns = row[7].text.to!int; item.options = row[8].isNull ? 0 : row[8].text.to!int;
         item.valid = row[9].text == "t"; item.ready = row[10].text == "t"; item.partial = row[11].text == "t"; item.defaultOperatorClass = row[12].text == "t";
         item.immediate = row[13].text == "t"; item.exclusion = row[14].text == "t"; item.columnCollation = row[15].text == "t";
+        item.lowerExpression = row[16].text == "t";
         description.indexes ~= item;
     }
     auto schemaIndexes = db.execute(`SELECT i.relname FROM pg_catalog.pg_class c

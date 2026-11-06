@@ -77,8 +77,7 @@ string[] z8_postgres_plan_add_foreign_keys(wstring schema, Z8Object table, Z8Pos
     return result;
 }
 
-// Plan only supported, absent single-column indexes; expression indexes are
-// reported by z8_postgres_compare_indexes and left for separate handling.
+// Plan absent single-column indexes, including the standard lower(...) expression.
 string[] z8_postgres_plan_add_indexes(wstring schema, Z8Object table, Z8PostgresTableDescription actual) {
     if (schema is null || !schema.length) throw new Z8PostgresException("empty PostgreSQL schema");
     if (actual is null) throw new Z8PostgresException("cannot add indexes to a missing PostgreSQL table");
@@ -105,6 +104,7 @@ string[] z8_postgres_plan_add_indexes(wstring schema, Z8Object table, Z8Postgres
         }
         names ~= name;
         auto expression = quoteIdentifier(expected.column.to!wstring);
+        if (expected.lowerExpression) expression = "pg_catalog.lower(" ~ expression ~ ")";
         if (expected.operatorClass !is null) expression ~= " " ~ expected.operatorClass;
         result ~= "CREATE " ~ (expected.unique ? "UNIQUE " : "") ~ "INDEX " ~ quoteIdentifier(name.to!wstring) ~
             " ON " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(tableName) ~ " USING " ~ expected.method ~ " (" ~ expression ~ ")";
