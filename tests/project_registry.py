@@ -26,7 +26,7 @@ import org.zenframework.z8.base.table.value.StringField;
 ''',
         "BaseTable": '''
 import org.zenframework.z8.base.table.Table;
-[name "Inherited"] public class BaseTable extends Table {}
+[name "Inherited"] [generatable] public class BaseTable extends Table {}
 ''',
         "DerivedTable": '[generatable] public class DerivedTable extends BaseTable {}',
         "Api": '[request] public class Api {}',
@@ -69,6 +69,8 @@ void main() {
         assert(request.classId != "PrivateApi"w);
     }
     assert(orders && inherited && api && child && orderRequest);
+    registry.registerTable(z8_object_new_instance("BaseTable"w));
+    assert(registry.newTableByName("Inherited"w).z8_class_id() == "DerivedTable"w);
     z8_register_project(registry); assert(registry.tables().length == 2 && registry.requests().length == 3);
     auto first = registry.newTableByName("Orders"w), second = registry.newTableByClass("Orders"w);
     assert(first !is null && second !is null && first !is second && first.z8_class_id() == "Orders"w);

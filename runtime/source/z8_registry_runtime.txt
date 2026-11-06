@@ -9,6 +9,7 @@ struct Z8RuntimeRegistration {
     wstring classId, name, displayName, description;
     Z8Guid key;
     Z8RuntimeFieldRegistration[] fields;
+    private TypeInfo_Class runtimeType;
 }
 class Z8RuntimeRegistry {
     private Z8RuntimeRegistration[] tableEntries, requestEntries;
@@ -25,6 +26,7 @@ class Z8RuntimeRegistry {
         Z8RuntimeRegistration entry;
         entry.classId = classId.idup; entry.name = name.idup; entry.displayName = displayName.idup;
         entry.description = value.z8_get_attribute("description"w);
+        entry.runtimeType = value.classinfo;
         entry.key = z8_guid_create_name(table ? name : classId);
         if (table) foreach (field; z8_query_declared_fields(value, true)) {
             Z8RuntimeFieldRegistration item;
@@ -46,6 +48,12 @@ class Z8RuntimeRegistry {
         synchronized (mutex) {
             foreach (ref existing; entries) {
                 if (existing.classId == entry.classId && existing.name == entry.name && existing.key == entry.key) { existing = entry; return; }
+                if (table && entry.runtimeType !is null && existing.runtimeType !is null) {
+                    // A more specialized table supersedes its named base,
+                    // regardless of the order in which startup code sees them.
+                    if (entry.runtimeType.isBaseOf(existing.runtimeType)) return;
+                    if (existing.name == entry.name && existing.runtimeType.isBaseOf(entry.runtimeType)) { existing = entry; return; }
+                }
                 if (existing.classId == entry.classId || existing.key == entry.key || (table && existing.name == entry.name))
                     throw new Exception("conflicting runtime registration");
             }
