@@ -23,7 +23,8 @@ with tempfile.TemporaryDirectory() as directory:
     service = pool.FindServiceByName("z8.authority.v1.Authority")
     assert [(m.name, m.input_type.name, m.output_type.name) for m in service.methods] == [
         ("Login", "LoginRequest", "SessionReply"), ("Authorize", "AuthorizeRequest", "SessionReply"),
-        ("UserChanged", "UserChanged", "Empty"), ("RoleChanged", "RoleChanged", "Empty")]
+        ("UserChanged", "UserChanged", "Empty"), ("RoleChanged", "RoleChanged", "Empty"),
+        ("ApplyUserChanged", "UserChanged", "Empty"), ("ApplyRoleChanged", "RoleChanged", "Empty")]
     login = pool.FindMessageTypeByName("z8.authority.v1.LoginRequest")
     assert login.fields_by_name["password"].has_presence and login.fields_by_name["password"].number == 2
     session = pool.FindMessageTypeByName("z8.authority.v1.SessionSnapshot")

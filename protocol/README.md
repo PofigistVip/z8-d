@@ -38,8 +38,10 @@ authorization and session reply envelopes, including explicit empty passwords
 and denied replies. It does not open sockets or choose an RPC implementation.
 `Z8ProtobufAuthorityService` dispatches these encoded operations to an
 `IZ8AuthorityEndpoint`. The optional `Z8ProtobufPostgresAuthority` adapter
-connects it to the single-schema PostgreSQL/CivetWeb authority; incoming
-notifications invalidate local sessions without being forwarded back to peers.
+connects it to the single-schema PostgreSQL/CivetWeb authority. `UserChanged`
+and `RoleChanged` submit changes for local invalidation and broadcast;
+`ApplyUserChanged` and `ApplyRoleChanged` apply peer broadcasts locally without
+rebroadcasting. `Z8ProtobufAuthorityPeerNotifier` sends the latter operations.
 `Z8ProtobufAuthorityClient` implements the same authority interface over an
 `IZ8AuthorityRpcTransport` supplied by the host. The client validates the
 returned schema and, for authorization, the session ID. The service's `dispatch`

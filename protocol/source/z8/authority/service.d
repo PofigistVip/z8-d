@@ -15,6 +15,11 @@ interface IZ8AuthorityEndpoint {
     void userChanged(Z8Guid id, wstring schema);
     void roleChanged(Z8Guid id, wstring schema);
 }
+// Apply a peer broadcast locally without sending it back to the origin.
+interface IZ8AuthorityInvalidationSink {
+    void applyUserChanged(Z8Guid id, wstring schema);
+    void applyRoleChanged(Z8Guid id, wstring schema);
+}
 
 // A transport authenticates the peer and maps its RPC methods to these calls.
 // A null session is an ordinary denial; malformed messages throw.
@@ -51,12 +56,28 @@ class Z8ProtobufAuthorityService {
         if (value.id is null || value.schema is null || !value.schema.length) throw new Z8ProtobufException("notification requires an ID and schema");
         endpoint.roleChanged(value.id, value.schema); return [];
     }
+    ubyte[] applyUserChanged(const(ubyte)[] payload) {
+        auto sink = cast(IZ8AuthorityInvalidationSink)endpoint;
+        if (sink is null) throw new Z8ProtobufException("authority cannot apply peer notifications");
+        auto value = z8_decode_authority_change(payload);
+        if (value.id is null || value.schema is null || !value.schema.length) throw new Z8ProtobufException("notification requires an ID and schema");
+        sink.applyUserChanged(value.id, value.schema); return [];
+    }
+    ubyte[] applyRoleChanged(const(ubyte)[] payload) {
+        auto sink = cast(IZ8AuthorityInvalidationSink)endpoint;
+        if (sink is null) throw new Z8ProtobufException("authority cannot apply peer notifications");
+        auto value = z8_decode_authority_change(payload);
+        if (value.id is null || value.schema is null || !value.schema.length) throw new Z8ProtobufException("notification requires an ID and schema");
+        sink.applyRoleChanged(value.id, value.schema); return [];
+    }
     ubyte[] dispatch(Z8AuthorityMethod method, const(ubyte)[] payload) {
         switch (method) {
             case Z8AuthorityMethod.login: return login(payload);
             case Z8AuthorityMethod.authorize: return authorize(payload);
             case Z8AuthorityMethod.userChanged: return userChanged(payload);
             case Z8AuthorityMethod.roleChanged: return roleChanged(payload);
+            case Z8AuthorityMethod.applyUserChanged: return applyUserChanged(payload);
+            case Z8AuthorityMethod.applyRoleChanged: return applyRoleChanged(payload);
             default: throw new Z8ProtobufException("unknown authority method");
         }
     }

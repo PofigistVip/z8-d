@@ -85,6 +85,7 @@ import z8.database.authentication;
 import z8.webserver.civetweb;
 import z8.integration.postgres_authority;
 import z8.integration.protobuf_postgres_authority;
+import z8.integration.protobuf_http_authority;
 import z8.authority.notifications;
 import z8.authority.messages;
 import z8.authority.service;
@@ -135,14 +136,14 @@ void main(string[] args) {
     rpcAuth.schema = "other"w;
     assert(z8_decode_authority_reply(service.authorize(z8_encode_authority_authorize(rpcAuth))).denied);
     Z8AuthorityChange roleChange; roleChange.id = z8_guid_literal("421A8413-A8EC-4DAB-9235-9A5FF83341C5"); roleChange.schema = "public"w;
-    assert(service.roleChanged(z8_encode_authority_change(roleChange)).length == 0);
+    assert(service.applyRoleChanged(z8_encode_authority_change(roleChange)).length == 0);
     assert(remoteSessions.getSession("remote-bob"w) !is null);
     rpcAuth.schema = "public"w;
     assert(z8_decode_authority_reply(service.authorize(z8_encode_authority_authorize(rpcAuth))).denied);
     rpcLogin = z8_decode_authority_reply(service.login(z8_encode_authority_login(loginRequest)));
     rpcAuth.sessionId = rpcLogin.session.session.id;
     Z8AuthorityChange userChange; userChange.id = z8_guid_create(85); userChange.schema = "public"w;
-    assert(service.userChanged(z8_encode_authority_change(userChange)).length == 0);
+    assert(service.applyUserChanged(z8_encode_authority_change(userChange)).length == 0);
     assert(z8_decode_authority_reply(service.authorize(z8_encode_authority_authorize(rpcAuth))).denied);
     assert(remoteSessions.getSession("remote-bob"w) !is null);
     auto client = new Z8ProtobufAuthorityClient(new LoopbackRpc(service));
@@ -150,15 +151,18 @@ void main(string[] args) {
     auto remoteRequest = Z8AuthorityAuthorize(remoteLogin.id, "public"w, "test"w);
     assert(client.authorize(remoteRequest) !is null);
     client.userChanged(z8_guid_create(85), "public"w); assert(client.authorize(remoteRequest) is null);
+    assert(remoteSessions.getSession("remote-bob"w) is null);
+    remoteSessions.create("remote-bob"w, remoteBob, remoteBob, "public"w);
     roleChange.schema = "other"w; bool rejected;
     try { service.roleChanged(z8_encode_authority_change(roleChange)); } catch (Exception) { rejected = true; } assert(rejected);
+    auto httpAuthority = new Z8ProtobufHttpAuthority(client, "public"w);
     z8_runtime_set_registry(registry);
     auto server = new Z8CivetServer("127.0.0.1:0", (Z8HttpRequest request) {
         auto db = connection.openSibling(); scope(exit) db.close();
         auto previous = z8_connection_set_current(new Z8PostgresDatabase(db, "public"w, registry));
         scope(exit) z8_connection_set_current(previous);
         z8_application_dispatch_request();
-    }, 8192, Z8ResponseMode.application, "test"w, authority);
+    }, 8192, Z8ResponseMode.application, "test"w, httpAuthority);
     writeln(server.port()); stdout.flush(); readln();
     authority.roleChanged(z8_guid_literal("421A8413-A8EC-4DAB-9235-9A5FF83341C5"), "public"w);
     assert(remoteSessions.getSession("remote-bob"w) is null);
@@ -170,12 +174,14 @@ void main(string[] args) {
     exe = temp / ("authority.exe" if os.name == "nt" else "authority")
     args = ["dmd", "-I" + str(generated), "-I" + str(root / "postgres/source"),
             "-I" + str(root / "webserver/source"), "-I" + str(root / "integrations/postgres_webserver/source"),
-            "-I" + str(root / "integrations/protobuf_postgres_webserver/source"), "-I" + str(root / "protocol/source"),
+            "-I" + str(root / "integrations/protobuf_postgres_webserver/source"), "-I" + str(root / "integrations/protobuf_webserver/source"),
+            "-I" + str(root / "protocol/source"),
             *import_args(), *map(str, generated.rglob("*.d")),
             *map(str, (root / "postgres/source/z8/database").glob("*.d")),
             str(root / "webserver/source/z8/webserver/civetweb.d"),
             str(root / "integrations/postgres_webserver/source/z8/integration/postgres_authority.d"),
             str(root / "integrations/protobuf_postgres_webserver/source/z8/integration/protobuf_postgres_authority.d"),
+            str(root / "integrations/protobuf_webserver/source/z8/integration/protobuf_http_authority.d"),
             *map(str, (root / "protocol/source/z8/protobuf").glob("*.d")),
             *map(str, (root / "protocol/source/z8/authority").glob("*.d")),
             str(harness), str(civet), str(runtime), "-of=" + str(exe)]

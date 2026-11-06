@@ -4,11 +4,11 @@ import z8.runtime : Z8ApplicationSession, Z8Guid, IZ8UserChangeNotifier, IZ8Role
 import z8.authority.custom_primary;
 import z8.authority.messages;
 import z8.authority.notifications;
-import z8.authority.service : IZ8AuthorityEndpoint;
+import z8.authority.service : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink;
 import z8.authority.transport;
 import z8.protobuf.wire;
 
-class Z8ProtobufAuthorityClient : IZ8AuthorityEndpoint, IZ8UserChangeNotifier, IZ8RoleChangeNotifier {
+class Z8ProtobufAuthorityClient : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink, IZ8UserChangeNotifier, IZ8RoleChangeNotifier {
     private IZ8AuthorityRpcTransport transport;
     private Z8CustomPrimaryRegistry custom;
     this(IZ8AuthorityRpcTransport transport, Z8CustomPrimaryRegistry custom = null) {
@@ -40,4 +40,16 @@ class Z8ProtobufAuthorityClient : IZ8AuthorityEndpoint, IZ8UserChangeNotifier, I
     }
     void userChanged(Z8Guid id, wstring schema) { changed(Z8AuthorityMethod.userChanged, id, schema); }
     void roleChanged(Z8Guid id, wstring schema) { changed(Z8AuthorityMethod.roleChanged, id, schema); }
+    void applyUserChanged(Z8Guid id, wstring schema) { changed(Z8AuthorityMethod.applyUserChanged, id, schema); }
+    void applyRoleChanged(Z8Guid id, wstring schema) { changed(Z8AuthorityMethod.applyRoleChanged, id, schema); }
+}
+// Attach this to a broadcasting authority when delivering to another peer.
+class Z8ProtobufAuthorityPeerNotifier : IZ8UserChangeNotifier, IZ8RoleChangeNotifier {
+    private Z8ProtobufAuthorityClient peer;
+    this(Z8ProtobufAuthorityClient peer) {
+        if (peer is null) throw new Z8ProtobufException("authority peer is required");
+        this.peer = peer;
+    }
+    void userChanged(Z8Guid id, wstring schema) { peer.applyUserChanged(id, schema); }
+    void roleChanged(Z8Guid id, wstring schema) { peer.applyRoleChanged(id, schema); }
 }

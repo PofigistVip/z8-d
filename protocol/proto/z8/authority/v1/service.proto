@@ -33,4 +33,6 @@ service Authority {
   rpc Authorize(AuthorizeRequest) returns (SessionReply);
   rpc UserChanged(.z8.authority.v1.UserChanged) returns (Empty);
   rpc RoleChanged(.z8.authority.v1.RoleChanged) returns (Empty);
+  rpc ApplyUserChanged(.z8.authority.v1.UserChanged) returns (Empty);
+  rpc ApplyRoleChanged(.z8.authority.v1.RoleChanged) returns (Empty);
 }

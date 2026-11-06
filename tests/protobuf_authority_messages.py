@@ -47,8 +47,8 @@ import z8.authority.transport;
 import z8.protobuf.wire;
 import std.file : read, write;
 import std.path : buildPath;
-class Endpoint : IZ8AuthorityEndpoint {
-    int users, roles;
+class Endpoint : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink {
+    int users, roles, appliedUsers, appliedRoles;
     Z8ApplicationSession makeSession(wstring id) {
         auto user = new Z8UserData(); user.id = z8_guid_create(42); user.privileges = new Z8Privileges();
         auto system = new Z8UserData(); system.id = z8_guid_create(1); system.privileges = new Z8Privileges();
@@ -58,6 +58,8 @@ class Endpoint : IZ8AuthorityEndpoint {
     Z8ApplicationSession authorize(Z8AuthorityAuthorize request) { return request.sessionId == "wrong"w ? makeSession("other"w) : makeSession(request.sessionId); }
     void userChanged(Z8Guid id, wstring schema) { assert(id == z8_guid_create(42) && schema == "схема"w); ++users; }
     void roleChanged(Z8Guid id, wstring schema) { assert(id == z8_guid_create(42) && schema == "схема"w); ++roles; }
+    void applyUserChanged(Z8Guid id, wstring schema) { assert(id == z8_guid_create(42) && schema == "схема"w); ++appliedUsers; }
+    void applyRoleChanged(Z8Guid id, wstring schema) { assert(id == z8_guid_create(42) && schema == "схема"w); ++appliedRoles; }
 }
 class Loopback : IZ8AuthorityRpcTransport {
     Z8ProtobufAuthorityService service;
@@ -113,6 +115,9 @@ void main(string[] args) {
     authRequest.sessionId = "token"w; assert(client.authorize(authRequest).id == "token"w);
     client.userChanged(z8_guid_create(42), "схема"w); client.roleChanged(z8_guid_create(42), "схема"w);
     assert(endpoint.users == 2 && endpoint.roles == 2);
+    auto peer = new Z8ProtobufAuthorityPeerNotifier(client);
+    peer.userChanged(z8_guid_create(42), "схема"w); peer.roleChanged(z8_guid_create(42), "схема"w);
+    assert(endpoint.appliedUsers == 1 && endpoint.appliedRoles == 1 && endpoint.users == 2 && endpoint.roles == 2);
     auto forged = new Forged(); auto forgedClient = new Z8ProtobufAuthorityClient(forged);
     Z8AuthoritySessionReply badReply; badReply.session = Z8SessionSnapshot("other"w, endpoint.makeSession("token"w));
     forged.response = z8_encode_authority_reply(badReply); rejected = false;
