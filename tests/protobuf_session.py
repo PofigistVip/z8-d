@@ -41,11 +41,13 @@ decimal = primary_file.message_type.add(name="Decimal")
 field(decimal, "coefficient", 1, 9); field(decimal, "scale", 2, 17); field(decimal, "nan", 3, 8)
 geometry = primary_file.message_type.add(name="Geometry"); field(geometry, "ewkb_hex", 1, 9); field(geometry, "srid", 2, 17)
 binary = primary_file.message_type.add(name="Binary"); field(binary, "data", 1, 12); field(binary, "name", 2, 9, optional=True)
+custom = primary_file.message_type.add(name="CustomPrimary"); field(custom, "class_id", 1, 9); field(custom, "payload", 2, 12)
 primary = primary_file.message_type.add(name="Primary"); primary.oneof_decl.add(name="value")
 for number, (name, kind, type_name) in enumerate((("null_value", 8, None), ("integer_value", 18, None),
     ("boolean_value", 8, None), ("decimal_value", 11, "Decimal"), ("text_value", 9, None),
     ("guid_value", 11, "Guid"), ("date_ticks", 18, None), ("datespan_milliseconds", 18, None),
-    ("geometry_value", 11, "Geometry"), ("binary_value", 11, "Binary"), ("file_value", 11, "FileMetadata")), 1):
+    ("geometry_value", 11, "Geometry"), ("binary_value", 11, "Binary"), ("file_value", 11, "FileMetadata"),
+    ("custom_value", 11, "CustomPrimary")), 1):
     field(primary, name, number, kind, type_name=type_name, oneof=0)
 priv_file = proto("privileges"); priv_file.dependency.append(common.name)
 access = priv_file.message_type.add(name="Access")
@@ -79,9 +81,16 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     source.write_text('''
 import z8.runtime;
 import z8.authority.session;
+import z8.authority.custom_primary;
 import z8.protobuf.wire;
 import std.file : read, write;
 import std.path : dirName, buildPath;
+class Demo : Z8Object { ubyte number; override wstring z8_class_id() { return "example.Demo"w; } }
+class Codec : IZ8CustomPrimaryCodec {
+    wstring classId() { return "example.Demo"w; }
+    ubyte[] encode(Z8Object value) { return [(cast(Demo)value).number]; }
+    Z8Object decode(const(ubyte)[] data) { if (data.length != 1) throw new Exception("invalid data"); auto item = new Demo(); item.number = data[0]; return item; }
+}
 void main(string[] args) {
     auto user = new Z8UserData(); user.id = z8_guid_create(42); user.login = "$literal$"w;
     user.middleName = z8_string_new(""w); user.roles = [z8_guid_create(5)]; user.roleNames = ["Operators"w];
@@ -97,11 +106,13 @@ void main(string[] args) {
     auto file = z8_file_from_upload("photo.bin"w, [cast(ubyte)4, 5]); file.id = z8_guid_create(7); file.time = z8_date_from_ticks(1700000000123L);
     file.details.z8_add("kind"w, "photo"w); user.parameters.z8_add("file"w, z8_primary_box(file));
     user.parameters.z8_add("geometry"w, z8_primary_box(z8_geometry_point(z8_decimal_literal("1.5"), z8_decimal_literal("-2.5"), 4326)));
+    auto demo = new Demo(); demo.number = 42; user.parameters.z8_add("custom"w, z8_primary_box(demo));
     auto system = new Z8UserData(); system.id = z8_guid_create(1); system.builtinSystem = true;
     system.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     auto session = new Z8ApplicationSession("token"w, user, system);
-    write(args[1], z8_encode_session(Z8SessionSnapshot("схема"w, session)));
-    auto decoded = z8_decode_session(cast(const(ubyte)[])read(args[2]));
+    auto customRegistry = new Z8CustomPrimaryRegistry(); customRegistry.register(new Codec());
+    write(args[1], z8_encode_session(Z8SessionSnapshot("схема"w, session), customRegistry));
+    auto decoded = z8_decode_session(cast(const(ubyte)[])read(args[2]), customRegistry);
     assert(decoded.schema == "схема"w && decoded.session.id == "token"w && decoded.session.user.id == z8_guid_create(42));
     auto copy = decoded.session.user;
     assert(copy.login == "$literal$"w && copy.firstName is null && copy.middleName !is null && !copy.middleName.length);
@@ -116,21 +127,23 @@ void main(string[] args) {
     auto copiedFile = z8_primary_cast!Z8File(copy.parameters.z8_get("file"w));
     assert(copiedFile.id == z8_guid_create(7) && z8_file_has_upload(copiedFile) && z8_file_upload_snapshot(copiedFile, 10) == [cast(ubyte)4, 5]);
     assert(z8_geometry_srs(z8_primary_cast!Z8Geometry(copy.parameters.z8_get("geometry"w))) == 4326);
+    assert((cast(Demo)copy.parameters.z8_get("custom"w).userValue).number == 42);
     assert(decoded.session.system.builtinSystem && decoded.session.system.privileges.getDefaultAccess().destroy);
-    write(args[3], z8_encode_session(decoded));
+    write(args[3], z8_encode_session(decoded, customRegistry));
     bool rejected; try { z8_decode_session([]); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
     foreach (name; ["duplicate.bin", "missing-privileges.bin", "missing-system.bin"]) {
         rejected = false;
-        try { z8_decode_session(cast(const(ubyte)[])read(buildPath(dirName(args[2]), name))); }
+        try { z8_decode_session(cast(const(ubyte)[])read(buildPath(dirName(args[2]), name)), customRegistry); }
         catch (Z8ProtobufException) { rejected = true; }
         assert(rejected);
     }
+    rejected = false; try { z8_decode_session(cast(const(ubyte)[])read(args[2])); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
     user.parameters.z8_add("unsupported"w, z8_primary_box(new Z8Object()));
-    rejected = false; try { z8_encode_session(Z8SessionSnapshot("schema"w, session)); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
+    rejected = false; try { z8_encode_session(Z8SessionSnapshot("schema"w, session), customRegistry); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
 }
 ''', encoding="utf-8")
     exe = temp / ("session.exe" if os.name == "nt" else "session")
-    modules = ("z8/protobuf/wire.d", "z8/protobuf/guid.d", "z8/authority/file.d", "z8/authority/primary.d", "z8/authority/privileges.d", "z8/authority/session.d")
+    modules = ("z8/protobuf/wire.d", "z8/protobuf/guid.d", "z8/authority/file.d", "z8/authority/custom_primary.d", "z8/authority/primary.d", "z8/authority/privileges.d", "z8/authority/session.d")
     subprocess.run(["dmd", "-I" + str(root / "protocol/source"), *import_args(), str(source),
                     *[str(root / "protocol/source" / module) for module in modules], str(runtime), "-of=" + str(exe)], check=True)
     message = Session(session_id="token", schema="схема")
@@ -142,6 +155,7 @@ void main(string[] args) {
     item = user.parameters.add(); item.null_key = True; item.value.integer_value = 7
     item = user.parameters.add(); item.key = ""; item.value.null_value = False
     item = user.parameters.add(); item.key = "binary"; item.value.binary_value.data = b"\x00\xff"; item.value.binary_value.name = "data.bin"
+    item = user.parameters.add(); item.key = "custom"; item.value.custom_value.class_id = "example.Demo"; item.value.custom_value.payload = b"\x2a"
     item = user.parameters.add(); item.key = "file"; metadata = item.value.file_value
     metadata.id.least_significant_bits = 7; metadata.user.SetInParent(); metadata.name = "photo.bin"; metadata.path = ""; metadata.author = ""
     metadata.time_ticks = 1700000000123; metadata.size = 2; metadata.upload = b"\x04\x05"
@@ -170,6 +184,6 @@ void main(string[] args) {
     generated = Session.FromString(output_file.read_bytes())
     assert generated.session_id == "token" and generated.user.login == "$literal$" and not generated.user.HasField("first_name")
     assert generated.user.HasField("middle_name") and generated.user.middle_name == ""
-    assert len(generated.user.parameters) == 7 and generated.user.privileges.tables[0].HasField("access")
+    assert len(generated.user.parameters) == 8 and generated.user.privileges.tables[0].HasField("access")
     assert Session.FromString(roundtrip_file.read_bytes()) == expected
 print("Protobuf session snapshots interoperate with Google's runtime")

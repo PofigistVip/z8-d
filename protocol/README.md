@@ -20,14 +20,17 @@ scale are preserved separately. Geometry carries EWKB and SRID. Binary values
 copy the unread stream without advancing it, subject to the message size limit.
 File metadata, details and in-memory upload contents are transferred; a file
 path remains metadata and does not cause the sender to read that path.
-User-defined primary values are currently rejected instead of being silently dropped.
+User-defined primary values require an explicitly registered
+`IZ8CustomPrimaryCodec` in a `Z8CustomPrimaryRegistry` supplied to the encoder
+and decoder. The registry selects only approved class IDs and checks the class
+returned by a codec. Codecs must validate their payloads and be thread-safe.
 `session.proto` and `z8.authority.session` serialize a session ID, schema,
 user and system identities, roles, entry points, privilege snapshots and typed
 parameters. Optional identity strings distinguish null from empty; parameters
 also distinguish null and empty keys and values. Decoding requires both users,
 their IDs and privileges, and rejects duplicate parameter keys. Conversion to
 runtime objects intentionally discards unknown fields; it is not a wire-message
-proxy. Parameters using the primary types listed above as unsupported cause the
+proxy. A user-defined parameter without its registered codec causes the
 operation to fail.
 `Z8ProtobufAuthorityNotifier` implements the runtime's user and role notifier
 interfaces and forwards encoded events to a host-provided

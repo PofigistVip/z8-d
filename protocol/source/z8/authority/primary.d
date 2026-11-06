@@ -6,8 +6,9 @@ import z8.runtime;
 import z8.protobuf.guid;
 import z8.protobuf.wire;
 import z8.authority.file;
+import z8.authority.custom_primary;
 
-enum Z8ProtobufPrimaryKind { none, nullValue, integer, boolean, decimal, text, guid, date, datespan, geometry, binary, file }
+enum Z8ProtobufPrimaryKind { none, nullValue, integer, boolean, decimal, text, guid, date, datespan, geometry, binary, file, custom }
 struct Z8ProtobufDecimal { wstring coefficient; int scale; bool nan; ubyte[] unknownFields; }
 struct Z8ProtobufGeometry { wstring ewkbHex; int srid; ubyte[] unknownFields; }
 struct Z8ProtobufBinary { ubyte[] data; wstring name; bool hasName; ubyte[] unknownFields; }
@@ -21,6 +22,7 @@ struct Z8ProtobufPrimary {
     Z8ProtobufGeometry geometryValue;
     Z8ProtobufBinary binaryValue;
     ubyte[] fileValue;
+    ubyte[] customValue;
     ubyte[] unknownFields;
 }
 private wstring utf8(const(ubyte)[] bytes) {
@@ -123,6 +125,9 @@ Z8ProtobufPrimary z8_parse_protobuf_primary(const(ubyte)[] data) {
         } else if (field == 11 && wire == 2) {
             if (result.kind != Z8ProtobufPrimaryKind.file) result.fileValue = null;
             result.kind = Z8ProtobufPrimaryKind.file; result.fileValue ~= reader.bytes();
+        } else if (field == 12 && wire == 2) {
+            if (result.kind != Z8ProtobufPrimaryKind.custom) result.customValue = null;
+            result.kind = Z8ProtobufPrimaryKind.custom; result.customValue ~= reader.bytes();
         } else { reader.skip(field, wire); result.unknownFields ~= data[start .. reader.position]; }
     }
     return result;
@@ -149,13 +154,15 @@ ubyte[] z8_serialize_protobuf_primary(Z8ProtobufPrimary value) {
             z8_proto_tag(output, 10, 2); z8_proto_bytes(output, encodeBinary(value.binaryValue)); break;
         case Z8ProtobufPrimaryKind.file:
             z8_proto_tag(output, 11, 2); z8_proto_bytes(output, value.fileValue); break;
+        case Z8ProtobufPrimaryKind.custom:
+            z8_proto_tag(output, 12, 2); z8_proto_bytes(output, value.customValue); break;
         default: throw new Z8ProtobufException("invalid protobuf primary kind");
     }
     output ~= value.unknownFields;
     if (output.length > 1024 * 1024) throw new Z8ProtobufException("protobuf primary exceeds size limit");
     return output;
 }
-Z8ProtobufPrimary z8_primary_to_protobuf(Z8Primary value) {
+Z8ProtobufPrimary z8_primary_to_protobuf(Z8Primary value, Z8CustomPrimaryRegistry custom = null) {
     Z8ProtobufPrimary result;
     if (value is null) { result.kind = Z8ProtobufPrimaryKind.nullValue; return result; }
     switch (value.kind) {
@@ -197,11 +204,24 @@ Z8ProtobufPrimary z8_primary_to_protobuf(Z8Primary value) {
         case Z8PrimaryKind.file:
             if (value.fileValue is null) throw new Z8ProtobufException("invalid file primary");
             result.kind = Z8ProtobufPrimaryKind.file; result.fileValue = z8_encode_file_metadata(value.fileValue); break;
+        case Z8PrimaryKind.user:
+            if (value.userValue is null || custom is null) throw new Z8ProtobufException("custom primary codec is not registered");
+            auto id = value.userValue.z8_class_id();
+            auto codec = custom.get(id);
+            if (codec is null) throw new Z8ProtobufException("custom primary codec is not registered");
+            ubyte[] payload;
+            try { payload = codec.encode(value.userValue); }
+            catch (Exception failure) { throw new Z8ProtobufException("custom primary encoding failed: " ~ failure.msg); }
+            if (payload.length > 1024 * 1024) throw new Z8ProtobufException("custom primary exceeds size limit");
+            result.kind = Z8ProtobufPrimaryKind.custom;
+            putText(result.customValue, 1, id);
+            if (payload.length) { z8_proto_tag(result.customValue, 2, 2); z8_proto_bytes(result.customValue, payload); }
+            break;
         default: throw new Z8ProtobufException("primary type is not supported by protobuf");
     }
     return result;
 }
-Z8Primary z8_primary_from_protobuf(Z8ProtobufPrimary value) {
+Z8Primary z8_primary_from_protobuf(Z8ProtobufPrimary value, Z8CustomPrimaryRegistry custom = null) {
     switch (value.kind) {
         case Z8ProtobufPrimaryKind.nullValue: return null;
         case Z8ProtobufPrimaryKind.integer: return z8_primary_box(value.integerValue);
@@ -231,6 +251,23 @@ Z8Primary z8_primary_from_protobuf(Z8ProtobufPrimary value) {
             binary.name = value.binaryValue.hasName ? (value.binaryValue.name is null ? ""w : value.binaryValue.name) : null;
             return z8_primary_box(binary);
         case Z8ProtobufPrimaryKind.file: return z8_primary_box(z8_decode_file_metadata(value.fileValue));
+        case Z8ProtobufPrimaryKind.custom:
+            if (custom is null) throw new Z8ProtobufException("custom primary codec is not registered");
+            if (value.customValue.length > 1024 * 1024) throw new Z8ProtobufException("custom primary exceeds size limit");
+            auto reader = Z8ProtobufReader(value.customValue); wstring classId; const(ubyte)[] payload;
+            while (!reader.empty()) {
+                uint field, wire; reader.tag(field, wire);
+                if (field == 1 && wire == 2) classId = utf8(reader.bytes());
+                else if (field == 2 && wire == 2) payload = reader.bytes();
+                else reader.skip(field, wire);
+            }
+            auto codec = custom.get(classId);
+            if (codec is null) throw new Z8ProtobufException("custom primary codec is not registered");
+            Z8Object object;
+            try { object = codec.decode(payload); }
+            catch (Exception failure) { throw new Z8ProtobufException("custom primary decoding failed: " ~ failure.msg); }
+            if (object is null || object.z8_class_id() != classId) throw new Z8ProtobufException("custom primary codec returned the wrong class");
+            return z8_primary_box(object);
         case Z8ProtobufPrimaryKind.decimal:
             if (value.decimalValue.nan) return z8_primary_box(z8_decimal_nan());
             auto text = value.decimalValue.coefficient;

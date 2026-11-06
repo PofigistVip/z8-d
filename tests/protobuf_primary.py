@@ -41,13 +41,16 @@ geometry.field.add(name="ewkb_hex", number=1, label=1, type=9); geometry.field.a
 binary = file.message_type.add(name="Binary"); binary.oneof_decl.add(name="_name")
 binary.field.add(name="data", number=1, label=1, type=12)
 binary.field.add(name="name", number=2, label=1, type=9, proto3_optional=True, oneof_index=0)
+custom = file.message_type.add(name="CustomPrimary")
+custom.field.add(name="class_id", number=1, label=1, type=9); custom.field.add(name="payload", number=2, label=1, type=12)
 primary = file.message_type.add(name="Primary"); primary.oneof_decl.add(name="value")
 for number, (name, kind, type_name) in enumerate((
     ("null_value", 8, None), ("integer_value", 18, None), ("boolean_value", 8, None),
     ("decimal_value", 11, ".z8.authority.v1.Decimal"), ("text_value", 9, None),
     ("guid_value", 11, ".z8.authority.v1.Guid"), ("date_ticks", 18, None),
     ("datespan_milliseconds", 18, None), ("geometry_value", 11, ".z8.authority.v1.Geometry"),
-    ("binary_value", 11, ".z8.authority.v1.Binary"), ("file_value", 11, ".z8.authority.v1.FileMetadata")), 1):
+    ("binary_value", 11, ".z8.authority.v1.Binary"), ("file_value", 11, ".z8.authority.v1.FileMetadata"),
+    ("custom_value", 11, ".z8.authority.v1.CustomPrimary")), 1):
     field = primary.field.add(name=name, number=number, label=1, type=kind, oneof_index=0)
     if type_name: field.type_name = type_name
 pool = descriptor_pool.DescriptorPool(); pool.Add(common); pool.Add(file_descriptor); pool.Add(file)
@@ -59,10 +62,22 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     source.write_text('''
 import z8.runtime;
 import z8.authority.primary;
+import z8.authority.custom_primary;
 import z8.protobuf.wire;
 import std.file : read, write;
 import std.path : buildPath;
 import std.bigint : BigInt;
+class Demo : Z8Object { ubyte number; override wstring z8_class_id() { return "example.Demo"w; } }
+class Codec : IZ8CustomPrimaryCodec {
+    wstring classId() { return "example.Demo"w; }
+    ubyte[] encode(Z8Object value) { auto item = cast(Demo)value; if (item is null) throw new Exception("wrong type"); return [item.number]; }
+    Z8Object decode(const(ubyte)[] data) { if (data.length != 1) throw new Exception("invalid data"); auto item = new Demo(); item.number = data[0]; return item; }
+}
+class BadCodec : IZ8CustomPrimaryCodec {
+    wstring classId() { return "example.Bad"w; }
+    ubyte[] encode(Z8Object value) { return []; }
+    Z8Object decode(const(ubyte)[] data) { return new Demo(); }
+}
 void main(string[] args) {
     auto dir = args[1];
     Z8Primary readValue(string name) {
@@ -98,6 +113,11 @@ void main(string[] args) {
     auto emptyUpload = z8_file_from_upload(""w, []);
     auto copiedEmpty = z8_primary_cast!Z8File(z8_primary_from_protobuf(z8_parse_protobuf_primary(z8_serialize_protobuf_primary(z8_primary_to_protobuf(z8_primary_box(emptyUpload))))));
     assert(z8_file_has_upload(copiedEmpty) && z8_file_upload_snapshot(copiedEmpty, 0).length == 0);
+    auto customRegistry = new Z8CustomPrimaryRegistry(); customRegistry.register(new Codec()); customRegistry.register(new BadCodec());
+    auto customWire = z8_parse_protobuf_primary(cast(const(ubyte)[])read(buildPath(dir, "custom.bin")));
+    auto customValue = cast(Demo)z8_primary_from_protobuf(customWire, customRegistry).userValue;
+    assert(customValue !is null && customValue.number == 42);
+    write(buildPath(dir, "custom-d.bin"), z8_serialize_protobuf_primary(z8_primary_to_protobuf(z8_primary_box(customValue), customRegistry)));
     auto parsed = z8_parse_protobuf_primary(cast(const(ubyte)[])read(buildPath(dir, "decimal.bin")));
     write(buildPath(dir, "decimal-roundtrip.bin"), z8_serialize_protobuf_primary(parsed));
     emit("null", null); emit("integer", z8_primary_box(long.min)); emit("boolean", z8_primary_box(false));
@@ -123,6 +143,10 @@ void main(string[] args) {
     assert(rejected);
     rejected = false; try { z8_primary_to_protobuf(z8_primary_box(new Z8Object())); } catch (Z8ProtobufException) { rejected = true; }
     assert(rejected);
+    rejected = false; try { z8_primary_from_protobuf(customWire); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
+    rejected = false; try { customRegistry.register(new Codec()); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
+    auto wrong = z8_parse_protobuf_primary([0x62, 0x0D, 0x0A, 0x0B, 'e', 'x', 'a', 'm', 'p', 'l', 'e', '.', 'B', 'a', 'd']);
+    rejected = false; try { z8_primary_from_protobuf(wrong, customRegistry); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
     rejected = false; try { readValue("bad-file"); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
     auto invalidGeometry = z8_primary_to_protobuf(z8_primary_box(geometry)); invalidGeometry.geometryValue.srid = 3857;
     rejected = false; try { z8_primary_from_protobuf(invalidGeometry); } catch (Z8ProtobufException) { rejected = true; }
@@ -138,13 +162,14 @@ void main(string[] args) {
     exe = temp / ("primary.exe" if os.name == "nt" else "primary")
     subprocess.run(["dmd", "-I" + str(root / "protocol/source"), *import_args(), str(source),
                     str(root / "protocol/source/z8/protobuf/wire.d"), str(root / "protocol/source/z8/protobuf/guid.d"),
-                    str(root / "protocol/source/z8/authority/file.d"), str(root / "protocol/source/z8/authority/primary.d"), str(runtime), "-of=" + str(exe)], check=True)
+                    str(root / "protocol/source/z8/authority/file.d"), str(root / "protocol/source/z8/authority/custom_primary.d"),
+                    str(root / "protocol/source/z8/authority/primary.d"), str(runtime), "-of=" + str(exe)], check=True)
     values = {
         "null": Primary(null_value=False), "integer": Primary(integer_value=-(1 << 63)),
         "boolean": Primary(boolean_value=False), "text": Primary(text_value="Строка 🐘"),
         "date": Primary(date_ticks=1700000000123), "span": Primary(datespan_milliseconds=-(1 << 63)),
         "decimal": Primary(), "guid": Primary(), "nan": Primary(), "empty": Primary(text_value=""),
-        "geometry": Primary(), "empty-geometry": Primary(), "binary": Primary(), "file": Primary(),
+        "geometry": Primary(), "empty-geometry": Primary(), "binary": Primary(), "file": Primary(), "custom": Primary(),
     }
     values["decimal"].decimal_value.coefficient = "-1234500"; values["decimal"].decimal_value.scale = 6
     values["decimal"].decimal_value.MergeFromString(b"\x20\x01")
@@ -162,6 +187,7 @@ void main(string[] args) {
     detail = metadata.details.entries.add(); detail.key = "charset"; detail.value = "utf-8"
     detail = metadata.details.entries.add(); detail.null_key = True; detail.null_value = True
     metadata.upload = b"\x00\xff"
+    values["custom"].custom_value.class_id = "example.Demo"; values["custom"].custom_value.payload = b"\x2a"
     bad_file = Primary(); bad_file.CopyFrom(values["file"]); bad_file.file_value.details.entries.add().CopyFrom(bad_file.file_value.details.entries[0])
     (temp / "bad-file.bin").write_bytes(bad_file.SerializeToString())
     (temp / "stream.bin").write_bytes(bytes([10, 11, 12, 13]))

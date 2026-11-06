@@ -21,6 +21,11 @@ message Binary {
   optional string name = 2;
 }
 
+message CustomPrimary {
+  string class_id = 1;
+  bytes payload = 2;
+}
+
 // Null and default scalar values remain distinct through oneof presence.
 message Primary {
   oneof value {
@@ -35,5 +40,6 @@ message Primary {
     Geometry geometry_value = 9;
     Binary binary_value = 10;
     FileMetadata file_value = 11;
+    CustomPrimary custom_value = 12;
   }
 }

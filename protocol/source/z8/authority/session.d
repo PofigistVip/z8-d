@@ -5,6 +5,7 @@ import std.conv : to;
 import z8.runtime;
 import z8.authority.primary;
 import z8.authority.privileges;
+import z8.authority.custom_primary;
 import z8.protobuf.guid;
 import z8.protobuf.wire;
 
@@ -38,7 +39,7 @@ private void guid(ref ubyte[] output, uint field, Z8Guid value) {
 private void flag(ref ubyte[] output, uint field, bool value) {
     if (value) { z8_proto_tag(output, field, 0); z8_proto_varint(output, 1); }
 }
-private ubyte[] encodeUser(Z8UserData user) {
+private ubyte[] encodeUser(Z8UserData user, Z8CustomPrimaryRegistry custom) {
     if (user is null || user.id is null || user.privileges is null || user.parameters is null)
         throw new Z8ProtobufException("session user requires ID, privileges and parameters");
     if (user.roles.length + user.entries.length + cast(size_t)user.parameters.z8_size() > 16384 || user.roleNames.length > user.roles.length)
@@ -71,20 +72,20 @@ private ubyte[] encodeUser(Z8UserData user) {
         ubyte[] entry;
         if (key is null) { z8_proto_tag(entry, 3, 0); z8_proto_varint(entry, 1); }
         else text(entry, 1, key);
-        nested(entry, 2, z8_serialize_protobuf_primary(z8_primary_to_protobuf(user.parameters.z8_get(key))));
+        nested(entry, 2, z8_serialize_protobuf_primary(z8_primary_to_protobuf(user.parameters.z8_get(key), custom)));
         nested(output, 18, entry);
     }
     if (nullKey) parameter(null);
     foreach (key; ordered) parameter(key);
     return output;
 }
-ubyte[] z8_encode_session(Z8SessionSnapshot value) {
+ubyte[] z8_encode_session(Z8SessionSnapshot value, Z8CustomPrimaryRegistry custom = null) {
     auto session = value.session;
     if (session is null || session.id is null || !session.id.length || value.schema is null || !value.schema.length)
         throw new Z8ProtobufException("session ID and schema are required");
     ubyte[] output;
     text(output, 1, session.id); text(output, 2, value.schema);
-    nested(output, 3, encodeUser(session.user)); nested(output, 4, encodeUser(session.system));
+    nested(output, 3, encodeUser(session.user, custom)); nested(output, 4, encodeUser(session.system, custom));
     if (output.length > 1024 * 1024) throw new Z8ProtobufException("protobuf session exceeds size limit");
     return output;
 }
@@ -119,7 +120,7 @@ private void readEntry(Z8UserData user, const(ubyte)[] bytes) {
     if (id.value is null) throw new Z8ProtobufException("session entry ID is absent");
     user.entries ~= Z8UserEntry(id.value, classId, title);
 }
-private void readParameter(Z8UserData user, const(ubyte)[] bytes) {
+private void readParameter(Z8UserData user, const(ubyte)[] bytes, Z8CustomPrimaryRegistry custom) {
     auto reader = Z8ProtobufReader(bytes); wstring key; bool hasKey, hasValue; ubyte[] primary;
     while (!reader.empty()) {
         uint field, wire; reader.tag(field, wire);
@@ -129,9 +130,9 @@ private void readParameter(Z8UserData user, const(ubyte)[] bytes) {
         else reader.skip(field, wire);
     }
     if (!hasKey || !hasValue || user.parameters.z8_containsKey(key)) throw new Z8ProtobufException("invalid or duplicate session parameter");
-    user.parameters.z8_add(key, z8_primary_from_protobuf(z8_parse_protobuf_primary(primary)));
+    user.parameters.z8_add(key, z8_primary_from_protobuf(z8_parse_protobuf_primary(primary), custom));
 }
-private void mergeUser(ref UserReader user, const(ubyte)[] bytes) {
+private void mergeUser(ref UserReader user, const(ubyte)[] bytes, Z8CustomPrimaryRegistry custom) {
     user.initialize(); auto reader = Z8ProtobufReader(bytes);
     while (!reader.empty()) {
         uint field, wire; reader.tag(field, wire);
@@ -150,7 +151,7 @@ private void mergeUser(ref UserReader user, const(ubyte)[] bytes) {
             auto item = reader.bytes();
             if (field == 10) readRole(user.value, item);
             else if (field == 11) readEntry(user.value, item);
-            else readParameter(user.value, item);
+            else readParameter(user.value, item, custom);
         } else if (field == 12 && wire == 2) { user.privilegesPresent = true; user.privileges ~= reader.bytes(); }
         else if (field >= 13 && field <= 17 && wire == 0) {
             auto value = reader.varint() != 0;
@@ -169,15 +170,15 @@ private Z8UserData finishUser(UserReader user) {
     user.value.privileges = z8_privileges_from_protobuf(z8_parse_protobuf_privileges(user.privileges));
     return user.value;
 }
-Z8SessionSnapshot z8_decode_session(const(ubyte)[] data) {
+Z8SessionSnapshot z8_decode_session(const(ubyte)[] data, Z8CustomPrimaryRegistry custom = null) {
     if (data.length > 1024 * 1024) throw new Z8ProtobufException("protobuf session exceeds size limit");
     auto reader = Z8ProtobufReader(data); wstring id, schema; UserReader user, system;
     while (!reader.empty()) {
         uint field, wire; reader.tag(field, wire);
         if (field == 1 && wire == 2) id = readText(reader.bytes());
         else if (field == 2 && wire == 2) schema = readText(reader.bytes());
-        else if (field == 3 && wire == 2) mergeUser(user, reader.bytes());
-        else if (field == 4 && wire == 2) mergeUser(system, reader.bytes());
+        else if (field == 3 && wire == 2) mergeUser(user, reader.bytes(), custom);
+        else if (field == 4 && wire == 2) mergeUser(system, reader.bytes(), custom);
         else reader.skip(field, wire);
     }
     if (id is null || !id.length || schema is null || !schema.length) throw new Z8ProtobufException("session ID and schema are required");
