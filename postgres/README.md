@@ -242,6 +242,12 @@ foreign keys in that order in one transaction and returns the executed SQL.
 It rejects incompatible existing columns and primary keys, and rolls back all
 changes if an index or foreign key cannot be created. Extra columns and indexes
 are preserved. Referenced rows and required extensions must already exist.
+`z8_postgres_ensure_additive_schema` also creates missing tables and initializes
+their null and declared static records before adding foreign keys. It leaves
+records in existing tables alone. Both functions return DDL statements after
+commit; record initialization is not included in that list. Creating the Roles
+table requires a registry and its access tables. Registry metadata synchronization
+remains a separate operation.
 
 `z8_postgres_sync_registry` in `z8.database.metadata` inserts or updates the
 registered table, field and request metadata and creates initial access rows

@@ -688,6 +688,29 @@ void main(string[] args) {
     try { z8_postgres_apply_additive_migration(db, "z8_migrate"w, migrateTables); } catch (Z8PostgresException) { incompatibleMigrationRejected = true; }
     assert(incompatibleMigrationRejected);
     foreach (column; z8_postgres_describe_table(db, "z8_migrate"w, "Source"w).columns) assert(column.name != "ParentId");
+    db.execute(`CREATE SCHEMA "z8_mixed"`);
+    auto mixedTarget = P.m_target(), mixedSource = P.m_references(), mixedIndexes = P.m_simpleIndexes(), mixedStatic = P.m_statics();
+    z8_postgres_create_tables(db, "z8_mixed"w, [mixedTarget, mixedIndexes]);
+    db.execute(`INSERT INTO "z8_mixed"."Target;--" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000088')`);
+    db.execute(`ALTER TABLE "z8_mixed"."SimpleIndexSample" DROP COLUMN "Amount"`);
+    Z8Object[] mixedTables = [mixedSource, mixedTarget, mixedIndexes, mixedStatic];
+    auto mixedChanges = z8_postgres_ensure_additive_schema(db, "z8_mixed"w, mixedTables);
+    assert(mixedChanges.length >= 4);
+    assert(db.execute(`SELECT count(*) FROM "z8_mixed"."StaticSample"`).rows[0][0].text == "3");
+    assert(db.execute(`SELECT count(*) FROM "z8_mixed"."Target;--"`).rows[0][0].text == "2");
+    assert(z8_postgres_compare_table(mixedSource, z8_postgres_describe_table(db, "z8_mixed"w, "Source"w)).length == 0);
+    assert(z8_postgres_compare_indexes(mixedIndexes, z8_postgres_describe_table(db, "z8_mixed"w, "SimpleIndexSample"w)).length == 0);
+    assert(z8_postgres_ensure_additive_schema(db, "z8_mixed"w, mixedTables).length == 0);
+    db.execute(`CREATE SCHEMA "z8_mixed_failed"`);
+    z8_postgres_create_tables(db, "z8_mixed_failed"w, [P.m_simpleIndexes()]);
+    db.execute(`ALTER TABLE "z8_mixed_failed"."SimpleIndexSample" DROP COLUMN "Amount"`);
+    bool mixedRolledBack;
+    try { z8_postgres_ensure_additive_schema(db, "z8_mixed_failed"w, [P.m_references(), P.m_statics(), P.m_simpleIndexes()]); }
+    catch (Z8PostgresException) { mixedRolledBack = true; }
+    assert(mixedRolledBack && !db.inTransaction());
+    assert(z8_postgres_describe_table(db, "z8_mixed_failed"w, "Source"w) is null);
+    assert(z8_postgres_describe_table(db, "z8_mixed_failed"w, "StaticSample"w) is null);
+    foreach (column; z8_postgres_describe_table(db, "z8_mixed_failed"w, "SimpleIndexSample"w).columns) assert(column.name != "Amount");
     auto roleTable = P.m_roles();
     auto roleDDL = z8_postgres_create_table_sql("z8_test"w, roleTable);
     assert(roleDDL.canFind(`"Name" character varying`) && roleDDL.canFind(`"Description" bytea`) && roleDDL.canFind(`"Read" smallint`));

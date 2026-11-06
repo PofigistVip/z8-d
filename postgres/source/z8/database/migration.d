@@ -7,7 +7,8 @@ import z8.database.catalog;
 import z8.database.compare;
 import z8.database.plan : quoteIdentifier;
 import z8.database.postgres : Z8PostgresConnection, Z8PostgresException;
-import z8.database.schema : fieldType, fieldDefault, foreignKeyTarget;
+import z8.database.schema : fieldType, fieldDefault, foreignKeyTarget, z8_postgres_create_table_sql,
+    z8_postgres_ensure_null_record, z8_postgres_apply_static_records;
 
 // Plan missing columns without executing them or changing existing columns.
 string[] z8_postgres_plan_add_columns(wstring schema, Z8Object table, Z8PostgresTableDescription actual) {
@@ -111,9 +112,8 @@ string[] z8_postgres_plan_add_indexes(wstring schema, Z8Object table, Z8Postgres
     return result;
 }
 
-// Apply only additive changes to existing tables, in dependency order. Every
-// statement is executed in one transaction and returned after a successful commit.
-string[] z8_postgres_apply_additive_migration(Z8PostgresConnection db, wstring schema, Z8Object[] tables) {
+private string[] applyAdditiveSchema(Z8PostgresConnection db, wstring schema, Z8Object[] tables,
+                                      bool createMissing, Z8RuntimeRegistry registry) {
     if (db is null || db.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
     if (db.inTransaction()) throw new Z8PostgresException("additive migration requires its own transaction");
     quoteIdentifier(schema);
@@ -128,23 +128,33 @@ string[] z8_postgres_apply_additive_migration(Z8PostgresConnection db, wstring s
     }
     db.beginTransaction();
     try {
-        // Reject changes that cannot be handled additively before executing DDL.
+        string[] applied;
+        Z8Object[] created;
+        foreach (index, table; tables) {
+            if (z8_postgres_describe_table(db, schema, names[index]) !is null) continue;
+            if (!createMissing) throw new Z8PostgresException("additive migration requires existing tables");
+            auto sql = z8_postgres_create_table_sql(schema, table);
+            db.execute(sql); applied ~= sql; created ~= table;
+        }
+        // Reject incompatible tables before altering any existing columns.
         foreach (index, table; tables) {
             auto actual = z8_postgres_describe_table(db, schema, names[index]);
-            if (actual is null) throw new Z8PostgresException("additive migration requires existing tables");
             foreach (difference; z8_postgres_compare_table(table, actual)) {
                 if (difference.kind == Z8SchemaDifferenceKind.columnType || difference.kind == Z8SchemaDifferenceKind.nullability ||
                     difference.kind == Z8SchemaDifferenceKind.primaryKey)
                     throw new Z8PostgresException("additive migration found an incompatible existing table");
             }
         }
-        string[] applied;
         // Re-read catalog state between stages, including index names used by
         // other tables in this same migration.
         foreach (index, table; tables) {
             auto actual = z8_postgres_describe_table(db, schema, names[index]);
             foreach (sql; z8_postgres_plan_add_columns(schema, table, actual)) { db.execute(sql); applied ~= sql; }
         }
+        // New tables need their null and declared static records before any
+        // foreign keys are enforced. Existing tables and their records are left alone.
+        foreach (table; created) z8_postgres_ensure_null_record(db, schema, table);
+        foreach (table; created) z8_postgres_apply_static_records(db, schema, table, registry);
         foreach (index, table; tables) {
             auto actual = z8_postgres_describe_table(db, schema, names[index]);
             foreach (sql; z8_postgres_plan_add_indexes(schema, table, actual)) { db.execute(sql); applied ~= sql; }
@@ -158,4 +168,16 @@ string[] z8_postgres_apply_additive_migration(Z8PostgresConnection db, wstring s
         try { if (db.inTransaction()) db.rollback(); } catch (Throwable ignored) { }
         throw failure;
     }
+}
+
+// Apply only additive changes to existing tables. Statements are returned
+// after a successful transaction; incompatible schemas cause a full rollback.
+string[] z8_postgres_apply_additive_migration(Z8PostgresConnection db, wstring schema, Z8Object[] tables) {
+    return applyAdditiveSchema(db, schema, tables, false, null);
+}
+
+// Also create missing tables and seed their null/static records. Roles require
+// the same application registry and access tables as ordinary bootstrap.
+string[] z8_postgres_ensure_additive_schema(Z8PostgresConnection db, wstring schema, Z8Object[] tables, Z8RuntimeRegistry registry = null) {
+    return applyAdditiveSchema(db, schema, tables, true, registry);
 }
