@@ -1,0 +1,53 @@
+// Configuration is supplied by the host before BL requests are processed.
+private __gshared Object z8_server_config_lock;
+private __gshared wstring[wstring] z8_server_config_values;
+void z8_server_config_replace(wstring[wstring] properties) {
+    wstring[wstring] copy;
+    wstring duplicate(wstring value) {
+        value = z8_string_required(value);
+        auto buffer = new wchar[value.length + 1]; buffer[0 .. value.length] = value[];
+        return cast(wstring)buffer[0 .. value.length];
+    }
+    foreach (key, value; properties) copy[duplicate(key)] = duplicate(value);
+    synchronized (z8_server_config_lock) z8_server_config_values = copy;
+}
+private wstring z8_server_config_value(wstring key) {
+    key = z8_string_required(key);
+    synchronized (z8_server_config_lock) {
+        auto value = key in z8_server_config_values;
+        return value is null ? null : *value;
+    }
+}
+private wstring z8_server_config_get(wstring key) { return z8_string_new(z8_server_config_value(key)); }
+// The Java BL wrapper currently ignores its string default argument.
+private wstring z8_server_config_get_string(wstring key, wstring defaultValue) { return z8_server_config_get(key); }
+private Z8Optional!bool z8_server_config_get_bool(wstring key, Z8Optional!bool defaultValue) {
+    auto fallback = z8_optional_require(defaultValue);
+    auto value = z8_server_config_value(key);
+    if (value is null || !value.length) return z8_optional_wrap(fallback);
+    return z8_optional_wrap(z8_str_compareNoCase(value, "true"w) == 0);
+}
+private Z8Optional!long z8_server_config_get_int(wstring key, Z8Optional!long defaultValue) {
+    auto fallback = cast(int)z8_optional_require(defaultValue);
+    auto value = z8_server_config_value(key);
+    if (value is null || !value.length) return z8_optional_wrap(cast(long)fallback);
+    size_t position;
+    bool negative;
+    if (value[0] == '-' || value[0] == '+') { negative = value[0] == '-'; ++position; }
+    if (position == value.length) return z8_optional_wrap(cast(long)fallback);
+    long number;
+    foreach (c; value[position .. $]) {
+        if (c < '0' || c > '9') return z8_optional_wrap(cast(long)fallback);
+        number = number * 10 + (c - '0');
+        if (number > (negative ? 2147483648L : 2147483647L)) return z8_optional_wrap(cast(long)fallback);
+    }
+    return z8_optional_wrap(negative ? -number : number);
+}
+void z8_bind_builtin_server_config() {
+    enum name = "org.zenframework.z8.server.base.application.ServerConfig.m_get"w;
+    z8_native_bind(name, &z8_server_config_get);
+    z8_native_bind(name, &z8_server_config_get_string);
+    z8_native_bind(name, &z8_server_config_get_bool);
+    z8_native_bind(name, &z8_server_config_get_int);
+}
+shared static this() { z8_server_config_lock = new Object(); z8_bind_builtin_server_config(); }
