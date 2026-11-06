@@ -115,6 +115,17 @@ import org.zenframework.z8.base.table.value.DecimalField;
     aggregateBy = {customerId};
 }
 ''',
+        "CountOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.IntField;
+import org.zenframework.z8.base.table.value.Aggregation;
+[name "CountOrders"] public class CountOrder extends Table {
+    public Customer customer; [name "CustomerId"] public Link customerId = customer;
+    [name "Amount"] public IntField amount; amount.aggregation = Aggregation.Count;
+    aggregateBy = {customerId};
+}
+''',
         "TextAggregateOrder": '''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.Link;
@@ -430,6 +441,7 @@ void main(string[] args) {
     db.execute(`CREATE TEMP TABLE "Orders" ("RecordId" uuid PRIMARY KEY, "Title" text, "CustomerId" uuid, "CityId" uuid, "Lock" bigint DEFAULT 0)`);
     db.execute(`CREATE TEMP TABLE "AggregateOrders" ("RecordId" uuid PRIMARY KEY, "CustomerId" uuid, "Amount" bigint)`);
     db.execute(`INSERT INTO "AggregateOrders" VALUES ('00000000-0000-0000-0000-000000000311','00000000-0000-0000-0000-000000000201',4), ('00000000-0000-0000-0000-000000000312','00000000-0000-0000-0000-000000000201',6), ('00000000-0000-0000-0000-000000000313','00000000-0000-0000-0000-000000000202',7)`);
+    db.execute(`CREATE TEMP TABLE "CountOrders" AS SELECT * FROM "AggregateOrders"`);
     db.execute(`CREATE TEMP TABLE "AverageOrders" ("RecordId" uuid PRIMARY KEY, "CustomerId" uuid, "Amount" bigint)`);
     db.execute(`INSERT INTO "AverageOrders" VALUES ('00000000-0000-0000-0000-000000000321','00000000-0000-0000-0000-000000000201',1), ('00000000-0000-0000-0000-000000000322','00000000-0000-0000-0000-000000000201',2), ('00000000-0000-0000-0000-000000000323','00000000-0000-0000-0000-000000000202',2), ('00000000-0000-0000-0000-000000000324','00000000-0000-0000-0000-000000000202',3)`);
     db.execute(`CREATE TEMP TABLE "DecimalOrders" ("RecordId" uuid PRIMARY KEY, "CustomerId" uuid, "Amount" numeric)`);
@@ -641,6 +653,12 @@ void main(string[] args) {
     scalarAggregate = parseJSON(requestFields(`["customer.label","title","description"]`w, null, null, null, null, "TextGroupedOrder"w, "read"w, null,
         `{"property":"description","value":"second"}`w).to!string);
     assert(scalarAggregate["data"].array.length == 1 && scalarAggregate["data"][0]["title"].str == "Zeta" && scalarAggregate["data"][0]["description"].str == "second");
+    auto countAggregate = parseJSON(requestFields(`["customer.label","amount"]`w, null,
+        `[{"property":"customer.label"}]`w, null, null, "CountOrder"w).to!string);
+    assert(countAggregate["data"].array.length == 2 && countAggregate["data"][0]["amount"].integer == 2 && countAggregate["data"][1]["amount"].integer == 1);
+    countAggregate = parseJSON(requestFields(`["amount"]`w, null, null, null, null, "CountOrder"w, "read"w, null,
+        `{"property":"amount","operator":"gt","value":"1"}`w).to!string);
+    assert(countAggregate["data"].array.length == 1 && countAggregate["data"][0]["amount"].integer == 2);
     aggregateResponse = parseJSON(requestFields(`["amount"]`w, null, null, null, null, "AggregateOrder"w, "read"w, null,
         `{"property":"customer.labelLength","operator":"gt","value":"3"}`w).to!string);
     assert(aggregateResponse["data"].array.length == 1 && aggregateResponse["data"][0]["amount"].integer == 10);
