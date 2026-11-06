@@ -4,10 +4,11 @@ import std.conv : to;
 import z8.runtime;
 import z8.database.postgres;
 import z8.database.query;
+import z8.database.privileges : z8_postgres_read_user;
 import z8.database.plan : quoteIdentifier;
 
 // Adapter for the request-local BL Connection and Query.setConnection APIs.
-class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection {
+class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection, IZ8JobUserResolver {
     private Z8PostgresConnection connection;
     private wstring schema;
     private Z8RuntimeRegistry registry;
@@ -55,6 +56,7 @@ class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection, IZ8Back
     void flush() { if (connection.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed"); }
     IZ8DatabaseConnection openBackgroundConnection() { return new Z8PostgresDatabase(connection.openSibling(), schema, registry); }
     void closeBackgroundConnection() { connection.close(); }
+    Z8UserData resolveJobUser(Z8Guid id) { return z8_postgres_read_user(connection, schema, id); }
     long nextSequence(wstring key, long increment, long defaultValue) {
         key = z8_string_required(key);
         synchronized (connection) {

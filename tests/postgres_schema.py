@@ -569,6 +569,12 @@ void main(string[] args) {
     auto bootFieldKey = z8_guid_create_name("Sample;--.Title"w);
     auto bootRequestKey = z8_guid_create_name("Sample"w);
     auto adminPrivileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2));
+    auto loadedAdmin = z8_postgres_read_user(db, "z8_bootstrap"w, z8_guid_create(2));
+    assert(loadedAdmin !is null && loadedAdmin.login == "Admin"w && loadedAdmin.builtinAdministrator && loadedAdmin.administrator);
+    assert(loadedAdmin.privileges.getRequestAccess(bootRequestKey).execute && loadedAdmin.roles.length == 1);
+    auto loadedSystem = (cast(IZ8JobUserResolver)new Z8PostgresDatabase(db, "z8_bootstrap"w)).resolveJobUser(z8_guid_create(1));
+    assert(loadedSystem !is null && loadedSystem.login == "System"w && loadedSystem.builtinSystem);
+    assert(z8_postgres_read_user(db, "z8_bootstrap"w, z8_guid_create(999999)) is null);
     assert(adminPrivileges.roleIds.length == 1 && adminPrivileges.privileges.getDefaultAccess().execute);
     assert(adminPrivileges.privileges.getTableAccess(bootTableKey).write && adminPrivileges.privileges.getFieldAccess(bootTableKey, bootFieldKey).read);
     assert(adminPrivileges.privileges.getRequestAccess(bootRequestKey).execute);

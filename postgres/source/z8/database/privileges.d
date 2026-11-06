@@ -69,3 +69,24 @@ void z8_postgres_refresh_user_privileges(Z8PostgresConnection db, wstring schema
     auto loaded = z8_postgres_load_privileges(db, schema, user.id);
     user.roles = loaded.roleIds; user.privileges = loaded.privileges;
 }
+// Resolve the standard Users record together with its current role grants.
+// A host can supply its own resolver for project-specific user parameters.
+Z8UserData z8_postgres_read_user(Z8PostgresConnection db, wstring schema, Z8Guid id) {
+    if (db is null || db.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
+    if (id is null || id == z8_guid_zero()) return null;
+    auto rows = db.execute(`SELECT "Name", "First Name", "Middle Name", "Last Name", "Phone", "Email", ` ~
+        `convert_from("Description", 'UTF8') FROM ` ~ quoteIdentifier(schema) ~ `."SystemUsers" WHERE "RecordId" = $1::uuid`,
+        [Z8PostgresParameter.value(z8_guid_to_string(id).to!string)]);
+    if (!rows.rows.length) return null;
+    if (rows.rows.length != 1) throw new Z8PostgresException("multiple users with the same id");
+    auto user = new Z8UserData(); user.id = id;
+    auto row = rows.rows[0];
+    wstring text(size_t index) { return row[index].isNull ? ""w : row[index].text.to!wstring; }
+    user.login = text(0); user.firstName = text(1); user.middleName = text(2); user.lastName = text(3);
+    user.phone = text(4); user.email = text(5); user.description = text(6);
+    user.builtinAdministrator = id == z8_guid_create(2); user.builtinSystem = id == z8_guid_create(1);
+    z8_postgres_refresh_user_privileges(db, schema, user);
+    user.administrator = user.builtinAdministrator;
+    foreach (role; user.roles) if (role == z8_guid_literal("DC08CA72-C668-412F-91B7-022F1C82AC09")) user.administrator = true;
+    return user;
+}

@@ -15,6 +15,7 @@ private void z8_executable_switch_user(Z8Object self, Z8Guid id) {
     id = z8_nonnull(id);
     if (z8_nonnull(z8_nonnull(request.session).user).id == id) return;
     auto resolver = request.jobUserResolver;
+    if (resolver is null) resolver = cast(IZ8JobUserResolver)z8_connection_current_backend();
     if (resolver is null) throw new Exception("job user resolver is not configured");
     auto user = z8_nonnull(resolver.resolveJobUser(id));
     if (user.id is null || user.id != id || user.privileges is null) throw new Exception("invalid resolved job user");
