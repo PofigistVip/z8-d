@@ -135,7 +135,8 @@ The initial `meta` action describes table fields, authorized Link paths, query
 access and nested sections, fieldsets, field groups, tab controls, independent
 forms and forms with a readable Link. Other controls, custom Join metadata,
 action parameters, reports and `aggregateBy` are rejected. Actions without
-parameters are included in metadata; their execution is not yet supported.
+parameters are included in metadata and can execute with `action=action`,
+`name`, `records` and `selection`; `useTransaction` controls the transaction.
 An omitted action combines this metadata with the corresponding table read.
 The direct-table `create` action accepts a nonempty `data` array of objects,
 checks table create access, and inserts the records in a transaction with the

@@ -1,0 +1,75 @@
+// Initial CommandAction adapter: direct query context and no action parameters.
+private Z8Object z8_action_find(Z8Object query, wstring id) {
+    import std.array : split;
+    id = z8_string_required(id);
+    auto own = query.z8_id();
+    if (id.length < own.length || id[0 .. own.length] != own) throw new Exception("action not found");
+    auto path = id[own.length .. $];
+    if (own.length && path.length) {
+        if (path[0] != '.') throw new Exception("action not found");
+        path = path[1 .. $];
+    }
+    auto current = query;
+    foreach (part; path.split("."w)) {
+        if (!part.length) throw new Exception("action not found");
+        Z8Object found;
+        foreach (member; z8_object_members(current)) if (member.z8_index() == part) { found = member; break; }
+        if (found is null) throw new Exception("action not found");
+        current = found;
+    }
+    if (!z8_native_is_instance(z8_action_name, current)) throw new Exception("action not found");
+    return current;
+}
+private Z8Array!Z8Guid z8_action_guid_list(wstring value) {
+    auto result = new Z8Array!Z8Guid();
+    if (value is null || !value.length) return result;
+    auto json = value[0] == '[' ? value : value[0] == '"' ? "["w ~ value ~ "]"w : "[\""w ~ value ~ "\"]"w;
+    auto parsed = z8_json_parse(json.to!string);
+    if (parsed.type != JSONType.array) throw new Exception("action record ids must be an array");
+    foreach (item; parsed.array) {
+        if (item.type != JSONType.string || !item.str.length) throw new Exception("invalid action record id");
+        auto id = z8_guid_parse(item.str.to!wstring);
+        if (id is null) throw new Exception("invalid action record id");
+        result.z8_add(id);
+    }
+    return result;
+}
+void z8_application_dispatch_query_action(wstring className) {
+    z8_application_dispatch_query_action_target(className, null);
+}
+private void z8_application_dispatch_query_action_target(wstring className, Z8Object query) {
+    auto request = z8_application_require_request();
+    auto session = z8_nonnull(request.session);
+    auto params = z8_nonnull(request.parameters);
+    if (request.writer.scopes.length != 2) throw new Exception("response object is not open");
+    if (params.z8_get("action"w) != "action"w) throw new Exception("unsupported query action");
+    if (!z8_application_may_execute(session, className, "action"w)) throw new Exception("request access denied");
+    auto keys = params.z8_keys();
+    for (long i; i < keys.z8_size(); ++i) {
+        auto name = keys.z8_get(i);
+        if (name is null) throw new Exception("invalid action parameter");
+        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w ||
+            name == "name"w || name == "records"w || name == "selection"w || name == "parameters"w || name == "recordId"w) continue;
+        if (params.z8_get(name).length) throw new Exception("unsupported action parameter: " ~ name.to!string);
+    }
+    if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
+    if (!z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, query)) throw new Exception("action requires a Query");
+    auto action = z8_action_find(query, params.z8_get("name"w));
+    auto state = z8_action_state(action);
+    if (state.parameters !is null && state.parameters.view() !is null && state.parameters.view().z8_erased_data().z8_size())
+        throw new Exception("action parameters are not supported");
+    auto parameterValues = params.z8_get("parameters"w);
+    if (parameterValues !is null && parameterValues.length) {
+        auto parsed = z8_json_parse(parameterValues.to!string);
+        if (parsed.type != JSONType.array || parsed.array.length) throw new Exception("action parameters are not supported");
+    }
+    auto records = z8_action_guid_list(params.z8_get("records"w));
+    auto selected = z8_action_guid_list(params.z8_get("selection"w));
+    z8_action_guid_list(params.z8_get("recordId"w));
+    auto connection = z8_optional_require(state.useTransaction) ? z8_connection_current_backend() : null;
+    if (z8_optional_require(state.useTransaction) && connection is null) throw new Exception("no current database connection");
+    if (connection !is null) connection.beginTransaction();
+    scope(failure) if (connection !is null) connection.rollback();
+    action.z8_action_virtual_execute_many(records, query, selected, query);
+    if (connection !is null) connection.commit();
+}

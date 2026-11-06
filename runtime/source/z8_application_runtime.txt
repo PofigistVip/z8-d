@@ -249,6 +249,7 @@ void z8_application_dispatch_request() {
         else if (action == "update"w) z8_application_dispatch_query_update_target(className, target);
         else if (action == "create"w) z8_application_dispatch_query_create_target(className, target);
         else if (action == "copy"w) z8_application_dispatch_query_copy_target(className, target);
+        else if (action == "action"w) z8_application_dispatch_query_action_target(className, target);
         else z8_application_dispatch_query_read_target(className, target);
     }
     else z8_application_dispatch_object_target(className,

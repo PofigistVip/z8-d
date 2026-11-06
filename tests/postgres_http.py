@@ -28,6 +28,22 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     temp = Path(directory)
     source, generated = temp / "bl", temp / "generated"
     shutil.copytree(language, source)
+    (source / "ApplyAction.bl").write_text('''
+import org.zenframework.z8.base.form.action.Action;
+import org.zenframework.z8.base.query.Query;
+import org.zenframework.z8.base.sql.Connection;
+import org.zenframework.z8.base.application.Application;
+public class ApplyAction extends Action {
+    virtual protected void execute(guid id, Query context, guid[] selected, Query query) {
+        Connection.get().execute("UPDATE \\"Sample\\" SET \\"Amount\\" = \\"Amount\\" + 1 WHERE \\"RecordId\\" = '" + id.toString() + "'");
+        if (selected.size() > 0 && id == '00000000-0000-0000-0000-000000000002') throw "action failed";
+        Application.info("applied");
+    }
+}
+''', encoding="utf-8")
+    (source / "NoTransactionAction.bl").write_text('''
+public class NoTransactionAction extends ApplyAction { useTransaction = false; }
+''', encoding="utf-8")
     (source / "Sample.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.IntField;
@@ -37,6 +53,7 @@ public class Sample extends Table {
     [name "Title"] public StringField title;
     [name "Amount"] public IntField amount;
     [name "Blob"] public BinaryField blob;
+    ApplyAction apply; NoTransactionAction noTransaction; actions = {apply, noTransaction};
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -109,7 +126,7 @@ void main(string[] args) {
                 query.update(params)
                 if query["action"] is None:
                     query.pop("action")
-                if query.get("action") == "destroy":
+                if query.get("action") in ("destroy", "action"):
                     query.pop("fields")
                 conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
                 try:
@@ -144,6 +161,23 @@ void main(string[] args) {
                 results = list(workers.map(lambda i: request(session="limited" if i % 2 else "full"), range(16)))
             assert all(result["success"] and len(result["data"]) == 2 for result in results)
             assert all(("title" not in result["data"][0]) == (i % 2 == 1) for i, result in enumerate(results))
+            ids = '["00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000002"]'
+            result = request(session="denied", action="action", name="apply", records=ids)
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = request(action="action", name="apply", records=ids, selection='["00000000-0000-0000-0000-000000000001"]')
+            assert not result["success"] and "action failed" in result["info"]["messages"][-1]["text"], result
+            result = request(sort='[{"property":"amount"}]')
+            assert [row["amount"] for row in result["data"]] == [5, 10], result
+            result = request(action="action", name="apply", records='["00000000-0000-0000-0000-000000000001"]', parameters="[]")
+            assert result["success"] and result["info"]["messages"][0]["text"] == "applied", result
+            result = request(action="action", name="missing", records=ids)
+            assert not result["success"], result
+            result = request(action="action", name="apply", records=ids, parameters='[{"id":"unknown","value":"x"}]')
+            assert not result["success"], result
+            result = request(action="action", name="noTransaction", records=ids, selection='["00000000-0000-0000-0000-000000000001"]')
+            assert not result["success"], result
+            result = request(sort='[{"property":"amount"}]')
+            assert [row["amount"] for row in result["data"]] == [7, 11], result
             new_record = '[{"recordId":"00000000-0000-0000-0000-000000000003","title":"Third","amount":25}]'
             result = request(session="limited", action="create", data=new_record)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result

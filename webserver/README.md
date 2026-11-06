@@ -41,8 +41,9 @@ The initial `meta` adapter writes query attributes, access rights, keys and
 metadata for direct and linked fields, including basic presentation, dependencies,
 permitted source information and BL `writeMeta` overrides. Nested sections,
 fieldsets, field groups, tab controls, independent forms and forms with a readable Link are also supported.
-Actions without parameters are described in metadata; action execution and
-parameter metadata are still pending. Other controls, custom Join metadata and
+Actions without parameters are described in metadata and can execute against
+the direct query context, respecting their `useTransaction` setting. Parameter
+metadata and parameterized action execution are still pending. Other controls, custom Join metadata and
 reports are rejected for now. With no
 `action` parameter, the same metadata is followed by the table read response.
 
