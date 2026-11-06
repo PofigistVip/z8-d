@@ -122,12 +122,14 @@ import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.IntField;
 import org.zenframework.z8.base.table.value.StringField;
 import org.zenframework.z8.base.table.value.BinaryField;
+import org.zenframework.z8.base.table.value.AttachmentField;
 import org.zenframework.z8.base.table.value.Link;
 import org.zenframework.z8.base.sql.Connection;
 public class Sample extends Table {
     [name "Title"] public StringField title;
     [name "Amount"] public IntField amount;
     [name "Blob"] public BinaryField blob;
+    [name "Documents"] public AttachmentField documents;
     Table child; [name "ChildLink"] Link childLink = child;
     ApplyAction apply; NoTransactionAction noTransaction; IncrementAction increment; ContextAction inspect;
     actions = {apply, noTransaction, increment, inspect};
@@ -154,7 +156,7 @@ __gshared string databaseInfo;
 
 class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
     Z8ApplicationSession authorize(Z8HttpRequest request, wstring id, wstring server) {
-        if (server != "test"w || (id != "full"w && id != "limited"w && id != "denied"w)) return null;
+        if (server != "test"w || (id != "full"w && id != "limited"w && id != "denied"w && id != "field-denied"w)) return null;
         auto user = new Z8UserData(); user.id = z8_guid_create(id == "full"w ? 2 : 3);
         user.builtinAdministrator = id == "full"w;
         user.login = "Alice"w; user.firstName = "Alice"w; user.email = "old@example.org"w; user.settings = "{}"w; user.changePassword = true;
@@ -169,6 +171,7 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
             user.privileges.setTableAccess(z8_guid_create_name("Sample"w), Z8Access(true, false, false, false, false, true));
         }
         if (id == "denied"w) user.privileges.setRequestAccess(z8_guid_create_name("Sample"w), Z8Access.init);
+        if (id == "field-denied"w) user.privileges.setFieldAccess(z8_guid_create_name("Sample.Documents"w), Z8Access.init);
         return new Z8ApplicationSession(id, user, user);
     }
     Z8ApplicationSession login(Z8HttpRequest request, wstring login, wstring password) {
@@ -184,7 +187,8 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
 void main(string[] args) {
     databaseInfo = args[1];
     auto setup = new Z8PostgresConnection(databaseInfo);
-    setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Blob" bytea, "ChildLink" uuid, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
+    setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Blob" bytea, "Documents" bytea, "ChildLink" uuid, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
+    setup.execute(`CREATE TABLE "SystemFiles" ("RecordId" uuid PRIMARY KEY, "Name" text, "File" bytea, "Path" text, "Size" bigint, "Time" bigint, "Last modified" bigint, "Location" bigint, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     setup.execute(`CREATE TABLE "ContentLog" (value integer)`);
     setup.execute(`CREATE TABLE "SystemUsers" ("RecordId" uuid PRIMARY KEY, "Settings" bytea, "Password" text, "Change Password" smallint, "Email" text, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     setup.execute(`INSERT INTO "SystemUsers" ("RecordId", "Settings", "Password", "Change Password", "Email") VALUES ('00000000-0000-0000-0000-000000000002', convert_to('{}','UTF8'), 'oldhash', 1, 'old@example.org')`);
@@ -209,6 +213,7 @@ void main(string[] args) {
     row = verify.execute(`SELECT "Password", "Change Password", "Email" FROM "SystemUsers" WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
     assert(row.rows[0][0].text == "newhash" && row.rows[0][1].text == "0" && row.rows[0][2].text == "new@example.org");
     assert(verify.execute(`SELECT count(*) FROM "ContentLog"`).rows[0][0].text == "2");
+    assert(verify.execute(`SELECT count(*) FROM "SystemFiles"`).rows[0][0].text == "0");
     verify.execute(`UPDATE "SystemUsers" SET "Password" = md5('old secret') WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
     auto originalConfig = z8_application_configuration(), plainConfig = z8_application_configuration();
     plainConfig.clientHashesPasswords = false; z8_application_configure(plainConfig);
@@ -469,6 +474,60 @@ void main(string[] args) {
                 assert response.status == 200 and result["success"], result
             finally:
                 conn.close()
+            def attach_file(session, record_id, filename, content, details='{"kind":"document"}'):
+                params = {"request": "Sample", "session": session, "server": "test", "action": "attach",
+                          "recordId": record_id, "field": "documents", "fields": '["documents"]', "details": details}
+                marker = "z8-attachment-boundary"
+                payload = b""
+                for key, value in params.items():
+                    payload += (f'--{marker}\r\nContent-Disposition: form-data; name="{key}"\r\n\r\n{value}\r\n').encode()
+                payload += (f'--{marker}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+                            'Content-Type: application/octet-stream\r\n\r\n').encode() + content + b"\r\n"
+                payload += f"--{marker}--\r\n".encode()
+                client = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+                try:
+                    client.request("POST", "/request.json", payload, {"Content-Type": f"multipart/form-data; boundary={marker}"})
+                    response = client.getresponse(); result = json.loads(response.read())
+                    assert response.status == 200
+                    return result
+                finally:
+                    client.close()
+            target = "00000000-0000-0000-0000-000000000002"
+            result = attach_file("limited", target, "denied.txt", b"no")
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = attach_file("field-denied", target, "denied.txt", b"no")
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = attach_file("full", target, "invalid.txt", b"no", details='{"kind":1}')
+            assert not result["success"] and "invalid attachment detail" in result["info"]["messages"][-1]["text"], result
+            result = attach_file("full", "00000000-0000-0000-0000-000000000099", "missing.txt", b"no")
+            assert not result["success"], result
+            result = attach_file("full", target, "first.txt", bytes([0, 255, 65]))
+            assert result["success"], result
+            metadata = json.loads(result["data"][0]["documents"])
+            assert len(metadata) == 1 and metadata[0]["name"] == "first.txt" and metadata[0]["details"]["kind"] == "document", result
+            first_id = metadata[0]["id"]
+            result = request(action="detach", field="documents", fields='["documents"]', recordId=target,
+                             data=json.dumps(["00000000-0000-0000-0000-000000000099"]))
+            assert not result["success"] and "does not belong" in result["info"]["messages"][-1]["text"], result
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                futures = [executor.submit(attach_file, "full", target, f"parallel-{i}.txt", bytes([i])) for i in range(2)]
+                concurrent = [future.result() for future in futures]
+            assert all(item["success"] for item in concurrent), concurrent
+            file_ids = {first_id}
+            for item in concurrent:
+                file_ids.update(file["id"] for file in json.loads(item["data"][0]["documents"]))
+            assert len(file_ids) == 3, concurrent
+            result = request(action="detach", field="documents", fields='["documents"]', recordId=target,
+                             data=json.dumps(list(file_ids)))
+            assert result["success"] and json.loads(result["data"][0]["documents"]) == [], result
+            result = attach_file("full", "", "new.txt", b"new")
+            assert result["success"], result
+            new_target = result["data"][0]["recordId"]
+            new_file = json.loads(result["data"][0]["documents"])[0]["id"]
+            result = request(action="detach", field="documents", fields='["documents"]', recordId=new_target, data=json.dumps([new_file]))
+            assert result["success"], result
+            result = request(action="destroy", data=json.dumps([new_target]))
+            assert result["success"], result
             data = '["00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000003","00000000-0000-0000-0000-000000000004"]'
             result = request(session="limited", action="destroy", data=data)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result

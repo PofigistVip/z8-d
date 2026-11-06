@@ -186,9 +186,12 @@ rather than copied to the filesystem cache. The runtime's
 data and metadata in the current database transaction; their callers own commit
 and rollback. The BL `FileField.getAttachmentProcessor()` supports parsing,
 reading, adding and removing attachment metadata and database content in the
-caller's transaction. Page-count extraction and the HTTP `attach` action remain
-unimplemented. A `FileField` represents a single current file; an
-`AttachmentField` reads the existing list before appending.
+caller's transaction. The direct-table HTTP `attach` and `detach` actions use
+that processor, require table and field permissions, and lock the target record
+while changing its attachments. Detach only accepts files belonging to that
+record. A `FileField` represents a single current file; an `AttachmentField`
+reads the existing list before appending. Page-count extraction remains
+unimplemented.
 Optional `values` are checked before a create, update or copy transaction and
 applied as readable context fields when selecting its response.
 The direct-table `copy` action accepts source GUIDs in `recordId` and one

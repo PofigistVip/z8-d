@@ -1,0 +1,89 @@
+// Direct-table forms of the Java AttachAction and DetachAction.
+private class Z8AttachmentUpdateLock : IZ8QueryLockCell {
+    Z8QueryReadLock get() { return Z8QueryReadLock.update; }
+}
+private void z8_application_dispatch_query_attachment_target(wstring className, Z8Object query, bool detach) {
+    auto request = z8_application_require_request(); auto session = z8_nonnull(request.session);
+    auto params = z8_nonnull(request.parameters);
+    if (request.writer.scopes.length != 2) throw new Exception("response object is not open");
+    auto action = detach ? "detach"w : "attach"w;
+    if (!z8_application_may_execute(session, className, action)) throw new Exception("request access denied");
+    auto keys = params.z8_keys();
+    for (long i; i < keys.z8_size(); ++i) {
+        auto name = keys.z8_get(i);
+        if (name is null) throw new Exception("invalid attachment parameter");
+        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w ||
+            name == "action"w || name == "recordId"w || name == "field"w || name == "fields"w ||
+            name == "values"w || (!detach && name == "details"w) || (detach && name == "data"w)) continue;
+        if (params.z8_get(name).length) throw new Exception("unsupported attachment parameter: " ~ name.to!string);
+    }
+    if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
+    if (!z8_native_is_instance(z8_table_name, query)) throw new Exception("attachment action requires a Table");
+    auto fieldId = params.z8_get("field"w);
+    if (fieldId is null || !fieldId.length) throw new Exception("attachment field is required");
+    auto field = z8_query_find_field_id(query, fieldId);
+    if (field.z8_get_owner() !is query || !z8_native_is_instance("org.zenframework.z8.server.base.table.value.FileField"w, field))
+        throw new Exception("attachment field must belong to the target table");
+    auto recordId = params.z8_get("recordId"w);
+    auto id = recordId is null || !recordId.length ? z8_guid_zero() : z8_guid_parse(recordId);
+    if (detach && id == z8_guid_zero()) throw new Exception("detach requires a record id");
+    auto privileges = z8_nonnull(session.user).privileges;
+    auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
+    auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
+    if (privileges is null || !(id == z8_guid_zero() ? privileges.getTableAccess(queryKey).create : privileges.getTableAccess(queryKey).write) ||
+        !privileges.getFieldAccess(queryKey, fieldKey).write) throw new Exception("attachment access denied");
+    auto selected = z8_application_query_fields(query, privileges, params);
+    z8_application_query_context_values(query, privileges, params, false);
+    auto files = new Z8Array!Z8File();
+    if (detach) {
+        auto data = params.z8_get("data"w);
+        if (data is null || !data.length) throw new Exception("detach requires file IDs");
+        auto json = z8_json_parse(data.to!string);
+        if (json.type != JSONType.array || !json.array.length) throw new Exception("detach requires file IDs");
+        foreach (entry; json.array) {
+            if (entry.type != JSONType.string || !entry.str.length) throw new Exception("invalid attachment ID");
+            auto file = new Z8File(); file.id = z8_guid_parse(entry.str.to!wstring);
+            if (file.id == z8_guid_zero()) throw new Exception("invalid attachment ID");
+            files.z8_add(file);
+        }
+    } else {
+        if (request.files is null || !request.files.z8_size()) throw new Exception("attach requires uploaded files");
+        auto details = params.z8_get("details"w);
+        JSONValue json;
+        if (details !is null && details.length) {
+            json = z8_json_parse(details.to!string);
+            if (json.type != JSONType.object) throw new Exception("invalid attachment details");
+            foreach (name, value; json.object) if (value.type != JSONType.string) throw new Exception("invalid attachment detail");
+        }
+        foreach (i; 0 .. request.files.z8_size()) {
+            auto file = z8_nonnull(request.files.z8_get(i));
+            if (details !is null && details.length) foreach (name, value; json.object)
+                file.details.z8_add(name.to!wstring, value.str.to!wstring);
+            files.z8_add(file);
+        }
+    }
+    auto processor = z8_attachment_processor_new(field);
+    auto connection = z8_connection_current_backend();
+    if (connection is null) throw new Exception("no current database connection");
+    {
+        connection.beginTransaction(); scope(failure) connection.rollback();
+        if (id == z8_guid_zero()) id = z8_query_create(query);
+        // Keep the record locked while inspecting and changing its file list.
+        Z8Array!Z8File existing;
+        {
+            auto state = z8_query_state(query); auto savedLock = state.lockCell;
+            state.lockCell = new Z8AttachmentUpdateLock(); scope(exit) state.lockCell = savedLock;
+            existing = z8_attachment_read_current(field, id);
+        }
+        if (detach) {
+            foreach (i; 0 .. files.z8_size()) {
+                bool found;
+                foreach (j; 0 .. existing.z8_size()) if (existing.z8_get(j).id == files.z8_get(i).id) { found = true; break; }
+                if (!found) throw new Exception("attachment does not belong to the record");
+            }
+            z8_attachment_remove(processor, id, files);
+        } else z8_attachment_update(processor, id, files);
+        connection.commit();
+    }
+    z8_application_query_write_affected(query, selected, [id], request.writer, privileges, params);
+}

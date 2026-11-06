@@ -22,6 +22,10 @@ private Z8Object z8_attachment_table(Z8Object field) {
 private Z8Array!Z8File z8_attachment_read(Z8Object self, Z8Guid id) {
     auto field = z8_attachment_field(self);
     if (z8_field_type_id(field) == "file"w || id is null || id == z8_guid_zero()) return new Z8Array!Z8File();
+    return z8_attachment_read_current(field, id);
+}
+private Z8Array!Z8File z8_attachment_read_current(Z8Object field, Z8Guid id) {
+    if (id is null || id == z8_guid_zero()) return new Z8Array!Z8File();
     auto table = z8_attachment_table(field);
     auto saved = new Z8QuerySavedState(table, [field]); scope(exit) saved.restore();
     auto fields = new Z8ObjectArray!Z8Object(); fields.z8_add(field);
