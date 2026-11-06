@@ -442,7 +442,7 @@ parent updates the paths and ancestor columns of the affected subtree within
 the database transaction.
 
 The executor supports `aggregateBy` grouping over root Link fields with numeric
-sum, average, count, minimum and maximum, and scalar minimum/maximum for strings, text,
+sum, average, count, minimum and maximum, count for string fields, and scalar minimum/maximum for strings, text,
 booleans, dates, durations and GUIDs. Filters can reference linked tables, and a
 subselect joins target fields, including chained links and computed fields, after
 grouping. An optional second grouping and its `HAVING` run in the outer select.

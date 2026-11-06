@@ -160,6 +160,17 @@ import org.zenframework.z8.base.table.value.Aggregation;
     aggregateBy = {customerId};
 }
 ''',
+        "CountStringOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.table.value.Aggregation;
+[name "CountStringOrders"] public class CountStringOrder extends Table {
+    public Customer customer; [name "CustomerId"] public Link customerId = customer;
+    [name "Title"] public StringField title; title.aggregation = Aggregation.Count;
+    aggregateBy = {customerId};
+}
+''',
         "TextGroupedOrder": '''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.Link;
@@ -374,6 +385,11 @@ import org.zenframework.z8.base.table.value.Field;
 import org.zenframework.z8.base.table.value.Aggregation;
 import org.zenframework.z8.base.table.SortDirection;
 public class Probe {
+    public static CountStringOrder countStringOrder() { CountStringOrder value; return value; }
+    public static void readCountString(CountStringOrder order) { Field[] fields = {order.customerId, order.title}; order.read(fields); }
+    public static bool nextCountString(CountStringOrder order) { return order.next(); }
+    public static guid countStringCustomer(CountStringOrder order) { return order.customerId.get(); }
+    public static string countStringTitle(CountStringOrder order) { return order.title.get(); }
     public static NativeTree tree() { NativeTree value; return value; }
     public static guid[] treePath(NativeTree tree, guid id) { return tree.getPathTo(id); }
     public static guid[] treeParents(NativeTree tree, guid id) { return tree.getParentsOf(id); }
@@ -521,6 +537,8 @@ void main(string[] args) {
     db.execute(`INSERT INTO "TextAggregateOrders" VALUES ('00000000-0000-0000-0000-000000000341','00000000-0000-0000-0000-000000000201','Alpha',convert_to('first','UTF8'),100,'00000000-0000-0000-0000-000000000001'), ('00000000-0000-0000-0000-000000000342','00000000-0000-0000-0000-000000000201','Zeta',convert_to('second','UTF8'),200,'00000000-0000-0000-0000-000000000002'), ('00000000-0000-0000-0000-000000000343','00000000-0000-0000-0000-000000000202','Beta',convert_to('third','UTF8'),300,'00000000-0000-0000-0000-000000000003')`);
     db.execute(`ALTER TABLE "TextAggregateOrders" ADD COLUMN "Flag" smallint DEFAULT 0`);
     db.execute(`UPDATE "TextAggregateOrders" SET "Flag" = 1 WHERE "Title" = 'Zeta'`);
+    db.execute(`CREATE TEMP TABLE "CountStringOrders" AS SELECT * FROM "TextAggregateOrders"`);
+    db.execute(`INSERT INTO "CountStringOrders" ("RecordId", "CustomerId", "Title") VALUES ('00000000-0000-0000-0000-000000000344','00000000-0000-0000-0000-000000000201',NULL)`);
     db.execute(`CREATE TEMP TABLE "TextGroupedOrders" AS SELECT * FROM "TextAggregateOrders"`);
     db.execute(`CREATE TEMP TABLE "GroupCustomers" ("RecordId" uuid PRIMARY KEY, "Label" text)`);
     db.execute(`INSERT INTO "GroupCustomers" VALUES ('00000000-0000-0000-0000-000000000501','Alice'), ('00000000-0000-0000-0000-000000000502','Alice'), ('00000000-0000-0000-0000-000000000503','Bob')`);
@@ -583,6 +601,16 @@ void main(string[] args) {
         sum += amount; ++aggregateRows;
     }
     assert(aggregateRows == 2 && sum == 17);
+    auto countString = P.m_countStringOrder();
+    z8_query_set_executor(countString, new Z8PostgresQueryExecutor(db, "pg_temp"w, "CountStringOrders"w));
+    P.m_readCountString(countString); int countStringRows;
+    while (z8_optional_require(P.m_nextCountString(countString))) {
+        auto customer = P.m_countStringCustomer(countString);
+        if (customer == z8_guid_create(0x201)) assert(P.m_countStringTitle(countString) == "2"w);
+        else { assert(customer == z8_guid_create(0x202)); assert(P.m_countStringTitle(countString) == "1"w); }
+        ++countStringRows;
+    }
+    assert(countStringRows == 2);
     auto groupedOrder = P.m_groupedOrder();
     z8_query_set_executor(groupedOrder, new Z8PostgresQueryExecutor(db, "pg_temp"w, "GroupedOrders"w));
     assert(z8_optional_require(P.m_countGroupedOrder(groupedOrder)) == 2);
