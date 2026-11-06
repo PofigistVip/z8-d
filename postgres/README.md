@@ -182,8 +182,10 @@ The native `SystemFiles` table's fields and creation timestamps are available
 when the host includes it in schema bootstrap. `Files.get(id)` reads file path
 metadata, and `Files.get(file)` reads existing local content or database content,
 checking a nonzero recorded size. Database content is currently held in memory
-rather than copied to the filesystem cache. The `AttachmentProcessor` workflow
-is not yet connected to that table.
+rather than copied to the filesystem cache. The runtime's
+`z8_system_files_write` and `z8_system_files_remove` operations store binary
+data and metadata in the current database transaction; their callers own commit
+and rollback. The `AttachmentProcessor` workflow is not yet connected to them.
 Optional `values` are checked before a create, update or copy transaction and
 applied as readable context fields when selecting its response.
 The direct-table `copy` action accepts source GUIDs in `recordId` and one

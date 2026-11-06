@@ -812,6 +812,20 @@ void main(string[] args) {
     db.execute(`UPDATE "z8_test"."SystemFiles" SET "Size" = 3 WHERE "RecordId" = '00000000-0000-0000-0000-000000000887'`);
     bool badFileSize; try { P.m_fileContent(P.m_fileById(z8_guid_create(0x887))); } catch (Exception) { badFileSize = true; }
     assert(badFileSize);
+    auto storedUpload = z8_file_from_upload("данные.bin"w, [cast(ubyte)0, 0xff, 0x7f]);
+    storedUpload.id = z8_guid_create(0x889); storedUpload.path = "storage/missing-889/данные.bin"w;
+    db.beginTransaction(); z8_system_files_write(storedUpload); db.rollback();
+    assert(P.m_fileById(storedUpload.id) is null);
+    db.beginTransaction(); z8_system_files_write(storedUpload); db.commit();
+    auto uploaded = P.m_fileContent(P.m_fileById(storedUpload.id));
+    assert(z8_binary_snapshot(z8_file_to_binary(uploaded), 3) == [cast(ubyte)0, 0xff, 0x7f]);
+    auto replacement = z8_file_from_upload("new.bin"w, [cast(ubyte)0x42]);
+    replacement.id = storedUpload.id; replacement.path = "storage/missing-889/new.bin"w;
+    db.beginTransaction(); z8_system_files_write(replacement, false); db.commit();
+    uploaded = P.m_fileContent(P.m_fileById(storedUpload.id));
+    assert(uploaded.name == "new.bin"w && z8_binary_snapshot(z8_file_to_binary(uploaded), 1) == [cast(ubyte)0x42]);
+    db.beginTransaction(); z8_system_files_remove(storedUpload.id); db.rollback(); assert(P.m_fileById(storedUpload.id) !is null);
+    z8_system_files_remove(storedUpload.id); assert(P.m_fileById(storedUpload.id) is null);
     z8_connection_set_current(savedFilesBackend);
     auto sequences = P.m_sequences();
     auto sequenceDDL = z8_postgres_create_table_sql("z8_test"w, sequences);
