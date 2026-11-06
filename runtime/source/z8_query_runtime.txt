@@ -5,6 +5,8 @@ private enum z8_expression_name = "org.zenframework.z8.server.base.table.value.E
 enum Z8QueryReadLock { none, update, share, updateNoWait, shareNoWait }
 struct Z8QueryReadRequest {
     Z8Object[] fields, sortFields, groupFields;
+    // Totals may omit display fields while retaining their join dependencies.
+    Z8Object[] aggregateSourceFields;
     Z8SqlBool where, having;
     // The executor must combine these query filters with where/having.
     Z8SqlBool queryWhere, queryHaving, queryScope;

@@ -165,7 +165,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
     // First stage of SelectFactory's aggregateBy: group root fields by Link.
     // Outer linked projections and a second grouping are rejected until the
     // corresponding subselect planner is available.
-    private Z8PostgresRootAggregation rootAggregation(Z8Object query, Z8QueryReadRequest request, bool counting) {
+    private Z8PostgresRootAggregation rootAggregation(Z8Object query, Z8QueryReadRequest request, bool counting, bool preserveAverage = false) {
         if (request.groupFields.length || z8_query_array(query, "groupBy"w).length || request.aggregateAll ||
             request.byRecordId || request.byRecordIds || request.readLock != Z8QueryReadLock.none ||
             !trivialTrue(request.having) || !trivialTrue(request.queryHaving))
@@ -214,7 +214,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                 throw new Z8PostgresException("unsupported PostgreSQL aggregateBy field aggregation");
             z8_sql_set_field_options(Z8SqlFieldFormatOptions(true, false));
             auto expression = z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string;
-            if (kind == "int"w && z8_field_aggregation(field) == Z8FieldAggregation.average) expression = "trunc(" ~ expression ~ ")::bigint";
+            if (kind == "int"w && z8_field_aggregation(field) == Z8FieldAggregation.average && !preserveAverage) expression = "trunc(" ~ expression ~ ")::bigint";
             sql ~= expression ~ " AS " ~ quoteIdentifier(("z8_" ~ index.to!string).to!wstring);
         }
         z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
@@ -266,7 +266,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
     }
     // SelectFactory's outer select joins grouped Link values to their targets.
     // Another GROUP BY is rejected until a second aggregation stage is supported.
-    private Z8PostgresRootAggregation linkedRootAggregation(Z8Object query, Z8QueryReadRequest request, bool counting) {
+    private Z8PostgresRootAggregation linkedRootAggregation(Z8Object query, Z8QueryReadRequest request, bool counting, bool preserveAverage = false) {
         auto declared = z8_query_declared_fields(query);
         auto groups = uniqueFields(z8_query_array(query, "aggregateBy"w));
         auto requested = aggregateRequestedFields(query, request);
@@ -298,7 +298,9 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         if (!innerRequest.fields.length) innerRequest.fields = groups.dup;
         innerRequest.sortFields = null; innerRequest.start = 0; innerRequest.limit = -1;
         innerRequest.having = null; innerRequest.queryHaving = null;
-        auto inner = rootAggregation(query, innerRequest, false);
+        // Keep AVG's fractional value for outer filters, ordering and totals;
+        // convert integer fields only when projecting the final result.
+        auto inner = rootAggregation(query, innerRequest, false, true);
         auto plan = new Z8PostgresQueryPlan(query, schema, table);
         foreach (field; linked) plan.includeField(field);
         foreach (condition; [request.having, request.queryHaving]) if (!trivialTrue(condition)) plan.includeExpression(condition);
@@ -329,6 +331,8 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             auto kind = z8_field_type_id(field); result.kinds ~= kind;
             if (kind == "none"w) throw new Z8PostgresException("unsupported PostgreSQL aggregateBy field type");
             auto expression = z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string;
+            if (containsField(declared, field) && kind == "int"w && z8_field_aggregation(field) == Z8FieldAggregation.average && !preserveAverage)
+                expression = "trunc(" ~ expression ~ ")::bigint";
             if (kind == "binary"w) expression = "encode(" ~ expression ~ ", 'hex')";
             else if (kind == "geometry"w) expression = "encode(ST_AsEWKB(" ~ expression ~ ", 'NDR'), 'hex')";
             else if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.TextField"w, field))
@@ -354,6 +358,36 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         if (!counting && request.limit >= 0) sql ~= " LIMIT " ~ request.limit.to!string;
         if (!counting && request.start) sql ~= " OFFSET " ~ request.start.to!string;
         result.sql = sql; return result;
+    }
+    private IZ8QueryCursor aggregateRootTotals(Z8Object query, Z8QueryReadRequest request) {
+        auto fields = uniqueFields(request.fields);
+        auto groupedRequest = request;
+        groupedRequest.aggregateAll = false; groupedRequest.sortFields = null;
+        groupedRequest.start = 0; groupedRequest.limit = -1;
+        auto declared = z8_query_declared_fields(query);
+        groupedRequest.fields = fields.dup;
+        foreach (field; request.aggregateSourceFields) if (!containsField(declared, field)) groupedRequest.fields ~= field;
+        if (!groupedRequest.fields.length) groupedRequest.fields = z8_query_array(query, "aggregateBy"w);
+        auto grouped = linkedRootAggregation(query, groupedRequest, false, true);
+        string sql = "SELECT "; wstring[] kinds;
+        foreach (index, field; fields) {
+            auto aggregation = z8_field_aggregation(field);
+            auto kind = z8_field_type_id(field); kinds ~= kind;
+            if ((aggregation != Z8FieldAggregation.sum && aggregation != Z8FieldAggregation.average) ||
+                (kind != "int"w && kind != "float"w))
+                throw new Z8PostgresException("unsupported PostgreSQL aggregateBy totals field");
+            size_t position = size_t.max;
+            foreach (i, projected; grouped.fields) if (projected is field) { position = i; break; }
+            if (position == size_t.max) throw new Z8PostgresException("aggregateBy totals field is not projected");
+            auto expression = (aggregation == Z8FieldAggregation.sum ? "sum(" : "avg(") ~
+                "z8_totals." ~ quoteIdentifier(("z8_" ~ position.to!string).to!wstring) ~ ")";
+            if (kind == "int"w && aggregation == Z8FieldAggregation.average) expression = "trunc(" ~ expression ~ ")::bigint";
+            if (index) sql ~= ", ";
+            sql ~= expression ~ " AS " ~ quoteIdentifier(("z8_" ~ index.to!string).to!wstring);
+        }
+        if (!fields.length) sql ~= "count(0) AS z8_0";
+        sql ~= " FROM (" ~ grouped.sql ~ ") AS z8_totals";
+        return new Z8PostgresRows(fields, kinds, connection.execute(sql), true);
     }
     private void createRoleAccess(wstring nativeName, wstring tableName, wstring targetIndex, Z8Guid roleId, Z8Guid targetId) {
         auto access = z8_native_new(nativeName); access.z8_ensure();
@@ -497,6 +531,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
     }
     IZ8QueryCursor read(Z8Object query, Z8QueryReadRequest request) {
         if (!request.disableGrouping && z8_query_array(query, "aggregateBy"w).length) {
+            if (request.aggregateAll) return aggregateRootTotals(query, request);
             auto linked = hasLinkedAggregateFields(query, request, false);
             auto plan = linked ? linkedRootAggregation(query, request, false) : rootAggregation(query, request, false);
             return new Z8PostgresRows(plan.fields, plan.kinds, connection.execute(plan.sql), !linked);

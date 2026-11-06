@@ -130,8 +130,8 @@ Linked groups are allowed through readable Link paths. Changes to `groupBy` from
 The client `group` parameter places its fields first in the sort order; it
 does not turn ordinary rows into SQL aggregates.
 `totals=true` returns a `data` object with supported sum and average totals over
-readable fields, including totals of grouped results. Filters, HAVING and the
-query scope still apply. Totals over `aggregateBy` links are not yet supported.
+readable fields, including totals of grouped and `aggregateBy` results. Filters,
+HAVING, linked fields and the query scope still apply.
 As in the Java `ReadAction`, a nonempty `recordId` list replaces the request
 filters and query scope; an empty list keeps the normal filters and scope.
 Direct Link paths may be selected, filtered, searched and sorted when every
@@ -302,7 +302,8 @@ The executor supports `aggregateBy` grouping over root Link fields with numeric
 sum, average, minimum and maximum. Filters can reference linked tables, and a
 subselect joins target fields, including chained links, after grouping. Linked
 expressions and joins that require unprojected root fields are rejected, as are
-a second grouping, totals and row locks on these queries. `HAVING` filters over
+a second grouping and row locks on these queries. Numeric sum and average totals
+retain linked fields' joins and apply after grouping. `HAVING` filters over
 projected root aggregates and linked fields run after the initial grouping;
 HAVING defined by a linked query itself is not yet supported.
 Nontrivial HAVING without grouping is also rejected. Filter-based updates and deletes select

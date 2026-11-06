@@ -92,6 +92,27 @@ import org.zenframework.z8.base.table.value.IntField;
     virtual protected void beforeRead() { aggregateBy.clear(); }
 }
 ''',
+        "AverageOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.IntField;
+import org.zenframework.z8.base.table.value.Aggregation;
+[name "AverageOrders"] public class AverageOrder extends Table {
+    public Customer customer; [name "CustomerId"] public Link customerId = customer;
+    [name "Amount"] public IntField amount; amount.aggregation = Aggregation.Average;
+    aggregateBy = {customerId};
+}
+''',
+        "DecimalOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.DecimalField;
+[name "DecimalOrders"] public class DecimalOrder extends Table {
+    public Customer customer; [name "CustomerId"] public Link customerId = customer;
+    [name "Amount"] public DecimalField amount;
+    aggregateBy = {customerId};
+}
+''',
         "FilteredCustomer": '''
 public class FilteredCustomer extends Customer {
     virtual protected sql_bool scope() { return label != "Bob"; }
@@ -319,6 +340,10 @@ void main(string[] args) {
     db.execute(`CREATE TEMP TABLE "Orders" ("RecordId" uuid PRIMARY KEY, "Title" text, "CustomerId" uuid, "CityId" uuid, "Lock" bigint DEFAULT 0)`);
     db.execute(`CREATE TEMP TABLE "AggregateOrders" ("RecordId" uuid PRIMARY KEY, "CustomerId" uuid, "Amount" bigint)`);
     db.execute(`INSERT INTO "AggregateOrders" VALUES ('00000000-0000-0000-0000-000000000311','00000000-0000-0000-0000-000000000201',4), ('00000000-0000-0000-0000-000000000312','00000000-0000-0000-0000-000000000201',6), ('00000000-0000-0000-0000-000000000313','00000000-0000-0000-0000-000000000202',7)`);
+    db.execute(`CREATE TEMP TABLE "AverageOrders" ("RecordId" uuid PRIMARY KEY, "CustomerId" uuid, "Amount" bigint)`);
+    db.execute(`INSERT INTO "AverageOrders" VALUES ('00000000-0000-0000-0000-000000000321','00000000-0000-0000-0000-000000000201',1), ('00000000-0000-0000-0000-000000000322','00000000-0000-0000-0000-000000000201',2), ('00000000-0000-0000-0000-000000000323','00000000-0000-0000-0000-000000000202',2), ('00000000-0000-0000-0000-000000000324','00000000-0000-0000-0000-000000000202',3)`);
+    db.execute(`CREATE TEMP TABLE "DecimalOrders" ("RecordId" uuid PRIMARY KEY, "CustomerId" uuid, "Amount" numeric)`);
+    db.execute(`INSERT INTO "DecimalOrders" VALUES ('00000000-0000-0000-0000-000000000331','00000000-0000-0000-0000-000000000201',1.25), ('00000000-0000-0000-0000-000000000332','00000000-0000-0000-0000-000000000201',2.5), ('00000000-0000-0000-0000-000000000333','00000000-0000-0000-0000-000000000202',3.125)`);
     db.execute(`CREATE TEMP TABLE "Nodes" ("RecordId" uuid PRIMARY KEY, "ParentId" uuid)`);
     db.execute(`INSERT INTO "Nodes" VALUES ('00000000-0000-0000-0000-000000000401','00000000-0000-0000-0000-000000000402'), ('00000000-0000-0000-0000-000000000402',NULL), ('00000000-0000-0000-0000-000000000403','00000000-0000-0000-0000-000000000401')`);
     db.execute(`INSERT INTO "Cities" VALUES ('00000000-0000-0000-0000-000000000101','Moscow')`);
@@ -451,7 +476,7 @@ void main(string[] args) {
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     auto session = new Z8ApplicationSession("join"w, user, user);
     auto priorBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "pg_temp"w));
-    wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null, wstring className = "HttpOrder"w, wstring action = "read"w, wstring groupSession = null, wstring having = null, wstring values = null) {
+    wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null, wstring className = "HttpOrder"w, wstring action = "read"w, wstring groupSession = null, wstring having = null, wstring values = null, wstring totals = null) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, className); request.parameters.z8_add("action"w, action); request.parameters.z8_add("fields"w, fields);
         if (filter !is null) request.parameters.z8_add("filter"w, filter);
@@ -461,6 +486,7 @@ void main(string[] args) {
         if (groupSession !is null) request.parameters.z8_add("session"w, groupSession);
         if (having !is null) request.parameters.z8_add("having"w, having);
         if (values !is null) request.parameters.z8_add("values"w, values);
+        if (totals !is null) request.parameters.z8_add("totals"w, totals);
         auto priorRequest = z8_application_set_request(request); scope(exit) z8_application_set_request(priorRequest);
         z8_application_start_response(request, "HttpOrder"w); z8_application_dispatch_request();
         z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
@@ -481,6 +507,21 @@ void main(string[] args) {
     aggregateResponse = parseJSON(requestFields(`["amount"]`w, null, null, null, null, "AggregateOrder"w, "read"w, null,
         `{"property":"customer.label","value":"Alice"}`w).to!string);
     assert(aggregateResponse["data"].array.length == 1 && aggregateResponse["data"][0]["amount"].integer == 10);
+    auto totalResponse = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "AggregateOrder"w, "read"w, null, null, null, "true"w).to!string);
+    assert(totalResponse["data"]["amount"].integer == 17);
+    totalResponse = parseJSON(requestFields(`["amount"]`w, null, null, null, null, "AggregateOrder"w, "read"w, null,
+        `{"property":"amount","operator":"gt","value":"9"}`w, null, "true"w).to!string);
+    assert(totalResponse["data"]["amount"].integer == 21);
+    totalResponse = parseJSON(requestFields(`["amount"]`w, null, null, null, null, "AverageOrder"w, "read"w, null, null, null, "true"w).to!string);
+    assert(totalResponse["data"]["amount"].integer == 2); // Average 1.5 and 2.5 before rounding.
+    aggregateResponse = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "AverageOrder"w, "read"w, null,
+        `{"property":"amount","operator":"gt","value":"1"}`w).to!string);
+    assert(aggregateResponse["data"].array.length == 2); // HAVING sees 1.5, not the displayed 1.
+    totalResponse = parseJSON(requestFields(`["amount"]`w, null, null, null, null, "DecimalOrder"w, "read"w, null, null, null, "true"w).to!string);
+    assert(totalResponse["data"]["amount"].floating == 6.875);
+    totalResponse = parseJSON(requestFields(`["amount"]`w, null, null, null, null, "AggregateOrder"w, "read"w, null,
+        `{"property":"amount","operator":"gt","value":"1000"}`w, null, "true"w).to!string);
+    assert(totalResponse["data"]["amount"].integer == 0);
     auto aggregateMeta = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "AggregateOrder"w, "meta"w).to!string);
     assert(aggregateMeta["isQuery"].boolean && aggregateMeta["readOnly"].boolean && "primaryKey" !in aggregateMeta.object);
     aggregateResponse = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "AggregateOrder"w, null).to!string);
