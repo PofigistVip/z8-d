@@ -555,7 +555,9 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         customData = query.z8_object_get_data(params);
         if (customData !is null) {
             if (!z8_native_is_instance(z8_json_array_name, customData)) throw new Exception("invalid query response data");
-            verifyGroups(); writeDefaultMetadata();
+            // ReadAction already captured the request metadata. A custom
+            // getData result does not execute the grouped SQL query.
+            writeDefaultMetadata();
             writer.property("data"w); writer.raw(z8_json_array_render_state(z8_json_array_state(customData)));
         }
     } catch (Throwable error) {

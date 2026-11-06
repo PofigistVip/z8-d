@@ -179,6 +179,7 @@ import org.zenframework.z8.base.application.Application;
     virtual protected void afterRead() { Application.info("table after"); }
     virtual protected JsonArray getData(string[string] parameters) {
         if (parameters.containsKey("lookup") && parameters["lookup"] == "database") return null;
+        if (parameters.containsKey("lookup") && parameters["lookup"] == "customgroups") groupBy = {title};
         return JsonArray.parse("[{title:'custom',amount:42}]");
     }
 }
@@ -414,6 +415,11 @@ void main(string[] args) {
             result = request(request="MemoryTable")
             assert result["success"] and result["data"] == [{"title": "custom", "amount": 42}], result
             assert [message["text"] for message in result["info"]["messages"]] == ["table before", "table after"], result
+            result = request(request="MemoryTable", lookup="customgroups")
+            assert result["success"] and result["data"] == [{"title": "custom", "amount": 42}], result
+            assert [message["text"] for message in result["info"]["messages"]] == ["table before", "table after"], result
+            result = request(request="MemoryTable", action=None, lookup="customgroups")
+            assert result["success"] and result["data"] == [{"title": "custom", "amount": 42}] and result["isQuery"], result
             result = request(request="MemoryTable", lookup="database")
             assert result["success"] and len(result["data"]) == 2 and result["data"][0]["amount"] in (5, 10), result
             assert [message["text"] for message in result["info"]["messages"]] == ["table before", "table after"], result
