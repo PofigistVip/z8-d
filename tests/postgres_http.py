@@ -129,6 +129,7 @@ public class NestedAttachment extends Table {
     virtual protected void onDestroyAction(guid id) {
         if (id == '00000000-0000-0000-0000-000000000091') throw "nested delete blocked";
     }
+    virtual protected binary processContentRequest(string[string] parameters, file[] files) { return '78, 69, 83, 84'; }
 }
 ''', encoding="utf-8")
     (source / "MemoryQuery.bl").write_text('''
@@ -217,7 +218,7 @@ __gshared string databaseInfo;
 
 class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
     Z8ApplicationSession authorize(Z8HttpRequest request, wstring id, wstring server) {
-        if (server != "test"w || (id != "full"w && id != "full2"w && id != "limited"w && id != "denied"w && id != "field-denied"w && id != "relation-denied"w)) return null;
+        if (server != "test"w || (id != "full"w && id != "full2"w && id != "limited"w && id != "denied"w && id != "field-denied"w && id != "relation-denied"w && id != "target-denied"w)) return null;
         auto user = new Z8UserData(); user.id = z8_guid_create(id == "full"w || id == "full2"w ? 2 : 3);
         user.builtinAdministrator = id == "full"w || id == "full2"w;
         user.login = "Alice"w; user.firstName = "Alice"w; user.email = "old@example.org"w; user.settings = "{}"w; user.changePassword = true;
@@ -243,6 +244,7 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.NestedLink"w), Z8Access.init);
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.OtherJoin"w), Z8Access.init);
         }
+        if (id == "target-denied"w) user.privileges.setTableAccess(z8_guid_create_name("NestedAttachment"w), Z8Access.init);
         return new Z8ApplicationSession(id, user, user);
     }
     Z8ApplicationSession login(Z8HttpRequest request, wstring login, wstring password) {
@@ -489,6 +491,15 @@ void main(string[] args) {
             assert result["success"] and result["info"]["messages"][0]["text"] == "child", result
             result = request(action="action", name="inspect", records=one, link="childLink", query="missing")
             assert result["success"] and result["info"]["messages"][0]["text"] == "child", result
+            result = request(action="action", name="inspect", records=one, link="otherJoin", query="missing")
+            assert result["success"] and result["info"]["messages"][0]["text"] == "otherNested", result
+            for action in ("action", "content"):
+                kwargs = {"name": "inspect", "records": one} if action == "action" else {}
+                for target in ({"link": "nestedLink"}, {"query": "nested"}, {"link": "otherJoin"}):
+                    result = request(session="relation-denied", action=action, **target, **kwargs)
+                    assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+                    result = request(session="target-denied", action=action, **target, **kwargs)
+                    assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(action="action", name="inspect", records=one, query="missing")
             assert not result["success"], result
             result = request(action="report", id="exported", recordId="00000000-0000-0000-0000-000000000001", name="invoice", format="pdf")
@@ -502,6 +513,13 @@ void main(string[] args) {
                 conn.request("GET", "/request.json?" + urlencode(dict(request="Sample", session="full", server="test", action="content")))
                 response = conn.getresponse()
                 assert response.status == 200 and response.read() == bytes([0, 255, 65, 0])
+            finally:
+                conn.close()
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            try:
+                conn.request("GET", "/request.json?" + urlencode(dict(request="Sample", session="full", server="test", action="content", link="otherJoin", query="missing")))
+                response = conn.getresponse()
+                assert response.status == 200 and response.read() == b"NEST"
             finally:
                 conn.close()
             result = request(action="content", empty="true")

@@ -83,6 +83,9 @@ Read, metadata, create, copy, update, destroy, attach, detach and export request
 can select a nested table using `query` or a `Link`/`Join` field in `link`; the root request, containing
 tables, their connecting relations and the selected table are checked. As in the
 original action factory, a nonempty `link` takes precedence over `query`.
+Commands and content requests also accept nested table targets, including
+`Link` and `Join`; access to the containing table, relation and target table is
+checked before executing BL code.
 With no
 `action` parameter, the same metadata is followed by the table read response.
 
