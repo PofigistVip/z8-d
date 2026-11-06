@@ -1,4 +1,5 @@
 import org.zenframework.z8.base.form.Desktop;
+import org.zenframework.z8.base.table.SchemaGenerator;
 import org.zenframework.z8.server.base.table.system.view.FilesView;
 import org.zenframework.z8.server.base.table.system.view.SequencesView;
 import org.zenframework.z8.server.base.table.system.view.TablesView;
@@ -15,4 +16,5 @@ public class SystemTools extends Desktop {
     TablesView tables;
     SequencesView sequences;
     FilesView files;
+    [displayName "$Generator.displayName$"] SchemaGenerator generator;
 }

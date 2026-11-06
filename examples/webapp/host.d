@@ -21,7 +21,11 @@ class SchedulerObserver : IZ8SchedulerObserver {
     void onRuns(Z8ScheduledRun[] runs) { }
     void onError(wstring message) { stderr.writeln("Scheduler: ", message.to!string); }
 }
-class DisabledSchedulerControl : IZ8SchedulerControl { void restart() { } }
+class DisabledSchedulerControl : IZ8SchedulerControl, IZ8SchedulerSuspension {
+    void restart() { }
+    void suspend() { }
+    void resume() { }
+}
 
 void main(string[] args) {
     if (args.length < 3) throw new Exception("usage: webapp-host <postgres-connection> <schema> [--initialize] [--public-dir <path>] [--config <path>]");

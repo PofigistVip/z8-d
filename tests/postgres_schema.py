@@ -42,6 +42,16 @@ import org.zenframework.z8.base.Executable;
 import org.zenframework.z8.base.Executable;
 public class ManualJob extends Executable {}
 ''', encoding="utf-8")
+    (source / "MigrationHook.bl").write_text('''
+import org.zenframework.z8.base.table.SchemaGenerator;
+public class MigrationHook extends SchemaGenerator {
+    string history = ""; bool failing = false;
+    virtual public void beforeStart() { history += "B"; if (failing) throw "migration hook failed"; }
+    virtual public void afterFinish() { history += "A"; }
+    public string observed() { return history; }
+    public void failNext() { failing = true; }
+}
+''', encoding="utf-8")
     (source / "CustomUser.bl").write_text('''
 import org.zenframework.z8.base.security.User;
 import org.zenframework.z8.base.application.Application;
@@ -242,6 +252,7 @@ import org.zenframework.z8.base.table.system.Files;
 import org.zenframework.z8.base.security.User;
 import org.zenframework.z8.base.table.value.Field;
 public class Probe {
+    public static MigrationHook migrationHook() { MigrationHook value; return value; }
     public static DailyJob dailyJob() { DailyJob value; return value; }
     public static DisabledJob disabledJob() { DisabledJob value; return value; }
     public static ManualJob manualJob() { ManualJob value; return value; }
@@ -374,6 +385,12 @@ class SchedulerObserver : IZ8SchedulerObserver {
     }
     void onError(wstring message) { synchronized (gate) wake.notifyAll(); }
     bool waitForSuccess() { synchronized (gate) { if (!succeeded) wake.wait(dur!"seconds"(10)); return succeeded; } }
+}
+class MigrationScheduler : IZ8SchedulerControl, IZ8SchedulerSuspension {
+    int pauses, resumes;
+    void restart() {}
+    void suspend() { ++pauses; }
+    void resume() { ++resumes; }
 }
 class AuthenticationObserver : IZ8UserChangeNotifier {
     Z8PostgresConnection db; size_t count; Z8Guid id;
@@ -1056,6 +1073,19 @@ void main(string[] args) {
     auto reconcileBackend = new Z8PostgresDatabase(db, "z8_reconcile"w, reconcileRegistry, platformTypes);
     reconcileBackend.reconcileSchema();
     assert(bootstrapRequest.eventsLevel() == Z8EventsLevel.user);
+    auto generatorConnection = z8_connection_set_current(reconcileBackend);
+    auto generatorScheduler = new MigrationScheduler(); bootstrapRequest.schedulerControl = generatorScheduler;
+    bootstrapRequest.monitor = new Z8RequestMonitor();
+    auto generator = P.m_migrationHook();
+    assert(z8_executable_run(generator) && generator.m_observed() == "BA"w);
+    assert(generatorScheduler.pauses == 1 && generatorScheduler.resumes == 1 && bootstrapRequest.eventsLevel() == Z8EventsLevel.user);
+    generator.m_failNext();
+    assert(!z8_executable_run(generator) && generator.m_observed() == "BAB"w);
+    assert(generatorScheduler.pauses == 2 && generatorScheduler.resumes == 2 && bootstrapRequest.eventsLevel() == Z8EventsLevel.user);
+    bootstrapUser.administrator = false;
+    assert(!z8_executable_run(generator) && generator.m_observed() == "BAB"w && generatorScheduler.pauses == 2);
+    bootstrapUser.administrator = true; bootstrapRequest.schedulerControl = null;
+    z8_connection_set_current(generatorConnection);
     auto reconcileBackground = cast(IZ8BackgroundDatabaseConnection)reconcileBackend.openBackgroundConnection();
     (cast(IZ8SchemaReconciler)reconcileBackground).reconcileSchema();
     reconcileBackground.closeBackgroundConnection();

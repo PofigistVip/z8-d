@@ -1092,6 +1092,17 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                     result ~= "override void z8_executable_virtual_execute_parameters() { this.m_execute(this.f_parameters); }\n";
             }
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.db.generator.SchemaGenerator"w) {
+            result ~= "override void z8_executable_virtual_execute() { z8_schema_generator_require_admin(this); super.z8_executable_virtual_execute(); }\n";
+            foreach (method; program.baseClass.methods) if (method.name.text == "execute" && method.parameters.length == 1 && method.parameters[0].type == ValueType.selfArray) {
+                auto parameter = method.parameters[0];
+                result ~= "override void m_execute(" ~ dStorageType(parameter.type, parameter.objectClass, parameter.keyObjectClasses) ~
+                    " parameters) { z8_schema_generator_execute(this); }\n";
+                break;
+            }
+            result ~= "override void z8_schema_generator_virtual_before_start() { this.m_beforeStart(); }\n";
+            result ~= "override void z8_schema_generator_virtual_after_finish() { this.m_afterFinish(); }\n";
+        }
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.security.User"w) {
             foreach (method; program.methods) if (!method.isStatic) {
                 if (method.name.text == "onBeforeLoad" && method.returnType == ValueType.voidType && method.parameters.length == 1 && method.parameters[0].type == ValueType.stringType)
@@ -1402,6 +1413,8 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
             result ~= "}\n";
         }
         result ~= "override void z8_init_values() {\nsuper.z8_init_values();\n";
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.db.generator.SchemaGenerator"w)
+            result ~= "z8_schema_generator_configure(this);\n";
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.TreeTable"w)
             result ~= "z8_tree_table_configure(this);\n";
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Roles"w)

@@ -52,6 +52,8 @@ The administrator's SystemTools entry includes users, role permissions, jobs,
 tables, files and sequences. The users form rejects duplicate role assignments
 and excludes assigned roles from the selection list. Its scheduler action wakes
 the local service to reload schedules immediately.
+The administrator can run the schema generator as a background job. It applies
+additive schema changes; incompatible existing table definitions are rejected.
 The tables report and other original system tools remain to be implemented.
 
 Optionally add `--config C:/path/to/server.properties` to initialization and

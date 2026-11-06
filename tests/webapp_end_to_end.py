@@ -164,6 +164,7 @@ with tempfile.TemporaryDirectory() as directory:
             jobs_view = "org.zenframework.z8.server.base.table.system.view.JobsView"
             roles_view = "org.zenframework.z8.server.base.table.system.view.RoleTableAccessView"
             users_view = "org.zenframework.z8.server.base.table.system.view.UsersView"
+            generator_class = "org.zenframework.z8.server.db.generator.SchemaGenerator"
             assert any(entry["request"] == tools_class for entry in login["user"]["entries"]), login
             assert any(item.get("request") == files_view for group in login["user"]["data"] for item in group.get("items", [])), login
             assert any(item.get("request") == sequences_view for group in login["user"]["data"] for item in group.get("items", [])), login
@@ -171,11 +172,32 @@ with tempfile.TemporaryDirectory() as directory:
             assert any(item.get("request") == jobs_view for group in login["user"]["data"] for item in group.get("items", [])), login
             assert any(item.get("request") == roles_view for group in login["user"]["data"] for item in group.get("items", [])), login
             assert any(item.get("request") == users_view for group in login["user"]["data"] for item in group.get("items", [])), login
+            assert any(item.get("request") == generator_class for group in login["user"]["data"] for item in group.get("items", [])), login
             session = login["session"]
             status, replacement = browser_login(port, "Admin", password)
             assert status == 200 and replacement["success"] and replacement["session"] != session
             assert request(port, request="login", session=session)[0] == 401
             session = replacement["session"]
+            status, generation = request(port, request=generator_class, session=session, scheduled="true")
+            assert status == 200 and generation.get("success") and not generation["info"]["messages"], str(generation)[:2000]
+            subprocess.run([str(psql), "-v", "ON_ERROR_STOP=1", "-c", 'ALTER TABLE "Tasks" DROP COLUMN "Done"', connection],
+                           env=environment, capture_output=True, check=True)
+            status, generation = request(port, request=generator_class, session=session)
+            assert status == 200 and generation.get("success") and generation.get("id"), str(generation)[:2000]
+            generation_id = generation["id"]
+            generation_messages = []
+            for _ in range(200):
+                status, progress = request(port, request=generator_class, session=session, job=generation_id)
+                assert status == 200 and progress.get("success"), str(progress)[:2000]
+                generation_messages.extend(progress["info"]["messages"])
+                if progress.get("done"):
+                    break
+                time.sleep(0.05)
+            else:
+                raise AssertionError("schema generator did not finish")
+            assert not generation_messages, generation_messages
+            restored = subprocess.check_output([str(psql), "-tAc", '''SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='Tasks' AND column_name='Done' ''', connection], env=environment, text=True).strip()
+            assert restored == "1", restored
             status, files_metadata = request(port, request=files_view, session=session, action="meta")
             assert status == 200 and files_metadata["success"] and [item["name"] for item in files_metadata["controls"]] == ["name", "createdAt", "path"], files_metadata
             status, sequences_metadata = request(port, request=sequences_view, session=session, action="meta")
