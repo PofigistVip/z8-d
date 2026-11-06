@@ -546,9 +546,14 @@ private void z8_control_write_meta_tree(Z8Object item, Z8Object query, Z8Object 
                 auto linkedKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, linked);
                 if (!privileges.getTableAccess(linkedKey).read) throw new Exception("Listbox linked table access denied");
             }
-            if (linked !is null && z8_native_is_instance("org.zenframework.z8.server.base.table.TreeTable"w, linked))
-                throw new Exception("Listbox tree link metadata is not supported yet");
-            writer.start('{', "link"w); z8_control_write_field_meta(link, target, context, privileges); writer.finish('}');
+            writer.start('{', "link"w); z8_control_write_field_meta(link, target, context, privileges);
+            if (linked !is null && z8_native_is_instance(z8_tree_table_name, linked)) {
+                auto parents = z8_tree_table_state(linked).fields;
+                writer.start('[', "parentKeys"w);
+                foreach (parent; parents[2 .. $]) writer.raw(z8_json_quote(parent.z8_id()));
+                writer.finish(']');
+            }
+            writer.finish('}');
         }
         writer.finish('}');
         if (state.selectorInitialized && state.selector !is null) {

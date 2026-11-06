@@ -59,7 +59,7 @@ metadata for direct and linked fields, including basic presentation, dependencie
 permitted source information and BL `writeMeta` overrides. Nested sections,
 fieldsets, field groups, tab controls, action groups, independent forms and forms with a readable Link are also supported.
 `Listbox` supports a table query, columns, sorting, actions, a readable Link and
-Selector metadata. Tree link metadata is not implemented yet. Table and link
+Selector metadata, including ancestor fields for tree links. Table and link
 access are checked.
 Actions and their parameters are described in metadata and can execute with a
 direct or nested query, respecting their `useTransaction` setting. Report metadata

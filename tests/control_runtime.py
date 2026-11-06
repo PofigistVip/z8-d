@@ -68,8 +68,9 @@ public class CyclicTable extends Table { Section section; section.controls = {se
 ''', encoding="utf-8")
     (source / "ListboxDetail.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.TreeTable;
 import org.zenframework.z8.base.table.value.Link;
-public class ListboxDetail extends Table { public Table parent; [name "Parent"] public Link parentId = parent; }
+public class ListboxDetail extends Table { public TreeTable parent; [name "Parent"] public Link parentId = parent; }
 ''', encoding="utf-8")
     (source / "ListboxTable.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
@@ -239,6 +240,7 @@ void main() {
     assert(linkedList["name"].str == "detail" && linkedList["link"]["name"].str == "detail.parentId");
     assert(linkedList["link"]["isLink"].boolean && linkedList["link"]["owner"].str == "detail");
     assert(linkedList["link"]["query"]["primaryKey"].str == "detail.parent.recordId");
+    assert(linkedList["link"]["parentKeys"].array.length == 6 && linkedList["link"]["parentKeys"][0].str == "detail.parent.parent1");
     auto selector = parseJSON(z8_application_response_text(linkedRequest).to!string)["controls"][0]["selector"];
     assert(selector["isSelector"].boolean && selector["copy"].boolean && selector["multiselect"].boolean);
     assert(selector["link"]["name"].str == "sourceId" && selector["columns"][0]["name"].str == "sourceId");
