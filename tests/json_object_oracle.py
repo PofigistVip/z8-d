@@ -30,6 +30,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     shutil.copytree(language, source)
     (source / "Probe.bl").write_text("""
 import org.zenframework.z8.base.json.JsonObject;
+import org.zenframework.z8.base.json.JsonUtil;
 public class Probe {
     public static JsonObject parse(string text) { return JsonObject.parse(text); }
     public static void assign(JsonObject object, string text) { object = text; }
@@ -48,6 +49,7 @@ public class Probe {
     public static JsonObject remove(JsonObject object, string name) { return object.remove(name); }
     public static string render(JsonObject object) { return (string)object; }
     public static string display(JsonObject object) { return object.toString(); }
+    public static string pretty(JsonObject object, int indent) { return JsonUtil.prettyPrint(object, indent); }
 }
 """, encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -139,6 +141,17 @@ class JsonObjectOracle {
         JsonObject escaped = JsonObject.z8_parse(new string("{}")).get();
         escaped.z8_set(new string("a"), new string("line\\n\\t\\"\\\\end"));
         System.out.println(escaped.string().get());
+        for (String input : new String[] {"{}", "{a:[1,null,{b:'<>&=中文'}]}", "{a:null}", "{a:null,b:1}", "{a:{b:null}}", "{a:1234567890123}"}) {
+            JsonObject item = JsonObject.z8_parse(new string(input)).get();
+            for (int indent : new int[] {-1, 0, 2, 4}) {
+                System.out.println("pretty:");
+                System.out.println(org.zenframework.z8.server.base.json.parser.JsonUtil.prettyPrint(item.get(), indent));
+            }
+        }
+        escaped.z8_set(new string("a"), new string("apostrophe ' and \\n newline"));
+        System.out.println("pretty:"); System.out.println(org.zenframework.z8.server.base.json.parser.JsonUtil.prettyPrint(escaped.get(), 2));
+        escaped.z8_set(new string("a"), new org.zenframework.z8.server.types.decimal("12345678901234567890.2500"));
+        System.out.println("pretty:"); System.out.println(org.zenframework.z8.server.base.json.parser.JsonUtil.prettyPrint(escaped.get(), 2));
     }
 }
 """, encoding="utf-8")
@@ -147,6 +160,7 @@ class JsonObjectOracle {
     current_sources = list((server_source / "json/parser").glob("*.java")) + [
         server_source / "base/json/parser/JsonObject.java",
         server_source / "base/json/parser/JsonArray.java",
+        server_source / "base/json/parser/JsonUtil.java",
         server_source / "types/date.java",
         server_source / "types/decimal.java",
         server_source / "types/file.java",
@@ -244,6 +258,14 @@ void main() {
     auto escaped = P.m_parse("{}"w);
     P.m_put(escaped, "a"w, z8_primary_box("line\\n\\t\\"\\\\end"w));
     writeln(P.m_render(escaped).to!string);
+    foreach (input; ["{}"w, "{a:[1,null,{b:'<>&=中文'}]}"w, "{a:null}"w, "{a:null,b:1}"w, "{a:{b:null}}"w, "{a:1234567890123}"w]) {
+        auto item = P.m_parse(input);
+        foreach (indent; [-1L, 0L, 2L, 4L]) { writeln("pretty:"); writeln(P.m_pretty(item, indent).to!string); }
+    }
+    P.m_put(escaped, "a"w, z8_primary_box("apostrophe ' and \\n newline"w));
+    writeln("pretty:"); writeln(P.m_pretty(escaped, 2).to!string);
+    P.m_put(escaped, "a"w, z8_primary_box(z8_decimal_parse("12345678901234567890.2500"w)));
+    writeln("pretty:"); writeln(P.m_pretty(escaped, 2).to!string);
     z8_native_clear_bindings();
     z8_bind_builtin_object();
     z8_bind_builtin_json_object();

@@ -1,0 +1,85 @@
+// JsonUtil.prettyPrint formats the rendered object through Gson's JsonWriter.
+private wstring z8_json_gson_quote(wstring value) {
+    import std.format : format;
+    wstring result = "\""w;
+    foreach (wchar c; value) {
+        switch (c) {
+            case '"': result ~= "\\\""w; break;
+            case '\\': result ~= "\\\\"w; break;
+            case '\b': result ~= "\\b"w; break;
+            case '\t': result ~= "\\t"w; break;
+            case '\n': result ~= "\\n"w; break;
+            case '\f': result ~= "\\f"w; break;
+            case '\r': result ~= "\\r"w; break;
+            default:
+                if (c < 0x20 || c == '<' || c == '>' || c == '&' || c == '=' || c == '\'' || c == 0x2028 || c == 0x2029)
+                    result ~= format("\\u%04x", cast(uint)c).to!wstring;
+                else result ~= c;
+        }
+    }
+    return result ~ "\""w;
+}
+private wstring z8_json_pretty_print(Z8Object object, Z8Optional!long indent) {
+    auto source = z8_json_object_render_state(z8_json_object_state(object));
+    auto width = cast(int)z8_optional_require(indent);
+    if (width < 0) width = 0;
+    size_t position;
+    wstring spacing(size_t depth) {
+        if (!width) return ""w;
+        auto spaces = new wchar[cast(size_t)width * depth]; spaces[] = ' ';
+        return "\n"w ~ spaces.idup;
+    }
+    wstring quoted() {
+        auto start = position++;
+        bool escaped;
+        while (position < source.length) {
+            auto c = source[position++];
+            if (escaped) escaped = false;
+            else if (c == '\\') escaped = true;
+            else if (c == '"') return z8_json_gson_quote(parseJSON(source[start .. position].to!string).str.to!wstring);
+        }
+        throw new Exception("invalid JSON string");
+    }
+    wstring formatValue(size_t depth) {
+        if (position >= source.length) throw new Exception("invalid JSON value");
+        auto c = source[position];
+        if (c == '"') return quoted();
+        if (c == '{' || c == '[') {
+            ++position;
+            auto close = c == '{' ? '}' : ']';
+            wstring result = c == '{' ? "{"w : "["w;
+            if (position < source.length && source[position] == close) { ++position; return result ~ cast(wchar)close; }
+            bool first = true;
+            for (;;) {
+                wstring entry;
+                bool include = true;
+                if (c == '{') {
+                    if (position >= source.length || source[position] != '"') throw new Exception("invalid JSON object key");
+                    entry = quoted();
+                    if (position >= source.length || source[position++] != ':') throw new Exception("invalid JSON object separator");
+                    entry ~= width ? ": "w : ":"w;
+                    if (position + 4 <= source.length && source[position .. position + 4] == "null"w) {
+                        position += 4; include = false;
+                    }
+                }
+                if (include) {
+                    entry ~= formatValue(depth + 1);
+                    if (!first) result ~= ","w;
+                    first = false; result ~= spacing(depth + 1) ~ entry;
+                }
+                if (position >= source.length) throw new Exception("unterminated JSON value");
+                if (source[position] == close) { ++position; return result ~ (first ? ""w : spacing(depth)) ~ cast(wchar)close; }
+                if (source[position++] != ',') throw new Exception("invalid JSON separator");
+            }
+        }
+        auto start = position;
+        while (position < source.length && source[position] != ',' && source[position] != ']' && source[position] != '}') ++position;
+        if (start == position) throw new Exception("invalid JSON value");
+        return source[start .. position];
+    }
+    return z8_string_new(formatValue(0));
+}
+void z8_bind_builtin_json_util() {
+    z8_native_bind("org.zenframework.z8.server.base.json.parser.JsonUtil.m_prettyPrint"w, &z8_json_pretty_print);
+}
+shared static this() { z8_bind_builtin_json_util(); }
