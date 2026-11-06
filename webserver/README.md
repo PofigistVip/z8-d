@@ -31,7 +31,7 @@ need specialized adapters and are not handled by this function.
 Alternatively, a handler can call `z8_application_dispatch_request()` in
 application response mode. It resolves the `request` parameter, verifies the
 session user's request permission, and routes ordinary objects or the supported
-table `meta`, `read`, `create`, `copy`, `update`, `destroy`, `attach`, `detach`, `action`, `report`
+table `meta`, `read`, `create`, `copy`, `update`, `destroy`, `attach`, `detach`, `archive`, `action`, `report`
 and `content` operations to the corresponding adapter. Before a table action, the
 host must install a database backend for the worker thread and restore the
 previous backend afterward. The authority is responsible for providing a
@@ -49,7 +49,10 @@ the original client's `session` and `id` parameters and require the stored
 session; as with the original converter, the URL does not identify a table or
 record for a per-field permission check. Files are returned as attachments with
 UTF-8 filenames. Preview conversion and files outside `SystemFiles` are not yet
-handled by this route.
+handled by this route, except short-lived archives created by `action=archive`.
+The archive URL is bound to its session, user and database schema; archive data
+is retained in the same server process for at most ten minutes, so its download
+must be routed to that process. The archive cache has size and count limits.
 
 The initial `meta` adapter writes query attributes, access rights, keys and
 metadata for direct and linked fields, including basic presentation, dependencies,

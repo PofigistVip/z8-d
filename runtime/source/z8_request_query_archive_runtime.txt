@@ -1,0 +1,38 @@
+// ArchiveAction: create a ZIP for the existing client-side download flow.
+private void z8_application_dispatch_query_archive_target(wstring className, Z8Object query) {
+    import std.zip : ZipArchive, ArchiveMember, CompressionMethod;
+    auto request = z8_application_require_request();
+    if (request.writer.scopes.length != 2) throw new Exception("response object is not open");
+    if (!z8_application_may_execute(z8_nonnull(request.session), className, "archive"w)) throw new Exception("request access denied");
+    if (!z8_native_is_instance(z8_query_name, query)) throw new Exception("archive requires a Query");
+    auto params = request.parameters; auto keys = params.z8_keys();
+    for (long i; i < keys.z8_size(); ++i) {
+        auto key = keys.z8_get(i);
+        if (key == "request"w || key == "session"w || key == "server"w || key == "ip"w || key == "action"w || key == "archive"w) continue;
+        if (key is null || params.z8_get(key).length) throw new Exception("unsupported archive parameter");
+    }
+    auto input = params.z8_get("archive"w);
+    if (input is null || !input.length) throw new Exception("archive file list is required");
+    auto json = z8_json_parse(input.to!string);
+    if (json.type != JSONType.array || json.array.length > 1000) throw new Exception("invalid archive file list");
+    auto archive = new ZipArchive(); size_t total;
+    foreach (item; json.array) {
+        if (item.type != JSONType.object) throw new Exception("invalid archive file");
+        auto id = "id" in item.object;
+        if (id is null || id.type != JSONType.string || !id.str.length) throw new Exception("invalid archive file ID");
+        auto file = z8_system_files_get_id(z8_guid_parse(id.str.to!wstring));
+        if (file is null) throw new Exception("archive file was not found");
+        file = z8_system_files_get_file(file);
+        auto name = z8_file_name(z8_string_required(file.name)).to!string;
+        if (!name.length || name == "." || name == ".." || name in archive.directory) throw new Exception("invalid or duplicate archive filename");
+        auto data = z8_file_to_binary(file);
+        ubyte[] bytes;
+        { scope(exit) z8_binary_close(data); bytes = z8_binary_snapshot(data, z8_temporary_archives_bytes_limit - total); }
+        total += bytes.length;
+        auto member = new ArchiveMember(); member.name = name; member.flags = 0x800;
+        member.expandedData = bytes; member.compressionMethod = CompressionMethod.deflate;
+        archive.addMember(member);
+    }
+    auto result = cast(ubyte[])archive.build();
+    z8_monitor_property(request.writer, "source"w, z8_temporary_archive_store(result));
+}

@@ -193,6 +193,13 @@ record. A `FileField` represents a single current file; an `AttachmentField`
 reads the existing list before appending. Page-count extraction remains
 unimplemented. An opt-in CivetWeb `/storage` route downloads `SystemFiles`
 content for authenticated sessions; see `webserver/README.md` for host setup.
+`action=archive` accepts the original client's JSON file list and returns a ZIP
+download path. Archive bytes are process-local, scoped to the creating session,
+user and database schema, retained for up to ten minutes, and bounded to 64 MiB
+and 128 cached archives; the oldest archives are evicted when necessary. A single
+archive accepts at most 1,000 files and 64 MiB of uncompressed content.
+The current archive and download paths authorize the session and request but do
+not infer field-level access from a file ID.
 Optional `values` are checked before a create, update or copy transaction and
 applied as readable context fields when selecting its response.
 The direct-table `copy` action accepts source GUIDs in `recordId` and one

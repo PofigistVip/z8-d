@@ -1,0 +1,65 @@
+// Short-lived archive data for the servlet-style download after ArchiveAction.
+// It is process-local, bound to a session and schema, and never stored in SystemFiles.
+private struct Z8TemporaryArchive {
+    wstring path, session, schema, user;
+    MonoTime expires;
+    ubyte[] data;
+}
+private __gshared Z8TemporaryArchive[] z8_temporary_archives;
+private __gshared Object z8_temporary_archives_lock;
+private enum size_t z8_temporary_archives_bytes_limit = 64 * 1024 * 1024;
+private enum size_t z8_temporary_archives_count_limit = 128;
+private import core.time : MonoTime, dur;
+shared static this() { z8_temporary_archives_lock = new Object(); }
+private wstring z8_temporary_archive_schema() {
+    auto backend = cast(IZ8DatabaseSchema)z8_connection_current_backend();
+    if (backend is null || backend.databaseSchema() is null) throw new Exception("archive requires a database schema");
+    return backend.databaseSchema();
+}
+private void z8_temporary_archive_prune(MonoTime now) {
+    size_t keep;
+    foreach (entry; z8_temporary_archives) if (entry.expires > now) z8_temporary_archives[keep++] = entry;
+    foreach (i; keep .. z8_temporary_archives.length) z8_temporary_archives[i] = Z8TemporaryArchive.init;
+    z8_temporary_archives.length = keep;
+}
+private wstring z8_temporary_archive_store(ubyte[] data) {
+    auto session = z8_nonnull(z8_application_require_request().session);
+    auto user = z8_nonnull(z8_nonnull(session.user).id);
+    auto schema = z8_temporary_archive_schema();
+    if (session.id is null || !session.id.length) throw new Exception("archive requires a session ID");
+    if (data.length > z8_temporary_archives_bytes_limit) throw new Exception("archive exceeds size limit");
+    auto now = MonoTime.currTime;
+    synchronized (z8_temporary_archives_lock) {
+        z8_temporary_archive_prune(now);
+        size_t total;
+        foreach (entry; z8_temporary_archives) total += entry.data.length;
+        while (z8_temporary_archives.length >= z8_temporary_archives_count_limit || total + data.length > z8_temporary_archives_bytes_limit) {
+            total -= z8_temporary_archives[0].data.length;
+            foreach (i; 1 .. z8_temporary_archives.length) z8_temporary_archives[i - 1] = z8_temporary_archives[i];
+            z8_temporary_archives[$ - 1] = Z8TemporaryArchive.init;
+            z8_temporary_archives.length--;
+        }
+        wstring path;
+        do {
+            path = "storage/z8-archive/"w ~ z8_guid_to_string(z8_guid_create_random()) ~ ".zip"w;
+            bool duplicate;
+            foreach (entry; z8_temporary_archives) if (entry.path == path) { duplicate = true; break; }
+            if (!duplicate) break;
+        } while (true);
+        z8_temporary_archives ~= Z8TemporaryArchive(path, session.id.idup, schema.idup,
+            z8_guid_to_string(user), now + dur!"minutes"(10), data.dup);
+        return path;
+    }
+}
+private Z8Binary z8_temporary_archive_get(wstring path) {
+    auto session = z8_nonnull(z8_application_require_request().session);
+    auto user = z8_nonnull(z8_nonnull(session.user).id);
+    auto schema = z8_temporary_archive_schema();
+    synchronized (z8_temporary_archives_lock) {
+        z8_temporary_archive_prune(MonoTime.currTime);
+        foreach (entry; z8_temporary_archives)
+            if (entry.path == path && entry.session == session.id && entry.schema == schema && entry.user == z8_guid_to_string(user))
+                return new Z8Binary(entry.data.dup);
+    }
+    return null;
+}

@@ -2,6 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import http.client
+import io
 import json
 import os
 import shutil
@@ -9,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import zipfile
 from urllib.parse import quote, urlencode
 
 from postgres_support import postgres_bin, temporary_postgres
@@ -158,9 +160,9 @@ __gshared string databaseInfo;
 
 class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
     Z8ApplicationSession authorize(Z8HttpRequest request, wstring id, wstring server) {
-        if (server != "test"w || (id != "full"w && id != "limited"w && id != "denied"w && id != "field-denied"w)) return null;
-        auto user = new Z8UserData(); user.id = z8_guid_create(id == "full"w ? 2 : 3);
-        user.builtinAdministrator = id == "full"w;
+        if (server != "test"w || (id != "full"w && id != "full2"w && id != "limited"w && id != "denied"w && id != "field-denied"w)) return null;
+        auto user = new Z8UserData(); user.id = z8_guid_create(id == "full"w || id == "full2"w ? 2 : 3);
+        user.builtinAdministrator = id == "full"w || id == "full2"w;
         user.login = "Alice"w; user.firstName = "Alice"w; user.email = "old@example.org"w; user.settings = "{}"w; user.changePassword = true;
         user.roles = [z8_guid_create(9)]; user.roleNames = ["Operators"w];
         user.entries = [Z8UserEntry(z8_guid_create_name("Sample"w), "Sample"w, "Sample"w),
@@ -290,7 +292,7 @@ void main(string[] args) {
                 query.update(params)
                 if query["action"] is None:
                     query.pop("action")
-                if query.get("action") in ("destroy", "action", "report"):
+                if query.get("action") in ("destroy", "action", "report", "archive"):
                     query.pop("fields")
                 if query["request"] in ("UpdateJob", "NonTransactionalJob", "ImpersonateJob"):
                     query.pop("fields", None)
@@ -513,7 +515,10 @@ void main(string[] args) {
             def download(path, session, file_id, method="GET"):
                 client = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
                 try:
-                    client.request(method, path + "?&" + urlencode({"session": session, "id": file_id}))
+                    params = {"session": session}
+                    if file_id is not None:
+                        params["id"] = file_id
+                    client.request(method, path + "?&" + urlencode(params) + "&noCache")
                     response = client.getresponse(); body = response.read()
                     return response.status, dict(response.getheaders()), body
                 finally:
@@ -534,9 +539,30 @@ void main(string[] args) {
                 concurrent = [future.result() for future in futures]
             assert all(item["success"] for item in concurrent), concurrent
             file_ids = {first_id}
+            archive_files = {first_id: metadata[0]}
             for item in concurrent:
-                file_ids.update(file["id"] for file in json.loads(item["data"][0]["documents"]))
+                for file in json.loads(item["data"][0]["documents"]):
+                    file_ids.add(file["id"]); archive_files[file["id"]] = file
             assert len(file_ids) == 3, concurrent
+            file_list = list(archive_files.values())
+            result = request(session="denied", action="archive", archive=json.dumps(file_list))
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = request(action="archive", archive=json.dumps(file_list + [file_list[0]]))
+            assert not result["success"] and "duplicate archive filename" in result["info"]["messages"][-1]["text"], result
+            result = request(action="archive", archive=json.dumps(file_list + [{"id": "00000000-0000-0000-0000-000000000099"}]))
+            assert not result["success"], result
+            result = request(action="archive", archive=json.dumps(file_list))
+            assert result["success"] and result["source"].startswith("storage/z8-archive/") and result["server"] == "test", result
+            archive_path = "/" + quote(result["source"], safe="/")
+            assert download(archive_path, "limited", None)[0] == 404
+            assert download(archive_path, "full2", None)[0] == 404
+            assert download(archive_path, "unknown", None)[0] == 401
+            status, headers, content = download(archive_path, "full", None)
+            assert status == 200 and "filename*=UTF-8''archive.zip" in headers["Content-Disposition"], (status, headers)
+            with zipfile.ZipFile(io.BytesIO(content)) as zipped:
+                assert set(zipped.namelist()) == {"данные.txt", "parallel-0.txt", "parallel-1.txt"}
+                assert zipped.read("данные.txt") == bytes([0, 255, 65])
+                assert zipped.read("parallel-0.txt") == b"\x00" and zipped.read("parallel-1.txt") == b"\x01"
             result = request(action="detach", field="documents", fields='["documents"]', recordId=target,
                              data=json.dumps(list(file_ids)))
             assert result["success"] and json.loads(result["data"][0]["documents"]) == [], result

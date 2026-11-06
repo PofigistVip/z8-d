@@ -74,6 +74,7 @@ package enum string runtimeSource = import("z8_core_runtime.txt") ~ import("z8_n
     import("z8_request_query_create_runtime.txt") ~ "\n" ~
     import("z8_request_query_copy_runtime.txt") ~ "\n" ~
     import("z8_request_query_attachment_runtime.txt") ~ "\n" ~
+    import("z8_request_query_archive_runtime.txt") ~ "\n" ~
     import("z8_request_query_action_runtime.txt") ~ "\n" ~
     import("z8_request_query_report_runtime.txt") ~ "\n" ~
     import("z8_request_query_content_runtime.txt") ~ "\n" ~
@@ -86,6 +87,7 @@ package enum string runtimeSource = import("z8_core_runtime.txt") ~ import("z8_n
     import("z8_geometry_runtime.txt") ~ "\n" ~
     import("z8_geometry_json_runtime.txt") ~ "\n" ~
     import("z8_file_runtime.txt") ~ "\n" ~
+    import("z8_temporary_archive_runtime.txt") ~ "\n" ~
     import("z8_zip_runtime.txt") ~ "\n" ~
     import("z8_primary_runtime.txt") ~ "\n" ~ import("z8_primary_key_map_runtime.txt") ~ "\n" ~ import("z8_reference_key_map_runtime.txt") ~ "\n" ~ import("z8_object_key_map_runtime.txt") ~ "\n" ~ import("z8_covariant_map_runtime.txt") ~ "\n" ~ import("z8_primary_map_runtime.txt") ~ "\n" ~
     import("z8_messageformat_runtime.txt") ~ "\n";
