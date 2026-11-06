@@ -639,7 +639,14 @@ void main(string[] args) {
     }
     assert(nestedRows == 2 && nestedSum == 17);
     auto defaultOrder = P.m_httpOrder();
-    z8_query_set_executor(defaultOrder, new Z8PostgresQueryExecutor(db, "pg_temp"w, "Orders"w));
+    auto defaultExecutor = new Z8PostgresQueryExecutor(db, "pg_temp"w, "Orders"w);
+    z8_query_set_executor(defaultOrder, defaultExecutor);
+    Z8QueryReadRequest idCount; idCount.byRecordId = true; idCount.recordId = z8_guid_create(0x301);
+    assert(defaultExecutor.count(defaultOrder, idCount) == 1);
+    idCount.recordId = z8_guid_create(0x999); assert(defaultExecutor.count(defaultOrder, idCount) == 0);
+    idCount.groupFields = [defaultOrder.f_title]; idCount.recordId = z8_guid_create(0x301);
+    assert(defaultExecutor.count(defaultOrder, idCount) == 1);
+    idCount.recordId = z8_guid_create(0x999); assert(defaultExecutor.count(defaultOrder, idCount) == 0);
     P.m_readHttpDefault(defaultOrder); int defaultRows;
     while (z8_optional_require(P.m_nextHttpDefault(defaultOrder))) { assert(P.m_httpDefaultName(defaultOrder).length); ++defaultRows; }
     assert(defaultRows == 2);

@@ -599,6 +599,12 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             filters ~= "(" ~ column ~ " <> '00000000-0000-0000-0000-000000000000'::uuid" ~ (rightKeys.length ? " OR " ~ column ~ " IS NULL" : "") ~ ")";
             foreach (rightKey; rightKeys) filters ~= "(" ~ z8_field_sql_format(rightKey, Z8SqlVendor.Postgres).to!string ~ " <> '00000000-0000-0000-0000-000000000000'::uuid)";
         }
+        Z8PostgresParameter[] parameters;
+        if (request.byRecordId) {
+            if (key is null) throw new Z8PostgresException("record lookup requires a primary key");
+            filters ~= "(" ~ z8_field_sql_format(key, Z8SqlVendor.Postgres).to!string ~ " = $1::uuid)";
+            parameters ~= Z8PostgresParameter.value(z8_guid_to_string(request.recordId).to!string);
+        }
         if (filters.length) {
             sql ~= " WHERE ";
             foreach (index, filter; filters) { if (index) sql ~= " AND "; sql ~= filter; }
@@ -616,7 +622,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             }
             sql ~= ") AS z8_count";
         }
-        auto result = connection.execute(sql);
+        auto result = connection.execute(sql, parameters);
         if (result.rows.length != 1 || result.rows[0].length != 1 || result.rows[0][0].isNull)
             throw new Z8PostgresException("invalid PostgreSQL count result");
         return result.rows[0][0].text.to!long;
