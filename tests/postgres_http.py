@@ -148,7 +148,7 @@ import org.zenframework.z8.base.table.value.IntField;
 import org.zenframework.z8.base.json.JsonArray;
 import org.zenframework.z8.base.application.Application;
 [name "Sample"] [request] public class MemoryTable extends Table {
-    [name "Title"] StringField title; [name "Amount"] IntField amount;
+    [name "Title"] public StringField title; [name "Amount"] public IntField amount;
     columns = {title, amount};
     virtual protected void beforeRead() { Application.info("table before"); }
     virtual protected void afterRead() { Application.info("table after"); }
@@ -182,6 +182,14 @@ public class Sample extends Table {
         if (params.containsKey("empty")) return null;
         return '0, 255, 65, 0';
     }
+}
+''', encoding="utf-8")
+    (source / "DynamicGroups.bl").write_text('''
+import org.zenframework.z8.base.table.value.Aggregation;
+import org.zenframework.z8.base.json.JsonArray;
+public class DynamicGroups extends MemoryTable {
+    virtual protected void beforeRead() { groupBy = {title}; amount.aggregation = Aggregation.Sum; }
+    virtual protected JsonArray getData(string[string] parameters) { return null; }
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -388,6 +396,18 @@ void main(string[] args) {
             result = request(action="meta")
             assert result["success"] and result["isQuery"] and result["primaryKey"] == "recordId", result
             assert {field["name"] for field in result["fields"]} == {"title", "amount", "recordId", "lock"}, result
+            result = request(request="DynamicGroups", action="meta")
+            assert result["success"] and result["readOnly"] and {field["name"] for field in result["fields"]} == {"title", "amount"}, result
+            result = request(request="DynamicGroups", sort='[{"property":"title"}]')
+            assert result["success"] and [(row["title"], row["amount"]) for row in result["data"]] == [("First", 5), ("Second", 10)], result
+            result = request(request="DynamicGroups", count="true")
+            assert result["success"] and result["total"] == 2, result
+            result = request(request="DynamicGroups", having='{"property":"amount","operator":"gt","value":5}')
+            assert result["success"] and [row["title"] for row in result["data"]] == ["Second"], result
+            result = request(request="DynamicGroups", totals="true")
+            assert result["success"] and result["data"]["amount"] == 15, result
+            result = request(request="DynamicGroups", session="limited")
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(session="limited", action="meta")
             assert result["success"] and "title" not in {field["name"] for field in result["fields"]}, result
             result = request(action=None)

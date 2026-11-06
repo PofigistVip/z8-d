@@ -323,9 +323,10 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     if (!z8_native_is_instance(z8_table_name, query)) {
         z8_application_query_context_values(query, privileges, params, true, context);
         if (z8_query_user_events_enabled()) query.z8_query_virtual_onReadAction();
+        z8_query_before_read(query);
         auto selected = z8_application_query_fields(query, privileges, params);
         Z8QueryReadRequest read;
-        z8_query_prepare_read(query, read);
+        z8_query_capture_read(query, read);
         scope(exit) if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();
         if (defaultAction) z8_application_query_write_meta(query, selected, null, privileges, context);
         auto data = query.z8_object_get_data(params);
@@ -339,6 +340,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     if (key is null) throw new Exception("query has no primary key");
     auto contextFields = z8_application_query_context_values(query, privileges, params, true, context);
     if (z8_query_user_events_enabled()) query.z8_query_virtual_onReadAction();
+    z8_query_before_read(query);
     auto groups = z8_query_array(query, "groupBy"w);
     auto aggregates = z8_query_array(query, "aggregateBy"w);
     auto selected = z8_application_query_fields(query, privileges, params, !groups.length && !aggregates.length);
@@ -350,11 +352,11 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     }
     void verifyGroups() {
         auto actual = z8_query_array(query, "groupBy"w);
-        if (actual.length != groups.length) throw new Exception("changing query groups during beforeRead is not supported");
-        foreach (i, field; actual) if (field !is groups[i]) throw new Exception("changing query groups during beforeRead is not supported");
+        if (actual.length != groups.length) throw new Exception("changing query groups after beforeRead is not supported");
+        foreach (i, field; actual) if (field !is groups[i]) throw new Exception("changing query groups after beforeRead is not supported");
         actual = z8_query_array(query, "aggregateBy"w);
-        if (actual.length != aggregates.length) throw new Exception("changing query aggregateBy during beforeRead is not supported");
-        foreach (i, field; actual) if (field !is aggregates[i]) throw new Exception("changing query aggregateBy during beforeRead is not supported");
+        if (actual.length != aggregates.length) throw new Exception("changing query aggregateBy after beforeRead is not supported");
+        foreach (i, field; actual) if (field !is aggregates[i]) throw new Exception("changing query aggregateBy after beforeRead is not supported");
     }
     long number(wstring key, long fallback) {
         auto value = params.z8_get(key);
@@ -540,7 +542,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         read.fields = totalsFields; read.sortFields = null; read.start = 0; read.limit = -1;
         read.aggregateAll = true;
     }
-    z8_query_prepare_read(query, read);
+    z8_query_capture_read(query, read);
     Z8Object customData;
     try {
         customData = query.z8_object_get_data(params);
@@ -563,7 +565,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
             if (!groups.length && !aggregates.length && read.queryHaving !is null && (read.queryHaving.kind != Z8SqlBoolKind.constant || !read.queryHaving.constant))
                 throw new Exception("query having is not supported for totals");
             foreach (i, field; totalsFields) if (z8_field_aggregation(field) != aggregations[i])
-                throw new Exception("changing query aggregations during beforeRead is not supported");
+                throw new Exception("changing query aggregations after beforeRead is not supported");
             writeDefaultMetadata();
         } catch (Throwable error) {
             if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();

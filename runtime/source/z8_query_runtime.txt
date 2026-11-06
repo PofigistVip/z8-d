@@ -221,12 +221,18 @@ private class Z8QuerySavedState {
         }
     }
 }
-private void z8_query_prepare_read(Z8Object self, ref Z8QueryReadRequest request) {
+private void z8_query_before_read(Z8Object self) {
     if (z8_query_user_events_enabled()) self.z8_query_virtual_beforeRead();
+}
+private void z8_query_capture_read(Z8Object self, ref Z8QueryReadRequest request) {
     if (!request.byRecordId && !request.byRecordIds) {
         request.queryWhere = z8_query_where(self); request.queryHaving = z8_query_having(self);
         request.queryScope = z8_query_scope(self);
     }
+}
+private void z8_query_prepare_read(Z8Object self, ref Z8QueryReadRequest request) {
+    z8_query_before_read(self);
+    z8_query_capture_read(self, request);
 }
 private IZ8QueryCursor z8_query_execute_read(Z8Object self, Z8QueryReadRequest request) {
     auto executor = z8_query_executor(self);

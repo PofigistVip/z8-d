@@ -149,8 +149,10 @@ BL-defined direct `groupBy` fields and JSON `having` conditions are supported;
 all participating fields must be readable. Array and distinct aggregations are
 accepted; the serialized value follows the original field's `get()` and
 `wasNull()` semantics, and BL code can retrieve elements with `array()`.
-Linked groups are allowed through readable Link paths. Changes to `groupBy` from
-`beforeRead` are not supported.
+Linked groups are allowed through readable Link paths. `beforeRead` runs before
+field selection, so changes to `groupBy`, `aggregateBy` and field aggregations
+are included in reads, totals and metadata. Grouping fields must still pass the
+same read-access checks.
 The client `group` parameter places its fields first in the sort order; it
 does not turn ordinary rows into SQL aggregates.
 `totals=true` returns a `data` object with supported sum and average totals over
