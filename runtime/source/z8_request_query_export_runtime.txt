@@ -24,11 +24,11 @@ private void z8_application_dispatch_query_export_target(wstring className, Z8Ob
         auto field = z8_query_try_find_field_id(query, id.str.to!wstring);
         if (field is null) continue;
         if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("query field access denied");
-        if (format == "pdf"w) {
+        if (format == "pdf"w || format == "xls"w || format == "xlsx"w) {
             auto width = "width" in column.object, minimum = "minWidth" in column.object;
-            auto requestedWidth = width is null ? 100 : z8_json_array_integer(*width);
+            auto requestedWidth = width is null ? (format == "pdf"w ? 100 : -1) : z8_json_array_integer(*width);
             auto requestedMinimum = minimum is null ? 0 : z8_json_array_integer(*minimum);
-            if (requestedWidth < 0 || requestedMinimum < 0) throw new Exception("invalid export column width");
+            if ((width !is null && requestedWidth < 0) || requestedMinimum < 0) throw new Exception("invalid export column width");
             widths ~= requestedWidth; minimumWidths ~= requestedMinimum;
         }
         ids ~= id.str.to!wstring;
@@ -62,7 +62,7 @@ private void z8_application_dispatch_query_export_target(wstring className, Z8Ob
     auto word = format == "doc"w || format == "docx"w;
     auto bytes = format == "pdf"w ? z8_export_pdf(ids, headers, types, data, original.z8_get("options"w), widths, minimumWidths) :
         word ? z8_export_word(ids, headers, types, data) : format == "html"w ?
-        z8_export_html(ids, headers, types, data) : z8_export_spreadsheet(ids, headers, types, data);
+        z8_export_html(ids, headers, types, data) : z8_export_spreadsheet(ids, headers, types, data, widths);
     auto file = new Z8File(); file.id = null;
     file.name = format == "pdf"w ? "export.pdf"w : word ? "export.docx"w :
         format == "html"w ? "export.html"w : "export.xlsx"w;
@@ -172,7 +172,7 @@ private ubyte[] z8_export_word(wstring[] ids, wstring[] headers, wstring[] types
     return cast(ubyte[])archive.build();
 }
 
-private ubyte[] z8_export_spreadsheet(wstring[] ids, wstring[] headers, wstring[] types, JSONValue rows) {
+private ubyte[] z8_export_spreadsheet(wstring[] ids, wstring[] headers, wstring[] types, JSONValue rows, int[] widths) {
     import std.json : JSONType;
     import std.zip : ZipArchive, ArchiveMember, CompressionMethod;
     auto archive = new ZipArchive();
@@ -185,7 +185,24 @@ private ubyte[] z8_export_spreadsheet(wstring[] ids, wstring[] headers, wstring[
     add("_rels/.rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
     add("xl/workbook.xml", `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Export" sheetId="1" r:id="rId1"/></sheets></workbook>`);
     add("xl/_rels/workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`);
-    string sheet = `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row>`;
+    string sheet = `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`;
+    assert(widths.length == ids.length);
+    bool hasWidths;
+    foreach (width; widths) if (width >= 0) { hasWidths = true; break; }
+    if (hasWidths) {
+        sheet ~= "<cols>";
+        foreach (i, width; widths) if (width >= 0) {
+            // Column widths in the request are points; XLSX uses approximate
+            // character widths based on the default spreadsheet font.
+            auto characters = cast(double)width * 4 / 21;
+            if (characters < 1) characters = 1;
+            if (characters > 255) characters = 255;
+            auto number = (i + 1).to!string;
+            sheet ~= `<col min="` ~ number ~ `" max="` ~ number ~ `" width="` ~ characters.to!string ~ `" customWidth="1"/>`;
+        }
+        sheet ~= "</cols>";
+    }
+    sheet ~= "<sheetData><row>";
     void textCell(wstring text) { sheet ~= `<c t="inlineStr"><is><t xml:space="preserve">` ~ z8_export_xml(text) ~ `</t></is></c>`; }
     foreach (header; headers) textCell(header);
     sheet ~= "</row>";
