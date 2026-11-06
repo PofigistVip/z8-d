@@ -9,7 +9,7 @@ import z8.database.metadata : z8_postgres_sync_registry;
 import z8.database.plan : quoteIdentifier;
 import z8.database.postgres : Z8PostgresConnection, Z8PostgresException;
 import z8.database.schema : fieldType, fieldDefault, foreignKeyTarget, z8_postgres_create_table_sql,
-    z8_postgres_ensure_null_record, z8_postgres_apply_static_records;
+    z8_postgres_ensure_null_record, z8_postgres_apply_static_records, z8_postgres_lock_schema;
 
 // Plan missing columns without executing them or changing existing columns.
 string[] z8_postgres_plan_add_columns(wstring schema, Z8Object table, Z8PostgresTableDescription actual) {
@@ -129,6 +129,7 @@ private string[] applyAdditiveSchema(Z8PostgresConnection db, wstring schema, Z8
     }
     db.beginTransaction();
     try {
+        z8_postgres_lock_schema(db, schema);
         string[] applied;
         Z8Object[] created;
         foreach (index, table; tables) {

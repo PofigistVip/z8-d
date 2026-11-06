@@ -711,6 +711,30 @@ void main(string[] args) {
     assert(z8_postgres_describe_table(db, "z8_mixed_failed"w, "Source"w) is null);
     assert(z8_postgres_describe_table(db, "z8_mixed_failed"w, "StaticSample"w) is null);
     foreach (column; z8_postgres_describe_table(db, "z8_mixed_failed"w, "SimpleIndexSample"w).columns) assert(column.name != "Amount");
+    db.execute(`CREATE SCHEMA "z8_parallel_schema"`);
+    auto schemaDb1 = db.openSibling(), schemaDb2 = db.openSibling();
+    long schemaChanges1 = -1, schemaChanges2 = -1; string schemaError1, schemaError2;
+    db.beginTransaction();
+    db.execute(`SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext('z8.schema'), pg_catalog.hashtext('z8_parallel_schema'))`);
+    auto schemaThread1 = new Thread({
+        try { schemaChanges1 = cast(long)z8_postgres_ensure_additive_schema(schemaDb1, "z8_parallel_schema"w, [P.m_simpleIndexes()]).length; }
+        catch (Throwable error) { schemaError1 = error.msg; }
+    });
+    auto schemaThread2 = new Thread({
+        try { schemaChanges2 = cast(long)z8_postgres_ensure_additive_schema(schemaDb2, "z8_parallel_schema"w, [P.m_simpleIndexes()]).length; }
+        catch (Throwable error) { schemaError2 = error.msg; }
+    });
+    schemaThread1.start(); schemaThread2.start();
+    bool bothWaiting;
+    foreach (attempt; 0 .. 500) {
+        auto waiting = db.execute(`SELECT count(*) FROM pg_catalog.pg_locks WHERE locktype = 'advisory' AND NOT granted AND objsubid = 2 AND classid = (pg_catalog.hashtext('z8.schema')::bigint & 4294967295)::oid AND objid = (pg_catalog.hashtext('z8_parallel_schema')::bigint & 4294967295)::oid`);
+        if (waiting.rows[0][0].text == "2") { bothWaiting = true; break; }
+        Thread.sleep(dur!"msecs"(10));
+    }
+    db.commit(); schemaThread1.join(); schemaThread2.join(); schemaDb1.close(); schemaDb2.close();
+    assert(bothWaiting && schemaError1.length == 0 && schemaError2.length == 0);
+    assert((schemaChanges1 > 0 && schemaChanges2 == 0) || (schemaChanges2 > 0 && schemaChanges1 == 0));
+    assert(z8_postgres_compare_indexes(P.m_simpleIndexes(), z8_postgres_describe_table(db, "z8_parallel_schema"w, "SimpleIndexSample"w)).length == 0);
     auto roleTable = P.m_roles();
     auto roleDDL = z8_postgres_create_table_sql("z8_test"w, roleTable);
     assert(roleDDL.canFind(`"Name" character varying`) && roleDDL.canFind(`"Description" bytea`) && roleDDL.canFind(`"Read" smallint`));

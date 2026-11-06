@@ -4,6 +4,7 @@ import std.conv : to;
 import z8.runtime;
 import z8.database.plan : quoteIdentifier;
 import z8.database.postgres;
+import z8.database.schema : z8_postgres_lock_schema;
 
 private Z8PostgresParameter textParameter(wstring value) {
     return value is null ? Z8PostgresParameter.nullValue() : Z8PostgresParameter.value(value.to!string);
@@ -19,6 +20,7 @@ void z8_postgres_sync_registry(Z8PostgresConnection db, wstring schema, Z8Runtim
     auto ownsTransaction = !db.inTransaction();
     if (ownsTransaction) db.beginTransaction();
     try {
+        z8_postgres_lock_schema(db, schema);
         db.execute("SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext($1)::bigint)",
             [Z8PostgresParameter.value("z8.registry." ~ schema.to!string)]);
         auto roles = db.execute("SELECT \"RecordId\"::text, COALESCE(\"Read\",0)::text, COALESCE(\"Write\",0)::text, " ~

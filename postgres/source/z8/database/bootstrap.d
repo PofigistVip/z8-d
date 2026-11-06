@@ -63,6 +63,7 @@ void z8_postgres_bootstrap(Z8PostgresConnection db, wstring schema, Z8Object[] t
     }
     db.beginTransaction();
     try {
+        z8_postgres_lock_schema(db, schema);
         foreach (sql; definitions) db.execute(sql);
         foreach (table; tables) z8_postgres_ensure_null_record(db, schema, table);
         foreach (table; tables) z8_postgres_apply_static_records(db, schema, table, registry);

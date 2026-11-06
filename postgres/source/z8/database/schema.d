@@ -7,6 +7,15 @@ import z8.database.plan : quoteIdentifier;
 import z8.database.postgres : Z8PostgresConnection, Z8PostgresException, Z8PostgresParameter;
 import z8.database.connection : Z8PostgresDatabase;
 
+// Serialize schema creation, additive migration and metadata sync per schema.
+// PostgreSQL releases transaction-level advisory locks on commit or rollback.
+package void z8_postgres_lock_schema(Z8PostgresConnection db, wstring schema) {
+    if (db is null || db.isClosed() || !db.inTransaction()) throw new Z8PostgresException("schema lock requires a transaction");
+    quoteIdentifier(schema);
+    db.execute("SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext($1), pg_catalog.hashtext($2))",
+        [Z8PostgresParameter.value("z8.schema"), Z8PostgresParameter.value(schema.to!string)]);
+}
+
 package string fieldType(Z8Object field) {
     switch (z8_field_type_id(field)) {
         case "int"w: case "date"w: case "datetime"w: case "datespan"w: return "bigint";
@@ -219,6 +228,7 @@ void z8_postgres_create_tables(Z8PostgresConnection connection, wstring schema, 
     }
     connection.beginTransaction();
     try {
+        z8_postgres_lock_schema(connection, schema);
         foreach (sql; definitions) connection.execute(sql);
         foreach (table; tables) z8_postgres_ensure_null_record(connection, schema, table);
         foreach (table; tables) z8_postgres_apply_static_records(connection, schema, table);

@@ -254,6 +254,10 @@ and any additional platform tables, creates missing registered tables, and
 updates table, field, request, entry and job metadata. Existing permission
 settings and schedules are preserved; obsolete entries are not removed. The
 returned list contains DDL, not static-record or registry changes.
+Table creation, additive migration and registry synchronization take a
+transaction-scoped PostgreSQL advisory lock per schema, so cooperating hosts
+do not race while creating or updating the same schema. The lock is released
+on commit or rollback.
 
 `z8_postgres_sync_registry` in `z8.database.metadata` inserts or updates the
 registered table, field and request metadata and creates initial access rows
