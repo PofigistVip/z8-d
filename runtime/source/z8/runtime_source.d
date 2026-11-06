@@ -10,6 +10,7 @@ package enum string runtimeSource = import("z8_core_runtime.txt") ~ import("z8_n
     import("z8_file_converter_runtime.txt") ~ "\n" ~
     import("z8_database_runtime.txt") ~ "\n" ~
     import("z8_cursor_runtime.txt") ~ "\n" ~
+    import("z8_security_event_runtime.txt") ~ "\n" ~
     import("z8_decimal_runtime.txt") ~ "\n" ~ import("z8_string_runtime.txt") ~ "\n" ~
     import("z8_nls_parser.txt") ~ "\n" ~ import("z8_nls_runtime.txt") ~ "\n" ~
     import("z8_regex_runtime.txt") ~ "\n" ~

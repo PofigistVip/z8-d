@@ -1,0 +1,55 @@
+// SecurityObject and SecurityEvent data used by security log implementations.
+private enum z8_security_object_name = "org.zenframework.z8.server.base.security.SecurityObject"w;
+private enum z8_security_event_name = "org.zenframework.z8.server.base.security.SecurityEvent"w;
+private class Z8SecurityObjectState { wstring type, name; Z8Guid id; }
+private Z8SecurityObjectState z8_security_object_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_security_object_name, self)) throw new Exception("invalid SecurityObject");
+    auto state = cast(Z8SecurityObjectState)self.z8_get_native_state(z8_security_object_name);
+    if (state is null) { state = new Z8SecurityObjectState(); self.z8_set_native_state(z8_security_object_name, state); }
+    return state;
+}
+Z8Object z8_security_object_new(wstring type, Z8Guid id, wstring name) {
+    auto value = z8_native_new(z8_security_object_name);
+    auto state = z8_security_object_state(value); state.type = type; state.id = id; state.name = name;
+    return value;
+}
+private wstring z8_security_object_type(Z8Object self) { return z8_security_object_state(self).type; }
+private Z8Guid z8_security_object_id(Z8Object self) { return z8_security_object_state(self).id; }
+private wstring z8_security_object_label(Z8Object self) { return z8_security_object_state(self).name; }
+private class Z8SecurityEventState {
+    Z8Object object;
+    wstring action, message = ""w;
+    Z8Optional!bool success = z8_optional_wrap(true);
+}
+private Z8SecurityEventState z8_security_event_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_security_event_name, self)) throw new Exception("invalid SecurityEvent");
+    auto state = cast(Z8SecurityEventState)self.z8_get_native_state(z8_security_event_name);
+    if (state is null) { state = new Z8SecurityEventState(); self.z8_set_native_state(z8_security_event_name, state); }
+    return state;
+}
+Z8Object z8_security_event_new(Z8Object object, wstring action) {
+    auto event = z8_native_new(z8_security_event_name);
+    auto state = z8_security_event_state(event); state.object = object; state.action = action;
+    return event;
+}
+void z8_security_event_set_result(Z8Object event, bool success, wstring message) {
+    auto state = z8_security_event_state(event); state.success = z8_optional_wrap(success); state.message = z8_string_new(message);
+}
+private Z8Object z8_security_event_object(Z8Object self) { return z8_security_event_state(self).object; }
+private wstring z8_security_event_action(Z8Object self) { return z8_security_event_state(self).action; }
+private Z8Optional!bool z8_security_event_success(Z8Object self) { return z8_security_event_state(self).success; }
+private wstring z8_security_event_message(Z8Object self) { return z8_security_event_state(self).message; }
+void z8_bind_builtin_security_event() {
+    enum object = z8_security_object_name ~ ".m_"w, event = z8_security_event_name ~ ".m_"w;
+    z8_native_bind(object ~ "object"w, &z8_security_object_new);
+    z8_native_bind(object ~ "getType"w, &z8_security_object_type);
+    z8_native_bind(object ~ "getId"w, &z8_security_object_id);
+    z8_native_bind(object ~ "getName"w, &z8_security_object_label);
+    z8_native_bind(event ~ "getObject"w, &z8_security_event_object);
+    z8_native_bind(event ~ "getAction"w, &z8_security_event_action);
+    z8_native_bind(event ~ "isSuccess"w, &z8_security_event_success);
+    z8_native_bind(event ~ "getMessage"w, &z8_security_event_message);
+}
+shared static this() { z8_bind_builtin_security_event(); }
