@@ -19,18 +19,34 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     (source / "TrackedEntity.bl").write_text('''
 import org.zenframework.z8.base.entity.Entity;
 public class TrackedEntity extends Entity {
-    public int changes = 0; public int created = 0; public int removed = 0; public string last = "";
+    public int changes = 0; public int created = 0; public int removed = 0; public int registered = 0; public string last = "";
     virtual protected void onChange(string key) { changes = changes + 1; last = key; }
     virtual protected void onCreate() { created = created + 1; }
     virtual protected void onDelete() { removed = removed + 1; }
+    virtual protected void onRegister() { registered = registered + 1; }
 }
 ''', encoding="utf-8")
     (source / "EntityProbe.bl").write_text('''
 import org.zenframework.z8.base.entity.Entity;
 import org.zenframework.z8.base.json.JsonObject;
 import org.zenframework.z8.base.json.JsonArray;
+import org.zenframework.z8.base.entity.Registry;
 public class EntityProbe {
     public static JsonObject noObject() { return null; }
+    public static Registry currentRegistry() { return Registry.getRegistry(); }
+    public static Entity registerCurrent() { Entity item; item.create(guid.create(99)); item.register(); return item; }
+    public static bool registryVerify() {
+        Registry registry; TrackedEntity first; TrackedEntity other;
+        first.register(registry);
+        if (!first.isRegistered() || first.registered != 1 || first.getRegistry() != registry) return false;
+        first.create(guid.create(31));
+        if (registry.getEntity(guid.create(31)) != first) return false;
+        other.create(guid.create(32)); other.register(registry); first.set("link", other); first.setOriginId(guid.create(32));
+        if (first.getEntity("link") != other || first.getOrigin() != other) return false;
+        registry.setLogEnabled(true); if (!registry.isLogEnabled()) return false;
+        other.unregister(); if (other.isRegistered() || other.registered != 2 || registry.getEntity(guid.create(32)) != null) return false;
+        registry.reset(); return registry.getEntity(guid.create(31)) == null && first.isRegistered();
+    }
     public static bool verify() {
         TrackedEntity item;
         if (!item.isNull() || item.isInitialized() || item.isChanged() || item.isDeleted() || item.isPersistent()) return false;
@@ -67,7 +83,16 @@ public class EntityProbe {
     harness.write_text('''
 import z8.runtime;
 import z8gen.p_EntityProbe;
-void main() { assert(z8_optional_require(Z8p_456E7469747950726F6265.m_verify())); }
+void main() {
+    alias P = Z8p_456E7469747950726F6265;
+    assert(z8_optional_require(P.m_verify()) && z8_optional_require(P.m_registryVerify()));
+    auto request = new Z8ApplicationRequest(); auto previous = z8_application_set_request(request);
+    auto registry = P.m_currentRegistry(); auto item = P.m_registerCurrent();
+    assert(registry.m_getEntity(z8_guid_create(99)) is item && P.m_currentRegistry() is registry);
+    z8_application_set_request(new Z8ApplicationRequest());
+    assert(P.m_currentRegistry() is registry && registry.m_getEntity(z8_guid_create(99)) is null);
+    z8_application_set_request(previous);
+}
 ''', encoding="utf-8")
     executable = temp / ("entity.exe" if os.name == "nt" else "entity")
     args = ["-I" + str(generated), *import_args(), *map(str, generated.rglob("*.d")),

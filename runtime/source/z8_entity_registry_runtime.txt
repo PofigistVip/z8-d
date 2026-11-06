@@ -1,0 +1,93 @@
+// Request-scoped Entity registry; persistence is handled by EntityTable.
+private enum z8_entity_registry_name = "org.zenframework.z8.server.base.entity.Registry"w;
+private class Z8EntityRegistryState {
+    Z8GuidMap!Z8Object entities;
+    Z8Object[] pending;
+    Z8ApplicationRequest request;
+    bool checked = true, logEnabled;
+    this() { entities = new Z8GuidMap!Z8Object(); }
+}
+private Z8EntityRegistryState z8_entity_registry_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_entity_registry_name, self)) throw new Exception("invalid Entity Registry");
+    auto state = cast(Z8EntityRegistryState)self.z8_get_native_state(z8_entity_registry_name);
+    if (state is null) { state = new Z8EntityRegistryState(); self.z8_set_native_state(z8_entity_registry_name, state); }
+    return state;
+}
+private Z8Object z8_entity_registry_local;
+private Z8Object z8_entity_registry_reset(Z8Object self) {
+    auto state = z8_entity_registry_state(self);
+    state.pending = null; state.entities.z8_clear(); state.checked = true; return self;
+}
+private Z8Object z8_entity_registry_get_current() {
+    if (z8_entity_registry_local is null) z8_entity_registry_local = z8_native_new(z8_entity_registry_name);
+    auto state = z8_entity_registry_state(z8_entity_registry_local);
+    auto request = z8_application_request();
+    if (state.request !is request) { state.request = request; z8_entity_registry_reset(z8_entity_registry_local); }
+    return z8_entity_registry_local;
+}
+private Z8Object z8_entity_registry_log_enabled(Z8Object self, Z8Optional!bool enabled) {
+    z8_entity_registry_state(self).logEnabled = z8_optional_require(enabled); return self;
+}
+private Z8Optional!bool z8_entity_registry_is_log_enabled(Z8Object self) { return z8_optional_wrap(z8_entity_registry_state(self).logEnabled); }
+private void z8_entity_registry_check(Z8EntityRegistryState state) {
+    if (state.checked) return;
+    state.checked = true;
+    size_t write;
+    foreach (entity; state.pending) {
+        auto id = z8_entity_get_id(entity);
+        if (id !is null && id != z8_guid_zero()) state.entities.z8_add(id, entity);
+        else state.pending[write++] = entity;
+    }
+    state.pending.length = write;
+}
+private Z8Object z8_entity_registry_find(Z8Object self, Z8Guid id) {
+    auto state = z8_entity_registry_state(self);
+    if (id is null || id == z8_guid_zero()) return null;
+    z8_entity_registry_check(state); return state.entities.z8_get(id);
+}
+private void z8_entity_registry_add(Z8Object self, Z8Object entity) {
+    auto state = z8_entity_registry_state(self);
+    auto id = z8_entity_get_id(entity);
+    if (id is null || id == z8_guid_zero()) { state.pending ~= entity; state.checked = false; }
+    else if (!state.entities.z8_containsKey(id)) state.entities.z8_add(id, entity);
+    else throw new Exception("duplicate entity");
+}
+private void z8_entity_registry_remove(Z8Object self, Z8Object entity) {
+    auto state = z8_entity_registry_state(self);
+    foreach (i, candidate; state.pending) if (z8_optional_require(z8_entity_equal(entity, candidate))) {
+        state.pending = state.pending[0 .. i] ~ state.pending[i + 1 .. $]; break;
+    }
+    state.entities.z8_remove(z8_entity_get_id(entity));
+}
+private Z8Object z8_entity_register_to(Z8Object self, Z8Object registry) {
+    auto state = z8_entity_state(self);
+    if (state.registry !is null) z8_entity_registry_remove(state.registry, self);
+    if (registry !is null) z8_entity_registry_add(registry, self);
+    state.registry = registry; self.z8_entity_virtual_on_register(); return self;
+}
+private Z8Object z8_entity_register(Z8Object self) { return z8_entity_register_to(self, z8_entity_registry_get_current()); }
+private Z8Object z8_entity_register_explicit(Z8Object self, Z8Object registry) { return z8_entity_register_to(self, z8_nonnull(registry)); }
+private Z8Object z8_entity_unregister(Z8Object self) { return z8_entity_register_to(self, null); }
+private Z8Optional!bool z8_entity_is_registered(Z8Object self) { return z8_optional_wrap(z8_entity_state(self).registry !is null); }
+private Z8Object z8_entity_get_registry(Z8Object self) { return z8_nonnull(z8_entity_state(self).registry); }
+private Z8Object z8_entity_related(Z8Object self, Z8Guid id) { return z8_entity_registry_find(z8_entity_get_registry(self), id); }
+private Z8Object z8_entity_related_key(Z8Object self, wstring key) { return z8_entity_related(self, z8_entity_guid(self, key)); }
+private Z8Object z8_entity_origin(Z8Object self) { return z8_entity_related(self, z8_entity_get_origin_id(self)); }
+void z8_bind_builtin_entity_registry() {
+    enum r = z8_entity_registry_name ~ ".m_"w, e = z8_entity_name ~ ".m_"w;
+    z8_native_bind(r ~ "getRegistry"w, &z8_entity_registry_get_current);
+    z8_native_bind(r ~ "setLogEnabled"w, &z8_entity_registry_log_enabled);
+    z8_native_bind(r ~ "isLogEnabled"w, &z8_entity_registry_is_log_enabled);
+    z8_native_bind(r ~ "getEntity"w, &z8_entity_registry_find);
+    z8_native_bind(r ~ "reset"w, &z8_entity_registry_reset);
+    z8_native_bind(e ~ "register"w, &z8_entity_register);
+    z8_native_bind(e ~ "register"w, &z8_entity_register_explicit);
+    z8_native_bind(e ~ "unregister"w, &z8_entity_unregister);
+    z8_native_bind(e ~ "isRegistered"w, &z8_entity_is_registered);
+    z8_native_bind(e ~ "getRegistry"w, &z8_entity_get_registry);
+    z8_native_bind(e ~ "getEntity"w, &z8_entity_related);
+    z8_native_bind(e ~ "getEntity"w, &z8_entity_related_key);
+    z8_native_bind(e ~ "getOrigin"w, &z8_entity_origin);
+}
+shared static this() { z8_bind_builtin_entity_registry(); }
