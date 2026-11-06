@@ -37,6 +37,19 @@ private Z8Object z8_parameter_create(wstring text, Z8Primary value, Z8Optional!b
 private Z8Object z8_parameter_create_scalar(T)(wstring text, T value) {
     return z8_parameter_create(text, z8_primary_box(value), z8_optional_wrap(true));
 }
+private Z8Object z8_parameter_create_source(wstring text, Z8Object source) {
+    auto sourceState = z8_parameter_source_state(source);
+    auto item = z8_parameter_create(text, z8_primary_box(""w), z8_optional_wrap(true));
+    auto state = z8_parameter_state(item);
+    state.type = sourceState.valueField is null ? "guid"w : z8_field_type_name(sourceState.valueField);
+    state.source = source;
+    return item;
+}
+private Z8Object z8_parameter_create_value_source(wstring text, Z8Primary value, Z8Object source) {
+    auto item = z8_parameter_create(text, value, z8_optional_wrap(true));
+    z8_parameter_state(item).source = source;
+    return item;
+}
 T z8_parameter_create_type(T, E)(wstring text, E type, Z8Optional!bool visible) if (is(T : Z8Object)) {
     if (type is null) throw new Exception("null parameter type");
     auto item = cast(T)z8_native_new(z8_parameter_name);
@@ -80,19 +93,23 @@ private void z8_parameter_parse(Z8Object item, wstring text) {
 }
 private void z8_parameter_write_meta(Z8Object item, Z8JsonWriterState writer) {
     auto state = z8_parameter_state(item);
-    if (state.source !is null) throw new Exception("parameter source metadata is not supported");
     auto type = z8_parameter_type(state);
     writer.start('{');
     z8_monitor_property(writer, "id"w, state.text); z8_monitor_property(writer, "text"w, state.text);
     z8_monitor_property(writer, "type"w, type); z8_monitor_property(writer, "visible"w, z8_optional_require(state.visible));
     writer.property("value"w); z8_json_writer_primary(writer, state.value);
-    writer.start('{', "field"w); z8_monitor_property(writer, "header"w, state.text); z8_monitor_property(writer, "type"w, type); writer.finish('}');
+    writer.start('{', "field"w); z8_monitor_property(writer, "header"w, state.text);
+    if (state.source is null) z8_monitor_property(writer, "type"w, type);
+    else z8_parameter_source_write_meta(state.source, writer);
+    writer.finish('}');
     writer.finish('}');
 }
 void z8_bind_builtin_parameter() {
     z8_native_bind_field(z8_parameter_name ~ ".f_text"w, &z8_parameter_address!"text");
     z8_native_bind_field(z8_parameter_name ~ ".f_source"w, &z8_parameter_address!"source");
     z8_native_bind(z8_parameter_name ~ ".m_create"w, &z8_parameter_create);
+    z8_native_bind(z8_parameter_name ~ ".m_create"w, &z8_parameter_create_source);
+    z8_native_bind(z8_parameter_name ~ ".m_create"w, &z8_parameter_create_value_source);
     z8_native_bind(z8_parameter_name ~ ".m_create"w, &z8_parameter_create_scalar!(Z8Optional!bool));
     z8_native_bind(z8_parameter_name ~ ".m_create"w, &z8_parameter_create_scalar!(Z8Optional!long));
     z8_native_bind(z8_parameter_name ~ ".m_create"w, &z8_parameter_create_scalar!(Z8Optional!Z8Decimal));

@@ -1,0 +1,63 @@
+// Query and field references used to populate an action parameter combobox.
+private enum z8_parameter_source_name = "org.zenframework.z8.server.base.form.action.ParameterSource"w;
+private class Z8ParameterSourceState { Z8Object query, displayField, valueField; }
+private Z8ParameterSourceState z8_parameter_source_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_parameter_source_name, self)) throw new Exception("invalid ParameterSource object");
+    auto state = cast(Z8ParameterSourceState)self.z8_get_native_state(z8_parameter_source_name);
+    if (state is null) { state = new Z8ParameterSourceState(); self.z8_set_native_state(z8_parameter_source_name, state); }
+    return state;
+}
+private auto z8_parameter_source_address(string member)(Z8Object self) {
+    return &__traits(getMember, z8_parameter_source_state(self), member);
+}
+private Z8Object z8_parameter_source_create(Z8Object query, Z8Object displayField, Z8Object valueField) {
+    auto item = z8_native_new(z8_parameter_source_name);
+    auto state = z8_parameter_source_state(item);
+    state.query = query; state.displayField = displayField; state.valueField = valueField;
+    return item;
+}
+private Z8Object z8_parameter_source_create_default(Z8Object query, Z8Object displayField) {
+    return z8_parameter_source_create(query, displayField, null);
+}
+private void z8_parameter_source_write_field(Z8Object field, Z8JsonWriterState writer) {
+    field = z8_nonnull(field);
+    writer.start('{');
+    z8_monitor_property(writer, "displayName"w, z8_object_display_name(field));
+    z8_monitor_property(writer, "name"w, field.z8_id());
+    z8_monitor_property(writer, "type"w, z8_field_type_name(field));
+    writer.finish('}');
+}
+private void z8_parameter_source_write_meta(Z8Object self, Z8JsonWriterState writer) {
+    auto state = z8_parameter_source_state(self);
+    auto query = state.query;
+    if (query is null) return;
+    auto display = z8_nonnull(state.displayField);
+    auto owner = query.z8_get_owner();
+    if (!z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, owner)) owner = null;
+    z8_monitor_property(writer, "isCombobox"w, true);
+    z8_monitor_property(writer, "name"w, display.z8_id());
+    writer.start('{', "query"w);
+    auto id = query.z8_id();
+    if (id.length) z8_monitor_property(writer, "name"w, id);
+    Z8Object lock;
+    foreach (field; z8_query_declared_fields(query)) if (field.z8_get_attribute("lockKey"w) !is null) { lock = field; break; }
+    z8_monitor_property(writer, "lockKey"w, z8_nonnull(lock).z8_id());
+    z8_monitor_property(writer, "primaryKey"w, z8_nonnull(z8_query_primary_key(query)).z8_id());
+    z8_monitor_property(writer, "request"w, owner is null ? query.z8_class_id() : owner.z8_class_id());
+    if (state.valueField !is null) {
+        writer.start('[', "fields"w);
+        z8_parameter_source_write_field(display, writer);
+        z8_parameter_source_write_field(state.valueField, writer);
+        writer.finish(']');
+    }
+    writer.finish('}');
+}
+void z8_bind_builtin_parameter_source() {
+    z8_native_bind_field(z8_parameter_source_name ~ ".f_query"w, &z8_parameter_source_address!"query");
+    z8_native_bind_field(z8_parameter_source_name ~ ".f_displayField"w, &z8_parameter_source_address!"displayField");
+    z8_native_bind_field(z8_parameter_source_name ~ ".f_valueField"w, &z8_parameter_source_address!"valueField");
+    z8_native_bind(z8_parameter_source_name ~ ".m_create"w, &z8_parameter_source_create_default);
+    z8_native_bind(z8_parameter_source_name ~ ".m_create"w, &z8_parameter_source_create);
+}
+shared static this() { z8_bind_builtin_parameter_source(); }
