@@ -174,6 +174,8 @@ import org.zenframework.z8.base.table.value.BoolField;
 import org.zenframework.z8.base.table.value.DatetimeField;
 import org.zenframework.z8.base.table.value.DatespanField;
 import org.zenframework.z8.base.table.value.BinaryField;
+import org.zenframework.z8.base.table.value.FileField;
+import org.zenframework.z8.base.table.value.AttachmentField;
 import org.zenframework.z8.base.table.value.Aggregation;
 [name "CountStringOrders"] public class CountStringOrder extends Table {
     public Customer customer; [name "CustomerId"] public Link customerId = customer;
@@ -183,6 +185,8 @@ import org.zenframework.z8.base.table.value.Aggregation;
     [name "When"] public DatetimeField instant; instant.aggregation = Aggregation.Count;
     [name "Duration"] public DatespanField duration; duration.aggregation = Aggregation.Count;
     [name "Payload"] public BinaryField payload; payload.aggregation = Aggregation.Count;
+    [name "File"] public FileField fileValue; fileValue.aggregation = Aggregation.Count;
+    [name "Attachments"] public AttachmentField attachments; attachments.aggregation = Aggregation.Count;
     aggregateBy = {customerId};
 }
 ''',
@@ -403,13 +407,15 @@ import org.zenframework.z8.base.table.value.Aggregation;
 import org.zenframework.z8.base.table.SortDirection;
 public class Probe {
     public static CountStringOrder countStringOrder() { CountStringOrder value; return value; }
-    public static void readCountString(CountStringOrder order) { Field[] fields = {order.customerId, order.title, order.description, order.flag, order.instant, order.duration, order.payload}; order.read(fields); }
-    public static void readCountStringLinked(CountStringOrder order) { Field[] fields = {order.customer.label, order.title, order.description, order.flag, order.instant, order.duration, order.payload}; order.read(fields); }
+    public static void readCountString(CountStringOrder order) { Field[] fields = {order.customerId, order.title, order.description, order.flag, order.instant, order.duration, order.payload, order.fileValue, order.attachments}; order.read(fields); }
+    public static void readCountStringLinked(CountStringOrder order) { Field[] fields = {order.customer.label, order.title, order.description, order.flag, order.instant, order.duration, order.payload, order.fileValue, order.attachments}; order.read(fields); }
     public static void groupCountString(CountStringOrder order) { order.customer.label.aggregation = Aggregation.None; order.groupBy = {order.customer.label}; }
     public static void directCountStringGroup(CountStringOrder order) { order.aggregateBy.clear(); order.groupBy = {order.customerId}; }
     public static void readSortedCountBinary(CountStringOrder order) { order.payload.sortDirection = SortDirection.Desc; Field[] fields = {order.customer.label, order.payload}; Field[] sort = {order.payload}; order.read(fields, sort); }
     public static void readSortedCountText(CountStringOrder order) { order.description.sortDirection = SortDirection.Desc; Field[] fields = {order.customer.label, order.description}; Field[] sort = {order.description}; order.read(fields, sort); }
+    public static void readSortedCountFile(CountStringOrder order) { order.fileValue.sortDirection = SortDirection.Desc; Field[] fields = {order.customer.label, order.fileValue}; Field[] sort = {order.fileValue}; order.read(fields, sort); }
     public static void havingCountText(CountStringOrder order) { order.addHaving(order.description > "2"); }
+    public static void havingCountFile(CountStringOrder order) { order.addHaving(order.fileValue > "2"); }
     public static void havingCountBinary(CountStringOrder order) { primary[] values = {'50'}; order.addHaving(order.payload.inVector(values)); }
     public static bool nextCountString(CountStringOrder order) { return order.next(); }
     public static guid countStringCustomer(CountStringOrder order) { return order.customerId.get(); }
@@ -419,6 +425,8 @@ public class Probe {
     public static int countStringInstant(CountStringOrder order) { return order.instant.get().ticks(); }
     public static int countStringDuration(CountStringOrder order) { return order.duration.get().milliseconds(); }
     public static string countStringPayload(CountStringOrder order) { return string.fromBinary(order.payload.get()); }
+    public static string countStringFile(CountStringOrder order) { return order.fileValue.get(); }
+    public static string countStringAttachments(CountStringOrder order) { return order.attachments.get(); }
     public static string countStringName(CountStringOrder order) { return order.customer.label.get(); }
     public static NativeTree tree() { NativeTree value; return value; }
     public static guid[] treePath(NativeTree tree, guid id) { return tree.getPathTo(id); }
@@ -574,9 +582,11 @@ void main(string[] args) {
     db.execute(`CREATE TEMP TABLE "CountStringOrders" AS SELECT * FROM "TextAggregateOrders"`);
     db.execute(`ALTER TABLE "CountStringOrders" ADD COLUMN "Duration" bigint DEFAULT 100`);
     db.execute(`ALTER TABLE "CountStringOrders" ADD COLUMN "Payload" bytea DEFAULT decode('01','hex')`);
+    db.execute(`ALTER TABLE "CountStringOrders" ADD COLUMN "File" bytea DEFAULT convert_to('[]','UTF8'), ADD COLUMN "Attachments" bytea DEFAULT convert_to('[]','UTF8')`);
     db.execute(`INSERT INTO "CountStringOrders" ("RecordId", "CustomerId", "Title") VALUES ('00000000-0000-0000-0000-000000000344','00000000-0000-0000-0000-000000000201',NULL)`);
     db.execute(`UPDATE "CountStringOrders" SET "Flag" = NULL WHERE "Title" = 'Alpha'`);
     db.execute(`UPDATE "CountStringOrders" SET "Payload" = NULL WHERE "Title" = 'Beta'`);
+    db.execute(`UPDATE "CountStringOrders" SET "Attachments" = NULL WHERE "Title" = 'Beta'`);
     db.execute(`CREATE TEMP TABLE "TextGroupedOrders" AS SELECT * FROM "TextAggregateOrders"`);
     db.execute(`CREATE TEMP TABLE "GroupCustomers" ("RecordId" uuid PRIMARY KEY, "Label" text)`);
     db.execute(`INSERT INTO "GroupCustomers" VALUES ('00000000-0000-0000-0000-000000000501','Alice'), ('00000000-0000-0000-0000-000000000502','Alice'), ('00000000-0000-0000-0000-000000000503','Bob')`);
@@ -672,6 +682,8 @@ void main(string[] args) {
         assert(z8_optional_require(P.m_countStringInstant(countString)) == (customer == z8_guid_create(0x201) ? 2 : 1));
         assert(z8_optional_require(P.m_countStringDuration(countString)) == (customer == z8_guid_create(0x201) ? 3 : 1));
         assert(P.m_countStringPayload(countString) == (customer == z8_guid_create(0x201) ? "3"w : "0"w));
+        assert(P.m_countStringFile(countString) == (customer == z8_guid_create(0x201) ? "3"w : "1"w));
+        assert(P.m_countStringAttachments(countString) == (customer == z8_guid_create(0x201) ? "3"w : "0"w));
         ++countStringRows;
     }
     assert(countStringRows == 2);
@@ -684,6 +696,8 @@ void main(string[] args) {
         assert(z8_optional_require(P.m_countStringInstant(countString)) == (name == "Alice"w ? 2 : 1));
         assert(z8_optional_require(P.m_countStringDuration(countString)) == (name == "Alice"w ? 3 : 1));
         assert(P.m_countStringPayload(countString) == (name == "Alice"w ? "3"w : "0"w));
+        assert(P.m_countStringFile(countString) == (name == "Alice"w ? "3"w : "1"w));
+        assert(P.m_countStringAttachments(countString) == (name == "Alice"w ? "3"w : "0"w));
         ++countStringRows;
     }
     assert(countStringRows == 2);
@@ -693,6 +707,7 @@ void main(string[] args) {
         assert(z8_optional_require(P.m_countStringFlag(countString)) && z8_optional_require(P.m_countStringInstant(countString)) == 1);
         assert(z8_optional_require(P.m_countStringDuration(countString)) == 1);
         assert(P.m_countStringPayload(countString) == "1"w);
+        assert(P.m_countStringFile(countString) == "1"w && P.m_countStringAttachments(countString) == "1"w);
         ++countStringRows;
     }
     assert(countStringRows == 2);
@@ -717,10 +732,19 @@ void main(string[] args) {
     P.m_readSortedCountText(sortedCount);
     assert(z8_optional_require(P.m_nextCountString(sortedCount)) && P.m_countStringName(sortedCount) == "Alice"w && P.m_countStringDescription(sortedCount) == "12"w);
     assert(z8_optional_require(P.m_nextCountString(sortedCount)) && P.m_countStringName(sortedCount) == "Bob"w && P.m_countStringDescription(sortedCount) == "2"w);
+    P.m_readSortedCountFile(sortedCount);
+    assert(z8_optional_require(P.m_nextCountString(sortedCount)) && P.m_countStringName(sortedCount) == "Alice"w && P.m_countStringFile(sortedCount) == "13"w);
+    assert(z8_optional_require(P.m_nextCountString(sortedCount)) && P.m_countStringName(sortedCount) == "Bob"w && P.m_countStringFile(sortedCount) == "2"w);
     auto havingCount = P.m_countStringOrder();
     z8_query_set_executor(havingCount, new Z8PostgresQueryExecutor(db, "pg_temp"w, "CountStringOrders"w));
     bool rejectedCountHaving;
     try { P.m_havingCountText(havingCount); P.m_readSortedCountText(havingCount); }
+    catch (Z8PostgresException) { rejectedCountHaving = true; }
+    assert(rejectedCountHaving);
+    auto havingFile = P.m_countStringOrder();
+    z8_query_set_executor(havingFile, new Z8PostgresQueryExecutor(db, "pg_temp"w, "CountStringOrders"w));
+    rejectedCountHaving = false;
+    try { P.m_havingCountFile(havingFile); P.m_readSortedCountFile(havingFile); }
     catch (Z8PostgresException) { rejectedCountHaving = true; }
     assert(rejectedCountHaving);
     auto havingBinary = P.m_countStringOrder();

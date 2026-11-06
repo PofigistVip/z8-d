@@ -222,7 +222,8 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                     kind == "date"w || kind == "datetime"w || kind == "datespan"w;
                 bool extrema = aggregation == Z8FieldAggregation.min || aggregation == Z8FieldAggregation.max;
                 bool arithmetic = aggregation == Z8FieldAggregation.sum || aggregation == Z8FieldAggregation.average;
-                bool countable = (comparable && kind != "guid"w) || kind == "binary"w || kind == "geometry"w;
+                bool countable = (comparable && kind != "guid"w) || kind == "binary"w || kind == "geometry"w ||
+                    kind == "file"w || kind == "attachments"w;
                 if (!(comparable && extrema) && !(numeric && arithmetic) && !(countable && aggregation == Z8FieldAggregation.count))
                     throw new Z8PostgresException("unsupported PostgreSQL aggregateBy field aggregation");
             }
@@ -231,7 +232,8 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             if (kind == "int"w && z8_field_aggregation(field) == Z8FieldAggregation.average && !preserveAverage) expression = "trunc(" ~ expression ~ ")::bigint";
             // TextField columns are bytea. Keep that representation across
             // the subselect so outer filters can use their normal SQL format.
-            if (outerGrouping && kind == "text"w) expression = "convert_to((" ~ expression ~ ")::text, 'UTF8')";
+            if (outerGrouping && (kind == "text"w || kind == "file"w || kind == "attachments"w))
+                expression = "convert_to((" ~ expression ~ ")::text, 'UTF8')";
             if (kind == "binary"w && aggregation == Z8FieldAggregation.count) {
                 expression = "convert_to((" ~ expression ~ ")::text, 'UTF8')";
                 if (!outerGrouping) expression = "encode(" ~ expression ~ ", 'hex')";
@@ -352,7 +354,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             foreach (field; z8_sql_collect_fields(condition)) {
                 auto kind = z8_field_type_id(field);
                 if (containsField(declared, field) && z8_field_aggregation(field) == Z8FieldAggregation.count &&
-                    (kind == "text"w || kind == "binary"w))
+                    (kind == "text"w || kind == "binary"w || kind == "file"w || kind == "attachments"w))
                     throw new Z8PostgresException("HAVING on byte-backed count aggregates is not supported");
             }
         Z8Object[] checked;
@@ -436,7 +438,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                 auto ordering = z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string;
                 auto kind = z8_field_type_id(field);
                 if (!outerGroups.length && containsField(declared, field) && z8_field_aggregation(field) == Z8FieldAggregation.count &&
-                    (kind == "text"w || kind == "binary"w))
+                    (kind == "text"w || kind == "binary"w || kind == "file"w || kind == "attachments"w))
                     ordering = "convert_from(" ~ ordering ~ ", 'UTF8')::bigint";
                 sql ~= ordering ~ " " ~ direction.to!string;
             }

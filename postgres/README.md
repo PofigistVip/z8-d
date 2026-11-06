@@ -454,7 +454,7 @@ parent updates the paths and ancestor columns of the affected subtree within
 the database transaction.
 
 The executor supports `aggregateBy` grouping over root Link fields with numeric
-sum, average, count, minimum and maximum, count for string, text, binary, boolean, temporal and geometry fields, and scalar minimum/maximum for strings, text,
+sum, average, count, minimum and maximum, count for string, text, file, attachment, binary, boolean, temporal and geometry fields, and scalar minimum/maximum for strings, text,
 booleans, dates, durations and GUIDs. Filters can reference linked tables, and a
 subselect joins target fields, including chained links and computed fields, after
 grouping. Record-ID filters apply before the initial grouping, including in reads,
@@ -463,7 +463,7 @@ As with JDBC, a boolean count can be read only when its result is 0 or 1; tempor
 fields interpret the count as milliseconds, and binary fields receive the decimal
 count as bytes. Binary count conversion also applies to ordinary `groupBy` queries;
 linked aggregate results are sorted by the numerical count.
-`HAVING` expressions over byte-backed text or binary count aggregates are
+`HAVING` expressions over byte-backed text, file, attachment or binary count aggregates are
 rejected until their SQL behavior is reproduced.
 For geometry fields, Z8 reads the decimal count as a raw geometry string; it is
 not valid WKB and geometry operations on it fail when the value is decoded.
