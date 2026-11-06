@@ -1003,6 +1003,12 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                     result ~= "override Z8Optional!bool z8_security_log_virtual_accept(Z8Object event) { return this.m_acceptEvent(cast(" ~ eventType ~ ")event); }\n";
                 if (method.name.text == "writeEvent" && method.returnType == ValueType.voidType)
                     result ~= "override void z8_security_log_virtual_write(Z8Object event) { this.m_writeEvent(cast(" ~ eventType ~ ")event); }\n";
+                if (method.name.text == "format" && method.returnType == ValueType.stringType &&
+                    method.parameters[0].objectClass.nativeName == "org.zenframework.z8.server.base.security.User"w)
+                    result ~= "override wstring z8_security_log_virtual_format_user(Z8Object user) { return this.m_format(cast(" ~ eventType ~ ")user); }\n";
+                if (method.name.text == "format" && method.returnType == ValueType.stringType &&
+                    method.parameters[0].objectClass.nativeName == "org.zenframework.z8.server.base.security.SecurityObject"w)
+                    result ~= "override wstring z8_security_log_virtual_format_object(Z8Object object) { return this.m_format(cast(" ~ eventType ~ ")object); }\n";
             }
         }
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.utils.Sorter"w) {

@@ -49,6 +49,15 @@ public class SecurityEndpoint extends Object {
     }
 }
 ''', encoding="utf-8")
+    (source / "FormattingSecurityLog.bl").write_text('''
+import org.zenframework.z8.base.security.SecurityLog;
+import org.zenframework.z8.base.security.SecurityObject;
+import org.zenframework.z8.base.security.User;
+public class FormattingSecurityLog extends SecurityLog {
+    virtual protected string format(SecurityObject object) { return "OBJECT:" + object.getName(); }
+    virtual protected string format(User user) { return "USER:" + user.login; }
+}
+''', encoding="utf-8")
     (source / "SecurityProbe.bl").write_text('''
 import org.zenframework.z8.base.security.SecurityObject;
 import org.zenframework.z8.base.security.SecurityEvent;
@@ -64,6 +73,7 @@ public class SecurityProbe {
     }
     public static bool customType(SecurityObject object) { return object.getType() == "custom"; }
     public static CustomSecurityLog log() { CustomSecurityLog value; return value; }
+    public static FormattingSecurityLog formattingLog() { FormattingSecurityLog value; return value; }
     public static User userType() { User value; return value; }
     public static void add(guid id) {
         Application.logSecurityEvent("table", id, "Orders", "skip");
@@ -77,6 +87,9 @@ public class SecurityProbe {
     harness.write_text('''
 import z8.runtime;
 import z8gen.p_SecurityProbe;
+import std.file : exists, readText;
+import std.string : indexOf;
+import std.path : buildPath;
 class Sink : IZ8SecurityLogSink {
     long count; bool failed, leaked; wstring action;
     void write(Z8Object event, Z8StringMap parameters) {
@@ -87,7 +100,7 @@ class Sink : IZ8SecurityLogSink {
         assert(parameters.z8_get("ip"w) == "127.0.0.1"w);
     }
 }
-void main() {
+void main(string[] args) {
     alias P = Z8p_536563757269747950726F6265;
     auto id = z8_guid_create(7); auto object = P.m_make(id);
     auto event = z8_security_event_new(object, "update"w);
@@ -128,6 +141,23 @@ void main() {
     z8_application_dispatch_request();
     assert(sink.count == 2 && !sink.failed && sink.action == "change"w && !sink.leaked);
     z8_application_set_request(previous);
+    auto filePath = buildPath(args[1], "security.log");
+    request = new Z8ApplicationRequest(); request.securityLogSink = new Z8FileSecurityLogSink(filePath, 4096, 3);
+    request.securityLog = P.m_formattingLog(); request.session = new Z8ApplicationSession("test"w, person, person);
+    request.parameters.z8_add("ip"w, "127.0.0.1"w); request.parameters.z8_add("password"w, "private-secret"w);
+    previous = z8_application_set_request(request); P.m_add(id); z8_security_events_commit(request);
+    z8_application_set_request(previous);
+    auto content = readText(filePath);
+    assert(content.indexOf("USER:alice") >= 0 && content.indexOf("OBJECT:Orders") >= 0);
+    assert(content.indexOf("private-secret") < 0 && content.indexOf("ip=127.0.0.1") >= 0);
+    auto rotatePath = buildPath(args[1], "rotate.log");
+    request.securityLog = null; request.securityLogSink = new Z8FileSecurityLogSink(rotatePath, 1, 2);
+    request.monitor = new Z8RequestMonitor();
+    previous = z8_application_set_request(request); P.m_add(id); z8_security_events_commit(request);
+    z8_application_set_request(previous);
+    assert(exists(rotatePath) && exists(rotatePath ~ ".1") && !exists(rotatePath ~ ".2"));
+    z8_file_set_roots(args[1]); z8_server_config_replace(["security.log.file"w:"configured.log"w]);
+    assert(z8_security_log_file_from_config() !is null);
 }
 ''', encoding="utf-8")
     executable = temp / ("security-event.exe" if os.name == "nt" else "security-event")
@@ -136,5 +166,5 @@ void main() {
     response = temp / "dmd.rsp"
     response.write_text("\n".join('"' + arg.replace('\\', '/') + '"' for arg in args), encoding="utf-8")
     subprocess.run(["dmd", "@" + str(response)], cwd=temp, check=True)
-    subprocess.run([str(executable)], cwd=temp, check=True)
+    subprocess.run([str(executable), str(temp)], cwd=temp, check=True)
 print("SecurityObject and SecurityEvent BL values passed")

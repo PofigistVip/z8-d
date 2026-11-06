@@ -1,0 +1,81 @@
+// A process-local, synchronized rotating sink for the default security log.
+class Z8FileSecurityLogSink : IZ8SecurityLogSink {
+    private string path;
+    private ulong sizeLimit;
+    private uint fileCount;
+    this(string path, ulong sizeLimit = 10 * 1024 * 1024, uint fileCount = 10) {
+        import std.path : absolutePath, buildPath, isAbsolute;
+        if (!path.length || !sizeLimit || !fileCount) throw new Exception("invalid security log configuration");
+        this.path = absolutePath(isAbsolute(path) ? path : buildPath(z8_file_working_root, path));
+        this.sizeLimit = sizeLimit; this.fileCount = fileCount;
+    }
+    void write(Z8Object event, Z8StringMap parameters) {
+        import std.datetime : Clock;
+        import std.file : exists, getSize, mkdirRecurse, remove, rename;
+        import std.format : format;
+        import std.path : dirName;
+        import std.stdio : File;
+        auto request = z8_application_request();
+        auto state = z8_security_event_state(event);
+        auto object = z8_nonnull(state.object);
+        auto type = z8_string_or_empty(object.z8_security_object_virtual_type());
+        auto name = z8_string_or_empty(object.z8_security_object_virtual_name());
+        auto id = object.z8_security_object_virtual_id();
+        wstring objectText;
+        if (type.length) objectText ~= type ~ ":"w;
+        if (id !is null && id == z8_guid_zero()) objectText ~= z8_guid_to_string(id) ~ ":"w;
+        if (name.length) objectText ~= name ~ ":"w;
+        if (objectText.length) objectText = objectText[0 .. $ - 1];
+        if (request !is null && request.securityLog !is null)
+            objectText = z8_nonnull(request.securityLog).z8_security_log_virtual_format_object(object);
+        wstring actor, actorId;
+        if (request !is null && request.session !is null && request.session.user !is null) {
+            auto user = request.session.user;
+            if (user.id !is null) actorId = z8_guid_to_string(user.id);
+            foreach (part; [user.firstName, user.middleName, user.lastName])
+                if (part !is null && part.length) actor ~= part ~ " "w;
+            if (actor.length) actor ~= "("w ~ z8_string_or_empty(user.login) ~ ")"w;
+            else actor = z8_string_or_empty(user.login);
+        } else if (request !is null) actor = z8_string_or_empty(request.securityLogin);
+        if (request !is null && request.securityLog !is null) {
+            Z8UserData user;
+            if (request.session !is null) user = request.session.user;
+            if (user is null) { user = new Z8UserData(); user.id = z8_guid_zero(); user.login = request.securityLogin; }
+            actor = z8_nonnull(request.securityLog).z8_security_log_virtual_format_user(z8_user_wrap(user));
+        }
+        wstring params = "{"w;
+        auto keys = z8_nonnull(parameters).z8_keys();
+        foreach (i; 0 .. keys.z8_size()) {
+            auto key = keys.z8_get(i);
+            if (i) params ~= ", "w;
+            params ~= key ~ "="w ~ z8_string_or_empty(parameters.z8_get(key));
+        }
+        params ~= "}"w;
+        auto now = Clock.currTime();
+        auto line = format("[%04d-%02d-%02d %02d:%02d:%02d] User{%s %s} Object{%s} Action{%s} Params%s Success: %s - %s \n",
+            now.year, cast(int)now.month, now.day, now.hour, now.minute, now.second,
+            actorId.to!string, actor.to!string, objectText.to!string, z8_string_or_empty(state.action).to!string,
+            params.to!string, state.success.value ? "true" : "false", z8_string_or_empty(state.message).to!string);
+        synchronized (this) {
+            auto directory = dirName(path);
+            if (directory.length) mkdirRecurse(directory);
+            if (exists(path) && getSize(path) && getSize(path) + line.length > sizeLimit) {
+                if (fileCount == 1) remove(path);
+                else {
+                    auto oldest = path ~ "." ~ (fileCount - 1).to!string;
+                    if (exists(oldest)) remove(oldest);
+                    for (uint i = fileCount - 1; i > 1; --i) {
+                        auto from = path ~ "." ~ (i - 1).to!string;
+                        if (exists(from)) rename(from, path ~ "." ~ i.to!string);
+                    }
+                    rename(path, path ~ ".1");
+                }
+            }
+            auto file = File(path, "ab"); file.rawWrite(cast(const(ubyte)[])line); file.close();
+        }
+    }
+}
+Z8FileSecurityLogSink z8_security_log_file_from_config() {
+    auto path = z8_server_config_value("security.log.file"w);
+    return path is null || !path.length ? null : new Z8FileSecurityLogSink(path.to!string);
+}

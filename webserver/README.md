@@ -112,6 +112,10 @@ security event handling per HTTP request. Authentication attempts produce login
 events; application request events are delivered when the handler calls
 `z8_application_dispatch_request`. A sink shared by workers and a supplied factory
 must support concurrent calls. The sink receives only the permitted log parameters.
+`Z8FileSecurityLogSink` writes a rotating file and uses overridden BL user and
+object formatters when a security log is installed. The host can construct it
+directly or call `z8_security_log_file_from_config()` after supplying server
+configuration; the custom Java `security.log.format` is not implemented.
 For a single PostgreSQL schema, the optional integration module
 `z8.integration.postgres_authority` supplies `Z8PostgresHttpAuthority`. Add
 `integrations/postgres_webserver/source`, `postgres/source` and
