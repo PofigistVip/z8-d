@@ -10,6 +10,8 @@ class Z8ScalarKeyMap(K, V) {
     static if (is(K == Z8Decimal)) alias KeyIdentity = string;
     else alias KeyIdentity = K;
     private Entry[KeyIdentity] entries;
+    private Z8JavaMapOrder!(Z8Optional!K) order;
+    private Z8JavaMapOrder!(Z8Optional!K) ordering() { if (order is null) order = new Z8JavaMapOrder!(Z8Optional!K)(); return order; }
     private static KeyIdentity keyOf(K key) {
         static if (is(K == Z8Decimal))
             return key.nan ? "NaN" : key.scale.to!string ~ ":" ~ key.coefficient.to!string;
@@ -32,7 +34,7 @@ class Z8ScalarKeyMap(K, V) {
     }
     long z8_size() { return cast(long)entries.length + (hasNullKey ? 1 : 0); }
     bool z8_isEmpty() { return entries.length == 0 && !hasNullKey; }
-    void z8_clear() { entries.clear(); hasNullKey = false; nullKeyValue = Element.init; }
+    void z8_clear() { entries.clear(); hasNullKey = false; nullKeyValue = Element.init; if (order !is null) order.clear(); }
     bool z8_containsKey(Z8Optional!K key) { return key.present ? (keyOf(key.value) in entries) !is null : hasNullKey; }
     bool z8_containsValue(Element value) {
         if (hasNullKey && valueEquals(value, nullKeyValue)) return true;
@@ -42,6 +44,7 @@ class Z8ScalarKeyMap(K, V) {
     Element z8_add(Z8Optional!K key, Element value) {
         if (!key.present) {
             auto previous = hasNullKey ? nullKeyValue : Element.init;
+            if (!hasNullKey) ordering().add(key);
             hasNullKey = true; nullKeyValue = value; return previous;
         }
         auto identity = keyOf(key.value);
@@ -51,14 +54,15 @@ class Z8ScalarKeyMap(K, V) {
             found.value = value;
             return previous;
         }
-        entries[identity] = Entry(key.value, value);
+        ordering().add(key); entries[identity] = Entry(key.value, value);
         return Element.init;
     }
     void z8_add(Z8ScalarKeyMap!(K, V) other) {
         z8_nonnull(other);
         if (other is this) return;
-        foreach (entry; other.entries) z8_add(z8_optional_wrap(entry.key), entry.value);
-        if (other.hasNullKey) z8_add(Z8Optional!K.init, other.nullKeyValue);
+        ordering().preparePutAll(cast(size_t)other.z8_size());
+        auto keys = other.z8_keys();
+        for (long i; i < keys.z8_size(); ++i) { auto key = keys.z8_get(i); z8_add(key, other.z8_get(key)); }
     }
     Element z8_get(Z8Optional!K key) {
         if (!key.present) return hasNullKey ? nullKeyValue : Element.init;
@@ -68,6 +72,7 @@ class Z8ScalarKeyMap(K, V) {
     Element z8_remove(Z8Optional!K key) {
         if (!key.present) {
             auto previous = hasNullKey ? nullKeyValue : Element.init;
+            if (hasNullKey) ordering().remove(key);
             hasNullKey = false; nullKeyValue = Element.init; return previous;
         }
         auto identity = keyOf(key.value);
@@ -75,18 +80,17 @@ class Z8ScalarKeyMap(K, V) {
         if (found is null) return Element.init;
         auto previous = found.value;
         entries.remove(identity);
+        ordering().remove(key);
         return previous;
     }
     Z8Array!K z8_keys() {
         auto result = new Z8Array!K();
-        foreach (entry; entries) result.z8_add(entry.key);
-        if (hasNullKey) result.z8_add(Z8Optional!K.init);
+        if (order !is null) foreach (key; order.ordered()) result.z8_add(key);
         return result;
     }
     Z8ValueArray!V z8_values() {
         auto result = new Z8ValueArray!V();
-        foreach (entry; entries) result.z8_add(entry.value);
-        if (hasNullKey) result.z8_add(nullKeyValue);
+        if (order !is null) foreach (key; order.ordered()) result.z8_add(z8_get(key));
         return result;
     }
 }

@@ -4,7 +4,7 @@ class Z8StringValueMap(V) {
     else static if (is(V == class)) alias Element = V;
     else static assert(0, "unsupported string-key map value");
     private Element[wstring] entries;
-    private Z8JavaStringMapOrder order;
+    private Z8JavaMapOrder!wstring order;
     private bool hasNullKey;
     private Element nullKeyValue;
 
@@ -19,7 +19,7 @@ class Z8StringValueMap(V) {
     }
     long z8_size() { return cast(long)entries.length + (hasNullKey ? 1 : 0); }
     bool z8_isEmpty() { return entries.length == 0 && !hasNullKey; }
-    private Z8JavaStringMapOrder ordering() { if (order is null) order = new Z8JavaStringMapOrder(); return order; }
+    private Z8JavaMapOrder!wstring ordering() { if (order is null) order = new Z8JavaMapOrder!wstring(); return order; }
     void z8_clear() { entries.clear(); hasNullKey = false; nullKeyValue = Element.init; if (order !is null) order.clear(); }
     bool z8_containsKey(wstring key) { return key is null ? hasNullKey : (key in entries) !is null; }
     bool z8_containsValue(Element value) {

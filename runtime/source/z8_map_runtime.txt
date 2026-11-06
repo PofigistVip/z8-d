@@ -1,19 +1,34 @@
 // RLinkedHashMap.java extends HashMap; ordinary buckets iterate in bucket order,
 // retaining insertion order within a bucket. Keep its capacity across clear.
 // Treeified collision buckets have additional Java-specific ordering.
-private class Z8JavaStringMapOrder {
-    private wstring[] keys;
+private class Z8JavaMapOrder(K) {
+    private struct Entry { K key; uint hash; }
+    private Entry[] keys;
     private size_t capacity;
     private size_t[size_t] bucketCounts;
-    private static uint hash(wstring key) {
+    private static uint hash(K key) {
         uint value;
-        if (key !is null) foreach (wchar c; key) value = value * 31 + c;
+        static if (is(K == wstring)) {
+            if (key !is null) foreach (wchar c; key) value = value * 31 + c;
+        } else {
+            if (key.present) value = cast(uint)z8_primary_hash(z8_primary_box(key));
+        }
         return value ^ (value >> 16);
+    }
+    private static bool same(K left, K right) {
+        static if (is(K == wstring)) return left is null ? right is null : (right !is null && left == right);
+        else {
+            if (left.present != right.present) return false;
+            if (!left.present) return true;
+            static if (is(K == Z8Optional!Z8Decimal))
+                return left.value.nan ? right.value.nan : (!right.value.nan && left.value.scale == right.value.scale && left.value.coefficient == right.value.coefficient);
+            else return left.value == right.value;
+        }
     }
     private void grow() {
         capacity *= 2; bucketCounts.clear();
         foreach (key; keys) {
-            auto bucket = hash(key) & (capacity - 1);
+            auto bucket = key.hash & (capacity - 1);
             auto count = bucket in bucketCounts;
             if (count is null) bucketCounts[bucket] = 1; else ++*count;
         }
@@ -26,31 +41,32 @@ private class Z8JavaStringMapOrder {
             while (capacity < needed && capacity < (cast(size_t)1 << 30)) capacity *= 2;
         } else if (incoming > capacity * 3 / 4 && capacity < (cast(size_t)1 << 30)) grow();
     }
-    void add(wstring key) {
+    void add(K key) {
         if (!capacity) capacity = 16;
-        auto bucket = hash(key) & (capacity - 1);
+        auto keyHash = hash(key);
+        auto bucket = keyHash & (capacity - 1);
         auto count = bucket in bucketCounts;
         auto collisions = count is null ? 0 : *count;
-        keys ~= key;
+        keys ~= Entry(key, keyHash);
         bucketCounts[bucket] = collisions + 1;
         if (collisions >= 8 && capacity < 64) grow();
         if (keys.length > capacity * 3 / 4 && capacity < (cast(size_t)1 << 30)) grow();
     }
-    void remove(wstring key) {
-        foreach (i, existing; keys) if (existing is null ? key is null : (key !is null && existing == key)) {
-            auto bucket = hash(existing) & (capacity - 1);
+    void remove(K key) {
+        foreach (i, existing; keys) if (same(existing.key, key)) {
+            auto bucket = existing.hash & (capacity - 1);
             if (--bucketCounts[bucket] == 0) bucketCounts.remove(bucket);
             keys = keys[0 .. i] ~ keys[i + 1 .. $]; return;
         }
     }
     void clear() { keys = null; bucketCounts.clear(); }
-    wstring[] ordered() {
+    K[] ordered() {
         import std.algorithm.sorting : sort;
-        struct OrderedKey { wstring value; size_t bucket, index; }
+        struct OrderedKey { K value; size_t bucket, index; }
         OrderedKey[] entries; entries.reserve(keys.length);
-        foreach (i, key; keys) entries ~= OrderedKey(key, hash(key) & (capacity - 1), i);
+        foreach (i, key; keys) entries ~= OrderedKey(key.key, key.hash & (capacity - 1), i);
         sort!((a, b) => a.bucket < b.bucket || (a.bucket == b.bucket && a.index < b.index))(entries);
-        wstring[] result; result.reserve(entries.length);
+        K[] result; result.reserve(entries.length);
         foreach (entry; entries) result ~= entry.value;
         return result;
     }
@@ -77,7 +93,7 @@ private bool z8_map_content_equals(M)(M left, M right) {
 }
 class Z8StringMap {
     private wstring[wstring] entries;
-    private Z8JavaStringMapOrder order;
+    private Z8JavaMapOrder!wstring order;
     // Retain insertion order so serializers can reproduce Java HashMap bucket ties.
     private wstring[] insertionKeys;
     private bool hasNullKey;
@@ -88,7 +104,7 @@ class Z8StringMap {
     }
     long z8_size() { return cast(long)entries.length + (hasNullKey ? 1 : 0); }
     bool z8_isEmpty() { return entries.length == 0 && !hasNullKey; }
-    private Z8JavaStringMapOrder ordering() { if (order is null) order = new Z8JavaStringMapOrder(); return order; }
+    private Z8JavaMapOrder!wstring ordering() { if (order is null) order = new Z8JavaMapOrder!wstring(); return order; }
     void z8_clear() { entries.clear(); insertionKeys = null; hasNullKey = false; nullKeyValue = null; if (order !is null) order.clear(); }
     bool z8_containsKey(wstring key) { return key is null ? hasNullKey : (key in entries) !is null; }
     bool z8_containsValue(wstring value) {
