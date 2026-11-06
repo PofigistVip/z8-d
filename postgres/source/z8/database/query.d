@@ -217,7 +217,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                     kind == "date"w || kind == "datetime"w || kind == "datespan"w;
                 bool extrema = aggregation == Z8FieldAggregation.min || aggregation == Z8FieldAggregation.max;
                 bool arithmetic = aggregation == Z8FieldAggregation.sum || aggregation == Z8FieldAggregation.average;
-                bool countable = numeric || kind == "string"w || kind == "text"w;
+                bool countable = comparable && kind != "guid"w;
                 if (!(comparable && extrema) && !(numeric && arithmetic) && !(countable && aggregation == Z8FieldAggregation.count))
                     throw new Z8PostgresException("unsupported PostgreSQL aggregateBy field aggregation");
             }

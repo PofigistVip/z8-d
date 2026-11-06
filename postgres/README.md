@@ -442,10 +442,12 @@ parent updates the paths and ancestor columns of the affected subtree within
 the database transaction.
 
 The executor supports `aggregateBy` grouping over root Link fields with numeric
-sum, average, count, minimum and maximum, count for string and text fields, and scalar minimum/maximum for strings, text,
+sum, average, count, minimum and maximum, count for string, text, boolean and temporal fields, and scalar minimum/maximum for strings, text,
 booleans, dates, durations and GUIDs. Filters can reference linked tables, and a
 subselect joins target fields, including chained links and computed fields, after
 grouping. An optional second grouping and its `HAVING` run in the outer select.
+As with JDBC, a boolean count can be read only when its result is 0 or 1; temporal
+fields interpret the count as milliseconds.
 Expressions and joins requiring unprojected root fields, and row locks on these
 queries, are rejected. Numeric sum and average totals retain linked fields' joins
 and apply after grouping. `HAVING` filters over
