@@ -80,6 +80,8 @@ Fields reached through a custom Join are exposed as read-only
 text controls after checking the relation and target permissions. Grouping with
 `aggregateBy` is supported by the PostgreSQL executor for its documented subset.
 Other control types and unsupported grouping combinations are rejected.
+Grouping used by a read is captured after `beforeRead` and before `getData`,
+as in the original `ReadAction`, even if `getData` changes query collections.
 `ActionReport` exposes the report format parameter and executes a custom report
 once for each selected record, adding the resulting files to the request monitor.
 Without an explicit `fields` parameter, configured form controls, names, columns

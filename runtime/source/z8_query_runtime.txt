@@ -5,6 +5,9 @@ private enum z8_expression_name = "org.zenframework.z8.server.base.table.value.E
 enum Z8QueryReadLock { none, update, share, updateNoWait, shareNoWait }
 struct Z8QueryReadRequest {
     Z8Object[] fields, sortFields, groupFields;
+    // ReadAction fixes the query's grouping before calling BL getData.
+    Z8Object[] capturedGroupBy, capturedAggregateBy;
+    bool groupingCaptured;
     // Totals may omit display fields while retaining their join dependencies.
     Z8Object[] aggregateSourceFields;
     Z8SqlBool where, having;
@@ -14,6 +17,12 @@ struct Z8QueryReadRequest {
     Z8Guid recordId;
     bool byRecordId, byRecordIds, disableGrouping, excludeNullRecord, aggregateAll;
     Z8QueryReadLock readLock;
+}
+Z8Object[] z8_query_read_group_by(Z8Object query, Z8QueryReadRequest request) {
+    return request.groupingCaptured ? request.capturedGroupBy : z8_query_array(query, "groupBy"w);
+}
+Z8Object[] z8_query_read_aggregate_by(Z8Object query, Z8QueryReadRequest request) {
+    return request.groupingCaptured ? request.capturedAggregateBy : z8_query_array(query, "aggregateBy"w);
 }
 interface IZ8QueryCursor : IZ8FieldCursor {
     Z8Object[] fields();

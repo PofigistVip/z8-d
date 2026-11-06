@@ -38,9 +38,9 @@ private void z8_application_dispatch_query_meta_target(wstring className, Z8Obje
         foreach (existing; selected) if (existing is field) { present = true; break; }
         if (!present) selected ~= field;
     }
-    z8_application_query_write_meta(query, selected, groups, privileges, context);
+    z8_application_query_write_meta(query, selected, groups, aggregates, privileges, context);
 }
-private void z8_application_query_write_meta(Z8Object query, Z8Object[] selected, Z8Object[] groups, Z8Privileges privileges, Z8Object context = null) {
+private void z8_application_query_write_meta(Z8Object query, Z8Object[] selected, Z8Object[] groups, Z8Object[] aggregates, Z8Privileges privileges, Z8Object context = null) {
     if (context is null) context = query;
     auto writer = z8_application_require_request().writer;
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
@@ -88,7 +88,7 @@ private void z8_application_query_write_meta(Z8Object query, Z8Object[] selected
     auto state = z8_query_state(query);
     if (state.period !is null && z8_application_query_field_readable(query, state.period, privileges))
         z8_monitor_property(writer, "periodKey"w, state.period.z8_id());
-    z8_monitor_property(writer, "readOnly"w, groups.length != 0 || z8_query_array(query, "aggregateBy"w).length != 0 || (state.readOnly.present && state.readOnly.value));
+    z8_monitor_property(writer, "readOnly"w, groups.length != 0 || aggregates.length != 0 || (state.readOnly.present && state.readOnly.value));
     z8_monitor_property(writer, "limit"w, z8_query_limit(query));
     z8_monitor_property(writer, "totals"w, state.totals);
     z8_monitor_property(writer, "colCount"w, state.colCount);

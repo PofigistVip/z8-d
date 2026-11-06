@@ -477,6 +477,7 @@ public class Probe {
     public static void readAggregateNested(AggregateOrder order) { Field[] fields = {order.customer.city.label}; order.read(fields); }
     public static void readAggregateExpression(AggregateOrder order) { Field[] fields = {order.customer.labelLength, order.amount}; Field[] sort = {order.customer.labelLength}; order.read(fields, sort); }
     public static int aggregateCount(AggregateOrder order) { return order.count(); }
+    public static void clearAggregate(AggregateOrder order) { order.aggregateBy.clear(); }
     public static int aggregateAlice(AggregateOrder order) { return order.count(order.customer.label == "Alice"); }
     public static bool nextAggregate(AggregateOrder order) { return order.next(); }
     public static guid aggregateCustomer(AggregateOrder order) { return order.customerId.get(); }
@@ -644,6 +645,24 @@ void main(string[] args) {
     assert(defaultRows == 2);
     auto aggregateExecutor = new Z8PostgresQueryExecutor(db, "pg_temp"w, "AggregateOrders"w);
     z8_query_set_executor(aggregate, aggregateExecutor);
+    auto snapshotAggregate = P.m_aggregateOrder();
+    Z8QueryReadRequest captured; captured.groupingCaptured = true;
+    captured.capturedAggregateBy = z8_query_array(snapshotAggregate, "aggregateBy"w);
+    captured.fields = [cast(Z8Object)snapshotAggregate.f_customerId, cast(Z8Object)snapshotAggregate.f_amount];
+    assert(captured.capturedAggregateBy.length == 1);
+    P.m_clearAggregate(snapshotAggregate);
+    assert(z8_query_array(snapshotAggregate, "aggregateBy"w).length == 0);
+    assert(aggregateExecutor.count(snapshotAggregate, captured) == 2);
+    auto capturedCursor = aggregateExecutor.read(snapshotAggregate, captured);
+    int capturedRows; long capturedTotal; bool capturedNull;
+    while (capturedCursor.next()) {
+        capturedTotal += z8_optional_require(z8_primary_cast!long(capturedCursor.read(snapshotAggregate.f_amount, false, capturedNull)));
+        ++capturedRows;
+    }
+    capturedCursor.close();
+    assert(capturedRows == 2 && capturedTotal == 17);
+    Z8QueryReadRequest emptySnapshot; emptySnapshot.groupingCaptured = true;
+    assert(aggregateExecutor.count(aggregate, emptySnapshot) == 3);
     assert(z8_optional_require(P.m_aggregateCount(aggregate)) == 2);
     assert(z8_optional_require(P.m_aggregateAlice(aggregate)) == 1);
     P.m_readAggregate(aggregate); long sum; int aggregateRows;

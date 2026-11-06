@@ -170,16 +170,21 @@ import org.zenframework.z8.base.application.Application;
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.StringField;
 import org.zenframework.z8.base.table.value.IntField;
+import org.zenframework.z8.base.table.value.Link;
 import org.zenframework.z8.base.json.JsonArray;
 import org.zenframework.z8.base.application.Application;
 [name "Sample"] [request] public class MemoryTable extends Table {
     [name "Title"] public StringField title; [name "Amount"] public IntField amount;
+    Table child; [name "ChildLink"] Link childLink = child;
     columns = {title, amount};
     virtual protected void beforeRead() { Application.info("table before"); }
     virtual protected void afterRead() { Application.info("table after"); }
     virtual protected JsonArray getData(string[string] parameters) {
         if (parameters.containsKey("lookup") && parameters["lookup"] == "database") return null;
+        if (parameters.containsKey("lookup") && parameters["lookup"] == "databasegroups") { groupBy = {title}; return null; }
+        if (parameters.containsKey("lookup") && parameters["lookup"] == "databaseaggregate") { aggregateBy = {childLink}; return null; }
         if (parameters.containsKey("lookup") && parameters["lookup"] == "customgroups") groupBy = {title};
+        if (parameters.containsKey("lookup") && parameters["lookup"] == "customaggregate") aggregateBy = {childLink};
         return JsonArray.parse("[{title:'custom',amount:42}]");
     }
 }
@@ -218,7 +223,10 @@ import org.zenframework.z8.base.table.value.Aggregation;
 import org.zenframework.z8.base.json.JsonArray;
 public class DynamicGroups extends MemoryTable {
     virtual protected void beforeRead() { groupBy = {title}; amount.aggregation = Aggregation.Sum; }
-    virtual protected JsonArray getData(string[string] parameters) { return null; }
+    virtual protected JsonArray getData(string[string] parameters) {
+        if (parameters.containsKey("lookup") && parameters["lookup"] == "cleargroups") groupBy = {};
+        return null;
+    }
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -420,9 +428,18 @@ void main(string[] args) {
             assert [message["text"] for message in result["info"]["messages"]] == ["table before", "table after"], result
             result = request(request="MemoryTable", action=None, lookup="customgroups")
             assert result["success"] and result["data"] == [{"title": "custom", "amount": 42}] and result["isQuery"], result
+            baseline = request(request="MemoryTable", action=None)
+            result = request(request="MemoryTable", action=None, lookup="customaggregate")
+            assert result["success"] and result["data"] == baseline["data"] and result["readOnly"] == baseline["readOnly"], result
             result = request(request="MemoryTable", lookup="database")
             assert result["success"] and len(result["data"]) == 2 and result["data"][0]["amount"] in (5, 10), result
             assert [message["text"] for message in result["info"]["messages"]] == ["table before", "table after"], result
+            result = request(request="MemoryTable", lookup="databasegroups", sort='[{"property":"title"}]')
+            assert result["success"] and [(row["title"], row["amount"]) for row in result["data"]] == [("First", 5), ("Second", 10)], result
+            result = request(request="MemoryTable", lookup="databasegroups", count="true")
+            assert result["success"] and result["total"] == 2, result
+            result = request(request="MemoryTable", lookup="databaseaggregate", count="true")
+            assert result["success"] and result["total"] == 2, result
             result = request(request="MemoryTable", count="true")
             assert result["success"] and result["data"][0]["amount"] == 42 and "total" not in result, result
             result = request(request="login", action=None, password="wrong", newPassword="newhash")
@@ -444,6 +461,10 @@ void main(string[] args) {
             assert result["success"] and result["readOnly"] and {field["name"] for field in result["fields"]} == {"title", "amount"}, result
             result = request(request="DynamicGroups", sort='[{"property":"title"}]')
             assert result["success"] and [(row["title"], row["amount"]) for row in result["data"]] == [("First", 5), ("Second", 10)], result
+            result = request(request="DynamicGroups", lookup="cleargroups", sort='[{"property":"title"}]')
+            assert result["success"] and [(row["title"], row["amount"]) for row in result["data"]] == [("First", 5), ("Second", 10)], result
+            result = request(request="DynamicGroups", lookup="cleargroups", count="true")
+            assert result["success"] and result["total"] == 2, result
             result = request(request="DynamicGroups", count="true")
             assert result["success"] and result["total"] == 2, result
             result = request(request="DynamicGroups", having='{"property":"amount","operator":"gt","value":5}')
