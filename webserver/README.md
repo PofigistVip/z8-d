@@ -77,6 +77,14 @@ receive the Z8 error envelope with HTTP 401. The authority supplies the
 `Z8ApplicationSession` used by `Application.user()` and related methods. With
 no authority, the host handler is responsible for access control. Providers
 must handle concurrent calls and decide how to synchronize session state.
+An authority may also implement `IZ8UserChangeNotifier`. User updates, deletion,
+and the BL `Users.notifyUserChange` call then notify it with the user ID and
+database schema, so it can invalidate cached sessions for the correct tenant.
+The PostgreSQL backend supplies the schema. `Z8SessionManager` implements this
+interface and drops that user's session; a host authority can delegate to it.
+As in the Java implementation, the callback runs during the database operation,
+which can be before an enclosing transaction commits. Changes to the current or
+built-in user normally do not notify; setting `changePassword` to true forces it.
 `remoteAddress` is the connection peer; `forwardedAddress` exposes the raw
 `X-Real-IP` header for deployments where the host explicitly trusts its proxy.
 

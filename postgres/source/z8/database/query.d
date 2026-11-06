@@ -146,7 +146,7 @@ private class Z8PostgresRows : IZ8QueryCursor {
 }
 
 // Executes queries and their required linked-table plans.
-class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWriter, IZ8RoleAccessPropagator, IZ8RoleLifecycle {
+class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWriter, IZ8RoleAccessPropagator, IZ8RoleLifecycle, IZ8DatabaseSchema {
     private Z8PostgresConnection connection;
     private wstring schema, table;
     private Z8RuntimeRegistry registry;
@@ -155,6 +155,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         quoteIdentifier(schema); quoteIdentifier(table);
         this.connection = connection; this.schema = schema.idup; this.table = table.idup; this.registry = registry;
     }
+    wstring databaseSchema() { return schema; }
     private void createRoleAccess(wstring nativeName, wstring tableName, wstring targetIndex, Z8Guid roleId, Z8Guid targetId) {
         auto access = z8_native_new(nativeName); access.z8_ensure();
         Z8Object role, target;

@@ -322,6 +322,7 @@ private long z8_query_update_id_run(Z8Object self, Z8Guid id, bool resetChanged)
     foreach (field; z8_query_declared_fields(self, true)) if (z8_field_is_changed(field)) changed ~= field;
     auto result = changed.length ? writer.update(self, id, changed) : 0L;
     if (id !is null && z8_query_user_events_enabled()) self.z8_query_virtual_afterUpdate(id);
+    if (id !is null && z8_query_user_events_enabled() && z8_native_is_instance(z8_users_name, self)) z8_users_after_update(self, id);
     if (resetChanged) foreach (field; changed) z8_field_reset(field);
     return result;
 }
@@ -342,6 +343,7 @@ private Z8Optional!long z8_query_destroy_id(Z8Object self, Z8Guid id) {
     }
     auto result = writer.destroy(self, id);
     if (z8_query_user_events_enabled()) self.z8_query_virtual_afterDestroy(id);
+    if (z8_query_user_events_enabled() && z8_native_is_instance(z8_users_name, self)) z8_users_notify_change(id, false, self);
     return z8_optional_wrap(cast(long)cast(int)result);
 }
 private void z8_query_read_request(Z8Object self, Z8ObjectArray!Z8Object fields, Z8ObjectArray!Z8Object sort,

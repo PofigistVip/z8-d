@@ -41,6 +41,9 @@ interface IZ8ApplicationMonitor {
 interface IZ8JobProgress { void setWorked(long percent); }
 // The host resolves a complete identity and privilege snapshot for job impersonation.
 interface IZ8JobUserResolver { Z8UserData resolveJobUser(Z8Guid id); }
+// The authority may revoke or refresh cached sessions after a user changes.
+// Notifications carry the database schema so tenants remain isolated.
+interface IZ8UserChangeNotifier { void userChanged(Z8Guid id, wstring schema); }
 struct Z8MonitorEntry {
     Z8MonitorLevel level;
     wstring text, source;
@@ -145,6 +148,7 @@ class Z8ApplicationRequest {
     Z8Array!Z8File files;
     IZ8ApplicationMonitor monitor;
     IZ8JobUserResolver jobUserResolver;
+    IZ8UserChangeNotifier userChangeNotifier;
     Z8ApplicationSession session;
     private Z8EventsLevel[] eventLevels;
     void setEventsLevel(Z8EventsLevel level) { eventLevels ~= level; }

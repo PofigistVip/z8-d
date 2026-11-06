@@ -1,6 +1,6 @@
 // Active-session bookkeeping analogous to org.zenframework.z8.auth.SessionManager.
 // The caller supplies session IDs issued by its authentication provider.
-class Z8SessionManager {
+class Z8SessionManager : IZ8UserChangeNotifier {
     private class Entry {
         Z8ApplicationSession session;
         wstring userKey, schema;
@@ -56,6 +56,7 @@ class Z8SessionManager {
         auto userKey = key(id, schema);
         synchronized (mutex) { auto found = userKey in users; if (found !is null) removeEntry(*found); }
     }
+    void userChanged(Z8Guid id, wstring schema) { dropUserSessions(id, schema); }
     void dropRoleSessions(Z8Guid roleId, wstring schema) {
         z8_nonnull(roleId);
         synchronized (mutex) {

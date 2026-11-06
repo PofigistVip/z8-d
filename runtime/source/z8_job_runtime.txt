@@ -91,6 +91,7 @@ private void z8_application_start_job(Z8Object executable) {
     worker.files.z8_addAll(request.files);
     worker.session = new Z8ApplicationSession(session.id, user, session.system);
     worker.jobUserResolver = request.jobUserResolver;
+    worker.userChangeNotifier = request.userChangeNotifier;
     worker.monitor = monitor; worker.setEventsLevel(request.eventsLevel());
     synchronized (z8_job_lock) z8_job_monitors[id] = monitor;
     scope(failure) if (!started) synchronized (z8_job_lock) z8_job_monitors.remove(id);

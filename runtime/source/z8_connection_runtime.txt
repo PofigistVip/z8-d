@@ -21,6 +21,7 @@ interface IZ8BackgroundDatabaseConnection {
 }
 // Requires an active transaction and holds the matched user row until it ends.
 interface IZ8UserPasswordVerifier { bool lockMatchingPassword(Z8Guid id, wstring passwordHash); }
+interface IZ8DatabaseSchema { wstring databaseSchema(); }
 private class Z8ConnectionState {
     IZ8DatabaseConnection backend;
     this(IZ8DatabaseConnection backend) { this.backend = backend; }

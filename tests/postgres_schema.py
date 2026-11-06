@@ -185,6 +185,8 @@ public class Probe {
     public static void createCustomUser(Users value, guid id) { value.password = "custom"; value.changePassword = false; value.create(id); }
     public static void createNamedUser(Users value, guid id, string name) { value.name = name; value.create(id); }
     public static void banUser(Users value, guid id, bool banned) { value.banned = banned; value.update(id); }
+    public static void forcePasswordChange(Users value, guid id) { value.changePassword = true; value.update(id); }
+    public static void notifyUserChange(guid id) { Users.notifyUserChange(id); }
     public static void deleteUser(Users value, guid id) { value.destroy(id); }
     public static void deleteRole(Roles value, guid id) { value.destroy(id); }
     public static void createRole(Roles value, guid id) { value.name = "Custom"; value.create(id); }
@@ -207,6 +209,7 @@ public class Probe {
 import z8.runtime;
 import z8.database.postgres;
 import z8.database.connection;
+import z8.database.query;
 import z8.database.schema;
 import z8.database.catalog;
 import z8.database.compare;
@@ -613,6 +616,30 @@ void main(string[] args) {
     assert(loadedSystem !is null && loadedSystem.login == "System"w && loadedSystem.builtinSystem);
     auto previousConnection = z8_connection_set_current(new Z8PostgresDatabase(db, "z8_bootstrap"w, bootstrapRegistry));
     assert(z8_optional_require(P.m_lookupSystemUser()));
+    auto manager = new Z8SessionManager();
+    auto notificationUser = new Z8UserData(); notificationUser.id = z8_guid_create(0x12345);
+    manager.create("victim"w, notificationUser, loadedSystem, "z8_bootstrap"w);
+    manager.create("other-schema"w, notificationUser, loadedSystem, "other"w);
+    manager.create("admin-session"w, loadedAdmin, loadedSystem, "z8_bootstrap"w);
+    auto notificationRequest = new Z8ApplicationRequest();
+    notificationRequest.session = new Z8ApplicationSession("admin-session"w, loadedAdmin, loadedSystem);
+    notificationRequest.userChangeNotifier = manager;
+    auto previousRequest = z8_application_set_request(notificationRequest);
+    P.m_createNamedUser(P.m_users(), notificationUser.id, "Notification User"w);
+    auto explicitUsers = P.m_users();
+    z8_query_set_executor(explicitUsers, new Z8PostgresQueryExecutor(db, "z8_bootstrap"w, "SystemUsers"w));
+    z8_connection_set_current(new Z8PostgresDatabase(db, "other"w));
+    P.m_banUser(explicitUsers, notificationUser.id, z8_optional_wrap(true));
+    z8_connection_set_current(new Z8PostgresDatabase(db, "z8_bootstrap"w, bootstrapRegistry));
+    assert(manager.getSession("victim"w) is null && manager.getSession("other-schema"w) !is null);
+    P.m_notifyUserChange(loadedAdmin.id);
+    assert(manager.getSession("admin-session"w) !is null);
+    P.m_forcePasswordChange(P.m_users(), loadedAdmin.id);
+    assert(manager.getSession("admin-session"w) is null);
+    manager.create("victim-delete"w, notificationUser, loadedSystem, "z8_bootstrap"w);
+    P.m_deleteUser(P.m_users(), notificationUser.id);
+    assert(manager.getSession("victim-delete"w) is null && manager.getSession("other-schema"w) !is null);
+    z8_application_set_request(previousRequest);
     z8_connection_set_current(previousConnection);
     assert(z8_postgres_read_user(db, "z8_bootstrap"w, z8_guid_create(999999)) is null);
     assert(adminPrivileges.roleIds.length == 1 && adminPrivileges.privileges.getDefaultAccess().execute);

@@ -88,12 +88,31 @@ void z8_users_before_write(Z8Object self, Z8Guid id, bool create) {
 void z8_users_before_destroy(Z8Guid id) {
     if (z8_users_is_builtin(id)) throw new Exception("Builtin users can not be deleted");
 }
+private void z8_users_notify_change(Z8Guid id, bool force = false, Z8Object table = null) {
+    auto request = z8_application_request();
+    if (request is null || request.userChangeNotifier is null) return;
+    id = z8_nonnull(id);
+    auto current = z8_nonnull(z8_nonnull(request.session).user).id;
+    if (!force && (z8_users_is_builtin(id) || (current !is null && current == id))) return;
+    auto executor = table is null ? null : z8_query_state(table).executor;
+    auto database = executor is null ? cast(IZ8DatabaseSchema)z8_connection_current_backend() : cast(IZ8DatabaseSchema)executor;
+    if (database is null || database.databaseSchema() is null || !database.databaseSchema().length)
+        throw new Exception("user change notification requires a database schema");
+    request.userChangeNotifier.userChanged(id, database.databaseSchema());
+}
+private void z8_users_notify_change_native(Z8Guid id) { z8_users_notify_change(id); }
+void z8_users_after_update(Z8Object self, Z8Guid id) {
+    auto field = z8_users_state(self).fields[12];
+    auto force = z8_field_is_changed(field) && z8_optional_require(z8_primary_cast!bool(z8_field_primary(field)));
+    z8_users_notify_change(id, force, self);
+}
 private Z8Guid* z8_user_system_address() { return &z8_user_system; }
 private Z8Guid* z8_user_administrator_address() { return &z8_user_administrator; }
 shared static this() {
     z8_user_system = z8_guid_literal("00000000-0000-0000-0000-000000000001");
     z8_user_administrator = z8_guid_literal("00000000-0000-0000-0000-000000000002");
     z8_native_bind(z8_users_name ~ ".m_new"w, &z8_users_new);
+    z8_native_bind(z8_users_name ~ ".m_notifyUserChange"w, &z8_users_notify_change_native);
     static foreach (i, name; ["name"w, "description"w, "password"w, "firstName"w, "middleName"w, "lastName"w,
         "phone"w, "email"w, "company"w, "position"w, "banned"w, "bannedUntil"w, "changePassword"w,
         "settings"w, "verification"w, "verificationModAt"w, "failedAuthCount"w])
