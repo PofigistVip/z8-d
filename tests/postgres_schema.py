@@ -1317,7 +1317,12 @@ void main(string[] args) {
     auto explicitUsers = P.m_users();
     z8_query_set_executor(explicitUsers, new Z8PostgresQueryExecutor(db, "z8_bootstrap"w, "SystemUsers"w));
     z8_connection_set_current(new Z8PostgresDatabase(db, "other"w));
+    db.beginTransaction(); P.m_banUser(explicitUsers, notificationUser.id, z8_optional_wrap(true));
+    assert(manager.getSession("victim"w) !is null); db.rollback();
+    assert(manager.getSession("victim"w) !is null);
+    db.beginTransaction();
     P.m_banUser(explicitUsers, notificationUser.id, z8_optional_wrap(true));
+    assert(manager.getSession("victim"w) !is null); db.commit();
     z8_connection_set_current(new Z8PostgresDatabase(db, "z8_bootstrap"w, bootstrapRegistry));
     assert(manager.getSession("victim"w) is null && manager.getSession("other-schema"w) !is null);
     manager.create("role-add"w, notificationUser, loadedSystem, "z8_bootstrap"w);
@@ -1940,6 +1945,13 @@ void main(string[] args) {
     auto roleRequest = new Z8ApplicationRequest(); roleRequest.roleChangeNotifier = roleSessions;
     roleRequest.session = new Z8ApplicationSession("admin"w, roleAdmin, roleAdmin);
     auto oldRoleRequest = z8_application_set_request(roleRequest);
+    roleSessions.create("pending"w, roleMember, roleAdmin, "z8_access"w);
+    db.beginTransaction(); P.m_setFieldRead(roleFieldAccess, z8_guid_create(101), z8_optional_wrap(true));
+    assert(roleSessions.getSession("pending"w) !is null); db.rollback();
+    assert(roleSessions.getSession("pending"w) !is null);
+    db.beginTransaction(); db.beginTransaction(); P.m_setFieldRead(roleFieldAccess, z8_guid_create(101), z8_optional_wrap(true));
+    db.commit(); assert(roleSessions.getSession("pending"w) !is null);
+    db.commit(); assert(roleSessions.getSession("pending"w) is null);
     roleSessions.create("field"w, roleMember, roleAdmin, "z8_access"w);
     P.m_setFieldRead(roleFieldAccess, z8_guid_create(101), z8_optional_wrap(true));
     assert(roleSessions.getSession("field"w) is null);

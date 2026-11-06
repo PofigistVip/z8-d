@@ -52,5 +52,9 @@ void z8_role_access_after_update(Z8RoleAccessKind kind)(Z8Object self, Z8Guid id
     if (request is null || request.roleChangeNotifier is null) return;
     bool found;
     auto values = z8_query_copy_values(self, [z8_role_access_state!kind(self).role], id, found);
-    if (found) request.roleChangeNotifier.roleChanged(z8_nonnull(z8_primary_cast!Z8Guid(values[0])), z8_notification_schema(self));
+    if (found) {
+        auto roleId = z8_nonnull(z8_primary_cast!Z8Guid(values[0])); auto copy = new Z8Guid(roleId.majorBits, roleId.minorBits);
+        auto notifier = request.roleChangeNotifier; auto schema = z8_notification_schema(self);
+        z8_notification_after_commit(self, { notifier.roleChanged(copy, schema); });
+    }
 }

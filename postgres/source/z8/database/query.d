@@ -154,7 +154,7 @@ private struct Z8PostgresRootAggregation {
 }
 
 // Executes queries and their required linked-table plans.
-class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWriter, IZ8RoleAccessPropagator, IZ8RoleLifecycle, IZ8DatabaseSchema {
+class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWriter, IZ8RoleAccessPropagator, IZ8RoleLifecycle, IZ8DatabaseSchema, IZ8AfterCommit {
     private Z8PostgresConnection connection;
     private wstring schema, table;
     private Z8RuntimeRegistry registry;
@@ -164,6 +164,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         this.connection = connection; this.schema = schema.idup; this.table = table.idup; this.registry = registry;
     }
     wstring databaseSchema() { return schema; }
+    void afterCommit(void delegate() callback) { connection.afterCommit(callback); }
     // First stage of SelectFactory's aggregateBy: group root fields by Link.
     // Outer linked projections and a second grouping are rejected until the
     // corresponding subselect planner is available.

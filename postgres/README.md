@@ -75,8 +75,9 @@ yet populate the application metadata needed by the role lifecycle.
 Users' and Roles' native fields, built-in identifiers and Java-defined static
 record metadata are available. Built-in user deletion is rejected, while the
 built-in role deletion and user-ban checks follow Z8's user-event setting.
-General authorization and cross-server user-change notifications are still
-pending.
+User and role changes invalidate affected local sessions. PostgreSQL defers
+these notifications until the outermost transaction commits and discards them
+on rollback; notifications outside a transaction are delivered immediately.
 Physical fields of the system `Tables`, `Fields` and `Requests` metadata tables
 are available, including the `Fields` link to `Tables`. Registry-based localized
 display values remain unimplemented.
@@ -84,8 +85,7 @@ The native `RoleTableAccess`, `RoleFieldAccess` and `RoleRequestAccess` fields
 and their table links are available. `RoleFieldAccess` keeps read and write
 permissions consistent during user-level updates. `RoleTableAccess` also
 normalizes table permissions and propagates read/write changes to matching field
-access rows using the same database connection. Role-change notifications and
-the remaining authorization lifecycle are not yet implemented. When a
+access rows using the same database connection. When a
 `Z8RuntimeRegistry` is supplied as the third argument to `Z8PostgresDatabase`,
 creating a role also creates access rows for its registered table keys and the
 existing field and request records; deleting a role removes those access rows.
@@ -121,9 +121,9 @@ roles, falls back to their default permissions and intersects field access
 with table access. `z8_postgres_refresh_user_privileges` installs the snapshot
 on a host user only after a successful load. The host can pass that user to
 `z8_application_dispatch_authorized_object`, which checks request execution
-permission before dispatch. Refresh after changes and authorization of query
-and job adapters remain separate work, except for the limited table-read
-adapter described below.
+permission before dispatch. Local sessions affected by a user or role change
+are invalidated, so the next login reloads their privileges. Query and job
+adapters apply request and operation-specific checks as described below.
 `z8_application_dispatch_query_read` reads a table using the current database
 connection and the session's privilege snapshot. It requires request execute
 and table read permissions, omits fields without read permission, and always

@@ -72,6 +72,7 @@ ubyte[] z8_postgres_unescape_bytea(string value) {
 class Z8PostgresConnection {
     private PGconn* connection;
     private uint transactionDepth;
+    private void delegate()[] commitCallbacks;
     private string connectionInfo;
     private string connectionUser, connectionPassword;
     this(string connectionInfo) {
@@ -103,6 +104,7 @@ class Z8PostgresConnection {
         synchronized (this) {
             if (connection !is null) { PQfinish(connection); connection = null; }
             transactionDepth = 0;
+            commitCallbacks = null;
             connectionInfo = null;
             connectionUser = connectionPassword = null;
         }
@@ -120,6 +122,14 @@ class Z8PostgresConnection {
         return new Z8PostgresConnection(info, user, password);
     }
     bool inTransaction() { synchronized (this) return transactionDepth != 0; }
+    void afterCommit(void delegate() callback) {
+        if (callback is null) throw new Z8PostgresException("commit callback is null");
+        synchronized (this) {
+            if (connection is null) throw new Z8PostgresException("PostgreSQL connection is closed");
+            if (transactionDepth) { commitCallbacks ~= callback; return; }
+        }
+        callback();
+    }
     void beginTransaction() {
         synchronized (this) {
             if (connection is null) throw new Z8PostgresException("PostgreSQL connection is closed");
@@ -132,6 +142,7 @@ class Z8PostgresConnection {
         }
     }
     void commit() {
+        void delegate()[] callbacks;
         synchronized (this) {
             if (connection is null) throw new Z8PostgresException("PostgreSQL connection is closed");
             if (!transactionDepth) throw new Z8PostgresException("Connection.commit() - not in transaction");
@@ -140,14 +151,18 @@ class Z8PostgresConnection {
             if (status == 3) throw new Z8PostgresException("PostgreSQL transaction is aborted; rollback is required");
             if (status != 2) throw new Z8PostgresException("PostgreSQL transaction state is not active");
             execute("COMMIT"); transactionDepth = 0;
+            callbacks = commitCallbacks; commitCallbacks = null;
         }
+        Throwable first;
+        foreach (callback; callbacks) try { callback(); } catch (Throwable error) { if (first is null) first = error; }
+        if (first !is null) throw first;
     }
     void rollback() {
         synchronized (this) {
             if (connection is null) throw new Z8PostgresException("PostgreSQL connection is closed");
             if (!transactionDepth) return;
             if (transactionDepth > 1) { --transactionDepth; return; }
-            execute("ROLLBACK"); transactionDepth = 0;
+            execute("ROLLBACK"); transactionDepth = 0; commitCallbacks = null;
         }
     }
 
@@ -177,7 +192,7 @@ class Z8PostgresConnection {
                 auto message = z8PgCString(PQresultErrorMessage(result));
                 // COPY requires a different libpq protocol; discard the connection
                 // instead of leaving it in an unusable copy state.
-                if (status == 3 || status == 4 || status == 8) { PQfinish(connection); connection = null; transactionDepth = 0; }
+                if (status == 3 || status == 4 || status == 8) { PQfinish(connection); connection = null; transactionDepth = 0; commitCallbacks = null; }
                 throw new Z8PostgresException(message.length ? message : "unsupported PostgreSQL result");
             }
             Z8PostgresResult copy;

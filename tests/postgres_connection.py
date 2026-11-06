@@ -232,6 +232,13 @@ void main(string[] args) {
     assert(callResult.rows[0][6].text == "0001ff" && callResult.rows[0][7].text == "O'Reilly 😀" && callResult.rows[0][8].isNull && callResult.rows[0][9].text != "0");
     bool unsupported; try { P.m_call("Noop"w, new Z8Array!Z8Primary([z8_primary_box(report)])); } catch (Z8PostgresException) { unsupported = true; }
     assert(unsupported && first.execute(`SELECT count(*) FROM "Calls"`).rows[0][0].text == "1");
+    int callbacks;
+    first.afterCommit({ ++callbacks; }); assert(callbacks == 1);
+    first.beginTransaction(); first.afterCommit({ ++callbacks; }); first.rollback(); assert(callbacks == 1);
+    first.beginTransaction(); first.afterCommit({ throw new Exception("notification failed"); });
+    first.afterCommit({ ++callbacks; }); bool callbackFailed;
+    try { first.commit(); } catch (Exception error) { callbackFailed = error.msg == "notification failed"; }
+    assert(callbackFailed && callbacks == 2 && !first.inTransaction());
     P.m_begin(); P.m_insert(report, z8_guid_create(1), z8_optional_wrap(12L));
     P.m_begin(); P.m_insert(report, z8_guid_create(2), z8_optional_wrap(25L)); P.m_rollback();
     assert(first.inTransaction() && z8_optional_require(P.m_count(report)) == 2);

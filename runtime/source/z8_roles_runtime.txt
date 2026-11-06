@@ -45,7 +45,9 @@ void z8_roles_before_destroy(Z8Guid id) {
 void z8_roles_notify_change(Z8Object self, Z8Guid id) {
     auto request = z8_application_request();
     if (request is null || request.roleChangeNotifier is null) return;
-    request.roleChangeNotifier.roleChanged(z8_nonnull(id), z8_notification_schema(self));
+    id = z8_nonnull(id); auto copy = new Z8Guid(id.majorBits, id.minorBits);
+    auto notifier = request.roleChangeNotifier; auto schema = z8_notification_schema(self);
+    z8_notification_after_commit(self, { notifier.roleChanged(copy, schema); });
 }
 private Z8Guid* z8_role_administrator_address() { return &z8_role_administrator; }
 private Z8Guid* z8_role_user_address() { return &z8_role_user; }

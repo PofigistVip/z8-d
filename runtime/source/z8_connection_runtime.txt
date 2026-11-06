@@ -9,6 +9,8 @@ interface IZ8DatabaseConnection {
     void flush();
     IZ8QueryExecutor queryExecutor(Z8Object query);
 }
+// Database adapters can defer observable changes until the outer transaction commits.
+interface IZ8AfterCommit { void afterCommit(void delegate() callback); }
 struct Z8RawSqlValue { wstring text; bool isNull; bool binary; ubyte[] bytes; }
 interface IZ8RawSqlCursor {
     bool next();

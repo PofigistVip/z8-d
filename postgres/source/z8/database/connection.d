@@ -8,7 +8,7 @@ import z8.database.privileges : z8_postgres_read_user;
 import z8.database.plan : quoteIdentifier;
 
 // Adapter for the request-local BL Connection and Query.setConnection APIs.
-class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8RawSqlConnection, IZ8SystemInstallation, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection, IZ8JobUserResolver, IZ8UserPasswordVerifier, IZ8UserProfileReader, IZ8DatabaseSchema {
+class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8RawSqlConnection, IZ8SystemInstallation, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection, IZ8JobUserResolver, IZ8UserPasswordVerifier, IZ8UserProfileReader, IZ8DatabaseSchema, IZ8AfterCommit {
     private Z8PostgresConnection connection;
     private wstring schema;
     private Z8RuntimeRegistry registry;
@@ -19,6 +19,7 @@ class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8RawSqlConnection, IZ8System
         this.connection = connection; this.schema = schema.idup; this.registry = registry;
     }
     void beginTransaction() { connection.beginTransaction(); }
+    void afterCommit(void delegate() callback) { connection.afterCommit(callback); }
     wstring databaseSchema() { return schema; }
     bool isSystemInstalled() {
         synchronized (connection) {
