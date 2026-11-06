@@ -838,10 +838,14 @@ void main(string[] args) {
     auto nestedDefault = parseJSON(requestFields(`["customer.label"]`w, null, null, null, null,
         "HttpOrder"w, null, null, null, null, null, null, "customer"w).to!string);
     assert(nestedDefault["isQuery"].boolean && nestedDefault["id"].str == "customer" && nestedDefault["data"].array.length == 3);
-    wstring nestedWrite(wstring action, wstring data) {
+    auto nestedMeta = parseJSON(requestFields(`["customer.label"]`w, null, null, null, null,
+        "HttpOrder"w, "meta"w, null, null, null, null, null, "customer"w).to!string);
+    assert(nestedMeta["isQuery"].boolean && nestedMeta["id"].str == "customer" && "data" !in nestedMeta.object);
+    wstring nestedWrite(wstring action, wstring data, wstring recordId = null) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, "HttpOrder"w); request.parameters.z8_add("action"w, action);
         request.parameters.z8_add("query"w, "customer"w); request.parameters.z8_add("data"w, data);
+        if (recordId !is null) request.parameters.z8_add("recordId"w, recordId);
         if (action != "destroy"w) request.parameters.z8_add("fields"w, `["customer.label"]`w);
         auto previous = z8_application_set_request(request); scope(exit) z8_application_set_request(previous);
         z8_application_start_response(request, "HttpOrder"w); z8_application_dispatch_request();
@@ -850,6 +854,11 @@ void main(string[] args) {
     auto inserted = parseJSON(nestedWrite("create"w, `[{"customer.label":"Cara"}]`w).to!string);
     assert(inserted["data"].array.length == 1 && inserted["data"][0]["customer.label"].str == "Cara");
     auto insertedId = inserted["data"][0]["customer.recordId"].str;
+    auto copied = parseJSON(nestedWrite("copy"w, `[{"customer.label":"Copy"}]`w, insertedId.to!wstring).to!string);
+    assert(copied["data"].array.length == 1 && copied["data"][0]["customer.label"].str == "Copy");
+    auto copiedId = copied["data"][0]["customer.recordId"].str;
+    assert(copiedId != insertedId);
+    nestedWrite("destroy"w, (`[{"customer.recordId":"` ~ copiedId ~ `"}]`).to!wstring);
     user.privileges.setFieldAccess(z8_guid_create_name("Customers.Label"w), Z8Access.init);
     bool nestedWriteDenied;
     try { nestedWrite("update"w, (`[{"customer.recordId":"` ~ insertedId ~ `","customer.label":"Denied"}]`).to!wstring); }
@@ -943,7 +952,7 @@ void main(string[] args) {
     blocked = false;
     try { requestFields(`["customer.label"]`w, null, null, null, null, "HttpOrder"w, "read"w, null, null, null, null, null, null, "customerId"w); } catch (Exception) { blocked = true; }
     assert(blocked);
-    foreach (action; ["create"w, "update"w, "destroy"w]) {
+    foreach (action; ["create"w, "update"w, "destroy"w, "copy"w]) {
         blocked = false; try { nestedWrite(action, `[]`w); } catch (Exception error) { blocked = error.msg == "nested query relation access denied"; }
         assert(blocked);
     }

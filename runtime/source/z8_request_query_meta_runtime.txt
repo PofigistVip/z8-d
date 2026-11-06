@@ -15,15 +15,18 @@ private void z8_application_dispatch_query_meta_target(wstring className, Z8Obje
     for (long i; i < keys.z8_size(); ++i) {
         auto name = keys.z8_get(i);
         if (name is null) throw new Exception("invalid query metadata parameter");
-        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "fields"w || name == "values"w) continue;
+        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "fields"w || name == "values"w || name == "query"w) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported query metadata parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
     if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, query))
         throw new Exception("query metadata requires a Table");
     auto privileges = z8_nonnull(session.user).privileges;
+    if (privileges is null) throw new Exception("query metadata access denied");
+    auto context = query;
+    query = z8_application_nested_query(context, privileges, params.z8_get("query"w));
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
-    if (privileges is null || !privileges.getTableAccess(queryKey).read) throw new Exception("query metadata access denied");
+    if (!privileges.getTableAccess(queryKey).read) throw new Exception("query metadata access denied");
     z8_application_query_context_values(query, privileges, params, true);
     if (z8_query_user_events_enabled()) query.z8_query_virtual_onReadAction();
     auto groups = z8_query_array(query, "groupBy"w);
@@ -44,7 +47,7 @@ private void z8_application_dispatch_query_meta_target(wstring className, Z8Obje
     auto actualAggregates = z8_query_array(query, "aggregateBy"w);
     if (actualAggregates.length != aggregates.length) throw new Exception("changing query aggregateBy during beforeRead is not supported");
     foreach (i, field; actualAggregates) if (field !is aggregates[i]) throw new Exception("changing query aggregateBy during beforeRead is not supported");
-    z8_application_query_write_meta(query, selected, groups, privileges);
+    z8_application_query_write_meta(query, selected, groups, privileges, context);
 }
 private void z8_application_query_write_meta(Z8Object query, Z8Object[] selected, Z8Object[] groups, Z8Privileges privileges, Z8Object context = null) {
     if (context is null) context = query;
