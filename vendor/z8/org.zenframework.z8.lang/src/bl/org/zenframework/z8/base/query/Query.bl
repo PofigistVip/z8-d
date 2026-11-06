@@ -1,0 +1,135 @@
+import org.zenframework.z8.base.form.Control;
+import org.zenframework.z8.base.form.action.Action;
+import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.sql.Connection;
+import org.zenframework.z8.base.table.value.Field;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.lang.Object;
+
+[native "org.zenframework.z8.server.base.query.Query"]
+public class Query extends Object {
+	public int priority = 0;
+
+	public bool readOnly = false;
+	public bool totals = false;
+	public int limit = 200;
+
+	public int colCount = 4;
+
+	public Control[] controls;
+
+	public Field[] columns;
+	public Field[] names;               // Поля для идентификации записи в UI, например, в навигаторе формы или заголовке
+	public Field[] quickFilters;        // Поля для быстрого поиска записей
+	public Field[] filterFields;        // Поля доступные для фильтрации в окне фильтрации. Если не задано - все поля
+
+	public Field[] extraFields;         // Неотображаемые, но требующиеся поля
+	public Field[] sortFields;
+	public Field[] groupFields;         // Соответствует пункту 'Группировать по полю' в меню колонки таблицы.
+										// Не путать с groupBy - выбираемые данные не группируются.
+
+	public Field period;
+
+	public Action[] actions;
+	public Report[] reports;
+
+	public Link[] aggregateBy;          // Поля из корневого запроса для группировки его перед выполнением основного.
+	public Field[] groupBy;
+
+	virtual protected void onReadAction();
+	virtual protected void onCopyAction(guid recordId);
+	virtual protected void onCreateAction(guid recordId);
+	virtual protected void onUpdateAction(guid recordId);
+	virtual protected void onDestroyAction(guid recordId);
+
+	virtual protected void onNew();
+	virtual protected void onCopy(guid recordId);
+
+	virtual protected void beforeRead();
+	virtual protected void afterRead();
+
+	virtual protected void beforeCreate(guid recordId);
+	virtual protected void afterCreate(guid recordId);
+
+	virtual protected void beforeUpdate(guid recordId);
+	virtual protected void afterUpdate(guid recordId);
+
+	virtual protected void beforeDestroy(guid recordId);
+	virtual protected void afterDestroy(guid recordId);
+
+	public bool hasRecord(guid recordId);
+	public bool hasRecord(sql_bool where);
+
+	public guid[] findRecords(sql_bool where);
+
+	public Field[] fields();
+	public Field[] primaryFields();
+
+	public Field getFieldByIndex(string index);
+	public Field getFieldById(string id);
+	public Field getFieldByName(string name);
+	public Field findFieldById(string id);
+
+	public int count();
+	public int count(sql_bool where);
+
+	public bool aggregate(Field[] fields);
+	public bool aggregate(Field[] fields, sql_bool where);
+
+	public guid create();
+	public guid create(guid recordId);
+	public guid copy(guid recordId);
+
+	public ReadLock readLock = ReadLock.None;
+
+	public void read(Field[] fields);
+	public void read(Field[] fields, sql_bool where);
+	public void read(Field[] fields, Field[] sortFields);
+	public void read(Field[] fields, Field[] sortFields, sql_bool where);
+	public void read(Field[] fields, Field[] sortFields, sql_bool where, int start, int limit);
+
+	public bool readFirst(Field[] fields);
+	public bool readFirst(Field[] fields, sql_bool where);
+	public bool readFirst(Field[] fields, Field[] sortFields);
+	public bool readFirst(Field[] fields, Field[] sortFields, sql_bool where);
+
+	public bool readRecord(guid id, Field[] fields);
+
+	public void group(Field[] groupFields);
+	public void group(Field[] groupFields, sql_bool where);
+	public void group(Field[] groupFields, Field[] fields);
+	public void group(Field[] groupFields, Field[] fields, sql_bool where);
+	public void group(Field[] groupFields, Field[] fields, sql_bool where, sql_bool having);
+	public void group(Field[] groupFields, Field[] fields, Field[] sortFields);
+	public void group(Field[] groupFields, Field[] fields, Field[] sortFields, sql_bool where);
+	public void group(Field[] groupFields, Field[] fields, Field[] sortFields, sql_bool where, sql_bool having);
+	public void group(Field[] groupFields, Field[] fields, Field[] sortFields, sql_bool where, sql_bool having, int start, int limit);
+
+	public bool next();
+	public void close();
+	public guid recordId();
+
+	public int update(guid id);
+	public int update(sql_bool where);
+
+	public int destroy(guid id);
+	public int destroy(sql_bool where);
+
+	virtual protected sql_bool where();
+	virtual protected sql_bool having();
+	virtual protected sql_bool scope();
+
+	public void addWhere(sql_bool where);
+	public void addWhere(string where);         // [{ property: "p", [operator: "o",] value: "v" }] или { property: "p", [operator: "o",] value: "v" }
+	public void addWhere(string[] where);       // { property: "p", [operator: "o",] value: "v" }
+
+	public void setWhere(sql_bool where);
+	public void setWhere(string where);
+	public void setWhere(string[] where);
+
+	public void addHaving(sql_bool having);
+	public void addHaving(string having);
+	public void addHaving(string[] having);
+
+	public void setConnection(Connection connection);
+}

@@ -1,0 +1,16 @@
+[native "org.zenframework.z8.server.db.sql.functions.Sql"]
+public class Sql {
+	static public sql_datespan IIF(sql_bool value, sql_datespan yes, sql_datespan no);
+	static public sql_date IIF(sql_bool value, sql_date yes, sql_date no);
+	static public sql_decimal IIF(sql_bool value, sql_decimal yes, sql_decimal no);
+	static public sql_guid IIF(sql_bool value, sql_guid yes, sql_guid no);
+	static public sql_int IIF(sql_bool value, sql_int yes, sql_int no);
+	static public sql_string IIF(sql_bool value, sql_string yes, sql_string no);
+
+	static public sql_bool inVector(sql_datespan value, datespan[] vector);
+	static public sql_bool inVector(sql_date value, date[] vector);
+	static public sql_bool inVector(sql_decimal value, decimal[] vector);
+	static public sql_bool inVector(sql_guid value, guid[] vector);
+	static public sql_bool inVector(sql_int value, int[] vector);
+	static public sql_bool inVector(sql_string value, string[] vector);
+}

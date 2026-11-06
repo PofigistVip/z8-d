@@ -1,0 +1,15 @@
+import org.zenframework.z8.lang.Object;
+
+[native "org.zenframework.z8.server.base.sql.Connection"]
+public class Connection extends Object {
+	public void beginTransaction();
+	public void commit();
+	public void rollback();
+
+	public void execute(string sql);
+	public void call(string name, primary[] parameters);
+
+	public void flush();
+
+	public static Connection get();
+}

@@ -1,0 +1,39 @@
+import org.zenframework.z8.lang.Object;
+
+[native "org.zenframework.z8.server.base.security.User"]
+public class User extends Object {
+	static public User get(guid id);
+
+	public guid id;
+	public string login;
+
+	public string firstName;
+	public string middleName;
+	public string lastName;
+
+	public string description;
+	public string phone;
+	public string email;
+
+	public primary[string] parameters;
+
+	public guid getId();
+	public User setId(guid id);
+
+	public string getLogin();
+	public User setLogin(string login);
+
+	public bool isAdministrator();
+	public bool isBuiltinAdministrator();
+	public bool isBuiltinSystem();
+
+	public string getParameter(string key, string defaultValue);
+	public guid getParameter(string key, guid defaultValue);
+	public int getParameter(string key, int defaultValue);
+	public bool getParameter(string key, bool defaultValue);
+
+	virtual protected bool authenticate(string password);
+
+	virtual protected void onBeforeLoad(string login);
+	virtual protected void onLoad();
+}

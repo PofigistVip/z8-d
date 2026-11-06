@@ -1,1 +1,2 @@
 runtime/source/*_runtime.txt text eol=lf
+vendor/z8/** -text

@@ -1,0 +1,68 @@
+[primary "org.zenframework.z8.server.types.geometry"]
+public final class geometry extends primary {
+
+	static public final int DefaultSRS = 3857;
+
+	static public final int None = -1;
+	static public final int Ring = 0;
+	static public final int Point = 1;
+	static public final int Line = 2;
+	static public final int Polygon = 3;
+	static public final int MultiPoint = 4;
+	static public final int MultiLine = 5;
+	static public final int MultiPolygon = 6;
+	static public final int Collection = 7;
+
+	static public final string StrNone = "NONE";
+	static public final string StrRing = "RING";
+	static public final string StrPoint = "POINT";
+	static public final string StrLine = "LINE";
+	static public final string StrPolygon = "POLYGON";
+	static public final string StrMultiPoint = "MULTIPOINT";
+	static public final string StrMultiLine = "MULTILINE";
+	static public final string StrMultiPolygon = "MULTIPOLYGON";
+	static public final string StrCollection = "GEOMETRYCOLLECTION";
+
+	public int shape();
+	public int srs();
+	public geometry[] points();
+
+	public decimal x();
+	public decimal y();
+
+	public decimal[][] extent();
+	public geometry center();
+	public decimal length();
+
+	public decimal x1();
+	public decimal y1();
+	public decimal x2();
+	public decimal y2();
+
+	public decimal width();
+	public decimal height();
+
+	public string toGeoJson();
+
+	public operator string();
+	public operator sql_geometry();
+
+	public bool operator == (guid value);
+	public bool operator != (guid value);
+
+	static public geometry none(int srs);
+	static public geometry point(decimal x, decimal y, int srs);
+	static public geometry line(geometry[] points);
+	static public geometry multiLine(geometry[] lines);
+	static public geometry ring(geometry[] points);
+	static public geometry polygon(geometry[] rings);
+	static public geometry collection(geometry[] geometries);
+
+	static public geometry pointOnLine(geometry line, decimal distance);
+	static public geometry perpendicularToLine(geometry line, decimal distance, decimal length);
+
+	static public geometry fromHexString(string hexString);
+	static public geometry fromGeoJson(string geoJson, int srs);
+
+	static public geometry fromArray(geometry[] geometries);
+}

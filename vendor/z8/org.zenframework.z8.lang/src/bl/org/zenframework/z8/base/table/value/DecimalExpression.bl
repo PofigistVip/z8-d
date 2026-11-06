@@ -1,0 +1,19 @@
+[native "org.zenframework.z8.server.base.table.value.DecimalExpression"]
+public class DecimalExpression extends Expression {
+	aggregation = Aggregation.Sum;
+
+	format = "0,000.00";
+
+	public void setDefault(decimal defaultValue);
+
+	virtual public decimal get();
+	virtual public decimal[] array();
+
+	public DecimalExpression operator = (sql_decimal value);
+
+	public operator sql_decimal();
+
+	virtual protected sql_decimal expression();
+
+	public void setExpression(sql_decimal expression);
+}

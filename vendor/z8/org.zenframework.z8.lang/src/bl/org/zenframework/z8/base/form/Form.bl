@@ -1,0 +1,4 @@
+[native "org.zenframework.z8.server.base.form.Form"]
+
+public class Form extends Section {
+}

@@ -1,0 +1,118 @@
+.form.fieldset {
+	padding-top: 1.07142857em;
+	padding-left: 1.07142857em;
+	padding-right: 1.07142857em;
+	margin: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	border: none;
+}
+
+.fieldset {
+	position: relative;
+	margin-top: .71428572em;
+	padding-top: 1.42857143em;
+	padding-left: .71428571em;
+	padding-right: .71428571em;
+	padding-bottom: .71428571em;
+	border: 1px solid #ccc;
+}
+
+.fieldset.section {
+	padding: 0;
+	border: none;
+	margin-top: 0;
+	margin-bottom: 0;
+}
+
+.fieldset>.legend {
+	position: absolute;
+	top: -.57142857em;
+	max-width: 85%;
+	padding-left: .71428571em;
+	padding-right: .71428571em;
+	color: #555;
+	background-color: #fff;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	overflow: hidden;
+}
+
+.fieldset>.legend>.fa {
+	margin-right: .5em;
+}
+
+.fieldset>.row {
+	position: relative;
+}
+
+.fieldset>.row>.cell.action {
+	justify-content: center;
+	align-items: flex-start;
+}
+
+.fieldset>.row:not(:last-child)>.cell>.tabs,
+.fieldset>.row:not(:last-child)>.cell>.fieldset,
+.fieldset>.row:not(:last-child)>.cell>.control-group,
+.fieldset>.row:not(:last-child)>.cell>.btn-group,
+.fieldset>.row:not(:last-child)>.cell>.btn {
+	margin-bottom: 1.71428572em;
+}
+
+.action-group {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: flex-end;
+	flex: 1;
+}
+
+.action-group>.btn,
+.action-group>.btn-group {
+	margin-right: 1em;
+}
+
+.fieldset>.row>.cell>.btn-group:not(:first-child),
+.fieldset>.row>.cell>.btn:not(:first-child) {
+	margin-left: .71428571em;
+}
+
+.fieldset>.row>.cell>.tabs,
+.fieldset>.row>.cell>.fieldset,
+.fieldset>.row>.cell>.control-group:not(.scrollable) {
+	flex: 1;
+}
+
+.fieldset>.row>.cell>.control-group.scrollable {
+	position: absolute;
+	top: 0;
+	left: 1.07142857em;
+	right: 1.07142857em;
+	bottom: 0;
+}
+
+@media screen and (min-width: 768px) {
+	.fieldset {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.fieldset>.row {
+		display: flex;
+		flex-direction: row;
+		align-items: stretch;
+		min-height: fit-content;
+		min-height: -moz-fit-content;
+	}
+
+	.fieldset>.row>.cell.stretch {
+		align-items: stretch;
+	}
+}
+
+.fieldset>.row>.cell>.control-group>.box>.textarea.control,
+.fieldset>.row>.cell>.control-group>.box>.html.control {
+	padding: .14285714em;
+	overflow-x: auto;
+	overflow-y: auto;
+}

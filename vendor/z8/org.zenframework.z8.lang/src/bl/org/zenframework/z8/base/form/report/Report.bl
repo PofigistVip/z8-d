@@ -1,0 +1,36 @@
+import org.zenframework.z8.lang.Object;
+
+[native "org.zenframework.z8.server.base.form.report.Report"]
+public class Report extends Object {
+	// Engines
+	static public final string BIRT;
+	static public final string POI;
+
+	// Formats
+	static public final string Pdf;
+	static public final string Excel;
+	static public final string Word;
+	static public final string WordX;
+	static public final string Html;
+	static public final string Powerpoint;
+
+	public string engine;
+	public string name;
+	public string template;
+	public string format;
+
+	/* >>> POI-only options >>> */
+
+	public Range[] ranges;
+	public string[][int] hiddenColumns;
+
+	public DataSource getDataSource(Object source);
+	public DataSource getDataSource(string index);
+
+	/* <<< POI-only options <<< */
+
+	public file run(guid recordId);
+
+	virtual protected void prepare(guid recordId);
+	virtual protected file execute(guid recordId);
+}

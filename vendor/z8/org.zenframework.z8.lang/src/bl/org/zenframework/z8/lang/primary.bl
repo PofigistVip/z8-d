@@ -1,0 +1,5 @@
+[primary "org.zenframework.z8.server.types.primary"]
+public class primary {
+	public string toString();
+	public int hashCode();
+}

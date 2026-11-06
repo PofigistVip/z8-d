@@ -1,0 +1,6 @@
+[native "org.zenframework.z8.server.base.form.Fieldset"]
+
+[icon]
+[displayName]
+public class Fieldset extends Section {
+}

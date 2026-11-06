@@ -1,0 +1,16 @@
+import org.zenframework.z8.base.table.value.Field;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.lang.Object;
+
+[native "org.zenframework.z8.server.base.form.Selector"]
+public class Selector extends Object {
+	public bool copy = false;
+	public bool multiselect = true;
+
+	public Link link;
+	public Field[] columns;
+	public Field[] sortFields;
+
+	public Field[][Field] inFields;
+	public Field[][Field] outFields;
+}

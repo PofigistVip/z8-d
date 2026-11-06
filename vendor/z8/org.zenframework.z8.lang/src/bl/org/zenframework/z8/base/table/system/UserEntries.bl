@@ -1,0 +1,21 @@
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.IntField;
+import org.zenframework.z8.base.table.value.Link;
+
+[name "SystemUserEntries"]
+[native "org.zenframework.z8.server.base.table.system.UserEntries"] 
+public class UserEntries extends Table {
+	readOnly = true;
+
+	public Users users;
+	public Entries entries;
+
+	[name "UserId"]
+	public Link user = users;
+
+	[name "EntryId"]
+	public Link entry = entries;
+
+	[name "Position"]
+	public IntField position;
+}

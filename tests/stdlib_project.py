@@ -1,6 +1,6 @@
 """Translate, compile and initialize the original BL standard library.
 
-Usage: python tests/stdlib_project.py <original-z8-root>
+Usage: python tests/stdlib_project.py [z8-source-root]
 This starts the generated modules; it does not exercise the native platform.
 """
 from pathlib import Path
@@ -10,10 +10,11 @@ import sys
 import tempfile
 from runtime_support import import_args, runtime_library
 
-if len(sys.argv) != 2:
-    raise SystemExit("Usage: python tests/stdlib_project.py <original-z8-root>")
 root = Path(__file__).resolve().parents[1]
-language = Path(sys.argv[1]).resolve() / "org.zenframework.z8.lang/src/bl"
+if len(sys.argv) > 2:
+    raise SystemExit("Usage: python tests/stdlib_project.py [z8-source-root]")
+sources = Path(sys.argv[1]).resolve() if len(sys.argv) == 2 else root / "vendor/z8"
+language = sources / "org.zenframework.z8.lang/src/bl"
 if not language.is_dir():
     raise SystemExit("Original BL standard library not found")
 compiler = root / ("z8d.exe" if os.name == "nt" else "z8d")

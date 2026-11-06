@@ -4,9 +4,9 @@ import subprocess
 import sys
 import tempfile
 
-if len(sys.argv) != 2: raise SystemExit("Usage: python tests/prepare_client.py <original-z8-root>")
 root = Path(__file__).resolve().parents[1]
-original = Path(sys.argv[1]).resolve()
+if len(sys.argv) > 2: raise SystemExit("Usage: python tests/prepare_client.py [z8-source-root]")
+original = Path(sys.argv[1]).resolve() if len(sys.argv) == 2 else root / "vendor/z8"
 js = original / "org.zenframework.z8.js/src"
 with tempfile.TemporaryDirectory() as directory:
     output = Path(directory) / "public"

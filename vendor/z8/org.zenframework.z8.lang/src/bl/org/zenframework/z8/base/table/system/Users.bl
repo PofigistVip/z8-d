@@ -1,0 +1,89 @@
+import org.zenframework.z8.base.security.LoginParameters;
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.BoolField;
+import org.zenframework.z8.base.table.value.DatetimeField;
+import org.zenframework.z8.base.table.value.IntField;
+import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.table.value.TextField;
+
+[name "SystemUsers"]
+[displayName "Пользователи"]
+[native "org.zenframework.z8.server.base.table.system.Users"]
+public class Users extends Table {
+	[displayName "Логин"]
+	public StringField name;
+	name.length = 128;
+
+	[name "Password"]
+	[displayName "Пароль"]
+	public StringField password;
+	password.length = 32;
+
+	[displayName "Описание"]
+	public TextField description;
+
+	[name "First Name"] 
+	[displayName "Имя"] 
+	public StringField firstName;
+	firstName.length = 100;
+
+	[name "Middle Name"] 
+	[displayName "Отчество"] 
+	public StringField middleName;
+	middleName.length = 100;
+
+	[name "Last Name"] 
+	[displayName "Фамилия"] 
+	public StringField lastName;
+	lastName.length = 100;
+
+	[name "Phone"]
+	[displayName "Телефон"]
+	public StringField phone;
+
+	[name "Email"]
+	[displayName "email"]
+	public StringField email;
+	
+	[name "Company"]
+	[displayName "Компания"]
+	public StringField company;
+	
+	[name "Position"]
+	[displayName "Должность"]
+	public StringField position;
+
+	[name "Banned"]
+	[displayName "Заблокирован"]
+	public BoolField banned;
+
+	[name "Banned Until"]
+	[displayName "Заблокирован до"]
+	public DatetimeField bannedUntil;
+
+	[name "Failed Auth Count"]
+	[displayName "Число неудачных авторизаций"]
+	public IntField failedAuthCount;
+
+	[name "Settings"]
+	[displayName "Настройки"]
+	public TextField settings;
+
+	[name "changePassword"]
+	[displayName "Изменить пароль при следующем входе"]
+	public BoolField changePassword;
+
+	virtual protected bool getParameters(guid id, string login, primary[string] parameters);
+	virtual protected bool getParameters(LoginParameters loginParameters, primary[string] parameters);
+	static public void notifyUserChange(guid userId);
+
+	records {
+		[name "System"]
+		[description "Системный вход"]
+		System = '00000000-0000-0000-0000-000000000001';
+
+		[name "Admin"]
+		[description "Администратор системы"]
+		Administrator = '00000000-0000-0000-0000-000000000002';
+	}
+}

@@ -1,0 +1,77 @@
+[primary "org.zenframework.z8.server.types.decimal"]
+public final class decimal extends primary {
+	static public int RoundUp = 0;
+	static public int RoundDown = 1;
+	static public int RoundCeiling = 2;
+	static public int RoundFloor = 3;
+	static public int RoundHalfUp = 4;
+	static public int RoundHalfDown = 5;
+	static public int RoundHalfEven = 6;
+	static public int RoundUnnecessary = 7;
+
+	static public decimal Min;
+	static public decimal Max;
+
+	public operator string();
+	public operator sql_decimal();
+
+	public decimal operator + ();
+	public decimal operator - ();
+	public decimal operator + (int value);
+	public decimal operator - (int value);
+	public decimal operator * (int value);
+	public decimal operator / (int value);
+	public decimal operator % (int value);
+	public decimal operator + (decimal value);
+	public decimal operator - (decimal value);
+	public decimal operator * (decimal value);
+	public decimal operator / (decimal value);
+	public decimal operator % (decimal value);
+
+	public bool operator < (int value);
+	public bool operator > (int value);
+	public bool operator <= (int value);
+	public bool operator >= (int value);
+	public bool operator == (int value);
+	public bool operator != (int value);
+	public bool operator > (decimal value);
+	public bool operator < (decimal value);
+	public bool operator <= (decimal value);
+	public bool operator >= (decimal value);
+	public bool operator == (decimal value);
+	public bool operator != (decimal value);
+
+	public decimal abs();
+	public int signum();
+	public int ceil();
+	public int floor();
+
+	public int round();
+	public decimal round(int digits);
+	public decimal round(int digits, int mode);
+
+	public decimal sin();
+	public decimal cos();
+	public decimal tan();
+	public decimal asin();	
+	public decimal acos();	
+	public decimal atan();	
+	public decimal sinh();
+	public decimal cosh();
+	public decimal tanh();
+
+	public decimal toRadians();
+	public decimal toDegrees();
+
+	public decimal exp();
+
+	public decimal ln();
+	public decimal log10();
+
+	public decimal sqrt();
+	public decimal cbrt();
+
+	public decimal power(decimal power);
+
+	static public decimal parse(string string);
+}

@@ -1,0 +1,28 @@
+import org.zenframework.z8.base.query.Query;
+import org.zenframework.z8.base.table.value.DatetimeField;
+import org.zenframework.z8.base.table.value.GuidField;
+import org.zenframework.z8.base.table.value.IntField;
+import org.zenframework.z8.lang.Object;
+
+[native "org.zenframework.z8.server.base.table.Table"]
+public class Table extends Query {
+	[name "RecordId"]
+	public GuidField recordId;
+
+	[name "CreatedAt"]
+	public DatetimeField createdAt;
+
+	[name "CreatedBy"]
+	public GuidField createdBy;
+
+	[name "ModifiedAt"]
+	public DatetimeField modifiedAt;
+
+	[name "ModifiedBy"]
+	public GuidField modifiedBy;
+
+	[name "Lock"]
+	public IntField lock;
+
+	static public Object newInstance(string name);
+}

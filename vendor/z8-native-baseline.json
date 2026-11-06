@@ -1,0 +1,681 @@
+{
+  "entries": {
+    "org/zenframework/z8/base/Executable.bl :: org.zenframework.z8.server.base.Executable": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/Executable.java",
+      "sha256": "19d930c7e784514aef3b77f1ebb775aa1fa3b889828a08839c339ddad2606a47"
+    },
+    "org/zenframework/z8/base/application/Application.bl :: org.zenframework.z8.server.base.application.Application": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/application/Application.java",
+      "sha256": "538d1c62072e3afec504ab9d7f9429f9a74c8e5fb520c83b1b412d38f8325f09"
+    },
+    "org/zenframework/z8/base/application/Resources.bl :: org.zenframework.z8.server.base.application.Resources": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/application/Resources.java",
+      "sha256": "365ce829bb75ad9ef1dd997c465f61f32d05a3fb7a115d489110904f706100cc"
+    },
+    "org/zenframework/z8/base/application/ServerConfig.bl :: org.zenframework.z8.server.base.application.ServerConfig": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/application/ServerConfig.java",
+      "sha256": "ff66cfdb489e3da2263b56d3b3251eb9bdb5376e917ccbf614181ac22da41827"
+    },
+    "org/zenframework/z8/base/crypto/Base34.bl :: org.zenframework.z8.server.crypto.Base34": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/crypto/Base34.java",
+      "sha256": "3b01c2b4ab999729f78658b2aa935951478d579f89db002a993a81c458f23f63"
+    },
+    "org/zenframework/z8/base/crypto/Digest.bl :: org.zenframework.z8.server.crypto.Digest": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/crypto/Digest.java",
+      "sha256": "499d3543e8210f0052b7d138172aa8627dd340eeee55db90fc2ff4d94ed9ecb5"
+    },
+    "org/zenframework/z8/base/crypto/MD5.bl :: org.zenframework.z8.server.crypto.MD5": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/crypto/MD5.java",
+      "sha256": "6d53dcb0e46d85ffdbea4786c0a9a7eb3c98de79f224283102c180ff18054f8c"
+    },
+    "org/zenframework/z8/base/entity/Entity.bl :: org.zenframework.z8.server.base.entity.Entity": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/entity/Entity.java",
+      "sha256": "3ddfaa87c4a230c741bf37b6ebfa715a8c4d92b7d30104b2c0c2deb935793635"
+    },
+    "org/zenframework/z8/base/entity/EntityParser.bl :: org.zenframework.z8.server.base.entity.EntityParser": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/entity/EntityParser.java",
+      "sha256": "415c2455556472b52ab905e15b31c2858204311b9262d256e4f40fe0674193de"
+    },
+    "org/zenframework/z8/base/entity/EntityTable.bl :: org.zenframework.z8.server.base.entity.EntityTable": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/entity/EntityTable.java",
+      "sha256": "60026898b3f39c10bf2108baff12fdf447af38b860dd6f5fcf6106f79c3173cf"
+    },
+    "org/zenframework/z8/base/entity/Filter.bl :: org.zenframework.z8.server.base.entity.Filter": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/entity/Filter.java",
+      "sha256": "355e9a8b9ef2b6e94c9ea738620734eb552ef8fc6f5f51c6f46ea54da95936c8"
+    },
+    "org/zenframework/z8/base/entity/Registry.bl :: org.zenframework.z8.server.base.entity.Registry": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/entity/Registry.java",
+      "sha256": "d86f3d636ba6b124b3eaeb454506644939db5e6eb094185836905c3230f31c8b"
+    },
+    "org/zenframework/z8/base/entity/Visitor.bl :: org.zenframework.z8.server.base.entity.Visitor": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/entity/Visitor.java",
+      "sha256": "9b663cb45661082e753c0b0cb9c17ed3dc188a80894f4ea8d7bdfb86f51eebd5"
+    },
+    "org/zenframework/z8/base/eval/Eval.bl :: org.zenframework.z8.server.base.eval.Eval": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/eval/Eval.java",
+      "sha256": "c48f7a2d7eceb83ee2cfe93ccbe84ef878b6f0b3d42651296ee7fbdde09c70c5"
+    },
+    "org/zenframework/z8/base/file/AttachmentProcessor.bl :: org.zenframework.z8.server.base.file.AttachmentProcessor": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/file/AttachmentProcessor.java",
+      "sha256": "c7b6a7b876e904d2bacaed386deaf6bde88d9c89fbcbfac0ca075625d4052696"
+    },
+    "org/zenframework/z8/base/file/FileConverter.bl :: org.zenframework.z8.server.base.file.FileConverter": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/file/FileConverter.java",
+      "sha256": "5e153e6aaaf2988b25f9d335bc5205b6d9f9c6c857ed1c9a09dd045ea2ff0c25"
+    },
+    "org/zenframework/z8/base/file/FileHandler.bl :: org.zenframework.z8.server.base.file.FileHandler": {
+      "java": null,
+      "sha256": null
+    },
+    "org/zenframework/z8/base/form/ActionGroup.bl :: org.zenframework.z8.server.base.form.ActionGroup": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/ActionGroup.java",
+      "sha256": "0236c2270af991835621b3ab4f096f90a68b288ec2de4b560eda3bd9cda7d42a"
+    },
+    "org/zenframework/z8/base/form/Control.bl :: org.zenframework.z8.server.base.form.Control": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/Control.java",
+      "sha256": "0490505cc22a338216cd0a054c406f2461bb3d26ceec6e049a0481d5bb0fe943"
+    },
+    "org/zenframework/z8/base/form/Desktop.bl :: org.zenframework.z8.server.base.form.Desktop": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/Desktop.java",
+      "sha256": "847a94a4e8d18050e582b9b94d85d663e0f9b7cf60c33e102c0937a783d408e4"
+    },
+    "org/zenframework/z8/base/form/FieldGroup.bl :: org.zenframework.z8.server.base.form.FieldGroup": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/FieldGroup.java",
+      "sha256": "61a7c5d3841634376ab1e0715fd2d9b134ed1150abff6948a73574b5423dbbc0"
+    },
+    "org/zenframework/z8/base/form/Fieldset.bl :: org.zenframework.z8.server.base.form.Fieldset": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/Fieldset.java",
+      "sha256": "004f91e86202fda8061afb8d0ded09c63031788e00241dbf1fc8be58275f8191"
+    },
+    "org/zenframework/z8/base/form/Form.bl :: org.zenframework.z8.server.base.form.Form": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/Form.java",
+      "sha256": "f0321c617e66df0591c507914cd32ca8b9a38aceed35b22f4f3b337ac4bdc2e3"
+    },
+    "org/zenframework/z8/base/form/Listbox.bl :: org.zenframework.z8.server.base.form.Listbox": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/Listbox.java",
+      "sha256": "9c26d8cbc80d9ca18ca3d4fc2363b4b5c0932a6e567b388cf6260387f071f944"
+    },
+    "org/zenframework/z8/base/form/Section.bl :: org.zenframework.z8.server.base.form.Section": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/Section.java",
+      "sha256": "fe8d2b90cb8015c3f86782a5b3a596f5342072d3b094bb7888a7c9e40b23fa7c"
+    },
+    "org/zenframework/z8/base/form/Selector.bl :: org.zenframework.z8.server.base.form.Selector": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/Selector.java",
+      "sha256": "ea4e95cfbcb9e8d8d55052ec35a7f7d5cd088043bfb39f9dd4defef25328dbb1"
+    },
+    "org/zenframework/z8/base/form/Source.bl :: org.zenframework.z8.server.base.form.Source": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/Source.java",
+      "sha256": "6b6fcc543b1749ea91158a20630a3bc3402efb21ccfafab7e8a0c30c7261fd6f"
+    },
+    "org/zenframework/z8/base/form/Tab.bl :: org.zenframework.z8.server.base.form.Tab": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/Tab.java",
+      "sha256": "dcf48933ced5e45c9d17f65df9d0d30f2460b524e9b8cc73c9aaa5ec389cb836"
+    },
+    "org/zenframework/z8/base/form/TabControl.bl :: org.zenframework.z8.server.base.form.TabControl": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/TabControl.java",
+      "sha256": "7bfb247cb70bd00d122620db4c663062b150c03b5f20745d37ac4a94e2394589"
+    },
+    "org/zenframework/z8/base/form/action/Action.bl :: org.zenframework.z8.server.base.form.action.Action": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/action/Action.java",
+      "sha256": "9e467e416f08478ea1f3d1dadde648aef0e3bb8e4463a488dc8cce7117c2a08e"
+    },
+    "org/zenframework/z8/base/form/action/ActionReport.bl :: org.zenframework.z8.server.base.form.action.ActionReport": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/action/ActionReport.java",
+      "sha256": "a9e15256e599131722d9cef88dcb452da08345181b452b7c19b0ef1a8928e7bf"
+    },
+    "org/zenframework/z8/base/form/action/ActionType.bl :: org.zenframework.z8.server.base.form.action.ActionType": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/action/ActionType.java",
+      "sha256": "b1b7702e0f12e563d851c2cd87e8c1c7dfa96cbd6e6942b1d655dbb349148fd5"
+    },
+    "org/zenframework/z8/base/form/action/Parameter.bl :: org.zenframework.z8.server.base.form.action.Parameter": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/action/Parameter.java",
+      "sha256": "4e2d2b495a7894110354e4f59d1649b16e9b90bb8142d6ea1a76b0dd7c22876f"
+    },
+    "org/zenframework/z8/base/form/action/ParameterSource.bl :: org.zenframework.z8.server.base.form.action.ParameterSource": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/action/ParameterSource.java",
+      "sha256": "9e092904c8878ba3d10d20ec2d45534ebf1fc181442100c5ea46bb3bdc67b869"
+    },
+    "org/zenframework/z8/base/form/report/CustomData.bl :: org.zenframework.z8.server.base.form.report.CustomData": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/report/CustomData.java",
+      "sha256": "5b08837891d35b07042e6b515b9408179f3f766787636846a5d7fbf608875948"
+    },
+    "org/zenframework/z8/base/form/report/DataSource.bl :: org.zenframework.z8.server.base.form.report.DataSource": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/report/DataSource.java",
+      "sha256": "9aa69510cbda318b271bf728b89e2dc5c018c5a25d4c48afd2e49d40db0f173f"
+    },
+    "org/zenframework/z8/base/form/report/Range.bl :: org.zenframework.z8.server.base.form.report.Range": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/report/Range.java",
+      "sha256": "57b9a1dc3a64b6a686e384b203a4f407d2d15938ae8728840e4cff3c7f62caff"
+    },
+    "org/zenframework/z8/base/form/report/Report.bl :: org.zenframework.z8.server.base.form.report.Report": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/form/report/Report.java",
+      "sha256": "c5fe463820765a5644e3bba699ad16d6d21ee7b8cce1b50808b2796819ab7b30"
+    },
+    "org/zenframework/z8/base/fts/Fts.bl :: org.zenframework.z8.server.db.sql.fts.Fts": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/db/sql/fts/Fts.java",
+      "sha256": "2f7a62161fbfda38e74ea5b388b78161bfa3d26063ea32eb7133d70c4a054978"
+    },
+    "org/zenframework/z8/base/fts/FtsQueryType.bl :: org.zenframework.z8.server.db.sql.fts.FtsQueryType": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/db/sql/fts/FtsQueryType.java",
+      "sha256": "49af62f337adc251ec1ee1a22c414c815500d5a76c8b48a25f932eab42d26f86"
+    },
+    "org/zenframework/z8/base/json/Json.bl :: org.zenframework.z8.server.base.json.Json": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/json/Json.java",
+      "sha256": "5f0e291d308f99c0ae7bcd015d10f26de20e29bcfbd6d5308d89961f2c3e2fa0"
+    },
+    "org/zenframework/z8/base/json/JsonArray.bl :: org.zenframework.z8.server.base.json.parser.JsonArray": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/json/parser/JsonArray.java",
+      "sha256": "fc02694ed8e8f860e56f5e23d855d1d2bf0ddb6d01f173240b8222c24304236f"
+    },
+    "org/zenframework/z8/base/json/JsonObject.bl :: org.zenframework.z8.server.base.json.parser.JsonObject": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/json/parser/JsonObject.java",
+      "sha256": "ed7b0cc12b511c67bb3843d60c7ad15eb1c610c8f395a26f8ebc7439444eda8b"
+    },
+    "org/zenframework/z8/base/json/JsonPath.bl :: org.zenframework.z8.server.base.json.parser.JsonPath": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/json/parser/JsonPath.java",
+      "sha256": "9921a126e552060921b2dbb4e3dc124169e07b356271b18fcabe1b270ba6e27f"
+    },
+    "org/zenframework/z8/base/json/JsonUtil.bl :: org.zenframework.z8.server.base.json.parser.JsonUtil": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/json/parser/JsonUtil.java",
+      "sha256": "a6f5fa0cb4fed83bef55f78dedfc3340f1f2cf65cbd8febf31ae258afc8a33c0"
+    },
+    "org/zenframework/z8/base/json/JsonWriter.bl :: org.zenframework.z8.server.base.json.JsonWriter": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/json/JsonWriter.java",
+      "sha256": "bdf8c9bade062387550c0cfca40bb97cb75c8e4f4f7b89ff5969482f32ac09a5"
+    },
+    "org/zenframework/z8/base/ldap/LdapAPI.bl :: org.zenframework.z8.server.base.ldap.LdapAPI": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/ldap/LdapAPI.java",
+      "sha256": "e6e24c2fce8216a3b28a0d9ef2c0efbea5c12924a64abf01e3adda832f0ad344"
+    },
+    "org/zenframework/z8/base/ldap/LdapGroup.bl :: org.zenframework.z8.server.base.ldap.LdapGroup": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/ldap/LdapGroup.java",
+      "sha256": "b7fa6a0a6998dea3b323dc85606bcafdc078c2fea195ce1ff063275d6736f9db"
+    },
+    "org/zenframework/z8/base/ldap/LdapUser.bl :: org.zenframework.z8.server.base.ldap.LdapUser": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/ldap/LdapUser.java",
+      "sha256": "d78b44bc6974fabab105290541b5995631b85ee1db2f7ce378a79b97a3e4acb0"
+    },
+    "org/zenframework/z8/base/poi/Cell.bl :: org.zenframework.z8.server.base.poi.Cell": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/poi/Cell.java",
+      "sha256": "83385bd56d8649397875d60914567319e7eed4d1dc261a60f078c9bde4aba9e5"
+    },
+    "org/zenframework/z8/base/poi/Row.bl :: org.zenframework.z8.server.base.poi.Row": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/poi/Row.java",
+      "sha256": "5e4ecf8b5b220bc3f883149db4f7bd153edd0769dd237f8663670eab62bbd9c2"
+    },
+    "org/zenframework/z8/base/poi/Sheet.bl :: org.zenframework.z8.server.base.poi.Sheet": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/poi/Sheet.java",
+      "sha256": "e121b19b10e642fa3874f623ec5149230fc8e918d9e38ff1815e674223803d3f"
+    },
+    "org/zenframework/z8/base/poi/Workbook.bl :: org.zenframework.z8.server.base.poi.Workbook": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/poi/Workbook.java",
+      "sha256": "ee36ee3da764b406b88b49c3774f2cba3f9f1095efa1d47a909fc757ca131ffc"
+    },
+    "org/zenframework/z8/base/query/Period.bl :: org.zenframework.z8.server.base.query.Period": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/query/Period.java",
+      "sha256": "79598afe116786fc8caa4c108cb1837e706bd25420297927e11f52490c45620a"
+    },
+    "org/zenframework/z8/base/query/Query.bl :: org.zenframework.z8.server.base.query.Query": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/query/Query.java",
+      "sha256": "5cbbc33d6fbd69daa9439a53c0db1403e95d20b6630b5e2bd5d9ca184a89eae6"
+    },
+    "org/zenframework/z8/base/query/ReadLock.bl :: org.zenframework.z8.server.base.query.ReadLock": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/query/ReadLock.java",
+      "sha256": "2acd981289d20dcf3bd5b9e0ec9407a43f7f4c387861016010990d9150d977dc"
+    },
+    "org/zenframework/z8/base/security/LoginParameters.bl :: org.zenframework.z8.server.base.security.LoginParameters": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/security/LoginParameters.java",
+      "sha256": "9721f02497a76a6293ff6ee61055968a4179f608e7894bd18ead93b5a3e412a7"
+    },
+    "org/zenframework/z8/base/security/Role.bl :: org.zenframework.z8.server.security.Role": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/security/Role.java",
+      "sha256": "96316ae9c1e6262381173dae2b6658d784c08b7df567048184454d761d37d48b"
+    },
+    "org/zenframework/z8/base/security/SecurityEvent.bl :: org.zenframework.z8.server.base.security.SecurityEvent": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/security/SecurityEvent.java",
+      "sha256": "fd22ad0307e9897499880480cd44a07f72d0e13e117c0ebcf9d7e7d4a2a702b5"
+    },
+    "org/zenframework/z8/base/security/SecurityLog.bl :: org.zenframework.z8.server.base.security.SecurityLog": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/security/SecurityLog.java",
+      "sha256": "c0e944ad78052c3a04dce23b56a33c8f12ac3d5ce7dddfa52fc6f545ec9bbc72"
+    },
+    "org/zenframework/z8/base/security/SecurityObject.bl :: org.zenframework.z8.server.base.security.SecurityObject": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/security/SecurityObject.java",
+      "sha256": "3e8bba83953b1614a57bdffd19172fd61104af63af719c700efd4f302c2549c7"
+    },
+    "org/zenframework/z8/base/security/User.bl :: org.zenframework.z8.server.base.security.User": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/security/User.java",
+      "sha256": "5bbef6c4de2c275ec93e7dc1ae0a4b2ffa9ee0d92404e9b42179ebaf0d19a35f"
+    },
+    "org/zenframework/z8/base/sql/Connection.bl :: org.zenframework.z8.server.base.sql.Connection": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/sql/Connection.java",
+      "sha256": "f96b415a632fb8c3067a7e93eb1a9e056199580be65f9e6b9bae6152ddd0013b"
+    },
+    "org/zenframework/z8/base/sql/Cursor.bl :: org.zenframework.z8.server.base.sql.Cursor": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/sql/Cursor.java",
+      "sha256": "3c3cf3ae55b01f89f6059c9db44c49b6fc800cd691457c11536a33089d37a576"
+    },
+    "org/zenframework/z8/base/sql/Database.bl :: org.zenframework.z8.server.base.sql.Database": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/sql/Database.java",
+      "sha256": "dc2163ecb9f73031d6066fb3a48a1d0e20766dea927cb2265d1b4cd67f4c62f7"
+    },
+    "org/zenframework/z8/base/sql/Transaction.bl :: org.zenframework.z8.server.base.sql.Transaction": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/sql/Transaction.java",
+      "sha256": "e5e149b5799631af33b83265bb76f132699de362d904168f05a5d648055c2b66"
+    },
+    "org/zenframework/z8/base/table/RecordLock.bl :: org.zenframework.z8.server.base.query.RecordLock": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/query/RecordLock.java",
+      "sha256": "8e790e4492207ab3de30b7216f3200987a299b9439f0d79be667c532c4c404e9"
+    },
+    "org/zenframework/z8/base/table/SchemaGenerator.bl :: org.zenframework.z8.server.db.generator.SchemaGenerator": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/db/generator/SchemaGenerator.java",
+      "sha256": "71da98a6a97e869724ca47fb8297a99c57c84fd013a1577d80c08bf6becf523e"
+    },
+    "org/zenframework/z8/base/table/Sequencer.bl :: org.zenframework.z8.server.base.table.value.Sequencer": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/Sequencer.java",
+      "sha256": "4a00de647ee97622d6a7b7e0ce26b74e2f8be9f16c0f94fa4612135dc917123e"
+    },
+    "org/zenframework/z8/base/table/SortDirection.bl :: org.zenframework.z8.server.db.sql.SortDirection": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/db/sql/SortDirection.java",
+      "sha256": "cd09b6cac7b883f4f05d50b4f65d43471d4fa083b6985ed760853c2de9236cad"
+    },
+    "org/zenframework/z8/base/table/Sql.bl :: org.zenframework.z8.server.db.sql.functions.Sql": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/db/sql/functions/Sql.java",
+      "sha256": "726192dc664461466dd56121b3bbf0d2022363080c889f7c11d8ec470573c18c"
+    },
+    "org/zenframework/z8/base/table/Table.bl :: org.zenframework.z8.server.base.table.Table": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/Table.java",
+      "sha256": "036368df1989671783c7a61f3fdbb75bc24103ac99e81c90967ef230ead1cd47"
+    },
+    "org/zenframework/z8/base/table/TreeTable.bl :: org.zenframework.z8.server.base.table.TreeTable": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/TreeTable.java",
+      "sha256": "bc2ec837be539b49654517986a1c31e5694a45ea609de5c3d9b40f91ad80f030"
+    },
+    "org/zenframework/z8/base/table/system/Domains.bl :: org.zenframework.z8.server.base.table.system.Domains": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/Domains.java",
+      "sha256": "814574e567772d63ca2c0ac8be1b2d33d4cac95b2a0a28a7e1b4738cb54bc927"
+    },
+    "org/zenframework/z8/base/table/system/Entries.bl :: org.zenframework.z8.server.base.table.system.Entries": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/Entries.java",
+      "sha256": "e352a3a72c1affa93c2146457a926ec2d1227f756ab259e709bef2c70375c214"
+    },
+    "org/zenframework/z8/base/table/system/Fields.bl :: org.zenframework.z8.server.base.table.system.Fields": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/Fields.java",
+      "sha256": "31416456fa777c9c3f8252ba8643f6c2a4d602540085b9cbfe975b9ceaa9cffb"
+    },
+    "org/zenframework/z8/base/table/system/Files.bl :: org.zenframework.z8.server.base.table.system.Files": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/Files.java",
+      "sha256": "cfd69048b74cb8c9c8cb6d66e2d025528949958a2f77830a4be53797caadfb0d"
+    },
+    "org/zenframework/z8/base/table/system/Requests.bl :: org.zenframework.z8.server.base.table.system.Requests": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/Requests.java",
+      "sha256": "3a0145707adb1534255a6dfb69cf9356a8ca9dd117884542546013837bf956c9"
+    },
+    "org/zenframework/z8/base/table/system/RoleFieldAccess.bl :: org.zenframework.z8.server.base.table.system.RoleFieldAccess": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/RoleFieldAccess.java",
+      "sha256": "a221d51220139f72ccaa33d8a0152a9f083381615198ce65c408e4fcd9286001"
+    },
+    "org/zenframework/z8/base/table/system/RoleRequestAccess.bl :: org.zenframework.z8.server.base.table.system.RoleRequestAccess": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/RoleRequestAccess.java",
+      "sha256": "ff2304b57ad7aba71e070e819f26c95ec4413114ce2aedd0dd8fb3aa0fa2e230"
+    },
+    "org/zenframework/z8/base/table/system/RoleTableAccess.bl :: org.zenframework.z8.server.base.table.system.RoleTableAccess": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/RoleTableAccess.java",
+      "sha256": "927cfc9861a7396eac95ea5e1152036e717d50e38c6933bc3080dec69e8226d6"
+    },
+    "org/zenframework/z8/base/table/system/Roles.bl :: org.zenframework.z8.server.base.table.system.Roles": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/Roles.java",
+      "sha256": "d4211472a4006de1a420b860eb9bd00df46ebaae8125f1b0057d36c97cacc9fa"
+    },
+    "org/zenframework/z8/base/table/system/Sequences.bl :: org.zenframework.z8.server.base.table.system.Sequences": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/Sequences.java",
+      "sha256": "b9c2c963dfd5dd93787f9c19b0563775817d6f73e5b9c5e916ea69b4f3439fac"
+    },
+    "org/zenframework/z8/base/table/system/Settings.bl :: org.zenframework.z8.server.base.table.system.Settings": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/Settings.java",
+      "sha256": "83fd72a1667aebdbc61f04e35b031f5c84e4e26c79e7870b0c16ccf35fe0ecbd"
+    },
+    "org/zenframework/z8/base/table/system/Tables.bl :: org.zenframework.z8.server.base.table.system.Tables": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/Tables.java",
+      "sha256": "d007ef4e5f3f132a5dfb79e55a3065769035ce3e5805b3da90a62c8d8fccdde3"
+    },
+    "org/zenframework/z8/base/table/system/UserEntries.bl :: org.zenframework.z8.server.base.table.system.UserEntries": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/UserEntries.java",
+      "sha256": "2639ef36c18d536c66115c75ca669be60507e1aeb3d8868dcfea8b1ae18ec9ea"
+    },
+    "org/zenframework/z8/base/table/system/UserRoles.bl :: org.zenframework.z8.server.base.table.system.UserRoles": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/UserRoles.java",
+      "sha256": "1f751f51190ff6ef07854a7b29b675ccda5d9ce462d59a046125473b80b6b915"
+    },
+    "org/zenframework/z8/base/table/system/Users.bl :: org.zenframework.z8.server.base.table.system.Users": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/Users.java",
+      "sha256": "4609ecb2fd3a9cc4ad3d21df18a19d5ce7e9311b6d179ee383d5fb55bb23dfb6"
+    },
+    "org/zenframework/z8/base/table/system/view/RoleTableAccessView.bl :: org.zenframework.z8.server.base.table.system.view.RoleTableAccessView": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/view/RoleTableAccessView.java",
+      "sha256": "0e3d16c7ece16958c55f41d78108690a3d122d29e40f721fd0afbc8da3eec5ed"
+    },
+    "org/zenframework/z8/base/table/system/view/UserForm.bl :: org.zenframework.z8.server.base.table.system.view.UserForm": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/view/UserForm.java",
+      "sha256": "595c4b09884113bbc069cb68eb360e07cf08c75c3e858080eb4f7b5fceb86ce1"
+    },
+    "org/zenframework/z8/base/table/system/view/UsersView.bl :: org.zenframework.z8.server.base.table.system.view.UsersView": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/view/UsersView.java",
+      "sha256": "37f6e16a59026866337da83508e35a39cba3b923d0fc7b538e137d73fe4ae877"
+    },
+    "org/zenframework/z8/base/table/value/Aggregation.bl :: org.zenframework.z8.server.base.table.value.Aggregation": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/Aggregation.java",
+      "sha256": "efc116913385864189e29c295acbab0baf4bf0f51dd8ac5f41a3ff50aaaa1256"
+    },
+    "org/zenframework/z8/base/table/value/AttachmentField.bl :: org.zenframework.z8.server.base.table.value.AttachmentField": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/AttachmentField.java",
+      "sha256": "a6b04e3194fa005a7d60ecbd7064cf9d08a55191fe70591370e75006b918db77"
+    },
+    "org/zenframework/z8/base/table/value/BinaryField.bl :: org.zenframework.z8.server.base.table.value.BinaryField": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/BinaryField.java",
+      "sha256": "0576c37908dcc6d828844387081fe1a3d9264fc0f1d9411b4b65e5e9ab1573aa"
+    },
+    "org/zenframework/z8/base/table/value/BoolExpression.bl :: org.zenframework.z8.server.base.table.value.BoolExpression": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/BoolExpression.java",
+      "sha256": "ef10ead44f4bdc2afc2cac81e098f6232c225b28bc2ecd52a5219a84b6f7a85b"
+    },
+    "org/zenframework/z8/base/table/value/BoolField.bl :: org.zenframework.z8.server.base.table.value.BoolField": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/BoolField.java",
+      "sha256": "bf24fa837134c5487e072c5d4122ea40fb6785f80419ed4ff21cb89796af83f8"
+    },
+    "org/zenframework/z8/base/table/value/CountExpression.bl :: org.zenframework.z8.server.base.table.value.CountExpression": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/CountExpression.java",
+      "sha256": "c5b31cdd8f60d8397ac47bbb0eb9074e42011c807fb614b8dcfd845fa1bbef6b"
+    },
+    "org/zenframework/z8/base/table/value/DateExpression.bl :: org.zenframework.z8.server.base.table.value.DateExpression": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/DateExpression.java",
+      "sha256": "570080e7e23146ed2982d6221dd31527a37c18467afc97137571742ee3f79246"
+    },
+    "org/zenframework/z8/base/table/value/DateField.bl :: org.zenframework.z8.server.base.table.value.DateField": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/DateField.java",
+      "sha256": "821d6ca8152154fe41a1fa5fa5fc43f05be5dc0c98becad1f38dfc1326247321"
+    },
+    "org/zenframework/z8/base/table/value/DatespanExpression.bl :: org.zenframework.z8.server.base.table.value.DatespanExpression": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/DatespanExpression.java",
+      "sha256": "a4771c7286b7e365f17d07de9c6ae46b4e1a154bef766742575e4d7d22e72ed7"
+    },
+    "org/zenframework/z8/base/table/value/DatespanField.bl :: org.zenframework.z8.server.base.table.value.DatespanField": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/DatespanField.java",
+      "sha256": "00f37e4b2bd711ec84b6256618f1656a95f2e45eda6ba4dac03996dd239f566e"
+    },
+    "org/zenframework/z8/base/table/value/DatetimeExpression.bl :: org.zenframework.z8.server.base.table.value.DatetimeExpression": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/DatetimeExpression.java",
+      "sha256": "6ec1096b178d492d8ad57f6acd52e54daae55e1eb9064e0e3dfb767619a39427"
+    },
+    "org/zenframework/z8/base/table/value/DatetimeField.bl :: org.zenframework.z8.server.base.table.value.DatetimeField": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/DatetimeField.java",
+      "sha256": "d96e1a915efa15046ff3a1dac607e3f5069025e4da54302b274e2d4fe847eef5"
+    },
+    "org/zenframework/z8/base/table/value/DecimalExpression.bl :: org.zenframework.z8.server.base.table.value.DecimalExpression": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/DecimalExpression.java",
+      "sha256": "54c983ecf5cbac6675c54b381232854df36eeba8a1b2e2f52a45d81b052c9548"
+    },
+    "org/zenframework/z8/base/table/value/DecimalField.bl :: org.zenframework.z8.server.base.table.value.DecimalField": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/DecimalField.java",
+      "sha256": "5ef5d2bda8400d01c4695d21779e5e474a0fd409cd889e9d63386fc4be3c1099"
+    },
+    "org/zenframework/z8/base/table/value/Expression.bl :: org.zenframework.z8.server.base.table.value.Expression": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/Expression.java",
+      "sha256": "3838b8d1e9e7fc5cbe497122cdea7d2acc951f61402d30e8790a69445b31b76e"
+    },
+    "org/zenframework/z8/base/table/value/Field.bl :: org.zenframework.z8.server.base.table.value.Field": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/Field.java",
+      "sha256": "746db69119ae1d772f4013a633f606a43d170b4ca3a08f8326d7dc4971f1aa0c"
+    },
+    "org/zenframework/z8/base/table/value/FieldType.bl :: org.zenframework.z8.server.db.FieldType": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/db/FieldType.java",
+      "sha256": "c7bc3f21119bee7a60f2bd851c955882584ff1dc3bb8b6bc89f3e967c4414a0c"
+    },
+    "org/zenframework/z8/base/table/value/FileExpression.bl :: org.zenframework.z8.server.base.table.value.FileExpression": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/FileExpression.java",
+      "sha256": "cba88d20da63361b8bd8ba2c495d5a9d713eeab49a7aec51847123781427d8c2"
+    },
+    "org/zenframework/z8/base/table/value/FileField.bl :: org.zenframework.z8.server.base.table.value.FileField": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/FileField.java",
+      "sha256": "53366016ab04b23e83b342143d629c374f97d7c10b34fefa4ed379f05d6f8f68"
+    },
+    "org/zenframework/z8/base/table/value/GeometryExpression.bl :: org.zenframework.z8.server.base.table.value.GeometryExpression": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/GeometryExpression.java",
+      "sha256": "f843832568021c25b2ce1d8ef542ffad3da362ae771b1e604ac004c744261cf8"
+    },
+    "org/zenframework/z8/base/table/value/GeometryField.bl :: org.zenframework.z8.server.base.table.value.GeometryField": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/GeometryField.java",
+      "sha256": "f288f000feab75748361c201c255594891a139e78da60bf38d67c06518a799b5"
+    },
+    "org/zenframework/z8/base/table/value/GuidExpression.bl :: org.zenframework.z8.server.base.table.value.GuidExpression": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/GuidExpression.java",
+      "sha256": "812fe0c15e82e4c0c0dfc3e24307184e671ccdcf57a108ebfacc5963ac851828"
+    },
+    "org/zenframework/z8/base/table/value/GuidField.bl :: org.zenframework.z8.server.base.table.value.GuidField": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/GuidField.java",
+      "sha256": "b43815923c5b99d44e513f16a8d5df8c314d317d21621b80e8facfa6f3a7886d"
+    },
+    "org/zenframework/z8/base/table/value/IntExpression.bl :: org.zenframework.z8.server.base.table.value.IntegerExpression": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/IntegerExpression.java",
+      "sha256": "79013cd89b273149b2c7b7720e568542409346e1611ef634a14fe6c5eb7f92d5"
+    },
+    "org/zenframework/z8/base/table/value/IntField.bl :: org.zenframework.z8.server.base.table.value.IntegerField": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/IntegerField.java",
+      "sha256": "efa7cbedc559c6eddbe1a41fe4c3a5a40a10057fb9ba905988d531626c9a131c"
+    },
+    "org/zenframework/z8/base/table/value/Join.bl :: org.zenframework.z8.server.base.table.value.Join": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/Join.java",
+      "sha256": "69723d86286c97ba677f8b706173ac42a36bba172e13e52fc20a463b6dbde96e"
+    },
+    "org/zenframework/z8/base/table/value/JoinType.bl :: org.zenframework.z8.server.base.table.value.JoinType": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/JoinType.java",
+      "sha256": "25668ddcf67fa71c4167ce5d0efa399fc6a68c8b4b040f05ed908460297440e5"
+    },
+    "org/zenframework/z8/base/table/value/JsonObjectExpression.bl :: org.zenframework.z8.server.base.table.value.JsonObjectExpression": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/JsonObjectExpression.java",
+      "sha256": "c56d31e59e3b27433cd45654dab26063c12bfded81d45ce6c183500b7bf639cb"
+    },
+    "org/zenframework/z8/base/table/value/Link.bl :: org.zenframework.z8.server.base.table.value.Link": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/Link.java",
+      "sha256": "18c848490fd4b4e291bad85bd25ad54a542f8eb7fb17363273b3c7cd303fda19"
+    },
+    "org/zenframework/z8/base/table/value/LinkExpression.bl :: org.zenframework.z8.server.base.table.value.LinkExpression": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/LinkExpression.java",
+      "sha256": "ac86baf56a368a0669f4faa5289da9fd5ef7b2b16a468b879c907221eec5f3ac"
+    },
+    "org/zenframework/z8/base/table/value/StringExpression.bl :: org.zenframework.z8.server.base.table.value.StringExpression": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/StringExpression.java",
+      "sha256": "672820934e884fb75935ea78d4125981c8faf12905a7030497e8f62fe76c9850"
+    },
+    "org/zenframework/z8/base/table/value/StringField.bl :: org.zenframework.z8.server.base.table.value.StringField": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/StringField.java",
+      "sha256": "c95875dd371f5521cf634401e05ec580d5c4ea59dbb25e97360f9d68ccada606"
+    },
+    "org/zenframework/z8/base/table/value/TextExpression.bl :: org.zenframework.z8.server.base.table.value.TextExpression": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/TextExpression.java",
+      "sha256": "17793e6d2c617e544826888ddf2d0f11469a48a197bae00c44b70a4aae2eca2f"
+    },
+    "org/zenframework/z8/base/table/value/TextField.bl :: org.zenframework.z8.server.base.table.value.TextField": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/TextField.java",
+      "sha256": "2523213472105f87b550e565db04bc22d721d5131332aaca2c252fa081c0f72c"
+    },
+    "org/zenframework/z8/base/table/value/TimestampField.bl :: org.zenframework.z8.server.base.table.value.TimestampField": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/TimestampField.java",
+      "sha256": "6ac50e53375a7de6e0ffc923a9a2eafdd91bbc9742ed5f72f76982d3fc24a595"
+    },
+    "org/zenframework/z8/ie/DataMessage.bl :: org.zenframework.z8.server.ie.DataMessage": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/ie/DataMessage.java",
+      "sha256": "abd359dbf8537a502f6243d4dd9f02794a45302a03e9f6ca1d128570d9237ea4"
+    },
+    "org/zenframework/z8/ie/FileMessage.bl :: org.zenframework.z8.server.ie.FileMessage": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/ie/FileMessage.java",
+      "sha256": "aff9bdb060e63e2d5326e13d7218a575b6bb8475b344ce4138e131a08d53c82b"
+    },
+    "org/zenframework/z8/ie/ImportPolicy.bl :: org.zenframework.z8.server.ie.ImportPolicy": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/ie/ImportPolicy.java",
+      "sha256": "8bfbaf3a0341b7af098236bbd6f5e5bd9ca986e78755ecddac045149fe32cc28"
+    },
+    "org/zenframework/z8/ie/Message.bl :: org.zenframework.z8.server.ie.Message": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/ie/Message.java",
+      "sha256": "e1542d702e4f2819c076ebe7dc81b518966b8b80ea9f2a3e510996aa87cbed1e"
+    },
+    "org/zenframework/z8/justintime/table/CompileAction.bl :: org.zenframework.z8.justintime.table.CompileAction": {
+      "java": "org.zenframework.z8.justintime/src/main/java/org/zenframework/z8/justintime/table/CompileAction.java",
+      "sha256": "81fc97df027011603b24fb4a94a9795d67a309bbf35963138c72a93302efdf19"
+    },
+    "org/zenframework/z8/justintime/table/JustInTimeTools.bl :: org.zenframework.z8.justintime.table.JustInTimeTools": {
+      "java": null,
+      "sha256": null
+    },
+    "org/zenframework/z8/justintime/table/Source.bl :: org.zenframework.z8.justintime.table.Source": {
+      "java": "org.zenframework.z8.justintime/src/main/java/org/zenframework/z8/justintime/table/Source.java",
+      "sha256": "766c5b9e4f5e8fcdc8a9636b3b03a87d11bd971f9b786bdeedeb7fcf73b9f2c7"
+    },
+    "org/zenframework/z8/justintime/table/SourcesView.bl :: org.zenframework.z8.justintime.table.SourcesView": {
+      "java": "org.zenframework.z8.justintime/src/main/java/org/zenframework/z8/justintime/table/SourcesView.java",
+      "sha256": "9d9f89470a13ccb928d5caa0b0bcbdb8246d1251267755334641d0aded02615e"
+    },
+    "org/zenframework/z8/lang/Attribute.bl :: org.zenframework.z8.server.runtime.Attribute": {
+      "java": null,
+      "sha256": null
+    },
+    "org/zenframework/z8/lang/Math.bl :: org.zenframework.z8.server.math.Math": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/math/Math.java",
+      "sha256": "c90bc34e9f0188bfd1e04ddcb223852cc5e4426bc8e27ab762cf7f2e543ade8c"
+    },
+    "org/zenframework/z8/lang/Object.bl :: org.zenframework.z8.server.runtime.OBJECT": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/runtime/OBJECT.java",
+      "sha256": "d41a3017298f12dcf8fb77eb7c8fbe0297e28c9f7b6e86708cfea35bbd026edb"
+    },
+    "org/zenframework/z8/lang/binary.bl :: org.zenframework.z8.server.types.binary": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/binary.java",
+      "sha256": "8c71246fb28d1f3d5dbd875a713e0f88a5665bd19c330df7935025bd93917218"
+    },
+    "org/zenframework/z8/lang/bool.bl :: org.zenframework.z8.server.types.bool": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/bool.java",
+      "sha256": "86dc207d21e7ff9abe265f1fb8ab78a3e96fb85ed63792641f010e536bedce22"
+    },
+    "org/zenframework/z8/lang/date.bl :: org.zenframework.z8.server.types.date": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/date.java",
+      "sha256": "597a658d94f709d023c766a2dfbd0c238cfd492fd17299f2e5a887df4cec215a"
+    },
+    "org/zenframework/z8/lang/datespan.bl :: org.zenframework.z8.server.types.datespan": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/datespan.java",
+      "sha256": "078d386d5af305858cadf1fbf8a72467b9647c975ba074c80c81eba18371674a"
+    },
+    "org/zenframework/z8/lang/decimal.bl :: org.zenframework.z8.server.types.decimal": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/decimal.java",
+      "sha256": "dfcbea7003b92fee3f04e3dac69fa780102e4048ec8201a568ae265eb67f6dfe"
+    },
+    "org/zenframework/z8/lang/encoding.bl :: org.zenframework.z8.server.types.encoding": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/encoding.java",
+      "sha256": "c75dc0b4d8ffd28bb070ff9c94040025a03a0c40292088dadcd4f7ad2d04e4c6"
+    },
+    "org/zenframework/z8/lang/exception.bl :: org.zenframework.z8.server.types.exception": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/exception.java",
+      "sha256": "7eff95267ace89d51ef8b5d9bb6fb34eec1c089df3f369ae284f7f635f01eb64"
+    },
+    "org/zenframework/z8/lang/file.bl :: org.zenframework.z8.server.types.file": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/file.java",
+      "sha256": "1610d5dff4550f1bacea1a6af8fab2fb6a5387c83d92e60882ec7f62f7e8e8ea"
+    },
+    "org/zenframework/z8/lang/geometry.bl :: org.zenframework.z8.server.types.geometry": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/geometry.java",
+      "sha256": "72a18b29080e73996390254bebfeaa48de090856a1b71299c6a50c7753a4cb5a"
+    },
+    "org/zenframework/z8/lang/guid.bl :: org.zenframework.z8.server.types.guid": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/guid.java",
+      "sha256": "6c89dd7e8727ccc1269e2ed1475a405c21ee0e0ad390204ee803d3449b092e80"
+    },
+    "org/zenframework/z8/lang/int.bl :: org.zenframework.z8.server.types.integer": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/integer.java",
+      "sha256": "1675135e495e835a238c67157bfc68ab33898f3c0183c88a479d7500fab7535a"
+    },
+    "org/zenframework/z8/lang/primary.bl :: org.zenframework.z8.server.types.primary": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/primary.java",
+      "sha256": "83b86dc48f31bcfa1f6dd7b9271e8024c34d2f8080eea76462f4d9452cd1e060"
+    },
+    "org/zenframework/z8/lang/sql/sql_binary.bl :: org.zenframework.z8.server.types.sql.sql_binary": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/sql/sql_binary.java",
+      "sha256": "d9ca688eb6523c3287f73c88c0e2add8887eafeb787a06e293a178b10bbf44c8"
+    },
+    "org/zenframework/z8/lang/sql/sql_bool.bl :: org.zenframework.z8.server.types.sql.sql_bool": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/sql/sql_bool.java",
+      "sha256": "f71d0660d833bf76741d9efd1cff0bdfcbff61f668adf5f2d5ed47598cb6e8b5"
+    },
+    "org/zenframework/z8/lang/sql/sql_date.bl :: org.zenframework.z8.server.types.sql.sql_date": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/sql/sql_date.java",
+      "sha256": "19a955bdd3c0e73cbf7a7dd309e4afdf29f2a1df0af56171956593294937de23"
+    },
+    "org/zenframework/z8/lang/sql/sql_datespan.bl :: org.zenframework.z8.server.types.sql.sql_datespan": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/sql/sql_datespan.java",
+      "sha256": "9024710813d90a57044779f8db0645351d7f7687d18ea4c42ba6a862b669cf39"
+    },
+    "org/zenframework/z8/lang/sql/sql_decimal.bl :: org.zenframework.z8.server.types.sql.sql_decimal": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/sql/sql_decimal.java",
+      "sha256": "703108d375357a6f4a1859d00246890035dac7149e9b72650e0dba2019267c2c"
+    },
+    "org/zenframework/z8/lang/sql/sql_geometry.bl :: org.zenframework.z8.server.types.sql.sql_geometry": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/sql/sql_geometry.java",
+      "sha256": "ec6be2f66f4c8c35878577926dd56c0eb73f98eaf57842279de48b1b52033953"
+    },
+    "org/zenframework/z8/lang/sql/sql_guid.bl :: org.zenframework.z8.server.types.sql.sql_guid": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/sql/sql_guid.java",
+      "sha256": "dab5f4146e0cc96c32fcbc6392898a64bc9ece94938a606b479d7713cfd1f6de"
+    },
+    "org/zenframework/z8/lang/sql/sql_int.bl :: org.zenframework.z8.server.types.sql.sql_integer": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/sql/sql_integer.java",
+      "sha256": "da6dccc94f7c32df71307ba4426a83eafa97f99fcbe8ac0f981dedaf6a5da882"
+    },
+    "org/zenframework/z8/lang/sql/sql_primary.bl :: org.zenframework.z8.server.types.sql.sql_primary": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/sql/sql_primary.java",
+      "sha256": "9682469e1f9380a05949472cfd47ef827aecd201e944f43d15b62bbd6978cd1b"
+    },
+    "org/zenframework/z8/lang/sql/sql_string.bl :: org.zenframework.z8.server.types.sql.sql_string": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/sql/sql_string.java",
+      "sha256": "864533cdc3a94d84c0afaf8badd690449956875f81385d495262bfe734a3cb05"
+    },
+    "org/zenframework/z8/lang/string.bl :: org.zenframework.z8.server.types.string": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/types/string.java",
+      "sha256": "20d2482afb21f4744dd3a3ce83f5f6636742a78936bea2cb8b3f804f9c5cb57f"
+    },
+    "org/zenframework/z8/lang/void.bl :: void": {
+      "java": null,
+      "sha256": null
+    },
+    "org/zenframework/z8/utils/Cron.bl :: org.zenframework.z8.server.utils.Cron": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/utils/Cron.java",
+      "sha256": "3d0ba3cb15272efc459d70d320529c2d5c751e6199ae2618552575fb1214823e"
+    },
+    "org/zenframework/z8/utils/Sorter.bl :: org.zenframework.z8.server.utils.Sorter": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/utils/Sorter.java",
+      "sha256": "65c525225856034c7a0308f879066abb6c89646f815fb6e69d05c489b219481a"
+    },
+    "platform/bl/org/zenframework/z8/base/table/system/Jobs.bl :: org.zenframework.z8.server.base.table.system.Jobs": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/Jobs.java",
+      "sha256": "1062f9693156eb60dadcd5441bddcb97d2310db1d6cee4b149c20ffdd041e6a7"
+    },
+    "platform/bl/org/zenframework/z8/base/table/system/ScheduledJobLogs.bl :: org.zenframework.z8.server.base.table.system.ScheduledJobLogs": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/ScheduledJobLogs.java",
+      "sha256": "5ae0f93026f18bb216dcf9843086c5b23554873def262a794ba6364bcceb6a84"
+    },
+    "platform/bl/org/zenframework/z8/base/table/system/ScheduledJobs.bl :: org.zenframework.z8.server.base.table.system.ScheduledJobs": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/ScheduledJobs.java",
+      "sha256": "ab812d45ecf155fbdfcd7fb51592d53d265c18101b4fa1e3ea12fdd519dc3bb0"
+    },
+    "platform/bl/org/zenframework/z8/server/base/table/system/view/ResetPasswordAction.bl :: org.zenframework.z8.server.base.table.system.view.ResetPasswordAction": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/view/ResetPasswordAction.java",
+      "sha256": "ca5372b65bfee92b9d2e0fd7ead8b3d4d2ce3f4514f868d4a58809f9c2adcda1"
+    },
+    "platform/bl/org/zenframework/z8/server/base/table/system/view/RestartSchedulerAction.bl :: org.zenframework.z8.server.base.table.system.view.RestartSchedulerAction": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/view/RestartSchedulerAction.java",
+      "sha256": "275e1f3ea64f62a51dadfa2a4dceb9ce72a5dbe82d7a5c31f556bd876b06eeba"
+    },
+    "platform/bl/org/zenframework/z8/server/base/table/system/view/RuntimeVersionData.bl :: org.zenframework.z8.server.base.table.system.view.RuntimeVersionData": {
+      "java": null,
+      "sha256": null
+    }
+  },
+  "format": 1
+}

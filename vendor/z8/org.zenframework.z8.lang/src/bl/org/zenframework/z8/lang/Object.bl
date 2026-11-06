@@ -1,0 +1,44 @@
+import org.zenframework.z8.base.json.JsonArray;
+import org.zenframework.z8.base.json.JsonWriter;
+import org.zenframework.z8.base.security.User;
+
+[native "org.zenframework.z8.server.runtime.OBJECT"]
+public class Object {
+	static public User user();
+	static public User system();
+
+	virtual protected void constructor();
+
+	public guid key();
+	public string index();
+	public string name();
+	public string className();
+
+	public string id();
+	public void setId(string id);
+
+	public string displayName();
+	public void setDisplayName(string displayName);
+
+	public string getAttribute(string attribute);
+	public void setAttribute(string attribute, primary value);
+
+	public bool operator == (Object object);
+	public bool operator != (Object object);
+
+	virtual public string toString();
+	virtual public int compare(Object o);
+
+	virtual public void write(JsonWriter writer);
+
+	virtual protected binary processContentRequest(string[string] parameters, file[] files);
+	virtual protected JsonArray getData(string[string] parameters);
+
+	auto public Object[] objects;
+
+	public Object[] getNamed();
+
+	static public Object newInstance(string className);
+	static public Object newNamedInstance(string name);
+	static public Object getNamedSingleton(string name);
+}

@@ -1,0 +1,13 @@
+import org.zenframework.z8.lang.Object;
+
+[native "org.zenframework.z8.server.base.file.AttachmentProcessor"]
+public class AttachmentProcessor extends Object {
+	static public file[] parse(string json);
+
+	public file[] read(guid recordId);
+	public file[] create(guid recordId, file[] files);
+	public file[] update(guid recordId, file[] files);
+	public file[] remove(guid recordId, file[] files);
+
+	public int getTotalPageCount(guid recordId);
+}

@@ -1,0 +1,38 @@
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.BinaryField;
+import org.zenframework.z8.base.table.value.DatetimeField;
+import org.zenframework.z8.base.table.value.IntField;
+import org.zenframework.z8.base.table.value.StringField;
+
+[name "SystemFiles"]
+[displayName "Файлы"]
+[native "org.zenframework.z8.server.base.table.system.Files"]
+public class Files extends Table {
+	[displayName "Имя файла"]
+	public StringField name;
+	name.length = 512;
+
+	[name "Path"]
+	[displayName "Путь к файлу в кэше"]
+	public StringField path;
+	path.length = 512;
+
+	[name "Time"]
+	public DatetimeField time;
+
+	[name "Last modified"]
+	public DatetimeField lastModified;
+
+	[name "Location"]
+	public IntField location;
+
+	[name "Size"]
+	public IntField size;
+
+	[name "File"]
+	public BinaryField data;
+
+	public static file get(guid fileId);
+	public static file get(file file);
+
+}

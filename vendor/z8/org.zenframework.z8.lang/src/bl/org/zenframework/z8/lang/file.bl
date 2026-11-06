@@ -1,0 +1,93 @@
+[primary "org.zenframework.z8.server.types.file"]
+public class file extends primary {
+	public guid id;
+	public string name;
+	public date time;
+	public int size;
+	public string path;
+	public guid user;
+	public string author;
+	public string[string] details;
+
+	/*
+	*    Assignment operator. Allows to write code like this:
+	*    file someFile = "storage/folder/file.name";
+	*/
+	public operator binary();
+	public operator string();
+
+	public void operator = (string path);
+
+	public bool operator == (file path);
+	public bool operator != (file path);
+
+	public bool exists();
+	public bool isEmpty();
+	public bool isFolder();
+	public file[] listFiles();
+
+	public file parent();
+
+	public string folder();
+	public string baseName();
+	public string fileName();
+	public string extension();
+	public date lastModified();
+
+	public string read();
+	public string read(encoding charset);
+
+	public file write(binary content);
+	public file write(string content);
+	public file write(string content, encoding charset);
+
+	public file append(binary content);
+	public file append(string content);
+	public file append(string content, encoding charset);
+
+	public void delete(); 
+	public void delete(bool recursively);
+
+	public file zip(file fileOrDirectory);
+	public file unzip(file directory);
+	public file unzip(file directory, encoding charset);
+
+	/*
+	*    Gets the name (with no path)
+	*/
+	static public string name(string path);
+
+	/*
+	*    Gets the base name (without path and extension)
+	*/
+	static public string baseName(string path);
+
+	/*
+	*    Gets the extension of a filename.
+	*/
+	static public string extension(string path);
+
+	/*
+	*    Parses JSON like below:
+	*
+	*    [{
+	*        id: '8D9C5AC1-F500-426F-9CDA-4258B4C79154',    // guid
+	*        name: 'file.name',                             // readable file name
+	*        time: '2010-12-24T01:10:20.032+03:00',         // UTC time
+	*        size: 12342345,                                // size in bytes
+	*        path: 'storage/01/file1.ext',                  // relative path
+	*        user: '33B3487D-C975-453C-AE5B-49D215009DA2'   // guid, user id
+	*        author: 'John Doe',                            // author info
+	*        details: { key: value }                        // extra info
+	*    }]
+	*/
+	static public file[] parse(string json);
+
+	/*
+	*    Convers array of files to JSON array, see file.parse()
+	*/
+	static public string toJson(file[] files);
+
+	static public file createTempFile(string prefix, string ext);
+
+}

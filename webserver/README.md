@@ -165,10 +165,10 @@ serves static assets from that directory and dispatches the request path to BL.
 Directory listings and server-side includes are disabled, and common servlet
 and repository metadata paths are hidden. Use a dedicated public asset directory:
 CivetWeb may follow filesystem links, so its contents and links must be trusted.
-To prepare the framework client from a checkout of the original Z8 sources:
+To prepare the framework client from the unchanged sources included in z8-d:
 
 ```sh
-python webserver/prepare_client.py path/to/original-z8 path/to/empty-public-dir
+python webserver/prepare_client.py vendor/z8 path/to/empty-public-dir
 ```
 
 The script follows the original Gradle `.buildorder` lists and copies the

@@ -1,0 +1,60 @@
+import org.zenframework.z8.base.form.Control;
+import org.zenframework.z8.base.table.Sequencer;
+import org.zenframework.z8.base.table.SortDirection;
+
+[native "org.zenframework.z8.server.base.table.value.Field"]
+public class Field extends Control {
+	public string format;
+
+	public int width = 0;
+
+	public bool indexed = false;
+	public bool unique = false;
+	public bool trigram = false;
+	public bool caseInsensitive = false;
+
+	public SortDirection sortDirection = SortDirection.Asc;
+	public Aggregation aggregation = Aggregation.None;
+	public bool totals = true;
+
+	public Field valueFrom;                   // Из какого поля брать значение при создании
+	public Field valueFor;                    // Для какого поля является значением
+
+	public Field[] usedFields;
+	public Field[] columns;                   // Дополнительные колонки в выпадающем списке
+	public Field[] arrayOrderBy;
+
+	public FieldType getType();
+	public string getTypeName();
+
+	public bool isChanged();
+	public bool wasNull();
+
+	public sql_bool sqlIsNull();
+
+	public Sequencer getSequencer();
+
+	public primary primary();
+	public binary binary();
+	public bool bool();
+	public geometry geometry();
+	public guid guid();
+	public date date();
+	public datespan datespan();
+	public decimal decimal();
+	public int int();
+	public string string();
+
+	public sql_bool inVector(primary[] values);
+	public sql_bool notInVector(primary[] values);
+
+	// Оператор закомментирован, чтобы можно было сравнивать поля как объекты
+	// При необходимости сравнить два поля, например, в where, нужно привести одно из них к sql_<...> типу
+	//public sql_bool operator == (Field field);
+
+	// Тоже не просто так закомментирован!
+	//public void operator = (Field field);
+
+	// Тоже не просто так закомментирован! Убивает типизацию полей!
+	// public Field operator = (primary value);
+}

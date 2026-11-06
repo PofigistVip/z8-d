@@ -1,0 +1,6 @@
+[native "org.zenframework.z8.server.security.Role"]
+public enum Role {
+	User,
+	Guest,
+	Administrator
+}

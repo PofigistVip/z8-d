@@ -1,0 +1,14 @@
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.StringField;
+
+[name "SystemRequests"]
+[displayName "Таблицы"]
+[native "org.zenframework.z8.server.base.table.system.Requests"]
+public class Requests extends Table {
+	public StringField name;
+	name.length = 256;
+
+	[displayName "Системное имя"]
+	public StringField classId;
+	classId.length = 1024;
+}

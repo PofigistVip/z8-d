@@ -1,0 +1,30 @@
+import org.zenframework.z8.base.table.value.FieldType;
+import org.zenframework.z8.lang.Object;
+
+[native "org.zenframework.z8.server.base.form.action.Parameter"]
+public class Parameter extends Object {
+	public string text;
+	public ParameterSource source;
+
+	public operator bool();
+	public operator guid();
+	public operator date();
+	public operator decimal();
+	public operator int();
+	public operator string();
+	public operator file();
+
+	static public Parameter create(string text, FieldType type);
+	static public Parameter create(string text, FieldType type, bool visible);
+	static public Parameter create(string text, ParameterSource source);
+
+	static public Parameter create(string text, primary value, bool visible);
+	static public Parameter create(string text, primary value, ParameterSource source);
+	static public Parameter create(string text, bool value);
+	static public Parameter create(string text, date value);
+	static public Parameter create(string text, decimal value);
+	static public Parameter create(string text, int value);
+	static public Parameter create(string text, string value);
+	static public Parameter create(string text, guid value);
+	static public Parameter create(string text, file value);
+}

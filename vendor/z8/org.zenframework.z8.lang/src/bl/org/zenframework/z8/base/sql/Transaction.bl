@@ -1,0 +1,20 @@
+import org.zenframework.z8.lang.Object;
+
+[native "org.zenframework.z8.server.base.sql.Transaction"]
+public class Transaction extends Object {
+	/*
+		try {
+			Transaction.begin();
+			...
+			Transaction.commit();
+		} catch(exception e) {
+			Transaction.rollback();
+			...
+		}
+	*/
+
+	static public void begin();
+	static public void flush();
+	static public void commit();
+	static public void rollback();
+}

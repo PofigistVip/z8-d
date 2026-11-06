@@ -1,0 +1,49 @@
+import org.zenframework.z8.base.json.JsonObject;
+import org.zenframework.z8.lang.Object;
+
+[native "org.zenframework.z8.server.base.json.parser.JsonArray"]
+public class JsonArray extends Object {
+	public operator string();
+
+	public void operator = (string source);
+	public void operator = (primary[] source);
+
+	public JsonArray operator + (JsonArray value);
+
+	public bool isEmpty();
+	public int length(); // Deprecated
+	public int size();
+
+	public string getString(int i);
+	public int getInt(int i);
+	public decimal getDecimal(int i);
+	public bool getBool(int i);
+	public guid getGuid(int i);
+
+	public JsonArray getJsonArray(int i);
+	public JsonObject getJsonObject(int i);
+
+	public JsonArray add(primary value);
+	public JsonArray add(JsonArray value);
+	public JsonArray add(JsonObject value);
+
+	public JsonArray insert(int index, primary value);
+	public JsonArray insert(int index, JsonArray value);
+	public JsonArray insert(int index, JsonObject value);
+
+	public JsonArray put(int index, primary value);
+	public JsonArray put(int index, JsonArray value);
+	public JsonArray put(int index, JsonObject value);
+
+	public JsonArray remove(int index);
+
+	public date[] toDateArray();
+	public decimal[] toDecimalArray();
+	public guid[] toGuidArray();
+	public int[] toIntArray();
+	public string[] toStringArray();
+	public bool[] toBoolArray();
+
+	public static JsonArray fromArray(primary[] array);
+	public static JsonArray parse(string source);
+}

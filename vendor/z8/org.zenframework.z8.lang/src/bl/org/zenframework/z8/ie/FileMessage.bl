@@ -1,0 +1,5 @@
+[native "org.zenframework.z8.server.ie.FileMessage"]
+public class FileMessage extends Message {
+	public file getFile();
+	public void setFile(file file);
+}
