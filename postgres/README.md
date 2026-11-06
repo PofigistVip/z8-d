@@ -442,13 +442,15 @@ parent updates the paths and ancestor columns of the affected subtree within
 the database transaction.
 
 The executor supports `aggregateBy` grouping over root Link fields with numeric
-sum, average, count, minimum and maximum, count for string, text, binary, boolean and temporal fields, and scalar minimum/maximum for strings, text,
+sum, average, count, minimum and maximum, count for string, text, binary, boolean, temporal and geometry fields, and scalar minimum/maximum for strings, text,
 booleans, dates, durations and GUIDs. Filters can reference linked tables, and a
 subselect joins target fields, including chained links and computed fields, after
 grouping. An optional second grouping and its `HAVING` run in the outer select.
 As with JDBC, a boolean count can be read only when its result is 0 or 1; temporal
 fields interpret the count as milliseconds, and binary fields receive the decimal
 count as bytes. Binary count conversion also applies to ordinary `groupBy` queries.
+For geometry fields, Z8 reads the decimal count as a raw geometry string; it is
+not valid WKB and geometry operations on it fail when the value is decoded.
 To check those conversions against a PostgreSQL JDBC driver, run
 `python tests/postgres_count_jdbc_oracle.py <postgres-bin> <postgresql-jdbc.jar>`.
 Expressions and joins requiring unprojected root fields, and row locks on these

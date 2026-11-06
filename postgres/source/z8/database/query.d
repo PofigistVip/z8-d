@@ -217,7 +217,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                     kind == "date"w || kind == "datetime"w || kind == "datespan"w;
                 bool extrema = aggregation == Z8FieldAggregation.min || aggregation == Z8FieldAggregation.max;
                 bool arithmetic = aggregation == Z8FieldAggregation.sum || aggregation == Z8FieldAggregation.average;
-                bool countable = (comparable && kind != "guid"w) || kind == "binary"w;
+                bool countable = (comparable && kind != "guid"w) || kind == "binary"w || kind == "geometry"w;
                 if (!(comparable && extrema) && !(numeric && arithmetic) && !(countable && aggregation == Z8FieldAggregation.count))
                     throw new Z8PostgresException("unsupported PostgreSQL aggregateBy field aggregation");
             }
@@ -378,7 +378,8 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                     expression = "convert_to((" ~ expression ~ ")::text, 'UTF8')";
                 expression = "encode(" ~ expression ~ ", 'hex')";
             }
-            else if (kind == "geometry"w) expression = "encode(ST_AsEWKB(" ~ expression ~ ", 'NDR'), 'hex')";
+            else if (kind == "geometry"w && z8_field_aggregation(field) != Z8FieldAggregation.count)
+                expression = "encode(ST_AsEWKB(" ~ expression ~ ", 'NDR'), 'hex')";
             else if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.TextField"w, field) &&
                 (!outerGroups.length || z8_field_aggregation(field) == Z8FieldAggregation.none))
                 expression = "convert_from(" ~ expression ~ ", 'UTF8')";

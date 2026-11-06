@@ -25,6 +25,38 @@ import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.GeometryField;
 public class GeoSample extends Table { [name "Shape"] public GeometryField shape; }
 ''', encoding="utf-8")
+    (source / "GeoCountBucket.bl").write_text('''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.StringField;
+[name "GeoCountBuckets"] public class GeoCountBucket extends Table { [name "Label"] public StringField label; }
+''', encoding="utf-8")
+    (source / "GeoCountSample.bl").write_text('''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.GeometryField;
+import org.zenframework.z8.base.table.value.Aggregation;
+[name "GeoCountSamples"] public class GeoCountSample extends Table {
+    public GeoCountBucket bucket; [name "BucketId"] public Link bucketId = bucket;
+    [name "Shape"] public GeometryField shape; shape.aggregation = Aggregation.Count;
+    aggregateBy = {bucketId};
+}
+''', encoding="utf-8")
+    (source / "GeoCountProbe.bl").write_text('''
+import org.zenframework.z8.base.table.value.Field;
+import org.zenframework.z8.base.table.value.Aggregation;
+public class GeoCountProbe {
+    public static GeoCountSample make() { GeoCountSample value; return value; }
+    public static void read(GeoCountSample value) { Field[] fields = {value.bucketId, value.shape}; value.read(fields); }
+    public static void readLinked(GeoCountSample value) { Field[] fields = {value.bucket.label, value.shape}; value.read(fields); }
+    public static void groupLinked(GeoCountSample value) { value.bucket.label.aggregation = Aggregation.None; value.groupBy = {value.bucket.label}; }
+    public static void groupDirect(GeoCountSample value) { value.aggregateBy.clear(); value.groupBy = {value.bucketId}; }
+    public static bool next(GeoCountSample value) { return value.next(); }
+    public static guid bucket(GeoCountSample value) { return value.bucketId.get(); }
+    public static string label(GeoCountSample value) { return value.bucket.label.get(); }
+    public static string count(GeoCountSample value) { return value.shape.get().toString(); }
+    public static int countShape(GeoCountSample value) { return value.shape.get().shape(); }
+}
+''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "main.d"
     harness.write_text('''
@@ -32,6 +64,8 @@ import z8.runtime;
 import z8.database.postgres;
 import z8.database.connection;
 import z8.database.schema;
+import z8.database.query;
+import z8gen.GeoCountProbe;
 import std.json : parseJSON, JSONType, JSONValue;
 import std.conv : to;
 
@@ -39,6 +73,35 @@ void main(string[] args) {
     auto db = new Z8PostgresConnection(args[1]);
     db.execute("CREATE EXTENSION IF NOT EXISTS postgis");
     db.execute("CREATE SCHEMA geo_test");
+    db.execute(`CREATE TABLE geo_test."GeoCountBuckets" ("RecordId" uuid PRIMARY KEY, "Label" text)`);
+    db.execute(`CREATE TABLE geo_test."GeoCountSamples" ("RecordId" uuid PRIMARY KEY, "BucketId" uuid, "Shape" geometry)`);
+    db.execute(`INSERT INTO geo_test."GeoCountBuckets" VALUES ('00000000-0000-0000-0000-000000000021','A'), ('00000000-0000-0000-0000-000000000022','B')`);
+    db.execute(`INSERT INTO geo_test."GeoCountSamples" VALUES
+        ('00000000-0000-0000-0000-000000000031','00000000-0000-0000-0000-000000000021',ST_GeomFromText('POINT(1 2)',3857)),
+        ('00000000-0000-0000-0000-000000000032','00000000-0000-0000-0000-000000000021',ST_GeomFromText('POINT(3 4)',3857)),
+        ('00000000-0000-0000-0000-000000000033','00000000-0000-0000-0000-000000000022',NULL)`);
+    alias P = Z8p_47656F436F756E7450726F6265;
+    auto count = P.m_make();
+    z8_query_set_executor(count, new Z8PostgresQueryExecutor(db, "geo_test"w, "GeoCountSamples"w));
+    P.m_read(count); int countRows;
+    while (z8_optional_require(P.m_next(count))) {
+        assert(P.m_count(count) == (P.m_bucket(count) == z8_guid_create(0x21) ? "2"w : "0"w)); ++countRows;
+        bool invalidShape; try { P.m_countShape(count); } catch (Exception) { invalidShape = true; } assert(invalidShape);
+    }
+    assert(countRows == 2);
+    P.m_readLinked(count); countRows = 0;
+    while (z8_optional_require(P.m_next(count))) {
+        assert(P.m_count(count) == (P.m_label(count) == "A"w ? "2"w : "0"w)); ++countRows;
+    }
+    assert(countRows == 2);
+    P.m_groupLinked(count); P.m_readLinked(count); countRows = 0;
+    while (z8_optional_require(P.m_next(count))) { assert(P.m_count(count) == "1"w); ++countRows; }
+    assert(countRows == 2);
+    P.m_groupDirect(count); P.m_read(count); countRows = 0;
+    while (z8_optional_require(P.m_next(count))) {
+        assert(P.m_count(count) == (P.m_bucket(count) == z8_guid_create(0x21) ? "2"w : "0"w)); ++countRows;
+    }
+    assert(countRows == 2);
     auto table = z8_object_new_instance("GeoSample"w);
     z8_postgres_create_tables(db, "geo_test"w, [table]);
     auto previous = z8_connection_set_current(new Z8PostgresDatabase(db, "geo_test"w));
