@@ -234,10 +234,8 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     auto groups = z8_query_array(query, "groupBy"w);
     auto selected = z8_application_query_fields(query, privileges, params, !groups.length);
     foreach (field; groups) {
-        if (field.z8_get_owner() !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
-            throw new Exception("linked and computed group fields are not supported");
-        auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
-        if (!privileges.getFieldAccess(queryKey, fieldKey).read) throw new Exception("query group field access denied");
+        if (field.z8_get_owner() !is query) throw new Exception("linked group fields are not supported");
+        if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("query group field access denied");
         bool exists;
         foreach (existing; selected) if (existing is field) { exists = true; break; }
         if (!exists) selected ~= field;

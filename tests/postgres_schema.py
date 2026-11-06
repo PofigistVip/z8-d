@@ -64,6 +64,7 @@ import org.zenframework.z8.base.application.Application;
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-group") { groupBy = {flag}; amount.aggregation = Aggregation.Sum; }
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-group-average") { groupBy = {flag}; amount.aggregation = Aggregation.Average; }
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-group-arrays") { groupBy = {flag}; amount.aggregation = Aggregation.Array; title.aggregation = Aggregation.Distinct; }
+        if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-computed-group") { computed.aggregation = Aggregation.None; groupBy = {computed}; }
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-average") amount.aggregation = Aggregation.Average;
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "default-events") amount = amount.get() + 1;
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "default-order") { groupFields = {flag}; sortFields = {amount}; amount.sortDirection = SortDirection.Desc; }
@@ -766,6 +767,23 @@ void main(string[] args) {
     z8_application_set_request(computedRequest); z8_application_start_response(computedRequest, "Sample"w);
     bool havingDenied; try { z8_application_dispatch_query_read("Sample"w); } catch (Exception) { havingDenied = true; }
     assert(havingDenied);
+    queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
+    auto groupByExpression = new Z8ApplicationRequest(); groupByExpression.session = querySession; groupByExpression.monitor = new Z8RequestMonitor();
+    groupByExpression.parameters.z8_add("action"w, "read"w); groupByExpression.parameters.z8_add("session"w, "with-computed-group"w);
+    groupByExpression.parameters.z8_add("fields"w, `["computed","amount"]`w);
+    groupByExpression.parameters.z8_add("sort"w, `[{"property":"computed"}]`w);
+    z8_application_set_request(groupByExpression); z8_application_start_response(groupByExpression, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+    z8_application_finish_response(groupByExpression, cast(Z8RequestMonitor)groupByExpression.monitor);
+    auto computedGroups = parseJSON(z8_application_response_text(groupByExpression).to!string)["data"].array;
+    assert(computedGroups.length == 2 && computedGroups[0]["computed"].integer == 11 && computedGroups[0]["amount"].integer == 10);
+    assert(computedGroups[1]["computed"].integer == 43 && computedGroups[1]["amount"].integer == 42);
+    queryUser.privileges.setFieldAccess(amountKey, Z8Access.init);
+    groupByExpression = new Z8ApplicationRequest(); groupByExpression.session = querySession; groupByExpression.monitor = new Z8RequestMonitor();
+    groupByExpression.parameters.z8_add("action"w, "read"w); groupByExpression.parameters.z8_add("session"w, "with-computed-group"w);
+    groupByExpression.parameters.z8_add("fields"w, `["computed"]`w);
+    z8_application_set_request(groupByExpression); z8_application_start_response(groupByExpression, "Sample"w);
+    bool computedGroupDenied; try { z8_application_dispatch_query_read("Sample"w); } catch (Exception) { computedGroupDenied = true; }
+    assert(computedGroupDenied);
     queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
     queryUser.privileges.setFieldAccess(z8_guid_create_name("Sample;--.Flag"w), Z8Access.init);
     bool groupDenied;
