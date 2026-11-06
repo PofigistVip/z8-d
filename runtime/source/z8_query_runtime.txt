@@ -324,6 +324,11 @@ private long z8_query_update_id_run(Z8Object self, Z8Guid id, bool resetChanged)
     auto result = changed.length ? writer.update(self, id, changed) : 0L;
     if (id !is null && z8_query_user_events_enabled()) self.z8_query_virtual_afterUpdate(id);
     if (id !is null && z8_query_user_events_enabled() && z8_native_is_instance(z8_users_name, self)) z8_users_after_update(self, id);
+    if (id !is null && z8_query_user_events_enabled()) {
+        if (z8_native_is_instance(z8_role_table_access_name, self)) z8_role_access_after_update!(Z8RoleAccessKind.table)(self, id);
+        else if (z8_native_is_instance(z8_role_field_access_name, self)) z8_role_access_after_update!(Z8RoleAccessKind.field)(self, id);
+        else if (z8_native_is_instance(z8_role_request_access_name, self)) z8_role_access_after_update!(Z8RoleAccessKind.request)(self, id);
+    }
     if (resetChanged) foreach (field; changed) z8_field_reset(field);
     return result;
 }

@@ -44,6 +44,7 @@ interface IZ8JobUserResolver { Z8UserData resolveJobUser(Z8Guid id); }
 // The authority may revoke or refresh cached sessions after a user changes.
 // Notifications carry the database schema so tenants remain isolated.
 interface IZ8UserChangeNotifier { void userChanged(Z8Guid id, wstring schema); }
+interface IZ8RoleChangeNotifier { void roleChanged(Z8Guid id, wstring schema); }
 struct Z8MonitorEntry {
     Z8MonitorLevel level;
     wstring text, source;
@@ -149,6 +150,7 @@ class Z8ApplicationRequest {
     IZ8ApplicationMonitor monitor;
     IZ8JobUserResolver jobUserResolver;
     IZ8UserChangeNotifier userChangeNotifier;
+    IZ8RoleChangeNotifier roleChangeNotifier;
     Z8ApplicationSession session;
     private Z8EventsLevel[] eventLevels;
     void setEventsLevel(Z8EventsLevel level) { eventLevels ~= level; }

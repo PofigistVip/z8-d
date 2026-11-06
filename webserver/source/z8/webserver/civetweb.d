@@ -324,6 +324,7 @@ class Z8CivetServer {
             auto application = new Z8ApplicationRequest();
             application.jobUserResolver = cast(IZ8JobUserResolver)authority;
             application.userChangeNotifier = cast(IZ8UserChangeNotifier)authority;
+            application.roleChangeNotifier = cast(IZ8RoleChangeNotifier)authority;
             request.monitor = new Z8RequestMonitor();
             application.monitor = request.monitor;
             if (type.startsWith("multipart/form-data")) addMultipart(application, request.contentType, request.body);

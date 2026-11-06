@@ -85,6 +85,9 @@ interface and drops that user's session; a host authority can delegate to it.
 As in the Java implementation, the callback runs during the database operation,
 which can be before an enclosing transaction commits. Changes to the current or
 built-in user normally do not notify; setting `changePassword` to true forces it.
+An authority can implement `IZ8RoleChangeNotifier` to invalidate sessions when
+table, field or request permissions change. `Z8SessionManager` implements this
+capability too, preserving administrator sessions as the original manager does.
 `remoteAddress` is the connection peer; `forwardedAddress` exposes the raw
 `X-Real-IP` header for deployments where the host explicitly trusts its proxy.
 

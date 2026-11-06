@@ -172,6 +172,7 @@ public class Probe {
     public static void createUserRole(UserRoles value, guid id, guid user, guid role) { value.user = user; value.role = role; value.create(id); }
     public static string accessRoleName(RoleTableAccess value) { Field[] fields = {value.roles.name}; value.read(fields); if (value.next()) return value.roles.name.get(); return "missing"; }
     public static void setFieldRead(RoleFieldAccess value, guid id, bool flag) { value.read = flag; value.update(id); }
+    public static void setRequestExecute(RoleRequestAccess value, guid id, bool flag) { value.execute = flag; value.update(id); }
     public static void setFieldWrite(RoleFieldAccess value, guid id, bool flag) { value.write = flag; value.update(id); }
     public static void setFieldBoth(RoleFieldAccess value, guid id) { value.read = false; value.write = true; value.update(id); }
     public static void setTableRead(RoleTableAccess value, guid id, bool flag) { value.read = flag; value.update(id); }
@@ -1243,6 +1244,28 @@ void main(string[] args) {
     db.execute(`INSERT INTO "z8_access"."SystemTables" ("RecordId", "Name") VALUES ('00000000-0000-0000-0000-000000000066', 'Other')`);
     db.execute(`INSERT INTO "z8_access"."SystemFields" ("RecordId", "Table") VALUES ('00000000-0000-0000-0000-000000000067', '00000000-0000-0000-0000-000000000066')`);
     db.execute(`INSERT INTO "z8_access"."SystemRoleFieldAccess" ("RecordId", "Role", "Field", "Read", "Write") VALUES ('00000000-0000-0000-0000-000000000068', 'DC08CA72-C668-412F-91B7-022F1C82AC09', '00000000-0000-0000-0000-000000000067', 1, 1), ('00000000-0000-0000-0000-000000000069', 'BE41CEB5-02DF-44EE-885F-B82DDEDCAA08', '00000000-0000-0000-0000-000000000064', 1, 1)`);
+    db.execute(`INSERT INTO "z8_access"."SystemRequests" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000071')`);
+    db.execute(`INSERT INTO "z8_access"."SystemRoleRequestAccess" ("RecordId", "Role", "Request") VALUES ('00000000-0000-0000-0000-000000000070', 'DC08CA72-C668-412F-91B7-022F1C82AC09', '00000000-0000-0000-0000-000000000071')`);
+    auto roleSessions = new Z8SessionManager();
+    auto roleMember = new Z8UserData(); roleMember.id = z8_guid_create(333); roleMember.roles = [P.m_administratorRole()];
+    auto roleAdmin = new Z8UserData(); roleAdmin.id = z8_guid_create(334); roleAdmin.roles = roleMember.roles; roleAdmin.administrator = true;
+    roleSessions.create("other-tenant"w, roleMember, roleAdmin, "other"w);
+    roleSessions.create("admin"w, roleAdmin, roleAdmin, "z8_access"w);
+    auto roleRequest = new Z8ApplicationRequest(); roleRequest.roleChangeNotifier = roleSessions;
+    roleRequest.session = new Z8ApplicationSession("admin"w, roleAdmin, roleAdmin);
+    auto oldRoleRequest = z8_application_set_request(roleRequest);
+    roleSessions.create("field"w, roleMember, roleAdmin, "z8_access"w);
+    P.m_setFieldRead(roleFieldAccess, z8_guid_create(101), z8_optional_wrap(true));
+    assert(roleSessions.getSession("field"w) is null);
+    roleSessions.create("table"w, roleMember, roleAdmin, "z8_access"w);
+    P.m_setTableRead(roleTableAccess, z8_guid_create(99), z8_optional_wrap(true));
+    assert(roleSessions.getSession("table"w) is null);
+    roleSessions.create("request"w, roleMember, roleAdmin, "z8_access"w);
+    P.m_setRequestExecute(roleRequestAccess, z8_guid_create(112), z8_optional_wrap(true));
+    assert(roleSessions.getSession("request"w) is null && roleSessions.getSession("other-tenant"w) !is null && roleSessions.getSession("admin"w) !is null);
+    z8_application_set_request(oldRoleRequest);
+    db.execute(`DELETE FROM "z8_access"."SystemRoleRequestAccess" WHERE "RecordId" = '00000000-0000-0000-0000-000000000070'`);
+    db.execute(`DELETE FROM "z8_access"."SystemRequests" WHERE "RecordId" = '00000000-0000-0000-0000-000000000071'`);
     auto accessId = z8_guid_create(101);
     P.m_setFieldWrite(roleFieldAccess, accessId, z8_optional_wrap(true));
     auto accessRow = db.execute(`SELECT "Read", "Write" FROM "z8_access"."SystemRoleFieldAccess" WHERE "RecordId" = '00000000-0000-0000-0000-000000000065'`);

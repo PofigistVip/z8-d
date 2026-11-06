@@ -1,6 +1,6 @@
 // Active-session bookkeeping analogous to org.zenframework.z8.auth.SessionManager.
 // The caller supplies session IDs issued by its authentication provider.
-class Z8SessionManager : IZ8UserChangeNotifier {
+class Z8SessionManager : IZ8UserChangeNotifier, IZ8RoleChangeNotifier {
     private class Entry {
         Z8ApplicationSession session;
         wstring userKey, schema;
@@ -69,6 +69,7 @@ class Z8SessionManager : IZ8UserChangeNotifier {
             foreach (entry; expired) removeEntry(entry);
         }
     }
+    void roleChanged(Z8Guid id, wstring schema) { dropRoleSessions(id, schema); }
     // The original manager expires sessions during an explicit periodic check.
     void check(long now) {
         if (!timeoutMilliseconds) return;
