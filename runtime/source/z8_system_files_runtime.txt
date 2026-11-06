@@ -79,8 +79,9 @@ private Z8File z8_system_files_get_id(Z8Guid id) {
     return result;
 }
 private Z8File z8_system_files_get_file(Z8File value) {
-    import std.file : exists, isFile, getSize, mkdir, mkdirRecurse, remove, rename, rmdir, write, FileException;
+    import std.file : exists, isFile, getSize, mkdir, mkdirRecurse, remove, rename, rmdir, FileException;
     import std.path : buildPath, dirName;
+    import std.stdio : File;
     import std.uuid : randomUUID;
     value = z8_nonnull(value);
     auto path = z8_file_system_path(value);
@@ -97,9 +98,8 @@ private Z8File z8_system_files_get_file(Z8File value) {
     scope(exit) z8_query_close(table);
     if (!z8_optional_require(z8_query_read_record(table, value.id, fields))) throw new Exception("file was not found");
     auto size = z8_optional_require(z8_primary_cast!long(z8_field_primary(members[3])));
-    auto data = z8_primary_cast!Z8Binary(z8_field_primary(members[1]));
-    auto bytes = z8_binary_snapshot(z8_nonnull(data), size_t.max);
-    if (size != 0 && (size < 0 || cast(ulong)size != bytes.length)) throw new Exception("stored file size does not match its content");
+    auto data = z8_nonnull(z8_primary_cast!Z8Binary(z8_field_primary(members[1])));
+    scope(exit) z8_binary_close(data);
     auto parent = dirName(path); if (parent.length) mkdirRecurse(parent);
     // Publish the complete file at once: another request must never observe a
     // cache entry while it is still being copied from PostgreSQL.
@@ -107,15 +107,23 @@ private Z8File z8_system_files_get_file(Z8File value) {
     mkdir(temporary);
     auto pending = buildPath(temporary, "content");
     scope(exit) { if (exists(pending)) remove(pending); rmdir(temporary); }
-    write(pending, bytes);
+    ulong copied;
+    {
+        auto output = File(pending, "wb");
+        scope(exit) output.close();
+        z8_binary_copy_to(data, output);
+        copied = output.tell;
+    }
+    if (copied > long.max || (size != 0 && (size < 0 || cast(ulong)size != copied)))
+        throw new Exception("stored file size does not match its content");
     try rename(pending, path);
     catch (FileException failure) {
         // Windows can refuse replacement if another request already opened the
         // winner. Its complete file is usable if it has the expected length.
-        if (!exists(path) || !isFile(path) || getSize(path) != bytes.length) throw failure;
+        if (!exists(path) || !isFile(path) || getSize(path) != copied) throw failure;
     }
     value.hasUpload = false; value.upload = null;
-    value.size = z8_optional_wrap(cast(long)bytes.length);
+    value.size = z8_optional_wrap(cast(long)copied);
     return value;
 }
 // The path must match the database record, never a caller-selected local file.

@@ -853,6 +853,12 @@ void main(string[] args) {
     db.execute(`UPDATE "z8_test"."SystemFiles" SET "Size" = 3 WHERE "RecordId" = '00000000-0000-0000-0000-000000000887'`);
     bool badFileSize; try { P.m_fileContent(P.m_fileById(z8_guid_create(0x887))); } catch (Exception) { badFileSize = true; }
     assert(badFileSize && !z8_file_exists(storedFile));
+    {
+        import std.file : dirEntries, SpanMode;
+        import std.path : dirName;
+        foreach (entry; dirEntries(dirName(z8_file_resolve_path(storedFile)), ".z8-cache-*", SpanMode.shallow))
+            assert(false, "failed cache copy left a temporary directory");
+    }
     auto storedUpload = z8_file_from_upload("данные.bin"w, [cast(ubyte)0, 0xff, 0x7f]);
     storedUpload.id = z8_guid_create(0x889); storedUpload.path = "storage/missing-889/данные.bin"w;
     db.beginTransaction(); z8_system_files_write(storedUpload); db.rollback();
