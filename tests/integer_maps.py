@@ -12,6 +12,7 @@ fixtures = [
     (root / "examples" / "project" / "demo" / "cases" / "PrimitiveMapValues.bl", 151),
     # The original BL compiler accepts indexed assignment but emits invalid Java.
     (root / "examples" / "maps" / "IntegerMapIndex.bl", 143),
+    (root / "examples" / "maps" / "MapCompound.bl", 191),
 ]
 
 with tempfile.TemporaryDirectory() as directory:

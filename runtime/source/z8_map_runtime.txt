@@ -1,3 +1,18 @@
+// Indexed assignment is a z8-d extension. Resolve its receiver and key once,
+// then read the old entry before evaluating the right-hand side.
+void z8_map_entry_compound(string op, M, K, V)(M map, K key, lazy V value) {
+    z8_nonnull(map);
+    auto before = map.z8_get(key);
+    auto after = value;
+    static if (is(typeof(before) == Z8Optional!long))
+        map.z8_add(key, z8_optional_wrap(z8_optional_int_binary!op(before, after)));
+    else static if (is(typeof(before) == Z8Optional!Z8Decimal))
+        map.z8_add(key, z8_optional_wrap(z8_optional_decimal_binary!op(before, after)));
+    else static if (is(typeof(before) == wstring) && op == "+")
+        map.z8_add(key, z8_nullable_string_binary!"+"(before, z8_string_or_empty(after)));
+    else static assert(0, "unsupported map entry compound assignment");
+}
+
 // RLinkedHashMap.java extends HashMap; ordinary buckets iterate in bucket order,
 // retaining insertion order within a bucket. Keep its capacity across clear.
 // Treeified collision buckets have additional Java-specific ordering.

@@ -1,0 +1,63 @@
+public class MapCompound {
+    int[string] numbers;
+    int calls = 0;
+
+    int[string] select() { calls += 1; return numbers; }
+    string key() { calls += 10; return "a"; }
+    int change() { calls += 100; numbers["a"] = 100; return 2; }
+    int mark() { calls += 1; return 1; }
+
+    int exercise() {
+        numbers["a"] = 10;
+        select()[key()] += change();
+        if (calls != 111 || numbers["a"] != 12) return 1;
+        numbers["a"] *= 3;
+        numbers["a"] -= 6;
+        numbers["a"] /= 5;
+        numbers["a"] %= 4;
+        if (numbers["a"] != 2) return 2;
+        calls = 0;
+        try { numbers["missing"] += mark(); return 3; } catch (exception expected) {}
+        if (calls != 1 || numbers.containsKey("missing")) return 4;
+        numbers[null] = 4;
+        numbers[null] += 3;
+        if (numbers[null] != 7) return 5;
+
+        decimal[int] amounts;
+        amounts[3] = 10.5;
+        amounts[3] += 1.5;
+        amounts[3] *= 2.0;
+        amounts[3] -= 4.0;
+        amounts[3] /= 5.0;
+        if (amounts[3] != 4.0) return 6;
+        amounts[3] += 1;
+        if (amounts[3] != 5.0) return 10;
+        string[int] words;
+        words[2] = "hello";
+        words[2] += "!";
+        string empty = null;
+        words[2] += empty;
+        if (words[2] != "hello!") return 7;
+        try { words[3] += "x"; return 8; } catch (exception expected) {}
+        if (words.containsKey(3)) return 9;
+        string[string] labels;
+        labels["x"] = "a";
+        labels["x"] += "b";
+        if (labels["x"] != "ab") return 11;
+        int[guid] identifiers;
+        guid id = '12345678-1234-1234-1234-123456789abc';
+        identifiers[id] = 6;
+        identifiers[id] += 4;
+        if (identifiers[id] != 10) return 12;
+        int[bool] flags;
+        flags[true] = 6;
+        flags[true] -= 1;
+        if (flags[true] != 5) return 13;
+        int[string] absent = null;
+        calls = 0;
+        try { absent["x"] += mark(); return 14; } catch (exception expected) {}
+        if (calls != 0) return 15;
+        return 191;
+    }
+    public static int run() { MapCompound test; return test.exercise(); }
+}

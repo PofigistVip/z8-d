@@ -2672,7 +2672,6 @@ class Checker {
                 if ((s.target.kind != ExprKind.index || isMap(s.target.inferredType) || [ValueType.intArray, ValueType.boolArray, ValueType.decimalArray].canFind(s.target.inferredType)) && (s.assignmentOperator == "=" || variableType == ValueType.intType || variableType == ValueType.decimalType) ?
                     !matchesStored(s.expression, variableType, s.target.objectClass, s.target.keyObjectClasses) :
                     !matches(s.expression, variableType, s.target.objectClass, s.target.keyObjectClasses)) fail("assignment type mismatch", s.token);
-                if (s.target.kind == ExprKind.index && isMap(s.target.inferredType) && s.assignmentOperator != "=") fail("compound assignment to a map entry is not supported", s.token);
                 s.type = variableType;
                 if (s.assignmentOperator != "=" && variableType != ValueType.intType &&
                     !(variableType == ValueType.stringType && s.assignmentOperator == "+=") &&

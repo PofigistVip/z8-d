@@ -768,7 +768,8 @@ private string emitSimple(Statement s) {
     if (s.filePathAssignment) return "z8_file_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.dateTickAssignment) return "z8_date_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.target.kind == ExprKind.index && isMap(s.target.inferredType))
-        return "z8_invoke!\"z8_add\"(" ~ emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
+        return (s.assignmentOperator == "=" ? "z8_invoke!\"z8_add\"(" : "z8_map_entry_compound!\"" ~ s.assignmentOperator[0 .. $-1] ~ "\"(") ~
+            emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.target.kind == ExprKind.index && s.target.inferredType == ValueType.stringArray)
         return (s.assignmentOperator == "+=" ? "z8_string_array_add_assign(" : "z8_string_array_assign(") ~
             emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";

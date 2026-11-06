@@ -558,7 +558,8 @@ unittest {
     rejects("class A { static A[][primary] x; }");
     compile("class A { static string[string] x; }");
     compile("class A { static void f() { geometry[string] x; } }");
-    rejects("class A { static void f() { string[string] x; x[\"a\"] += \"b\"; } }");
+    compile("class A { static void f() { string[string] x; x[\"a\"] += \"b\"; } }");
+    rejects("class A { static void f() { string[string] x; x[\"a\"] -= \"b\"; } }");
     rejects("class A { static void f() { string[string] x; int[] key; x.add(key, \"b\"); } }");
     rejects("class A { static void f() { string[string] x; int[] key; x.remove(key); } }");
     rejects("class A { static void f() { string[string] x; int[] value; x.add(value); } }");
