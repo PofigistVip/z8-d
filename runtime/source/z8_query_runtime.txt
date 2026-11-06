@@ -66,6 +66,7 @@ class Z8QueryState {
     private Z8Object[] cursorFields;
     private IZ8QueryLockCell lockCell;
     private Object[wstring] arrays;
+    private Z8Object[] pendingExtraFields;
     this() { colCount = z8_optional_wrap(4L); readOnly = totals = z8_optional_wrap(false); }
 }
 private Z8QueryState z8_query_state(Z8Object self) {
@@ -86,6 +87,10 @@ ref Z8ObjectArray!T z8_query_array_ref(T, string name)(Z8Object self) if (is(T :
     if (cell is null) {
         if (found !is null) throw new Exception("incompatible query array type");
         cell = new Z8FieldOrderCell!T(); state.arrays[key] = cell;
+        static if (name == "extraFields") {
+            foreach (field; state.pendingExtraFields) cell.value.z8_erased_data().z8_add(field);
+            state.pendingExtraFields = null;
+        }
     }
     return cell.value;
 }
@@ -112,7 +117,7 @@ Z8Object[] z8_query_array(Z8Object self, wstring name) {
     }
     auto state = z8_query_state(self);
     auto entry = name in state.arrays;
-    if (entry is null) return [];
+    if (entry is null) return name == "extraFields"w ? state.pendingExtraFields.dup : [];
     auto cell = cast(IZ8FieldOrderCell)*entry;
     if (cell is null) throw new Exception("invalid query collection");
     auto view = cell.view();
@@ -121,6 +126,14 @@ Z8Object[] z8_query_array(Z8Object self, wstring name) {
     Z8Object[] result;
     for (long i; i < values.z8_size(); ++i) result ~= cast(Z8Object)values.z8_get(i);
     return result;
+}
+private void z8_query_add_extra_field(Z8Object self, Z8Object field) {
+    auto state = z8_query_state(self);
+    auto entry = "extraFields"w in state.arrays;
+    if (entry is null) { state.pendingExtraFields ~= field; return; }
+    auto cell = cast(IZ8FieldOrderCell)*entry;
+    if (cell is null || cell.view() is null) throw new Exception("null query extraFields");
+    cell.view().z8_erased_data().z8_add(field);
 }
 long z8_query_limit(Z8Object self) {
     auto value = z8_query_state(self).limit;

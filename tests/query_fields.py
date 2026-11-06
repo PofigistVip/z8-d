@@ -42,12 +42,35 @@ public class Configured extends Report {
     limit = 17;
 }
 ''', encoding="utf-8")
+    (source / "DetailTable.bl").write_text('''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.StringField;
+public class DetailTable extends Table { public StringField detailName; public StringField detailCode; }
+''', encoding="utf-8")
+    (source / "DependentTable.bl").write_text('''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.form.Form;
+import org.zenframework.z8.base.form.Listbox;
+public class DependentTable extends Table {
+    public DetailTable detail;
+    public Form form; form.controls = {detail.detailName};
+    public Form next; next.controls = {detail.detailCode}; form.dependencies = {next};
+    public Listbox list; list.query = detail; list.dependencies = {form};
+    controls = {list, form, next};
+}
+''', encoding="utf-8")
     (source / "Probe.bl").write_text('''
 import org.zenframework.z8.base.table.value.Field;
 import org.zenframework.z8.base.query.ReadLock;
 public class Probe {
     public static Report make() { Report query; return query; }
     public static Configured configured() { Configured query; return query; }
+    public static DependentTable dependent() { DependentTable query; return query; }
+    public static bool checkDependent(DependentTable query) {
+        return query.detail.extraFields.size() == 2 && query.detail.extraFields[0] == query.detail.detailName &&
+            query.detail.extraFields[1] == query.detail.detailCode;
+    }
     public static bool checkConfigured(Configured query) {
         return query.limit == 17 && query.columns.size() == 2 && query.columns[0] == query.amount && query.columns[1] == query.label && query.controls[0] == query.amount;
     }
@@ -82,6 +105,11 @@ void main() {
     assert(z8_query_read_lock(query) == Z8QueryReadLock.shareNoWait);
     assert(z8_query_limit(query) == 50 && z8_query_array(query, "columns"w).length == 1 && z8_query_array(query, "groupBy"w).length == 1);
     assert(z8_query_array(query, "sortFields"w).length == 0);
+    auto dependent = P.m_dependent();
+    assert(z8_query_form_fields(dependent).length == 0);
+    assert(z8_query_array(dependent.f_detail, "extraFields"w).length == 2);
+    assert(z8_optional_require(P.m_checkDependent(dependent)));
+    assert(z8_query_form_fields(dependent.f_detail).length == 2);
     bool missing; try { query.m_getFieldByIndex("missing"w); } catch (Exception) { missing = true; }
     assert(missing);
 }

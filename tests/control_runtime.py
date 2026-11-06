@@ -70,15 +70,18 @@ public class CyclicTable extends Table { Section section; section.controls = {se
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.TreeTable;
 import org.zenframework.z8.base.table.value.Link;
-public class ListboxDetail extends Table { public TreeTable parent; [name "Parent"] public Link parentId = parent; }
+import org.zenframework.z8.base.table.value.StringField;
+public class ListboxDetail extends Table { public TreeTable parent; [name "Parent"] public Link parentId = parent; public StringField display; }
 ''', encoding="utf-8")
     (source / "ListboxTable.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.form.Listbox;
+import org.zenframework.z8.base.form.Form;
 import org.zenframework.z8.base.table.value.Link;
 public class ListboxTable extends Table {
     ListboxDetail detail; Listbox list; Table source; [name "Source"] Link sourceId = source;
-    list.query = detail; list.link = detail.parentId; list.columns = {detail.parentId}; controls = {list};
+    Form detailForm; detailForm.controls = {detail.display};
+    list.query = detail; list.link = detail.parentId; list.columns = {detail.parentId}; list.dependencies = {detailForm}; controls = {list, detailForm};
     list.selector.link = sourceId; list.selector.columns = {sourceId}; list.selector.copy = true;
 }
 ''', encoding="utf-8")
@@ -236,7 +239,25 @@ void main() {
     linkedRequest.parameters.z8_add("request"w, "ListboxTable"w); linkedRequest.parameters.z8_add("action"w, "meta"w);
     z8_application_set_request(linkedRequest); z8_application_start_response(linkedRequest, "ListboxTable"w);
     z8_application_dispatch_request(); z8_application_finish_response(linkedRequest, new Z8RequestMonitor());
-    auto linkedList = parseJSON(z8_application_response_text(linkedRequest).to!string)["controls"][0]["query"];
+    auto linkedMeta = parseJSON(z8_application_response_text(linkedRequest).to!string);
+    auto linkedList = linkedMeta["controls"][0]["query"];
+    assert(linkedMeta["controls"][1]["isForm"].boolean && linkedMeta["controls"][1]["link"]["owner"].str == "detail");
+    assert(linkedMeta["controls"][1]["controls"][0]["name"].str == "detail.display");
+    assert(linkedList["fields"][0]["name"].str == "detail.display");
+    auto nestedRequest = new Z8ApplicationRequest(); nestedRequest.session = request.session;
+    nestedRequest.parameters.z8_add("request"w, "ListboxTable"w); nestedRequest.parameters.z8_add("action"w, "meta"w);
+    nestedRequest.parameters.z8_add("query"w, "detail"w);
+    z8_application_set_request(nestedRequest); z8_application_start_response(nestedRequest, "ListboxTable"w);
+    z8_application_dispatch_request(); z8_application_finish_response(nestedRequest, new Z8RequestMonitor());
+    auto nestedMeta = parseJSON(z8_application_response_text(nestedRequest).to!string);
+    assert(nestedMeta["fields"][0]["name"].str == "detail.display");
+    auto explicitRequest = new Z8ApplicationRequest(); explicitRequest.session = request.session;
+    explicitRequest.parameters.z8_add("request"w, "ListboxTable"w); explicitRequest.parameters.z8_add("action"w, "meta"w);
+    explicitRequest.parameters.z8_add("fields"w, "[\\\"recordId\\\"]"w);
+    z8_application_set_request(explicitRequest); z8_application_start_response(explicitRequest, "ListboxTable"w);
+    z8_application_dispatch_request(); z8_application_finish_response(explicitRequest, new Z8RequestMonitor());
+    auto explicitMeta = parseJSON(z8_application_response_text(explicitRequest).to!string);
+    assert(explicitMeta["controls"][1]["link"]["owner"].str == "detail");
     assert(linkedList["name"].str == "detail" && linkedList["link"]["name"].str == "detail.parentId");
     assert(linkedList["link"]["isLink"].boolean && linkedList["link"]["owner"].str == "detail");
     assert(linkedList["link"]["query"]["primaryKey"].str == "detail.parent.recordId");

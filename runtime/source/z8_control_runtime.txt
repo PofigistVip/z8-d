@@ -2,6 +2,7 @@
 private enum z8_control_name = "org.zenframework.z8.server.base.form.Control"w;
 private enum z8_source_name = "org.zenframework.z8.server.base.form.Source"w;
 private enum z8_section_name = "org.zenframework.z8.server.base.form.Section"w;
+private enum z8_form_name = "org.zenframework.z8.server.base.form.Form"w;
 private enum z8_tab_control_name = "org.zenframework.z8.server.base.form.TabControl"w;
 private enum z8_action_group_name = "org.zenframework.z8.server.base.form.ActionGroup"w;
 private enum z8_listbox_name = "org.zenframework.z8.server.base.form.Listbox"w;
@@ -48,6 +49,18 @@ ref Z8ObjectArray!T z8_control_dependencies_ref(T)(Z8Object self) if (is(T : Z8O
 private class Z8SectionState {
     Z8Optional!long colCount = z8_optional_wrap(3L);
     IZ8FieldOrderCell controls;
+}
+private class Z8FormState { Z8Object query; bool dependent; }
+private Z8FormState z8_form_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_form_name, self)) throw new Exception("invalid Form object");
+    auto state = cast(Z8FormState)self.z8_get_native_state(z8_form_name);
+    if (state is null) { state = new Z8FormState(); self.z8_set_native_state(z8_form_name, state); }
+    return state;
+}
+private Z8Object z8_form_query(Z8Object self) {
+    auto dependency = z8_control_state(self).dependency;
+    return dependency !is null ? z8_link_query(dependency) : z8_form_state(self).query;
 }
 private Z8SectionState z8_section_state(Z8Object self) {
     self = z8_nonnull(self);
@@ -196,32 +209,61 @@ private auto z8_source_address(string member)(Z8Object self) { return &__traits(
 // Query.fields() expands sections and tabs into the fields needed by a read.
 Z8Object[] z8_control_fields(Z8Object control) {
     Z8Object[] result, path;
-    void add(Z8Object field) {
-        foreach (existing; result) if (existing is field) return;
-        result ~= field;
+    void add(ref Z8Object[] fields, Z8Object field) {
+        foreach (existing; fields) if (existing is field) return;
+        fields ~= field;
     }
-    void visit(Z8Object item) {
+    void visit(Z8Object item, ref Z8Object[] fields) {
         item = z8_nonnull(item);
-        if (z8_native_is_instance(z8_field_name, item)) { foreach (field; z8_field_fields(item)) add(field); return; }
-        if (z8_native_is_instance(z8_action_name, item) || z8_native_is_instance(z8_action_group_name, item) ||
-            z8_native_is_instance(z8_listbox_name, item)) return;
+        if (z8_native_is_instance(z8_field_name, item)) { foreach (field; z8_field_fields(item)) add(fields, field); return; }
+        if (z8_native_is_instance(z8_action_name, item) || z8_native_is_instance(z8_action_group_name, item)) return;
         foreach (parent; path) if (parent is item) throw new Exception("cyclic section controls");
         path ~= item;
         scope(exit) path.length = path.length - 1;
+        void assignDependentForms(Z8Object owner, Z8Object query) {
+            auto dependencies = z8_control_state(owner).dependencies;
+            if (dependencies is null || dependencies.view() is null || query is null) return;
+            auto items = dependencies.view().z8_erased_data();
+            for (long i; i < items.z8_size(); ++i) {
+                auto form = z8_nonnull(cast(Z8Object)items.z8_get(i));
+                if (!z8_native_is_instance(z8_form_name, form)) continue;
+                foreach (parent; path) if (parent is form) throw new Exception("cyclic form dependencies");
+                path ~= form;
+                auto state = z8_form_state(form);
+                if (z8_control_state(form).dependency is null) state.query = query;
+                state.dependent = true;
+                Z8Object[] extra;
+                auto controls = z8_section_state(form).controls;
+                if (controls !is null && controls.view() !is null) {
+                    auto children = controls.view().z8_erased_data();
+                    for (long j; j < children.z8_size(); ++j) visit(cast(Z8Object)children.z8_get(j), extra);
+                }
+                foreach (field; extra) z8_query_add_extra_field(query, field);
+                path.length = path.length - 1;
+            }
+        }
+        if (z8_native_is_instance(z8_listbox_name, item)) {
+            assignDependentForms(item, z8_listbox_state(item).query);
+            return;
+        }
+        if (z8_native_is_instance(z8_form_name, item) && z8_form_state(item).dependent) {
+            assignDependentForms(item, z8_form_query(item));
+            return;
+        }
         IZ8FieldOrderCell cell;
         if (z8_native_is_instance(z8_tab_control_name, item)) cell = z8_tab_control_state(item).tabs;
         else if (z8_native_is_instance(z8_section_name, item)) cell = z8_section_state(item).controls;
         else throw new Exception("unsupported control fields");
         if (cell !is null && cell.view() !is null) {
             auto items = cell.view().z8_erased_data();
-            for (long i; i < items.z8_size(); ++i) visit(cast(Z8Object)items.z8_get(i));
+            for (long i; i < items.z8_size(); ++i) visit(cast(Z8Object)items.z8_get(i), fields);
         }
-        if (z8_native_is_instance("org.zenframework.z8.server.base.form.Form"w, item)) {
+        if (z8_native_is_instance(z8_form_name, item)) {
             auto dependency = z8_control_state(item).dependency;
-            if (dependency !is null) add(z8_nonnull(z8_query_primary_key(z8_nonnull(dependency.z8_get_owner()))));
+            if (dependency !is null) add(fields, z8_nonnull(z8_query_primary_key(z8_nonnull(dependency.z8_get_owner()))));
         }
     }
-    visit(control);
+    visit(control, result);
     return result;
 }
 Z8Object[] z8_query_form_fields(Z8Object query) {
@@ -442,12 +484,14 @@ private bool z8_control_metadata_visible(Z8Object item, Z8Object query, Z8Privil
     }
     if (z8_native_is_instance(z8_tab_control_name, item)) return true;
     if (!z8_native_is_instance(z8_section_name, item)) throw new Exception("unsupported control metadata");
-    if (z8_native_is_instance("org.zenframework.z8.server.base.form.Form"w, item)) {
+    if (z8_native_is_instance(z8_form_name, item)) {
         auto dependency = z8_control_state(item).dependency;
         if (dependency !is null) {
             if (!z8_native_is_instance("org.zenframework.z8.server.base.table.value.Link"w, dependency) ||
                 !z8_application_query_field_readable(query, dependency, privileges)) throw new Exception("dependent form link access denied");
-            auto target = z8_link_query(dependency);
+        }
+        auto target = z8_form_query(item);
+        if (target !is null || dependency !is null) {
             if (target is null || !z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, target))
                 throw new Exception("dependent form requires a linked table");
             auto targetKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, target);
@@ -610,18 +654,20 @@ private void z8_control_write_meta_tree(Z8Object item, Z8Object query, Z8Object 
         return;
     }
     auto formQuery = query;
-    if (z8_native_is_instance("org.zenframework.z8.server.base.form.Form"w, item)) {
+    if (z8_native_is_instance(z8_form_name, item)) {
         z8_monitor_property(writer, "isForm"w, true);
         auto dependency = z8_control_state(item).dependency;
-        if (dependency !is null) {
-            formQuery = z8_nonnull(z8_link_query(dependency));
-            auto owner = z8_nonnull(dependency.z8_get_owner());
-            auto ownerKey = z8_nonnull(z8_query_primary_key(owner));
+        auto target = z8_form_query(item);
+        if (target !is null) {
+            formQuery = target;
             auto targetKey = z8_nonnull(z8_query_primary_key(formQuery));
             writer.start('{', "link"w);
-            z8_monitor_property(writer, "name"w, dependency.z8_id());
-            z8_monitor_property(writer, "primaryKey"w, ownerKey.z8_id());
-            z8_monitor_property(writer, "owner"w, owner.z8_id());
+            if (dependency !is null) {
+                auto owner = z8_nonnull(dependency.z8_get_owner());
+                z8_monitor_property(writer, "name"w, dependency.z8_id());
+                z8_monitor_property(writer, "primaryKey"w, z8_nonnull(z8_query_primary_key(owner)).z8_id());
+                z8_monitor_property(writer, "owner"w, owner.z8_id());
+            } else z8_monitor_property(writer, "owner"w, formQuery.z8_id());
             writer.start('{', "query"w); z8_monitor_property(writer, "primaryKey"w, targetKey.z8_id()); writer.finish('}');
             writer.finish('}');
         }

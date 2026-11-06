@@ -80,6 +80,7 @@ private Z8Object z8_application_nested_query(Z8Object context, Z8Privileges priv
     if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, query))
         throw new Exception("nested query requires a Table");
     auto current = query;
+    Z8Object[] parents;
     while (current !is context) {
         auto parent = z8_object_container(current);
         while (parent !is null && !z8_native_is_instance(z8_query_name, parent)) parent = z8_object_container(parent);
@@ -95,8 +96,11 @@ private Z8Object z8_application_nested_query(Z8Object context, Z8Privileges priv
                 break;
             }
         }
+        parents ~= parent;
         current = parent;
     }
+    // Recreate the parent controls' dependent-form bindings on this request.
+    foreach_reverse (parent; parents) z8_query_form_fields(parent);
     return query;
 }
 private bool z8_application_query_field_readable(Z8Object root, Z8Object field, Z8Privileges privileges) {
@@ -138,6 +142,8 @@ private Z8Object[] z8_application_query_context_values(Z8Object query, Z8Privile
 private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges privileges, Z8StringMap params, bool includeKeys = true) {
     auto key = z8_nonnull(z8_query_primary_key(query));
     Z8Object[] requested;
+    // Resolve dependent forms even when the client supplies an explicit field list.
+    auto formFields = z8_query_form_fields(query);
     auto fields = params.z8_get("fields"w);
     if (fields !is null && fields.length) {
         auto parsed = z8_json_parse(fields.to!string);
@@ -154,7 +160,6 @@ private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges priv
         }
     }
     if (!requested.length) {
-        auto formFields = z8_query_form_fields(query);
         bool configured;
         foreach (name; ["controls"w, "names"w, "columns"w, "extraFields"w])
             if (z8_query_array(query, name).length) { configured = true; break; }
