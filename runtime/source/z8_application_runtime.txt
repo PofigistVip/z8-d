@@ -8,6 +8,7 @@ class Z8ApplicationConfig {
     bool oneSessionPerUser;
     int uploadMaxMiB = 5, downloadMaxMiB = 1;
     int authFailsLimit, authFailsBanSeconds, sessionTimeoutMinutes = 24 * 60;
+    wstring storagePathFormat = "yyyy.MM.dd"w;
     wstring[] textExtensions = ["txt"w, "xml"w];
     wstring[] imageExtensions = ["tif"w, "tiff"w, "jpg"w, "jpeg"w, "gif"w, "png"w, "bmp"w];
     wstring[] emailExtensions = ["eml"w, "mime"w];
@@ -19,6 +20,7 @@ class Z8ApplicationConfig {
         result.filesSaveOnDisk = filesSaveOnDisk;
         result.oneSessionPerUser = oneSessionPerUser; result.authFailsLimit = authFailsLimit;
         result.authFailsBanSeconds = authFailsBanSeconds; result.sessionTimeoutMinutes = sessionTimeoutMinutes;
+        result.storagePathFormat = storagePathFormat;
         result.textExtensions = textExtensions.dup; result.imageExtensions = imageExtensions.dup;
         result.emailExtensions = emailExtensions.dup; result.officeExtensions = officeExtensions.dup;
         return result;
@@ -51,6 +53,8 @@ void z8_application_configure_from_server() {
     config.authFailsLimit = cast(int)z8_optional_require(z8_server_config_parse_int(property("auth.fails.limit"w), z8_optional_wrap(0L)));
     config.authFailsBanSeconds = cast(int)z8_optional_require(z8_server_config_parse_int(property("auth.fails.banSeconds"w), z8_optional_wrap(0L)));
     config.sessionTimeoutMinutes = cast(int)z8_optional_require(z8_server_config_parse_int(property("authority.center.session.timeout"w), z8_optional_wrap(24L * 60)));
+    auto storageFormat = property("storage.path.format"w);
+    if (storageFormat !is null && storageFormat.length) config.storagePathFormat = storageFormat;
     config.uploadMaxMiB = cast(int)z8_optional_require(z8_server_config_parse_int(property("web.server.upload.max"w), z8_optional_wrap(5L)));
     config.downloadMaxMiB = cast(int)z8_optional_require(z8_server_config_parse_int(property("web.client.download.max"w), z8_optional_wrap(1L)));
     wstring[] extensions(wstring key, wstring[] defaults) {

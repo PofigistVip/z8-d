@@ -52,10 +52,11 @@ void main() {
     z8_application_configure_from_server();
     auto defaults = z8_application_configuration();
     assert(defaults.authFailsLimit == 0 && defaults.authFailsBanSeconds == 0 && defaults.sessionTimeoutMinutes == 1440 && !defaults.oneSessionPerUser);
+    assert(defaults.storagePathFormat == "yyyy.MM.dd"w);
     z8_server_config_replace(["auth.fails.limit"w:"3"w, "auth.fails.banSeconds"w:"90"w,
-        "authority.center.session.timeout"w:"15"w, "authority.center.session.onePerUser"w:"true"w]);
+        "authority.center.session.timeout"w:"15"w, "authority.center.session.onePerUser"w:"true"w, "storage.path.format"w:"yyyy/MM"w]);
     z8_application_configure_from_server(); auto config = z8_application_configuration();
-    assert(config.authFailsLimit == 3 && config.authFailsBanSeconds == 90 && config.sessionTimeoutMinutes == 15 && config.oneSessionPerUser);
+    assert(config.authFailsLimit == 3 && config.authFailsBanSeconds == 90 && config.sessionTimeoutMinutes == 15 && config.oneSessionPerUser && config.storagePathFormat == "yyyy/MM"w);
     config.sessionTimeoutMinutes = 0; assert(z8_application_configuration().sessionTimeoutMinutes == 15);
 }
 ''', encoding="utf-8")

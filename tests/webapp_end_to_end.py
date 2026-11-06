@@ -4,6 +4,7 @@ import http.client
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -27,7 +28,7 @@ with tempfile.TemporaryDirectory() as directory:
                     str(executable), "--postgres-bin", str(bin_dir)], check=True)
     public = temp / "public"
     config = temp / "custom.properties"
-    config.write_text("application.working.path=work\nstorage.path=storage-data\nsecurity.log.file=logs/security.log\nweb.client.hashPassword=false\nfiles.saveOnDisk=true\nauth.fails.limit=2\nauth.fails.banSeconds=60\nauthority.center.session.onePerUser=true\nauthority.center.session.timeout=10\n", encoding="ascii")
+    config.write_text("application.working.path=work\nstorage.path=storage-data\nstorage.path.format=yyyy/MM\nsecurity.log.file=logs/security.log\nweb.client.hashPassword=false\nfiles.saveOnDisk=true\nauth.fails.limit=2\nauth.fails.banSeconds=60\nauthority.center.session.onePerUser=true\nauthority.center.session.timeout=10\n", encoding="ascii")
     default_config = temp / "server.properties"
     default_config.write_text("web.client.hashPassword=true\n", encoding="ascii")
     subprocess.run([sys.executable, str(root / "webserver/prepare_client.py"), str(Path(sys.argv[1]).resolve()), str(public)], check=True)
@@ -173,7 +174,7 @@ with tempfile.TemporaryDirectory() as directory:
             files = upload(port, session, record, "first.txt", b"first")
             files = upload(port, session, record, "second.txt", bytes([0, 255, 42]))
             assert len(files) == 2
-            assert files[0]["path"].startswith("storage/")
+            assert re.match(r"^storage/\d{4}/\d{2}/Tasks/", files[0]["path"]), files[0]["path"]
             assert (temp / "work/storage-data" / files[0]["path"][len("storage/"):]).read_bytes() == b"first"
             location = subprocess.check_output([str(psql), "-tAc", 'SELECT "Location" FROM "SystemFiles" WHERE "RecordId" = ' + "'" + files[0]["id"] + "'", connection], env=environment, text=True).strip()
             assert location == "1", location

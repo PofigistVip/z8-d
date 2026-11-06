@@ -57,10 +57,11 @@ private Z8Array!Z8File z8_attachment_create(Z8Object self, Z8Guid id, Z8Array!Z8
         file.author = name ~ (name.length ? " - "w : ""w) ~ z8_string_or_empty(user.login);
         if (!z8_attachment_storage_path(file.path)) {
             auto now = z8_date_now();
-            file.path = "storage/"w ~ z8_date_toString(now, "yyyy.MM.dd"w) ~ "/"w ~
+            file.path = "storage/"w ~ z8_date_toString(now, z8_application_configuration().storagePathFormat) ~ "/"w ~
                 z8_attachment_component(z8_object_name(table)) ~ "/"w ~ z8_guid_to_string(z8_nonnull(id)) ~ "/"w ~
                 z8_attachment_component(z8_object_name(field)) ~ "/"w ~ z8_date_toString(now, "HH-mm-ss"w) ~ "/"w ~
                 z8_attachment_component(z8_file_name(z8_string_or_empty(file.name)));
+            if (!z8_attachment_storage_path(file.path)) throw new Exception("invalid attachment storage path");
         }
         z8_system_files_write(file);
     }

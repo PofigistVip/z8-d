@@ -206,6 +206,8 @@ in the current database transaction; their callers own commit and rollback.
 By default content is stored in PostgreSQL. With `files.saveOnDisk=true`, content
 is written under the configured storage path and the row records its location;
 as in the original, filesystem writes are not undone by a database rollback.
+`storage.path.format` controls the date-based attachment subdirectory and
+defaults to `yyyy.MM.dd`.
 The BL `FileField.getAttachmentProcessor()` supports parsing,
 reading, adding and removing attachment metadata and database content in the
 caller's transaction. The direct-table HTTP `attach` and `detach` actions use
