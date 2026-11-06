@@ -130,7 +130,7 @@ private Z8Object z8_application_nested_query(Z8Object context, Z8Privileges priv
 private Z8Object z8_application_action_query(Z8Object context, Z8Privileges privileges, wstring queryId, wstring linkId) {
     if (linkId is null || !linkId.length) return z8_application_nested_query(context, privileges, queryId);
     auto link = z8_application_context_field(context, privileges, linkId);
-    if (!z8_native_is_instance("org.zenframework.z8.server.base.table.value.Link"w, link))
+    if (!z8_native_is_instance(z8_link_name, link) && !z8_native_is_instance(z8_join_name, link))
         throw new Exception("query link access denied");
     auto target = z8_link_query(link);
     if (target is null) throw new Exception("query link has no target");

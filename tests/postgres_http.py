@@ -172,6 +172,7 @@ import org.zenframework.z8.base.table.value.StringField;
 import org.zenframework.z8.base.table.value.BinaryField;
 import org.zenframework.z8.base.table.value.AttachmentField;
 import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.Join;
 import org.zenframework.z8.base.sql.Connection;
 public class Sample extends Table {
     [name "Title"] public StringField title;
@@ -180,6 +181,7 @@ public class Sample extends Table {
     [name "Documents"] public AttachmentField documents;
     Table child; [name "ChildLink"] Link childLink = child;
     NestedAttachment nested; [name "NestedLink"] Link nestedLink = nested;
+    NestedAttachment otherNested; [name "OtherJoin"] Join otherJoin = otherNested;
     ApplyAction apply; NoTransactionAction noTransaction; IncrementAction increment; ContextAction inspect;
     actions = {apply, noTransaction, increment, inspect};
     CustomReport exported; reports = {exported};
@@ -237,7 +239,10 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.Documents"w), Z8Access.init);
             user.privileges.setFieldAccess(z8_guid_create_name("NestedAttachment.Documents"w), Z8Access.init);
         }
-        if (id == "relation-denied"w) user.privileges.setFieldAccess(z8_guid_create_name("Sample.NestedLink"w), Z8Access.init);
+        if (id == "relation-denied"w) {
+            user.privileges.setFieldAccess(z8_guid_create_name("Sample.NestedLink"w), Z8Access.init);
+            user.privileges.setFieldAccess(z8_guid_create_name("Sample.OtherJoin"w), Z8Access.init);
+        }
         return new Z8ApplicationSession(id, user, user);
     }
     Z8ApplicationSession login(Z8HttpRequest request, wstring login, wstring password) {
@@ -255,7 +260,7 @@ void main(string[] args) {
     auto setup = new Z8PostgresConnection(databaseInfo);
     setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Blob" bytea, "Documents" bytea, "ChildLink" uuid, "NestedLink" uuid, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     setup.execute(`CREATE TABLE "NestedAttachment" ("RecordId" uuid PRIMARY KEY, "Documents" bytea, "Title" text, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
-    setup.execute(`INSERT INTO "NestedAttachment" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000088'), ('00000000-0000-0000-0000-000000000089'), ('00000000-0000-0000-0000-000000000090'), ('00000000-0000-0000-0000-000000000091')`);
+    setup.execute(`INSERT INTO "NestedAttachment" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000088'), ('00000000-0000-0000-0000-000000000089'), ('00000000-0000-0000-0000-000000000090'), ('00000000-0000-0000-0000-000000000091'), ('00000000-0000-0000-0000-000000000094')`);
     setup.execute(`CREATE TABLE "SystemFiles" ("RecordId" uuid PRIMARY KEY, "Name" text, "File" bytea, "Path" text, "Size" bigint, "Time" bigint, "Last modified" bigint, "Location" bigint, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     setup.execute(`CREATE TABLE "ContentLog" (value integer)`);
     setup.execute(`CREATE TABLE "SystemUsers" ("RecordId" uuid PRIMARY KEY, "Settings" bytea, "Password" text, "Change Password" smallint, "Email" text, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
@@ -284,6 +289,7 @@ void main(string[] args) {
     assert(verify.execute(`SELECT count(*) FROM "ContentLog"`).rows[0][0].text == "2");
     assert(verify.execute(`SELECT count(*) FROM "SystemFiles"`).rows[0][0].text == "0");
     assert(verify.execute(`SELECT count(*) FROM "NestedAttachment" WHERE "RecordId" IN ('00000000-0000-0000-0000-000000000089', '00000000-0000-0000-0000-000000000090')`).rows[0][0].text == "0");
+    assert(verify.execute(`SELECT count(*) FROM "NestedAttachment" WHERE "RecordId" = '00000000-0000-0000-0000-000000000094'`).rows[0][0].text == "0");
     verify.execute(`UPDATE "SystemUsers" SET "Password" = md5('old secret') WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
     auto originalConfig = z8_application_configuration(), plainConfig = z8_application_configuration();
     plainConfig.clientHashesPasswords = false; z8_application_configure(plainConfig);
@@ -741,6 +747,13 @@ void main(string[] args) {
             result = request(action="destroy", query="nested", data=json.dumps([{"nested.recordId": nested_one}]))
             assert result["success"], result
             result = request(action="destroy", query="missing", link="nestedLink", data=json.dumps([nested_two]))
+            assert result["success"], result
+            joined_id = "00000000-0000-0000-0000-000000000094"
+            result = request(action="read", link="otherJoin", query="missing", fields='["otherNested.title"]', recordId=joined_id)
+            assert result["success"] and len(result["data"]) == 1, result
+            result = request(session="relation-denied", action="destroy", link="otherJoin", data=json.dumps([joined_id]))
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = request(action="destroy", link="otherJoin", data=json.dumps([joined_id]))
             assert result["success"], result
             data = '["00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000003","00000000-0000-0000-0000-000000000004"]'
             result = request(session="limited", action="destroy", data=data)

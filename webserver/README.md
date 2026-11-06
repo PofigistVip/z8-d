@@ -80,7 +80,7 @@ and extra fields determine the selected fields; if none are configured, z8-d
 uses the table's declared fields as a convenience fallback. Field dependencies
 are included in the selection, subject to the same access checks.
 Read, metadata, create, copy, update, destroy, attach, detach and export requests
-can select a nested table using `query` or `link`; the root request, containing
+can select a nested table using `query` or a `Link`/`Join` field in `link`; the root request, containing
 tables, their connecting relations and the selected table are checked. As in the
 original action factory, a nonempty `link` takes precedence over `query`.
 With no

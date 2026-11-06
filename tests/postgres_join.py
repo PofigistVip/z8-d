@@ -509,6 +509,8 @@ void main(string[] args) {
     db.execute(`CREATE TEMP TABLE "Orders" ("RecordId" uuid PRIMARY KEY, "Title" text, "CustomerId" uuid, "CityId" uuid, "Lock" bigint DEFAULT 0)`);
     db.execute(`CREATE TEMP TABLE "AggregateOrders" ("RecordId" uuid PRIMARY KEY, "CustomerId" uuid, "Amount" bigint)`);
     db.execute(`INSERT INTO "AggregateOrders" VALUES ('00000000-0000-0000-0000-000000000311','00000000-0000-0000-0000-000000000201',4), ('00000000-0000-0000-0000-000000000312','00000000-0000-0000-0000-000000000201',6), ('00000000-0000-0000-0000-000000000313','00000000-0000-0000-0000-000000000202',7)`);
+    db.execute(`CREATE TEMP TABLE "AggregateDynamicOrders" AS SELECT * FROM "AggregateOrders"`);
+    db.execute(`ALTER TABLE "AggregateDynamicOrders" ADD COLUMN "Lock" bigint DEFAULT 0`);
     db.execute(`CREATE TEMP TABLE "NestedAggregateOrders" AS SELECT * FROM "AggregateOrders"`);
     db.execute(`CREATE TEMP TABLE "CountOrders" AS SELECT * FROM "AggregateOrders"`);
     db.execute(`CREATE TEMP TABLE "AverageOrders" ("RecordId" uuid PRIMARY KEY, "CustomerId" uuid, "Amount" bigint)`);
@@ -864,12 +866,10 @@ void main(string[] args) {
     assert(aggregateMeta["isQuery"].boolean && aggregateMeta["readOnly"].boolean && "primaryKey" !in aggregateMeta.object);
     aggregateResponse = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "AggregateOrder"w, null).to!string);
     assert(aggregateResponse["isQuery"].boolean && aggregateResponse["readOnly"].boolean && aggregateResponse["data"].array.length == 2);
-    bool changedGroupingRejected;
-    try { requestFields(`["amount"]`w, null, null, null, null, "AggregateDynamicOrder"w, "read"w); } catch (Exception) { changedGroupingRejected = true; }
-    assert(changedGroupingRejected);
-    changedGroupingRejected = false;
-    try { requestFields(`["amount"]`w, null, null, null, null, "AggregateDynamicOrder"w, "meta"w); } catch (Exception) { changedGroupingRejected = true; }
-    assert(changedGroupingRejected);
+    auto dynamicRows = parseJSON(requestFields(`["amount"]`w, null, null, null, null, "AggregateDynamicOrder"w, "read"w).to!string);
+    assert(dynamicRows["data"].array.length == 3);
+    auto dynamicMeta = parseJSON(requestFields(`["amount"]`w, null, null, null, null, "AggregateDynamicOrder"w, "meta"w).to!string);
+    assert(dynamicMeta["isQuery"].boolean && !dynamicMeta["readOnly"].boolean);
     auto linkedMeta = parseJSON(requestFields(`["customer.label","customer.city.label"]`w, null, null, null, null, "HttpOrder"w, "meta"w).to!string);
     bool customerMeta, cityMeta;
     foreach (field; linkedMeta["fields"].array) {
