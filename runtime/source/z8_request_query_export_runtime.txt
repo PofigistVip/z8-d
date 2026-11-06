@@ -16,6 +16,7 @@ private void z8_application_dispatch_query_export_target(wstring className, Z8Ob
     if (privileges is null) throw new Exception("query read access denied");
     auto query = z8_application_action_query(context, privileges, original.z8_get("query"w), original.z8_get("link"w));
     wstring[] ids, headers, types;
+    int[] widths, minimumWidths;
     foreach (column; columns.array) {
         if (column.type != JSONType.object) throw new Exception("invalid export column");
         auto id = "id" in column.object;
@@ -23,6 +24,13 @@ private void z8_application_dispatch_query_export_target(wstring className, Z8Ob
         auto field = z8_query_try_find_field_id(query, id.str.to!wstring);
         if (field is null) continue;
         if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("query field access denied");
+        if (format == "pdf"w) {
+            auto width = "width" in column.object, minimum = "minWidth" in column.object;
+            auto requestedWidth = width is null ? 100 : z8_json_array_integer(*width);
+            auto requestedMinimum = minimum is null ? 0 : z8_json_array_integer(*minimum);
+            if (requestedWidth < 0 || requestedMinimum < 0) throw new Exception("invalid export column width");
+            widths ~= requestedWidth; minimumWidths ~= requestedMinimum;
+        }
         ids ~= id.str.to!wstring;
         auto header = field.z8_get_attribute("columnHeader"w);
         if (header is null || !header.length) header = field.z8_get_attribute("displayName"w);
@@ -52,7 +60,7 @@ private void z8_application_dispatch_query_export_target(wstring className, Z8Ob
         data = *rows;
     }
     auto word = format == "doc"w || format == "docx"w;
-    auto bytes = format == "pdf"w ? z8_export_pdf(ids, headers, types, data, original.z8_get("options"w)) :
+    auto bytes = format == "pdf"w ? z8_export_pdf(ids, headers, types, data, original.z8_get("options"w), widths, minimumWidths) :
         word ? z8_export_word(ids, headers, types, data) : format == "html"w ?
         z8_export_html(ids, headers, types, data) : z8_export_spreadsheet(ids, headers, types, data);
     auto file = new Z8File(); file.id = null;

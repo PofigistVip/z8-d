@@ -173,8 +173,10 @@ private Z8PdfPageLayout z8_pdf_page_layout(wstring options) {
     return result;
 }
 
-private ubyte[] z8_export_pdf(wstring[] ids, wstring[] headers, wstring[] types, JSONValue rows, wstring options = null) {
+private ubyte[] z8_export_pdf(wstring[] ids, wstring[] headers, wstring[] types, JSONValue rows,
+                              wstring options, int[] requestedWidths, int[] minimumWidths) {
     import std.json : JSONType;
+    import std.math : round;
     ubyte[] bytes;
     synchronized (z8_pdf_font_lock) bytes = z8_pdf_font_data;
     if (bytes is null) throw new Exception("PDF export font is not configured");
@@ -196,11 +198,44 @@ private ubyte[] z8_export_pdf(wstring[] ids, wstring[] headers, wstring[] types,
     }
     // Each cell is clipped so a long value cannot overwrite its neighbors.
     auto layout = z8_pdf_page_layout(options);
-    int pageWidth = layout.width, pageHeight = layout.height, headerHeight = 18, columns = cast(int)ids.length;
+    int pageWidth = layout.width, pageHeight = layout.height, headerHeight = 18;
     int rowLimit = (pageHeight - layout.top - layout.bottom - headerHeight) / layout.detailHeight;
-    int cellWidth = (pageWidth - layout.left - layout.right) / columns;
     if (rowLimit < 1) throw new Exception("page has no room for export rows");
-    if (cellWidth < 8) throw new Exception("too many PDF columns");
+    auto available = pageWidth - layout.left - layout.right;
+    assert(requestedWidths.length == ids.length && minimumWidths.length == ids.length);
+    double total = 0;
+    foreach (width; requestedWidths) total += width;
+    double[] scaled = new double[requestedWidths.length];
+    double fixedWidth = 0, scaledTotal = 0;
+    foreach (i, width; requestedWidths) {
+        auto proportional = total > 0 ? available * cast(double)width / total : cast(double)available / requestedWidths.length;
+        scaled[i] = proportional < minimumWidths[i] ? minimumWidths[i] : proportional;
+        scaledTotal += scaled[i];
+        if (scaled[i] == minimumWidths[i]) fixedWidth += scaled[i];
+    }
+    if (scaledTotal > available && scaledTotal > fixedWidth) {
+        auto factor = (available - fixedWidth) / (scaledTotal - fixedWidth);
+        scaledTotal = 0;
+        foreach (i; 0 .. scaled.length) {
+            if (scaled[i] != minimumWidths[i]) {
+                scaled[i] *= factor;
+                if (scaled[i] < minimumWidths[i]) scaled[i] = minimumWidths[i];
+            }
+            scaledTotal += scaled[i];
+        }
+    }
+    if (scaledTotal > available) foreach (ref width; scaled) width *= available / scaledTotal;
+    int[] cellWidths, positions;
+    double cumulative = 0;
+    int previous;
+    foreach (width; scaled) {
+        cumulative += width;
+        auto next = cast(int)round(cumulative);
+        positions ~= layout.left + previous;
+        cellWidths ~= next - previous;
+        previous = next;
+        if (cellWidths[$ - 1] < 8) throw new Exception("PDF column is too narrow");
+    }
     string[] contents;
     size_t position;
     do {
@@ -208,7 +243,7 @@ private ubyte[] z8_export_pdf(wstring[] ids, wstring[] headers, wstring[] types,
         void line(wstring[] values, int row) {
             auto height = row == 0 ? headerHeight : layout.detailHeight;
             foreach (i, value; values) {
-                auto x = layout.left + cast(int)i * cellWidth;
+                auto x = positions[i], cellWidth = cellWidths[i];
                 auto y = pageHeight - layout.top - headerHeight - row * layout.detailHeight;
                 auto baseline = row == 0 ? 5 : layout.detailAlign == "top" ? height - 12 :
                     layout.detailAlign == "bottom" ? 3 : (height - 9) / 2 + 1;
