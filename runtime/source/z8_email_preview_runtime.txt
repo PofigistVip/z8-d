@@ -62,8 +62,12 @@ private wstring z8_email_decode(const(ubyte)[] bytes, string charset) {
         case "utf-16": id = 5; break;
         case "utf-16be": id = 6; break;
         case "utf-16le": id = 7; break;
+        case "windows-1250": case "cp1250": id = 8; break;
         case "windows-1251": case "cp1251": id = 9; break;
         case "windows-1252": case "cp1252": id = 10; break;
+        case "windows-1253": case "cp1253": id = 11; break;
+        case "windows-1254": case "cp1254": id = 12; break;
+        case "windows-1257": case "cp1257": id = 13; break;
         case "koi8-r": id = 2; break;
         case "cp866": case "ibm866": id = 1; break;
         case "iso-8859-1": case "latin1":

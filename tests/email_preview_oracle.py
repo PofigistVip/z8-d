@@ -51,6 +51,11 @@ messages = [
     b'From: html@example.com\r\nSubject: Partial HTML\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n'
     b'First <not closed\r\nline> Second <b>bold</b> End <unfinished',
 ]
+for encoding, value in (("windows-1250", "Žluťoučký"), ("windows-1253", "Καλημέρα"),
+                        ("windows-1254", "İstanbul"), ("windows-1257", "Ąžuolas")):
+    messages.append(("From: sender@example.com\r\nSubject: " + encoding + "\r\n"
+                     "Content-Type: text/plain; charset=" + encoding + "\r\n"
+                     "Content-Transfer-Encoding: 8bit\r\n\r\n").encode("ascii") + value.encode(encoding))
 with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     temp = Path(directory)
     java = temp / "EmailOracle.java"
