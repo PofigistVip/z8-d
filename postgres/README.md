@@ -170,6 +170,8 @@ Other custom request parameters remain available to BL hooks; only recognized
 options affect the reader. The same applies to metadata, create, update, copy,
 destroy, attachment and action requests. The host must open the
 application response before calling it.
+Unknown field IDs in a requested field list are ignored, as in `QueryUtils`;
+an explicitly nonempty list containing only unknown IDs does not select all fields.
 Ordinary computed fields can be selected, filtered and sorted only when all
 their declared and SQL expression dependencies are readable.
 `JsonObjectExpression` builds JSON from field references or named SQL values;

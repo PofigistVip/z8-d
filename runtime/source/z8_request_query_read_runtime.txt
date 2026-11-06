@@ -193,9 +193,11 @@ private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges priv
     // Resolve dependent forms even when the client supplies an explicit field list.
     auto formFields = z8_query_form_fields(query);
     auto fields = params.z8_get("fields"w);
+    bool explicitFields;
     if (fields !is null && fields.length) {
         auto parsed = z8_json_parse(fields.to!string);
         if (parsed.type != JSONType.array) throw new Exception("query fields must be a JSON array");
+        explicitFields = parsed.array.length != 0;
         foreach (item; parsed.array) {
             wstring id;
             if (item.type == JSONType.string) id = item.str.to!wstring;
@@ -204,10 +206,11 @@ private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges priv
                 if (member is null || member.type != JSONType.string) throw new Exception("query field has no id");
                 id = member.str.to!wstring;
             } else throw new Exception("invalid query field");
-            requested ~= z8_query_find_field_id(query, id);
+            auto field = z8_query_try_find_field_id(query, id);
+            if (field !is null) requested ~= field;
         }
     }
-    if (!requested.length) {
+    if (!requested.length && !explicitFields) {
         bool configured;
         foreach (name; ["controls"w, "names"w, "columns"w, "extraFields"w])
             if (z8_query_array(query, name).length) { configured = true; break; }

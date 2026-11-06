@@ -914,6 +914,12 @@ void main(string[] args) {
     db.execute(`CREATE TEMP TABLE "JoinOrders" AS SELECT * FROM "Orders"`);
     db.execute(`CREATE TEMP TABLE "DependencyOrders" AS SELECT * FROM "Orders"`);
     auto response = parseJSON(requestFields(`["title","customer.label","customer.city.label"]`w).to!string);
+    auto partiallyKnownFields = parseJSON(requestFields(`["title","missing.field"]`w).to!string);
+    assert(partiallyKnownFields["data"].array.length == 4 && "title" in partiallyKnownFields["data"][0].object && "missing.field" !in partiallyKnownFields["data"][0].object);
+    auto unknownFields = parseJSON(requestFields(`["missing.field"]`w).to!string);
+    assert(unknownFields["data"].array.length == 4 && "title" !in unknownFields["data"][0].object && "customer.label" !in unknownFields["data"][0].object);
+    auto unknownMeta = parseJSON(requestFields(`["title","missing.field"]`w, null, null, null, null, "HttpOrder"w, "meta"w).to!string);
+    foreach (field; unknownMeta["fields"].array) assert(field["name"].str != "missing.field");
     wstring readCustomCustomer(wstring customer, wstring action = "read"w) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, "HttpOrder"w); if (action !is null) request.parameters.z8_add("action"w, action);
