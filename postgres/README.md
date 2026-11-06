@@ -300,6 +300,10 @@ connection without an active transaction. When supplied, the user-change notifie
 invalidates non-built-in users' sessions after a failed-attempt counter or ban
 update commits, including a successful login that resets the counter. A notifier
 failure is reported to the caller; the committed database update is retained.
+Counter resets, increments and ban timestamps use the registered `SystemUsers`
+table's update lifecycle, including BL `beforeUpdate` and `afterUpdate` hooks.
+Notifications raised by these updates are delivered after commit; a failing
+update hook rolls the transaction back without delivering its notifications.
 A registered named `User` subclass
 can implement the original `onBeforeLoad`, `authenticate` and `onLoad` hooks;
 if custom authentication returns false, password verification remains the

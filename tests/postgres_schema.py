@@ -77,6 +77,12 @@ import org.zenframework.z8.base.table.system.Users;
 import org.zenframework.z8.base.security.LoginParameters;
 import org.zenframework.z8.base.application.Application;
 public class CustomUsers extends Users {
+    virtual protected void beforeUpdate(guid id) {
+        if (Application.requestParameters().containsKey("address")) {
+            if (Application.requestParameters()["address"] == "counter-observed") firstName = "counter hook";
+            if (Application.requestParameters()["address"] == "counter-rejected") throw "counter rejected";
+        }
+    }
     virtual protected bool getParameters(LoginParameters login, primary[string] values) {
         if (login.login() == "Admin" || login.address() == "fail") throw "hook failed";
         if (login.address() == "deny") return false;
@@ -346,6 +352,14 @@ class SchedulerObserver : IZ8SchedulerObserver {
     }
     void onError(wstring message) { synchronized (gate) wake.notifyAll(); }
     bool waitForSuccess() { synchronized (gate) { if (!succeeded) wake.wait(dur!"seconds"(10)); return succeeded; } }
+}
+class AuthenticationObserver : IZ8UserChangeNotifier {
+    Z8PostgresConnection db; size_t count; Z8Guid id;
+    this(Z8PostgresConnection db) { this.db = db; }
+    void userChanged(Z8Guid id, wstring schema) {
+        assert(!db.inTransaction() && schema == "z8_bootstrap"w);
+        this.id = id; ++count;
+    }
 }
 void main(string[] args) {
     alias P = Z8p_50726F6265;
@@ -1077,6 +1091,24 @@ void main(string[] args) {
     auto customRegistry = new Z8RuntimeRegistry();
     customRegistry.registerNamedType("User"w, "CustomUser"w, typeid(Z8p_437573746F6D55736572));
     customRegistry.registerNamedType("SystemUsers"w, "CustomUsers"w, typeid(Z8p_437573746F6D5573657273));
+    db.execute(`INSERT INTO "z8_bootstrap"."SystemUsers" ("RecordId", "Name", "Password") VALUES ('00000000-0000-0000-0000-000000000AAB', 'Hook Counter', md5('correct'))`);
+    auto authObserver = new AuthenticationObserver(db);
+    auto observedAuth = new Z8PostgresAuthenticator(db, "z8_bootstrap"w, customRegistry, authConfig, authObserver);
+    assert(observedAuth.authenticate("Hook Counter"w, "wrong"w, authTime, "counter-observed"w) is null);
+    auto hookState = db.execute(`SELECT "Failed Auth Count", "First Name" FROM "z8_bootstrap"."SystemUsers" WHERE "Name" = 'Hook Counter'`);
+    assert(hookState.rows[0][0].text == "1" && hookState.rows[0][1].text == "counter hook");
+    assert(authObserver.count == 1 && authObserver.id == z8_guid_create(0xAAB));
+    bool counterRejected;
+    try { observedAuth.authenticate("Hook Counter"w, "wrong"w, authTime, "counter-rejected"w); }
+    catch (Exception) { counterRejected = true; }
+    assert(counterRejected && !db.inTransaction() && authObserver.count == 1);
+    assert(db.execute(`SELECT "Failed Auth Count" FROM "z8_bootstrap"."SystemUsers" WHERE "Name" = 'Hook Counter'`).rows[0][0].text == "1");
+    assert(observedAuth.authenticate("Hook Counter"w, "correct"w, authTime, "counter-observed"w) !is null);
+    assert(authObserver.count == 2);
+    assert(observedAuth.authenticate("Hook Counter"w, "wrong"w, authTime) is null);
+    assert(observedAuth.authenticate("Hook Counter"w, "wrong"w, authTime) is null);
+    assert(observedAuth.authenticate("Hook Counter"w, "wrong"w, authTime) is null);
+    assert(authObserver.count == 6); // The ban time and counter are separate Users updates.
     auto customAuth = new Z8PostgresAuthenticator(db, "z8_bootstrap"w, customRegistry, authConfig);
     auto callerRequest = z8_application_request(); auto callerConnection = z8_connection_current_backend();
     auto customAuthenticated = customAuth.authenticate("Auth Alice"w, "override"w, z8_date_from_ticks(1700000001000), "permit"w);

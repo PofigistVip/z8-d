@@ -25,6 +25,24 @@ private bool samePassword(wstring left, wstring right) {
     return differences == 0;
 }
 
+// Table events can notify the authority, but an authentication update is not
+// visible to other connections until its transaction commits.
+private class AuthenticationNotifications : IZ8UserChangeNotifier, IZ8RoleChangeNotifier {
+    private struct Change { bool role; Z8Guid id; wstring schema; }
+    private Change[] changes;
+    void userChanged(Z8Guid id, wstring schema) { add(false, id, schema); }
+    void roleChanged(Z8Guid id, wstring schema) { add(true, id, schema); }
+    private void add(bool role, Z8Guid id, wstring schema) {
+        changes ~= Change(role, id is null ? null : new Z8Guid(id.majorBits, id.minorBits), schema.idup);
+    }
+    void flush(IZ8UserChangeNotifier users, IZ8RoleChangeNotifier roles) {
+        foreach (change; changes) {
+            if (change.role) roles.roleChanged(change.id, change.schema);
+            else users.userChanged(change.id, change.schema);
+        }
+    }
+}
+
 // Host-facing credential check for the standard SystemUsers table. Null means
 // access denied; callers must not distinguish unknown, banned and bad-password
 // users in their response. Trusted login and custom BL authentication hooks are
@@ -37,10 +55,36 @@ class Z8PostgresAuthenticator {
     private Z8PostgresAuthenticationConfig config;
     private IZ8UserChangeNotifier userNotifier;
     private IZ8RoleChangeNotifier roleNotifier;
-    private void notifyAuthenticationChange(Z8Guid id) {
-        // Users.notifyUserChange excludes built-in system and administrator users.
-        if (userNotifier !is null && id != z8_guid_create(1) && id != z8_guid_create(2))
-            userNotifier.userChanged(id, schema);
+    private Z8Object usersTable() {
+        auto users = registry is null ? null : registry.newNamedByName("SystemUsers"w);
+        if (users is null && registry !is null) users = registry.newTableByName("SystemUsers"w);
+        if (users is null) users = z8_native_new("org.zenframework.z8.server.base.table.system.Users"w);
+        users.z8_ensure();
+        if (!z8_native_is_instance("org.zenframework.z8.server.base.table.system.Users"w, users))
+            throw new Z8PostgresException("SystemUsers is not a Users table");
+        return users;
+    }
+    private void updateAuthenticationField(Z8Guid id, wstring index, Z8Primary value) {
+        auto users = usersTable();
+        Z8Object target;
+        foreach (field; z8_query_declared_fields(users, true)) if (field.z8_index() == index) target = field;
+        if (target is null) throw new Z8PostgresException("SystemUsers authentication field is missing");
+        z8_field_set(target, value);
+        if (!z8_optional_require(z8_native_call!(Z8Optional!long)("org.zenframework.z8.server.base.query.Query.m_update"w, users, id)))
+            throw new Z8PostgresException("authentication user was not updated");
+    }
+    private void commitAuthenticationState(Z8Guid id, long failures, bool ban = false, long bannedUntil = 0) {
+        auto request = z8_application_request();
+        auto users = request.userChangeNotifier, roles = request.roleChangeNotifier;
+        auto notifications = new AuthenticationNotifications();
+        if (users !is null) request.userChangeNotifier = notifications;
+        if (roles !is null) request.roleChangeNotifier = notifications;
+        scope(exit) { request.userChangeNotifier = users; request.roleChangeNotifier = roles; }
+        if (ban) updateAuthenticationField(id, "bannedUntil"w, z8_primary_box(z8_date_from_ticks(bannedUntil)));
+        updateAuthenticationField(id, "failedAuthCount"w, z8_primary_box(failures));
+        db.commit();
+        request.userChangeNotifier = users; request.roleChangeNotifier = roles;
+        notifications.flush(users, roles);
     }
     this(Z8PostgresConnection db, wstring schema, Z8RuntimeRegistry registry = null,
          Z8PostgresAuthenticationConfig config = Z8PostgresAuthenticationConfig.init,
@@ -72,23 +116,17 @@ class Z8PostgresAuthenticator {
         if (now is null) now = z8_date_now();
         auto ticks = z8_date_ticks(now);
         Z8Object customUser;
-        bool needsHookContext;
         if (registry !is null) foreach (entry; registry.named()) if (entry.name == "User"w) {
             customUser = z8_user_wrap_with_registry(new Z8UserData(), registry);
             break;
         }
-        needsHookContext = customUser !is null || createIfMissing;
-        if (registry !is null && !needsHookContext) {
-            foreach (entry; registry.named()) if (entry.name == "SystemUsers"w) { needsHookContext = true; break; }
-            if (!needsHookContext) foreach (entry; registry.tables()) if (entry.name == "SystemUsers"w) { needsHookContext = true; break; }
-        }
         auto previousRequest = z8_application_request();
         auto previousConnection = z8_connection_current_backend();
-        scope(exit) if (needsHookContext) {
+        scope(exit) {
             z8_application_set_request(previousRequest);
             z8_connection_set_current(previousConnection);
         }
-        if (needsHookContext) {
+        {
             auto system = z8_postgres_read_user(db, schema, z8_guid_create(1), registry, null, false);
             if (system is null) throw new Z8PostgresException("system user is missing");
             auto request = new Z8ApplicationRequest();
@@ -119,12 +157,7 @@ class Z8PostgresAuthenticator {
             bool created;
             if (!rows.rows.length && createIfMissing) {
                 if (userId !is null) throw new Z8PostgresException("cannot provision a missing user by explicit ID");
-                auto users = registry is null ? null : registry.newNamedByName("SystemUsers"w);
-                if (users is null && registry !is null) users = registry.newTableByName("SystemUsers"w);
-                if (users is null) users = z8_native_new("org.zenframework.z8.server.base.table.system.Users"w);
-                users.z8_ensure();
-                if (!z8_native_is_instance("org.zenframework.z8.server.base.table.system.Users"w, users))
-                    throw new Z8PostgresException("SystemUsers is not a Users table");
+                auto users = usersTable();
                 Z8Object nameField, passwordField;
                 foreach (field; z8_query_declared_fields(users, true)) {
                     if (field.z8_index() == "name"w) nameField = field;
@@ -154,7 +187,6 @@ class Z8PostgresAuthenticator {
             if (rows.rows.length != 1) throw new Z8PostgresException("duplicate case-insensitive user login");
             auto row = rows.rows[0];
             auto id = z8_guid_literal(row[0].text);
-            auto key = Z8PostgresParameter.value(row[0].text);
             auto failures = row[4].text.to!long;
             auto loginData = new Z8LoginParametersData(id, login, address, schema);
             auto user = z8_postgres_read_user(db, schema, id, registry, loginData);
@@ -176,18 +208,13 @@ class Z8PostgresAuthenticator {
                 if (config.maxFailedAttempts > 0) {
                     if (failures >= config.maxFailedAttempts - 1) {
                         if (ticks > long.max - config.banMilliseconds) throw new Z8PostgresException("authentication ban time overflow");
-                        db.execute("UPDATE " ~ ns ~ `."SystemUsers" SET "Failed Auth Count" = 0, "Banned Until" = $2::bigint WHERE "RecordId" = $1::uuid`,
-                            [key, Z8PostgresParameter.value((ticks + config.banMilliseconds).to!string)]);
-                    } else db.execute("UPDATE " ~ ns ~ `."SystemUsers" SET "Failed Auth Count" = $2::bigint WHERE "RecordId" = $1::uuid`,
-                        [key, Z8PostgresParameter.value((failures + 1).to!string)]);
-                }
-                db.commit();
-                if (config.maxFailedAttempts > 0) notifyAuthenticationChange(id);
+                        commitAuthenticationState(id, 0, true, ticks + config.banMilliseconds);
+                    } else commitAuthenticationState(id, failures + 1);
+                } else db.commit();
                 return null;
             }
-            if (failures != 0) db.execute("UPDATE " ~ ns ~ `."SystemUsers" SET "Failed Auth Count" = 0 WHERE "RecordId" = $1::uuid`, [key]);
-            db.commit();
-            if (failures != 0) notifyAuthenticationChange(id);
+            if (failures != 0) commitAuthenticationState(id, 0);
+            else db.commit();
             if (customUser !is null) {
                 z8_user_attach(customUser, user);
                 try { z8_user_on_load(customUser); }
