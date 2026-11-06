@@ -77,6 +77,14 @@ public class ManyAction extends Action {
     virtual protected void execute(guid[] ids, Query context, guid[] selected, Query query) { Application.info("many"); }
 }
 ''', encoding="utf-8")
+    (source / "CustomReport.bl").write_text('''
+import org.zenframework.z8.base.form.report.Report;
+public class CustomReport extends Report {
+    public string trace = "";
+    virtual protected void prepare(guid id) { trace = "prepare:" + id.toString(); }
+    virtual protected file execute(guid id) { trace = trace + ":execute"; return null; }
+}
+''', encoding="utf-8")
     (source / "ControlProbe.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.GuidField;
@@ -89,6 +97,7 @@ public class ControlProbe {
     public static CustomTable makeTable() { CustomTable value; return value; }
     public static SingleAction single() { SingleAction value; return value; }
     public static ManyAction many() { ManyAction value; return value; }
+    public static CustomReport customReport() { CustomReport value; return value; }
     public static bool verify() {
         StringField field; GuidField key; Table target; Section section; Action action;
         Parameter amount = Parameter.create("Amount", 9);
@@ -172,6 +181,11 @@ void main() {
     assert(meta["reports"].array.length == 2 && meta["reports"][0]["id"].str == "monthly" && meta["reports"][0]["format"].str == "xls");
     assert(meta["reports"][1]["id"].str == "daily" && meta["reports"][1]["format"].str == "pdf");
     assert(table.f_monthly.f_engine == "birt"w && table.f_monthly.f_template == "monthly"w);
+    auto report = z8_nonnull(P.m_customReport());
+    assert(report.m_run(z8_guid_create(1)) is null);
+    assert(report.f_trace == "prepare:00000000-0000-0000-0000-000000000001:execute"w);
+    bool noEngine; try { table.f_daily.m_run(z8_guid_create(1)); } catch (Exception error) { noEngine = error.msg == "report engine is not implemented: birt"; }
+    assert(noEngine);
     auto records = new Z8Array!Z8Guid([z8_guid_create(1), z8_guid_create(2)]);
     auto selectedRecords = new Z8Array!Z8Guid();
     z8_nonnull(P.m_single()).z8_action_virtual_execute_many(records, table, selectedRecords, table);

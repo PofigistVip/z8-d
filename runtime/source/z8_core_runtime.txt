@@ -129,6 +129,8 @@ class Z8Object {
     void z8_control_virtual_write_meta(Z8Object writer, Z8Object query, Z8Object context) {}
     void z8_action_virtual_execute_many(Z8Array!Z8Guid records, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) {}
     void z8_action_virtual_execute_one(Z8Guid record, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) {}
+    void z8_report_virtual_prepare(Z8Guid record) {}
+    Z8File z8_report_virtual_execute(Z8Guid record) { throw new Exception("report engine is not implemented"); }
     void z8_query_virtual_onCopy(Z8Guid id) {}
     void z8_query_virtual_beforeRead() {}
     void z8_query_virtual_afterRead() {}

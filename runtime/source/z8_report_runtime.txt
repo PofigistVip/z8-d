@@ -35,6 +35,16 @@ private void z8_report_write_meta(Z8Object report, Z8JsonWriterState writer) {
     z8_monitor_property(writer, "format"w, state.format is null ? z8_report_pdf : state.format);
     writer.finish('}');
 }
+private void z8_report_default_prepare(Z8Object self, Z8Guid record) { z8_nonnull(self); }
+private Z8File z8_report_default_execute(Z8Object self, Z8Guid record) {
+    auto state = z8_report_state(self);
+    throw new Exception("report engine is not implemented: " ~ z8_string_or_empty(state.engine).to!string);
+}
+private Z8File z8_report_run(Z8Object self, Z8Guid record) {
+    self = z8_nonnull(self);
+    self.z8_report_virtual_prepare(record);
+    return self.z8_report_virtual_execute(record);
+}
 void z8_bind_builtin_report() {
     z8_native_bind_field(z8_report_name ~ ".f_engine"w, &z8_report_address!"engine");
     z8_native_bind_field(z8_report_name ~ ".f_name"w, &z8_report_address!"name");
@@ -42,5 +52,8 @@ void z8_bind_builtin_report() {
     z8_native_bind_field(z8_report_name ~ ".f_format"w, &z8_report_address!"format");
     static foreach (name; ["BIRT", "POI", "Pdf", "Excel", "Word", "WordX", "Html", "Powerpoint"])
         z8_native_bind_field(z8_report_name ~ ".f_"w ~ name.to!wstring, &z8_report_constant!name);
+    z8_native_bind(z8_report_name ~ ".m_prepare"w, &z8_report_default_prepare);
+    z8_native_bind(z8_report_name ~ ".m_execute"w, &z8_report_default_execute);
+    z8_native_bind(z8_report_name ~ ".m_run"w, &z8_report_run);
 }
 shared static this() { z8_bind_builtin_report(); }

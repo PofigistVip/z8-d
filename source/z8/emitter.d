@@ -1005,6 +1005,14 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                     method.parameters[1].objectClass.emittedName ~ ")context, selected, cast(" ~ method.parameters[3].objectClass.emittedName ~ ")query); }\n";
             }
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.form.report.Report"w) {
+            foreach (method; program.methods) if (!method.isStatic && method.parameters.length == 1 && method.parameters[0].type == ValueType.guidType) {
+                if (method.name.text == "prepare" && method.returnType == ValueType.voidType)
+                    result ~= "override void z8_report_virtual_prepare(Z8Guid record) { this.m_prepare(record); }\n";
+                if (method.name.text == "execute" && method.returnType == ValueType.fileType)
+                    result ~= "override Z8File z8_report_virtual_execute(Z8Guid record) { return this.m_execute(record); }\n";
+            }
+        }
         if (extendsBuiltinPrimary(program)) {
             if (program.isNative) {
                 auto stringBinding = emitRawWStringLiteral(program.nativeName ~ ".m_toString"w);
