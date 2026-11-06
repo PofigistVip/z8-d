@@ -40,11 +40,20 @@ public class BinaryZip {
     result = subprocess.run([str(compiler), "compile", str(source)], capture_output=True, text=True, encoding="utf-8", check=True)
     generated.write_text(result.stdout + '''
 import std.conv : to;
+import std.file : read;
 void main(string[] args) {
     assert(z8_optional_require(Z8_BinaryZip.m_run(args[1].to!wstring, args[2].to!wstring,
         args[3].to!wstring, args[4].to!wstring, args[5].to!wstring, args[8].to!wstring, args[9].to!wstring)) == 0);
     bool rejected;
     try { z8_file_unzip(z8_file_from_path(args[6].to!wstring), z8_file_from_path(args[7].to!wstring)); }
+    catch (Exception) { rejected = true; }
+    assert(rejected);
+    auto uploaded = z8_file_from_upload("foreign.zip"w, cast(const(ubyte)[])read(args[4]));
+    assert(z8_file_unzip(uploaded, z8_file_from_path(args[10].to!wstring)) is uploaded);
+    assert(z8_file_has_upload(uploaded));
+    auto unsafeUpload = z8_file_from_upload("unsafe.zip"w, cast(const(ubyte)[])read(args[6]));
+    rejected = false;
+    try { z8_file_unzip(unsafeUpload, z8_file_from_path(args[11].to!wstring)); }
     catch (Exception) { rejected = true; }
     assert(rejected);
 }
@@ -66,10 +75,13 @@ void main(string[] args) {
         archive.writestr("../escaped.txt", "unsafe")
     output, archive_path, foreign_output = temp / "output", temp / "binary.zip", temp / "foreign-output"
     legacy_output = temp / "legacy-output"
+    uploaded_output = temp / "uploaded-output"
     subprocess.run([str(executable), str(source_dir), str(archive_path), str(output), str(foreign),
-                    str(foreign_output), str(invalid), str(temp / "unsafe-output"), str(legacy), str(legacy_output)], cwd=temp, check=True)
+                    str(foreign_output), str(invalid), str(temp / "unsafe-output"), str(legacy), str(legacy_output),
+                    str(uploaded_output), str(temp / "unsafe-upload-output")], cwd=temp, check=True)
     assert (output / "данные.txt").read_text(encoding="utf-8") == "Привет"
     assert (foreign_output / "nested" / "foreign.txt").read_text(encoding="utf-8") == "foreign content"
+    assert (uploaded_output / "nested" / "foreign.txt").read_text(encoding="utf-8") == "foreign content"
     assert (legacy_output / "тест.txt").read_text(encoding="utf-8") == "legacy content"
     assert not (temp / "escaped.txt").exists()
     with zipfile.ZipFile(archive_path) as archive:

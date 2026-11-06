@@ -64,8 +64,9 @@ Z8File z8_file_unzip(Z8File archive, Z8File directory) {
     return z8_file_unzip(archive, directory, z8_encoding_by_id(4));
 }
 Z8File z8_file_unzip(Z8File archive, Z8File directory, Z8Encoding encoding) {
-    import std.file : read;
-    z8_zip_extract(cast(ubyte[])read(z8_file_system_path(archive)), z8_file_system_path(directory), encoding);
+    // A request upload (or a database-backed file) can have content without a
+    // local path. Use the file's input stream just as file.java does.
+    z8_zip_extract(z8_binary_read_all(z8_file_to_binary(archive)), z8_file_system_path(directory), encoding);
     return archive;
 }
 
