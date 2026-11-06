@@ -22,6 +22,24 @@ private wstring[wstring] z8_server_config_snapshot() {
     synchronized (z8_server_config_lock) return z8_server_config_values.dup;
 }
 private wstring z8_server_config_get(wstring key) { return z8_string_new(z8_server_config_value(key)); }
+// Match Z8's HTTP port property. Keep the D development host bound to loopback
+// unless the application explicitly configures another interface.
+string z8_server_http_listen_address() {
+    import std.algorithm.searching : canFind;
+    auto host = z8_server_config_value("web.server.http.host"w);
+    if (host is null || !host.length) host = "127.0.0.1"w;
+    foreach (ch; host) {
+        if (!((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') ||
+              (ch >= 'A' && ch <= 'Z') || ch == '.' || ch == '-' || ch == ':'))
+            throw new Exception("invalid web.server.http.host");
+    }
+    auto value = z8_server_config_value("web.server.http.port"w);
+    auto port = z8_optional_require(z8_server_config_parse_int(value, z8_optional_wrap(value is null || !value.length ? 9080L : -1L)));
+    if (port < 1 || port > 65535) throw new Exception("web.server.http.port must be between 1 and 65535");
+    auto address = host.to!string;
+    if (host.canFind(':')) address = "[" ~ address ~ "]";
+    return address ~ ":" ~ port.to!string;
+}
 // The Java BL wrapper currently ignores its string default argument.
 private wstring z8_server_config_get_string(wstring key, wstring defaultValue) { return z8_server_config_get(key); }
 private Z8Optional!bool z8_server_config_get_bool(wstring key, Z8Optional!bool defaultValue) {

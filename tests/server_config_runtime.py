@@ -49,6 +49,19 @@ void main() {
     assert(z8_optional_require(P.m_getInt("space"w, 8)) == 8);
     z8_server_config_replace(["plain"w:"updated"w]);
     assert(P.m_get("plain"w) == "updated"w && P.m_get("true"w) is null);
+    assert(z8_server_http_listen_address() == "127.0.0.1:9080");
+    z8_server_config_replace(["web.server.http.host"w:"::1"w, "web.server.http.port"w:"19080"w]);
+    assert(z8_server_http_listen_address() == "[::1]:19080");
+    foreach (invalid; ["0"w, "65536"w, "foo"w]) {
+        z8_server_config_replace(["web.server.http.port"w:invalid]);
+        bool rejected;
+        try { z8_server_http_listen_address(); } catch (Exception) { rejected = true; }
+        assert(rejected);
+    }
+    z8_server_config_replace(["web.server.http.host"w:"127.0.0.1:80,0.0.0.0"w]);
+    bool invalidHost;
+    try { z8_server_http_listen_address(); } catch (Exception) { invalidHost = true; }
+    assert(invalidHost);
     z8_application_configure_from_server();
     auto defaults = z8_application_configuration();
     assert(defaults.authFailsLimit == 0 && defaults.authFailsBanSeconds == 0 && defaults.sessionTimeoutMinutes == 1440 && !defaults.oneSessionPerUser);
