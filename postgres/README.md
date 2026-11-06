@@ -132,8 +132,8 @@ their declared and SQL expression dependencies are readable.
 the CivetWeb host must explicitly call the dispatcher and install a backend for
 the worker thread. The separately supported write actions are described below.
 The initial `meta` action describes table fields, authorized Link paths, query
-access and nested sections, fieldsets, field groups, tab controls and
-non-dependent forms. Other controls, dependent forms, custom Join metadata,
+access and nested sections, fieldsets, field groups, tab controls, independent
+forms and forms with a readable Link. Other controls, custom Join metadata,
 actions, reports and `aggregateBy` are rejected.
 An omitted action combines this metadata with the corresponding table read.
 The direct-table `create` action accepts a nonempty `data` array of objects,

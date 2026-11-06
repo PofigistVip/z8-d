@@ -71,10 +71,12 @@ import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.Link;
 import org.zenframework.z8.base.table.value.StringField;
 import org.zenframework.z8.base.table.value.IntExpression;
+import org.zenframework.z8.base.form.Form;
 [name "Orders"] public class HttpOrder extends Table {
     [name "Title"] public StringField title;
     public Customer customer; [name "CustomerId"] public Link customerId = customer;
     public IntExpression nameLength = customer.label.sql_string().length();
+    Form details; details.dependency = customerId; details.controls = {customer.label}; controls = {details};
 }
 ''',
         "HttpRightOrder": '''
@@ -300,6 +302,9 @@ void main(string[] args) {
         }
     }
     assert(customerMeta && cityMeta);
+    assert(linkedMeta["controls"][0]["isForm"].boolean && linkedMeta["controls"][0]["link"]["name"].str == "customerId");
+    assert(linkedMeta["controls"][0]["link"]["primaryKey"].str == "recordId" && linkedMeta["controls"][0]["link"]["query"]["primaryKey"].str == "customer.recordId");
+    assert(linkedMeta["controls"][0]["controls"][0]["name"].str == "customer.label");
     linkedMeta = parseJSON(requestFields(`["customer.label"]`w, null, null, null, null, "HttpOrder"w, null).to!string);
     assert(linkedMeta["isQuery"].boolean && linkedMeta["data"].array.length == 2);
     response = parseJSON(requestFields(`["title"]`w, `{"property":"customer.label","value":"alice"}`w).to!string);
@@ -324,6 +329,7 @@ void main(string[] args) {
     user.privileges.setTableAccess(z8_guid_create_name("Customers"w), denied);
     bool blocked; try { requestFields(`["customer.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
     blocked = false; try { requestFields(`["customer.label"]`w, null, null, null, null, "HttpOrder"w, "meta"w); } catch (Exception) { blocked = true; } assert(blocked);
+    blocked = false; try { requestFields(`["title"]`w, null, null, null, null, "HttpOrder"w, "meta"w); } catch (Exception) { blocked = true; } assert(blocked);
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     user.privileges.setFieldAccess(z8_guid_create_name("Orders.CustomerId"w), denied);
     blocked = false; try { requestFields(`["customer.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
@@ -336,6 +342,7 @@ void main(string[] args) {
     foreach (row; response["data"].array) assert("customer.label" !in row.object);
     linkedMeta = parseJSON(requestFields(`["customer.label"]`w, null, null, null, null, "HttpOrder"w, "meta"w).to!string);
     foreach (field; linkedMeta["fields"].array) assert(field["name"].str != "customer.label");
+    assert("controls" !in linkedMeta["controls"][0].object);
     blocked = false; try { requestFields(`["title"]`w, `{"property":"customer.label","value":"alice"}`w); } catch (Exception) { blocked = true; } assert(blocked);
     blocked = false; try { requestFields(`["title"]`w, null, `[{"property":"customer.label"}]`w); } catch (Exception) { blocked = true; } assert(blocked);
     blocked = false; try { requestFields(`["title"]`w, null, null, "alice"w, `["customer.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
