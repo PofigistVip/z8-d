@@ -25,8 +25,10 @@ with tempfile.TemporaryDirectory() as directory:
     subprocess.run([sys.executable, str(root / "examples/webapp/build.py"), str(Path(sys.argv[1]).resolve()),
                     str(executable), "--postgres-bin", str(bin_dir)], check=True)
     public = temp / "public"
-    config = temp / "server.properties"
+    config = temp / "custom.properties"
     config.write_text("application.working.path=work\nstorage.path=storage-data\nsecurity.log.file=logs/security.log\nweb.client.hashPassword=false\n", encoding="ascii")
+    default_config = temp / "server.properties"
+    default_config.write_text("web.client.hashPassword=true\n", encoding="ascii")
     subprocess.run([sys.executable, str(root / "webserver/prepare_client.py"), str(Path(sys.argv[1]).resolve()), str(public)], check=True)
 
     with temporary_postgres(bin_dir) as (connection, environment):
@@ -40,8 +42,11 @@ with tempfile.TemporaryDirectory() as directory:
         subprocess.run([str(executable), connection, "public", "--initialize", "--config", str(config)], env=environment,
                        capture_output=True, text=True, encoding="utf-8", check=True)
 
-        def start():
-            process = subprocess.Popen([str(executable), connection, "public", "--public-dir", str(public), "--config", str(config)], cwd=temp, env=environment,
+        def start(explicit_config=False):
+            command = [str(executable), connection, "public", "--public-dir", str(public)]
+            if explicit_config:
+                command.extend(["--config", str(config)])
+            process = subprocess.Popen(command, cwd=temp, env=environment,
                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
             line = process.stdout.readline().strip()
             if not line.isdigit():
@@ -110,7 +115,7 @@ with tempfile.TemporaryDirectory() as directory:
             finally:
                 client.close()
 
-        process, port = start()
+        process, port = start(explicit_config=True)
         try:
             client = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
             try:
@@ -156,6 +161,7 @@ with tempfile.TemporaryDirectory() as directory:
         audit = (temp / "work/logs/security.log").read_text(encoding="utf-8")
         assert "Action{login}" in audit and "Object{request:Tasks}" in audit and password not in audit
 
+        default_config.write_bytes(config.read_bytes())
         process, port = start()
         try:
             assert request(port, request="login", session=session)[0] == 401

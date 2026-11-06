@@ -2,6 +2,7 @@
 module webapp_host;
 
 import std.conv : to;
+import std.file : exists;
 import std.stdio : readln, stdout, writeln;
 import std.string : startsWith, replace;
 import z8.runtime;
@@ -22,6 +23,7 @@ void main(string[] args) {
         else if (args[i] == "--config" && !configPath.length && i + 1 < args.length) configPath = args[++i];
         else throw new Exception("invalid option");
     }
+    if (!configPath.length && exists("server.properties")) configPath = "server.properties";
     if (configPath.length) z8_server_configure_from_file(configPath);
     auto db = new Z8PostgresConnection(args[1]); scope(exit) db.close();
     auto schema = args[2].to!wstring;
