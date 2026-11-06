@@ -200,8 +200,7 @@ files. Linked or computed fields and additional write options are rejected.
 The native `SystemFiles` table's fields and creation timestamps are available
 when the host includes it in schema bootstrap. `Files.get(id)` reads file path
 metadata, and `Files.get(file)` reads existing local content or database content,
-checking a nonzero recorded size. Database content is currently held in memory
-rather than copied to the filesystem cache. The runtime's
+checking a nonzero recorded size and caching database content on disk. The runtime's
 `z8_system_files_write` and `z8_system_files_remove` operations store metadata
 in the current database transaction; their callers own commit and rollback.
 By default content is stored in PostgreSQL. With `files.saveOnDisk=true`, content
