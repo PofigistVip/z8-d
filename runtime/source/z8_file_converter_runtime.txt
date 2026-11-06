@@ -5,31 +5,24 @@ private wstring z8_file_converter_extension(wstring name) {
 private wstring z8_file_converter_file_extension(Z8File file) {
     return z8_string_new(z8_file_extension_instance(file));
 }
-private bool z8_file_converter_in_list(wstring extension, wstring setting, wstring[] defaults) {
-    import std.array : split;
-    import std.string : strip;
+private bool z8_file_converter_in_list(wstring extension, wstring[] values) {
     if (extension is null) return false;
-    auto configured = z8_server_config_value(setting);
-    wstring[] values = defaults;
-    if (configured !is null && configured.strip().length) values = configured.split(","w);
     auto lower = z8_str_toLowerCase(extension);
-    foreach (value; values) if (value.strip() == lower) return true;
+    foreach (value; values) if (value == lower) return true;
     return false;
 }
 private Z8Optional!bool z8_file_converter_pdf(wstring extension) { return z8_optional_wrap(extension == "pdf"w); }
 private Z8Optional!bool z8_file_converter_text(wstring extension) {
-    return z8_optional_wrap(z8_file_converter_in_list(extension, "file.converter.text"w, ["txt"w, "xml"w]));
+    return z8_optional_wrap(z8_file_converter_in_list(extension, z8_application_configuration().textExtensions));
 }
 private Z8Optional!bool z8_file_converter_image(wstring extension) {
-    return z8_optional_wrap(z8_file_converter_in_list(extension, "file.converter.image"w, ["tif"w, "tiff"w, "jpg"w, "jpeg"w, "gif"w, "png"w, "bmp"w]));
+    return z8_optional_wrap(z8_file_converter_in_list(extension, z8_application_configuration().imageExtensions));
 }
 private Z8Optional!bool z8_file_converter_email(wstring extension) {
-    return z8_optional_wrap(z8_file_converter_in_list(extension, "file.converter.email"w, ["eml"w, "mime"w]));
+    return z8_optional_wrap(z8_file_converter_in_list(extension, z8_application_configuration().emailExtensions));
 }
 private Z8Optional!bool z8_file_converter_office(wstring extension) {
-    return z8_optional_wrap(z8_file_converter_in_list(extension, "file.converter.office"w,
-        ["doc"w, "docx"w, "rtf"w, "xls"w, "xlsx"w, "ppt"w, "pptx"w, "odt"w, "odp"w, "ods"w, "odf"w, "odg"w,
-         "wpd"w, "sxw"w, "sxi"w, "sxc"w, "sxd"w, "stw"w, "vsd"w]));
+    return z8_optional_wrap(z8_file_converter_in_list(extension, z8_application_configuration().officeExtensions));
 }
 private Z8Optional!bool z8_file_converter_convertible(wstring extension) {
     return z8_optional_wrap(z8_file_converter_pdf(extension).value || z8_file_converter_text(extension).value ||

@@ -63,6 +63,16 @@ void main() {
     assert(z8_optional_require(P.m_custom()));
     auto thread = new Thread({ assert(z8_optional_require(P.m_custom())); });
     thread.start(); thread.join();
+    z8_server_config_replace(["application.multitenancy"w:"TRUE"w, "web.server.upload.max"w:"2048"w,
+        "web.client.download.max"w:"3"w, "web.client.hashPassword"w:"false"w,
+        "file.converter.text"w:" csv "w, "file.converter.image"w:"png"w,
+        "file.converter.email"w:","w, "file.converter.office"w:"custom,"w]);
+    z8_application_configure_from_server();
+    assert(z8_optional_require(P.m_custom()));
+    assert(!z8_application_configuration().clientHashesPasswords);
+    z8_server_config_replace(["web.server.upload.max"w:"invalid"w]);
+    z8_application_configure_from_server();
+    assert(z8_optional_require(P.m_defaults()));
 }
 ''', encoding="utf-8")
     exe = temp / ("application-config.exe" if os.name == "nt" else "application-config")

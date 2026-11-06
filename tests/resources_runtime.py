@@ -66,6 +66,7 @@ void main(string[] args) {
     assert(z8_optional_require(P.m_email("EML"w)) && z8_optional_require(P.m_office("DOCX"w)));
     assert(z8_optional_require(P.m_convertible("docx"w)) && !z8_optional_require(P.m_convertible("zip"w)));
     z8_server_config_replace(["file.converter.text"w:" md, csv "w]);
+    z8_application_configure_from_server();
     assert(z8_optional_require(P.m_text("MD"w)) && z8_optional_require(P.m_convertible("csv"w)));
     assert(!z8_optional_require(P.m_text("txt"w)));
     auto source = z8_file_from_path(buildPath(args[1], "data", "sample.pdf").to!wstring);

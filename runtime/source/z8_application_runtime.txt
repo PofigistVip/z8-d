@@ -31,6 +31,31 @@ void z8_application_configure(Z8ApplicationConfig config) {
 Z8ApplicationConfig z8_application_configuration() {
     synchronized (z8_application_config_lock) return z8_application_config.copy();
 }
+// Apply the same startup properties used by ServerConfig's application getters.
+void z8_application_configure_from_server() {
+    import std.array : split;
+    import std.string : strip;
+    auto config = new Z8ApplicationConfig();
+    auto properties = z8_server_config_snapshot();
+    wstring property(wstring key) { auto found = key in properties; return found is null ? null : *found; }
+    config.multitenant = z8_optional_require(z8_server_config_parse_bool(property("application.multitenancy"w), z8_optional_wrap(false)));
+    config.clientHashesPasswords = z8_optional_require(z8_server_config_parse_bool(property("web.client.hashPassword"w), z8_optional_wrap(true)));
+    config.uploadMaxMiB = cast(int)z8_optional_require(z8_server_config_parse_int(property("web.server.upload.max"w), z8_optional_wrap(5L)));
+    config.downloadMaxMiB = cast(int)z8_optional_require(z8_server_config_parse_int(property("web.client.download.max"w), z8_optional_wrap(1L)));
+    wstring[] extensions(wstring key, wstring[] defaults) {
+        auto value = property(key);
+        if (value is null || !value.strip().length) return defaults;
+        auto result = value.split(","w);
+        while (result.length && !result[$ - 1].length) result.length--;
+        foreach (ref item; result) item = z8_string_new(item.strip());
+        return result;
+    }
+    config.textExtensions = extensions("file.converter.text"w, config.textExtensions);
+    config.imageExtensions = extensions("file.converter.image"w, config.imageExtensions);
+    config.emailExtensions = extensions("file.converter.email"w, config.emailExtensions);
+    config.officeExtensions = extensions("file.converter.office"w, config.officeExtensions);
+    z8_application_configure(config);
+}
 // The embedding server chooses how messages, log events and files are stored.
 interface IZ8ApplicationMonitor {
     void message(Z8MonitorLevel level, wstring text);

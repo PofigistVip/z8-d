@@ -18,18 +18,25 @@ private wstring z8_server_config_value(wstring key) {
         return value is null ? null : *value;
     }
 }
+private wstring[wstring] z8_server_config_snapshot() {
+    synchronized (z8_server_config_lock) return z8_server_config_values.dup;
+}
 private wstring z8_server_config_get(wstring key) { return z8_string_new(z8_server_config_value(key)); }
 // The Java BL wrapper currently ignores its string default argument.
 private wstring z8_server_config_get_string(wstring key, wstring defaultValue) { return z8_server_config_get(key); }
 private Z8Optional!bool z8_server_config_get_bool(wstring key, Z8Optional!bool defaultValue) {
+    return z8_server_config_parse_bool(z8_server_config_value(key), defaultValue);
+}
+private Z8Optional!bool z8_server_config_parse_bool(wstring value, Z8Optional!bool defaultValue) {
     auto fallback = z8_optional_require(defaultValue);
-    auto value = z8_server_config_value(key);
     if (value is null || !value.length) return z8_optional_wrap(fallback);
     return z8_optional_wrap(z8_str_compareNoCase(value, "true"w) == 0);
 }
 private Z8Optional!long z8_server_config_get_int(wstring key, Z8Optional!long defaultValue) {
+    return z8_server_config_parse_int(z8_server_config_value(key), defaultValue);
+}
+private Z8Optional!long z8_server_config_parse_int(wstring value, Z8Optional!long defaultValue) {
     auto fallback = cast(int)z8_optional_require(defaultValue);
-    auto value = z8_server_config_value(key);
     if (value is null || !value.length) return z8_optional_wrap(cast(long)fallback);
     size_t position;
     bool negative;
