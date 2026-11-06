@@ -517,7 +517,6 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     }
     auto having = params.z8_get("having"w);
     if (!read.byRecordIds && having !is null && having.length) {
-        if (!groups.length && !aggregates.length) throw new Exception("query having requires grouped results");
         read.having = z8_application_query_filter(query, having);
         foreach (field; z8_sql_collect_fields(read.having)) {
             if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("query having field access denied");
@@ -562,8 +561,6 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
             read.aggregateSourceFields = selected.dup;
             read.fields = totalsFields; read.sortFields = null; read.start = 0; read.limit = -1;
             read.aggregateAll = true;
-            if (!groups.length && !aggregates.length && read.queryHaving !is null && (read.queryHaving.kind != Z8SqlBoolKind.constant || !read.queryHaving.constant))
-                throw new Exception("query having is not supported for totals");
             writeDefaultMetadata();
         } catch (Throwable error) {
             if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();

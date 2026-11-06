@@ -84,6 +84,8 @@ Grouping used by a read is captured after `beforeRead` and before `getData`,
 as in the original `ReadAction`, even if `getData` changes query collections.
 Totals fields and their aggregations are selected only if `getData` returns null,
 so a BL handler can change them before the database query is constructed.
+Without `groupBy` or `aggregateBy`, group filters (`having`) are ignored, as
+in the original select factory; grouped queries continue to apply them.
 `ActionReport` exposes the report format parameter and executes a custom report
 once for each selected record, adding the resulting files to the request monitor.
 Without an explicit `fields` parameter, configured form controls, names, columns

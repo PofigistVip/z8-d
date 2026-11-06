@@ -631,8 +631,6 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         }
         auto groups = request.disableGrouping ? null : request.groupFields.length ? request.groupFields : z8_query_read_group_by(query, request);
         bool grouped = groups.length != 0 || request.aggregateAll;
-        if (!request.disableGrouping && !grouped && (!trivialTrue(request.having) || !trivialTrue(request.queryHaving)))
-            throw new Z8PostgresException("PostgreSQL HAVING filters require grouped query support");
         auto plan = new Z8PostgresQueryPlan(query, schema, table);
         auto requested = request.fields;
         if (!requested.length && !request.aggregateAll) requested = z8_query_form_fields(query);
@@ -655,9 +653,6 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         foreach (field; groups) plan.includeField(field);
         foreach (condition; [request.where, request.queryWhere, request.queryScope, request.having, request.queryHaving]) plan.includeExpression(condition);
         plan.finish(!request.byRecordId && !request.byRecordIds);
-        if (request.aggregateAll && !groups.length && plan.having.length) throw new Z8PostgresException("PostgreSQL linked HAVING filters are not supported for totals");
-        if (!request.disableGrouping && !grouped && plan.having.length)
-            throw new Z8PostgresException("PostgreSQL HAVING filters require grouped query support");
         auto previous = z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
         scope(exit) z8_sql_set_field_options(previous);
         string sql = "SELECT ";

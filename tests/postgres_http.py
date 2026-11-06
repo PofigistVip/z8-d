@@ -171,16 +171,26 @@ import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.StringField;
 import org.zenframework.z8.base.table.value.IntField;
 import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.Aggregation;
 import org.zenframework.z8.base.json.JsonArray;
 import org.zenframework.z8.base.application.Application;
 [name "Sample"] [request] public class MemoryTable extends Table {
     [name "Title"] public StringField title; [name "Amount"] public IntField amount;
     Table child; [name "ChildLink"] Link childLink = child;
     columns = {title, amount};
-    virtual protected void beforeRead() { Application.info("table before"); }
+    virtual protected void beforeRead() {
+        Application.info("table before");
+        if (Application.requestParameters().containsKey("lookup") && Application.requestParameters()["lookup"] == "ungroupedhaving")
+            amount.aggregation = Aggregation.Sum;
+    }
     virtual protected void afterRead() { Application.info("table after"); }
+    virtual protected sql_bool having() {
+        if (Application.requestParameters().containsKey("lookup") && Application.requestParameters()["lookup"] == "ungroupedhaving") return amount > 100;
+        return true;
+    }
     virtual protected JsonArray getData(string[string] parameters) {
         if (parameters.containsKey("lookup") && parameters["lookup"] == "database") return null;
+        if (parameters.containsKey("lookup") && parameters["lookup"] == "ungroupedhaving") return null;
         if (parameters.containsKey("lookup") && parameters["lookup"] == "databasegroups") { groupBy = {title}; return null; }
         if (parameters.containsKey("lookup") && parameters["lookup"] == "databaseaggregate") { aggregateBy = {childLink}; return null; }
         if (parameters.containsKey("lookup") && parameters["lookup"] == "customgroups") groupBy = {title};
@@ -449,6 +459,14 @@ void main(string[] args) {
             assert result["success"] and result["total"] == 2, result
             result = request(request="MemoryTable", lookup="databaseaggregate", count="true")
             assert result["success"] and result["total"] == 2, result
+            result = request(request="MemoryTable", lookup="ungroupedhaving")
+            assert result["success"] and len(result["data"]) == 2, result
+            result = request(request="MemoryTable", lookup="ungroupedhaving", count="true")
+            assert result["success"] and result["total"] == 2, result
+            result = request(request="MemoryTable", lookup="ungroupedhaving", totals="true")
+            assert result["success"] and result["data"]["amount"] == 15, result
+            result = request(request="MemoryTable", lookup="database", having='{"property":"amount","operator":"gt","value":999}')
+            assert result["success"] and len(result["data"]) == 2, result
             result = request(request="MemoryTable", count="true")
             assert result["success"] and result["data"][0]["amount"] == 42 and "total" not in result, result
             result = request(request="login", action=None, password="wrong", newPassword="newhash")
