@@ -1,0 +1,91 @@
+// AttachmentProcessor and FileField.getAttachmentProcessor (AttachmentProcessor.java).
+private enum z8_attachment_processor_name = "org.zenframework.z8.server.base.file.AttachmentProcessor"w;
+private class Z8AttachmentProcessorState { Z8Object field; }
+private Z8Object z8_attachment_processor_new(Z8Object field) {
+    if (!z8_native_is_instance("org.zenframework.z8.server.base.table.value.FileField"w, z8_nonnull(field)))
+        throw new Exception("attachment processor requires a FileField");
+    auto processor = z8_native_new(z8_attachment_processor_name);
+    auto state = new Z8AttachmentProcessorState(); state.field = field;
+    processor.z8_set_native_state(z8_attachment_processor_name, state);
+    return processor;
+}
+private Z8Object z8_attachment_field(Z8Object self) {
+    auto state = cast(Z8AttachmentProcessorState)z8_nonnull(self).z8_get_native_state(z8_attachment_processor_name);
+    if (state is null || state.field is null) throw new Exception("attachment processor has no field");
+    return state.field;
+}
+private Z8Object z8_attachment_table(Z8Object field) {
+    auto table = z8_nonnull(field).z8_get_owner();
+    if (!z8_native_is_instance(z8_table_name, table)) throw new Exception("attachment field has no table owner");
+    return table;
+}
+private Z8Array!Z8File z8_attachment_read(Z8Object self, Z8Guid id) {
+    auto field = z8_attachment_field(self);
+    if (z8_field_type_id(field) == "file"w || id is null || id == z8_guid_zero()) return new Z8Array!Z8File();
+    auto table = z8_attachment_table(field);
+    auto saved = new Z8QuerySavedState(table, [field]); scope(exit) saved.restore();
+    auto fields = new Z8ObjectArray!Z8Object(); fields.z8_add(field);
+    if (!z8_optional_require(z8_query_read_record(table, id, fields))) return new Z8Array!Z8File();
+    return z8_file_parse(z8_string_or_empty(z8_primary_cast!wstring(z8_field_primary(field))));
+}
+private wstring z8_attachment_component(wstring value) {
+    import std.string : replace;
+    auto text = z8_string_or_empty(value).to!string.replace("/", "_").replace("\\", "_").to!wstring;
+    return !text.length || text == "."w || text == ".."w ? "_"w : text;
+}
+private bool z8_attachment_storage_path(wstring path) {
+    import std.algorithm.searching : canFind;
+    import std.string : startsWith, split;
+    if (path is null || !path.startsWith("storage/"w) || path.canFind('\\')) return false;
+    foreach (part; path.to!string.split("/")) if (!part.length || part == "." || part == "..") return false;
+    return true;
+}
+private Z8Array!Z8File z8_attachment_create(Z8Object self, Z8Guid id, Z8Array!Z8File files) {
+    auto field = z8_attachment_field(self); auto table = z8_attachment_table(field);
+    auto user = z8_nonnull(z8_nonnull(z8_application_session()).user);
+    foreach (i; 0 .. z8_nonnull(files).z8_size()) {
+        auto file = z8_nonnull(files.z8_get(i));
+        if (file.id !is null && file.id != z8_guid_zero()) continue;
+        file.id = z8_guid_create_random(); file.user = user.id;
+        auto name = z8_string_or_empty(user.firstName);
+        if (name.length) name ~= " "w;
+        name ~= z8_string_or_empty(user.lastName);
+        file.author = name ~ (name.length ? " - "w : ""w) ~ z8_string_or_empty(user.login);
+        if (!z8_attachment_storage_path(file.path)) {
+            auto now = z8_date_now();
+            file.path = "storage/"w ~ z8_date_toString(now, "yyyy.MM.dd"w) ~ "/"w ~
+                z8_attachment_component(z8_object_name(table)) ~ "/"w ~ z8_guid_to_string(z8_nonnull(id)) ~ "/"w ~
+                z8_attachment_component(z8_object_name(field)) ~ "/"w ~ z8_date_toString(now, "HH-mm-ss"w) ~ "/"w ~
+                z8_attachment_component(z8_file_name(z8_string_or_empty(file.name)));
+        }
+        z8_system_files_write(file);
+    }
+    return files;
+}
+private void z8_attachment_save(Z8Object self, Z8Guid id, Z8Array!Z8File files) {
+    auto field = z8_attachment_field(self); auto table = z8_attachment_table(field);
+    z8_field_set(field, z8_primary_box(z8_file_toJson(files)));
+    if (!z8_query_update_id_run(table, id, true)) throw new Exception("attachment record was not updated");
+}
+private Z8Array!Z8File z8_attachment_update(Z8Object self, Z8Guid id, Z8Array!Z8File files) {
+    auto result = z8_attachment_read(self, id);
+    result.z8_addAll(z8_attachment_create(self, id, files));
+    z8_attachment_save(self, id, result); return result;
+}
+private Z8Array!Z8File z8_attachment_remove(Z8Object self, Z8Guid id, Z8Array!Z8File files) {
+    auto result = z8_attachment_read(self, id);
+    foreach (i; 0 .. z8_nonnull(files).z8_size()) {
+        auto file = z8_nonnull(files.z8_get(i));
+        z8_system_files_remove(file.id);
+        while (result.z8_remove(file)) { }
+    }
+    z8_attachment_save(self, id, result); return result;
+}
+shared static this() {
+    z8_native_bind("org.zenframework.z8.server.base.table.value.FileField.m_getAttachmentProcessor"w, &z8_attachment_processor_new);
+    z8_native_bind(z8_attachment_processor_name ~ ".m_parse"w, &z8_file_parse);
+    z8_native_bind(z8_attachment_processor_name ~ ".m_read"w, &z8_attachment_read);
+    z8_native_bind(z8_attachment_processor_name ~ ".m_create"w, &z8_attachment_create);
+    z8_native_bind(z8_attachment_processor_name ~ ".m_update"w, &z8_attachment_update);
+    z8_native_bind(z8_attachment_processor_name ~ ".m_remove"w, &z8_attachment_remove);
+}

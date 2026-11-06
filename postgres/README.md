@@ -177,7 +177,6 @@ supported by both write actions, as are GeoJSON geometry values when PostGIS
 is installed in the database. File and attachment field values are stored
 as text metadata; binary fields accept an index into the request's uploaded
 files. Linked or computed fields and additional write options are rejected.
-Persisting attachment files separately is not implemented.
 The native `SystemFiles` table's fields and creation timestamps are available
 when the host includes it in schema bootstrap. `Files.get(id)` reads file path
 metadata, and `Files.get(file)` reads existing local content or database content,
@@ -185,7 +184,11 @@ checking a nonzero recorded size. Database content is currently held in memory
 rather than copied to the filesystem cache. The runtime's
 `z8_system_files_write` and `z8_system_files_remove` operations store binary
 data and metadata in the current database transaction; their callers own commit
-and rollback. The `AttachmentProcessor` workflow is not yet connected to them.
+and rollback. The BL `FileField.getAttachmentProcessor()` supports parsing,
+reading, adding and removing attachment metadata and database content in the
+caller's transaction. Page-count extraction and the HTTP `attach` action remain
+unimplemented. A `FileField` represents a single current file; an
+`AttachmentField` reads the existing list before appending.
 Optional `values` are checked before a create, update or copy transaction and
 applied as readable context fields when selecting its response.
 The direct-table `copy` action accepts source GUIDs in `recordId` and one

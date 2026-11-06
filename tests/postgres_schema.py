@@ -212,6 +212,15 @@ import org.zenframework.z8.base.table.value.IntField;
     }
 }
 ''', encoding="utf-8")
+    (source / "AttachmentSample.bl").write_text('''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.AttachmentField;
+import org.zenframework.z8.base.table.value.FileField;
+[name "AttachmentSample"] public class AttachmentSample extends Table {
+    [name "Documents"] public AttachmentField documents;
+    [name "Single"] public FileField single;
+}
+''', encoding="utf-8")
     (source / "Probe.bl").write_text('''
 import org.zenframework.z8.base.table.system.Roles;
 import org.zenframework.z8.base.table.system.Users;
@@ -260,6 +269,12 @@ public class Probe {
     public static void createFile(Files value, guid id) { value.name = "hello.txt"; value.path = "storage/hello.txt"; value.create(id); }
     public static file fileById(guid id) { return Files.get(id); }
     public static file fileContent(file value) { return Files.get(value); }
+    public static AttachmentSample attachmentSample() { AttachmentSample value; return value; }
+    public static void createAttachmentRecord(AttachmentSample value, guid id) { value.create(id); }
+    public static file[] attachments(AttachmentSample value, guid id) { return value.documents.getAttachmentProcessor().read(id); }
+    public static file[] attach(AttachmentSample value, guid id, file[] files) { return value.documents.getAttachmentProcessor().update(id, files); }
+    public static file[] detach(AttachmentSample value, guid id, file[] files) { return value.documents.getAttachmentProcessor().remove(id, files); }
+    public static file[] singleAttachments(AttachmentSample value, guid id) { return value.single.getAttachmentProcessor().read(id); }
     public static void createSchedule(ScheduledJobs value, guid id, guid job) { value.job = job; value.create(id); }
     public static void createScheduleLog(ScheduledJobLogs value, guid id, guid schedule) { value.scheduledJob = schedule; value.errors = true; value.create(id); }
     public static void setScheduleCron(ScheduledJobs value, guid id, string cron) { value.cron = cron; value.update(id); }
@@ -826,6 +841,33 @@ void main(string[] args) {
     assert(uploaded.name == "new.bin"w && z8_binary_snapshot(z8_file_to_binary(uploaded), 1) == [cast(ubyte)0x42]);
     db.beginTransaction(); z8_system_files_remove(storedUpload.id); db.rollback(); assert(P.m_fileById(storedUpload.id) !is null);
     z8_system_files_remove(storedUpload.id); assert(P.m_fileById(storedUpload.id) is null);
+    auto attachmentTable = P.m_attachmentSample(); z8_postgres_create_tables(db, "z8_test"w, [attachmentTable]);
+    auto attachmentUser = new Z8UserData(); attachmentUser.id = z8_guid_create(0x41); attachmentUser.login = "login"w;
+    attachmentUser.firstName = "First"w; attachmentUser.lastName = "Last"w;
+    auto attachmentRequest = new Z8ApplicationRequest(); attachmentRequest.session = new Z8ApplicationSession("test"w, attachmentUser, attachmentUser);
+    auto savedAttachmentRequest = z8_application_set_request(attachmentRequest);
+    auto attachmentRecord = z8_guid_create(0x88a); P.m_createAttachmentRecord(attachmentTable, attachmentRecord);
+    assert(P.m_attachments(attachmentTable, attachmentRecord).z8_size() == 0);
+    assert(P.m_singleAttachments(attachmentTable, attachmentRecord).z8_size() == 0);
+    auto document = z8_file_from_upload("тест.txt"w, [cast(ubyte)0x44, 0x55]);
+    auto documents = new Z8Array!Z8File(); documents.z8_add(document);
+    db.beginTransaction(); auto attached = P.m_attach(attachmentTable, attachmentRecord, documents); db.commit();
+    assert(attached.z8_size() == 1 && document.id != z8_guid_zero() && document.user == attachmentUser.id);
+    assert(document.author == "First Last - login"w && document.path.startsWith("storage/"w));
+    auto loadedAttachments = P.m_attachments(attachmentTable, attachmentRecord);
+    assert(loadedAttachments.z8_size() == 1 && loadedAttachments.z8_get(0).id == document.id);
+    assert(z8_binary_snapshot(z8_file_to_binary(P.m_fileContent(loadedAttachments.z8_get(0))), 2) == [cast(ubyte)0x44, 0x55]);
+    db.beginTransaction(); assert(P.m_detach(attachmentTable, attachmentRecord, documents).z8_size() == 0); db.rollback();
+    assert(P.m_attachments(attachmentTable, attachmentRecord).z8_size() == 1 && P.m_fileById(document.id) !is null);
+    db.beginTransaction(); assert(P.m_detach(attachmentTable, attachmentRecord, documents).z8_size() == 0); db.commit();
+    assert(P.m_attachments(attachmentTable, attachmentRecord).z8_size() == 0 && P.m_fileById(document.id) is null);
+    auto rollbackDocument = z8_file_from_upload("other.txt"w, [cast(ubyte)1]);
+    rollbackDocument.path = "storage/../../other.txt"w;
+    auto rollbackDocuments = new Z8Array!Z8File(); rollbackDocuments.z8_add(rollbackDocument);
+    db.beginTransaction(); P.m_attach(attachmentTable, attachmentRecord, rollbackDocuments); db.rollback();
+    assert(!rollbackDocument.path.canFind(".."w) && rollbackDocument.path.startsWith("storage/"w));
+    assert(P.m_attachments(attachmentTable, attachmentRecord).z8_size() == 0 && P.m_fileById(rollbackDocument.id) is null);
+    z8_application_set_request(savedAttachmentRequest);
     z8_connection_set_current(savedFilesBackend);
     auto sequences = P.m_sequences();
     auto sequenceDDL = z8_postgres_create_table_sql("z8_test"w, sequences);
