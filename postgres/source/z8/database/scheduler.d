@@ -24,11 +24,15 @@ class Z8PostgresScheduler {
     private Z8PostgresConnection db;
     private wstring schema;
     private Z8RuntimeRegistry registry;
+    private IZ8UserChangeNotifier userNotifier;
+    private IZ8RoleChangeNotifier roleNotifier;
     private string ns;
-    this(Z8PostgresConnection db, wstring schema, Z8RuntimeRegistry registry) {
+    this(Z8PostgresConnection db, wstring schema, Z8RuntimeRegistry registry,
+         IZ8UserChangeNotifier userNotifier = null, IZ8RoleChangeNotifier roleNotifier = null) {
         if (db is null || db.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
         if (registry is null) throw new Z8PostgresException("application registry is required");
         this.db = db; this.schema = schema.idup; this.registry = registry;
+        this.userNotifier = userNotifier; this.roleNotifier = roleNotifier;
         ns = quoteIdentifier(schema);
     }
     private Z8PostgresParameter guidParameter(Z8Guid id) {
@@ -98,6 +102,7 @@ class Z8PostgresScheduler {
             if (user is null || system is null) throw new Z8PostgresException("scheduled job user does not exist");
             auto request = new Z8ApplicationRequest();
             request.session = new Z8ApplicationSession(""w, user, system); request.monitor = monitor;
+            request.userChangeNotifier = userNotifier; request.roleChangeNotifier = roleNotifier;
             request.parameters.z8_add("request"w, classId); request.parameters.z8_add("scheduled"w, "true"w);
             z8_application_set_request(request);
             z8_connection_set_current(new Z8PostgresDatabase(db, schema, registry));

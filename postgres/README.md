@@ -243,10 +243,16 @@ checks. It records start, next start and finish times; a log row is written on
 errors or when `Log errors only` is disabled. Results and captured messages are
 returned to the caller. The scheduler needs an open connection with no active
 transaction and the Jobs, ScheduledJobs, ScheduledJobLogs and security tables.
-The host supplies periodic calls and connection lifetime; this module does not
-start threads or persist the monitor's text and files. Start time is committed
+The caller supplies periodic calls and connection lifetime. Alternatively,
+`Z8PostgresSchedulerService` in `z8.database.scheduler_service` starts a timer
+thread with its own sibling connection. `start()` and `stop()` are idempotent;
+`stop()` waits for a running job to finish. An optional thread-safe observer
+receives run results and service errors on the scheduler thread. Neither API
+persists the monitor's text and files. Start time is committed
 before execution, so a process crash after claiming a run does not retry that
 occurrence automatically.
+Both scheduler APIs accept optional user and role change notifiers, allowing
+jobs that modify security records to invalidate the authority's sessions.
 
 `Z8PostgresQueryExecutor` connects BL `Query` reads to PostgreSQL tables.
 Construct it with a connection, schema and root table name, then attach it to

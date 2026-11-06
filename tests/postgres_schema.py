@@ -23,8 +23,9 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     shutil.copytree(root / "platform/bl", source, dirs_exist_ok=True)
     (source / "DailyJob.bl").write_text('''
 import org.zenframework.z8.base.Executable;
+import org.zenframework.z8.base.table.system.Users;
 [job "*/5 * * * *"] [displayName "Daily task"] public class DailyJob extends Executable {
-    virtual protected void execute() { info("daily ran"); }
+    virtual protected void execute() { info("daily ran"); Users.notifyUserChange(guid.create(119)); }
 }
 ''', encoding="utf-8")
     (source / "FailingJob.bl").write_text('''
@@ -255,10 +256,27 @@ import z8.database.metadata;
 import z8.database.bootstrap;
 import z8.database.privileges;
 import z8.database.scheduler;
+import z8.database.scheduler_service;
 import z8gen.p_Probe;
 import std.algorithm.searching : canFind;
 import std.conv : to;
 import std.json : parseJSON;
+import core.sync.mutex : Mutex;
+import core.sync.condition : Condition;
+import core.time : dur;
+import core.thread : Thread;
+class SchedulerObserver : IZ8SchedulerObserver {
+    Mutex gate; Condition wake; bool succeeded;
+    this() { gate = new Mutex(); wake = new Condition(gate); }
+    void onRuns(Z8ScheduledRun[] runs) {
+        synchronized (gate) {
+            foreach (run; runs) if (run.classId == "DailyJob"w && run.success) succeeded = true;
+            wake.notifyAll();
+        }
+    }
+    void onError(wstring message) { synchronized (gate) wake.notifyAll(); }
+    bool waitForSuccess() { synchronized (gate) { if (!succeeded) wake.wait(dur!"seconds"(10)); return succeeded; } }
+}
 void main(string[] args) {
     alias P = Z8p_50726F6265;
     auto db = new Z8PostgresConnection(args[1]);
@@ -686,9 +704,24 @@ void main(string[] args) {
     db.beginTransaction(); bool schedulerTransactionRejected;
     try { scheduler.runDue(); } catch (Z8PostgresException) { schedulerTransactionRejected = true; }
     assert(schedulerTransactionRejected && db.inTransaction()); db.rollback();
+    db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "Active" = 0 WHERE "Job" = $1::uuid`,
+        [Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("FailingJob"w)).to!string)]);
+    db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "User" = '00000000-0000-0000-0000-000000000001', "LastStart" = 1699999700000 WHERE "RecordId" = $1::uuid`,
+        [Z8PostgresParameter.value(dailyScheduleRow.rows[0][0].text)]);
+    auto observer = new SchedulerObserver();
+    auto serviceSessions = new Z8SessionManager();
+    auto serviceVictim = new Z8UserData(); serviceVictim.id = z8_guid_create(119);
+    serviceSessions.create("job-victim"w, serviceVictim, bootstrapUser, "z8_bootstrap"w);
+    auto service = new Z8PostgresSchedulerService(db, "z8_bootstrap"w, bootstrapRegistry, 50, observer, serviceSessions, serviceSessions);
+    service.start(); service.start();
+    assert(observer.waitForSuccess());
+    auto concurrentStop = new Thread({ service.stop(); }); concurrentStop.start();
+    service.stop(); concurrentStop.join(); service.stop();
+    assert(!service.isRunning() && service.lastError() is null && !db.isClosed() && serviceSessions.getSession("job-victim"w) is null);
     db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "Cron" = '*/30 * * * *', "Active" = 0, "User" = '00000000-0000-0000-0000-000000000001' WHERE "RecordId" = $1::uuid`,
         [Z8PostgresParameter.value(dailyScheduleRow.rows[0][0].text)]);
     db.execute(`DELETE FROM "z8_bootstrap"."SystemUsers" WHERE "RecordId" = '00000000-0000-0000-0000-000000000054'`);
+    service.start(); service.stop(); assert(!service.isRunning());
     db.execute(`INSERT INTO "z8_bootstrap"."SystemJobs" ("RecordId", "Name", "Class") VALUES ('00000000-0000-0000-0000-000000000099', 'Old', 'OldJob')`);
     bootstrapJob.z8_set_attribute("displayName"w, "Renamed job"w); bootstrapRegistry.registerJob(bootstrapJob);
     assert(z8_application_request() is bootstrapRequest && bootstrapRequest.eventsLevel() == Z8EventsLevel.user);
