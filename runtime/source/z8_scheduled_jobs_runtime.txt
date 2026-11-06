@@ -1,0 +1,50 @@
+// Fields and validation of the Java-only ScheduledJobs system table.
+private enum z8_scheduled_jobs_name = "org.zenframework.z8.server.base.table.system.ScheduledJobs"w;
+private class Z8ScheduledJobsState {
+    Z8Object jobs, users;
+    Z8Object[9] fields;
+}
+private void z8_scheduled_jobs_new(Z8Object self) {
+    enum base = "org.zenframework.z8.server.base.table.value."w;
+    enum kinds = ["TextField"w, "Link"w, "Link"w, "StringField"w, "DatetimeField"w,
+        "DatetimeField"w, "DatetimeField"w, "BoolField"w, "BoolField"w];
+    enum indexes = ["description"w, "job"w, "user"w, "cron"w, "lastStart"w,
+        "lastFinish"w, "nextStart"w, "active"w, "logErrorsOnly"w];
+    enum names = ["Description"w, "Job"w, "User"w, "Cron"w, "LastStart"w,
+        "LastFinish"w, "NextStart"w, "Active"w, "Log errors only"w];
+    auto state = new Z8ScheduledJobsState();
+    state.jobs = z8_native_new(z8_system_jobs_name); state.jobs.z8_set_container(self); state.jobs.z8_set_index("jobs"w);
+    state.users = z8_native_new(z8_users_name); state.users.z8_set_container(self); state.users.z8_set_index("users"w);
+    foreach (i; 0 .. state.fields.length) state.fields[i] = z8_table_system_field(self, base ~ kinds[i], indexes[i], names[i]);
+    self.z8_set_native_state(z8_scheduled_jobs_name, state);
+}
+private Z8ScheduledJobsState z8_scheduled_jobs_state(Z8Object self) {
+    auto state = cast(Z8ScheduledJobsState)z8_nonnull(self, -1).z8_get_native_state(z8_scheduled_jobs_name);
+    if (state is null) throw new Exception("ScheduledJobs members are not initialized");
+    return state;
+}
+private Z8Object* z8_scheduled_jobs_address(string member)(Z8Object self) { return &__traits(getMember, z8_scheduled_jobs_state(self), member); }
+private Z8Object* z8_scheduled_jobs_field_address(size_t index)(Z8Object self) { return &z8_scheduled_jobs_state(self).fields[index]; }
+void z8_scheduled_jobs_configure(Z8Object self) {
+    auto state = z8_scheduled_jobs_state(self);
+    z8_link_assign(state.fields[1], z8_nonnull(state.jobs));
+    z8_link_assign(state.fields[2], z8_nonnull(state.users));
+    z8_field_set_default(state.fields[2], z8_primary_box(z8_user_system));
+    z8_field_set_default(state.fields[3], z8_primary_box("0 * * * *"w));
+    z8_field_set_default(state.fields[7], z8_primary_box(true));
+    z8_field_set_default(state.fields[8], z8_primary_box(true));
+}
+void z8_scheduled_jobs_before_update(Z8Object self) {
+    auto fields = z8_scheduled_jobs_state(self).fields;
+    if (!z8_field_is_changed(fields[3])) return;
+    auto cron = z8_string_required(z8_primary_cast!wstring(z8_field_default_value(fields[3])));
+    if (!cron.length) z8_field_set(fields[7], z8_primary_box(false));
+    else if (!z8_cron_valid(cron)) throw new Exception("CRON value must be a valid CRON expression");
+}
+shared static this() {
+    z8_native_bind(z8_scheduled_jobs_name ~ ".m_new"w, &z8_scheduled_jobs_new);
+    static foreach (member; ["jobs", "users"])
+        z8_native_bind_field(z8_scheduled_jobs_name ~ ".f_"w ~ member.to!wstring, &z8_scheduled_jobs_address!member);
+    static foreach (i, name; ["description"w, "job"w, "user"w, "cron"w, "lastStart"w, "lastFinish"w, "nextStart"w, "active"w, "logErrorsOnly"w])
+        z8_native_bind_field(z8_scheduled_jobs_name ~ ".f_"w ~ name, &z8_scheduled_jobs_field_address!i);
+}

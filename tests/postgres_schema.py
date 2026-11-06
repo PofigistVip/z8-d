@@ -143,6 +143,7 @@ import org.zenframework.z8.base.table.system.UserRoles;
 import org.zenframework.z8.base.table.system.Entries;
 import org.zenframework.z8.base.table.system.UserEntries;
 import org.zenframework.z8.base.table.system.Jobs;
+import org.zenframework.z8.base.table.system.ScheduledJobs;
 import org.zenframework.z8.base.security.User;
 import org.zenframework.z8.base.table.value.Field;
 public class Probe {
@@ -162,6 +163,9 @@ public class Probe {
     public static Users users() { Users value; return value; }
     public static Sequences sequences() { Sequences value; return value; }
     public static Jobs jobs() { Jobs value; return value; }
+    public static ScheduledJobs scheduledJobs() { ScheduledJobs value; return value; }
+    public static void createSchedule(ScheduledJobs value, guid id, guid job) { value.job = job; value.create(id); }
+    public static void setScheduleCron(ScheduledJobs value, guid id, string cron) { value.cron = cron; value.update(id); }
     public static Tables systemTables() { Tables value; return value; }
     public static Requests systemRequests() { Requests value; return value; }
     public static Fields systemFields() { Fields value; return value; }
@@ -586,7 +590,7 @@ void main(string[] args) {
     auto bootstrapRegistry = new Z8RuntimeRegistry(); auto bootstrapSample = P.m_make();
     auto bootstrapJob = P.m_dailyJob(); bootstrapRegistry.registerJob(bootstrapJob);
     bootstrapRegistry.registerTable(bootstrapSample); bootstrapRegistry.registerRequest(bootstrapSample); bootstrapRegistry.registerEntry(bootstrapSample);
-    Z8Object[] bootstrapTables = [P.m_jobs(), P.m_userRoles(), P.m_userEntries(), P.m_entries(), P.m_roles(), P.m_users(), P.m_sequences(), P.m_systemTables(), P.m_systemFields(),
+    Z8Object[] bootstrapTables = [P.m_scheduledJobs(), P.m_jobs(), P.m_userRoles(), P.m_userEntries(), P.m_entries(), P.m_roles(), P.m_users(), P.m_sequences(), P.m_systemTables(), P.m_systemFields(),
         P.m_systemRequests(), P.m_roleTableAccess(), P.m_roleFieldAccess(), P.m_roleRequestAccess(), P.m_target()];
     db.execute(`CREATE SCHEMA "z8_bootstrap"`);
     auto bootstrapUser = new Z8UserData(); bootstrapUser.id = z8_guid_create(777); bootstrapUser.administrator = true;
@@ -597,6 +601,21 @@ void main(string[] args) {
     auto jobRows = db.execute(`SELECT "RecordId"::text, "Name", "Lock" FROM "z8_bootstrap"."SystemJobs" WHERE "Class" = 'DailyJob'`);
     assert(jobRows.rows.length == 1 && z8_guid_literal(jobRows.rows[0][0].text) == z8_guid_create_name("DailyJob"w));
     assert(jobRows.rows[0][1].text == "Daily task" && jobRows.rows[0][2].text == "3");
+    auto schedule = P.m_scheduledJobs();
+    assert(z8_postgres_create_foreign_keys_sql("z8_bootstrap"w, schedule).length == 2);
+    auto savedScheduleConnection = z8_connection_set_current(new Z8PostgresDatabase(db, "z8_bootstrap"w));
+    auto scheduleId = z8_guid_create(0x999);
+    P.m_createSchedule(schedule, scheduleId, z8_guid_create_name("DailyJob"w));
+    auto scheduleRows = db.execute(`SELECT "User"::text, "Cron", "Active", "Log errors only" FROM "z8_bootstrap"."SystemScheduledJobs" WHERE "RecordId" = '00000000-0000-0000-0000-000000000999'`);
+    assert(scheduleRows.rows.length == 1 && scheduleRows.rows[0][0].text == "00000000-0000-0000-0000-000000000001");
+    assert(scheduleRows.rows[0][1].text == "0 * * * *" && scheduleRows.rows[0][2].text == "1" && scheduleRows.rows[0][3].text == "1");
+    bool invalidCron; try { P.m_setScheduleCron(schedule, scheduleId, "invalid"w); } catch (Exception) { invalidCron = true; }
+    assert(invalidCron);
+    P.m_setScheduleCron(P.m_scheduledJobs(), scheduleId, ""w);
+    scheduleRows = db.execute(`SELECT "Cron", "Active" FROM "z8_bootstrap"."SystemScheduledJobs" WHERE "RecordId" = '00000000-0000-0000-0000-000000000999'`);
+    assert(scheduleRows.rows[0][0].text == "" && scheduleRows.rows[0][1].text == "0");
+    P.m_setScheduleCron(P.m_scheduledJobs(), scheduleId, "*/10 * * * *"w);
+    z8_connection_set_current(savedScheduleConnection);
     db.execute(`INSERT INTO "z8_bootstrap"."SystemJobs" ("RecordId", "Name", "Class") VALUES ('00000000-0000-0000-0000-000000000099', 'Old', 'OldJob')`);
     bootstrapJob.z8_set_attribute("displayName"w, "Renamed job"w); bootstrapRegistry.registerJob(bootstrapJob);
     assert(z8_application_request() is bootstrapRequest && bootstrapRequest.eventsLevel() == Z8EventsLevel.user);
