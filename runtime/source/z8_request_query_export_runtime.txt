@@ -48,11 +48,38 @@ private void z8_application_dispatch_query_export_target(wstring className, Z8Ob
         if (rows is null || rows.type != JSONType.array) throw new Exception("invalid export data");
         data = *rows;
     }
-    auto bytes = format == "pdf"w ? z8_export_pdf(ids, headers, data) : z8_export_spreadsheet(ids, headers, types, data);
+    auto bytes = format == "pdf"w ? z8_export_pdf(ids, headers, types, data) : z8_export_spreadsheet(ids, headers, types, data);
     auto file = new Z8File(); file.id = null; file.name = format == "pdf"w ? "export.pdf"w : "export.xlsx"w;
     file.path = z8_temporary_archive_store(bytes, file.name);
     file.size = z8_optional_wrap(cast(long)bytes.length);
     z8_application_print(file);
+}
+
+private wstring z8_export_display_value(wstring type, JSONValue value) {
+    import std.json : JSONType;
+    if (value.type == JSONType.null_) return ""w;
+    if ((type == "date"w || type == "datetime"w) &&
+        (value.type == JSONType.integer || value.type == JSONType.uinteger)) {
+        auto date = z8_date_from_ticks(z8_int_parse(z8_json_value_text(value)));
+        return z8_date_toString(date, type == "date"w ? "dd.MM.yyyy"w : "dd.MM.yyyy HH:mm:ss"w);
+    }
+    if ((type == "file"w || type == "attachments"w) && value.type == JSONType.string && value.str.length) {
+        try {
+            auto files = z8_json_parse(value.str);
+            if (files.type == JSONType.array) {
+                wstring result;
+                foreach (file; files.array) {
+                    if (file.type != JSONType.object) continue;
+                    auto name = "name" in file.object;
+                    if (name is null || name.type != JSONType.string) continue;
+                    if (result.length) result ~= ", "w;
+                    result ~= name.str.to!wstring;
+                }
+                return result;
+            }
+        } catch (Exception) { } // Preserve legacy text if it is not a file list.
+    }
+    return z8_json_value_text(value);
 }
 
 private string z8_export_xml(wstring value) {
@@ -91,12 +118,12 @@ private ubyte[] z8_export_spreadsheet(wstring[] ids, wstring[] headers, wstring[
         foreach (i, id; ids) {
             auto value = id.to!string in row.object;
             if (value is null || value.type == JSONType.null_) { sheet ~= "<c/>"; continue; }
-            if ((types[i] == "integer"w || types[i] == "decimal"w) &&
+            if ((types[i] == "int"w || types[i] == "float"w) &&
                 (value.type == JSONType.integer || value.type == JSONType.uinteger || value.type == JSONType.float_))
                 sheet ~= "<c><v>" ~ z8_json_value_text(*value).to!string ~ "</v></c>";
             else if (value.type == JSONType.true_ || value.type == JSONType.false_)
                 sheet ~= `<c t="b"><v>` ~ (value.type == JSONType.true_ ? "1" : "0") ~ "</v></c>";
-            else textCell(z8_json_value_text(*value));
+            else textCell(z8_export_display_value(types[i], *value));
         }
         sheet ~= "</row>";
     }

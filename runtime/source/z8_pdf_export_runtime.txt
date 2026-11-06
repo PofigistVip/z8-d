@@ -80,7 +80,7 @@ private string z8_pdf_hex(uint value, size_t digits) {
     return cast(string)result;
 }
 
-private ubyte[] z8_export_pdf(wstring[] ids, wstring[] headers, JSONValue rows) {
+private ubyte[] z8_export_pdf(wstring[] ids, wstring[] headers, wstring[] types, JSONValue rows) {
     import std.json : JSONType;
     ubyte[] bytes;
     synchronized (z8_pdf_font_lock) bytes = z8_pdf_font_data;
@@ -126,9 +126,9 @@ private ubyte[] z8_export_pdf(wstring[] ids, wstring[] headers, JSONValue rows) 
             auto row = rows.array[position];
             if (row.type != JSONType.object) throw new Exception("invalid export row");
             wstring[] values;
-            foreach (id; ids) {
+            foreach (i, id; ids) {
                 auto value = id.to!string in row.object;
-                values ~= value is null ? ""w : z8_json_value_text(*value);
+                values ~= value is null ? ""w : z8_export_display_value(types[i], *value);
             }
             line(values, lineNumber++);
         }
