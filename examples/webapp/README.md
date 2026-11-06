@@ -47,6 +47,7 @@ The host also starts the local scheduled-job service and stops it on shutdown.
 `TasksJob` is a disabled example until its `SystemScheduledJobs` row has an
 active CRON expression. Scheduler errors are written to stderr; task logs are
 stored under `logs/scheduler` in the configured working directory.
+Set `scheduler.enabled=false` to disable the service.
 The administrator's SystemTools entry includes the jobs, tables, files and sequences
 views. Its scheduler action wakes the local service to reload schedules immediately.
 The tables report and other original system tools remain to be implemented.

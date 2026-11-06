@@ -21,6 +21,7 @@ class SchedulerObserver : IZ8SchedulerObserver {
     void onRuns(Z8ScheduledRun[] runs) { }
     void onError(wstring message) { stderr.writeln("Scheduler: ", message.to!string); }
 }
+class DisabledSchedulerControl : IZ8SchedulerControl { void restart() { } }
 
 void main(string[] args) {
     if (args.length < 3) throw new Exception("usage: webapp-host <postgres-connection> <schema> [--initialize] [--public-dir <path>] [--config <path>]");
@@ -71,12 +72,14 @@ void main(string[] args) {
     auto authority = new Z8PostgresHttpAuthority(db, schema, registry, config, sessions, "example"w);
     auto logStore = new Z8FileSchedulerLogStore(z8_file_resolve_path(z8_file_from_path("logs/scheduler"w)));
     auto scheduler = new Z8PostgresSchedulerService(db, schema, registry, 1000, new SchedulerObserver(), authority, authority, logStore);
-    scheduler.start(); scope(exit) scheduler.stop();
+    if (applicationConfig.schedulerEnabled) scheduler.start();
+    scope(exit) if (applicationConfig.schedulerEnabled) scheduler.stop();
+    IZ8SchedulerControl schedulerControl = applicationConfig.schedulerEnabled ? cast(IZ8SchedulerControl)scheduler : new DisabledSchedulerControl();
     auto server = new Z8CivetServer("127.0.0.1:0", (Z8HttpRequest request) {
         auto connection = db.openSibling(); scope(exit) connection.close();
         auto previous = z8_connection_set_current(new Z8PostgresDatabase(connection, schema, registry));
         scope(exit) z8_connection_set_current(previous);
-        z8_application_request().schedulerControl = scheduler;
+        z8_application_request().schedulerControl = schedulerControl;
         if (request.path.startsWith("/storage/")) z8_application_dispatch_file_download(request.path.to!wstring);
         else z8_application_dispatch_request();
     }, bodyLimit, Z8ResponseMode.application, "example"w, authority, "Access denied"w, publicDirectory, "/request.json", true, securityLog);

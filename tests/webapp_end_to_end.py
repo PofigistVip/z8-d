@@ -218,13 +218,21 @@ with tempfile.TemporaryDirectory() as directory:
         audit = (temp / "work/logs/security.log").read_text(encoding="utf-8")
         assert "Action{login}" in audit and "Object{request:Tasks}" in audit and password not in audit
 
-        default_config.write_bytes(config.read_bytes())
+        default_config.write_bytes(config.read_bytes() + b"scheduler.enabled=false\n")
+        subprocess.run([str(psql), "-v", "ON_ERROR_STOP=1", "-c",
+                        '''UPDATE "SystemScheduledJobs" SET "LastStart"=0 WHERE "Job"=(SELECT "RecordId" FROM "SystemJobs" WHERE "Class"='TasksJob')''', connection],
+                       env=environment, capture_output=True, check=True)
         process, port = start()
         try:
             assert request(port, request="login", session=session)[0] == 401
             status, login = request(port, request="login", login="Admin", password=password)
             assert status == 200 and login["success"], login
             session = login["session"]
+            status, restarted = request(port, request=jobs_view, session=session, action="action", name="restartScheduler", records="[]", selection="[]", parameters="[]")
+            assert status == 200 and restarted["success"], restarted
+            time.sleep(2)
+            last_start = subprocess.check_output([str(psql), "-tAc", '''SELECT "LastStart" FROM "SystemScheduledJobs" WHERE "Job"=(SELECT "RecordId" FROM "SystemJobs" WHERE "Class"='TasksJob')''', connection], env=environment, text=True).strip()
+            assert last_start == "0", last_start
             status, rows = request(port, request="Tasks", session=session, action="read", fields='["title","done","documents"]')
             assert status == 200 and rows["success"] and len(rows["data"]) == 1, rows
             files = json.loads(rows["data"][0]["documents"])
