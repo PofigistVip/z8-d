@@ -36,6 +36,11 @@ external descriptors to connections; the catalog owns their lifetimes. Without a
 catalog, `Database.get()` exposes the current connection's schema and connection,
 but cannot provide its other configuration values, and a descriptor created by
 `fromJson` cannot open an external connection.
+`Z8PostgresDatabaseCatalog` is a ready-to-use implementation: it accepts libpq
+connection strings and PostgreSQL JDBC URLs, opens and reuses connections for
+descriptors on its thread, and accepts separate user and password values. The host
+must restore the previous catalog and call `close()` when those connections are
+no longer needed. JDBC-specific URL options unsupported by libpq are not translated.
 `Query.setConnection` binds a query to a specific connection. `flush()` is a
 no-op because this client executes statements immediately. `Connection.call`
 invokes a procedure in the configured schema with parameterized scalar, GUID,

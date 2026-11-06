@@ -9,6 +9,7 @@ extern(C) {
     private struct PGconn;
     private struct PGresult;
     private PGconn* PQconnectdb(const(char)* conninfo);
+    private PGconn* PQconnectdbParams(const(char)** keywords, const(char)** values, int expandDbname);
     private int PQstatus(const(PGconn)* connection);
     private int PQtransactionStatus(const(PGconn)* connection);
     private const(char)* PQerrorMessage(const(PGconn)* connection);
@@ -60,9 +61,20 @@ class Z8PostgresConnection {
     private PGconn* connection;
     private uint transactionDepth;
     private string connectionInfo;
+    private string connectionUser, connectionPassword;
     this(string connectionInfo) {
+        this(connectionInfo, null, null);
+    }
+    this(string connectionInfo, string user, string password) {
         z8PgValidate(connectionInfo);
-        connection = PQconnectdb(connectionInfo.toStringz);
+        if (user is null && password is null) connection = PQconnectdb(connectionInfo.toStringz);
+        else {
+            z8PgValidate(user); z8PgValidate(password);
+            const(char)*[4] keywords = ["dbname".ptr, "user".ptr, "password".ptr, null];
+            const(char)*[4] values = [connectionInfo.toStringz, user is null ? null : user.toStringz,
+                password is null ? null : password.toStringz, null];
+            connection = PQconnectdbParams(keywords.ptr, values.ptr, 1);
+        }
         if (connection is null) throw new Z8PostgresException("libpq could not allocate a connection");
         if (PQstatus(connection) != 0 || PQsetClientEncoding(connection, "UTF8") != 0) {
             auto message = z8PgCString(PQerrorMessage(connection));
@@ -70,6 +82,8 @@ class Z8PostgresConnection {
             throw new Z8PostgresException(message);
         }
         this.connectionInfo = connectionInfo.idup;
+        this.connectionUser = user is null ? null : (user ~ '\0')[0 .. user.length];
+        this.connectionPassword = password is null ? null : (password ~ '\0')[0 .. password.length];
     }
     ~this() { if (connection !is null) PQfinish(connection); }
 
@@ -78,18 +92,20 @@ class Z8PostgresConnection {
             if (connection !is null) { PQfinish(connection); connection = null; }
             transactionDepth = 0;
             connectionInfo = null;
+            connectionUser = connectionPassword = null;
         }
     }
     bool isClosed() { synchronized (this) return connection is null; }
     // Used when Z8 must persist sequence initialization independently of an
     // active transaction. Session-local settings are not copied.
     Z8PostgresConnection openSibling() {
-        string info;
+        string info, user, password;
         synchronized (this) {
             if (connection is null) throw new Z8PostgresException("PostgreSQL connection is closed");
             info = connectionInfo;
+            user = connectionUser; password = connectionPassword;
         }
-        return new Z8PostgresConnection(info);
+        return new Z8PostgresConnection(info, user, password);
     }
     bool inTransaction() { synchronized (this) return transactionDepth != 0; }
     void beginTransaction() {

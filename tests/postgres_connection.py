@@ -62,6 +62,9 @@ import z8.database.postgres;
 import z8.database.connection;
 import z8gen.p_Probe;
 import core.thread : Thread;
+import std.conv : to;
+import std.json : JSONValue;
+import std.string : split, startsWith;
 class Catalog : IZ8DatabaseCatalog {
     IZ8DatabaseConnection target;
     Z8DatabaseDescriptor observed;
@@ -104,6 +107,32 @@ void main(string[] args) {
     assert(catalog.observed.schema == "other"w && catalog.observed.user == "alice"w);
     assert(z8_optional_require(P.m_count(external)) == 0);
     z8_database_set_catalog(previousCatalog);
+    auto postgresCatalog = new Z8PostgresDatabaseCatalog(Z8DatabaseDescriptor("pg_temp"w, "postgres"w, null, args[1].to!wstring, "postgres"w, "UTF-8"w));
+    z8_database_set_catalog(postgresCatalog);
+    auto externalJson = `{"schema":"public","user":"postgres","password":"irrelevant","connection":` ~ JSONValue(args[1]).toString() ~ `,"driver":"postgres"}`;
+    auto externalDatabase = P.m_databaseFromText(externalJson.to!wstring);
+    auto externalConnection = P.m_databaseConnection(externalDatabase);
+    auto sibling = cast(IZ8BackgroundDatabaseConnection)postgresCatalog.connectionFor(
+        Z8DatabaseDescriptor("public"w, "postgres"w, "irrelevant"w, args[1].to!wstring, "postgres"w, "UTF-8"w));
+    auto siblingConnection = sibling.openBackgroundConnection();
+    siblingConnection.execute(`SELECT 1`w); (cast(IZ8BackgroundDatabaseConnection)siblingConnection).closeBackgroundConnection();
+    externalConnection.m_beginTransaction();
+    externalConnection.m_execute(`INSERT INTO public.z8_background_probe VALUES (9)`w);
+    auto externalAgain = P.m_databaseConnection(P.m_databaseFromText(externalJson.to!wstring));
+    externalAgain.m_execute(`INSERT INTO public.z8_background_probe VALUES (10)`w);
+    externalAgain.m_rollback();
+    assert(first.execute(`SELECT count(*) FROM public.z8_background_probe`).rows[0][0].text == "1");
+    string port; foreach (part; args[1].split(" ")) if (part.startsWith("port=")) port = part[5 .. $];
+    auto jdbc = "jdbc:postgresql://127.0.0.1:" ~ port ~ "/postgres";
+    auto jdbcJson = `{"schema":"public","user":"postgres","connection":` ~ JSONValue(jdbc).toString() ~ `,"driver":"org.postgresql.Driver"}`;
+    auto jdbcConnection = P.m_databaseConnection(P.m_databaseFromText(jdbcJson.to!wstring));
+    jdbcConnection.m_execute(`INSERT INTO public.z8_background_probe VALUES (11)`w);
+    assert(first.execute(`SELECT count(*) FROM public.z8_background_probe`).rows[0][0].text == "2");
+    auto invalidJson = `{"schema":"public","user":"nonexistent_role_z8","connection":` ~ JSONValue(args[1]).toString() ~ `}`;
+    bool invalidUser; try { P.m_databaseConnection(P.m_databaseFromText(invalidJson.to!wstring)); } catch (Z8PostgresException) { invalidUser = true; }
+    assert(invalidUser);
+    postgresCatalog.close(); z8_database_set_catalog(previousCatalog);
+    bool closed; try { externalConnection.m_execute(`SELECT 1`w); } catch (Z8PostgresException) { closed = true; } assert(closed);
     auto thread = new Thread({ assert(z8_connection_current_backend() is null); z8_connection_set_current(db2); assert(z8_connection_current_backend() is db2); });
     thread.start(); thread.join(); assert(z8_connection_current_backend() is db1);
     auto report = P.m_make(); auto wrapper = P.m_current();

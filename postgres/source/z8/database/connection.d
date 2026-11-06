@@ -112,3 +112,38 @@ class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection, IZ8Back
         return new Z8PostgresQueryExecutor(connection, schema, name, registry);
     }
 }
+
+// The embedding host installs one catalog per thread and closes it after use.
+class Z8PostgresDatabaseCatalog : IZ8DatabaseCatalog {
+    private struct Entry { Z8DatabaseDescriptor descriptor; Z8PostgresConnection connection; Z8PostgresDatabase backend; }
+    private Z8DatabaseDescriptor current;
+    private Z8RuntimeRegistry registry;
+    private Entry[] entries;
+    this(Z8DatabaseDescriptor current, Z8RuntimeRegistry registry = null) {
+        this.current = current; this.registry = registry;
+    }
+    Z8DatabaseDescriptor currentDatabase() { return current; }
+    IZ8DatabaseConnection connectionFor(Z8DatabaseDescriptor descriptor) {
+        import std.string : indexOf, startsWith;
+        if (descriptor.schema is null || !descriptor.schema.length) throw new Z8PostgresException("empty PostgreSQL schema");
+        if (descriptor.connection is null || !descriptor.connection.length) throw new Z8PostgresException("empty PostgreSQL connection");
+        auto driver = descriptor.driver is null ? "" : z8_str_toLowerCase(descriptor.driver).to!string;
+        if (driver.indexOf("oracle") >= 0 || driver.indexOf("sqlserver") >= 0 || driver.indexOf("h2") >= 0)
+            throw new Z8PostgresException("database driver is not PostgreSQL");
+        foreach (entry; entries)
+            if (entry.descriptor == descriptor && !entry.connection.isClosed()) return entry.backend;
+        auto info = descriptor.connection.to!string;
+        if (info.startsWith("jdbc:postgresql:")) info = info["jdbc:".length .. $];
+        auto user = descriptor.user is null ? null : z8_to_utf8(descriptor.user);
+        auto password = descriptor.password is null ? null : z8_to_utf8(descriptor.password);
+        auto connection = new Z8PostgresConnection(info, user, password);
+        scope(failure) connection.close();
+        auto backend = new Z8PostgresDatabase(connection, descriptor.schema, registry);
+        entries ~= Entry(descriptor, connection, backend);
+        return backend;
+    }
+    void close() {
+        foreach (entry; entries) entry.connection.close();
+        entries = null;
+    }
+}
