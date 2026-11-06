@@ -3,9 +3,20 @@ class Z8PrimaryKeyMap(V) {
     static if (is(V == long) || is(V == bool) || is(V == Z8Decimal)) alias Element = Z8Optional!V;
     else static if (is(V == wstring) || is(V == class)) alias Element = V;
     else static assert(0, "unsupported primary-key map value");
-    private struct Entry { Z8Primary key; Element value; }
+    private struct Entry { Z8Primary key; Element value; ulong token; }
     private Entry[][uint] buckets;
     private size_t count;
+    private Z8JavaMapOrder!ulong order;
+    private uint[ulong] tokenHashes;
+    private ulong nextToken;
+    private Z8JavaMapOrder!ulong ordering() { if (order is null) order = new Z8JavaMapOrder!ulong(); return order; }
+    private Entry* orderedEntry(ulong token) {
+        auto hash = token in tokenHashes;
+        if (hash is null) throw new Exception("map ordering is inconsistent");
+        auto bucket = *hash in buckets;
+        if (bucket !is null) foreach (ref entry; *bucket) if (entry.token == token) return &entry;
+        throw new Exception("map ordering is inconsistent");
+    }
 
     private static uint keyHash(Z8Primary key) {
         auto h = key is null ? 0u : cast(uint)z8_primary_hash(key);
@@ -28,7 +39,7 @@ class Z8PrimaryKeyMap(V) {
     }
     long z8_size() { return cast(long)count; }
     bool z8_isEmpty() { return count == 0; }
-    void z8_clear() { buckets.clear(); count = 0; }
+    void z8_clear() { buckets.clear(); tokenHashes.clear(); count = 0; nextToken = 0; if (order !is null) order.clear(); }
     bool z8_containsKey(Z8Primary key) {
         auto bucket = keyHash(key) in buckets;
         if (bucket !is null) foreach (entry; *bucket) if (keyEquals(key, entry.key)) return true;
@@ -44,14 +55,20 @@ class Z8PrimaryKeyMap(V) {
         if (bucket !is null) foreach (ref entry; *bucket) if (keyEquals(key, entry.key)) {
             auto previous = entry.value; entry.value = value; return previous;
         }
-        buckets[hash] ~= Entry(key, value);
+        if (nextToken == ulong.max) throw new Exception("map entry limit reached");
+        auto token = ++nextToken;
+        ordering().addWithHash(token, hash); tokenHashes[token] = hash;
+        buckets[hash] ~= Entry(key, value, token);
         ++count;
         return Element.init;
     }
     void z8_add(Z8PrimaryKeyMap!V other) {
         z8_nonnull(other);
         if (other is this) return;
-        foreach (bucket; other.buckets) foreach (entry; bucket) z8_add(entry.key, entry.value);
+        ordering().preparePutAll(other.count);
+        if (other.order !is null) foreach (token; other.order.ordered()) {
+            auto entry = other.orderedEntry(token); z8_add(entry.key, entry.value);
+        }
     }
     Element z8_get(Z8Primary key) {
         auto bucket = keyHash(key) in buckets;
@@ -63,6 +80,7 @@ class Z8PrimaryKeyMap(V) {
         auto bucket = hash in buckets;
         if (bucket !is null) foreach (i, entry; *bucket) if (keyEquals(key, entry.key)) {
             auto previous = entry.value;
+            ordering().remove(entry.token); tokenHashes.remove(entry.token);
             *bucket = (*bucket)[0 .. i] ~ (*bucket)[i + 1 .. $];
             if (!(*bucket).length) buckets.remove(hash);
             --count;
@@ -72,12 +90,12 @@ class Z8PrimaryKeyMap(V) {
     }
     Z8Array!Z8Primary z8_keys() {
         auto result = new Z8Array!Z8Primary();
-        foreach (bucket; buckets) foreach (entry; bucket) result.z8_add(entry.key);
+        if (order !is null) foreach (token; order.ordered()) result.z8_add(orderedEntry(token).key);
         return result;
     }
     Z8ValueArray!V z8_values() {
         auto result = new Z8ValueArray!V();
-        foreach (bucket; buckets) foreach (entry; bucket) result.z8_add(entry.value);
+        if (order !is null) foreach (token; order.ordered()) result.z8_add(orderedEntry(token).value);
         return result;
     }
 }
