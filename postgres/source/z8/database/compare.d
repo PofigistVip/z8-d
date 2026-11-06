@@ -13,6 +13,61 @@ struct Z8SchemaDifference {
     string column, expected, actual;
 }
 
+enum Z8SchemaIndexDifferenceKind { missingIndex, unsupportedIndex }
+struct Z8SchemaIndexDifference {
+    Z8SchemaIndexDifferenceKind kind;
+    string column, expected;
+}
+package struct Z8ExpectedIndex {
+    Z8Object field;
+    string column, method, operatorClass;
+    bool unique, unsupported;
+}
+package Z8ExpectedIndex[] z8_postgres_expected_indexes(Z8Object table) {
+    if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, z8_nonnull(table)))
+        throw new Z8PostgresException("PostgreSQL schema requires a Table");
+    Z8ExpectedIndex[] result;
+    foreach (field; z8_query_declared_fields(table, true)) {
+        auto options = z8_field_index_options(field);
+        auto kind = z8_field_type_id(field);
+        if (!options.indexed && !options.unique && !(kind == "string"w && options.trigram)) continue;
+        if (options.unique && (kind == "geometry"w || (kind == "string"w && options.trigram)))
+            throw new Z8PostgresException("PostgreSQL GIN and GiST indexes cannot be unique");
+        Z8ExpectedIndex expected; expected.field = field;
+        expected.column = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, field).to!string;
+        expected.method = kind == "geometry"w ? "gist" : kind == "string"w && options.trigram ? "gin" : "btree";
+        expected.operatorClass = expected.method == "gin" ? "gin_trgm_ops" : null;
+        expected.unique = options.unique;
+        expected.unsupported = kind == "string"w && options.caseInsensitive;
+        result ~= expected;
+    }
+    return result;
+}
+private bool indexMatches(Z8ExpectedIndex expected, Z8PostgresIndexDescription actual) {
+    import std.algorithm.searching : canFind;
+    if (actual.primary || !actual.valid || !actual.ready || actual.partial || actual.columns != 1 || actual.options != 0 ||
+        !actual.immediate || actual.exclusion || !actual.columnCollation || actual.column != expected.column ||
+        actual.method != expected.method || actual.unique != expected.unique ||
+        (actual.unique && actual.definition.canFind(" NULLS NOT DISTINCT"))) return false;
+    return expected.operatorClass is null ? actual.defaultOperatorClass : actual.operatorClass == expected.operatorClass;
+}
+// Compare supported single-column indexes structurally, independent of names.
+// Expression indexes are reported separately; extra user indexes are retained.
+Z8SchemaIndexDifference[] z8_postgres_compare_indexes(Z8Object table, Z8PostgresTableDescription actual) {
+    auto expected = z8_postgres_expected_indexes(table);
+    if (actual is null) throw new Z8PostgresException("cannot compare indexes on a missing PostgreSQL table");
+    auto tableName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, table).to!string;
+    if (actual.name != tableName) throw new Z8PostgresException("PostgreSQL table description does not match BL table");
+    Z8SchemaIndexDifference[] result;
+    foreach (index; expected) {
+        auto description = (index.unique ? "unique " : "") ~ index.method;
+        if (index.unsupported) { result ~= Z8SchemaIndexDifference(Z8SchemaIndexDifferenceKind.unsupportedIndex, index.column, description ~ " expression"); continue; }
+        bool found; foreach (existing; actual.indexes) if (indexMatches(index, existing)) { found = true; break; }
+        if (!found) result ~= Z8SchemaIndexDifference(Z8SchemaIndexDifferenceKind.missingIndex, index.column, description);
+    }
+    return result;
+}
+
 // PostgreSQL's format_type may insert spaces or vary type-name capitalization.
 private string normalizedType(string value) {
     char[] result;

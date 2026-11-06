@@ -76,3 +76,38 @@ string[] z8_postgres_plan_add_foreign_keys(wstring schema, Z8Object table, Z8Pos
     }
     return result;
 }
+
+// Plan only supported, absent single-column indexes; expression indexes are
+// reported by z8_postgres_compare_indexes and left for separate handling.
+string[] z8_postgres_plan_add_indexes(wstring schema, Z8Object table, Z8PostgresTableDescription actual) {
+    if (schema is null || !schema.length) throw new Z8PostgresException("empty PostgreSQL schema");
+    if (actual is null) throw new Z8PostgresException("cannot add indexes to a missing PostgreSQL table");
+    if (schema.to!string != actual.schema && !(schema == "pg_temp"w && actual.schema.startsWith("pg_temp_")))
+        throw new Z8PostgresException("PostgreSQL table description does not match schema");
+    auto indexDifferences = z8_postgres_compare_indexes(table, actual);
+    auto tableDifferences = z8_postgres_compare_table(table, actual);
+    auto names = actual.schemaIndexNames.dup;
+    auto tableName = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, table);
+    string[] result;
+    foreach (expected; z8_postgres_expected_indexes(table)) {
+        bool missing;
+        foreach (difference; indexDifferences)
+            if (difference.kind == Z8SchemaIndexDifferenceKind.missingIndex && difference.column == expected.column) { missing = true; break; }
+        if (!missing) continue;
+        foreach (difference; tableDifferences)
+            if (difference.column == expected.column && (difference.kind == Z8SchemaDifferenceKind.missingColumn || difference.kind == Z8SchemaDifferenceKind.columnType))
+                throw new Z8PostgresException("index source column is missing or has an incompatible type");
+        size_t suffix; string name;
+        while (true) {
+            name = "z8_idx_" ~ suffix.to!string; ++suffix;
+            bool taken; foreach (existing; names) if (existing == name) { taken = true; break; }
+            if (!taken) break;
+        }
+        names ~= name;
+        auto expression = quoteIdentifier(expected.column.to!wstring);
+        if (expected.operatorClass !is null) expression ~= " " ~ expected.operatorClass;
+        result ~= "CREATE " ~ (expected.unique ? "UNIQUE " : "") ~ "INDEX " ~ quoteIdentifier(name.to!wstring) ~
+            " ON " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(tableName) ~ " USING " ~ expected.method ~ " (" ~ expression ~ ")";
+    }
+    return result;
+}

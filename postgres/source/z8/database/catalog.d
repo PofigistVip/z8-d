@@ -12,6 +12,9 @@ struct Z8PostgresColumnDescription {
 struct Z8PostgresIndexDescription {
     string name, definition;
     bool unique, primary;
+    string method, column, operatorClass;
+    int columns, options;
+    bool valid, ready, partial, defaultOperatorClass, immediate, exclusion, columnCollation;
 }
 struct Z8PostgresForeignKeyDescription {
     string name, definition;
@@ -25,6 +28,7 @@ class Z8PostgresTableDescription {
     Z8PostgresColumnDescription[] columns;
     string[] primaryKeyColumns;
     string[] constraintNames;
+    string[] schemaIndexNames;
     Z8PostgresIndexDescription[] indexes;
     Z8PostgresForeignKeyDescription[] foreignKeys;
 }
@@ -60,10 +64,27 @@ Z8PostgresTableDescription z8_postgres_describe_table(Z8PostgresConnection db, w
     auto constraints = db.execute(`SELECT k.conname FROM pg_catalog.pg_class c
         JOIN pg_catalog.pg_constraint k ON k.conrelid = c.oid` ~ whereTable ~ ` ORDER BY k.conname`, params);
     foreach (row; constraints.rows) description.constraintNames ~= row[0].text;
-    auto indexes = db.execute(`SELECT i.relname, pg_catalog.pg_get_indexdef(i.oid), x.indisunique, x.indisprimary
+    auto indexes = db.execute(`SELECT i.relname, pg_catalog.pg_get_indexdef(i.oid), x.indisunique, x.indisprimary,
+        am.amname, a.attname, op.opcname, x.indnatts::text, x.indoption[0]::text,
+        x.indisvalid, x.indisready, x.indpred IS NOT NULL, op.opcdefault,
+        x.indimmediate, x.indisexclusion, COALESCE(x.indcollation[0] = a.attcollation, false)
         FROM pg_catalog.pg_class c JOIN pg_catalog.pg_index x ON x.indrelid = c.oid
-        JOIN pg_catalog.pg_class i ON i.oid = x.indexrelid` ~ whereTable ~ ` ORDER BY i.relname`, params);
-    foreach (row; indexes.rows) description.indexes ~= Z8PostgresIndexDescription(row[0].text, row[1].text, row[2].text == "t", row[3].text == "t");
+        JOIN pg_catalog.pg_class i ON i.oid = x.indexrelid
+        JOIN pg_catalog.pg_am am ON am.oid = i.relam
+        LEFT JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = x.indkey[0]
+        LEFT JOIN pg_catalog.pg_opclass op ON op.oid = x.indclass[0]` ~ whereTable ~ ` ORDER BY i.relname`, params);
+    foreach (row; indexes.rows) {
+        Z8PostgresIndexDescription item;
+        item.name = row[0].text; item.definition = row[1].text; item.unique = row[2].text == "t"; item.primary = row[3].text == "t";
+        item.method = row[4].text; item.column = row[5].isNull ? null : row[5].text; item.operatorClass = row[6].isNull ? null : row[6].text;
+        item.columns = row[7].text.to!int; item.options = row[8].isNull ? 0 : row[8].text.to!int;
+        item.valid = row[9].text == "t"; item.ready = row[10].text == "t"; item.partial = row[11].text == "t"; item.defaultOperatorClass = row[12].text == "t";
+        item.immediate = row[13].text == "t"; item.exclusion = row[14].text == "t"; item.columnCollation = row[15].text == "t";
+        description.indexes ~= item;
+    }
+    auto schemaIndexes = db.execute(`SELECT i.relname FROM pg_catalog.pg_class c
+        JOIN pg_catalog.pg_class i ON i.relnamespace = c.relnamespace AND i.relkind IN ('i', 'I')` ~ whereTable ~ ` ORDER BY i.relname`, params);
+    foreach (row; schemaIndexes.rows) description.schemaIndexNames ~= row[0].text;
     auto foreignKeys = db.execute(`SELECT k.conname, pg_catalog.pg_get_constraintdef(k.oid), n.nspname, r.relname,
         source_col.attname, target_col.attname, k.confmatchtype::text, k.confupdtype::text, k.confdeltype::text,
         k.condeferrable, k.condeferred, k.convalidated

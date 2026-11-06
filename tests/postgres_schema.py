@@ -140,6 +140,16 @@ import org.zenframework.z8.base.table.value.IntField;
     [name "Ignored"] public StringField ignored;
 }
 ''', encoding="utf-8")
+    (source / "SimpleIndexSample.bl").write_text('''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.table.value.IntField;
+[name "SimpleIndexSample"] public class SimpleIndexSample extends Table {
+    [name "Title"] public StringField title; title.unique = true;
+    [name "Amount"] public IntField amount; amount.indexed = true;
+    [name "Search"] public StringField search; search.trigram = true;
+}
+''', encoding="utf-8")
     (source / "ReferenceTarget.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.StringField;
@@ -205,6 +215,7 @@ public class Probe {
     public static Sample make() { Sample value; return value; }
     public static GeoSample geo() { GeoSample value; return value; }
     public static IndexSample indexes() { IndexSample value; return value; }
+    public static SimpleIndexSample simpleIndexes() { SimpleIndexSample value; return value; }
     public static ReferenceSource references() { ReferenceSource value; return value; }
     public static ReferenceTarget target() { ReferenceTarget value; return value; }
     public static StaticSample statics() { StaticSample value; return value; }
@@ -397,6 +408,55 @@ void main(string[] args) {
         db.execute(index);
     }
     assert(uniqueIndex && trigramIndex && amountIndex);
+    auto indexInfo = z8_postgres_describe_table(db, "pg_temp"w, "IndexSample"w);
+    auto indexDifferences = z8_postgres_compare_indexes(indexedTable, indexInfo);
+    assert(indexDifferences.length == 2); // Both case-insensitive expression indexes are explicit unsupported cases.
+    foreach (difference; indexDifferences) assert(difference.kind == Z8SchemaIndexDifferenceKind.unsupportedIndex);
+    db.execute(`DROP INDEX "pg_temp"."Idx2IndexSample"`);
+    db.execute(`CREATE TEMP TABLE "IndexOther" ("Value" integer)`);
+    db.execute(`CREATE INDEX "z8_idx_0" ON "IndexOther" ("Value")`);
+    db.execute(`CREATE INDEX "PartialAmount" ON "IndexSample" ("Amount") WHERE "Amount" > 0`);
+    db.execute(`CREATE INDEX "MultiAmount" ON "IndexSample" ("Amount", "Ignored")`);
+    db.execute(`CREATE UNIQUE INDEX "UniqueAmount" ON "IndexSample" ("Amount")`);
+    indexInfo = z8_postgres_describe_table(db, "pg_temp"w, "IndexSample"w);
+    indexDifferences = z8_postgres_compare_indexes(indexedTable, indexInfo);
+    bool missingAmount;
+    foreach (difference; indexDifferences)
+        if (difference.kind == Z8SchemaIndexDifferenceKind.missingIndex && difference.column == "Amount") missingAmount = true;
+    assert(missingAmount);
+    auto indexPlan = z8_postgres_plan_add_indexes("pg_temp"w, indexedTable, indexInfo);
+    assert(indexPlan.length == 1 && indexPlan[0].canFind(`CREATE INDEX "z8_idx_1" ON "pg_temp"."IndexSample" USING btree ("Amount")`));
+    db.execute(indexPlan[0]);
+    indexInfo = z8_postgres_describe_table(db, "pg_temp"w, "IndexSample"w);
+    assert(z8_postgres_plan_add_indexes("pg_temp"w, indexedTable, indexInfo).length == 0);
+    assert(z8_postgres_compare_indexes(indexedTable, indexInfo).length == 2);
+    bool wrongIndexSchema;
+    try { z8_postgres_plan_add_indexes("other"w, indexedTable, indexInfo); } catch (Z8PostgresException) { wrongIndexSchema = true; }
+    assert(wrongIndexSchema);
+    auto emptyIndexes = new Z8PostgresTableDescription(); emptyIndexes.schema = indexInfo.schema; emptyIndexes.name = "IndexSample";
+    bool missingIndexColumn;
+    try { z8_postgres_plan_add_indexes("pg_temp"w, indexedTable, emptyIndexes); } catch (Z8PostgresException) { missingIndexColumn = true; }
+    assert(missingIndexColumn);
+    auto simpleIndexes = P.m_simpleIndexes();
+    db.execute(z8_postgres_create_table_sql("pg_temp"w, simpleIndexes));
+    db.execute(`CREATE UNIQUE INDEX "WrongOperatorClass" ON "SimpleIndexSample" ("Title" varchar_pattern_ops)`);
+    db.execute(`CREATE UNIQUE INDEX "WrongCollation" ON "SimpleIndexSample" ("Title" COLLATE "C")`);
+    if (db.execute(`SHOW server_version_num`).rows[0][0].text.to!int >= 150000)
+        db.execute(`CREATE UNIQUE INDEX "NullsNotDistinct" ON "SimpleIndexSample" ("Title") NULLS NOT DISTINCT`);
+    auto simpleInfo = z8_postgres_describe_table(db, "pg_temp"w, "SimpleIndexSample"w);
+    assert(z8_postgres_compare_indexes(simpleIndexes, simpleInfo).length == 3);
+    auto simplePlan = z8_postgres_plan_add_indexes("pg_temp"w, simpleIndexes, simpleInfo);
+    assert(simplePlan.length == 3);
+    bool uniquePlanned, trigramPlanned;
+    foreach (sql; simplePlan) {
+        if (sql.canFind(`CREATE UNIQUE INDEX`) && sql.canFind(`("Title")`)) uniquePlanned = true;
+        if (sql.canFind(`USING gin ("Search" gin_trgm_ops)`)) trigramPlanned = true;
+        db.execute(sql);
+    }
+    assert(uniquePlanned && trigramPlanned);
+    simpleInfo = z8_postgres_describe_table(db, "pg_temp"w, "SimpleIndexSample"w);
+    assert(z8_postgres_compare_indexes(simpleIndexes, simpleInfo).length == 0);
+    assert(z8_postgres_plan_add_indexes("pg_temp"w, simpleIndexes, simpleInfo).length == 0);
     db.execute(`INSERT INTO "IndexSample" ("RecordId", "Title") VALUES ('00000000-0000-0000-0000-000000000011', 'Alice')`);
     bool insensitiveDuplicate;
     try { db.execute(`INSERT INTO "IndexSample" ("RecordId", "Title") VALUES ('00000000-0000-0000-0000-000000000012', 'ALICE')`); }
