@@ -1321,6 +1321,13 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                     m.name.text == "getType" && !m.isStatic && m.parameters.length == 0 &&
                     m.returnType == ValueType.enumType && m.returnObjectClass !is null)
                     call = "z8_field_type!(" ~ m.returnObjectClass.emittedName ~ ")(this)";
+                if (program.nativeName == "org.zenframework.z8.server.base.form.action.Parameter"w &&
+                    m.name.text == "create" && m.isStatic && m.parameters.length >= 2 &&
+                    m.parameters[1].type == ValueType.enumType && m.returnObjectClass !is null) {
+                    auto visible = m.parameters.length == 3 ? "v_" ~ m.parameters[2].name.text : "z8_optional_wrap(true)";
+                    call = "z8_parameter_create_type!(" ~ m.returnObjectClass.emittedName ~ ")(v_" ~
+                        m.parameters[0].name.text ~ ", v_" ~ m.parameters[1].name.text ~ ", " ~ visible ~ ")";
+                }
                 body = "{\n" ~ (m.returnType == ValueType.voidType ? "" : "return ") ~ call ~ ";\n}\n";
             } else {
                 ControlContext context;

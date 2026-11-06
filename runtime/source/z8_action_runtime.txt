@@ -1,4 +1,4 @@
-// Native form Action state; individual parameter support is added separately.
+// Native form Action state and metadata.
 private enum z8_action_name = "org.zenframework.z8.server.base.form.action.Action"w;
 private interface IZ8ActionTypeCell { wstring text(); }
 private class Z8ActionTypeCell(T) : IZ8ActionTypeCell {
@@ -54,14 +54,17 @@ private void z8_action_default_execute_many(Z8Object self, Z8Array!Z8Guid record
 }
 private void z8_action_write_meta(Z8Object item, Z8Object query, Z8Object context, Z8Privileges privileges) {
     auto state = z8_action_state(item);
-    if (state.parameters !is null && state.parameters.view() !is null && state.parameters.view().z8_erased_data().z8_size())
-        throw new Exception("action parameter metadata is not supported");
     z8_control_write_base_meta(item, query, context, privileges);
     auto writer = z8_application_require_request().writer;
     z8_monitor_property(writer, "isAction"w, true);
     z8_monitor_property(writer, "request"w, z8_nonnull(context).z8_class_id());
     z8_monitor_property(writer, "type"w, state.type is null ? "default"w : state.type.text());
-    writer.start('[', "parameters"w); writer.finish(']');
+    writer.start('[', "parameters"w);
+    if (state.parameters !is null && state.parameters.view() !is null) {
+        auto parameters = state.parameters.view().z8_erased_data();
+        for (long i; i < parameters.z8_size(); ++i) z8_parameter_write_meta(cast(Z8Object)parameters.z8_get(i), writer);
+    }
+    writer.finish(']');
 }
 void z8_bind_builtin_action() {
     z8_native_bind_field(z8_action_name ~ ".f_useTransaction"w, &z8_action_use_transaction);

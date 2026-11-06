@@ -32,7 +32,11 @@ Z8Object z8_object_container(Z8Object self) { return self is null ? null : self.
 private void z8_object_constructor(Z8Object self) { }
 private Z8Object z8_object_default_data(Z8Object self, Z8StringMap parameters) { z8_nonnull(self); return null; }
 private Z8Binary z8_object_default_content(Z8Object self, Z8StringMap parameters, Z8Array!Z8File files) { z8_nonnull(self); return null; }
-private wstring z8_object_id(Z8Object self) { return z8_string_new(z8_nonnull(self).z8_id()); }
+private wstring z8_object_id(Z8Object self) {
+    self = z8_nonnull(self);
+    if (z8_native_is_instance(z8_parameter_name, self)) return z8_string_new(z8_parameter_state(self).text);
+    return z8_string_new(self.z8_id());
+}
 private void z8_object_set_id(Z8Object self, wstring value) { z8_nonnull(self).z8_set_id(z8_string_required(value)); }
 private wstring z8_object_index(Z8Object self) { return z8_string_new(z8_string_or_empty(z8_nonnull(self).z8_index())); }
 private wstring z8_object_class_name(Z8Object self) { return z8_string_new(z8_string_or_empty(z8_nonnull(self).z8_class_id())); }
@@ -115,6 +119,7 @@ private void z8_object_set_attribute(Z8Object self, wstring name, Z8Primary valu
     z8_nonnull(self).z8_set_attribute(key, z8_string_new(text));
 }
 private wstring z8_object_display_name(Z8Object self) {
+    if (z8_native_is_instance(z8_parameter_name, self)) return z8_string_new(z8_parameter_state(self).text);
     return z8_object_get_attribute(self, "displayName"w);
 }
 private void z8_object_set_display_name(Z8Object self, wstring value) {

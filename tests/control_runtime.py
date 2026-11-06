@@ -34,6 +34,8 @@ import org.zenframework.z8.base.form.Tab;
 import org.zenframework.z8.base.form.TabControl;
 import org.zenframework.z8.base.form.action.Action;
 import org.zenframework.z8.base.form.action.ActionType;
+import org.zenframework.z8.base.form.action.Parameter;
+import org.zenframework.z8.base.table.value.FieldType;
 public class CustomTable extends Table {
     [name "Label"] CustomField label;
     label.required = true; label.width = 120; label.colSpan = 2;
@@ -43,7 +45,9 @@ public class CustomTable extends Table {
     Fieldset panel; Section nested; TabControl tabControl; Tab tab;
     panel.controls = {nested}; nested.controls = {label};
     tabControl.tabs = {tab}; tab.controls = {label}; controls = {panel, tabControl};
-    Action publish; publish.type = ActionType.Primary; actions = {publish};
+    Action publish; publish.type = ActionType.Primary;
+    publish.parameters = {Parameter.create("Count", 7), Parameter.create("Enabled", true), Parameter.create("Note", FieldType.Text, false)};
+    actions = {publish};
 }
 ''', encoding="utf-8")
     (source / "CyclicTable.bl").write_text('''
@@ -73,6 +77,7 @@ import org.zenframework.z8.base.table.value.GuidField;
 import org.zenframework.z8.base.table.value.StringField;
 import org.zenframework.z8.base.form.Section;
 import org.zenframework.z8.base.form.action.Action;
+import org.zenframework.z8.base.form.action.Parameter;
 public class ControlProbe {
     public static CustomField makeCustom() { CustomField value; return value; }
     public static CustomTable makeTable() { CustomTable value; return value; }
@@ -80,6 +85,8 @@ public class ControlProbe {
     public static ManyAction many() { ManyAction value; return value; }
     public static bool verify() {
         StringField field; GuidField key; Table target; Section section; Action action;
+        Parameter amount = Parameter.create("Amount", 9);
+        if ((int)amount != 9 || amount.id() != "Amount" || amount.displayName() != "Amount") return false;
         if (field.colSpan != 1 || field.flex != 0 || field.readOnly || field.required || field.editable || field.important) return false;
         field.colSpan = 3; field.flex = 2; field.height = 45;
         field.readOnly = true; field.required = true; field.editable = true; field.important = true;
@@ -145,7 +152,11 @@ void main() {
     assert(meta["controls"][1]["isTabControl"].boolean && meta["controls"][1]["tabs"][0]["isTab"].boolean);
     assert(meta["controls"][1]["tabs"][0]["colCount"].integer == 1 && meta["controls"][1]["tabs"][0]["controls"][0]["name"].str == "label");
     assert(meta["actions"][0]["name"].str == "publish" && meta["actions"][0]["isAction"].boolean && meta["actions"][0]["type"].str == "primary");
-    assert(meta["actions"][0]["request"].str == "CustomTable" && meta["actions"][0]["parameters"].array.length == 0);
+    assert(meta["actions"][0]["request"].str == "CustomTable" && meta["actions"][0]["parameters"].array.length == 3);
+    auto parameters = meta["actions"][0]["parameters"].array;
+    assert(parameters[0]["id"].str == "Count" && parameters[0]["type"].str == "int" && parameters[0]["value"].integer == 7);
+    assert(parameters[1]["type"].str == "boolean" && parameters[1]["value"].boolean && parameters[1]["visible"].boolean);
+    assert(parameters[2]["type"].str == "text" && parameters[2]["field"]["header"].str == "Note" && !parameters[2]["visible"].boolean);
     auto records = new Z8Array!Z8Guid([z8_guid_create(1), z8_guid_create(2)]);
     auto selectedRecords = new Z8Array!Z8Guid();
     z8_nonnull(P.m_single()).z8_action_virtual_execute_many(records, table, selectedRecords, table);

@@ -1,0 +1,95 @@
+// Native implementation of base.form.action.Parameter.
+private enum z8_parameter_name = "org.zenframework.z8.server.base.form.action.Parameter"w;
+private class Z8ParameterState {
+    wstring text = ""w, type = "none"w;
+    Z8Object source;
+    Z8Primary value;
+    Z8Optional!bool visible = z8_optional_wrap(true);
+    this() { value = z8_primary_box(""w); }
+}
+private Z8ParameterState z8_parameter_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_parameter_name, self)) throw new Exception("invalid Parameter object");
+    auto state = cast(Z8ParameterState)self.z8_get_native_state(z8_parameter_name);
+    if (state is null) { state = new Z8ParameterState(); self.z8_set_native_state(z8_parameter_name, state); }
+    return state;
+}
+private auto z8_parameter_address(string member)(Z8Object self) { return &__traits(getMember, z8_parameter_state(self), member); }
+private wstring z8_parameter_type(Z8ParameterState state) {
+    if (state.type != "none"w) return state.type;
+    if (state.value is null) return "string"w;
+    final switch (state.value.kind) {
+        case Z8PrimaryKind.boolean: return "boolean"w;
+        case Z8PrimaryKind.integer: return "int"w;
+        case Z8PrimaryKind.decimal: return "float"w;
+        case Z8PrimaryKind.date: return "date"w;
+        case Z8PrimaryKind.guid: return "guid"w;
+        case Z8PrimaryKind.text: case Z8PrimaryKind.binary: case Z8PrimaryKind.datespan:
+        case Z8PrimaryKind.geometry: case Z8PrimaryKind.file: case Z8PrimaryKind.user: return "string"w;
+    }
+}
+private Z8Object z8_parameter_create(wstring text, Z8Primary value, Z8Optional!bool visible) {
+    auto item = z8_native_new(z8_parameter_name);
+    auto state = z8_parameter_state(item);
+    state.text = text; state.value = value; state.visible = visible;
+    return item;
+}
+private Z8Object z8_parameter_create_scalar(T)(wstring text, T value) {
+    return z8_parameter_create(text, z8_primary_box(value), z8_optional_wrap(true));
+}
+T z8_parameter_create_type(T, E)(wstring text, E type, Z8Optional!bool visible) if (is(T : Z8Object)) {
+    if (type is null) throw new Exception("null parameter type");
+    auto item = cast(T)z8_native_new(z8_parameter_name);
+    if (item is null) throw new Exception("invalid native Parameter type");
+    auto state = z8_parameter_state(item);
+    state.text = text; state.visible = visible;
+    if (type is E.e_None) state.type = "none"w;
+    else if (type is E.e_Guid) state.type = "guid"w;
+    else if (type is E.e_Geometry) state.type = "geometry"w;
+    else if (type is E.e_Boolean) state.type = "boolean"w;
+    else if (type is E.e_Integer) state.type = "int"w;
+    else if (type is E.e_String) state.type = "string"w;
+    else if (type is E.e_Date) state.type = "date"w;
+    else if (type is E.e_Datetime) state.type = "datetime"w;
+    else if (type is E.e_Datespan) state.type = "datespan"w;
+    else if (type is E.e_Decimal) state.type = "float"w;
+    else if (type is E.e_Binary) state.type = "binary"w;
+    else if (type is E.e_Text) state.type = "text"w;
+    else if (type is E.e_Attachments) state.type = "attachments"w;
+    else if (type is E.e_File) state.type = "file"w;
+    else if (type is E.e_Null) state.type = "null"w;
+    else throw new Exception("unknown parameter type");
+    return item;
+}
+private auto z8_parameter_cast(T)(Z8Object self) { return z8_primary_cast!T(z8_parameter_state(self).value); }
+private void z8_parameter_write_meta(Z8Object item, Z8JsonWriterState writer) {
+    auto state = z8_parameter_state(item);
+    if (state.source !is null) throw new Exception("parameter source metadata is not supported");
+    auto type = z8_parameter_type(state);
+    writer.start('{');
+    z8_monitor_property(writer, "id"w, state.text); z8_monitor_property(writer, "text"w, state.text);
+    z8_monitor_property(writer, "type"w, type); z8_monitor_property(writer, "visible"w, z8_optional_require(state.visible));
+    writer.property("value"w); z8_json_writer_primary(writer, state.value);
+    writer.start('{', "field"w); z8_monitor_property(writer, "header"w, state.text); z8_monitor_property(writer, "type"w, type); writer.finish('}');
+    writer.finish('}');
+}
+void z8_bind_builtin_parameter() {
+    z8_native_bind_field(z8_parameter_name ~ ".f_text"w, &z8_parameter_address!"text");
+    z8_native_bind_field(z8_parameter_name ~ ".f_source"w, &z8_parameter_address!"source");
+    z8_native_bind(z8_parameter_name ~ ".m_create"w, &z8_parameter_create);
+    z8_native_bind(z8_parameter_name ~ ".m_create"w, &z8_parameter_create_scalar!(Z8Optional!bool));
+    z8_native_bind(z8_parameter_name ~ ".m_create"w, &z8_parameter_create_scalar!(Z8Optional!long));
+    z8_native_bind(z8_parameter_name ~ ".m_create"w, &z8_parameter_create_scalar!(Z8Optional!Z8Decimal));
+    z8_native_bind(z8_parameter_name ~ ".m_create"w, &z8_parameter_create_scalar!wstring);
+    z8_native_bind(z8_parameter_name ~ ".m_create"w, &z8_parameter_create_scalar!Z8Date);
+    z8_native_bind(z8_parameter_name ~ ".m_create"w, &z8_parameter_create_scalar!Z8Guid);
+    z8_native_bind(z8_parameter_name ~ ".m_create"w, &z8_parameter_create_scalar!Z8File);
+    z8_native_bind(z8_parameter_name ~ ".z8cast_bool"w, &z8_parameter_cast!bool);
+    z8_native_bind(z8_parameter_name ~ ".z8cast_int"w, &z8_parameter_cast!long);
+    z8_native_bind(z8_parameter_name ~ ".z8cast_decimal"w, &z8_parameter_cast!Z8Decimal);
+    z8_native_bind(z8_parameter_name ~ ".z8cast_string"w, &z8_parameter_cast!wstring);
+    z8_native_bind(z8_parameter_name ~ ".z8cast_guid"w, &z8_parameter_cast!Z8Guid);
+    z8_native_bind(z8_parameter_name ~ ".z8cast_date"w, &z8_parameter_cast!Z8Date);
+    z8_native_bind(z8_parameter_name ~ ".z8cast_file"w, &z8_parameter_cast!Z8File);
+}
+shared static this() { z8_bind_builtin_parameter(); }
