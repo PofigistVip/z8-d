@@ -268,7 +268,14 @@ void z8_application_dispatch_request() {
         else if (action == "content"w) z8_application_dispatch_query_content_target(className, target);
         else z8_application_dispatch_query_read_target(className, target);
     }
-    else if (z8_native_is_instance(z8_executable_name, target)) z8_application_dispatch_scheduled_job(target);
+    else if (z8_native_is_instance(z8_executable_name, target)) {
+        auto registry = z8_runtime_get_registry();
+        if (registry !is null) {
+            auto named = registry.newExecutableByName(z8_object_name(target));
+            if (named !is null) target = named;
+        }
+        z8_application_dispatch_scheduled_job(target);
+    }
     else z8_application_dispatch_object_target(className,
         (Z8ApplicationSession session, wstring name, wstring selectedAction) {
             return z8_application_may_execute(session, name, selectedAction);

@@ -1450,7 +1450,8 @@ package GeneratedModule[] emitProjectModules(Program[] programs) {
     Program[] registrations;
     foreach (program; programs) if (program.lexicalOwner is null && !program.isEnum && !isPrimaryClass(program) &&
         (directAttribute(program, "generatable") || inheritedAttribute(program, "request") ||
-         directAttribute(program, "job") || directAttribute(program, "entry"))) registrations ~= program;
+         directAttribute(program, "job") || directAttribute(program, "entry") ||
+         (inheritedAttribute(program, "name") && inheritedAttribute(program, "executable")))) registrations ~= program;
     if (registrations.length) {
         string source = "module z8gen.project_registry;\n\nimport z8.runtime;\n";
         foreach (program; registrations) source ~= "import " ~ moduleByClass[program.emittedName] ~ ";\n";
@@ -1465,6 +1466,9 @@ package GeneratedModule[] emitProjectModules(Program[] programs) {
                     "if (request !is null && (!request.length || z8_str_compareNoCase(request, \"true\"w) == 0)) registry.registerRequest(value);\n";
             if (directAttribute(program, "job")) source ~= "registry.registerJob(value);\n";
             if (directAttribute(program, "entry")) source ~= "registry.registerEntry(value);\n";
+            if (!directAttribute(program, "generatable") && inheritedAttribute(program, "name") && inheritedAttribute(program, "executable"))
+                source ~= "auto executableName = value.z8_get_attribute(\"name\"w);\n" ~
+                    "if (executableName !is null && executableName.length) registry.registerExecutable(value);\n";
             source ~= "}\n";
         }
         source ~= "}\n";

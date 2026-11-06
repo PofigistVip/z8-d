@@ -12,7 +12,7 @@ struct Z8RuntimeRegistration {
     private TypeInfo_Class runtimeType;
 }
 class Z8RuntimeRegistry {
-    private Z8RuntimeRegistration[] tableEntries, requestEntries, jobEntries, entryEntries;
+    private Z8RuntimeRegistration[] tableEntries, requestEntries, jobEntries, entryEntries, executableEntries;
     private Object mutex;
     this() { mutex = new Object(); }
     private Z8RuntimeRegistration descriptor(Z8Object value, bool table) {
@@ -44,17 +44,17 @@ class Z8RuntimeRegistry {
         }
         return entry;
     }
-    private void add(ref Z8RuntimeRegistration[] entries, Z8RuntimeRegistration entry, bool table) {
+    private void add(ref Z8RuntimeRegistration[] entries, Z8RuntimeRegistration entry, bool table, bool named = false) {
         synchronized (mutex) {
             foreach (ref existing; entries) {
                 if (existing.classId == entry.classId && existing.name == entry.name && existing.key == entry.key) { existing = entry; return; }
-                if (table && entry.runtimeType !is null && existing.runtimeType !is null) {
+                if ((table || named) && entry.runtimeType !is null && existing.runtimeType !is null) {
                     // A more specialized table supersedes its named base,
                     // regardless of the order in which startup code sees them.
                     if (entry.runtimeType.isBaseOf(existing.runtimeType)) return;
                     if (existing.name == entry.name && existing.runtimeType.isBaseOf(entry.runtimeType)) { existing = entry; return; }
                 }
-                if (existing.classId == entry.classId || existing.key == entry.key || (table && existing.name == entry.name))
+                if (existing.classId == entry.classId || existing.key == entry.key || ((table || named) && existing.name == entry.name))
                     throw new Exception("conflicting runtime registration");
             }
             entries ~= entry;
@@ -67,6 +67,10 @@ class Z8RuntimeRegistry {
         add(jobEntries, descriptor(job, false), false);
     }
     void registerEntry(Z8Object entry) { add(entryEntries, descriptor(entry, false), false); }
+    void registerExecutable(Z8Object executable) {
+        if (!z8_native_is_instance(z8_executable_name, executable)) throw new Exception("runtime executable registration requires an Executable");
+        add(executableEntries, descriptor(executable, false), false, true);
+    }
     private Z8RuntimeRegistration[] snapshot(ref Z8RuntimeRegistration[] entries) {
         Z8RuntimeRegistration[] result;
         synchronized (mutex) {
@@ -83,6 +87,7 @@ class Z8RuntimeRegistry {
     Z8RuntimeRegistration[] requests() { return snapshot(requestEntries); }
     Z8RuntimeRegistration[] jobs() { return snapshot(jobEntries); }
     Z8RuntimeRegistration[] entries() { return snapshot(entryEntries); }
+    Z8RuntimeRegistration[] executables() { return snapshot(executableEntries); }
     Z8Guid[] tableKeys() { Z8Guid[] keys; foreach (item; tables()) keys ~= item.key; return keys; }
     Z8Guid[] requestKeys() { Z8Guid[] keys; foreach (item; requests()) keys ~= item.key; return keys; }
     Z8Guid[] jobKeys() { Z8Guid[] keys; foreach (item; jobs()) keys ~= item.key; return keys; }
@@ -110,6 +115,11 @@ class Z8RuntimeRegistry {
     Z8Object newEntryByClass(wstring classId) {
         classId = z8_string_required(classId);
         foreach (item; entries()) if (item.classId == classId) return z8_object_new_instance(item.classId);
+        return null;
+    }
+    Z8Object newExecutableByName(wstring name) {
+        name = z8_string_required(name);
+        foreach (item; executables()) if (item.name == name) return z8_object_new_instance(item.classId);
         return null;
     }
     Z8Object[] newTables() {

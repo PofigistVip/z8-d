@@ -42,6 +42,16 @@ import org.zenframework.z8.base.Executable;
 [job] [request] public class DailyJob extends Executable {}
 ''',
         "MenuEntry": '[entry] public class MenuEntry {}',
+        "BaseJob": '''
+import org.zenframework.z8.base.Executable;
+[name "Nightly"] [request] public class BaseJob extends Executable {
+    useTransaction = false;
+    virtual protected void execute() { info("base"); }
+}
+''',
+        "DerivedJob": '''
+public class DerivedJob extends BaseJob { virtual protected void execute() { info("derived"); } }
+''',
         "TableFactory": '''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.lang.Object;
@@ -61,7 +71,7 @@ import std.conv : to;
 void main() {
     auto registry = new Z8RuntimeRegistry(); z8_register_project(registry);
     auto tables = registry.tables(), requests = registry.requests();
-    assert(tables.length == 2 && requests.length == 4 && registry.jobs().length == 1 && registry.entries().length == 1);
+    assert(tables.length == 2 && requests.length == 6 && registry.jobs().length == 1 && registry.entries().length == 1);
     bool orders, inherited, api, child, orderRequest;
     foreach (table; tables) {
         if (table.name == "Orders"w) orders = table.classId == "Orders"w && table.fields.length == 7;
@@ -76,7 +86,10 @@ void main() {
     assert(orders && inherited && api && child && orderRequest);
     registry.registerTable(z8_object_new_instance("BaseTable"w));
     assert(registry.newTableByName("Inherited"w).z8_class_id() == "DerivedTable"w);
-    z8_register_project(registry); assert(registry.tables().length == 2 && registry.requests().length == 4 && registry.jobs().length == 1 && registry.entries().length == 1);
+    z8_register_project(registry); assert(registry.tables().length == 2 && registry.requests().length == 6 && registry.jobs().length == 1 && registry.entries().length == 1);
+    assert(registry.newExecutableByName("Nightly"w).z8_class_id() == "DerivedJob"w);
+    registry.registerExecutable(z8_object_new_instance("BaseJob"w));
+    assert(registry.newExecutableByName("Nightly"w).z8_class_id() == "DerivedJob"w);
     assert(registry.newJobByClass("DailyJob"w).z8_class_id() == "DailyJob"w && registry.jobKeys()[0] == z8_guid_create_name("DailyJob"w));
     assert(registry.newEntryByClass("MenuEntry"w).z8_class_id() == "MenuEntry"w && registry.entryKeys()[0] == z8_guid_create_name("MenuEntry"w));
     auto first = registry.newTableByName("Orders"w), second = registry.newTableByClass("Orders"w);
@@ -87,7 +100,7 @@ void main() {
     auto factoryValue = Z8p_5461626C65466163746F7279.m_find("Orders"w);
     assert(factoryValue !is null && factoryValue.z8_class_id() == "Orders"w && factoryValue !is first);
     bool missing; try { Z8p_5461626C65466163746F7279.m_find("Missing"w); } catch (Exception) { missing = true; }
-    assert(missing); z8_runtime_set_registry(previousRegistry);
+    assert(missing);
     auto user = new Z8UserData(); user.id = z8_guid_create(1);
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     auto request = new Z8ApplicationRequest(); request.session = new Z8ApplicationSession("test"w, user, user);
@@ -95,6 +108,12 @@ void main() {
     z8_application_set_request(request); z8_application_start_response(request, "Api"w); z8_application_dispatch_request();
     z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor);
     assert(parseJSON(z8_application_response_text(request).to!string)["data"].type == JSONType.null_);
+    request = new Z8ApplicationRequest(); request.session = new Z8ApplicationSession("test"w, user, user);
+    auto monitor = new Z8RequestMonitor(); request.monitor = monitor;
+    request.parameters.z8_add("request"w, "BaseJob"w); request.parameters.z8_add("scheduled"w, "true"w);
+    z8_application_set_request(request); z8_application_start_response(request, "BaseJob"w); z8_application_dispatch_request();
+    assert(monitor.messages().length == 1 && monitor.messages()[0].text == "derived"w);
+    z8_runtime_set_registry(previousRegistry);
 }
 ''', encoding="utf-8")
     exe = temp / ("registry.exe" if os.name == "nt" else "registry")
