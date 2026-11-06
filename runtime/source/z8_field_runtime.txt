@@ -166,11 +166,10 @@ ref Z8ObjectArray!T z8_field_array_ref(T, string name)(Z8Object self) if (is(T :
     }
     return cell.value;
 }
-// Java Field.fields() returns the field itself, usedFields, and valueFrom in
-// insertion order without duplicates. Columns are presentation metadata.
-Z8Object[] z8_field_fields(Z8Object self) {
+// Java Field.getUsedFields() preserves the declared order.
+Z8Object[] z8_field_used_fields(Z8Object self) {
     auto state = z8_field_state(self);
-    Z8Object[] result = [self];
+    Z8Object[] result;
     void add(Z8Object item) {
         foreach (existing; result) if (existing is item) return;
         result ~= item;
@@ -182,7 +181,20 @@ Z8Object[] z8_field_fields(Z8Object self) {
         auto items = used.z8_erased_data();
         for (long i; i < items.z8_size(); ++i) add(z8_nonnull(cast(Z8Object)items.z8_get(i)));
     }
-    if (state.valueFrom !is null) add(state.valueFrom);
+    return result;
+}
+// Java Field.fields() adds the field, usedFields and valueFrom without duplicates.
+Z8Object[] z8_field_fields(Z8Object self) {
+    auto state = z8_field_state(self);
+    Z8Object[] result = [self];
+    foreach (item; z8_field_used_fields(self)) {
+        bool present; foreach (existing; result) if (existing is item) { present = true; break; }
+        if (!present) result ~= item;
+    }
+    if (state.valueFrom !is null) {
+        bool present; foreach (existing; result) if (existing is state.valueFrom) { present = true; break; }
+        if (!present) result ~= state.valueFrom;
+    }
     return result;
 }
 // SQL planners also need dependencies of computed fields and ordered arrays.

@@ -138,8 +138,14 @@ private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges priv
         foreach (field; z8_query_declared_fields(query))
             if (field.z8_get_attribute("lockKey"w) !is null) requested ~= field;
     }
-    Z8Object[] selected;
+    Z8Object[] expanded;
     foreach (field; requested) {
+        expanded ~= field;
+        if (!z8_native_is_instance("org.zenframework.z8.server.base.table.value.Join"w, field))
+            expanded ~= z8_field_used_fields(field);
+    }
+    Z8Object[] selected;
+    foreach (field; expanded) {
         // Join is a relation expression, not a data field (ReadAction.addSelectField).
         if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Join"w, field)) continue;
         bool duplicate;

@@ -342,6 +342,17 @@ import org.zenframework.z8.base.table.value.StringField;
     }
 }
 ''',
+        "HttpDependencyOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.StringField;
+[name "DependencyOrders"] public class HttpDependencyOrder extends Table {
+    [name "Title"] public StringField title;
+    public Customer customer; [name "CustomerId"] public Link customerId = customer;
+    public City city; [name "CityId"] public Link cityId = city;
+    title.usedFields = {customer.label}; title.valueFrom = cityId; controls = {title};
+}
+''',
         "CyclicOrder": '''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.Join;
@@ -678,6 +689,7 @@ void main(string[] args) {
     }
     db.execute(`CREATE TEMP TABLE "RightOrders" AS SELECT * FROM "Orders"`);
     db.execute(`CREATE TEMP TABLE "JoinOrders" AS SELECT * FROM "Orders"`);
+    db.execute(`CREATE TEMP TABLE "DependencyOrders" AS SELECT * FROM "Orders"`);
     auto response = parseJSON(requestFields(`["title","customer.label","customer.city.label"]`w).to!string);
     assert(response["data"].array.length == 1 && response["data"][0]["customer.label"].str == "Alice" && response["data"][0]["customer.city.label"].str == "Moscow");
     assert(response["data"][0]["customerId"].str == "00000000-0000-0000-0000-000000000201");
@@ -813,6 +825,12 @@ void main(string[] args) {
     auto defaultResponse = parseJSON(requestFields(null, null, null, null, null, "HttpOrder"w).to!string);
     assert(defaultResponse["data"].array.length == 2 && defaultResponse["data"][0]["customer.label"].str.length);
     assert("title" !in defaultResponse["data"][0].object);
+    auto dependencyResponse = parseJSON(requestFields(`["title"]`w, null, null, null, null, "HttpDependencyOrder"w).to!string);
+    assert(dependencyResponse["data"].array.length == 2 && dependencyResponse["data"][0]["title"].str.length);
+    assert("customer.label" in dependencyResponse["data"][0].object && "cityId" !in dependencyResponse["data"][0].object);
+    dependencyResponse = parseJSON(requestFields(null, null, null, null, null, "HttpDependencyOrder"w).to!string);
+    assert(dependencyResponse["data"].array.length == 2 && "cityId" in dependencyResponse["data"][0].object);
+    assert("customer.label" in dependencyResponse["data"][0].object);
     linkedMeta = parseJSON(requestFields(`["customer.label"]`w, null, null, null, null, "HttpOrder"w, null).to!string);
     assert(linkedMeta["isQuery"].boolean && linkedMeta["data"].array.length == 2);
     response = parseJSON(requestFields(`["title"]`w, `{"property":"customer.label","value":"alice"}`w).to!string);
@@ -888,6 +906,8 @@ void main(string[] args) {
     blocked = false; try { requestFields(`["customer.city.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     user.privileges.setFieldAccess(z8_guid_create_name("Customers.Label"w), denied);
+    dependencyResponse = parseJSON(requestFields(`["title"]`w, null, null, null, null, "HttpDependencyOrder"w).to!string);
+    foreach (row; dependencyResponse["data"].array) assert("title" !in row.object && "customer.label" !in row.object);
     aggregateBlocked = false;
     try { requestFields(`["amount"]`w, null, null, null, null, "AggregateOrder"w, "read"w, null,
         `{"property":"customer.labelLength","operator":"gt","value":"3"}`w); } catch (Exception) { aggregateBlocked = true; }

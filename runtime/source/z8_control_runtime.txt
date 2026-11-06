@@ -98,7 +98,7 @@ Z8Object[] z8_control_fields(Z8Object control) {
     }
     void visit(Z8Object item) {
         item = z8_nonnull(item);
-        if (z8_native_is_instance(z8_field_name, item)) { add(item); return; }
+        if (z8_native_is_instance(z8_field_name, item)) { foreach (field; z8_field_fields(item)) add(field); return; }
         if (z8_native_is_instance(z8_action_name, item)) return;
         foreach (parent; path) if (parent is item) throw new Exception("cyclic section controls");
         path ~= item;

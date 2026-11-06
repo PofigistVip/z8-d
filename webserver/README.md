@@ -67,7 +67,8 @@ text controls after checking the relation and target permissions. Grouping with
 Other control types and unsupported grouping combinations are rejected.
 Without an explicit `fields` parameter, configured form controls, names, columns
 and extra fields determine the selected fields; if none are configured, z8-d
-uses the table's declared fields as a convenience fallback.
+uses the table's declared fields as a convenience fallback. Field dependencies
+are included in the selection, subject to the same access checks.
 With no
 `action` parameter, the same metadata is followed by the table read response.
 
