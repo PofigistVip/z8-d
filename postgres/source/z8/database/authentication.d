@@ -37,6 +37,11 @@ class Z8PostgresAuthenticator {
     private Z8PostgresAuthenticationConfig config;
     private IZ8UserChangeNotifier userNotifier;
     private IZ8RoleChangeNotifier roleNotifier;
+    private void notifyAuthenticationChange(Z8Guid id) {
+        // Users.notifyUserChange excludes built-in system and administrator users.
+        if (userNotifier !is null && id != z8_guid_create(1) && id != z8_guid_create(2))
+            userNotifier.userChanged(id, schema);
+    }
     this(Z8PostgresConnection db, wstring schema, Z8RuntimeRegistry registry = null,
          Z8PostgresAuthenticationConfig config = Z8PostgresAuthenticationConfig.init,
          IZ8UserChangeNotifier userNotifier = null, IZ8RoleChangeNotifier roleNotifier = null) {
@@ -118,10 +123,13 @@ class Z8PostgresAuthenticator {
                     } else db.execute("UPDATE " ~ ns ~ `."SystemUsers" SET "Failed Auth Count" = $2::bigint WHERE "RecordId" = $1::uuid`,
                         [key, Z8PostgresParameter.value((failures + 1).to!string)]);
                 }
-                db.commit(); return null;
+                db.commit();
+                if (config.maxFailedAttempts > 0) notifyAuthenticationChange(id);
+                return null;
             }
             if (failures != 0) db.execute("UPDATE " ~ ns ~ `."SystemUsers" SET "Failed Auth Count" = 0 WHERE "RecordId" = $1::uuid`, [key]);
             db.commit();
+            if (failures != 0) notifyAuthenticationChange(id);
             if (customUser !is null) {
                 z8_user_attach(customUser, user);
                 try { z8_user_on_load(customUser); }

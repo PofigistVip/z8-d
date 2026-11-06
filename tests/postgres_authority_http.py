@@ -116,6 +116,9 @@ class LoopbackRpc : IZ8AuthorityRpcTransport {
     this(Z8ProtobufAuthorityService service) { this.service = service; }
     ubyte[] call(Z8AuthorityMethod method, const(ubyte)[] payload) { return service.dispatch(method, payload); }
 }
+class FailingNotifier : IZ8UserChangeNotifier {
+    void userChanged(Z8Guid id, wstring schema) { throw new Exception("notification failed"); }
+}
 void main(string[] args) {
     alias P = Z8p_50726F6265;
     auto connection = new Z8PostgresConnection(args[1]);
@@ -126,9 +129,16 @@ void main(string[] args) {
     z8_postgres_bootstrap(connection, "public"w, [P.m_userRoles(), P.m_userEntries(), P.m_entries(), P.m_roles(), P.m_users(), P.m_sequences(), P.m_tables(), P.m_fields(), P.m_requests(), P.m_tableAccess(), P.m_fieldAccess(), P.m_requestAccess(), sample], registry);
     connection.execute(`UPDATE "SystemUsers" SET "Password" = md5('secret'), "Change Password" = 1 WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
     connection.execute(`INSERT INTO "SystemUsers" ("RecordId", "Name", "Password") VALUES ('00000000-0000-0000-0000-000000000055', 'Bob', md5('bobsecret'))`);
+    connection.execute(`INSERT INTO "SystemUsers" ("RecordId", "Name", "Password") VALUES ('00000000-0000-0000-0000-000000000057', 'Fail', md5('secret'))`);
     connection.execute(`INSERT INTO "SystemUserRoles" ("RecordId", "User", "Role") VALUES ('00000000-0000-0000-0000-000000000056', '00000000-0000-0000-0000-000000000055', '421A8413-A8EC-4DAB-9235-9A5FF83341C5')`);
     auto applicationConfig = z8_application_configuration(); applicationConfig.clientHashesPasswords = false; z8_application_configure(applicationConfig);
-    Z8PostgresAuthenticationConfig config; config.clientHashesPasswords = false;
+    Z8PostgresAuthenticationConfig config; config.clientHashesPasswords = false; config.maxFailedAttempts = 2; config.banMilliseconds = 60_000;
+    auto failingConfig = config; failingConfig.maxFailedAttempts = 1;
+    auto failingAuth = new Z8PostgresAuthenticator(connection, "public"w, null, failingConfig, new FailingNotifier());
+    bool notificationFailed;
+    try { failingAuth.authenticate("Fail"w, "wrong"w); } catch (Exception) { notificationFailed = true; }
+    assert(notificationFailed && !connection.inTransaction());
+    assert(connection.execute(`SELECT "Banned Until" > 0 FROM "SystemUsers" WHERE "Name" = 'Fail'`).rows[0][0].text == "t");
     auto sessions = new Z8SessionManager(60_000, true);
     auto remoteSessions = new Z8SessionManager();
     auto remoteBob = new Z8UserData(); remoteBob.id = z8_guid_create(85); remoteBob.roles = [z8_guid_literal("421A8413-A8EC-4DAB-9235-9A5FF83341C5")];
@@ -175,6 +185,8 @@ void main(string[] args) {
         z8_application_dispatch_request();
     }, 8192, Z8ResponseMode.application, "test"w, httpAuthority);
     writeln(server.port()); stdout.flush(); readln();
+    assert(remoteSessions.getSession("remote-bob"w) is null); // Failed login was broadcast.
+    remoteSessions.create("remote-bob"w, remoteBob, remoteBob, "public"w);
     authority.roleChanged(z8_guid_literal("421A8413-A8EC-4DAB-9235-9A5FF83341C5"), "public"w);
     assert(remoteSessions.getSession("remote-bob"w) is null);
     writeln("invalidated"); stdout.flush();
@@ -236,6 +248,15 @@ void main(string[] args) {
             assert bob["user"]["parameters"]["tenant"] == "public"
             bob_token = bob["session"]
             assert re.fullmatch(r"[0-9a-f]{64}", bob_token) and bob_token != admin_token
+            # Failed login updates the user's counter and revokes existing sessions.
+            assert request(request="login", login="Bob", password="wrong")[0] == 401
+            assert request(request="login", session=bob_token, server="test")[0] == 401
+            status, bob = request(request="login", login="Bob", password="override")
+            assert status == 200 and bob["success"]
+            bob_token = bob["session"]
+            # Built-in administrator sessions are excluded from these notifications.
+            assert request(request="login", login="Admin", password="wrong")[0] == 401
+            assert request(request="login", session=admin_token, server="test")[0] == 200
             assert request(request="login", session=bob_token, server="wrong")[0] == 401
             assert request(request="login", session=bob_token, server="test")[0] == 200
             process.stdin.write("invalidate\n"); process.stdin.flush()

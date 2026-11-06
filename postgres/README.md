@@ -263,14 +263,18 @@ for denied credentials. It supports the original client-hashed and server-MD5
 password modes, case-insensitive login lookup, permanent and timed bans, and
 optional failed-attempt limits. Concurrent attempts lock the user row; failed
 attempts and timed bans commit even when access is denied. It requires a
-connection without an active transaction. A registered named `User` subclass
+connection without an active transaction. When supplied, the user-change notifier
+invalidates non-built-in users' sessions after a failed-attempt counter or ban
+update commits, including a successful login that resets the counter. A notifier
+failure is reported to the caller; the committed database update is retained.
+A registered named `User` subclass
 can implement the original `onBeforeLoad`, `authenticate` and `onLoad` hooks;
 if custom authentication returns false or throws, password verification remains
 the fallback. Hook execution uses a system-user request and the current schema.
 The registered `SystemUsers` specialization can also populate or reject a
 user through either `getParameters` overload. If that hook throws, the built-in
 system and administrator accounts retain the original fallback behavior.
-Trusted login and cross-server session notifications are still pending.
+Trusted login and a network transport for cross-server notifications are still pending.
 The optional `z8.integration.postgres_authority`
 module connects it to CivetWeb.
 
