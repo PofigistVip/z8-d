@@ -42,6 +42,21 @@ import org.zenframework.z8.base.Executable;
 import org.zenframework.z8.base.Executable;
 public class ManualJob extends Executable {}
 ''', encoding="utf-8")
+    (source / "CustomUser.bl").write_text('''
+import org.zenframework.z8.base.security.User;
+import org.zenframework.z8.base.application.Application;
+[name "User"] public class CustomUser extends User {
+    bool checked;
+    virtual protected void onBeforeLoad(string input) {
+        checked = Application.userId() == guid.create(1) && Application.requestParameters()["login"] == input;
+    }
+    virtual protected bool authenticate(string password) {
+        if (password == "secret") throw "fallback";
+        return checked && password == "override";
+    }
+    virtual protected void onLoad() { parameters.add("verified", true); }
+}
+''', encoding="utf-8")
     (source / "Sample.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.StringField;
@@ -259,6 +274,7 @@ import z8.database.scheduler;
 import z8.database.scheduler_service;
 import z8.database.authentication;
 import z8gen.p_Probe;
+import z8gen.p_CustomUser;
 import std.algorithm.searching : canFind;
 import std.conv : to;
 import std.json : parseJSON;
@@ -762,6 +778,16 @@ void main(string[] args) {
     auto attempt2 = new Thread({ assert(auth2.authenticate("Auth Alice"w, "wrong"w, z8_date_from_ticks(1700000001000)) is null); });
     attempt1.start(); attempt2.start(); attempt1.join(); attempt2.join(); authDb1.close(); authDb2.close();
     assert(db.execute(`SELECT "Failed Auth Count" FROM "z8_bootstrap"."SystemUsers" WHERE "Name" = 'Auth Alice'`).rows[0][0].text == "2");
+    auto customRegistry = new Z8RuntimeRegistry();
+    customRegistry.registerNamedType("User"w, "CustomUser"w, typeid(Z8p_437573746F6D55736572));
+    auto customAuth = new Z8PostgresAuthenticator(db, "z8_bootstrap"w, customRegistry, authConfig);
+    auto callerRequest = z8_application_request(); auto callerConnection = z8_connection_current_backend();
+    auto customAuthenticated = customAuth.authenticate("Auth Alice"w, "override"w, z8_date_from_ticks(1700000001000));
+    assert(customAuthenticated !is null && z8_optional_require(z8_primary_cast!bool(customAuthenticated.parameters.z8_get("verified"w))));
+    assert(z8_application_request() is callerRequest && z8_connection_current_backend() is callerConnection);
+    customAuthenticated = customAuth.authenticate("Auth Alice"w, "secret"w, z8_date_from_ticks(1700000001000));
+    assert(customAuthenticated !is null && z8_optional_require(z8_primary_cast!bool(customAuthenticated.parameters.z8_get("verified"w))));
+    assert(customAuth.authenticate("Auth Alice"w, "wrong"w, z8_date_from_ticks(1700000001000)) is null);
     db.execute(`DELETE FROM "z8_bootstrap"."SystemUsers" WHERE "Name" = 'Auth Alice'`);
     assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemRoles" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`).rows[0][0].text == "3");
     assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemUserRoles" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`).rows[0][0].text == "2");

@@ -33,6 +33,13 @@ import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.StringField;
 [name "Sample"] [generatable] [request] public class Sample extends Table { [name "Title"] StringField title; }
 ''', encoding="utf-8")
+    (source / "CustomUser.bl").write_text('''
+import org.zenframework.z8.base.security.User;
+[name "User"] public class CustomUser extends User {
+    virtual protected bool authenticate(string password) { return login == "Bob" && password == "override"; }
+    virtual protected void onLoad() { parameters.add("custom", true); }
+}
+''', encoding="utf-8")
     (source / "Probe.bl").write_text('''
 import org.zenframework.z8.base.table.system.Roles;
 import org.zenframework.z8.base.table.system.Users;
@@ -75,6 +82,7 @@ import z8.database.authentication;
 import z8.webserver.civetweb;
 import z8.integration.postgres_authority;
 import z8gen.p_Probe;
+import z8gen.p_CustomUser;
 import std.stdio : writeln, stdout, readln;
 import std.string : strip;
 import std.conv : to;
@@ -83,6 +91,7 @@ void main(string[] args) {
     auto connection = new Z8PostgresConnection(args[1]);
     auto registry = new Z8RuntimeRegistry(); auto sample = P.m_sample();
     registry.registerTable(sample); registry.registerRequest(sample);
+    registry.registerNamedType("User"w, "CustomUser"w, typeid(Z8p_437573746F6D55736572));
     z8_postgres_bootstrap(connection, "public"w, [P.m_userRoles(), P.m_userEntries(), P.m_entries(), P.m_roles(), P.m_users(), P.m_sequences(), P.m_tables(), P.m_fields(), P.m_requests(), P.m_tableAccess(), P.m_fieldAccess(), P.m_requestAccess(), sample], registry);
     connection.execute(`UPDATE "SystemUsers" SET "Password" = md5('secret') WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
     connection.execute(`INSERT INTO "SystemUsers" ("RecordId", "Name", "Password") VALUES ('00000000-0000-0000-0000-000000000055', 'Bob', md5('bobsecret'))`);
@@ -142,8 +151,8 @@ void main(string[] args) {
             assert status == 200 and admin["success"] and admin["user"]["administrator"]
             admin_token = admin["session"]
             assert re.fullmatch(r"[0-9a-f]{64}", admin_token)
-            status, bob = request(request="login", login="Bob", password="bobsecret")
-            assert status == 200 and bob["success"] and not bob["user"]["administrator"]
+            status, bob = request(request="login", login="Bob", password="override")
+            assert status == 200 and bob["success"] and not bob["user"]["administrator"] and bob["user"]["parameters"]["custom"]
             bob_token = bob["session"]
             assert re.fullmatch(r"[0-9a-f]{64}", bob_token) and bob_token != admin_token
             assert request(request="login", session=bob_token, server="wrong")[0] == 401

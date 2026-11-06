@@ -61,7 +61,7 @@ class Z8PostgresHttpAuthority : IZ8HttpAuthority, IZ8UserChangeNotifier, IZ8Role
         sessions.check(z8_date_ticks(z8_date_now()));
         auto connection = source.openSibling();
         scope(exit) connection.close();
-        auto user = new Z8PostgresAuthenticator(connection, schema, registry, config).authenticate(login, password);
+        auto user = new Z8PostgresAuthenticator(connection, schema, registry, config, this, this).authenticate(login, password);
         if (user is null) return null;
         auto system = z8_postgres_read_user(connection, schema, z8_guid_create(1), registry);
         if (system is null) throw new Z8PostgresException("system user is missing");

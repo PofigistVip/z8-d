@@ -4,6 +4,7 @@ import std.conv : to;
 import z8.runtime;
 import z8.database.plan : quoteIdentifier;
 import z8.database.postgres;
+import z8.database.connection : Z8PostgresDatabase;
 import z8.database.privileges : z8_postgres_read_user;
 
 // Authentication settings corresponding to ServerConfig's password mode and
@@ -34,11 +35,15 @@ class Z8PostgresAuthenticator {
     private string ns;
     private Z8RuntimeRegistry registry;
     private Z8PostgresAuthenticationConfig config;
+    private IZ8UserChangeNotifier userNotifier;
+    private IZ8RoleChangeNotifier roleNotifier;
     this(Z8PostgresConnection db, wstring schema, Z8RuntimeRegistry registry = null,
-         Z8PostgresAuthenticationConfig config = Z8PostgresAuthenticationConfig.init) {
+         Z8PostgresAuthenticationConfig config = Z8PostgresAuthenticationConfig.init,
+         IZ8UserChangeNotifier userNotifier = null, IZ8RoleChangeNotifier roleNotifier = null) {
         if (db is null || db.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
         if (config.maxFailedAttempts < 0 || config.banMilliseconds < 0) throw new Z8PostgresException("invalid authentication configuration");
         this.db = db; this.schema = schema.idup; this.registry = registry; this.config = config;
+        this.userNotifier = userNotifier; this.roleNotifier = roleNotifier;
         ns = quoteIdentifier(schema);
     }
     Z8UserData authenticate(wstring login, wstring password, Z8Date now = null) {
@@ -47,8 +52,30 @@ class Z8PostgresAuthenticator {
         if (login is null || password is null) return null;
         if (now is null) now = z8_date_now();
         auto ticks = z8_date_ticks(now);
-        auto candidate = config.clientHashesPasswords ? password :
-            z8_native_call!wstring("org.zenframework.z8.server.crypto.Digest.m_md5"w, password);
+        Z8Object customUser;
+        if (registry !is null) foreach (entry; registry.named()) if (entry.name == "User"w) {
+            customUser = z8_user_wrap_with_registry(new Z8UserData(), registry);
+            break;
+        }
+        auto previousRequest = z8_application_request();
+        auto previousConnection = z8_connection_current_backend();
+        scope(exit) if (customUser !is null) {
+            z8_application_set_request(previousRequest);
+            z8_connection_set_current(previousConnection);
+        }
+        if (customUser !is null) {
+            auto system = z8_postgres_read_user(db, schema, z8_guid_create(1), registry);
+            if (system is null) throw new Z8PostgresException("system user is missing");
+            auto request = new Z8ApplicationRequest();
+            request.session = new Z8ApplicationSession("system"w, system, system);
+            request.monitor = new Z8RequestMonitor();
+            request.userChangeNotifier = userNotifier; request.roleChangeNotifier = roleNotifier;
+            request.parameters.z8_add("login"w, login); request.parameters.z8_add("schema"w, schema);
+            z8_application_set_request(request);
+            z8_connection_set_current(new Z8PostgresDatabase(db, schema, registry));
+            try { z8_user_before_load(customUser, login); }
+            catch (Throwable failure) { request.monitor.log(Z8MonitorLevel.error, failure.msg.to!wstring); }
+        }
         db.beginTransaction();
         try {
             auto rows = db.execute("SELECT \"RecordId\"::text, \"Password\", COALESCE(\"Banned\", 0)::text, " ~
@@ -62,7 +89,18 @@ class Z8PostgresAuthenticator {
             auto id = z8_guid_literal(row[0].text);
             auto key = Z8PostgresParameter.value(row[0].text);
             auto failures = row[4].text.to!long;
-            if (row[1].isNull || !samePassword(candidate, row[1].text.to!wstring)) {
+            Z8UserData user;
+            bool accepted;
+            if (customUser !is null) {
+                user = z8_postgres_read_user(db, schema, id, registry);
+                z8_user_attach(customUser, user);
+                try { accepted = z8_user_authenticate(customUser, password); }
+                catch (Throwable failure) { z8_application_request().monitor.log(Z8MonitorLevel.error, failure.msg.to!wstring); }
+            }
+            auto candidate = password;
+            if (!accepted && !config.clientHashesPasswords)
+                candidate = z8_native_call!wstring("org.zenframework.z8.server.crypto.Digest.m_md5"w, password);
+            if (!accepted && (row[1].isNull || !samePassword(candidate, row[1].text.to!wstring))) {
                 if (config.maxFailedAttempts > 0) {
                     if (failures >= config.maxFailedAttempts - 1) {
                         if (ticks > long.max - config.banMilliseconds) throw new Z8PostgresException("authentication ban time overflow");
@@ -74,8 +112,13 @@ class Z8PostgresAuthenticator {
                 db.commit(); return null;
             }
             if (failures != 0) db.execute("UPDATE " ~ ns ~ `."SystemUsers" SET "Failed Auth Count" = 0 WHERE "RecordId" = $1::uuid`, [key]);
-            auto user = z8_postgres_read_user(db, schema, id, registry);
+            if (user is null) user = z8_postgres_read_user(db, schema, id, registry);
             db.commit();
+            if (customUser !is null) {
+                z8_user_attach(customUser, user);
+                try { z8_user_on_load(customUser); }
+                catch (Throwable failure) { z8_application_request().monitor.log(Z8MonitorLevel.error, failure.msg.to!wstring); }
+            }
             return user;
         } catch (Throwable failure) {
             if (db.inTransaction()) db.rollback();
