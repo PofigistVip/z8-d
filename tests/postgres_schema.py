@@ -169,6 +169,7 @@ public class Probe {
     public static int entryNameDependencies(Entries value) { return value.name.usedFields.size(); }
     public static void clearEntryNameDependencies(Entries value) { value.name.usedFields.clear(); }
     public static void deleteUserRole(UserRoles value, guid id) { value.destroy(id); }
+    public static void createUserRole(UserRoles value, guid id, guid user, guid role) { value.user = user; value.role = role; value.create(id); }
     public static string accessRoleName(RoleTableAccess value) { Field[] fields = {value.roles.name}; value.read(fields); if (value.next()) return value.roles.name.get(); return "missing"; }
     public static void setFieldRead(RoleFieldAccess value, guid id, bool flag) { value.read = flag; value.update(id); }
     public static void setFieldWrite(RoleFieldAccess value, guid id, bool flag) { value.write = flag; value.update(id); }
@@ -632,6 +633,13 @@ void main(string[] args) {
     P.m_banUser(explicitUsers, notificationUser.id, z8_optional_wrap(true));
     z8_connection_set_current(new Z8PostgresDatabase(db, "z8_bootstrap"w, bootstrapRegistry));
     assert(manager.getSession("victim"w) is null && manager.getSession("other-schema"w) !is null);
+    manager.create("role-add"w, notificationUser, loadedSystem, "z8_bootstrap"w);
+    auto assignmentId = z8_guid_create(0x12346);
+    P.m_createUserRole(P.m_userRoles(), assignmentId, notificationUser.id, P.m_userRole());
+    assert(manager.getSession("role-add"w) is null);
+    manager.create("role-remove"w, notificationUser, loadedSystem, "z8_bootstrap"w);
+    P.m_deleteUserRole(P.m_userRoles(), assignmentId);
+    assert(manager.getSession("role-remove"w) is null && manager.getSession("other-schema"w) !is null);
     P.m_notifyUserChange(loadedAdmin.id);
     assert(manager.getSession("admin-session"w) !is null);
     P.m_forcePasswordChange(P.m_users(), loadedAdmin.id);

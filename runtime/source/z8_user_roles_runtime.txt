@@ -42,6 +42,19 @@ void z8_user_roles_before_destroy(Z8Guid id) {
     if (id !is null && (id == z8_user_roles_administrator || id == z8_user_roles_system))
         throw new Exception("Builtin user's roles can not be removed.");
 }
+void z8_user_roles_after_create(Z8Object self) {
+    auto request = z8_application_request();
+    if (request is null || request.userChangeNotifier is null) return;
+    auto user = z8_primary_cast!Z8Guid(z8_field_primary(z8_user_roles_state(self).user));
+    z8_users_notify_change(user, false, self);
+}
+void z8_user_roles_notify_before_destroy(Z8Object self, Z8Guid id) {
+    auto request = z8_application_request();
+    if (request is null || request.userChangeNotifier is null) return;
+    bool found;
+    auto values = z8_query_copy_values(self, [z8_user_roles_state(self).user], id, found);
+    if (found) z8_users_notify_change(z8_primary_cast!Z8Guid(values[0]), false, self);
+}
 shared static this() {
     z8_user_roles_system = z8_guid_literal("DAD7CCDE-51D8-4B24-884D-3F7C2C13F9EC");
     z8_user_roles_administrator = z8_guid_literal("8D05DB1E-1A17-4E19-949C-F2894920261E");
