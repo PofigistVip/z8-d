@@ -7,7 +7,8 @@ private class Z8EvalState {
     wstring[] errors;
     this() { order = new Z8JavaMapOrder!wstring(); }
 }
-private struct Z8EvalValue { bool evaluated; Z8Primary primary; Z8Object json; wstring expression; }
+private enum Z8EvalContext { none, json }
+private struct Z8EvalValue { bool evaluated; Z8Primary primary; Z8Object json; wstring expression; Z8EvalContext context; }
 private Z8EvalState z8_eval_state(Z8Object self) {
     self = z8_nonnull(self);
     if (!z8_native_is_instance(z8_eval_name, self)) throw new Exception("invalid Eval object");
@@ -86,6 +87,7 @@ private Z8EvalValue z8_eval_atom(Z8EvalState state, wstring source) {
         throw new Exception("unsupported Eval expression");
     auto found = text in state.variables;
     if (found !is null) return Z8EvalValue(true, found.primary, found.json, null);
+    if (text == "json"w) return Z8EvalValue(true, null, null, null, Z8EvalContext.json);
     auto pattern = z8_string_new("$Expression.variableIsNotSet$"w);
     state.errors ~= z8_string_format(pattern, new Z8Array!Z8Primary([z8_primary_box(text)]));
     return Z8EvalValue(false, null, null, text.idup);
@@ -131,10 +133,71 @@ private Z8EvalValue z8_eval_property(Z8EvalValue object, wstring name) {
         throw new Exception("unsupported Eval property");
     return z8_eval_json_property(object.json, name);
 }
+private struct Z8EvalNumber { Z8Primary value; bool floating; }
+private Z8EvalNumber z8_eval_json_number(Z8Object object, wstring key, bool minimum) {
+    auto missing = Z8EvalNumber(z8_primary_box(minimum ? long.min : long.max), false);
+    if (object is null) return missing;
+    auto state = z8_json_object_state(object);
+    auto value = z8_json_object_get(object, key);
+    if (value.type != JSONType.integer && value.type != JSONType.uinteger && value.type != JSONType.float_) return missing;
+    auto exact = key.to!string in state.decimals;
+    return Z8EvalNumber(z8_eval_json_scalar(value, exact).primary, value.type == JSONType.float_ && exact is null);
+}
+private long z8_eval_number_long(Z8EvalNumber value) {
+    return value.value.kind == Z8PrimaryKind.integer ? value.value.integerValue : z8_json_bigdecimal_long(value.value.decimalValue);
+}
+private double z8_eval_number_double(Z8EvalNumber value) {
+    return value.value.kind == Z8PrimaryKind.integer ? cast(double)value.value.integerValue : value.value.decimalValue.z8_as_double();
+}
+private Z8EvalNumber z8_eval_json_choose(Z8EvalNumber a, Z8EvalNumber b, bool minimum) {
+    bool keep;
+    if (a.floating || b.floating) keep = minimum ? z8_eval_number_double(a) < z8_eval_number_double(b) : z8_eval_number_double(a) > z8_eval_number_double(b);
+    else keep = minimum ? z8_eval_number_long(a) < z8_eval_number_long(b) : z8_eval_number_long(a) > z8_eval_number_long(b);
+    return keep ? a : b;
+}
+private Z8EvalValue z8_eval_json_aggregate(wstring name, Z8EvalValue[] arguments) {
+    if (arguments.length != 2) throw new Exception("invalid Eval JSON aggregate arguments");
+    auto array = arguments[0];
+    auto key = arguments[1].primary;
+    if (arguments[1].json !is null || (key !is null && key.kind != Z8PrimaryKind.text))
+        throw new Exception("Eval JSON aggregate key must be a string");
+    if (array.json is null && array.primary is null && array.context == Z8EvalContext.none)
+        return Z8EvalValue(true, null, null, null);
+    if (array.json is null) throw new Exception("Eval JSON aggregate requires a collection");
+    bool minimum = name == "min"w;
+    auto result = Z8EvalNumber(z8_primary_box(minimum ? long.max : long.min), false);
+    void add(Z8Object object) {
+        if (key is null) throw new Exception("null Eval JSON aggregate key");
+        result = z8_eval_json_choose(result, z8_eval_json_number(object, key.textValue, minimum), minimum);
+    }
+    if (z8_native_is_instance(z8_json_array_name, array.json)) {
+        auto state = z8_json_array_state(array.json);
+        foreach (position, value; state.value.array)
+            add(value.type == JSONType.object ? z8_json_array_get_object(array.json, z8_optional_wrap(cast(long)position)) : null);
+    } else {
+        auto state = z8_json_object_state(array.json);
+        foreach (field, value; state.value.object)
+            add(value.type == JSONType.object ? z8_json_object_get_object(array.json, field.to!wstring) : null);
+    }
+    return Z8EvalValue(true, result.value, null, null);
+}
+private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue[] arguments) {
+    bool evaluated = object.evaluated;
+    foreach (argument; arguments) evaluated = evaluated && argument.evaluated;
+    if (!evaluated) {
+        wstring call = z8_eval_expression_repr(object) ~ "."w ~ name ~ "("w;
+        foreach (i, argument; arguments) { if (i) call ~= ", "w; call ~= z8_eval_value_text(argument); }
+        return Z8EvalValue(false, null, null, call ~ ")"w);
+    }
+    if (object.context == Z8EvalContext.json && (name == "min"w || name == "max"w))
+        return z8_eval_json_aggregate(name, arguments);
+    throw new Exception("unsupported Eval method");
+}
 private Z8EvalValue z8_eval_item(Z8EvalState state, Z8EvalValue object, Z8EvalValue index) {
     if (!object.evaluated || !index.evaluated)
         return Z8EvalValue(false, null, null, z8_eval_expression_repr(object) ~ "["w ~ z8_eval_expression_repr(index) ~ "]"w);
-    if ((object.primary is null && object.json is null) || (index.primary is null && index.json is null)) return object;
+    if ((object.primary is null && object.json is null && object.context == Z8EvalContext.none) ||
+        (index.primary is null && index.json is null && index.context == Z8EvalContext.none)) return object;
     auto key = index.primary;
     if (key !is null && key.kind == Z8PrimaryKind.text && object.json !is null &&
         z8_native_is_instance(z8_json_object_name, object.json))
@@ -292,7 +355,15 @@ private class Z8EvalParser {
                     throw new Exception("missing Eval property name");
                 ++position;
                 while (position < text.length && (isAlpha(text[position]) || isNumber(text[position]) || text[position] == '_')) ++position;
-                if (evaluating) value = z8_eval_property(value, text[start .. position]);
+                auto name = text[start .. position];
+                if (take("("w)) {
+                    Z8EvalValue[] arguments;
+                    if (!take(")"w)) {
+                        do { arguments ~= conditional(); } while (take(","w));
+                        if (!take(")"w)) throw new Exception("unclosed Eval method arguments");
+                    }
+                    if (evaluating) value = z8_eval_method(value, name, arguments);
+                } else if (evaluating) value = z8_eval_property(value, name);
             } else if (take("["w)) {
                 auto index = conditional();
                 if (!take("]"w)) throw new Exception("unclosed Eval index");
@@ -333,7 +404,7 @@ private class Z8EvalParser {
         auto parent = evaluating;
         scope(exit) evaluating = parent;
         if (take("?:"w)) {
-            bool keep = parent && condition.evaluated && (condition.primary !is null || condition.json !is null);
+            bool keep = parent && condition.evaluated && (condition.primary !is null || condition.json !is null || condition.context != Z8EvalContext.none);
             evaluating = parent && !keep;
             auto alternative = conditional();
             if (!parent) return Z8EvalValue.init;
@@ -346,7 +417,7 @@ private class Z8EvalParser {
         bool yes;
         if (known) {
             auto value = condition.primary;
-            yes = condition.json !is null || (value !is null &&
+            yes = condition.json !is null || condition.context != Z8EvalContext.none || (value !is null &&
                 (value.kind == Z8PrimaryKind.integer ? value.integerValue != 0 : value.kind == Z8PrimaryKind.boolean ? value.booleanValue : true));
         }
         evaluating = parent && (!known || yes);
