@@ -31,8 +31,47 @@ private void z8_system_files_on_new(Z8Object self) {
     z8_field_set(fields[4], z8_primary_box(now));
     z8_field_set(fields[5], z8_primary_box(now));
 }
+// Resolve metadata separately from content, as the Java Files.get overloads do.
+private Z8File z8_system_files_get_id(Z8Guid id) {
+    if (id is null || id == z8_guid_zero()) return null;
+    auto table = z8_native_new(z8_system_files_name);
+    table.z8_ensure();
+    auto path = z8_system_files_state(table).fields[2];
+    auto fields = new Z8ObjectArray!Z8Object(); fields.z8_add(path);
+    scope(exit) z8_query_close(table);
+    if (!z8_optional_require(z8_query_read_record(table, id, fields))) return null;
+    auto result = z8_file_from_path(z8_primary_cast!wstring(z8_field_primary(path)));
+    result.id = new Z8Guid(id.majorBits, id.minorBits);
+    return result;
+}
+private Z8File z8_system_files_get_file(Z8File value) {
+    import std.file : exists, isFile, getSize;
+    value = z8_nonnull(value);
+    auto path = z8_file_system_path(value);
+    if (exists(path) && isFile(path)) {
+        value.size = z8_optional_wrap(cast(long)getSize(path));
+        value.hasUpload = false; value.upload = null;
+        return value;
+    }
+    if (value.id is null || value.id == z8_guid_zero()) throw new Exception("file was not found");
+    auto table = z8_native_new(z8_system_files_name);
+    table.z8_ensure();
+    auto members = z8_system_files_state(table).fields;
+    auto fields = new Z8ObjectArray!Z8Object(); fields.z8_add(members[1]); fields.z8_add(members[3]);
+    scope(exit) z8_query_close(table);
+    if (!z8_optional_require(z8_query_read_record(table, value.id, fields))) throw new Exception("file was not found");
+    auto size = z8_optional_require(z8_primary_cast!long(z8_field_primary(members[3])));
+    auto data = z8_primary_cast!Z8Binary(z8_field_primary(members[1]));
+    auto bytes = z8_binary_snapshot(z8_nonnull(data), size_t.max);
+    if (size != 0 && (size < 0 || cast(ulong)size != bytes.length)) throw new Exception("stored file size does not match its content");
+    value.hasUpload = true; value.upload = bytes;
+    value.size = z8_optional_wrap(cast(long)bytes.length);
+    return value;
+}
 shared static this() {
     z8_native_bind(z8_system_files_name ~ ".m_new"w, &z8_system_files_new);
+    z8_native_bind(z8_system_files_name ~ ".m_get"w, &z8_system_files_get_id);
+    z8_native_bind(z8_system_files_name ~ ".m_get"w, &z8_system_files_get_file);
     static foreach (i, name; ["name"w, "data"w, "path"w, "size"w, "time"w, "lastModified"w, "location"w])
         z8_native_bind_field(z8_system_files_name ~ ".f_"w ~ name, &z8_system_files_field_address!i);
 }

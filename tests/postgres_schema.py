@@ -258,6 +258,8 @@ public class Probe {
     public static ScheduledJobLogs scheduledJobLogs() { ScheduledJobLogs value; return value; }
     public static Files files() { Files value; return value; }
     public static void createFile(Files value, guid id) { value.name = "hello.txt"; value.path = "storage/hello.txt"; value.create(id); }
+    public static file fileById(guid id) { return Files.get(id); }
+    public static file fileContent(file value) { return Files.get(value); }
     public static void createSchedule(ScheduledJobs value, guid id, guid job) { value.job = job; value.create(id); }
     public static void createScheduleLog(ScheduledJobLogs value, guid id, guid schedule) { value.scheduledJob = schedule; value.errors = true; value.create(id); }
     public static void setScheduleCron(ScheduledJobs value, guid id, string cron) { value.cron = cron; value.update(id); }
@@ -800,6 +802,17 @@ void main(string[] args) {
     z8_connection_set_current(savedFilesBackend);
     auto fileRow = db.execute(`SELECT "Name", "Path", "Time"::text, "Last modified"::text FROM "z8_test"."SystemFiles" WHERE "RecordId" = '00000000-0000-0000-0000-000000000887'`).rows[0];
     assert(fileRow[0].text == "hello.txt" && fileRow[1].text == "storage/hello.txt" && fileRow[2].text == fileRow[3].text && fileRow[2].text.to!long > 0);
+    db.execute(`UPDATE "z8_test"."SystemFiles" SET "Path" = 'storage/missing-887/hello.txt', "File" = decode('00ff410a', 'hex'), "Size" = 4 WHERE "RecordId" = '00000000-0000-0000-0000-000000000887'`);
+    savedFilesBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "z8_test"w));
+    assert(P.m_fileById(z8_guid_zero()) is null && P.m_fileById(z8_guid_create(0x888)) is null);
+    auto storedFile = P.m_fileById(z8_guid_create(0x887));
+    assert(storedFile !is null && storedFile.name == "hello.txt"w && storedFile.path == "storage/missing-887/hello.txt"w);
+    assert(P.m_fileContent(storedFile) is storedFile && z8_optional_require(storedFile.size) == 4);
+    assert(z8_binary_snapshot(z8_file_to_binary(storedFile), 4) == [cast(ubyte)0, 0xff, 0x41, 0x0a]);
+    db.execute(`UPDATE "z8_test"."SystemFiles" SET "Size" = 3 WHERE "RecordId" = '00000000-0000-0000-0000-000000000887'`);
+    bool badFileSize; try { P.m_fileContent(P.m_fileById(z8_guid_create(0x887))); } catch (Exception) { badFileSize = true; }
+    assert(badFileSize);
+    z8_connection_set_current(savedFilesBackend);
     auto sequences = P.m_sequences();
     auto sequenceDDL = z8_postgres_create_table_sql("z8_test"w, sequences);
     assert(sequenceDDL.canFind(`"Description" bytea`) && sequenceDDL.canFind(`"Key" character varying`) && sequenceDDL.canFind(`"Value" bigint`));

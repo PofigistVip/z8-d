@@ -179,8 +179,11 @@ as text metadata; binary fields accept an index into the request's uploaded
 files. Linked or computed fields and additional write options are rejected.
 Persisting attachment files separately is not implemented.
 The native `SystemFiles` table's fields and creation timestamps are available
-when the host includes it in schema bootstrap. File storage and the
-`AttachmentProcessor` workflow are not yet connected to that table.
+when the host includes it in schema bootstrap. `Files.get(id)` reads file path
+metadata, and `Files.get(file)` reads existing local content or database content,
+checking a nonzero recorded size. Database content is currently held in memory
+rather than copied to the filesystem cache. The `AttachmentProcessor` workflow
+is not yet connected to that table.
 Optional `values` are checked before a create, update or copy transaction and
 applied as readable context fields when selecting its response.
 The direct-table `copy` action accepts source GUIDs in `recordId` and one
