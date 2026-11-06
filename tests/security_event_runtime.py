@@ -86,7 +86,7 @@ public class SecurityProbe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_SecurityProbe;
+import z8gen.SecurityProbe;
 import std.file : exists, readText;
 import std.string : indexOf;
 import std.path : buildPath;

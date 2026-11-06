@@ -58,12 +58,12 @@ void bindGeneric() {
     subprocess.run(["dmd", "-c", *import_args(), str(adapter), "-of=" + str(adapter_object)], check=True)
     harness = temp / "main.d"
     harness.write_text('''import z8.runtime;
-import z8gen.p_NativeMath;
-import z8gen.p_NativeNumber;
-import z8gen.p_NativeConsumer;
-import z8gen.p_EagerUser;
-import z8gen.p_EagerHolder;
-import z8gen.p_GenericNative;
+import z8gen.NativeMath;
+import z8gen.NativeNumber;
+import z8gen.NativeConsumer;
+import z8gen.EagerUser;
+import z8gen.EagerHolder;
+import z8gen.GenericNative;
 import adapter;
 alias Math = Z8p_4E61746976654D617468;
 alias Number = Z8p_4E61746976654E756D626572;
@@ -231,7 +231,7 @@ void main() {
     good = temp / "good-primary"
     subprocess.run([str(compiler), "project", str(source), str(good)], check=True)
     good_harness = temp / "good.d"
-    good_harness.write_text('''import z8.runtime; import z8gen.p_GoodUser;
+    good_harness.write_text('''import z8.runtime; import z8gen.GoodUser;
 void main() { assert(z8_optional_require(Z8p_476F6F6455736572.m_run()) == 31); }
 ''', encoding="utf-8")
     good_executable = temp / ("good.exe" if os.name == "nt" else "good")

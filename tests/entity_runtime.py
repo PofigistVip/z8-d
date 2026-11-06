@@ -154,7 +154,7 @@ public class EntityProbe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_EntityProbe;
+import z8gen.EntityProbe;
 void main() {
     alias P = Z8p_456E7469747950726F6265;
     assert(z8_optional_require(P.m_verify()) && z8_optional_require(P.m_registryVerify()) && z8_optional_require(P.m_copyAndCollections()));

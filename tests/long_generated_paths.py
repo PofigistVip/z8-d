@@ -12,11 +12,11 @@ def io_path(path):
     text = str(path.absolute())
     return "\\\\?\\" + text if os.name == "nt" else text
 try:
-    source, output = temp / "bl", temp / "generated"
+    source, output = temp / "bl", temp / ("g" * 95) / ("h" * 95) / "generated"
     source.mkdir()
     name = "Т" * 32
     (source / (name + ".bl")).write_text("public class " + name + " { public static int run() { return 7; } }", encoding="utf-8")
-    encoded = "p_" + "".join("_%02X" % b for b in name.encode("utf-8"))
+    encoded = name
     module = output / "z8gen" / (encoded + ".d")
     assert os.name != "nt" or len(str(module)) > 260
     subprocess.run([str(compiler), "project", str(source), str(output)], check=True)
@@ -30,13 +30,13 @@ try:
     assert not list(build_temp.glob("z8d-*")), "Temporary build directory was not cleaned"
     if subprocess.run([str(executable)]).returncode != 7:
         raise SystemExit("Long-path executable returned an unexpected result")
-    deep = temp / ("a" * 90) / ("b" * 90)
+    deep = temp / ("a" * 120) / ("b" * 120)
     os.makedirs(io_path(deep))
     with open(io_path(deep / "Other.bl"), "w", encoding="utf-8") as other:
         other.write("public class Other { public static int run() { return 8; } }")
     assert os.name != "nt" or len(str(deep / "Other.bl")) > 260
     subprocess.run([str(compiler), "project", str(deep), str(temp / "deep-output")], check=True)
-    assert (temp / "deep-output" / "z8gen" / "p_Other.d").is_file()
+    assert (temp / "deep-output" / "z8gen" / "Other.d").is_file()
     deep_executable = deep / ("program.exe" if os.name == "nt" else "program")
     subprocess.run([str(compiler), "build", str(deep), "Other.run", str(deep_executable)], check=True)
     copied_executable = temp / ("copied.exe" if os.name == "nt" else "copied")

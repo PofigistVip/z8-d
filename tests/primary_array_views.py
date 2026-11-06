@@ -174,7 +174,7 @@ public class Probe {
     harness = temp / "bl_main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 Z8Optional!long count(Z8Array!Z8Primary values) { return z8_optional_wrap(z8_nonnull(values).z8_size()); }
 void main() {
     z8_native_bind("example.Input.m_size"w, &count);

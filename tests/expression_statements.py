@@ -18,7 +18,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     runner = temp / "main.d"
     runner.write_text('''import z8.runtime;
-import z8gen.p_Discard;
+import z8gen.Discard;
 void main() { assert(z8_optional_require(Z8p_44697363617264.m_run()) == 5); }
 ''', encoding="utf-8")
     executable = temp / ("discard.exe" if os.name == "nt" else "discard")

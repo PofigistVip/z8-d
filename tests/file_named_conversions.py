@@ -31,7 +31,7 @@ public class Probe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 void main(string[] args) {
     z8_file_set_roots(args[1]);
     assert(z8_optional_require(Z8p_50726F6265.m_run()) == 0);

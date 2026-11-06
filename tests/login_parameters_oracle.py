@@ -24,7 +24,7 @@ for dependency in (cache / "commons-logging" / "commons-logging", cache / "org.z
         jars.extend(p for p in dependency.rglob("*.jar") if not p.name.endswith("-sources.jar"))
 compiler = root / ("z8d.exe" if os.name == "nt" else "z8d")
 qualified = "org.zenframework.z8.base.security.LoginParameters"
-module = "z8gen." + ".".join("p_" + part for part in qualified.split("."))
+module = "z8gen." + qualified
 typename = "Z8p_" + qualified.encode().hex().upper()
 with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     temp = Path(directory)
@@ -77,7 +77,7 @@ class LoginOracle {
     harness = temp / "main.d"
     harness.write_text('''import z8.runtime;
 import __MODULE__;
-import z8gen.p_Probe;
+import z8gen.Probe;
 import std.stdio : writeln;
 alias Login = __TYPE__;
 alias Probe = Z8p_50726F6265;

@@ -82,7 +82,7 @@ public class Probe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 import std.algorithm.searching : canFind;
 import std.conv : to;
 import std.json : JSONValue;

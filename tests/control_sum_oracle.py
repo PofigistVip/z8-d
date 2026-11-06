@@ -92,7 +92,7 @@ public class Probe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 import std.stdio : writeln;
 import std.conv : to;
 class UnicodeObject : Z8Object { override wstring z8_class_id() { return "Класс 😀"w; } }

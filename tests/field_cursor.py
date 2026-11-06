@@ -42,7 +42,7 @@ public class Probe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 class Cursor : IZ8FieldCursor {
     bool closed, grouped, nullValue, lastArray;
     long reads;

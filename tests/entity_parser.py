@@ -117,7 +117,7 @@ public class ParserProbe {
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "main.d"
-    harness.write_text('''import z8.runtime; import z8gen.p_ParserProbe; import z8gen.p_SampleParser;
+    harness.write_text('''import z8.runtime; import z8gen.ParserProbe; import z8gen.SampleParser;
 void main() {
     assert(z8_optional_require(Z8p_50617273657250726F6265.m_check()));
     assert(z8_optional_require(Z8p_50617273657250726F6265.m_nullArray(z8_new!Z8p_53616D706C65506172736572(), null)));

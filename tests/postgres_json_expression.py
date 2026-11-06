@@ -53,7 +53,7 @@ import z8.runtime;
 import z8.database.postgres;
 import z8.database.schema;
 import z8.database.query;
-import z8gen.p_JsonRows;
+import z8gen.JsonRows;
 import std.conv : to;
 void main(string[] args) {
     auto db = new Z8PostgresConnection(args[1]); scope(exit) db.close();

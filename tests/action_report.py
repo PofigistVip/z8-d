@@ -39,7 +39,7 @@ import org.zenframework.z8.base.form.action.ActionReport;
 import z8.runtime;
 import std.json : parseJSON;
 import std.conv : to;
-import z8gen.p_ReportActionTable;
+import z8gen.ReportActionTable;
 void main() {
     auto sample = z8_new!Z8p_5265706F7274416374696F6E5461626C65(); z8_nonnull(sample);
     assert(z8_optional_require(sample.m_parameterCount()) == 1);

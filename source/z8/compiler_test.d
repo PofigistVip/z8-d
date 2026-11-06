@@ -431,7 +431,7 @@ unittest {
     auto b = SourceUnit("other.B", "B.bl", "class B { public static int g(int x) { return x; } }");
     auto output = compileSources([a, b]);
     assert(output.length == 2 && output[0].source.canFind("Z8_B.m_g"));
-    assert(output[0].source.canFind("import z8gen.p_other.p_B;"));
+    assert(output[0].source.canFind("import z8gen.other.B;"));
     auto withEntry = compileSources([a, b], "pkg.A.f");
     assert(withEntry.length == 3 && withEntry[$-1].source.canFind("int main()"));
     bool badEntry;
@@ -536,6 +536,23 @@ unittest {
     auto badCastValue = SourceUnit("pkg.A", "A.bl", "class A { static B f() { return (B)1; } }");
     rejectsSources([badCastValue, arrayItem], "A.bl");
     compile("class A { static int f(int x) { return (x) + 2; } }");
+}
+
+unittest {
+    auto inputs = [
+        SourceUnit("Names.First", "First.bl", "class First {}"),
+        SourceUnit("names.Second", "Second.bl", "class Second {}"),
+        SourceUnit("pkg.CON", "CON.bl", "class CON {}"),
+        SourceUnit("pkg.CON_", "CON_.bl", "class CON_ {}"),
+        SourceUnit("entry", "entry.bl", "class entry { public static void run() {} }")
+    ];
+    auto output = compileSources(inputs, "entry.run");
+    bool[string] paths;
+    foreach (item; output) paths[item.relativePath] = true;
+    assert("z8gen/_z8_4E616D6573/First.d" in paths);
+    assert("z8gen/_z8_6E616D6573/Second.d" in paths);
+    assert("z8gen/pkg/CON_.d" in paths && "z8gen/pkg/CON__.d" in paths);
+    assert("z8gen/_z8_656E747279.d" in paths && "z8gen/entry.d" in paths);
 }
 
 unittest {

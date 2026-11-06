@@ -37,8 +37,8 @@ public class Probe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
-import z8gen.p_SqlValue;
+import z8gen.Probe;
+import z8gen.SqlValue;
 void main() {
     alias P = Z8p_50726F6265;
     auto flag = z8_sql_bool_const(true);

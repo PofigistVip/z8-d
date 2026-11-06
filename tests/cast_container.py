@@ -31,7 +31,7 @@ public class Probe {
     harness = temp / "main.d"
     harness.write_text("""
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 void main() {
     alias Probe = Z8p_50726F6265;
     assert(z8_sql_string_format(Probe.m_run(), Z8SqlVendor.Postgres) == "(('second'))"w);

@@ -82,7 +82,7 @@ public class Probe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 import z8gen.project_registry;
 class Resolver : IZ8JobUserResolver {
     Z8UserData user;

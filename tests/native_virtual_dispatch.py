@@ -24,10 +24,10 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     harness = temp / "main.d"
     harness.write_text("""
 import z8.runtime;
-import z8gen.p_Probe;
-import z8gen.p_Base;
-import z8gen.p_Derived;
-import z8gen.p_Child;
+import z8gen.Probe;
+import z8gen.Base;
+import z8gen.Derived;
+import z8gen.Child;
 wstring baseText(Z8Object self) { return "base"w; }
 wstring derivedText(Z8Object self) { return "derived"w; }
 void main() {

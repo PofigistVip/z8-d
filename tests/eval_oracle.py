@@ -150,7 +150,7 @@ public class EvalProbe {
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "main.d"
     harness.write_text('''
-import z8.runtime; import z8gen.p_EvalProbe; import std.stdio : writeln; import std.conv : to;
+import z8.runtime; import z8gen.EvalProbe; import std.stdio : writeln; import std.conv : to;
 void main() {
     auto eval = Z8p_4576616C50726F6265.m_make();
     foreach (pattern; ["plain text"w, "${name}"w, "Hello ${name}!"w, "${count}"w, "Count ${count}"w,

@@ -38,7 +38,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     harness = temp / "main.d"
     harness.write_text("""
 import z8.runtime;
-import z8gen.p_RecordProbe;
+import z8gen.RecordProbe;
 class CapturingTable : Z8p_5265636F726450726F6265 {
     int calls;
     override void z8_add_static_record(Z8Guid key, Z8StaticRecordValue[] values) {

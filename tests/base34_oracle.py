@@ -64,7 +64,7 @@ class Base34Oracle {
     expected = subprocess.check_output(["java", "-Duser.language=en", "-Duser.country=US", "-cp", str(temp) + os.pathsep + str(jars[0]), "Base34Oracle"], cwd=temp, text=True, encoding="utf-8").splitlines()
     harness = temp / "main.d"
     harness.write_text('''import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 import std.stdio : writeln;
 void main() {
     alias Probe = Z8p_50726F6265;

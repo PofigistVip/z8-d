@@ -5,8 +5,7 @@ import std.algorithm.mutation : SwapStrategy;
 import std.array : join;
 import std.conv : to;
 import std.format : format;
-import std.string : replace, startsWith, split;
-import std.regex : matchAll, regex;
+import std.string : replace, startsWith, endsWith, split;
 import z8.compiler_model;
 import z8.lexer : TokenKind, decodeStringLiteral;
 import z8.d_writer : formatDSource;
@@ -1599,23 +1598,78 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
     return formatDSource(result);
 }
 
-/// Escape path segments without colliding with D keywords or escaped names.
-package string moduleNameFor(string qualifiedName) {
-    string[] parts = ["z8gen"];
-    foreach (part; qualifiedName.split(".")) {
-        string encoded = "p_";
-        foreach (ubyte c; part) {
-            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))
-                encoded ~= cast(char)c;
-            else encoded ~= format("_%02X", c);
+private enum dModuleKeywords = ["abstract", "alias", "align", "asm", "assert", "auto", "body", "bool", "break", "byte",
+    "case", "cast", "catch", "cdouble", "cent", "cfloat", "char", "class", "const", "continue", "creal", "dchar",
+    "debug", "default", "delegate", "delete", "deprecated", "do", "double", "else", "enum", "export", "extern",
+    "false", "final", "finally", "float", "for", "foreach", "foreach_reverse", "function", "goto", "idouble", "if",
+    "ifloat", "immutable", "import", "in", "inout", "int", "interface", "invariant", "ireal", "is", "lazy", "long",
+    "macro", "mixin", "module", "new", "nothrow", "null", "out", "override", "package", "pragma", "private",
+    "protected", "public", "pure", "real", "ref", "return", "scope", "shared", "short", "static", "struct", "super",
+    "switch", "synchronized", "template", "this", "throw", "true", "try", "typeid", "typeof", "ubyte", "ucent",
+    "uint", "ulong", "union", "unittest", "ushort", "version", "void", "wchar", "while", "with"];
+
+private string escapedModuleSegment(string part) {
+    string result = "_z8_";
+    foreach (ubyte c; part) result ~= format("%02X", c);
+    return result;
+}
+private bool windowsDeviceName(string part) {
+    import std.uni : toUpper;
+    auto name = part.toUpper;
+    if (["CON", "PRN", "AUX", "NUL"].canFind(name)) return true;
+    if (name.length < 4 || (name[0 .. 3] != "COM" && name[0 .. 3] != "LPT")) return false;
+    auto suffix = name[3 .. $];
+    return (suffix.length == 1 && suffix[0] >= '1' && suffix[0] <= '9') || ["¹", "²", "³"].canFind(suffix);
+}
+private string moduleSegment(string part, bool root) {
+    import std.uni : toLower;
+    auto lower = part.toLower;
+    // Reserve the escape namespace, internal generated modules, and D's __ names.
+    if (part.startsWith("__") || lower.startsWith("_z8_") ||
+        (root && ["native_registry", "project_registry", "entry"].canFind(lower)))
+        return escapedModuleSegment(part);
+    if (part.endsWith("_") || dModuleKeywords.canFind(part) || windowsDeviceName(part)) return part ~ "_";
+    return part;
+}
+
+/// Resolve module segments as a group so names that collide on Windows do not
+/// overwrite each other even when their input roots live on different systems.
+package string[string] projectModuleNames(Program[] programs) {
+    import std.uni : toLower, normalize;
+    string portableKey(string value) { return normalize(normalize(value).toLower); }
+    string[][string] siblings;
+    bool[string] encountered;
+    foreach (program; programs) if (program.lexicalOwner is null) {
+        string parent;
+        foreach (part; program.qualifiedName.split(".")) {
+            auto key = parent ~ "\0" ~ part;
+            if (!(key in encountered)) { siblings[parent] ~= part; encountered[key] = true; }
+            parent = parent.length ? parent ~ "." ~ part : part;
         }
-        parts ~= encoded;
     }
-    return parts.join(".");
+    bool[string] conflicts;
+    foreach (parent, children; siblings) {
+        size_t[string] counts;
+        foreach (part; children) ++counts[portableKey(moduleSegment(part, !parent.length))];
+        foreach (part; children) if (counts[portableKey(moduleSegment(part, !parent.length))] > 1)
+            conflicts[parent ~ "\0" ~ part] = true;
+    }
+    string[string] result;
+    foreach (program; programs) if (program.lexicalOwner is null) {
+        string[] output = ["z8gen"];
+        string parent;
+        foreach (part; program.qualifiedName.split(".")) {
+            auto key = parent ~ "\0" ~ part;
+            output ~= key in conflicts ? escapedModuleSegment(part) : moduleSegment(part, !parent.length);
+            parent = parent.length ? parent ~ "." ~ part : part;
+        }
+        result[program.qualifiedName] = output.join(".");
+    }
+    return result;
 }
 
 /// Produce one module per Z8 type, importing only referenced generated types.
-package GeneratedModule[] emitProjectModules(Program[] programs) {
+package GeneratedModule[] emitProjectModules(Program[] programs, string[string] moduleNames) {
     string[string] moduleByClass;
     Program rootOf(Program program) {
         while (program.lexicalOwner !is null) program = program.lexicalOwner;
@@ -1623,28 +1677,35 @@ package GeneratedModule[] emitProjectModules(Program[] programs) {
     }
     Program[][string] groupsByModule;
     foreach (program; programs) {
-        auto name = moduleNameFor(rootOf(program).qualifiedName);
+        auto name = moduleNames[rootOf(program).qualifiedName];
         moduleByClass[program.emittedName] = name;
         groupsByModule[name] ~= program;
     }
-    auto symbolPattern = regex(`\bZ8(?:_|q_)[A-Za-z0-9_]+\b`);
+    // Scan UTF-8 identifier bytes; generated short class names can contain
+    // Unicode letters and ordinary underscores.
+    string[] referencedModules(string body, string ownModule = null) {
+        bool identifierByte(ubyte c) { return c >= 128 || c == '_' || (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'); }
+        string[] dependencies; bool[string] seen;
+        for (size_t i; i < body.length;) {
+            if ((i && identifierByte(cast(ubyte)body[i - 1])) || !(body[i .. $].startsWith("Z8_") || body[i .. $].startsWith("Z8q_"))) { ++i; continue; }
+            auto end = i;
+            while (end < body.length && identifierByte(cast(ubyte)body[end])) ++end;
+            auto dependency = body[i .. end] in moduleByClass;
+            if (dependency !is null && *dependency != ownModule && !(*dependency in seen)) {
+                seen[*dependency] = true; dependencies ~= *dependency;
+            }
+            i = end;
+        }
+        sort(dependencies);
+        return dependencies;
+    }
     GeneratedModule[] modules;
     Program[] nativePrograms;
     foreach (program; programs) if (program.isNative && !program.isEnum) nativePrograms ~= program;
     foreach (program; programs) {
         if (program.lexicalOwner !is null) continue;
         auto body = emitPrograms(groupsByModule[moduleByClass[program.emittedName]], true);
-        string[] dependencies;
-        bool[string] seen;
-        foreach (match; matchAll(body, symbolPattern)) {
-            auto symbol = match.hit;
-            auto dependency = symbol in moduleByClass;
-            if (dependency !is null && *dependency != moduleByClass[program.emittedName] && !(*dependency in seen)) {
-                seen[*dependency] = true;
-                dependencies ~= *dependency;
-            }
-        }
-        sort(dependencies);
+        auto dependencies = referencedModules(body, moduleByClass[program.emittedName]);
         auto name = moduleByClass[program.emittedName];
         string source = "module " ~ name ~ ";\n\n";
         if (nativePrograms.length) source ~= "import z8gen.native_registry;\n";
@@ -1728,13 +1789,7 @@ package GeneratedModule[] emitProjectModules(Program[] programs) {
             body ~= "}\n";
         }
         body ~= "}\n";
-        string[] imports;
-        bool[string] seen;
-        foreach (match; matchAll(body, symbolPattern)) {
-            auto dependency = match.hit in moduleByClass;
-            if (dependency !is null && !(*dependency in seen)) { imports ~= *dependency; seen[*dependency] = true; }
-        }
-        sort(imports);
+        auto imports = referencedModules(body);
         string source = "module z8gen.project_registry;\n\nimport z8.runtime;\n";
         foreach (name; imports) source ~= "import " ~ name ~ ";\n";
         source ~= "\n" ~ body;

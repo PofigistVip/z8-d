@@ -25,8 +25,8 @@ public class Value { public int get() { Base b; return b.get(); } }
     generated = temp / "generated"
     dependencies = ["--dependency", str(first), "--dependency", str(second)]
     subprocess.run([str(compiler), "project", str(main), str(generated), *dependencies], check=True)
-    assert (generated / "z8gen/p_lib/p_Value.d").is_file()
-    assert (generated / "z8gen/p_lib/p_Base.d").is_file()
+    assert (generated / "z8gen/lib/Value.d").is_file()
+    assert (generated / "z8gen/lib/Base.d").is_file()
     exe = temp / ("project.exe" if os.name == "nt" else "project")
     subprocess.run([str(compiler), "build", str(main), "app.Main.run", str(exe), *dependencies], check=True)
     assert subprocess.run([str(exe)]).returncode == 42

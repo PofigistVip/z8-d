@@ -51,7 +51,7 @@ public class Probe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 void main() {
     assert(z8_optional_require(Z8p_50726F6265.m_run()));
     auto hidden = z8_object_new_instance("pkg.Hidden"w);

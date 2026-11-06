@@ -77,7 +77,7 @@ public class Probe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 import std.stdio : writeln;
 wstring fieldId(Z8Object value) { return "field"w; }
 Z8Primary fieldValue(Z8Object value) { return z8_primary_box(99L); }

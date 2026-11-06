@@ -72,7 +72,7 @@ public class Probe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 void main() {
     alias P = Z8p_50726F6265;
     auto order = P.m_make(); z8_nonnull(order);

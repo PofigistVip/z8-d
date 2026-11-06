@@ -51,8 +51,8 @@ public class Probe extends Object {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
-import z8gen.p_Leaf;
+import z8gen.Probe;
+import z8gen.Leaf;
 void main() {
     assert(z8_optional_require(Z8p_50726F6265.m_run()));
     auto root = z8_new!Z8p_50726F6265(); root.z8_ensure();

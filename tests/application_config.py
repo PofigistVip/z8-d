@@ -48,7 +48,7 @@ public class Probe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 import core.thread : Thread;
 void main() {
     alias P = Z8p_50726F6265;

@@ -59,7 +59,7 @@ public class Probe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 void main() {
     alias P = Z8p_50726F6265;
     auto field = P.m_create(); field.z8_set_container(new Z8Object()); field.z8_set_index("amount"w);

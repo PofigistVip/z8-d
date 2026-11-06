@@ -65,7 +65,7 @@ public class SortProbe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_SortProbe;
+import z8gen.SortProbe;
 void main() { assert(z8_optional_require(Z8p_536F727450726F6265.m_verify())); }
 ''', encoding="utf-8")
     executable = temp / ("sorter.exe" if os.name == "nt" else "sorter")

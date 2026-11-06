@@ -70,14 +70,14 @@ void bind() {
     harness = temp / "main.d"
     harness.write_text("""
 import z8.runtime;
-import z8gen.p_Probe;
-import z8gen.p_GuidField;
-import z8gen.p_IntField;
-import z8gen.p_TextField;
-import z8gen.p_Direct;
-import z8gen.p_BoolField;
-import z8gen.p_DecimalField;
-import z8gen.p_DirectUnary;
+import z8gen.Probe;
+import z8gen.GuidField;
+import z8gen.IntField;
+import z8gen.TextField;
+import z8gen.Direct;
+import z8gen.BoolField;
+import z8gen.DecimalField;
+import z8gen.DirectUnary;
 import adapter;
 void main() {
     alias P = Z8p_50726F6265;

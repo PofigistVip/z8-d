@@ -3,7 +3,7 @@ module z8.compiler;
 import std.format : format;
 import std.string : lastIndexOf;
 import z8.lexer : LexException, Position;
-import z8.emitter : emitPrograms, emitProjectModules, moduleNameFor;
+import z8.emitter : emitPrograms, emitProjectModules, projectModuleNames;
 import z8.d_writer : formatDSource;
 public import z8.compiler_model;
 public import z8.parser : Parser;
@@ -110,7 +110,7 @@ GeneratedModule[] compileSources(SourceUnit[] units, string entry = "") {
     foreach (program; ordered) ++nameCounts[program.name.text];
     foreach (program; ordered) {
         program.emittedName = program.lexicalOwner is null && nameCounts[program.name.text] == 1 ?
-            "Z8_" ~ identifierPart(program.name.text) : "Z8q_" ~ identifierPart(program.qualifiedName);
+            "Z8_" ~ program.name.text : "Z8q_" ~ identifierPart(program.qualifiedName);
     }
     prepareInheritance(ordered, programs);
     foreach (program; ordered) {
@@ -126,7 +126,8 @@ GeneratedModule[] compileSources(SourceUnit[] units, string entry = "") {
         checked[program.qualifiedName] = true;
     }
     foreach (program; ordered) checkInOrder(program);
-    auto output = emitProjectModules(ordered);
+    auto moduleNames = projectModuleNames(ordered);
+    auto output = emitProjectModules(ordered, moduleNames);
     if (entry.length) {
         auto dot = entry.lastIndexOf('.');
         if (dot <= 0 || dot + 1 == entry.length)
@@ -152,7 +153,7 @@ GeneratedModule[] compileSources(SourceUnit[] units, string entry = "") {
             error.sourceName = (*owner).sourceName; throw error;
         }
         auto call = (*owner).emittedName ~ ".m_" ~ target.name.text ~ "()";
-        auto entrySource = "module z8gen.entry;\n\nimport " ~ moduleNameFor(ownerName) ~ ";\n\n";
+        auto entrySource = "module z8gen.entry;\n\nimport " ~ moduleNames[ownerName] ~ ";\n\n";
         entrySource ~= target.returnType == ValueType.voidType ? "void main() {\n" ~ call ~ ";\n}\n" :
             "int main() {\nreturn cast(int)(" ~ call ~ ");\n}\n";
         output ~= GeneratedModule("z8gen.entry", "z8gen/entry.d", "", formatDSource(entrySource));

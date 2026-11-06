@@ -42,7 +42,7 @@ public class Probe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 void main() {
     assert(z8_optional_require(Z8p_50726F6265.m_run()) == 0);
     auto value = z8_nonnull(z8_new!Z8p_50726F6265());

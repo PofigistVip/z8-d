@@ -29,7 +29,7 @@ public class ConfigProbe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_ConfigProbe;
+import z8gen.ConfigProbe;
 void main() {
     alias P = Z8p_436F6E66696750726F6265;
     z8_string_set_resource("greeting"w, "hello"w);

@@ -58,7 +58,7 @@ public class Probe {
                     *map(str, modules)], cwd=temp, check=True)
     harness = temp / "main.d"
     harness.write_text('''import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 import std.stdio : writeln;
 void main() {
     writeln(z8_to_utf8(Z8p_50726F6265.m_recordLock()));

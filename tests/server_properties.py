@@ -64,7 +64,7 @@ public class PropertiesOracle {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_PropertiesProbe;
+import z8gen.PropertiesProbe;
 import std.base64 : Base64;
 import std.conv : to;
 import std.stdio : writeln;

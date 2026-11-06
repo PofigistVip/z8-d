@@ -62,9 +62,9 @@ public class ConfiguredReport extends Report {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_SourceProbe;
-import z8gen.p_CustomRows;
-import z8gen.p_ConfiguredReport;
+import z8gen.SourceProbe;
+import z8gen.CustomRows;
+import z8gen.ConfiguredReport;
 void main() {
     alias P = Z8p_536F7572636550726F6265;
     auto rows = z8_new!Z8p_437573746F6D526F7773(); z8_nonnull(rows);

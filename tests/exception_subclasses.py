@@ -71,8 +71,8 @@ void bindError() { z8_native_bind("example.UserError.m_error"w, &userError); }
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
-import z8gen.p_UserError;
+import z8gen.Probe;
+import z8gen.UserError;
 import adapter;
 void main() {
     alias P = Z8p_50726F6265;

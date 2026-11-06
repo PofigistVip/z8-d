@@ -185,11 +185,11 @@ void main() {
         capture_output=True, text=True, encoding="utf-8", check=True,
     )
     modules = sorted(generated_root.rglob("*.d"))
-    assert len(modules) == len(list((root / "examples" / "project").rglob("*.bl")))
-    main_source = (generated_root / "z8gen" / "p_demo" / "p_Main.d").read_text(encoding="utf-8")
-    assert "module z8gen.p_demo.p_Main;" in main_source
+    assert len(modules) == len(list((root / "examples" / "project").rglob("*.bl"))) + 1  # project_registry
+    main_source = (generated_root / "z8gen" / "demo" / "Main.d").read_text(encoding="utf-8")
+    assert "module z8gen.demo.Main;" in main_source
     assert "import z8.runtime;" in main_source and "class Z8Object {" not in main_source
-    assert "import z8gen.p_demo.p_Counter;" in main_source
+    assert "import z8gen.demo.Counter;" in main_source
     assert "\n    override void z8_allocate_fields() {\n        super.z8_allocate_fields();" in main_source
     relative_root = directory / "relative project"
     subprocess.run(
@@ -201,8 +201,8 @@ void main() {
     project_class = "Z8p_" + "demo.Main".encode("utf-8").hex().upper()
     static_class = "Z8p_" + "demo.cases.StaticState".encode("utf-8").hex().upper()
     runner = directory / "project_runner.d"
-    runner.write_text("module project_runner;\nimport z8gen.p_demo.p_Main;\n" +
-                      "import z8gen.p_demo.p_cases.p_StaticState;\nimport z8.runtime;\nimport core.thread : Thread;\n" +
+    runner.write_text("module project_runner;\nimport z8gen.demo.Main;\n" +
+                      "import z8gen.demo.cases.StaticState;\nimport z8.runtime;\nimport core.thread : Thread;\n" +
                       "void main() { assert(" + project_class +
                       ".m_run() == 59); auto worker = new Thread({ " + static_class +
                       ".f_count = 123; }); worker.start(); worker.join(); assert(" + static_class +

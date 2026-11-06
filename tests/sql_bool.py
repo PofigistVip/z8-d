@@ -18,7 +18,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     runner = temp / "main.d"
     runner.write_text('''
 import z8.runtime;
-import z8gen.p_demo.p_cases.p_SqlBoolValues;
+import z8gen.demo.cases.SqlBoolValues;
 alias Cases = Z8p_64656D6F2E63617365732E53716C426F6F6C56616C756573;
 void main() {
     assert(z8_optional_require(Cases.m_run()) == 235);

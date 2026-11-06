@@ -106,7 +106,7 @@ public class Probe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 void main() { assert(z8_optional_require(Z8p_50726F6265.m_run())); }
 ''', encoding="utf-8")
     exe = temp / ("extra-fields.exe" if os.name == "nt" else "extra-fields")

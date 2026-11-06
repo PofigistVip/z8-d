@@ -201,7 +201,7 @@ public class Probe {
 import z8.runtime;
 import z8.database.postgres;
 import z8.database.query;
-import z8gen.p_Probe;
+import z8gen.Probe;
 import std.conv : to;
 void main(string[] args) {
     alias P = Z8p_50726F6265;

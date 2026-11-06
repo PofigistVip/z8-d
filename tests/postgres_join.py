@@ -497,7 +497,7 @@ import z8.database.postgres;
 import z8.database.query;
 import z8.database.connection;
 import z8.database.schema;
-import z8gen.p_Probe;
+import z8gen.Probe;
 import std.conv : to;
 import std.json : parseJSON;
 import std.algorithm.searching : canFind;

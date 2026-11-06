@@ -49,7 +49,7 @@ public class JsonExpressionProbe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_JsonExpressionProbe;
+import z8gen.JsonExpressionProbe;
 import std.algorithm.searching : canFind;
 void main() {
     alias P = Z8p_4A736F6E45787072657373696F6E50726F6265;

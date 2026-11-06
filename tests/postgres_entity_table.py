@@ -91,7 +91,7 @@ import z8.runtime;
 import z8.database.postgres;
 import z8.database.connection;
 import z8.database.schema;
-import z8gen.p_EntityTableProbe;
+import z8gen.EntityTableProbe;
 void main(string[] args) {
     alias P = Z8p_456E746974795461626C6550726F6265;
     auto connection = new Z8PostgresConnection(args[1]); scope(exit) connection.close();

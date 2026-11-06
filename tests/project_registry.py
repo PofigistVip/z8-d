@@ -88,8 +88,8 @@ public class DerivedTools extends SystemTools {}
     harness.write_text('''
 import z8.runtime;
 import z8gen.project_registry;
-import z8gen.p_TableFactory;
-import z8gen.p_NamedFactory;
+import z8gen.TableFactory;
+import z8gen.NamedFactory;
 import std.json : parseJSON, JSONType;
 import std.conv : to;
 import core.thread : Thread;

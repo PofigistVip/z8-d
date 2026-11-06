@@ -59,7 +59,7 @@ public class Probe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 class Writer : IZ8QueryExecutor, IZ8QueryWriter {
     Z8Object amount, other, key;
     long inserted, updated, deleted, lastAmount, lastOther;

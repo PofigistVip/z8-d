@@ -20,9 +20,9 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     runner.write_text('''
 import core.thread;
 import z8.runtime;
-import z8gen.p_demo.p_cases.p_StaticInitTracker;
-import z8gen.p_demo.p_cases.p_StaticInitTarget;
-import z8gen.p_demo.p_cases.p_StaticInitFailure;
+import z8gen.demo.cases.StaticInitTracker;
+import z8gen.demo.cases.StaticInitTarget;
+import z8gen.demo.cases.StaticInitFailure;
 alias Tracker = Z8p_64656D6F2E63617365732E537461746963496E6974547261636B6572;
 alias Target = Z8p_64656D6F2E63617365732E537461746963496E6974546172676574;
 alias Failure = Z8p_64656D6F2E63617365732E537461746963496E69744661696C757265;

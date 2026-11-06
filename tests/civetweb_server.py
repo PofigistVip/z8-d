@@ -141,7 +141,7 @@ public class Probe {
     harness.write_text('''
 import z8.runtime;
 import z8.webserver.civetweb;
-import z8gen.p_Probe;
+import z8gen.Probe;
 import std.stdio : writeln, stdout, readln;
 import core.memory : GC;
 import std.string : indexOf;

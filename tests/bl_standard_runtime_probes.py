@@ -29,7 +29,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     harness = temp / "main.d"
     harness.write_text("""
 import z8.runtime;
-import z8gen.p_SpecProbe;
+import z8gen.SpecProbe;
 import std.stdio : writeln;
 void main() {
     alias Probe = Z8p_5370656350726F6265;

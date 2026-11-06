@@ -36,7 +36,7 @@ public class PeriodProbe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_PeriodProbe;
+import z8gen.PeriodProbe;
 void main() {
     alias P = Z8p_506572696F6450726F6265;
     auto table = P.m_table();

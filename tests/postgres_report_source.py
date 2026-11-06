@@ -40,7 +40,7 @@ import z8.runtime;
 import z8.database.postgres;
 import z8.database.schema;
 import z8.database.query;
-import z8gen.p_ReportRows;
+import z8gen.ReportRows;
 class FailingExecutor : IZ8QueryExecutor {
     IZ8QueryCursor read(Z8Object query, Z8QueryReadRequest request) { throw new Exception("report query failed"); }
 }

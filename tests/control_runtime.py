@@ -178,7 +178,7 @@ public class ControlProbe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_ControlProbe;
+import z8gen.ControlProbe;
 import std.json : parseJSON;
 import std.conv : to;
 void main() {

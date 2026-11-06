@@ -35,13 +35,13 @@ public class Probe {
     harness = temp / "main.d"
     harness.write_text("""
 import z8.runtime;
-import z8gen.p_Probe;
-import z8gen.p_GuidValue;
-import z8gen.p_DateValue;
-import z8gen.p_SpanValue;
-import z8gen.p_FileValue;
-import z8gen.p_IntValue;
-import z8gen.p_TextValue;
+import z8gen.Probe;
+import z8gen.GuidValue;
+import z8gen.DateValue;
+import z8gen.SpanValue;
+import z8gen.FileValue;
+import z8gen.IntValue;
+import z8gen.TextValue;
 Z8Guid asGuid(Z8Object self) { return z8_guid_literal("00000000-0000-0000-0000-000000000001"); }
 Z8Date asDate(Z8Object self) { return z8_date_from_ticks(1000); }
 Z8Datespan asSpan(Z8Object self) { return new Z8Datespan(2000); }

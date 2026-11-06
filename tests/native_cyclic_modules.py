@@ -20,9 +20,9 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     harness = temp / "main.d"
     harness.write_text("""
 import z8.runtime;
-import z8gen.p_First;
-import z8gen.p_Second;
-import z8gen.p_Mode;
+import z8gen.First;
+import z8gen.Second;
+import z8gen.Mode;
 void main() {
     assert(cast(Z8p_4669727374)z8_native_new("example.First"w) !is null);
     assert(cast(Z8p_5365636F6E64)z8_native_new("example.Second"w) !is null);

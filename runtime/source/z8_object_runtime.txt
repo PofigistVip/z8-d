@@ -76,8 +76,7 @@ private string z8_object_class_symbol_name(string symbol, string moduleName = nu
         }
         return cast(string)decoded;
     }
-    if (symbol.startsWith("Z8p_")) {
-        auto encoded = symbol[4 .. $];
+    string decodeHex(string encoded) {
         if (!encoded.length || encoded.length % 2) return null;
         char[] decoded;
         for (size_t i; i < encoded.length; i += 2) {
@@ -85,7 +84,11 @@ private string z8_object_class_symbol_name(string symbol, string moduleName = nu
             if (high < 0 || low < 0) return null;
             decoded ~= cast(char)((high << 4) | low);
         }
-        return (cast(string)decoded).replace("$", ".");
+        return cast(string)decoded;
+    }
+    if (symbol.startsWith("Z8p_")) {
+        auto decoded = decodeHex(symbol[4 .. $]);
+        return decoded is null ? null : decoded.replace("$", ".");
     }
     if (symbol.startsWith("Z8q_")) {
         auto decoded = decodePart(symbol[4 .. $]);
@@ -93,13 +96,25 @@ private string z8_object_class_symbol_name(string symbol, string moduleName = nu
     }
     if (symbol.startsWith("Z8_") && moduleName.startsWith("z8gen.")) {
         string[] names;
-        foreach (part; moduleName[6 .. $].split(".")) {
+        auto parts = moduleName[6 .. $].split(".");
+        foreach (part; parts) {
+            string decoded;
+            if (part.startsWith("_z8_")) decoded = decodeHex(part[4 .. $]);
+            else decoded = part.length && part[$ - 1] == '_' ? part[0 .. $ - 1] : part;
+            if (decoded is null || !decoded.length) { names = null; break; }
+            names ~= decoded;
+        }
+        if (names.length && names[$ - 1] == symbol[3 .. $]) return names.join(".");
+        // Older separately compiled projects used p_ + escaped UTF-8 bytes.
+        names = null;
+        foreach (part; parts) {
             if (!part.startsWith("p_")) return null;
             auto decoded = decodePart(part[2 .. $]);
             if (decoded is null || !decoded.length) return null;
             names ~= decoded;
         }
-        return names.join(".");
+        auto oldShort = decodePart(symbol[3 .. $]);
+        return oldShort !is null && names.length && names[$ - 1] == oldShort ? names.join(".") : null;
     }
     if (symbol.startsWith("Z8_")) return symbol[3 .. $];
     return null;

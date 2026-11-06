@@ -40,7 +40,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     d_lines = "\n".join(f"writeln(z8_optional_require(P.m_value{i}()).z8_string());" for i in range(len(samples)))
     harness.write_text("""
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 import std.stdio : writeln;
 import core.stdc.locale : setlocale, LC_NUMERIC;
 void main() {

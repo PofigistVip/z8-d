@@ -37,8 +37,8 @@ public class ModernUsers extends Users {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_LegacyUsers;
-import z8gen.p_ModernUsers;
+import z8gen.LegacyUsers;
+import z8gen.ModernUsers;
 void main() {
     auto login = new Z8LoginParametersData(z8_guid_create(42), "alice"w, "127.0.0.1"w, "tenant"w);
     auto values = new Z8PrimaryMap();

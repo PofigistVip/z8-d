@@ -43,7 +43,7 @@ public class ResourceProbe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_ResourceProbe;
+import z8gen.ResourceProbe;
 import std.conv : to;
 import std.path : buildPath;
 void main(string[] args) {

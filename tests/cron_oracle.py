@@ -65,7 +65,7 @@ class CronOracle {
     expected = subprocess.check_output(["java", "-cp", str(temp) + os.pathsep + str(jars[0]), "CronOracle"], cwd=temp, text=True, encoding="utf-8").splitlines()
     harness = temp / "main.d"
     harness.write_text('''import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 import std.stdio : writeln;
 void main() {
     alias Probe = Z8p_50726F6265;

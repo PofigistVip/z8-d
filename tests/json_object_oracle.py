@@ -176,7 +176,7 @@ class JsonObjectOracle {
     harness = temp / "main.d"
     harness.write_text("""
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 import std.stdio : writeln;
 import std.conv : to;
 import std.algorithm : sort;

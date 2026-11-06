@@ -32,7 +32,7 @@ public class Probe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 void main() {
     alias P = Z8p_50726F6265;
     assert(P.m_flag(true).left.constant);

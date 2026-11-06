@@ -82,7 +82,7 @@ public class Probe {
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
-import z8gen.p_Probe;
+import z8gen.Probe;
 import core.thread : Thread;
 class Monitor : IZ8ApplicationMonitor {
     wstring[] messages, logs;
