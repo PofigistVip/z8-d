@@ -46,6 +46,11 @@ public class MapOrder {
             collisions.put(key, "c" + i);
             if (i >= 7) show(collisions);
         }
+        HashMap<String,String> primary = new HashMap<>(); populate(primary); show(primary);
+        for (int i=0; i<50; ++i) primary.put("k"+i, "v"+i);
+        for (int i=0; i<47; ++i) primary.remove("k"+i); show(primary);
+        HashMap<String,String> primaryCopy = new HashMap<>(); primaryCopy.putAll(primary); show(primaryCopy);
+        primary.clear(); primary.put("Aa", "1"); primary.put(null, "2"); primary.put("", "3"); primary.put("BB", "4"); show(primary);
     }
 }
 '''
@@ -62,6 +67,17 @@ void show(Z8StringMap map) {
         keys ~= key is null ? "<null>" : !key.length ? "<empty>" : key.to!string;
         values ~= value is null ? "<null>" : value.to!string;
         assert(z8_string_equals(value, map.z8_get(key)));
+    }
+    writeln(keys.join("|"), ";", values.join("|"));
+}
+void show(Z8PrimaryMap map) {
+    string[] keys, values;
+    auto allKeys = map.z8_keys(); auto allValues = map.z8_values();
+    for (long i; i < allKeys.z8_size(); ++i) {
+        auto key = allKeys.z8_get(i); auto value = allValues.z8_get(i);
+        keys ~= key is null ? "<null>" : !key.length ? "<empty>" : key.to!string;
+        values ~= value is null ? "<null>" : value.textValue.to!string;
+        assert(value is map.z8_get(key));
     }
     writeln(keys.join("|"), ";", values.join("|"));
 }
@@ -101,6 +117,17 @@ void main() {
     for (long i; i < names.z8_size(); ++i) assert(values.z8_get(i) == typed.z8_get(names.z8_get(i)));
     assert(names.z8_get(0) == "BB"w && names.z8_get(1) is null && names.z8_get(2) == "Aa"w);
     auto clone = new Z8StringValueMap!long(); clone.z8_add(typed); assert(clone == typed);
+    auto primary = new Z8PrimaryMap();
+    primary.z8_add("z"w, z8_primary_box("1"w)); primary.z8_add("a"w, z8_primary_box("2"w));
+    primary.z8_add(null, z8_primary_box("3"w)); primary.z8_add(""w, z8_primary_box("4"w));
+    primary.z8_add("Aa"w, z8_primary_box("5"w)); primary.z8_add("BB"w, z8_primary_box("6"w));
+    primary.z8_add("🌍"w, z8_primary_box("7"w)); primary.z8_add("кириллица"w, null); show(primary);
+    for (int i; i<50; ++i) primary.z8_add("k"w ~ i.to!wstring, z8_primary_box("v"w ~ i.to!wstring));
+    for (int i; i<47; ++i) primary.z8_remove("k"w ~ i.to!wstring); show(primary);
+    auto primaryCopy = new Z8PrimaryMap(); primaryCopy.z8_add(primary); show(primaryCopy);
+    assert(primaryCopy == primary); primary.z8_clear();
+    primary.z8_add("Aa"w, z8_primary_box("1"w)); primary.z8_add(null, z8_primary_box("2"w));
+    primary.z8_add(""w, z8_primary_box("3"w)); primary.z8_add("BB"w, z8_primary_box("4"w)); show(primary);
 }
 '''
 
