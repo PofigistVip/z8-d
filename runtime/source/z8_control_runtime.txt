@@ -2,6 +2,7 @@
 private enum z8_control_name = "org.zenframework.z8.server.base.form.Control"w;
 private enum z8_source_name = "org.zenframework.z8.server.base.form.Source"w;
 private enum z8_section_name = "org.zenframework.z8.server.base.form.Section"w;
+private enum z8_tab_control_name = "org.zenframework.z8.server.base.form.TabControl"w;
 private class Z8ControlState {
     Z8Optional!long colSpan = z8_optional_wrap(1L), flex = z8_optional_wrap(0L), height;
     Z8Optional!bool readOnly = z8_optional_wrap(false), required = z8_optional_wrap(false),
@@ -59,6 +60,23 @@ ref Z8ObjectArray!T z8_section_controls_ref(T)(Z8Object self) if (is(T : Z8Objec
     if (cell is null) {
         if (state.controls !is null) throw new Exception("incompatible Section controls array");
         cell = new Z8FieldOrderCell!T(); state.controls = cell;
+    }
+    return cell.value;
+}
+private class Z8TabControlState { IZ8FieldOrderCell tabs; }
+private Z8TabControlState z8_tab_control_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_tab_control_name, self)) throw new Exception("invalid TabControl object");
+    auto state = cast(Z8TabControlState)self.z8_get_native_state(z8_tab_control_name);
+    if (state is null) { state = new Z8TabControlState(); self.z8_set_native_state(z8_tab_control_name, state); }
+    return state;
+}
+ref Z8ObjectArray!T z8_tab_control_tabs_ref(T)(Z8Object self) if (is(T : Z8Object)) {
+    auto state = z8_tab_control_state(self);
+    auto cell = cast(Z8FieldOrderCell!T)state.tabs;
+    if (cell is null) {
+        if (state.tabs !is null) throw new Exception("incompatible TabControl tabs array");
+        cell = new Z8FieldOrderCell!T(); state.tabs = cell;
     }
     return cell.value;
 }
@@ -186,6 +204,7 @@ private bool z8_control_metadata_visible(Z8Object item, Z8Object query, Z8Privil
         if (z8_application_query_field_path(query, item, privileges).length) throw new Exception("linked field metadata is not supported");
         return z8_application_query_field_readable(query, item, privileges);
     }
+    if (z8_native_is_instance(z8_tab_control_name, item)) return true;
     if (!z8_native_is_instance(z8_section_name, item)) throw new Exception("unsupported control metadata");
     if (z8_native_is_instance("org.zenframework.z8.server.base.form.Form"w, item) && z8_control_state(item).dependency !is null)
         throw new Exception("dependent form metadata is not supported");
@@ -197,6 +216,24 @@ private void z8_control_write_meta_tree(Z8Object item, Z8Object query, Z8Object 
     path ~= item;
     scope(exit) path.length = path.length - 1;
     auto writer = z8_application_require_request().writer;
+    if (z8_native_is_instance(z8_tab_control_name, item)) {
+        z8_control_write_base_meta(item, query, context, privileges);
+        z8_monitor_property(writer, "isTabControl"w, true);
+        auto tabs = z8_tab_control_state(item).tabs;
+        if (tabs !is null && tabs.view() !is null) {
+            auto items = tabs.view().z8_erased_data();
+            if (items.z8_size()) {
+                writer.start('[', "tabs"w);
+                for (long i; i < items.z8_size(); ++i) {
+                    auto tab = z8_nonnull(cast(Z8Object)items.z8_get(i));
+                    if (!z8_native_is_instance("org.zenframework.z8.server.base.form.Tab"w, tab)) throw new Exception("invalid TabControl tab");
+                    writer.start('{'); z8_control_write_meta_tree(tab, query, context, privileges, path); writer.finish('}');
+                }
+                writer.finish(']');
+            }
+        }
+        return;
+    }
     if (z8_native_is_instance("org.zenframework.z8.server.base.form.Form"w, item)) z8_monitor_property(writer, "isForm"w, true);
     z8_control_write_base_meta(item, query, context, privileges);
     z8_monitor_property(writer, "isSection"w, true);

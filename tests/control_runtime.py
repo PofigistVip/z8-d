@@ -30,14 +30,17 @@ public class CustomField extends StringField {
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.form.Fieldset;
 import org.zenframework.z8.base.form.Section;
+import org.zenframework.z8.base.form.Tab;
+import org.zenframework.z8.base.form.TabControl;
 public class CustomTable extends Table {
     [name "Label"] CustomField label;
     label.required = true; label.width = 120; label.colSpan = 2;
     Table destination;
     label.source = destination; label.source.valueFrom = recordId; label.source.filterField = destination.recordId;
     label.dependency = recordId; label.dependsOn = recordId; label.dependencies = {recordId};
-    Fieldset panel; Section nested;
-    panel.controls = {nested}; nested.controls = {label}; controls = {panel};
+    Fieldset panel; Section nested; TabControl tabControl; Tab tab;
+    panel.controls = {nested}; nested.controls = {label};
+    tabControl.tabs = {tab}; tab.controls = {label}; controls = {panel, tabControl};
 }
 ''', encoding="utf-8")
     (source / "CyclicTable.bl").write_text('''
@@ -115,6 +118,8 @@ void main() {
     assert(meta["limit"].integer == 200 && meta["colCount"].integer == 4 && "data" !in meta.object);
     assert(meta["controls"][0]["isFieldset"].boolean && meta["controls"][0]["isSection"].boolean);
     assert(meta["controls"][0]["controls"][0]["isSection"].boolean && meta["controls"][0]["controls"][0]["controls"][0]["name"].str == "label");
+    assert(meta["controls"][1]["isTabControl"].boolean && meta["controls"][1]["tabs"][0]["isTab"].boolean);
+    assert(meta["controls"][1]["tabs"][0]["colCount"].integer == 1 && meta["controls"][1]["tabs"][0]["controls"][0]["name"].str == "label");
     user.privileges.setFieldAccess(z8_guid_create_name("CustomTable.Label"w), Z8Access.init);
     request = new Z8ApplicationRequest(); monitor = new Z8RequestMonitor(); request.monitor = monitor;
     request.session = new Z8ApplicationSession("test"w, user, user); request.parameters.z8_add("request"w, "CustomTable"w);
@@ -122,6 +127,7 @@ void main() {
     z8_application_set_request(request); z8_application_start_response(request, "CustomTable"w); z8_application_dispatch_request();
     z8_application_finish_response(request, monitor); meta = parseJSON(z8_application_response_text(request).to!string);
     assert("controls" !in meta["controls"][0]["controls"][0].object);
+    assert("controls" !in meta["controls"][1]["tabs"][0].object);
     request = new Z8ApplicationRequest(); request.session = new Z8ApplicationSession("test"w, user, user);
     request.parameters.z8_add("request"w, "CyclicTable"w); request.parameters.z8_add("action"w, "meta"w);
     z8_application_set_request(request); z8_application_start_response(request, "CyclicTable"w);
