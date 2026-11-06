@@ -449,6 +449,8 @@ grouping. An optional second grouping and its `HAVING` run in the outer select.
 As with JDBC, a boolean count can be read only when its result is 0 or 1; temporal
 fields interpret the count as milliseconds, and binary fields receive the decimal
 count as bytes.
+To check those conversions against a PostgreSQL JDBC driver, run
+`python tests/postgres_count_jdbc_oracle.py <postgres-bin> <postgresql-jdbc.jar>`.
 Expressions and joins requiring unprojected root fields, and row locks on these
 queries, are rejected. Numeric sum and average totals retain linked fields' joins
 and apply after grouping. `HAVING` filters over
