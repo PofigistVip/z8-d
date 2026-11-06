@@ -33,6 +33,21 @@ messages = [
     b'From: plain@example.com\nSubject: =?UTF-8?Q?Hello?=\n =?UTF-8?Q?_world?=\n'
     b'Content-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: base64\n\n'
     b'0J/RgNC40LLQtdGC\n',
+    b'From: html@example.com\r\nSubject: HTML\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n'
+    b'   <b>Hello</b>   world   ',
+    b'From: encoded@example.com\r\nSubject: Encoded\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n'
+    b'=?UTF-8?B?0J/RgNC40LLQtdGC?=',
+    b'From: nested@example.com\r\nSubject: Nested\r\nMIME-Version: 1.0\r\n'
+    b'Content-Type: multipart/mixed; boundary=outer\r\n\r\n'
+    b'--outer\r\nContent-Type: application/octet-stream\r\n\r\nignored\r\n'
+    b'--outer\r\nContent-Type: multipart/alternative; boundary=inner\r\n\r\n'
+    b'--inner\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n<b>nested html</b>\r\n'
+    b'--inner\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nnested plain\r\n'
+    b'--inner--\r\n--outer--\r\n',
+    b'From: =?UTF-8?B?0J/RgNC40LLQtdGC?= <sender@example.com>\r\n'
+    b'Subject: Named sender\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nBody',
+    b'From: "Doe, Jane" <jane@example.com>, other@example.com\r\n'
+    b'Subject: Multiple senders\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nBody',
 ]
 with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     temp = Path(directory)

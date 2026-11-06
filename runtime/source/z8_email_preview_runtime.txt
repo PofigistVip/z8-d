@@ -108,6 +108,26 @@ private ptrdiff_t z8_email_header_end(string message, out size_t length) {
     length = 2;
     return lf;
 }
+private wstring z8_email_first_sender(string header) {
+    import std.string : strip;
+    bool quoted, escaped;
+    int brackets, comments;
+    size_t end;
+    for (; end < header.length; ++end) {
+        auto c = header[end];
+        if (escaped) { escaped = false; continue; }
+        if (c == '\\' && (quoted || comments)) { escaped = true; continue; }
+        if (c == '"' && !comments) quoted = !quoted;
+        else if (!quoted) {
+            if (c == '(') ++comments;
+            else if (c == ')' && comments) --comments;
+            else if (!comments && c == '<') ++brackets;
+            else if (!comments && c == '>' && brackets) --brackets;
+            else if (!comments && !brackets && c == ',') break;
+        }
+    }
+    return z8_email_decode(cast(const(ubyte)[])header[0 .. end].strip(), "utf-8");
+}
 private wstring z8_email_part(string message, size_t depth) {
     import std.string : indexOf, splitLines, strip, toLower;
     if (depth > 32) throw new Exception("email MIME nesting limit exceeded");
@@ -152,11 +172,14 @@ private wstring z8_email_part(string message, size_t depth) {
     else if (encoding == "quoted-printable") decoded = z8_email_quoted_printable(body);
     else if (encoding == "" || encoding == "7bit" || encoding == "8bit" || encoding == "binary") decoded = cast(ubyte[])body.dup;
     else throw new Exception("unsupported email transfer encoding: " ~ encoding);
-    auto text = z8_email_decode(decoded, z8_email_parameter(contentType, "charset"));
+    auto text = z8_email_decode_words(z8_email_decode(decoded, z8_email_parameter(contentType, "charset")).to!string);
     if (mediaType == "text/html") {
+        import std.string : strip, replace;
         wchar[] plain; bool tag;
         foreach (c; text) { if (c == '<') tag = true; else if (c == '>') tag = false; else if (!tag) plain ~= c; }
-        text = plain.idup;
+        text = plain.idup.strip().idup;
+        while (text.canFind("  "w)) text = text.replace("  "w, " "w);
+        while (text.canFind("\r\n\r\n"w)) text = text.replace("\r\n\r\n"w, "\r\n"w);
     }
     return text;
 }
@@ -170,7 +193,8 @@ wstring z8_email_message_text(Z8Binary source) {
     if (separator < 0) throw new Exception("invalid email MIME headers");
     auto headers = z8_email_headers(message[0 .. separator]);
     auto subject = z8_email_decode_words(z8_email_header(headers, "subject", "null"));
-    auto sender = z8_email_decode_words(z8_email_header(headers, "from", "null"));
+    // MimeMessage.getFrom()[0].toString() retains encoded display names.
+    auto sender = z8_email_first_sender(z8_email_header(headers, "from", "null"));
     auto body = z8_email_part(message, 0);
     return "Тема : "w ~ subject ~ "\nОтправитель : "w ~ sender ~ "\n----------------------------\nСообщение :\n"w ~
         (body is null ? "null"w : body) ~ "\n"w;
