@@ -922,6 +922,22 @@ void main(string[] args) {
     assert(P.m_attachments(attachmentTable, attachmentRecord).z8_size() == 1 && P.m_fileById(document.id) !is null);
     db.beginTransaction(); assert(P.m_detach(attachmentTable, attachmentRecord, documents).z8_size() == 0); db.commit();
     assert(P.m_attachments(attachmentTable, attachmentRecord).z8_size() == 0 && P.m_fileById(document.id) is null);
+    // Two uploads with the same filename must never share a cache/disk path,
+    // including when both are saved in the same second.
+    auto firstSameName = z8_file_from_upload("same.txt"w, [cast(ubyte)0x41]);
+    auto secondSameName = z8_file_from_upload("same.txt"w, [cast(ubyte)0x42]);
+    auto sameNameFiles = new Z8Array!Z8File();
+    sameNameFiles.z8_add(firstSameName); sameNameFiles.z8_add(secondSameName);
+    db.beginTransaction(); P.m_attach(attachmentTable, attachmentRecord, sameNameFiles); db.commit();
+    assert(firstSameName.path != secondSameName.path);
+    assert(firstSameName.path.canFind("/"w ~ z8_guid_to_string(firstSameName.id) ~ "/"w));
+    assert(secondSameName.path.canFind("/"w ~ z8_guid_to_string(secondSameName.id) ~ "/"w));
+    auto firstContent = z8_file_to_binary(P.m_fileContent(firstSameName));
+    auto secondContent = z8_file_to_binary(P.m_fileContent(secondSameName));
+    assert(z8_binary_snapshot(firstContent, 1) == [cast(ubyte)0x41]);
+    assert(z8_binary_snapshot(secondContent, 1) == [cast(ubyte)0x42]);
+    z8_binary_close(firstContent); z8_binary_close(secondContent);
+    db.beginTransaction(); P.m_detach(attachmentTable, attachmentRecord, sameNameFiles); db.commit();
     auto rollbackDocument = z8_file_from_upload("other.txt"w, [cast(ubyte)1]);
     rollbackDocument.path = "storage/../../other.txt"w;
     auto rollbackDocuments = new Z8Array!Z8File(); rollbackDocuments.z8_add(rollbackDocument);
