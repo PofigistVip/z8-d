@@ -1,0 +1,38 @@
+// Synchronous scheduled jobs use the request thread and its database backend.
+private class Z8ScheduledJobMonitor : IZ8ApplicationMonitor, IZ8JobProgress {
+    IZ8ApplicationMonitor target;
+    this(IZ8ApplicationMonitor target) { this.target = z8_nonnull(target); }
+    void message(Z8MonitorLevel level, wstring text) { target.message(level, text); target.log(level, text); }
+    void log(Z8MonitorLevel level, wstring text) { target.log(level, text); }
+    void print(Z8File value) { target.print(value); }
+    void setWorked(long percent) {
+        auto progress = cast(IZ8JobProgress)target;
+        if (progress is null) throw new Exception("job monitor does not support progress");
+        progress.setWorked(percent);
+    }
+}
+private void z8_application_dispatch_scheduled_job(Z8Object executable) {
+    auto request = z8_application_require_request();
+    auto params = z8_nonnull(request.parameters);
+    if (params.z8_get("scheduled"w) is null) throw new Exception("asynchronous jobs are not implemented");
+    auto keys = params.z8_keys();
+    for (long i; i < keys.z8_size(); ++i) {
+        auto key = keys.z8_get(i);
+        if (key == "request"w || key == "session"w || key == "server"w || key == "ip"w || key == "action"w || key == "scheduled"w || key == "parameters"w) continue;
+        if (key is null || params.z8_get(key).length) throw new Exception("unsupported job parameter");
+    }
+    auto json = params.z8_get("parameters"w);
+    if (json !is null && json.length) {
+        auto parsed = z8_json_parse(json.to!string);
+        if (parsed.type != JSONType.object) throw new Exception("job parameters must be an object");
+        auto state = z8_action_state(executable);
+        foreach (id, value; parsed.object) {
+            if (value.type == JSONType.array || value.type == JSONType.object) throw new Exception("invalid job parameter value");
+            z8_parameter_parse(z8_action_parameter_by_id(state, id.to!wstring), z8_json_value_text(value));
+        }
+    }
+    auto previous = request.monitor;
+    request.monitor = new Z8ScheduledJobMonitor(previous);
+    scope(exit) request.monitor = previous;
+    z8_executable_run(executable);
+}

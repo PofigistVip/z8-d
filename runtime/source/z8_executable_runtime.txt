@@ -20,6 +20,32 @@ void z8_executable_execute(Z8Object self) {
     if (!z8_native_is_instance(z8_executable_name, z8_nonnull(self))) throw new Exception("invalid Executable object");
     self.z8_executable_virtual_execute();
 }
+// Run with Executable.run's transaction and error-reporting behavior.
+bool z8_executable_run(Z8Object self) {
+    auto request = z8_application_require_request();
+    auto session = z8_nonnull(request.session);
+    auto originalUser = session.user;
+    scope(exit) { request.session = session; session.user = originalUser; }
+    IZ8DatabaseConnection connection;
+    bool begun;
+    try {
+        if (z8_optional_require(z8_action_state(self).useTransaction)) {
+            connection = z8_connection_current_backend();
+            if (connection is null) throw new Exception("no current database connection");
+            connection.beginTransaction(); begun = true;
+        }
+        z8_executable_execute(self);
+        if (connection !is null) { connection.commit(); begun = false; }
+        return true;
+    } catch (Throwable error) {
+        if (begun) {
+            try { connection.rollback(); }
+            catch (Throwable rollbackError) { error = rollbackError; }
+        }
+        z8_nonnull(request.monitor).message(Z8MonitorLevel.error, error.msg.to!wstring);
+        return false;
+    }
+}
 void z8_bind_builtin_executable() {
     z8_native_bind(z8_executable_name ~ ".m_execute"w, &z8_executable_default_execute);
     z8_native_bind(z8_executable_name ~ ".m_execute"w, &z8_executable_default_parameters);

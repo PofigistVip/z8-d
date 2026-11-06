@@ -80,6 +80,22 @@ public class CustomReport extends Report {
     virtual protected file execute(guid id) { file result = name + "." + format; return result; }
 }
 ''', encoding="utf-8")
+    (source / "UpdateJob.bl").write_text('''
+import org.zenframework.z8.base.Executable;
+import org.zenframework.z8.base.form.action.Parameter;
+import org.zenframework.z8.base.sql.Connection;
+public class UpdateJob extends Executable {
+    Parameter amount = Parameter.create("amount", 1); Parameter fail = Parameter.create("fail", false);
+    parameters = {amount, fail};
+    virtual protected void execute(Parameter[] args) {
+        Connection.get().execute("UPDATE \\"Sample\\" SET \\"CreatedAt\\" = COALESCE(\\"CreatedAt\\", 0) + " + ((int)amount).toString() + " WHERE \\"RecordId\\" = '00000000-0000-0000-0000-000000000002'");
+        progress(50); if ((bool)fail) throw "job failed"; info("job complete");
+    }
+}
+''', encoding="utf-8")
+    (source / "NonTransactionalJob.bl").write_text('''
+public class NonTransactionalJob extends UpdateJob { useTransaction = false; }
+''', encoding="utf-8")
     (source / "Sample.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.IntField;
@@ -139,7 +155,9 @@ void main(string[] args) {
     writeln(server.port()); stdout.flush(); readln(); server.stop();
     auto verify = new Z8PostgresConnection(databaseInfo);
     auto row = verify.execute(`SELECT encode("Blob", 'hex') FROM "Sample" WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
-    assert(row.rows.length == 1 && row.rows[0][0].text == "00ff4100"); verify.close();
+    assert(row.rows.length == 1 && row.rows[0][0].text == "00ff4100");
+    row = verify.execute(`SELECT "CreatedAt" FROM "Sample" WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
+    assert(row.rows.length == 1 && row.rows[0][0].text == "7"); verify.close();
 }
 ''', encoding="utf-8")
     exe = temp / ("postgres-http.exe" if os.name == "nt" else "postgres-http")
@@ -168,6 +186,8 @@ void main(string[] args) {
                     query.pop("action")
                 if query.get("action") in ("destroy", "action", "report"):
                     query.pop("fields")
+                if query["request"] in ("UpdateJob", "NonTransactionalJob"):
+                    query.pop("fields", None)
                 conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
                 try:
                     conn.request("GET", "/request.json?" + urlencode(query))
@@ -241,6 +261,16 @@ void main(string[] args) {
             assert not result["success"], result
             result = request(session="denied", action="report", id="exported", recordId="00000000-0000-0000-0000-000000000001")
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = request(request="UpdateJob", action=None, scheduled="true", parameters='{"amount":5}')
+            assert result["success"] and result["info"]["messages"][-1]["text"] == "job complete", result
+            result = request(request="UpdateJob", action=None, scheduled="true", parameters='{"amount":9,"fail":true}')
+            assert result["success"] and "job failed" in result["info"]["messages"][-1]["text"], result
+            result = request(request="NonTransactionalJob", action=None, scheduled="true", parameters='{"amount":2,"fail":true}')
+            assert result["success"] and "job failed" in result["info"]["messages"][-1]["text"], result
+            result = request(request="UpdateJob", action=None, scheduled="true", parameters='{"missing":1}')
+            assert not result["success"], result
+            result = request(request="UpdateJob", action=None)
+            assert not result["success"] and "asynchronous jobs" in result["info"]["messages"][-1]["text"], result
             result = request(sort='[{"property":"amount"}]')
             assert [row["amount"] for row in result["data"]] == [11, 11], result
             new_record = '[{"recordId":"00000000-0000-0000-0000-000000000003","title":"Third","amount":25}]'

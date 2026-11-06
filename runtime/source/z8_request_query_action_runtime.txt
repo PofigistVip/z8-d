@@ -79,15 +79,7 @@ private void z8_application_dispatch_query_action_target(wstring className, Z8Ob
             if (entry.type != JSONType.object) throw new Exception("invalid action parameter");
             auto id = "id" in entry.object;
             if (id is null || id.type != JSONType.string) throw new Exception("action parameter requires an id");
-            Z8Object parameter;
-            if (state.parameters !is null && state.parameters.view() !is null) {
-                auto candidates = state.parameters.view().z8_erased_data();
-                for (long i; i < candidates.z8_size(); ++i) {
-                    auto candidate = cast(Z8Object)candidates.z8_get(i);
-                    if (z8_parameter_state(candidate).text == id.str.to!wstring) { parameter = candidate; break; }
-                }
-            }
-            if (parameter is null) throw new Exception("unknown action parameter: " ~ id.str);
+            auto parameter = z8_action_parameter_by_id(state, id.str.to!wstring);
             auto value = "value" in entry.object;
             if (value !is null && (value.type == JSONType.array || value.type == JSONType.object)) throw new Exception("invalid action parameter value");
             z8_parameter_parse(parameter, value is null ? ""w : z8_json_value_text(*value));
