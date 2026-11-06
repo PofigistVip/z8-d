@@ -28,13 +28,22 @@ public class CustomField extends StringField {
 ''', encoding="utf-8")
     (source / "CustomTable.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.form.Fieldset;
+import org.zenframework.z8.base.form.Section;
 public class CustomTable extends Table {
     [name "Label"] CustomField label;
     label.required = true; label.width = 120; label.colSpan = 2;
     Table destination;
     label.source = destination; label.source.valueFrom = recordId; label.source.filterField = destination.recordId;
     label.dependency = recordId; label.dependsOn = recordId; label.dependencies = {recordId};
+    Fieldset panel; Section nested;
+    panel.controls = {nested}; nested.controls = {label}; controls = {panel};
 }
+''', encoding="utf-8")
+    (source / "CyclicTable.bl").write_text('''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.form.Section;
+public class CyclicTable extends Table { Section section; section.controls = {section}; controls = {section}; }
 ''', encoding="utf-8")
     (source / "ControlProbe.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
@@ -104,6 +113,19 @@ void main() {
     assert(meta["isQuery"].boolean && meta["fields"].array.length == 3 && meta["primaryKey"].str == "recordId" && meta["lockKey"].str == "lock");
     assert(meta["fields"][0]["name"].str == "label" && meta["fields"][0]["custom"].str == "enabled" && meta["access"]["read"].boolean && !meta["access"]["write"].boolean);
     assert(meta["limit"].integer == 200 && meta["colCount"].integer == 4 && "data" !in meta.object);
+    assert(meta["controls"][0]["isFieldset"].boolean && meta["controls"][0]["isSection"].boolean);
+    assert(meta["controls"][0]["controls"][0]["isSection"].boolean && meta["controls"][0]["controls"][0]["controls"][0]["name"].str == "label");
+    user.privileges.setFieldAccess(z8_guid_create_name("CustomTable.Label"w), Z8Access.init);
+    request = new Z8ApplicationRequest(); monitor = new Z8RequestMonitor(); request.monitor = monitor;
+    request.session = new Z8ApplicationSession("test"w, user, user); request.parameters.z8_add("request"w, "CustomTable"w);
+    request.parameters.z8_add("action"w, "meta"w); request.parameters.z8_add("fields"w, `["label"]`w);
+    z8_application_set_request(request); z8_application_start_response(request, "CustomTable"w); z8_application_dispatch_request();
+    z8_application_finish_response(request, monitor); meta = parseJSON(z8_application_response_text(request).to!string);
+    assert("controls" !in meta["controls"][0]["controls"][0].object);
+    request = new Z8ApplicationRequest(); request.session = new Z8ApplicationSession("test"w, user, user);
+    request.parameters.z8_add("request"w, "CyclicTable"w); request.parameters.z8_add("action"w, "meta"w);
+    z8_application_set_request(request); z8_application_start_response(request, "CyclicTable"w);
+    bool cyclic; try { z8_application_dispatch_request(); } catch (Exception error) { cyclic = error.msg == "cyclic section controls"; } assert(cyclic);
     user.privileges.setTableAccess(z8_guid_create_name("CustomTable"w), Z8Access.init);
     request = new Z8ApplicationRequest(); request.session = new Z8ApplicationSession("test"w, user, user);
     request.parameters.z8_add("request"w, "CustomTable"w); request.parameters.z8_add("action"w, "meta"w);

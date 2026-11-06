@@ -49,15 +49,11 @@ private void z8_application_query_write_meta(Z8Object query, Z8Object[] selected
         throw new Exception("query actions, reports and aggregateBy metadata are not supported");
     void fields(wstring property, Z8Object[] values) {
         Z8Object[] readable;
-        foreach (field; values) {
-            if (!z8_native_is_instance(z8_field_name, field)) throw new Exception("non-field control metadata is not supported");
-            if (z8_application_query_field_path(query, field, privileges).length) throw new Exception("linked field metadata is not supported");
-            if (z8_application_query_field_readable(query, field, privileges)) readable ~= field;
-        }
+        foreach (field; values) if (z8_control_metadata_visible(field, query, privileges)) readable ~= field;
         if (!readable.length) return;
         writer.start('[', property);
         foreach (field; readable) {
-            writer.start('{'); z8_control_write_field_meta(field, query, query, privileges); writer.finish('}');
+            writer.start('{'); z8_control_write_meta(field, query, query, privileges); writer.finish('}');
         }
         writer.finish(']');
     }

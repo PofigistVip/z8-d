@@ -45,7 +45,11 @@ private Z8SectionState z8_section_state(Z8Object self) {
     self = z8_nonnull(self);
     if (!z8_native_is_instance(z8_section_name, self)) throw new Exception("invalid Section object");
     auto state = cast(Z8SectionState)self.z8_get_native_state(z8_section_name);
-    if (state is null) { state = new Z8SectionState(); self.z8_set_native_state(z8_section_name, state); }
+    if (state is null) {
+        state = new Z8SectionState();
+        if (z8_native_is_instance("org.zenframework.z8.server.base.form.Tab"w, self)) state.colCount = z8_optional_wrap(1L);
+        self.z8_set_native_state(z8_section_name, state);
+    }
     return state;
 }
 private Z8Optional!long* z8_section_col_count(Z8Object self) { return &z8_section_state(self).colCount; }
@@ -117,19 +121,6 @@ void z8_control_write_field_meta(Z8Object field, Z8Object query, Z8Object contex
     if (field is z8_query_primary_key(query)) z8_monitor_property(writer, "isPrimaryKey"w, true);
     if (fieldState.valueFrom !is null) z8_monitor_property(writer, "valueFrom"w, fieldState.valueFrom.z8_id());
     if (fieldState.valueFor !is null) z8_monitor_property(writer, "valueFor"w, fieldState.valueFor.z8_id());
-    z8_monitor_property(writer, "name"w, field.z8_id());
-    z8_monitor_property(writer, "ui"w, field.z8_get_attribute("ui"w));
-    auto title = field.z8_get_attribute("displayName"w);
-    if (title is null) title = z8_object_name(field);
-    if (!title.length) title = field.z8_id();
-    z8_monitor_property(writer, "header"w, title);
-    z8_monitor_property(writer, "columnHeader"w, field.z8_get_attribute("columnHeader"w));
-    z8_monitor_property(writer, "description"w, field.z8_get_attribute("description"w));
-    z8_monitor_property(writer, "icon"w, field.z8_get_attribute("icon"w));
-    z8_monitor_property(writer, "height"w, control.height);
-    z8_monitor_property(writer, "colSpan"w, control.colSpan);
-    z8_monitor_property(writer, "flex"w, control.flex);
-    writer.start('{', "label"w); z8_monitor_property(writer, "align"w, field.z8_get_attribute("labelAlign"w)); writer.finish('}');
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
     auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
     bool readOnly = (control.readOnly.present && control.readOnly.value) ||
@@ -139,8 +130,26 @@ void z8_control_write_field_meta(Z8Object field, Z8Object query, Z8Object contex
     control.readOnly = z8_optional_wrap(readOnly);
     control.required = z8_optional_wrap(!readOnly && previousRequired.present && previousRequired.value);
     scope(exit) { control.readOnly = previousReadOnly; control.required = previousRequired; }
-    z8_monitor_property(writer, "readOnly"w, readOnly);
-    z8_monitor_property(writer, "required"w, control.required);
+    z8_control_write_base_meta(field, query, context, privileges);
+}
+private void z8_control_write_base_meta(Z8Object item, Z8Object query, Z8Object context, Z8Privileges privileges) {
+    auto writer = z8_application_require_request().writer;
+    auto control = z8_control_state(item);
+    z8_monitor_property(writer, "name"w, item.z8_id());
+    z8_monitor_property(writer, "ui"w, item.z8_get_attribute("ui"w));
+    auto title = item.z8_get_attribute("displayName"w);
+    if (title is null && z8_native_is_instance(z8_field_name, item)) title = z8_object_name(item);
+    if (title !is null && !title.length && z8_native_is_instance(z8_field_name, item)) title = item.z8_id();
+    z8_monitor_property(writer, "header"w, title);
+    z8_monitor_property(writer, "columnHeader"w, item.z8_get_attribute("columnHeader"w));
+    z8_monitor_property(writer, "description"w, item.z8_get_attribute("description"w));
+    z8_monitor_property(writer, "icon"w, item.z8_get_attribute("icon"w));
+    z8_monitor_property(writer, "height"w, control.height);
+    z8_monitor_property(writer, "colSpan"w, control.colSpan);
+    z8_monitor_property(writer, "flex"w, control.flex);
+    writer.start('{', "label"w); z8_monitor_property(writer, "align"w, item.z8_get_attribute("labelAlign"w)); writer.finish('}');
+    z8_monitor_property(writer, "readOnly"w, control.readOnly.present && control.readOnly.value);
+    z8_monitor_property(writer, "required"w, control.required.present && control.required.value);
     z8_monitor_property(writer, "editable"w, control.editable);
     z8_monitor_property(writer, "important"w, control.important);
     if (control.sourceInitialized && control.source !is null) {
@@ -169,7 +178,52 @@ void z8_control_write_field_meta(Z8Object field, Z8Object query, Z8Object contex
             writer.finish(']');
         }
     }
-    z8_control_write_custom_meta(field, query, context);
+    z8_control_write_custom_meta(item, query, context);
+}
+private bool z8_control_metadata_visible(Z8Object item, Z8Object query, Z8Privileges privileges) {
+    item = z8_nonnull(item);
+    if (z8_native_is_instance(z8_field_name, item)) {
+        if (z8_application_query_field_path(query, item, privileges).length) throw new Exception("linked field metadata is not supported");
+        return z8_application_query_field_readable(query, item, privileges);
+    }
+    if (!z8_native_is_instance(z8_section_name, item)) throw new Exception("unsupported control metadata");
+    if (z8_native_is_instance("org.zenframework.z8.server.base.form.Form"w, item) && z8_control_state(item).dependency !is null)
+        throw new Exception("dependent form metadata is not supported");
+    return true;
+}
+private void z8_control_write_meta_tree(Z8Object item, Z8Object query, Z8Object context, Z8Privileges privileges, ref Z8Object[] path) {
+    if (z8_native_is_instance(z8_field_name, item)) { z8_control_write_field_meta(item, query, context, privileges); return; }
+    foreach (parent; path) if (parent is item) throw new Exception("cyclic section controls");
+    path ~= item;
+    scope(exit) path.length = path.length - 1;
+    auto writer = z8_application_require_request().writer;
+    if (z8_native_is_instance("org.zenframework.z8.server.base.form.Form"w, item)) z8_monitor_property(writer, "isForm"w, true);
+    z8_control_write_base_meta(item, query, context, privileges);
+    z8_monitor_property(writer, "isSection"w, true);
+    auto section = z8_section_state(item);
+    z8_monitor_property(writer, "colCount"w, section.colCount);
+    if (section.controls !is null && section.controls.view() !is null) {
+        auto items = section.controls.view().z8_erased_data();
+        Z8Object[] visible;
+        for (long i; i < items.z8_size(); ++i) {
+            auto child = z8_nonnull(cast(Z8Object)items.z8_get(i));
+            if (z8_control_metadata_visible(child, query, privileges)) visible ~= child;
+        }
+        if (visible.length) {
+            writer.start('[', "controls"w);
+            foreach (child; visible) {
+                writer.start('{'); z8_control_write_meta_tree(child, query, context, privileges, path); writer.finish('}');
+            }
+            writer.finish(']');
+        }
+    }
+    if (z8_native_is_instance("org.zenframework.z8.server.base.form.Fieldset"w, item)) z8_monitor_property(writer, "isFieldset"w, true);
+    if (z8_native_is_instance("org.zenframework.z8.server.base.form.FieldGroup"w, item)) z8_monitor_property(writer, "isFieldGroup"w, true);
+    if (z8_native_is_instance("org.zenframework.z8.server.base.form.Tab"w, item)) z8_monitor_property(writer, "isTab"w, true);
+}
+private void z8_control_write_meta(Z8Object item, Z8Object query, Z8Object context, Z8Privileges privileges) {
+    Z8Object[] path;
+    z8_control_write_meta_tree(item, query, context, privileges, path);
 }
 void z8_bind_builtin_control() {
     enum control = z8_control_name ~ "."w, source = z8_source_name ~ "."w;
