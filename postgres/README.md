@@ -82,6 +82,9 @@ provide the complete table list and registry, create the schema and extensions
 first, and call it outside an existing transaction. Like the Java schema
 generator it suppresses user-level events during initialization; an existing
 request's event level is restored afterward. Existing tables are not migrated.
+`z8_postgres_bootstrap_registered` obtains fresh table instances from the registry
+and accepts additional framework tables separately; the host must still supply
+any required system tables that were not registered by the generated project.
 `UserRoles` provides links to users and roles, built-in administrator
 assignments, a read-only flag based on the current user and protection against
 removing the built-in assignments. The flag is metadata; general access

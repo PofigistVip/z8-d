@@ -1,6 +1,13 @@
 // Native Table owns the six system fields that are not declared in a
 // generated subclass. Their names and member order match Table.java.
 private enum z8_table_name = "org.zenframework.z8.server.base.table.Table"w;
+private Z8Object z8_table_new_instance(wstring name) {
+    auto registry = z8_runtime_get_registry();
+    if (registry is null) throw new Exception("runtime registry is not configured");
+    auto table = registry.newTableByName(name);
+    if (table is null) throw new Exception("table is not registered: " ~ z8_string_required(name).to!string);
+    return table;
+}
 private class Z8TableState {
     Z8Object recordId, createdAt, modifiedAt, createdBy, modifiedBy, lock;
 }
@@ -55,6 +62,7 @@ private void z8_table_before_write(Z8Object self, bool create) {
 void z8_bind_builtin_table() {
     enum p = z8_table_name ~ "."w;
     z8_native_bind(p ~ "m_new"w, &z8_table_new);
+    z8_native_bind(p ~ "m_newInstance"w, &z8_table_new_instance);
     z8_native_bind_field(p ~ "f_recordId"w, &z8_table_field_address!"recordId");
     z8_native_bind_field(p ~ "f_createdAt"w, &z8_table_field_address!"createdAt");
     z8_native_bind_field(p ~ "f_modifiedAt"w, &z8_table_field_address!"modifiedAt");

@@ -6,6 +6,13 @@ import z8.database.plan : quoteIdentifier;
 import z8.database.postgres : Z8PostgresConnection, Z8PostgresException;
 import z8.database.schema;
 
+// Build fresh registered table instances and optionally include framework
+// tables supplied by the host, then run the normal atomic bootstrap.
+void z8_postgres_bootstrap_registered(Z8PostgresConnection db, wstring schema, Z8RuntimeRegistry registry, Z8Object[] additionalTables = null) {
+    if (registry is null) throw new Z8PostgresException("application registry is required");
+    z8_postgres_bootstrap(db, schema, additionalTables ~ registry.newTables(), registry);
+}
+
 // Bootstrap new tables, built-in records and the additive access metadata in a
 // single transaction. The caller supplies the schema, table instances, and the
 // complete registry; no existing table is recreated or dropped.

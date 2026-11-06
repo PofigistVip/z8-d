@@ -71,4 +71,35 @@ class Z8RuntimeRegistry {
     Z8RuntimeRegistration[] requests() { return snapshot(false); }
     Z8Guid[] tableKeys() { Z8Guid[] keys; foreach (item; tables()) keys ~= item.key; return keys; }
     Z8Guid[] requestKeys() { Z8Guid[] keys; foreach (item; requests()) keys ~= item.key; return keys; }
+    Z8Object newTableByName(wstring name) {
+        name = z8_string_required(name);
+        foreach (item; tables()) if (item.name == name) return z8_object_new_instance(item.classId);
+        return null;
+    }
+    Z8Object newTableByClass(wstring classId) {
+        classId = z8_string_required(classId);
+        foreach (item; tables()) if (item.classId == classId) return z8_object_new_instance(item.classId);
+        return null;
+    }
+    Z8Object newRequestByClass(wstring classId) {
+        classId = z8_string_required(classId);
+        foreach (item; requests()) if (item.classId == classId) return z8_object_new_instance(item.classId);
+        return null;
+    }
+    Z8Object[] newTables() {
+        Z8Object[] result;
+        foreach (item; tables()) result ~= z8_object_new_instance(item.classId);
+        return result;
+    }
+}
+private __gshared Object z8_runtime_registry_lock;
+private __gshared Z8RuntimeRegistry z8_runtime_registry;
+shared static this() { z8_runtime_registry_lock = new Object(); }
+Z8RuntimeRegistry z8_runtime_set_registry(Z8RuntimeRegistry value) {
+    synchronized (z8_runtime_registry_lock) {
+        auto previous = z8_runtime_registry; z8_runtime_registry = value; return previous;
+    }
+}
+Z8RuntimeRegistry z8_runtime_get_registry() {
+    synchronized (z8_runtime_registry_lock) return z8_runtime_registry;
 }

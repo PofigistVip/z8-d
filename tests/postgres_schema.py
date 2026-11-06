@@ -547,13 +547,13 @@ void main(string[] args) {
     auto bootstrapRegistry = new Z8RuntimeRegistry(); auto bootstrapSample = P.m_make();
     bootstrapRegistry.registerTable(bootstrapSample); bootstrapRegistry.registerRequest(bootstrapSample);
     Z8Object[] bootstrapTables = [P.m_userRoles(), P.m_roles(), P.m_users(), P.m_sequences(), P.m_systemTables(), P.m_systemFields(),
-        P.m_systemRequests(), P.m_roleTableAccess(), P.m_roleFieldAccess(), P.m_roleRequestAccess(), bootstrapSample, P.m_target()];
+        P.m_systemRequests(), P.m_roleTableAccess(), P.m_roleFieldAccess(), P.m_roleRequestAccess(), P.m_target()];
     db.execute(`CREATE SCHEMA "z8_bootstrap"`);
     auto bootstrapUser = new Z8UserData(); bootstrapUser.id = z8_guid_create(777); bootstrapUser.administrator = true;
     auto bootstrapRequest = new Z8ApplicationRequest(); bootstrapRequest.session = new Z8ApplicationSession("bootstrap"w, bootstrapUser, bootstrapUser);
     bootstrapRequest.setEventsLevel(Z8EventsLevel.user);
     auto savedBootstrapRequest = z8_application_set_request(bootstrapRequest);
-    z8_postgres_bootstrap(db, "z8_bootstrap"w, bootstrapTables, bootstrapRegistry);
+    z8_postgres_bootstrap_registered(db, "z8_bootstrap"w, bootstrapRegistry, bootstrapTables);
     assert(z8_application_request() is bootstrapRequest && bootstrapRequest.eventsLevel() == Z8EventsLevel.user);
     z8_application_set_request(savedBootstrapRequest);
     auto initialUsers = db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemUsers" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`);

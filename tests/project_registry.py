@@ -37,6 +37,11 @@ import org.zenframework.z8.base.table.Table;
 [generatable] public class UnnamedTable extends Table {}
 ''',
         "Other": 'public class Other {}',
+        "TableFactory": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.lang.Object;
+public class TableFactory { public static Object find(string name) { return Table.newInstance(name); } }
+''',
     }
     for name, code in classes.items():
         (source / (name + ".bl")).write_text(code, encoding="utf-8")
@@ -45,6 +50,7 @@ import org.zenframework.z8.base.table.Table;
     harness.write_text('''
 import z8.runtime;
 import z8gen.project_registry;
+import z8gen.p_TableFactory;
 import std.json : parseJSON, JSONType;
 import std.conv : to;
 void main() {
@@ -64,6 +70,15 @@ void main() {
     }
     assert(orders && inherited && api && child && orderRequest);
     z8_register_project(registry); assert(registry.tables().length == 2 && registry.requests().length == 3);
+    auto first = registry.newTableByName("Orders"w), second = registry.newTableByClass("Orders"w);
+    assert(first !is null && second !is null && first !is second && first.z8_class_id() == "Orders"w);
+    assert(registry.newTableByName("Missing"w) is null && registry.newRequestByClass("Api"w).z8_class_id() == "Api"w);
+    assert(registry.newTables().length == 2);
+    auto previousRegistry = z8_runtime_set_registry(registry);
+    auto factoryValue = Z8p_5461626C65466163746F7279.m_find("Orders"w);
+    assert(factoryValue !is null && factoryValue.z8_class_id() == "Orders"w && factoryValue !is first);
+    bool missing; try { Z8p_5461626C65466163746F7279.m_find("Missing"w); } catch (Exception) { missing = true; }
+    assert(missing); z8_runtime_set_registry(previousRegistry);
     auto user = new Z8UserData(); user.id = z8_guid_create(1);
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     auto request = new Z8ApplicationRequest(); request.session = new Z8ApplicationSession("test"w, user, user);
