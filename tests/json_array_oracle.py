@@ -70,6 +70,7 @@ public class Probe {
     public static void putObject(JsonObject object, string key, JsonObject value) { object.put(key, value); }
     public static string objectRender(JsonObject object) { return (string)object; }
     public static string objectText(JsonObject object, string key) { return object.getString(key); }
+    public static int objectInt(JsonObject object, string key) { return object.getInt(key); }
     public static void assignObject(JsonObject object, string text) { object = text; }
     public static JsonObject mergeObjects(JsonObject left, JsonObject right) { return left + right; }
     public static int objectSize(JsonObject object) { return object.size(); }
@@ -158,6 +159,15 @@ class JsonArrayOracle {
         scalars.z8_add(new org.zenframework.z8.server.types.datespan(12345));
         scalars.z8_add(new date(0)); scalars.z8_add(new date(date.MinTicks)); scalars.z8_add(decimal.NaN);
         System.out.println("scalars:" + scalars.string().get());
+        file attachment = new file(); attachment.name = new string("report.txt"); attachment.size = new integer(42);
+        attachment.time = new date(0L); attachment.details.put(new string("key"), new string("value"));
+        JsonArray attachments = parse("[]"); attachments.z8_add(attachment);
+        attachments.z8_insert(new integer(0), attachment);
+        attachment.name = new string("changed");
+        org.zenframework.z8.server.base.json.parser.JsonObject storedFile = attachments.z8_getJsonObject(new integer(0)).get();
+        System.out.println("file:" + storedFile.z8_getString(new string("name")).get() + ":" + storedFile.z8_getInt(new string("size")).get());
+        storedFile.z8_set(new string("name"), new string("nested"));
+        System.out.println("file:changed:" + attachments.z8_getJsonObject(new integer(0)).get().z8_getString(new string("name")).get() + ":" + attachments.z8_getJsonObject(new integer(1)).get().z8_getString(new string("name")).get());
         org.zenframework.z8.server.runtime.RCollection<primary> values = new org.zenframework.z8.server.runtime.RCollection<>();
         values.add(new decimal("1.2500")); values.add(new integer(9)); values.add(null);
         JsonArray from = JsonArray.z8_fromArray(values).get();
@@ -275,6 +285,8 @@ class JsonArrayOracle {
         server_source / "base/json/parser/JsonObject.java", server_source / "base/json/parser/JsonArray.java",
         server_source / "base/json/parser/JsonPath.java",
         server_source / "types/date.java", server_source / "types/decimal.java",
+        server_source / "types/file.java", server_source / "types/binary.java",
+        original / "org.zenframework.z8.boot/src/main/java/org/zenframework/z8/rmi/ObjectIO.java",
     ]
     subprocess.run(["javac", "-source", "8", "-target", "8", "-cp", classpath, "-d", str(temp),
                     *map(str, current_sources)], cwd=temp, check=True)
@@ -344,6 +356,15 @@ void main() {
     P.m_add(scalars, z8_primary_box(new Z8Datespan(12345)));
     P.m_add(scalars, z8_primary_box(z8_date_from_ticks(0))); P.m_add(scalars, z8_primary_box(z8_date_min)); P.m_add(scalars, z8_primary_box(z8_decimal_nan()));
     writeln("scalars:", P.m_render(scalars).to!string);
+    auto attachment = new Z8File(); attachment.name = "report.txt"w; attachment.size = z8_optional_wrap(42L);
+    attachment.time = z8_date_from_ticks(0); attachment.details.z8_add("key"w, "value"w);
+    auto attachments = P.m_parse("[]"w); P.m_add(attachments, z8_primary_box(attachment));
+    P.m_insert(attachments, 0, z8_primary_box(attachment)); attachment.name = "changed"w;
+    auto storedFile = P.m_arrayObject(attachments, 0);
+    writeln("file:", P.m_objectText(storedFile, "name"w).to!string, ":", z8_optional_require(P.m_objectInt(storedFile, "size"w)));
+    P.m_objectPut(storedFile, "name"w, z8_primary_box("nested"w));
+    writeln("file:changed:", P.m_objectText(P.m_arrayObject(attachments, 0), "name"w).to!string,
+        ":", P.m_objectText(P.m_arrayObject(attachments, 1), "name"w).to!string);
     auto beforeInvalid = P.m_render(scalars);
     bool rejected;
     try { P.m_add(scalars, z8_primary_box(new Z8Binary())); } catch (Exception) { rejected = true; }

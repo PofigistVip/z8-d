@@ -44,6 +44,7 @@ public class Probe {
     public static string[] names(JsonObject object) { return object.getNames(); }
     public static JsonObject put(JsonObject object, string name, primary entry) { return object.set(name, entry); }
     public static JsonObject putLegacy(JsonObject object, string name, primary entry) { return object.put(name, entry); }
+    public static JsonObject nested(JsonObject object, string name) { return object.getJsonObject(name); }
     public static JsonObject remove(JsonObject object, string name) { return object.remove(name); }
     public static string render(JsonObject object) { return (string)object; }
     public static string display(JsonObject object) { return object.toString(); }
@@ -94,6 +95,19 @@ class JsonObjectOracle {
         value.z8_set(new string("storedNull"), (org.zenframework.z8.server.types.primary)null);
         for (String key : new String[] {"storedInt", "storedBool", "storedText", "storedGuid", "storedSpan", "storedDate", "storedMin", "storedNaN", "storedNull"})
             System.out.println(value.z8_has(new string(key)).get() + ":" + value.z8_getString(new string(key)).get());
+        org.zenframework.z8.server.types.file attachment = new org.zenframework.z8.server.types.file();
+        attachment.name = new string("документ.txt"); attachment.path = new string("files/doc.txt");
+        attachment.size = new org.zenframework.z8.server.types.integer(123);
+        attachment.time = new org.zenframework.z8.server.types.date(0L);
+        attachment.details.put(new string("language"), new string("русский"));
+        value.z8_set(new string("attachment"), attachment);
+        attachment.name = new string("changed"); attachment.details.put(new string("language"), new string("changed"));
+        JsonObject stored = value.z8_getJsonObject(new string("attachment")).get();
+        for (String key : new String[] {"name", "path", "size", "time", "id", "user"})
+            System.out.println("file:" + key + ":" + stored.z8_getString(new string(key)).get());
+        System.out.println("file:detail:" + stored.z8_getJsonObject(new string("details")).get().z8_getString(new string("language")).get());
+        stored.z8_set(new string("name"), new string("nested change"));
+        System.out.println("file:mutated:" + value.z8_getJsonObject(new string("attachment")).get().z8_getString(new string("name")).get());
         for (String input : new String[] {"12345678901234567890.2500", "1E+3", "1E-7", "-18446744073709551617.99"}) {
             value.z8_set(new string("decimal"), new org.zenframework.z8.server.types.decimal(input));
             System.out.println(value.z8_getString(new string("decimal")).get() + ":" + value.z8_getInt(new string("decimal")).get());
@@ -135,6 +149,9 @@ class JsonObjectOracle {
         server_source / "base/json/parser/JsonArray.java",
         server_source / "types/date.java",
         server_source / "types/decimal.java",
+        server_source / "types/file.java",
+        server_source / "types/binary.java",
+        original / "org.zenframework.z8.boot/src/main/java/org/zenframework/z8/rmi/ObjectIO.java",
     ]
     subprocess.run(["javac", "-source", "8", "-target", "8", "-cp", classpath, "-d", str(temp),
                     *map(str, current_sources)], cwd=temp, check=True)
@@ -186,6 +203,17 @@ void main() {
     P.m_put(value, "storedNull"w, null);
     foreach (key; ["storedInt"w, "storedBool"w, "storedText"w, "storedGuid"w, "storedSpan"w, "storedDate"w, "storedMin"w, "storedNaN"w, "storedNull"w])
         writeln(z8_optional_require(P.m_has(value, key)), ":", P.m_text(value, key).to!string);
+    auto attachment = new Z8File(); attachment.name = "документ.txt"w; attachment.path = "files/doc.txt"w;
+    attachment.size = z8_optional_wrap(123L); attachment.time = z8_date_from_ticks(0);
+    attachment.details.z8_add("language"w, "русский"w);
+    P.m_put(value, "attachment"w, z8_primary_box(attachment));
+    attachment.name = "changed"w; attachment.details.z8_add("language"w, "changed"w);
+    auto stored = P.m_nested(value, "attachment"w);
+    foreach (key; ["name"w, "path"w, "size"w, "time"w, "id"w, "user"w])
+        writeln("file:", key.to!string, ":", P.m_text(stored, key).to!string);
+    writeln("file:detail:", P.m_text(P.m_nested(stored, "details"w), "language"w).to!string);
+    P.m_put(stored, "name"w, z8_primary_box("nested change"w));
+    writeln("file:mutated:", P.m_text(P.m_nested(value, "attachment"w), "name"w).to!string);
     foreach (input; ["12345678901234567890.2500"w, "1E+3"w, "1E-7"w, "-18446744073709551617.99"w]) {
         P.m_put(value, "decimal"w, z8_primary_box(z8_decimal_parse(input)));
         writeln(P.m_text(value, "decimal"w).to!string, ":", z8_optional_require(P.m_integer(value, "decimal"w)));

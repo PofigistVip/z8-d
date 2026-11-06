@@ -260,7 +260,11 @@ private Z8JsonPrimaryValue z8_json_from_primary(Z8Primary value) {
             if (!value.decimalValue.nan) { result.value = JSONValue(0L); result.hasDecimal = true; result.decimalValue = value.decimalValue; }
             break;
         case Z8PrimaryKind.binary: throw new Exception("binary JSON value is unsupported");
-        case Z8PrimaryKind.geometry: case Z8PrimaryKind.file: case Z8PrimaryKind.user:
+        case Z8PrimaryKind.file:
+            // JsonUtils.unwrap snapshots file metadata as a nested JsonObject.
+            result.value = z8_json_parse(z8_file_to_string(value.fileValue).to!string);
+            break;
+        case Z8PrimaryKind.geometry: case Z8PrimaryKind.user:
             throw new Exception("JSON value type is not supported yet");
     }
     return result;
