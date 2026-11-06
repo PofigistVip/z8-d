@@ -1,6 +1,7 @@
 """Cross-check typed BL primary values with Google's protobuf runtime."""
 from pathlib import Path
 import os
+import struct
 import subprocess
 import tempfile
 from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
@@ -21,12 +22,18 @@ decimal = file.message_type.add(name="Decimal")
 decimal.field.add(name="coefficient", number=1, label=1, type=9)
 decimal.field.add(name="scale", number=2, label=1, type=17)
 decimal.field.add(name="nan", number=3, label=1, type=8)
+geometry = file.message_type.add(name="Geometry")
+geometry.field.add(name="ewkb_hex", number=1, label=1, type=9); geometry.field.add(name="srid", number=2, label=1, type=17)
+binary = file.message_type.add(name="Binary"); binary.oneof_decl.add(name="_name")
+binary.field.add(name="data", number=1, label=1, type=12)
+binary.field.add(name="name", number=2, label=1, type=9, proto3_optional=True, oneof_index=0)
 primary = file.message_type.add(name="Primary"); primary.oneof_decl.add(name="value")
 for number, (name, kind, type_name) in enumerate((
     ("null_value", 8, None), ("integer_value", 18, None), ("boolean_value", 8, None),
     ("decimal_value", 11, ".z8.authority.v1.Decimal"), ("text_value", 9, None),
     ("guid_value", 11, ".z8.authority.v1.Guid"), ("date_ticks", 18, None),
-    ("datespan_milliseconds", 18, None)), 1):
+    ("datespan_milliseconds", 18, None), ("geometry_value", 11, ".z8.authority.v1.Geometry"),
+    ("binary_value", 11, ".z8.authority.v1.Binary")), 1):
     field = primary.field.add(name=name, number=number, label=1, type=kind, oneof_index=0)
     if type_name: field.type_name = type_name
 pool = descriptor_pool.DescriptorPool(); pool.Add(common); pool.Add(file)
@@ -59,6 +66,11 @@ void main(string[] args) {
     assert(z8_primary_cast!Z8Guid(readValue("guid")) == new Z8Guid(0xFEDCBA9876543210UL, 0x8877665544332211UL));
     assert(z8_date_ticks(z8_primary_cast!Z8Date(readValue("date"))) == 1700000000123L);
     assert(z8_primary_cast!Z8Datespan(readValue("span")).ticks == long.min);
+    auto geometry = z8_primary_cast!Z8Geometry(readValue("geometry"));
+    assert(z8_geometry_srs(geometry) == 4326 && z8_geometry_x(geometry) == z8_decimal_literal("1.5"));
+    auto none = z8_primary_cast!Z8Geometry(readValue("empty-geometry")); assert(z8_geometry_srs(none) == 3857 && !z8_geometry_to_string(none).length);
+    auto binary = z8_primary_cast!Z8Binary(readValue("binary"));
+    assert(binary.data == [cast(ubyte)1, 2, 255] && binary.name !is null && !binary.name.length);
     auto parsed = z8_parse_protobuf_primary(cast(const(ubyte)[])read(buildPath(dir, "decimal.bin")));
     write(buildPath(dir, "decimal-roundtrip.bin"), z8_serialize_protobuf_primary(parsed));
     emit("null", null); emit("integer", z8_primary_box(long.min)); emit("boolean", z8_primary_box(false));
@@ -66,11 +78,25 @@ void main(string[] args) {
     emit("nan", z8_primary_box(z8_decimal_nan())); emit("empty", z8_primary_box(z8_string_new(""w)));
     emit("guid", z8_primary_box(new Z8Guid(0xFEDCBA9876543210UL, 0x8877665544332211UL)));
     emit("date", z8_primary_box(z8_date_from_ticks(1700000000123L))); emit("span", z8_primary_box(new Z8Datespan(long.min)));
+    emit("geometry", z8_primary_box(geometry)); emit("empty-geometry", z8_primary_box(none));
+    auto memory = new Z8Binary([cast(ubyte)0, 1, 2, 255]); memory.name = z8_string_new(""w);
+    ubyte[2] buffer; assert(z8_binary_read_chunk(memory, buffer[0 .. 1]) == [cast(ubyte)0]);
+    emit("binary", z8_primary_box(memory)); assert(memory.position == 1);
+    bool tooLarge; try { z8_binary_snapshot(memory, 2); } catch (Exception) { tooLarge = true; }
+    assert(tooLarge && memory.position == 1);
+    auto file = z8_binary_from_file(buildPath(dir, "stream.bin"));
+    assert(z8_binary_read_chunk(file, buffer[]) == [cast(ubyte)10, 11]);
+    emit("file-stream", z8_primary_box(file)); assert(z8_binary_remaining(file) == 2);
+    assert(z8_binary_read_chunk(file, buffer[]) == [cast(ubyte)12, 13]); z8_binary_close(file);
+    bool closed; try { z8_binary_snapshot(file, 100); } catch (Exception) { closed = true; } assert(closed);
     auto overridden = z8_parse_protobuf_primary([0x18, 0x01, 0x10, 0x00]);
     assert(overridden.kind == Z8ProtobufPrimaryKind.integer && overridden.integerValue == 0);
     bool rejected; try { z8_primary_from_protobuf(z8_parse_protobuf_primary([])); } catch (Z8ProtobufException) { rejected = true; }
     assert(rejected);
-    rejected = false; try { z8_primary_to_protobuf(z8_primary_box(new Z8Binary())); } catch (Z8ProtobufException) { rejected = true; }
+    rejected = false; try { z8_primary_to_protobuf(z8_primary_box(new Z8File())); } catch (Z8ProtobufException) { rejected = true; }
+    assert(rejected);
+    auto invalidGeometry = z8_primary_to_protobuf(z8_primary_box(geometry)); invalidGeometry.geometryValue.srid = 3857;
+    rejected = false; try { z8_primary_from_protobuf(invalidGeometry); } catch (Z8ProtobufException) { rejected = true; }
     assert(rejected);
     Z8ProtobufPrimary invalidDate; invalidDate.kind = Z8ProtobufPrimaryKind.date; invalidDate.integerValue = long.max;
     rejected = false; try { z8_primary_from_protobuf(invalidDate); } catch (Z8ProtobufException) { rejected = true; }
@@ -89,6 +115,7 @@ void main(string[] args) {
         "boolean": Primary(boolean_value=False), "text": Primary(text_value="Строка 🐘"),
         "date": Primary(date_ticks=1700000000123), "span": Primary(datespan_milliseconds=-(1 << 63)),
         "decimal": Primary(), "guid": Primary(), "nan": Primary(), "empty": Primary(text_value=""),
+        "geometry": Primary(), "empty-geometry": Primary(), "binary": Primary(),
     }
     values["decimal"].decimal_value.coefficient = "-1234500"; values["decimal"].decimal_value.scale = 6
     values["decimal"].decimal_value.MergeFromString(b"\x20\x01")
@@ -96,6 +123,11 @@ void main(string[] args) {
     values["decimal"].MergeFromString(b"\x98\x06\x01")
     values["guid"].guid_value.most_significant_bits = 0xFEDCBA9876543210
     values["guid"].guid_value.least_significant_bits = 0x8877665544332211
+    values["geometry"].geometry_value.ewkb_hex = (struct.pack("<BII", 1, 0x20000001, 4326) + struct.pack("<dd", 1.5, -2.5)).hex().upper()
+    values["geometry"].geometry_value.srid = 4326
+    values["empty-geometry"].geometry_value.srid = 3857
+    values["binary"].binary_value.data = b"\x01\x02\xff"; values["binary"].binary_value.name = ""
+    (temp / "stream.bin").write_bytes(bytes([10, 11, 12, 13]))
     for name, value in values.items(): (temp / (name + ".bin")).write_bytes(value.SerializeToString())
     first, second = Primary(), Primary()
     first.decimal_value.coefficient = "-1234500"; first.decimal_value.MergeFromString(b"\x20\x01")
@@ -111,4 +143,5 @@ void main(string[] args) {
         else:
             assert actual == expected
     assert Primary.FromString((temp / "decimal-roundtrip.bin").read_bytes()) == values["decimal"]
+    assert Primary.FromString((temp / "file-stream-d.bin").read_bytes()).binary_value.data == bytes([12, 13])
 print("Protobuf primary values interoperate with Google's runtime")

@@ -10,6 +10,16 @@ message Decimal {
   bool nan = 3;
 }
 
+message Geometry {
+  string ewkb_hex = 1;
+  sint32 srid = 2;
+}
+
+message Binary {
+  bytes data = 1;
+  optional string name = 2;
+}
+
 // Null and default scalar values remain distinct through oneof presence.
 message Primary {
   oneof value {
@@ -21,5 +31,7 @@ message Primary {
     Guid guid_value = 6;
     sint64 date_ticks = 7;
     sint64 datespan_milliseconds = 8;
+    Geometry geometry_value = 9;
+    Binary binary_value = 10;
   }
 }

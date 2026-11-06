@@ -44,6 +44,25 @@ ulong z8_binary_remaining(Z8Binary value) {
     }
     return value.data.length - value.position;
 }
+// Copy the unread bytes without advancing or closing the original stream.
+// A bound keeps callers from accidentally materializing an arbitrary file.
+ubyte[] z8_binary_snapshot(Z8Binary value, ulong maximum) {
+    value = z8_nonnull(value);
+    auto remaining = z8_binary_remaining(value);
+    if (remaining > maximum || remaining > size_t.max) throw new Exception("binary snapshot exceeds size limit");
+    if (value.fileInput is null) return value.data[value.position .. $].dup;
+    auto stream = value.fileInput.stream;
+    auto position = stream.tell;
+    scope(exit) stream.seek(position);
+    auto result = new ubyte[cast(size_t)remaining];
+    size_t offset;
+    while (offset < result.length) {
+        auto chunk = stream.rawRead(result[offset .. $]);
+        if (!chunk.length) throw new Exception("binary stream changed during snapshot");
+        offset += chunk.length;
+    }
+    return result;
+}
 private ubyte[] z8_binary_read_all(Z8Binary value) {
     z8_nonnull(value);
     scope(exit) z8_binary_finish_read(value);

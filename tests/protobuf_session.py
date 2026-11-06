@@ -1,6 +1,7 @@
 """Verify protobuf session snapshots against Google's protobuf runtime."""
 from pathlib import Path
 import os
+import struct
 import subprocess
 import tempfile
 from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
@@ -28,10 +29,13 @@ field(guid, "most_significant_bits", 1, 6); field(guid, "least_significant_bits"
 primary_file = proto("primary"); primary_file.dependency.append(common.name)
 decimal = primary_file.message_type.add(name="Decimal")
 field(decimal, "coefficient", 1, 9); field(decimal, "scale", 2, 17); field(decimal, "nan", 3, 8)
+geometry = primary_file.message_type.add(name="Geometry"); field(geometry, "ewkb_hex", 1, 9); field(geometry, "srid", 2, 17)
+binary = primary_file.message_type.add(name="Binary"); field(binary, "data", 1, 12); field(binary, "name", 2, 9, optional=True)
 primary = primary_file.message_type.add(name="Primary"); primary.oneof_decl.add(name="value")
 for number, (name, kind, type_name) in enumerate((("null_value", 8, None), ("integer_value", 18, None),
     ("boolean_value", 8, None), ("decimal_value", 11, "Decimal"), ("text_value", 9, None),
-    ("guid_value", 11, "Guid"), ("date_ticks", 18, None), ("datespan_milliseconds", 18, None)), 1):
+    ("guid_value", 11, "Guid"), ("date_ticks", 18, None), ("datespan_milliseconds", 18, None),
+    ("geometry_value", 11, "Geometry"), ("binary_value", 11, "Binary")), 1):
     field(primary, name, number, kind, type_name=type_name, oneof=0)
 priv_file = proto("privileges"); priv_file.dependency.append(common.name)
 access = priv_file.message_type.add(name="Access")
@@ -78,6 +82,9 @@ void main(string[] args) {
     user.parameters.z8_add(z8_string_new(""w), null);
     user.parameters.z8_add("flag"w, z8_primary_box(false));
     user.parameters.z8_add("text"w, z8_primary_box("текст 🐘"w));
+    auto binaryValue = new Z8Binary([cast(ubyte)0, 255]); binaryValue.name = "data.bin"w;
+    user.parameters.z8_add("binary"w, z8_primary_box(binaryValue));
+    user.parameters.z8_add("geometry"w, z8_primary_box(z8_geometry_point(z8_decimal_literal("1.5"), z8_decimal_literal("-2.5"), 4326)));
     auto system = new Z8UserData(); system.id = z8_guid_create(1); system.builtinSystem = true;
     system.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     auto session = new Z8ApplicationSession("token"w, user, system);
@@ -93,6 +100,8 @@ void main(string[] args) {
     assert(copy.parameters.z8_containsKey(""w) && copy.parameters.z8_get(""w) is null);
     assert(!z8_optional_require(z8_primary_cast!bool(copy.parameters.z8_get("flag"w))));
     assert(z8_primary_cast!wstring(copy.parameters.z8_get("text"w)) == "текст 🐘"w);
+    assert(z8_primary_cast!Z8Binary(copy.parameters.z8_get("binary"w)).data == [cast(ubyte)0, 255]);
+    assert(z8_geometry_srs(z8_primary_cast!Z8Geometry(copy.parameters.z8_get("geometry"w))) == 4326);
     assert(decoded.session.system.builtinSystem && decoded.session.system.privileges.getDefaultAccess().destroy);
     write(args[3], z8_encode_session(decoded));
     bool rejected; try { z8_decode_session([]); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
@@ -102,7 +111,7 @@ void main(string[] args) {
         catch (Z8ProtobufException) { rejected = true; }
         assert(rejected);
     }
-    user.parameters.z8_add("unsupported"w, z8_primary_box(new Z8Binary()));
+    user.parameters.z8_add("unsupported"w, z8_primary_box(new Z8File()));
     rejected = false; try { z8_encode_session(Z8SessionSnapshot("schema"w, session)); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
 }
 ''', encoding="utf-8")
@@ -118,7 +127,10 @@ void main(string[] args) {
     item = user.privileges.tables.add(); item.id.least_significant_bits = 7; item.access.SetInParent()
     item = user.parameters.add(); item.null_key = True; item.value.integer_value = 7
     item = user.parameters.add(); item.key = ""; item.value.null_value = False
+    item = user.parameters.add(); item.key = "binary"; item.value.binary_value.data = b"\x00\xff"; item.value.binary_value.name = "data.bin"
     item = user.parameters.add(); item.key = "flag"; item.value.boolean_value = False
+    item = user.parameters.add(); item.key = "geometry"; item.value.geometry_value.srid = 4326
+    item.value.geometry_value.ewkb_hex = (struct.pack("<BII", 1, 0x20000001, 4326) + struct.pack("<dd", 1.5, -2.5)).hex().upper()
     item = user.parameters.add(); item.key = "text"; item.value.text_value = "текст 🐘"
     system = message.system; system.id.least_significant_bits = 1; system.builtin_system = True; system.has_roles = True
     for name in ("read", "write", "create", "copy", "destroy", "execute"): setattr(system.privileges.default_access, name, True)
@@ -140,6 +152,6 @@ void main(string[] args) {
     generated = Session.FromString(output_file.read_bytes())
     assert generated.session_id == "token" and generated.user.login == "$literal$" and not generated.user.HasField("first_name")
     assert generated.user.HasField("middle_name") and generated.user.middle_name == ""
-    assert len(generated.user.parameters) == 4 and generated.user.privileges.tables[0].HasField("access")
+    assert len(generated.user.parameters) == 6 and generated.user.privileges.tables[0].HasField("access")
     assert Session.FromString(roundtrip_file.read_bytes()) == expected
 print("Protobuf session snapshots interoperate with Google's runtime")

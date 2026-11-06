@@ -14,10 +14,11 @@ remain present. Conversion into runtime privileges rejects duplicate IDs and
 entries without an ID or access; an omitted default grants nothing. The wire
 representation preserves unknown fields and limits the number of entries.
 `primary.proto` and `z8.authority.primary` encode null, integers, booleans,
-decimals, strings, GUIDs, dates and durations. The `oneof` preserves the
+decimals, strings, GUIDs, dates, durations, geometries and binary values. The `oneof` preserves the
 difference between null and default scalar values. Decimal coefficient and
-scale are preserved separately. Binary, geometry, file and user-defined primary
-values are currently rejected instead of being silently dropped.
+scale are preserved separately. Geometry carries EWKB and SRID. Binary values
+copy the unread stream without advancing it, subject to the message size limit.
+File and user-defined primary values are currently rejected instead of being silently dropped.
 `session.proto` and `z8.authority.session` serialize a session ID, schema,
 user and system identities, roles, entry points, privilege snapshots and typed
 parameters. Optional identity strings distinguish null from empty; parameters
