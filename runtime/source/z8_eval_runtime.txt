@@ -37,6 +37,20 @@ private wstring z8_eval_value_text(Z8EvalValue value) {
         z8_json_object_to_string(value.json) : z8_json_array_string(value.json);
     return value.primary is null ? "null"w : z8_primary_to_string(value.primary);
 }
+private wstring z8_eval_formatted_text(Z8EvalValue value) {
+    if (value.primary is null && value.json is null) return "<null>"w;
+    if (value.primary !is null && value.primary.kind == Z8PrimaryKind.date)
+        return z8_date_toString(value.primary.dateValue, "dd.MM.yyy"w);
+    if (value.primary !is null && value.primary.kind == Z8PrimaryKind.decimal) {
+        auto number = value.primary.decimalValue;
+        if (number.nan) return "NaN"w;
+        auto rounded = z8_math_result(number.z8_as_double()).z8_round(2, 4);
+        auto formatted = z8_message_number(rounded.z8_string(), 2);
+        if (number.coefficient < 0 && rounded.coefficient == 0) formatted = "-"w ~ formatted;
+        return (number.coefficient < 0 ? ""w : " "w) ~ formatted;
+    }
+    return z8_eval_value_text(value);
+}
 private wstring z8_eval_context_info(Z8Object self) {
     auto state = z8_eval_state(self); wstring result = "variables: {"w;
     foreach (i, name; state.order.ordered()) {
@@ -89,6 +103,13 @@ private Z8EvalValue z8_eval_unary(wstring op, Z8EvalValue value) {
         return Z8EvalValue(true, z8_primary_box(op == "+"w ? item.integerValue : -item.integerValue), null, null);
     throw new Exception("unsupported Eval unary operands");
 }
+private Z8Primary z8_eval_decimal_binary(string op)(Z8Primary left, Z8Primary right) {
+    if (left.kind == Z8PrimaryKind.integer && right.kind == Z8PrimaryKind.decimal)
+        return z8_primary_box(z8_optional_mixed!(op, true)(z8_optional_wrap(left.integerValue), z8_optional_wrap(right.decimalValue)));
+    auto a = left.kind == Z8PrimaryKind.integer ? z8_decimal_from_int(left.integerValue) : left.decimalValue;
+    auto b = right.kind == Z8PrimaryKind.integer ? z8_decimal_from_int(right.integerValue) : right.decimalValue;
+    return z8_primary_box(mixin("a " ~ op ~ " b"));
+}
 private Z8EvalValue z8_eval_binary(wstring op, Z8EvalValue left, Z8EvalValue right) {
     if (!left.evaluated || !right.evaluated)
         return Z8EvalValue(false, null, null, z8_eval_expression_repr(left) ~ " "w ~
@@ -110,6 +131,18 @@ private Z8EvalValue z8_eval_binary(wstring op, Z8EvalValue left, Z8EvalValue rig
         else if (op == ">"w) result = z8_primary_box(x > y);
         else if (op == "<="w) result = z8_primary_box(x <= y);
         else if (op == ">="w) result = z8_primary_box(x >= y);
+    } else if (b !is null && [Z8PrimaryKind.integer, Z8PrimaryKind.decimal].canFind(a.kind) &&
+               [Z8PrimaryKind.integer, Z8PrimaryKind.decimal].canFind(b.kind)) {
+        if (op == "+"w) result = z8_eval_decimal_binary!"+"(a, b);
+        else if (op == "-"w) result = z8_eval_decimal_binary!"-"(a, b);
+        else if (op == "*"w) result = z8_eval_decimal_binary!"*"(a, b);
+        else if (op == "/"w) result = z8_eval_decimal_binary!"/"(a, b);
+        else if (op == "=="w) result = z8_eval_decimal_binary!"=="(a, b);
+        else if (op == "!="w) result = z8_eval_decimal_binary!"!="(a, b);
+        else if (op == "<"w) result = z8_eval_decimal_binary!"<"(a, b);
+        else if (op == ">"w) result = z8_eval_decimal_binary!">"(a, b);
+        else if (op == "<="w) result = z8_eval_decimal_binary!"<="(a, b);
+        else if (op == ">="w) result = z8_eval_decimal_binary!">="(a, b);
     } else if (a.kind == Z8PrimaryKind.boolean && b !is null && b.kind == Z8PrimaryKind.boolean) {
         if (op == "=="w) result = z8_primary_box(a.booleanValue == b.booleanValue);
         else if (op == "!="w) result = z8_primary_box(a.booleanValue != b.booleanValue);
@@ -232,7 +265,7 @@ private wstring z8_eval_text(Z8Object self, wstring source) {
     wstring result = source[0 .. cast(size_t)first];
     for (;;) {
         result ~= failed ? source[start .. last + 1] : value.evaluated ?
-            (value.primary is null && value.json is null ? "<null>"w : z8_eval_value_text(value)) : "${"w ~ value.expression ~ "}"w;
+            z8_eval_formatted_text(value) : "${"w ~ value.expression ~ "}"w;
         auto remaining = source[last + 1 .. $];
         auto next = remaining.indexOf("${"w);
         if (next < 0) return z8_string_new(result ~ remaining);

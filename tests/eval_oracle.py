@@ -1,4 +1,7 @@
-"""Compare the supported Eval subset with the current original Z8 sources."""
+"""Compare Eval with current expression and scalar sources plus the older server JAR.
+
+The BIRT exception stub is only needed to compile an unused error path.
+"""
 from pathlib import Path
 import os
 import shutil
@@ -40,9 +43,9 @@ public class EvalOracle {
         eval.z8_setVariable(new string("name"), new string("Ada"));
         eval.z8_setVariable(new string("count"), new integer(7));
         eval.z8_setVariable(new string("flag"), bool.True);
-        String[] patterns = {"plain text", "${name}", "Hello ${name}!", "${count}", "Count ${count}", "${true}", "${missing}", "before ${missing} after", "${'literal'}", "${count + 2}", "twice ${count * 2}", "${'Hi ' + name}", "${missing + 2}", "${(missing)}", "result ${true && false}!"};
+        String[] patterns = {"plain text", "${name}", "Hello ${name}!", "${count}", "Count ${count}", "${true}", "${missing}", "before ${missing} after", "${'literal'}", "${count + 2}", "twice ${count * 2}", "${'Hi ' + name}", "${missing + 2}", "${(missing)}", "result ${true && false}!", "${1.5 + 2}", "${2 * 1.25}", "${7.0 / 2}", "decimal=${1.25}", "large=${1234.5}", "negative=${0.0 - 0.001}"};
         for (String pattern : patterns) System.out.println(eval.z8_evaluateText(new string(pattern)).get());
-        for (String expression : new String[]{"flag", "true", "false", "count > 5", "count + 2 == 9", "count + 2 == 9 && flag", "!(count < 3)", "'abc' + name == 'abcAda'", "-count + 10 == 3", "true || false && false"}) {
+        for (String expression : new String[]{"flag", "true", "false", "count > 5", "count + 2 == 9", "count + 2 == 9 && flag", "!(count < 3)", "'abc' + name == 'abcAda'", "-count + 10 == 3", "true || false && false", "1.5 + 2 == 3.5", "1 < 1.0", "1 <= 1.0", "1.0 == 1", "2 * 1.25 == 2.50"}) {
             try { System.out.println(eval.z8_evaluateBoolean(new string(expression)).get()); }
             catch (Exception error) { System.out.println("error"); }
         }
@@ -54,6 +57,7 @@ public class EvalOracle {
 ''', encoding="utf-8")
     classpath = os.pathsep.join(map(str, [temp, *jars]))
     java_sources = [*sorted((sources / "org/zenframework/z8/server/expression").rglob("*.java")),
+                    *(sources / "org/zenframework/z8/server/types" / (name + ".java") for name in ("decimal", "integer", "bool", "string", "date")),
                     sources / "org/zenframework/z8/server/base/eval/Eval.java", stub, java]
     subprocess.run(["javac", "-source", "8", "-target", "8", "-cp", classpath, "-sourcepath", str(temp),
                     "-d", str(temp), *map(str, java_sources)], cwd=temp, check=True)
@@ -78,10 +82,12 @@ void main() {
     foreach (pattern; ["plain text"w, "${name}"w, "Hello ${name}!"w, "${count}"w, "Count ${count}"w,
                        "${true}"w, "${missing}"w, "before ${missing} after"w, "${'literal'}"w,
                        "${count + 2}"w, "twice ${count * 2}"w, "${'Hi ' + name}"w, "${missing + 2}"w, "${(missing)}"w,
-                       "result ${true && false}!"w])
+                       "result ${true && false}!"w, "${1.5 + 2}"w, "${2 * 1.25}"w, "${7.0 / 2}"w,
+                       "decimal=${1.25}"w, "large=${1234.5}"w, "negative=${0.0 - 0.001}"w])
         writeln(eval.m_evaluateText(pattern).to!string);
     foreach (expression; ["flag"w, "true"w, "false"w, "count > 5"w, "count + 2 == 9"w, "count + 2 == 9 && flag"w,
-                          "!(count < 3)"w, "'abc' + name == 'abcAda'"w, "-count + 10 == 3"w, "true || false && false"w])
+                          "!(count < 3)"w, "'abc' + name == 'abcAda'"w, "-count + 10 == 3"w, "true || false && false"w,
+                          "1.5 + 2 == 3.5"w, "1 < 1.0"w, "1 <= 1.0"w, "1.0 == 1"w, "2 * 1.25 == 2.50"w])
         try { writeln(z8_optional_require(eval.m_evaluateBoolean(expression))); } catch (Exception) { writeln("error"); }
     writeln(eval.m_getContextInfo().to!string);
     writeln("errors=", eval.m_getErrors().z8_size()); eval.m_clear(); writeln("clear=", eval.m_getErrors().z8_size());
