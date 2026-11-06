@@ -5,7 +5,8 @@ private void z8_application_dispatch_query_export_target(wstring className, Z8Ob
     auto request = z8_application_require_request();
     auto original = request.parameters;
     auto format = original.z8_get("format"w);
-    if (format != "xls"w && format != "xlsx"w && format != "pdf"w) throw new Exception("unsupported export format");
+    if (format != "xls"w && format != "xlsx"w && format != "pdf"w && format != "doc"w && format != "docx"w)
+        throw new Exception("unsupported export format");
     auto input = original.z8_get("columns"w);
     if (input is null || !input.length) throw new Exception("export columns are required");
     auto columns = z8_json_parse(input.to!string);
@@ -48,8 +49,11 @@ private void z8_application_dispatch_query_export_target(wstring className, Z8Ob
         if (rows is null || rows.type != JSONType.array) throw new Exception("invalid export data");
         data = *rows;
     }
-    auto bytes = format == "pdf"w ? z8_export_pdf(ids, headers, types, data) : z8_export_spreadsheet(ids, headers, types, data);
-    auto file = new Z8File(); file.id = null; file.name = format == "pdf"w ? "export.pdf"w : "export.xlsx"w;
+    auto word = format == "doc"w || format == "docx"w;
+    auto bytes = format == "pdf"w ? z8_export_pdf(ids, headers, types, data) :
+        word ? z8_export_word(ids, headers, types, data) : z8_export_spreadsheet(ids, headers, types, data);
+    auto file = new Z8File(); file.id = null;
+    file.name = format == "pdf"w ? "export.pdf"w : word ? "export.docx"w : "export.xlsx"w;
     file.path = z8_temporary_archive_store(bytes, file.name);
     file.size = z8_optional_wrap(cast(long)bytes.length);
     z8_application_print(file);
@@ -93,6 +97,47 @@ private string z8_export_xml(wstring value) {
         else if (ch == 9 || ch == 10 || ch == 13 || (ch >= 32 && ch != 0xfffe && ch != 0xffff)) result ~= ch.to!string;
     }
     return result;
+}
+
+// WordprocessingML keeps the export independent of the optional office engine.
+private ubyte[] z8_export_word(wstring[] ids, wstring[] headers, wstring[] types, JSONValue rows) {
+    import std.json : JSONType;
+    import std.zip : ZipArchive, ArchiveMember, CompressionMethod;
+    auto archive = new ZipArchive();
+    void add(string name, string content) {
+        auto member = new ArchiveMember(); member.name = name;
+        member.expandedData = cast(ubyte[])content.dup; member.compressionMethod = CompressionMethod.deflate;
+        archive.addMember(member);
+    }
+    add("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`);
+    add("_rels/.rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
+    string body = `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblBorders><w:top w:val="single" w:sz="4"/><w:left w:val="single" w:sz="4"/><w:bottom w:val="single" w:sz="4"/><w:right w:val="single" w:sz="4"/><w:insideH w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/></w:tblBorders></w:tblPr>`;
+    void cell(wstring value, bool heading) {
+        body ~= `<w:tc><w:p><w:r>` ~ (heading ? `<w:rPr><w:b/></w:rPr>` : "");
+        size_t start;
+        foreach (i, c; value) if (c == '\n') {
+            body ~= `<w:t xml:space="preserve">` ~ z8_export_xml(value[start .. i]) ~ `</w:t><w:br/>`;
+            start = i + 1;
+        }
+        body ~= `<w:t xml:space="preserve">` ~ z8_export_xml(value[start .. $]) ~ `</w:t></w:r></w:p></w:tc>`;
+    }
+    body ~= `<w:tr><w:trPr><w:tblHeader/></w:trPr>`;
+    foreach (header; headers) cell(header, true);
+    body ~= `</w:tr>`;
+    foreach (row; rows.array) {
+        if (row.type != JSONType.object) throw new Exception("invalid export row");
+        body ~= `<w:tr>`;
+        foreach (i, id; ids) {
+            auto value = id.to!string in row.object;
+            cell(value is null ? ""w : z8_export_display_value(types[i], *value), false);
+        }
+        body ~= `</w:tr>`;
+        if (body.length > z8_temporary_archives_bytes_limit) throw new Exception("export is too large");
+    }
+    body ~= `</w:tbl></w:body></w:document>`;
+    if (body.length > z8_temporary_archives_bytes_limit) throw new Exception("export is too large");
+    add("word/document.xml", body);
+    return cast(ubyte[])archive.build();
 }
 
 private ubyte[] z8_export_spreadsheet(wstring[] ids, wstring[] headers, wstring[] types, JSONValue rows) {
