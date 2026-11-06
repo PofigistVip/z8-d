@@ -1,0 +1,44 @@
+// Entity filters retain their operands and short-circuit like Filter.java.
+private enum z8_entity_filter_name = "org.zenframework.z8.server.base.entity.Filter"w;
+private enum z8_entity_visitor_name = "org.zenframework.z8.server.base.entity.Visitor"w;
+private enum Z8EntityFilterOperation { none, not, and, or }
+private class Z8EntityFilterState { Z8EntityFilterOperation operation; Z8Object left, right; }
+private Z8EntityFilterState z8_entity_filter_state(Z8Object filter) {
+    filter = z8_nonnull(filter);
+    if (!z8_native_is_instance(z8_entity_filter_name, filter)) throw new Exception("invalid Entity Filter");
+    auto state = cast(Z8EntityFilterState)filter.z8_get_native_state(z8_entity_filter_name);
+    if (state is null) { state = new Z8EntityFilterState(); filter.z8_set_native_state(z8_entity_filter_name, state); }
+    return state;
+}
+private bool z8_entity_filter_accept(Z8Object filter, Z8Object entity) {
+    auto state = z8_entity_filter_state(filter);
+    final switch (state.operation) {
+        case Z8EntityFilterOperation.none: return z8_optional_require(filter.z8_entity_filter_virtual_accept(entity));
+        case Z8EntityFilterOperation.not: return !z8_entity_filter_accept(state.left, entity);
+        case Z8EntityFilterOperation.and: return z8_entity_filter_accept(state.left, entity) && z8_entity_filter_accept(state.right, entity);
+        case Z8EntityFilterOperation.or: return z8_entity_filter_accept(state.left, entity) || z8_entity_filter_accept(state.right, entity);
+    }
+}
+private Z8Object z8_entity_filter_combine(Z8Object self, Z8Object other, Z8EntityFilterOperation op) {
+    z8_entity_filter_state(self);
+    if (op != Z8EntityFilterOperation.not && other is null) return self;
+    if (other !is null) z8_entity_filter_state(other);
+    auto result = z8_native_new(z8_entity_filter_name);
+    result.z8_set_container(z8_object_container(self));
+    auto state = z8_entity_filter_state(result); state.operation = op; state.left = self; state.right = other;
+    return result;
+}
+private Z8Object z8_entity_filter_not(Z8Object self) { return z8_entity_filter_combine(self, null, Z8EntityFilterOperation.not); }
+private Z8Object z8_entity_filter_and(Z8Object self, Z8Object other) { return z8_entity_filter_combine(self, other, Z8EntityFilterOperation.and); }
+private Z8Object z8_entity_filter_or(Z8Object self, Z8Object other) { return z8_entity_filter_combine(self, other, Z8EntityFilterOperation.or); }
+private Z8Optional!bool z8_entity_filter_default(Z8Object self, Z8Object entity) { z8_entity_filter_state(self); return z8_optional_wrap(true); }
+private void z8_entity_visitor_default(Z8Object self, Z8Object entity) { z8_nonnull(self); }
+void z8_bind_builtin_entity_filter() {
+    enum f = z8_entity_filter_name ~ "."w, v = z8_entity_visitor_name ~ "."w;
+    z8_native_bind(f ~ "z8op_not"w, &z8_entity_filter_not);
+    z8_native_bind(f ~ "z8op_and"w, &z8_entity_filter_and);
+    z8_native_bind(f ~ "z8op_or"w, &z8_entity_filter_or);
+    z8_native_bind(f ~ "m_accept"w, &z8_entity_filter_default);
+    z8_native_bind(v ~ "m_visit"w, &z8_entity_visitor_default);
+}
+shared static this() { z8_bind_builtin_entity_filter(); }

@@ -139,6 +139,8 @@ class Z8Object {
     void z8_entity_virtual_on_register() {}
     void z8_entity_virtual_on_create() {}
     void z8_entity_virtual_on_delete() {}
+    Z8Optional!bool z8_entity_filter_virtual_accept(Z8Object entity) { return z8_optional_wrap(true); }
+    void z8_entity_visitor_virtual_visit(Z8Object entity) {}
     void z8_action_virtual_execute_many(Z8Array!Z8Guid records, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) {}
     void z8_action_virtual_execute_one(Z8Guid record, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) {}
     void z8_report_virtual_prepare(Z8Guid record) {}

@@ -18,12 +18,37 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     shutil.copytree(language, source)
     (source / "TrackedEntity.bl").write_text('''
 import org.zenframework.z8.base.entity.Entity;
+import org.zenframework.z8.base.entity.Filter;
 public class TrackedEntity extends Entity {
     public int changes = 0; public int created = 0; public int removed = 0; public int registered = 0; public string last = "";
     virtual protected void onChange(string key) { changes = changes + 1; last = key; }
     virtual protected void onCreate() { created = created + 1; }
     virtual protected void onDelete() { removed = removed + 1; }
     virtual protected void onRegister() { registered = registered + 1; }
+    public Entity[] matching(Filter filter) { return findEntities(filter); }
+}
+''', encoding="utf-8")
+    (source / "NumberFilter.bl").write_text('''
+import org.zenframework.z8.base.entity.Entity;
+import org.zenframework.z8.base.entity.Filter;
+public class NumberFilter extends Filter {
+    public int calls = 0; public int minimum = 0;
+    virtual public bool accept(Entity entity) { calls = calls + 1; return entity.getInt("number") >= minimum; }
+}
+''', encoding="utf-8")
+    (source / "CountVisitor.bl").write_text('''
+import org.zenframework.z8.base.entity.Entity;
+import org.zenframework.z8.base.entity.Visitor;
+public class CountVisitor extends Visitor {
+    public int count = 0; public int total = 0;
+    virtual public void visit(Entity entity) { count = count + 1; total = total + entity.getInt("number"); }
+}
+''', encoding="utf-8")
+    (source / "MutatingVisitor.bl").write_text('''
+import org.zenframework.z8.base.entity.Entity;
+import org.zenframework.z8.base.entity.Visitor;
+public class MutatingVisitor extends Visitor {
+    virtual public void visit(Entity entity) { entity.unregister(); }
 }
 ''', encoding="utf-8")
     (source / "EntityProbe.bl").write_text('''
@@ -31,9 +56,15 @@ import org.zenframework.z8.base.entity.Entity;
 import org.zenframework.z8.base.json.JsonObject;
 import org.zenframework.z8.base.json.JsonArray;
 import org.zenframework.z8.base.entity.Registry;
+import org.zenframework.z8.base.entity.Filter;
 public class EntityProbe {
     public static JsonObject noObject() { return null; }
     public static Registry currentRegistry() { return Registry.getRegistry(); }
+    public static void mutateDuringVisit() {
+        Registry registry; Entity first; Entity second; MutatingVisitor visitor;
+        first.create(guid.create(41)); second.create(guid.create(42)); first.register(registry); second.register(registry);
+        registry.visitEntities(visitor);
+    }
     public static Entity registerCurrent() { Entity item; item.create(guid.create(99)); item.register(); return item; }
     public static bool registryVerify() {
         Registry registry; TrackedEntity first; TrackedEntity other;
@@ -43,6 +74,20 @@ public class EntityProbe {
         if (registry.getEntity(guid.create(31)) != first) return false;
         other.create(guid.create(32)); other.register(registry); first.set("link", other); first.setOriginId(guid.create(32));
         if (first.getEntity("link") != other || first.getOrigin() != other) return false;
+        first.init("number", 1); other.init("number", 2);
+        NumberFilter filter; filter.minimum = 2;
+        Entity[guid] found = registry.findEntities(filter);
+        if (found.size() != 1 || found[guid.create(32)] != other || registry.findEntity(filter) != other) return false;
+        if (registry.findCopy(guid.create(32)) != first || first.matching(filter).size() != 1) return false;
+        CountVisitor visitor; registry.visitEntities(visitor, filter);
+        if (visitor.count != 1 || visitor.total != 2) return false;
+        Filter inverse = !filter; found = registry.findEntities(inverse);
+        if (found.size() != 1 || found[guid.create(31)] != first) return false;
+        NumberFilter never; never.minimum = 10; NumberFilter after; after.minimum = 0;
+        Filter both = never && after; found = registry.findEntities(both);
+        if (found.size() != 0 || never.calls != 2 || after.calls != 0 || !both.accept(first)) return false;
+        Filter either = filter || after; found = registry.findEntities(either);
+        if (found.size() != 2 || after.calls != 1) return false;
         registry.setLogEnabled(true); if (!registry.isLogEnabled()) return false;
         other.unregister(); if (other.isRegistered() || other.registered != 2 || registry.getEntity(guid.create(32)) != null) return false;
         registry.reset(); return registry.getEntity(guid.create(31)) == null && first.isRegistered();
@@ -86,6 +131,7 @@ import z8gen.p_EntityProbe;
 void main() {
     alias P = Z8p_456E7469747950726F6265;
     assert(z8_optional_require(P.m_verify()) && z8_optional_require(P.m_registryVerify()));
+    bool changed; try { P.m_mutateDuringVisit(); } catch (Exception) { changed = true; } assert(changed);
     auto request = new Z8ApplicationRequest(); auto previous = z8_application_set_request(request);
     auto registry = P.m_currentRegistry(); auto item = P.m_registerCurrent();
     assert(registry.m_getEntity(z8_guid_create(99)) is item && P.m_currentRegistry() is registry);
