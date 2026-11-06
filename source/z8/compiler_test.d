@@ -344,7 +344,7 @@ unittest {
 
 unittest {
     compile("class A { static primary f() { return 1; } }");
-    rejects("class A { static void f() { primary value; } }");
+    compile("class A { static void f() { primary value; } }");
     rejects("class A { static int f(primary x) { return 1; } static int f(int x) { return 2; } static int g() { return f(1); } }");
     // The facade continues to expose the parser, checker and model types.
     auto parsed = (new Parser("class PublicApi {} ")).parse();
@@ -501,7 +501,7 @@ unittest {
     auto enumFields = SourceUnit("pkg.A", "A.bl", "class A { Mode member; static Mode shared; static Mode missing = null; static Mode initial = Mode.One; }");
     compileSources([enumFields, enumType]);
     auto enumDefault = SourceUnit("pkg.A", "A.bl", "class A { void f() { Mode value; } }");
-    rejectsSources([enumDefault, enumType], "A.bl");
+    compileSources([enumDefault, enumType]);
     auto enumWrite = SourceUnit("pkg.A", "A.bl", "class A { void f() { Mode.One = Mode.Two; } }");
     rejectsSources([enumWrite, enumType], "A.bl");
     auto enumArray = SourceUnit("pkg.A", "A.bl", "class A { void f() { Mode[] values; } }");

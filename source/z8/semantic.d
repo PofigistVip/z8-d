@@ -190,8 +190,6 @@ class Checker {
                 if (containsReferenceClass(field.type, valueClass, keyClasses))
                     fail("static reference fields are not allowed", field.name);
             }
-            if (field.type == ValueType.primaryType && field.initializer is null)
-                fail("primary fields require an initializer", field.name);
         }
         foreach (method; program.methods) {
             method.returnType = resolveDeclaredType(method.returnType, program, method.returnObjectName, method.returnKeyObjectNames, method.name);
@@ -2605,7 +2603,7 @@ class Checker {
         if (expression.left !is null) copy.left = copyQualifiedTarget(expression.left);
         return copy;
     }
-    private bool checkStatement(Statement s, bool allowUninitializedEnum = false) {
+    private bool checkStatement(Statement s) {
         final switch (s.kind) {
             case StmtKind.block:
                 auto old = variables.dup; auto oldObjects = objectVariables.dup; auto oldKeyObjects = keyObjectVariables.dup; bool returns;
@@ -2615,8 +2613,6 @@ class Checker {
                 s.hasContainer = !staticContext;
                 if (s.token.text in variables) fail("duplicate or shadowed variable", s.token);
                 s.type = resolveDeclaredType(s.type, currentProgram, s.objectName, s.keyObjectNames, s.token);
-                if (s.type == ValueType.enumType && s.expression is null && !allowUninitializedEnum) fail("enum variables require an initializer", s.token);
-                if (s.type == ValueType.primaryType && s.expression is null && !allowUninitializedEnum) fail("primary variables require an initializer", s.token);
                 if (s.type == ValueType.voidType) fail("variable cannot be void", s.token);
                 if (hasObjectClass(s.type)) s.objectClass = resolveClass(currentProgram, s.objectName, s.token);
                 if (s.type == ValueType.selfType && isPrimaryClass(s.objectClass)) s.hasContainer = false;
@@ -2725,7 +2721,7 @@ class Checker {
             case StmtKind.forEachStmt:
                 auto old = variables.dup; auto oldObjects = objectVariables.dup; auto oldKeyObjects = keyObjectVariables.dup;
                 auto array = typeOf(s.expression);
-                checkStatement(s.initial, true);
+                checkStatement(s.initial);
                 if ([ValueType.stringArray, ValueType.guidArray, ValueType.intArray, ValueType.boolArray, ValueType.decimalArray, ValueType.fileArray].canFind(array) && s.initial.type == ValueType.primaryType && matches(s.expression, ValueType.primaryArray)) array = ValueType.primaryArray;
                 if (!isArray(array) || elementType(array) != s.initial.type) fail("foreach element type mismatch", s.token);
                 if (!matches(s.expression, array, s.initial.objectClass, s.initial.keyObjectClasses)) fail("foreach element type mismatch", s.token);
