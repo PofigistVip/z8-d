@@ -42,6 +42,11 @@ void z8_roles_before_destroy(Z8Guid id) {
     if (id !is null && (id == z8_role_administrator || id == z8_role_user || id == z8_role_guest))
         throw new Exception("Builtin roles can not be deleted");
 }
+void z8_roles_notify_change(Z8Object self, Z8Guid id) {
+    auto request = z8_application_request();
+    if (request is null || request.roleChangeNotifier is null) return;
+    request.roleChangeNotifier.roleChanged(z8_nonnull(id), z8_notification_schema(self));
+}
 private Z8Guid* z8_role_administrator_address() { return &z8_role_administrator; }
 private Z8Guid* z8_role_user_address() { return &z8_role_user; }
 private Z8Guid* z8_role_guest_address() { return &z8_role_guest; }

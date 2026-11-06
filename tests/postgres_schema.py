@@ -192,6 +192,7 @@ public class Probe {
     public static void deleteUser(Users value, guid id) { value.destroy(id); }
     public static void deleteRole(Roles value, guid id) { value.destroy(id); }
     public static void createRole(Roles value, guid id) { value.name = "Custom"; value.create(id); }
+    public static void renameRole(Roles value, guid id) { value.name = "Renamed"; value.update(id); }
     public static guid administratorRole() { return Roles.Administrator; }
     public static guid userRole() { return Roles.User; }
     public static guid guestRole() { return Roles.Guest; }
@@ -1320,6 +1321,16 @@ void main(string[] args) {
     P.m_deleteRole(P.m_roles(), roleId);
     createdAccessCounts = db.execute(`SELECT (SELECT count(*) FROM "z8_access"."SystemRoleTableAccess" WHERE "Role" = '00000000-0000-0000-0000-00000000006F'), (SELECT count(*) FROM "z8_access"."SystemRoleFieldAccess" WHERE "Role" = '00000000-0000-0000-0000-00000000006F'), (SELECT count(*) FROM "z8_access"."SystemRoleRequestAccess" WHERE "Role" = '00000000-0000-0000-0000-00000000006F')`);
     assert(createdAccessCounts.rows[0][0].text == "0" && createdAccessCounts.rows[0][1].text == "0" && createdAccessCounts.rows[0][2].text == "0");
+    P.m_createRole(P.m_roles(), roleId);
+    roleMember.roles = [roleId];
+    roleSessions.create("rename-role"w, roleMember, roleAdmin, "z8_access"w);
+    oldRoleRequest = z8_application_set_request(roleRequest);
+    P.m_renameRole(P.m_roles(), roleId);
+    assert(roleSessions.getSession("rename-role"w) is null);
+    roleSessions.create("delete-role"w, roleMember, roleAdmin, "z8_access"w);
+    P.m_deleteRole(P.m_roles(), roleId);
+    assert(roleSessions.getSession("delete-role"w) is null);
+    z8_application_set_request(oldRoleRequest);
     auto missingRegistry = new Z8RuntimeRegistry(); missingRegistry.registerTable(P.m_geo());
     z8_connection_set_current(new Z8PostgresDatabase(db, "z8_access"w, missingRegistry));
     db.beginTransaction(); bool missingRegisteredTable;

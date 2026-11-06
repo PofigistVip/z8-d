@@ -88,6 +88,7 @@ built-in user normally do not notify; setting `changePassword` to true forces it
 An authority can implement `IZ8RoleChangeNotifier` to invalidate sessions when
 table, field or request permissions change. `Z8SessionManager` implements this
 capability too, preserving administrator sessions as the original manager does.
+Updating or deleting a role also invalidates affected non-administrator sessions.
 `remoteAddress` is the connection peer; `forwardedAddress` exposes the raw
 `X-Real-IP` header for deployments where the host explicitly trusts its proxy.
 

@@ -325,7 +325,8 @@ private long z8_query_update_id_run(Z8Object self, Z8Guid id, bool resetChanged)
     if (id !is null && z8_query_user_events_enabled()) self.z8_query_virtual_afterUpdate(id);
     if (id !is null && z8_query_user_events_enabled() && z8_native_is_instance(z8_users_name, self)) z8_users_after_update(self, id);
     if (id !is null && z8_query_user_events_enabled()) {
-        if (z8_native_is_instance(z8_role_table_access_name, self)) z8_role_access_after_update!(Z8RoleAccessKind.table)(self, id);
+        if (z8_native_is_instance(z8_roles_name, self)) z8_roles_notify_change(self, id);
+        else if (z8_native_is_instance(z8_role_table_access_name, self)) z8_role_access_after_update!(Z8RoleAccessKind.table)(self, id);
         else if (z8_native_is_instance(z8_role_field_access_name, self)) z8_role_access_after_update!(Z8RoleAccessKind.field)(self, id);
         else if (z8_native_is_instance(z8_role_request_access_name, self)) z8_role_access_after_update!(Z8RoleAccessKind.request)(self, id);
     }
@@ -351,6 +352,7 @@ private Z8Optional!long z8_query_destroy_id(Z8Object self, Z8Guid id) {
     auto result = writer.destroy(self, id);
     if (z8_query_user_events_enabled()) self.z8_query_virtual_afterDestroy(id);
     if (z8_query_user_events_enabled() && z8_native_is_instance(z8_users_name, self)) z8_users_notify_change(id, false, self);
+    if (z8_query_user_events_enabled() && z8_native_is_instance(z8_roles_name, self)) z8_roles_notify_change(self, id);
     return z8_optional_wrap(cast(long)cast(int)result);
 }
 private void z8_query_read_request(Z8Object self, Z8ObjectArray!Z8Object fields, Z8ObjectArray!Z8Object sort,
