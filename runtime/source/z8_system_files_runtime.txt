@@ -79,8 +79,9 @@ private Z8File z8_system_files_get_id(Z8Guid id) {
     return result;
 }
 private Z8File z8_system_files_get_file(Z8File value) {
-    import std.file : exists, isFile, getSize, mkdirRecurse, write;
-    import std.path : dirName;
+    import std.file : exists, isFile, getSize, mkdir, mkdirRecurse, remove, rename, rmdir, write, FileException;
+    import std.path : buildPath, dirName;
+    import std.uuid : randomUUID;
     value = z8_nonnull(value);
     auto path = z8_file_system_path(value);
     if (exists(path) && isFile(path)) {
@@ -100,7 +101,19 @@ private Z8File z8_system_files_get_file(Z8File value) {
     auto bytes = z8_binary_snapshot(z8_nonnull(data), size_t.max);
     if (size != 0 && (size < 0 || cast(ulong)size != bytes.length)) throw new Exception("stored file size does not match its content");
     auto parent = dirName(path); if (parent.length) mkdirRecurse(parent);
-    write(path, bytes);
+    // Publish the complete file at once: another request must never observe a
+    // cache entry while it is still being copied from PostgreSQL.
+    auto temporary = buildPath(parent, ".z8-cache-" ~ randomUUID().toString());
+    mkdir(temporary);
+    auto pending = buildPath(temporary, "content");
+    scope(exit) { if (exists(pending)) remove(pending); rmdir(temporary); }
+    write(pending, bytes);
+    try rename(pending, path);
+    catch (FileException failure) {
+        // Windows can refuse replacement if another request already opened the
+        // winner. Its complete file is usable if it has the expected length.
+        if (!exists(path) || !isFile(path) || getSize(path) != bytes.length) throw failure;
+    }
     value.hasUpload = false; value.upload = null;
     value.size = z8_optional_wrap(cast(long)bytes.length);
     return value;
