@@ -81,6 +81,7 @@ public class EvalOracle {
         dictionary.get().operatorAssign(new string("{\\\"a\\\":{\\\"n\\\":7},\\\"b\\\":{\\\"n\\\":2}}"));
         jsonEval.z8_setVariable(new string("dictionary"), dictionary);
         jsonEval.z8_setVariable(new string("day"), new date(2024, 2, 29));
+        jsonEval.z8_setVariable(new string("span"), datespan.z8_parse(new string("1 02:03:04")));
         for (String pattern : new String[]{"${json.min(rows, 'n')}", "${json.max(rows, 'n')}", "${json.min(rows, 'missing')}", "${json.max(rows, 'missing')}", "${json.min(nil, 'n')}", "${json.min(decimals, 'n')}", "${json.max(decimals, 'n')}", "${json.min(dictionary, 'n')}", "${json.max(dictionary, 'n')}", "${json.min(rows, nil)}", "${false ? json.min(rows, 'n') : 42}", "${json.min(rows)}", "${json.unknown(rows, 'n')}"}) {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
@@ -101,6 +102,12 @@ public class EvalOracle {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
         }
+        for (String pattern : new String[]{"${day.year()}", "${day.month()}", "${day.day()}", "${day.daysInMonth()}", "${day.dayOfWeek()}", "${day.weekOfYear()}", "${day.toString('yyyy-MM-dd')}", "${day.addDay(1).toString('yyyy-MM-dd')}", "${day.addMonth(1).toString('yyyy-MM-dd')}", "${day.truncMonth().toString('yyyy-MM-dd')}", "${day.truncWeek().toString('yyyy-MM-dd')}", "${datespan.parse('1 02:03:04').days()}", "${datespan.parse('1 02:03:04').hours()}", "${datespan.parse('1 02:03:04').totalMinutes()}", "${day.addDay('x')}", "${day.addDay(missing)}"}) {
+            try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
+            catch (Exception error) { System.out.println("error"); }
+        }
+        for (String pattern : new String[]{"${span.setTotalHours(50)}", "${span.days()}", "${span.hours()}", "${span.truncDay()}", "${span.totalHours()}", "${day.setDate(2023, 12, 31)}", "${day.year()}", "${day.month()}"})
+            System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get());
         jsonEval.z8_setVariable(new string("int"), new integer(10));
         System.out.println(jsonEval.z8_evaluateText(new string("${int}")).get());
         try { System.out.println(jsonEval.z8_evaluateText(new string("${int.parse('42')}")).get()); }
@@ -132,7 +139,7 @@ import org.zenframework.z8.base.json.JsonArray;
 public class EvalProbe {
     public static Eval make() { Eval e; e.setVariable("name", "Ada"); e.setVariable("count", 7); e.setVariable("flag", true); primary nil = null; e.setVariable("nil", nil); return e; }
     public static Eval withJson() { Eval e; JsonObject obj; JsonObject child; JsonArray arr; child.set("title", "Ada"); arr.add(3); arr.add("tail"); obj.set("count", 7); obj.set("child", child); obj.set("items", arr); obj.set("price", 1.25); obj.set("yes", true); e.setVariable("obj", obj); e.setVariable("arr", arr); primary nil = null; e.setVariable("nil", nil); obj.set("after", 42); obj = "{}"; arr = "[]"; return e; }
-    public static Eval withRows(Eval e) { JsonArray rows; JsonArray decimals; JsonObject dictionary; rows = "[{\\\"n\\\":7},{\\\"n\\\":2},{\\\"n\\\":5}]"; decimals = "[{\\\"n\\\":1.75},{\\\"n\\\":1.25},{\\\"n\\\":3}]"; dictionary = "{\\\"a\\\":{\\\"n\\\":7},\\\"b\\\":{\\\"n\\\":2}}"; e.setVariable("rows", rows); e.setVariable("decimals", decimals); e.setVariable("dictionary", dictionary); date day = '29/02/2024'; e.setVariable("day", day); return e; }
+    public static Eval withRows(Eval e) { JsonArray rows; JsonArray decimals; JsonObject dictionary; rows = "[{\\\"n\\\":7},{\\\"n\\\":2},{\\\"n\\\":5}]"; decimals = "[{\\\"n\\\":1.75},{\\\"n\\\":1.25},{\\\"n\\\":3}]"; dictionary = "{\\\"a\\\":{\\\"n\\\":7},\\\"b\\\":{\\\"n\\\":2}}"; e.setVariable("rows", rows); e.setVariable("decimals", decimals); e.setVariable("dictionary", dictionary); date day = '29/02/2024'; e.setVariable("day", day); datespan span = datespan.parse("1 02:03:04"); e.setVariable("span", span); return e; }
     public static void shadow(Eval e) { e.setVariable("int", 10); }
 }
 ''', encoding="utf-8")
@@ -203,6 +210,16 @@ void main() {
                        "${format(date.parse('2024-02-29', 'yyyy-MM-dd'), 'dd.MM.yyyy')}"w, "${int.Min}"w,
                        "${int.parse(missing)}"w, "${int.parse('x')}"w])
         try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
+    foreach (pattern; ["${day.year()}"w, "${day.month()}"w, "${day.day()}"w, "${day.daysInMonth()}"w, "${day.dayOfWeek()}"w,
+                       "${day.weekOfYear()}"w, "${day.toString('yyyy-MM-dd')}"w, "${day.addDay(1).toString('yyyy-MM-dd')}"w,
+                       "${day.addMonth(1).toString('yyyy-MM-dd')}"w, "${day.truncMonth().toString('yyyy-MM-dd')}"w,
+                       "${day.truncWeek().toString('yyyy-MM-dd')}"w,
+                       "${datespan.parse('1 02:03:04').days()}"w, "${datespan.parse('1 02:03:04').hours()}"w,
+                       "${datespan.parse('1 02:03:04').totalMinutes()}"w, "${day.addDay('x')}"w, "${day.addDay(missing)}"w])
+        try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
+    foreach (pattern; ["${span.setTotalHours(50)}"w, "${span.days()}"w, "${span.hours()}"w, "${span.truncDay()}"w,
+                       "${span.totalHours()}"w, "${day.setDate(2023, 12, 31)}"w, "${day.year()}"w, "${day.month()}"w])
+        writeln(jsonEval.m_evaluateText(pattern).to!string);
     Z8p_4576616C50726F6265.m_shadow(jsonEval);
     writeln(jsonEval.m_evaluateText("${int}"w).to!string);
     try { writeln(jsonEval.m_evaluateText("${int.parse('42')}"w).to!string); } catch (Exception) { writeln("error"); }

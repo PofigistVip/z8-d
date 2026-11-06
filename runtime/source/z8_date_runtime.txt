@@ -438,6 +438,13 @@ private Z8Date z8_date_truncate(Z8Date x, int unit) {
 Z8Date z8_date_truncYear(Z8Date x) { return z8_date_truncate(x, 0); }
 Z8Date z8_date_truncQuarter(Z8Date x) { return z8_date_truncate(x, 1); }
 Z8Date z8_date_truncMonth(Z8Date x) { return z8_date_truncate(x, 2); }
+Z8Date z8_date_truncWeek(Z8Date x) {
+    auto day = z8_date_truncate(x, 3);
+    // The runtime's calendar currently follows the Russian locale, where
+    // Monday is the first day of the week, as does z8_date_weekOfYear.
+    auto days = (z8_date_dayOfWeek(day) + 5) % 7;
+    return days ? z8_date_addDay(day, -days) : day;
+}
 Z8Date z8_date_truncDay(Z8Date x) { return z8_date_truncate(x, 3); }
 Z8Date z8_date_truncHour(Z8Date x) { return z8_date_truncate(x, 4); }
 Z8Date z8_date_truncMinute(Z8Date x) { return z8_date_truncate(x, 5); }

@@ -95,6 +95,66 @@ private Z8Primary z8_eval_number_method(Z8Primary value, wstring name, Z8EvalVal
         return z8_primary_box(number.z8_round(intArg(0), intArg(1)));
     throw new Exception("unsupported Eval numeric method");
 }
+private Z8Primary z8_eval_temporal_method(Z8Primary value, wstring name, Z8EvalValue[] arguments) {
+    bool isDate = value.kind == Z8PrimaryKind.date;
+    long intArg(size_t i) {
+        if (i >= arguments.length || arguments[i].primary is null || arguments[i].primary.kind != Z8PrimaryKind.integer)
+            throw new Exception("invalid Eval temporal argument");
+        return arguments[i].primary.integerValue;
+    }
+    if (!arguments.length) {
+        if (name == "toString"w) return z8_primary_box(z8_string_new(z8_primary_to_string(value)));
+        if (isDate) {
+            auto date = value.dateValue;
+            static foreach (method; ["ticks", "year", "quarter", "weekOfYear", "month", "day", "dayOfWeek", "dayOfYear", "daysInMonth", "hours", "minutes", "seconds", "milliseconds", "zoneOffset"]) {
+                if (name == method.to!wstring) return z8_primary_box(mixin("z8_date_" ~ method ~ "(date)"));
+            }
+            static foreach (method; ["truncYear", "truncQuarter", "truncMonth", "truncWeek", "truncDay", "truncHour", "truncMinute", "truncSecond"]) {
+                if (name == method.to!wstring) return z8_primary_box(mixin("z8_date_" ~ method ~ "(date)"));
+            }
+            if (name == "toIsoString"w) return z8_primary_box(z8_string_new(z8_date_toIsoString(date)));
+        } else {
+            auto span = value.datespanValue;
+            static foreach (method; ["days", "hours", "minutes", "seconds", "milliseconds", "totalHours", "totalMinutes", "totalSeconds"]) {
+                if (name == method.to!wstring) return z8_primary_box(mixin("z8_datespan_" ~ method ~ "(span)"));
+            }
+            static foreach (method; ["truncDay", "truncHour", "truncMinute"]) {
+                if (name == method.to!wstring) { mixin("z8_datespan_" ~ method ~ "(span);"); return null; }
+            }
+        }
+    } else if (arguments.length == 1) {
+        auto arg = arguments[0].primary;
+        if (arg is null) throw new Exception("invalid Eval temporal argument");
+        if (name == "toString"w && arg.kind == Z8PrimaryKind.text)
+            return z8_primary_box(z8_string_new(isDate ? z8_date_toString(value.dateValue, arg.textValue) : z8_datespan_to_string(value.datespanValue, arg.textValue)));
+        if (isDate && arg.kind == Z8PrimaryKind.integer) {
+            auto date = value.dateValue;
+            auto count = arg.integerValue;
+            if (name == "setZoneOffset"w) { z8_date_setZoneOffset(date, count); return null; }
+            static foreach (method; ["addYear", "addQuarter", "addMonth", "addDay", "addHour", "addMinute", "addSecond", "addMillisecond"]) {
+                if (name == method.to!wstring) return z8_primary_box(mixin("z8_date_" ~ method ~ "(date, count)"));
+            }
+        } else if (!isDate && arg.kind == Z8PrimaryKind.integer) {
+            auto span = value.datespanValue;
+            auto count = arg.integerValue;
+            static foreach (method; ["set", "setTotalHours", "setTotalMinutes", "setTotalSeconds"]) {
+                if (name == method.to!wstring) { mixin("z8_datespan_" ~ method ~ "(span, count);"); return null; }
+            }
+        }
+    } else if (isDate) {
+        auto date = value.dateValue;
+        if (arguments.length == 3 && name == "setDate"w) { z8_date_setDate(date, intArg(0), intArg(1), intArg(2)); return null; }
+        if ((arguments.length == 3 || arguments.length == 4) && name == "setTime"w) {
+            z8_date_setTime(date, intArg(0), intArg(1), intArg(2), arguments.length == 4 ? intArg(3) : 0); return null;
+        }
+        if ((arguments.length == 6 || arguments.length == 7) && name == "set"w) {
+            z8_date_set(date, intArg(0), intArg(1), intArg(2), intArg(3), intArg(4), intArg(5), arguments.length == 7 ? intArg(6) : 0); return null;
+        }
+    } else if ((arguments.length == 4 || arguments.length == 5) && name == "set"w) {
+        z8_datespan_set(value.datespanValue, intArg(0), intArg(1), intArg(2), intArg(3), arguments.length == 5 ? intArg(4) : 0); return null;
+    }
+    throw new Exception("unsupported Eval temporal method");
+}
 private Z8Primary z8_eval_type_method(Z8EvalContext context, wstring name, Z8EvalValue[] arguments) {
     Z8Primary arg(size_t i, Z8PrimaryKind kind) {
         if (i >= arguments.length || arguments[i].primary is null || arguments[i].primary.kind != kind)
@@ -175,6 +235,8 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
         return Z8EvalValue(true, z8_eval_string_method(object.primary.textValue, name, arguments), null, null);
     if (object.primary !is null && (object.primary.kind == Z8PrimaryKind.integer || object.primary.kind == Z8PrimaryKind.decimal))
         return Z8EvalValue(true, z8_eval_number_method(object.primary, name, arguments), null, null);
+    if (object.primary !is null && (object.primary.kind == Z8PrimaryKind.date || object.primary.kind == Z8PrimaryKind.datespan))
+        return Z8EvalValue(true, z8_eval_temporal_method(object.primary, name, arguments), null, null);
     throw new Exception("unsupported Eval method");
 }
 private wstring z8_eval_format_decimal(Z8Decimal number, wstring pattern) {
