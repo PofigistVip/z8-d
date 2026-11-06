@@ -1,3 +1,61 @@
+// RLinkedHashMap.java extends HashMap; ordinary buckets iterate in bucket order,
+// retaining insertion order within a bucket. Keep its capacity across clear.
+// Treeified collision buckets have additional Java-specific ordering.
+private class Z8JavaStringMapOrder {
+    private wstring[] keys;
+    private size_t capacity;
+    private size_t[size_t] bucketCounts;
+    private static uint hash(wstring key) {
+        uint value;
+        if (key !is null) foreach (wchar c; key) value = value * 31 + c;
+        return value ^ (value >> 16);
+    }
+    private void grow() {
+        capacity *= 2; bucketCounts.clear();
+        foreach (key; keys) {
+            auto bucket = hash(key) & (capacity - 1);
+            auto count = bucket in bucketCounts;
+            if (count is null) bucketCounts[bucket] = 1; else ++*count;
+        }
+    }
+    void preparePutAll(size_t incoming) {
+        if (!incoming) return;
+        if (!capacity) {
+            size_t needed = incoming + incoming / 3 + 1;
+            capacity = 1;
+            while (capacity < needed && capacity < (cast(size_t)1 << 30)) capacity *= 2;
+        } else if (incoming > capacity * 3 / 4 && capacity < (cast(size_t)1 << 30)) grow();
+    }
+    void add(wstring key) {
+        if (!capacity) capacity = 16;
+        auto bucket = hash(key) & (capacity - 1);
+        auto count = bucket in bucketCounts;
+        auto collisions = count is null ? 0 : *count;
+        keys ~= key;
+        bucketCounts[bucket] = collisions + 1;
+        if (collisions >= 8 && capacity < 64) grow();
+        if (keys.length > capacity * 3 / 4 && capacity < (cast(size_t)1 << 30)) grow();
+    }
+    void remove(wstring key) {
+        foreach (i, existing; keys) if (existing is null ? key is null : (key !is null && existing == key)) {
+            auto bucket = hash(existing) & (capacity - 1);
+            if (--bucketCounts[bucket] == 0) bucketCounts.remove(bucket);
+            keys = keys[0 .. i] ~ keys[i + 1 .. $]; return;
+        }
+    }
+    void clear() { keys = null; bucketCounts.clear(); }
+    wstring[] ordered() {
+        import std.algorithm.sorting : sort;
+        struct OrderedKey { wstring value; size_t bucket, index; }
+        OrderedKey[] entries; entries.reserve(keys.length);
+        foreach (i, key; keys) entries ~= OrderedKey(key, hash(key) & (capacity - 1), i);
+        sort!((a, b) => a.bucket < b.bucket || (a.bucket == b.bucket && a.index < b.index))(entries);
+        wstring[] result; result.reserve(entries.length);
+        foreach (entry; entries) result ~= entry.value;
+        return result;
+    }
+}
+
 // Map.equals in the original runtime compares entries, not map identity.
 private bool z8_map_content_equals(M)(M left, M right) {
     if (left is right) return true;
@@ -19,6 +77,7 @@ private bool z8_map_content_equals(M)(M left, M right) {
 }
 class Z8StringMap {
     private wstring[wstring] entries;
+    private Z8JavaStringMapOrder order;
     // Retain insertion order so serializers can reproduce Java HashMap bucket ties.
     private wstring[] insertionKeys;
     private bool hasNullKey;
@@ -29,7 +88,8 @@ class Z8StringMap {
     }
     long z8_size() { return cast(long)entries.length + (hasNullKey ? 1 : 0); }
     bool z8_isEmpty() { return entries.length == 0 && !hasNullKey; }
-    void z8_clear() { entries.clear(); insertionKeys = null; hasNullKey = false; nullKeyValue = null; }
+    private Z8JavaStringMapOrder ordering() { if (order is null) order = new Z8JavaStringMapOrder(); return order; }
+    void z8_clear() { entries.clear(); insertionKeys = null; hasNullKey = false; nullKeyValue = null; if (order !is null) order.clear(); }
     bool z8_containsKey(wstring key) { return key is null ? hasNullKey : (key in entries) !is null; }
     bool z8_containsValue(wstring value) {
         if (hasNullKey && z8_string_equals(nullKeyValue, value)) return true;
@@ -39,24 +99,25 @@ class Z8StringMap {
     wstring z8_add(wstring key, wstring value) {
         if (key is null) {
             auto previous = hasNullKey ? nullKeyValue : null;
+            if (!hasNullKey) ordering().add(null);
             hasNullKey = true; nullKeyValue = value; return previous;
         }
         auto found = key in entries;
         wstring previous = found is null ? null : *found;
-        if (found is null) insertionKeys ~= key;
+        if (found is null) { insertionKeys ~= key; ordering().add(key); }
         entries[key] = value;
         return previous;
     }
     void z8_add(Z8StringMap other) {
         z8_nonnull(other);
         if (other is this) return;
-        foreach (key, value; other.entries) z8_add(key, value);
-        if (other.hasNullKey) z8_add(null, other.nullKeyValue);
+        ordering().preparePutAll(cast(size_t)other.z8_size());
+        auto keys = other.z8_keys();
+        for (long i; i < keys.z8_size(); ++i) { auto key = keys.z8_get(i); z8_add(key, other.z8_get(key)); }
     }
     Z8Array!wstring z8_keys() {
         auto result = new Z8Array!wstring();
-        foreach (key, value; entries) result.z8_add(key);
-        if (hasNullKey) result.z8_add(null);
+        if (order !is null) foreach (key; order.ordered()) result.z8_add(key);
         return result;
     }
     // Stable order is needed when copying file details with equal hash buckets.
@@ -68,8 +129,7 @@ class Z8StringMap {
     }
     Z8Array!wstring z8_values() {
         auto result = new Z8Array!wstring();
-        foreach (value; entries) result.z8_add(value);
-        if (hasNullKey) result.z8_add(nullKeyValue);
+        if (order !is null) foreach (key; order.ordered()) result.z8_add(z8_get(key));
         return result;
     }
     wstring z8_get(wstring key) {
@@ -81,12 +141,14 @@ class Z8StringMap {
     wstring z8_remove(wstring key) {
         if (key is null) {
             auto previous = hasNullKey ? nullKeyValue : null;
+            if (hasNullKey) ordering().remove(null);
             hasNullKey = false; nullKeyValue = null; return previous;
         }
         auto found = key in entries;
         if (found is null) return null;
         auto previous = *found;
         entries.remove(key);
+        ordering().remove(key);
         foreach (i, existing; insertionKeys) if (existing == key) {
             insertionKeys = insertionKeys[0 .. i] ~ insertionKeys[i + 1 .. $];
             break;

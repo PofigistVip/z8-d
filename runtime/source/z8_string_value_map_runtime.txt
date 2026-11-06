@@ -4,6 +4,7 @@ class Z8StringValueMap(V) {
     else static if (is(V == class)) alias Element = V;
     else static assert(0, "unsupported string-key map value");
     private Element[wstring] entries;
+    private Z8JavaStringMapOrder order;
     private bool hasNullKey;
     private Element nullKeyValue;
 
@@ -18,7 +19,8 @@ class Z8StringValueMap(V) {
     }
     long z8_size() { return cast(long)entries.length + (hasNullKey ? 1 : 0); }
     bool z8_isEmpty() { return entries.length == 0 && !hasNullKey; }
-    void z8_clear() { entries.clear(); hasNullKey = false; nullKeyValue = Element.init; }
+    private Z8JavaStringMapOrder ordering() { if (order is null) order = new Z8JavaStringMapOrder(); return order; }
+    void z8_clear() { entries.clear(); hasNullKey = false; nullKeyValue = Element.init; if (order !is null) order.clear(); }
     bool z8_containsKey(wstring key) { return key is null ? hasNullKey : (key in entries) !is null; }
     bool z8_containsValue(Element value) {
         if (hasNullKey && valueEquals(value, nullKeyValue)) return true;
@@ -28,18 +30,21 @@ class Z8StringValueMap(V) {
     Element z8_add(wstring key, Element value) {
         if (key is null) {
             auto previous = hasNullKey ? nullKeyValue : Element.init;
+            if (!hasNullKey) ordering().add(null);
             hasNullKey = true; nullKeyValue = value; return previous;
         }
         auto found = key in entries;
         auto previous = found is null ? Element.init : *found;
+        if (found is null) ordering().add(key);
         entries[key] = value;
         return previous;
     }
     void z8_add(Z8StringValueMap!V other) {
         z8_nonnull(other);
         if (other is this) return;
-        foreach (key, value; other.entries) z8_add(key, value);
-        if (other.hasNullKey) z8_add(null, other.nullKeyValue);
+        ordering().preparePutAll(cast(size_t)other.z8_size());
+        auto keys = other.z8_keys();
+        for (long i; i < keys.z8_size(); ++i) { auto key = keys.z8_get(i); z8_add(key, other.z8_get(key)); }
     }
     Element z8_get(wstring key) {
         if (key is null) return hasNullKey ? nullKeyValue : Element.init;
@@ -49,24 +54,24 @@ class Z8StringValueMap(V) {
     Element z8_remove(wstring key) {
         if (key is null) {
             auto previous = hasNullKey ? nullKeyValue : Element.init;
+            if (hasNullKey) ordering().remove(null);
             hasNullKey = false; nullKeyValue = Element.init; return previous;
         }
         auto found = key in entries;
         if (found is null) return Element.init;
         auto previous = *found;
         entries.remove(key);
+        ordering().remove(key);
         return previous;
     }
     Z8Array!wstring z8_keys() {
         auto result = new Z8Array!wstring();
-        foreach (key, value; entries) result.z8_add(key);
-        if (hasNullKey) result.z8_add(null);
+        if (order !is null) foreach (key; order.ordered()) result.z8_add(key);
         return result;
     }
     Z8ValueArray!V z8_values() {
         auto result = new Z8ValueArray!V();
-        foreach (value; entries) result.z8_add(value);
-        if (hasNullKey) result.z8_add(nullKeyValue);
+        if (order !is null) foreach (key; order.ordered()) result.z8_add(z8_get(key));
         return result;
     }
 }
