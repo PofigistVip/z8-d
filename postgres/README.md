@@ -167,7 +167,8 @@ linked and computed fields; supplied values are detached while serializing rows.
 Geometry filter values are GeoJSON strings: as in Z8, they select geometries
 intersecting the supplied shape, using the field or expression's configured SRS.
 Other custom request parameters remain available to BL hooks; only recognized
-options affect the reader. The host must open the
+options affect the reader. The same applies to metadata, create, update, copy,
+destroy, attachment and action requests. The host must open the
 application response before calling it.
 Ordinary computed fields can be selected, filtered and sorted only when all
 their declared and SQL expression dependencies are readable.

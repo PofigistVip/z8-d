@@ -724,7 +724,8 @@ void main(string[] args) {
                 conn.close()
             def attach_file(session, record_id, filename, content, details='{"kind":"document"}', nested=False, link=False):
                 params = {"request": "Sample", "session": session, "server": "test", "action": "attach",
-                          "recordId": record_id, "field": "documents", "fields": '["documents"]', "details": details}
+                          "recordId": record_id, "field": "documents", "fields": '["documents"]', "details": details,
+                          "clientContext": "custom"}
                 if nested:
                     params.update(query="nested", field="nested.documents", fields='["nested.documents"]',
                                   values=json.dumps({"recordId": "00000000-0000-0000-0000-000000000001"}))
@@ -834,7 +835,7 @@ void main(string[] args) {
             assert result["success"], result
             new_target = result["data"][0]["recordId"]
             new_file = json.loads(result["data"][0]["documents"])[0]["id"]
-            result = request(action="detach", field="documents", fields='["documents"]', recordId=new_target, data=json.dumps([new_file]))
+            result = request(action="detach", field="documents", fields='["documents"]', recordId=new_target, data=json.dumps([new_file]), clientContext="custom")
             assert result["success"], result
             result = request(action="destroy", data=json.dumps([new_target]))
             assert result["success"], result

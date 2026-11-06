@@ -18,8 +18,9 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     shutil.copytree(language, source)
     (source / "CustomReport.bl").write_text('''
 import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.application.Application;
 public class CustomReport extends Report {
-    virtual protected file execute(guid recordId) { file result = format + "-" + recordId.toString(); return result; }
+    virtual protected file execute(guid recordId) { file result = format + "-" + recordId.toString() + "-" + Application.requestParameters()["clientContext"]; return result; }
 }
 ''', encoding="utf-8")
     (source / "ReportActionTable.bl").write_text('''
@@ -58,21 +59,23 @@ void main() {
     request = new Z8ApplicationRequest(); request.session = session; auto monitor = new Z8RequestMonitor(); request.monitor = monitor;
     request.parameters.z8_add("request"w, "ReportActionTable"w); request.parameters.z8_add("action"w, "action"w);
     request.parameters.z8_add("name"w, "exportAction"w);
+    request.parameters.z8_add("clientContext"w, "custom"w);
     request.parameters.z8_add("records"w, `["00000000-0000-0000-0000-000000000011","00000000-0000-0000-0000-000000000012"]`w);
     request.parameters.z8_add("parameters"w, `[{"id":"format","value":"xls"}]`w);
     z8_application_set_request(request); z8_application_start_response(request, "ReportActionTable"w);
     z8_application_dispatch_request(); z8_application_finish_response(request, monitor);
     auto response = parseJSON(z8_application_response_text(request).to!string);
     assert(response["success"].boolean && monitor.files().length == 2);
-    assert(z8_file_path(monitor.files()[0]) == "xls-00000000-0000-0000-0000-000000000011"w);
-    assert(z8_file_path(monitor.files()[1]) == "xls-00000000-0000-0000-0000-000000000012"w);
+    assert(z8_file_path(monitor.files()[0]) == "xls-00000000-0000-0000-0000-000000000011-custom"w);
+    assert(z8_file_path(monitor.files()[1]) == "xls-00000000-0000-0000-0000-000000000012-custom"w);
     request = new Z8ApplicationRequest(); request.session = session; monitor = new Z8RequestMonitor(); request.monitor = monitor;
     request.parameters.z8_add("request"w, "ReportActionTable"w); request.parameters.z8_add("action"w, "action"w);
     request.parameters.z8_add("name"w, "exportAction"w);
+    request.parameters.z8_add("clientContext"w, "second"w);
     request.parameters.z8_add("records"w, `["00000000-0000-0000-0000-000000000011"]`w);
     z8_application_set_request(request); z8_application_start_response(request, "ReportActionTable"w);
     z8_application_dispatch_request(); z8_application_finish_response(request, monitor);
-    assert(monitor.files().length == 1 && z8_file_path(monitor.files()[0]) == "pdf-00000000-0000-0000-0000-000000000011"w);
+    assert(monitor.files().length == 1 && z8_file_path(monitor.files()[0]) == "pdf-00000000-0000-0000-0000-000000000011-second"w);
 }
 ''', encoding="utf-8")
     executable = temp / ("action-report.exe" if os.name == "nt" else "action-report")

@@ -1582,7 +1582,7 @@ void main(string[] args) {
         try { z8_application_dispatch_query_read("Sample"w); } catch (Exception) { return true; }
         return false;
     }
-    assert(rejectedRead("otherOption"w, "true"w));
+    assert(!rejectedRead("otherOption"w, "true"w));
     assert(rejectedRead("action"w, "write"w));
     assert(rejectedRead("fields"w, `{"id":"title"}`w));
     assert(!rejectedRead("fields"w, `["computed"]`w));

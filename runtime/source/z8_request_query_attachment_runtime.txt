@@ -12,10 +12,6 @@ private void z8_application_dispatch_query_attachment_target(wstring className, 
     for (long i; i < keys.z8_size(); ++i) {
         auto name = keys.z8_get(i);
         if (name is null) throw new Exception("invalid attachment parameter");
-        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w ||
-            name == "action"w || name == "recordId"w || name == "field"w || name == "fields"w ||
-            name == "values"w || name == "query"w || name == "link"w || (!detach && name == "details"w) || (detach && name == "data"w)) continue;
-        if (params.z8_get(name).length) throw new Exception("unsupported attachment parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
     if (!z8_native_is_instance(z8_table_name, query)) throw new Exception("attachment action requires a Table");

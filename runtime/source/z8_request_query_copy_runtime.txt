@@ -13,9 +13,6 @@ private void z8_application_dispatch_query_copy_target(wstring className, Z8Obje
     for (long i; i < keys.z8_size(); ++i) {
         auto name = keys.z8_get(i);
         if (name is null) throw new Exception("invalid query copy parameter");
-        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w ||
-            name == "data"w || name == "fields"w || name == "recordId"w || name == "values"w || name == "query"w || name == "link"w) continue;
-        if (params.z8_get(name).length) throw new Exception("unsupported query copy parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
     if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, query))

@@ -31,10 +31,15 @@ import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.Link;
 import org.zenframework.z8.base.table.value.StringField;
 import org.zenframework.z8.base.table.value.IntExpression;
+import org.zenframework.z8.base.application.Application;
 [name "Customers"] public class Customer extends Table {
     [name "Label"] public StringField label;
     public IntExpression labelLength = label.sql_string().length();
     public City city; [name "CityId"] public Link cityId = city;
+    virtual protected void onCreateAction(guid id) { if (Application.isRequest() && Application.requestParameters()["clientContext"] == "rejectCreate") throw "rejected"; }
+    virtual protected void onUpdateAction(guid id) { if (Application.isRequest() && Application.requestParameters()["clientContext"] == "rejectUpdate") throw "rejected"; }
+    virtual protected void onCopyAction(guid id) { if (Application.isRequest() && Application.requestParameters()["clientContext"] == "rejectCopy") throw "rejected"; }
+    virtual protected void onDestroyAction(guid id) { if (Application.isRequest() && Application.requestParameters()["clientContext"] == "rejectDestroy") throw "rejected"; }
 }
 ''',
         "AggregateOrder": '''
@@ -1087,24 +1092,37 @@ void main(string[] args) {
     auto nestedMeta = parseJSON(requestFields(`["customer.label"]`w, null, null, null, null,
         "HttpOrder"w, "meta"w, null, null, null, null, null, "customer"w).to!string);
     assert(nestedMeta["isQuery"].boolean && nestedMeta["id"].str == "customer" && "data" !in nestedMeta.object);
-    wstring nestedWrite(wstring action, wstring data, wstring recordId = null) {
+    wstring nestedWrite(wstring action, wstring data, wstring recordId = null, wstring custom = "custom"w) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, "HttpOrder"w); request.parameters.z8_add("action"w, action);
         request.parameters.z8_add("query"w, "customer"w); request.parameters.z8_add("data"w, data);
+        request.parameters.z8_add("clientContext"w, custom);
         if (recordId !is null) request.parameters.z8_add("recordId"w, recordId);
         if (action != "destroy"w) request.parameters.z8_add("fields"w, `["customer.label"]`w);
         auto previous = z8_application_set_request(request); scope(exit) z8_application_set_request(previous);
         z8_application_start_response(request, "HttpOrder"w); z8_application_dispatch_request();
         z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
     }
+    bool customRejected;
+    try { nestedWrite("create"w, `[{"customer.label":"Rejected custom create"}]`w, null, "rejectCreate"w); } catch (Exception) { customRejected = true; }
+    assert(customRejected && db.execute(`SELECT count(*) FROM "Customers" WHERE "Label" = 'Rejected custom create'`).rows[0][0].text == "0");
     auto inserted = parseJSON(nestedWrite("create"w, `[{"customer.label":"Cara"}]`w).to!string);
     assert(inserted["data"].array.length == 1 && inserted["data"][0]["customer.label"].str == "Cara");
     auto insertedId = inserted["data"][0]["customer.recordId"].str;
+    customRejected = false;
+    try { nestedWrite("copy"w, `[{"customer.label":"Rejected custom copy"}]`w, insertedId.to!wstring, "rejectCopy"w); } catch (Exception) { customRejected = true; }
+    assert(customRejected && db.execute(`SELECT count(*) FROM "Customers" WHERE "Label" = 'Rejected custom copy'`).rows[0][0].text == "0");
     auto copied = parseJSON(nestedWrite("copy"w, `[{"customer.label":"Copy"}]`w, insertedId.to!wstring).to!string);
     assert(copied["data"].array.length == 1 && copied["data"][0]["customer.label"].str == "Copy");
     auto copiedId = copied["data"][0]["customer.recordId"].str;
     assert(copiedId != insertedId);
+    customRejected = false;
+    try { nestedWrite("destroy"w, (`[{"customer.recordId":"` ~ copiedId ~ `"}]`).to!wstring, null, "rejectDestroy"w); } catch (Exception) { customRejected = true; }
+    assert(customRejected && db.execute(`SELECT count(*) FROM "Customers" WHERE "RecordId" = '` ~ copiedId ~ `'::uuid`).rows[0][0].text == "1");
     nestedWrite("destroy"w, (`[{"customer.recordId":"` ~ copiedId ~ `"}]`).to!wstring);
+    customRejected = false;
+    try { nestedWrite("update"w, (`[{"customer.recordId":"` ~ insertedId ~ `","customer.label":"Rejected custom update"}]`).to!wstring, null, "rejectUpdate"w); } catch (Exception) { customRejected = true; }
+    assert(customRejected && db.execute(`SELECT "Label" FROM "Customers" WHERE "RecordId" = '` ~ insertedId ~ `'::uuid`).rows[0][0].text == "Cara");
     user.privileges.setFieldAccess(z8_guid_create_name("Customers.Label"w), Z8Access.init);
     bool nestedWriteDenied;
     try { nestedWrite("update"w, (`[{"customer.recordId":"` ~ insertedId ~ `","customer.label":"Denied"}]`).to!wstring); }
