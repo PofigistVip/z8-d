@@ -42,6 +42,8 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     project = temp / "project"
     (project / "src").mkdir(parents=True)
     shutil.copytree(root / "examples" / "project", project / "src" / "bl")
+    native_enum_fixture = project / "src/bl/demo/cases/NativeEnumArraySort.bl"
+    shutil.copy2(root / "tests/fixtures/NativeEnumArraySort.bl", native_enum_fixture)
     shutil.copy2(root / "examples" / "math.bl", project / "src" / "bl" / "Math.bl")
     file_io_path = temp / "file-io-oracle.txt"
     file_io_dir = temp / "file-io-oracle-dir"
@@ -484,6 +486,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         System.out.println("GUIDARRAYSORT:" + demo.cases.GuidArraySort.z8_run().get());
         System.out.println("OBJECTARRAYSORT:" + demo.cases.ObjectArraySort.z8_run().get());
         System.out.println("ENUMARRAYSORT:" + demo.cases.EnumArraySort.z8_run().get());
+        System.out.println("NATIVEENUMARRAYSORT:" + demo.cases.NativeEnumArraySort.z8_run().get());
         System.out.println("RESULT:" + demo.cases.CompoundCases.z8_run().get());
         System.out.println("RESULT:" + demo.cases.FinalDeclarations.z8_run().get());
         System.out.println("RESULT:" + demo.cases.AutoCases.z8_run().get());
@@ -767,6 +770,19 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         collection_java = decimal_java.parent.parent / "runtime" / "RCollection.java"
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
                         "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), str(collection_java)], cwd=temp, check=True)
+        # Native enum order comes from the current Java implementation rather
+        # than the BL declarations or potentially older prebuilt server JAR.
+        server_java = original / "org.zenframework.z8.server/src/main/java"
+        native_enums = [server_java / path for path in (
+            "org/zenframework/z8/server/base/form/action/ActionType.java",
+            "org/zenframework/z8/server/base/query/ReadLock.java",
+            "org/zenframework/z8/server/db/sql/SortDirection.java",
+            "org/zenframework/z8/server/base/table/value/Aggregation.java",
+            "org/zenframework/z8/server/db/FieldType.java",
+            "org/zenframework/z8/server/base/table/value/JoinType.java",
+            "org/zenframework/z8/server/ie/ImportPolicy.java")]
+        subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8",
+                        "-cp", str(generated_classes) + os.pathsep + run_classpath, "-d", str(generated_classes), *map(str, native_enums)], cwd=temp, check=True)
         # Override the cached CLASS implementation so lifecycle comparisons use
         # the checked-out source. Other runtime classes still come from the JAR.
         class_java = collection_java.with_name("CLASS.java")
@@ -840,9 +856,14 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             raise SystemExit("Original Z8 object-array sorting differs:\n" + output)
         if "ENUMARRAYSORT:0" not in output.splitlines():
             raise SystemExit("Original Z8 enum-array sorting differs:\n" + output)
+        if "NATIVEENUMARRAYSORT:0" not in output.splitlines():
+            raise SystemExit("Original Z8 native enum-array sorting differs:\n" + output)
         original_results = [line[7:] for line in output.splitlines() if line.startswith("RESULT:")]
         z8d = root / ("z8d.exe" if os.name == "nt" else "z8d")
         d_root = temp / "generated-d"
+        # The native-enum fixture uses the standard library; its D execution
+        # is covered by native_enum_array_sort.py with the library supplied.
+        native_enum_fixture.unlink()
         subprocess.run([str(z8d), "project", str(project / "src" / "bl"), str(d_root)], cwd=temp, check=True)
         d_modules = sorted(d_root.rglob("*.d"))
         imports = []

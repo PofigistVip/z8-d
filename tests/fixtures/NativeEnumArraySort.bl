@@ -1,0 +1,39 @@
+import org.zenframework.z8.base.form.action.ActionType;
+import org.zenframework.z8.base.query.ReadLock;
+import org.zenframework.z8.base.table.SortDirection;
+import org.zenframework.z8.base.table.value.Aggregation;
+import org.zenframework.z8.base.table.value.FieldType;
+import org.zenframework.z8.base.table.value.JoinType;
+import org.zenframework.z8.ie.ImportPolicy;
+
+public class NativeEnumArraySort {
+    public static int run() {
+        Aggregation[] aggregations = {Aggregation.BitwiseAnd, Aggregation.BitwiseOr, Aggregation.Concat, Aggregation.Distinct,
+            Aggregation.Array, Aggregation.Count, Aggregation.Average, Aggregation.Max, Aggregation.Min, Aggregation.Sum, Aggregation.None};
+        Aggregation[] expectedAggregations = {Aggregation.None, Aggregation.Sum, Aggregation.Min, Aggregation.Max,
+            Aggregation.Average, Aggregation.Count, Aggregation.Array, Aggregation.Distinct, Aggregation.Concat, Aggregation.BitwiseOr, Aggregation.BitwiseAnd};
+        aggregations.sort();
+        for (int i = 0; i < aggregations.size(); i += 1) if (aggregations[i] != expectedAggregations[i]) return 1;
+        FieldType[] fields = {FieldType.Text, FieldType.String, FieldType.Integer, FieldType.Guid, FieldType.Geometry,
+            FieldType.File, FieldType.Decimal, FieldType.Datespan, FieldType.Datetime, FieldType.Date,
+            FieldType.Boolean, FieldType.Binary, FieldType.Attachments, FieldType.Null, FieldType.None};
+        FieldType[] expectedFields = {FieldType.None, FieldType.Null, FieldType.Attachments, FieldType.Binary,
+            FieldType.Boolean, FieldType.Date, FieldType.Datetime, FieldType.Datespan, FieldType.Decimal,
+            FieldType.File, FieldType.Geometry, FieldType.Guid, FieldType.Integer, FieldType.String, FieldType.Text};
+        fields.sort();
+        for (int i = 0; i < fields.size(); i += 1) if (fields[i] != expectedFields[i]) return 2;
+        ActionType[] actions = {ActionType.Success, ActionType.Primary, ActionType.Danger, ActionType.Default}; actions.sort();
+        if (actions[0] != ActionType.Default || actions[1] != ActionType.Danger || actions[2] != ActionType.Primary || actions[3] != ActionType.Success) return 3;
+        ReadLock[] locks = {ReadLock.ShareNoWait, ReadLock.UpdateNoWait, ReadLock.Share, ReadLock.Update, ReadLock.None}; locks.sort();
+        if (locks[0] != ReadLock.None || locks[1] != ReadLock.Update || locks[2] != ReadLock.Share || locks[3] != ReadLock.UpdateNoWait || locks[4] != ReadLock.ShareNoWait) return 5;
+        SortDirection[] directions = {SortDirection.Desc, SortDirection.Asc}; directions.sort();
+        if (directions[0] != SortDirection.Asc) return 6;
+        JoinType[] joins = {JoinType.Full, JoinType.Right, JoinType.Left, JoinType.Inner}; joins.sort();
+        if (joins[0] != JoinType.Inner || joins[1] != JoinType.Left || joins[2] != JoinType.Right || joins[3] != JoinType.Full) return 7;
+        ImportPolicy[] policies = {ImportPolicy.Merge, ImportPolicy.Override, ImportPolicy.Keep}; policies.sort();
+        if (policies[0] != ImportPolicy.Keep || policies[1] != ImportPolicy.Override || policies[2] != ImportPolicy.Merge) return 8;
+        Aggregation[] nullable = {Aggregation.Sum, null};
+        try { nullable.sort(); return 9; } catch (exception expected) {}
+        return 0;
+    }
+}

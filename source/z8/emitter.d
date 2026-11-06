@@ -9,6 +9,7 @@ import std.string : replace, startsWith, endsWith, split;
 import z8.compiler_model;
 import z8.lexer : TokenKind, decodeStringLiteral;
 import z8.d_writer : formatDSource;
+import z8.native_enum_order : enumSortOrder;
 
 private string operatorDName(string symbol) {
     switch (symbol) {
@@ -512,8 +513,9 @@ private string emitExprRaw(Expression e) {
             if (isArray(e.inferredType)) {
                 if (e.inferredType == ValueType.enumArray && e.token.text == "sort") {
                     auto enumClass = e.objectClass;
-                    string[] values;
-                    foreach (value; enumClass.enumValues) values ~= enumClass.emittedName ~ ".e_" ~ value.text;
+                    string[] values, order;
+                    if (!enumSortOrder(enumClass, order)) throw new Exception("enum sort order was not resolved");
+                    foreach (value; order) values ~= enumClass.emittedName ~ ".e_" ~ value;
                     return "z8_enum_array_sort(" ~ emitExpr(e.left) ~ ", cast(" ~ enumClass.emittedName ~ "[])[" ~ values.join(", ") ~ "])";
                 }
                 string[] args; foreach (a; e.arguments) args ~= emitExpr(a);

@@ -5,6 +5,7 @@ import std.conv : to;
 import std.string : lastIndexOf, indexOf, icmp;
 import z8.compiler_model;
 import z8.lexer : Token, TokenKind;
+import z8.native_enum_order : enumSortOrder;
 
 /// Checks the entire program before emitting code; unsupported constructs fail closed.
 class Checker {
@@ -1882,8 +1883,11 @@ class Checker {
                         auto guidSort = receiver == ValueType.guidArray && e.token.text == "sort";
                         auto objectSort = receiver == ValueType.selfArray && e.token.text == "sort" &&
                             e.left.objectClass !is null && !isPrimaryClass(e.left.objectClass);
+                        string[] enumOrder;
                         auto enumSort = receiver == ValueType.enumArray && e.token.text == "sort" &&
-                            e.left.objectClass !is null && !e.left.objectClass.isNative;
+                            enumSortOrder(e.left.objectClass, enumOrder);
+                        if (receiver == ValueType.enumArray && e.token.text == "sort" && !enumSort)
+                            fail("native enum sort order is unavailable or stale", e.token);
                         if (!primaryJoin && !guidSort && !objectSort && !enumSort && !["size", "isEmpty", "clear", "first", "last", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
                             fail("this method is not yet supported for object arrays", e.token);
                     }

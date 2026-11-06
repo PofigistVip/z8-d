@@ -27,5 +27,5 @@ with tempfile.TemporaryDirectory() as directory:
     (native / "NativeColor.bl").write_text('[native "example.NativeColor"] public enum NativeColor { Red, Blue }', encoding="utf-8")
     (native / "NativeSort.bl").write_text('public class NativeSort { public static void run() { NativeColor[] values; values.sort(); } }', encoding="utf-8")
     rejected = subprocess.run([str(compiler), "project", str(native), str(temp / "native-output")], capture_output=True, text=True)
-    assert rejected.returncode and "not yet supported" in rejected.stderr, rejected.stderr
+    assert rejected.returncode and "native enum sort order is unavailable or stale" in rejected.stderr, rejected.stderr
 print("BL enum-array sorting, null and aliasing verified")
