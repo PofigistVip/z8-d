@@ -81,6 +81,7 @@ import org.zenframework.z8.base.application.Application;
     virtual protected void onReadAction() {
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "group") groupBy = {customer.label};
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "context-filter") addWhere(customer.label == customer.label.get());
+        if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "changed-link") customer.label = "Changed in hook";
     }
 }
 ''',
@@ -328,6 +329,8 @@ void main(string[] args) {
     assert(response["data"].array.length == 1 && response["data"][0]["title"].str == "Second" && response["data"][0]["customer.label"].str == "Bob", response.toString());
     response = parseJSON(requestFields(`["customer.label"]`w, null, `[ {"property":"customer.label"} ]`w, null, null, "HttpOrder"w, "read"w, null, null,
         `{"customer.label":"Changed only for context"}`w).to!string);
+    assert(response["data"].array.length == 2 && response["data"][0]["customer.label"].str == "Alice" && response["data"][1]["customer.label"].str == "Bob", response.toString());
+    response = parseJSON(requestFields(`["customer.label"]`w, null, `[{"property":"customer.label"}]`w, null, null, "HttpOrder"w, "read"w, "changed-link"w).to!string);
     assert(response["data"].array.length == 2 && response["data"][0]["customer.label"].str == "Alice" && response["data"][1]["customer.label"].str == "Bob", response.toString());
     response = parseJSON(requestFields(`["nameLength"]`w, null, `[{"property":"nameLength"}]`w, null, null, "HttpOrder"w, "read"w, null, null,
         `{"nameLength":999}`w).to!string);

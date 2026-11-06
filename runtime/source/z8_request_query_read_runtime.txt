@@ -431,7 +431,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
             if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();
             throw error;
         }
-        auto saved = new Z8QuerySavedState(query, contextFields);
+        auto saved = new Z8QuerySavedState(query, contextFields ~ selected);
         scope(exit) saved.restore();
         z8_query_open(query, read, false, true);
         writer.start('{', "data"w);
@@ -473,7 +473,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     }
     // ReadAction's FramedSelect saves changed field values before attaching
     // the cursor, then restores them after writing the rows.
-    auto saved = new Z8QuerySavedState(query, contextFields);
+    auto saved = new Z8QuerySavedState(query, contextFields ~ selected);
     scope(exit) saved.restore();
     z8_query_open(query, read, true, true);
     z8_application_query_write_rows(query, writer, selected);
