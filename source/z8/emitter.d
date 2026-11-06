@@ -1128,6 +1128,10 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 field.name.text == "actions" && !field.isStatic && field.type == ValueType.selfArray && field.objectClass !is null) {
                 result ~= "@property ref " ~ storageType ~ " f_actions() { return z8_action_group_actions_ref!(" ~
                     field.objectClass.emittedName ~ ")(this); }\n";
+            } else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.form.Listbox"w &&
+                ["columns", "sortFields", "actions"].canFind(field.name.text) && !field.isStatic && field.type == ValueType.selfArray && field.objectClass !is null) {
+                result ~= "@property ref " ~ storageType ~ " f_" ~ field.name.text ~ "() { return z8_listbox_array_ref!(" ~
+                    field.objectClass.emittedName ~ ", \"" ~ field.name.text ~ "\")(this); }\n";
             } else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.form.action.Action"w &&
                 field.name.text == "parameters" && !field.isStatic && field.type == ValueType.selfArray && field.objectClass !is null) {
                 result ~= "@property ref " ~ storageType ~ " f_parameters() { return z8_action_parameters_ref!(" ~

@@ -33,6 +33,7 @@ import org.zenframework.z8.base.form.Section;
 import org.zenframework.z8.base.form.Tab;
 import org.zenframework.z8.base.form.TabControl;
 import org.zenframework.z8.base.form.ActionGroup;
+import org.zenframework.z8.base.form.Listbox;
 import org.zenframework.z8.base.form.action.Action;
 import org.zenframework.z8.base.form.action.ActionType;
 import org.zenframework.z8.base.form.action.Parameter;
@@ -54,7 +55,9 @@ public class CustomTable extends Table {
         Parameter.create("Default", ParameterSource.create(destination, destination.recordId)),
         Parameter.create("By name", "fallback", ParameterSource.create(destination, destination.recordId))};
     actions = {publish};
-    ActionGroup group; group.actions = {publish}; controls = {panel, tabControl, group};
+    ActionGroup group; group.actions = {publish};
+    Listbox box; box.query = destination; box.columns = {destination.recordId};
+    controls = {panel, tabControl, group, box};
     Report monthly; monthly.template = "monthly"; monthly.format = Report.Excel; Report daily; reports = {monthly, daily};
 }
 ''', encoding="utf-8")
@@ -201,6 +204,9 @@ void main() {
     assert(meta["controls"][2]["isActionGroup"].boolean && meta["controls"][2]["isSection"].boolean);
     assert(meta["controls"][2]["actions"].array.length == 1 && meta["controls"][2]["actions"][0]["name"].str == "publish");
     assert(meta["controls"][2]["actions"][0]["parameters"].array.length == 6);
+    assert(meta["controls"][3]["isListbox"].boolean && meta["controls"][3]["editable"].boolean);
+    assert(meta["controls"][3]["query"]["name"].str == "destination" && meta["controls"][3]["query"]["primaryKey"].str == "destination.recordId");
+    assert(meta["controls"][3]["query"]["columns"][0]["name"].str == "destination.recordId");
     assert(meta["actions"][0]["name"].str == "publish" && meta["actions"][0]["isAction"].boolean && meta["actions"][0]["type"].str == "primary");
     assert(meta["actions"][0]["request"].str == "CustomTable" && meta["actions"][0]["parameters"].array.length == 6);
     auto parameters = meta["actions"][0]["parameters"].array;
@@ -237,6 +243,14 @@ void main() {
     z8_application_finish_response(request, monitor); meta = parseJSON(z8_application_response_text(request).to!string);
     assert("controls" !in meta["controls"][0]["controls"][0].object);
     assert("controls" !in meta["controls"][1]["tabs"][0].object);
+    auto destinationKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, table.f_destination);
+    user.privileges.setTableAccess(destinationKey, Z8Access.init);
+    request = new Z8ApplicationRequest(); request.session = new Z8ApplicationSession("test"w, user, user);
+    request.parameters.z8_add("request"w, "CustomTable"w); request.parameters.z8_add("action"w, "meta"w);
+    z8_application_set_request(request); z8_application_start_response(request, "CustomTable"w);
+    bool listDenied; try { z8_application_dispatch_request(); } catch (Exception error) { listDenied = error.msg == "Listbox table access denied"; }
+    assert(listDenied);
+    user.privileges = new Z8Privileges(Z8Access(true, false, false, false, false, true));
     request = new Z8ApplicationRequest(); request.session = new Z8ApplicationSession("test"w, user, user);
     request.parameters.z8_add("request"w, "CyclicTable"w); request.parameters.z8_add("action"w, "meta"w);
     z8_application_set_request(request); z8_application_start_response(request, "CyclicTable"w);

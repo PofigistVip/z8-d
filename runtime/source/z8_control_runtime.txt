@@ -4,6 +4,7 @@ private enum z8_source_name = "org.zenframework.z8.server.base.form.Source"w;
 private enum z8_section_name = "org.zenframework.z8.server.base.form.Section"w;
 private enum z8_tab_control_name = "org.zenframework.z8.server.base.form.TabControl"w;
 private enum z8_action_group_name = "org.zenframework.z8.server.base.form.ActionGroup"w;
+private enum z8_listbox_name = "org.zenframework.z8.server.base.form.Listbox"w;
 private class Z8ControlState {
     Z8Optional!long colSpan = z8_optional_wrap(1L), flex = z8_optional_wrap(0L), height;
     Z8Optional!bool readOnly = z8_optional_wrap(false), required = z8_optional_wrap(false),
@@ -16,7 +17,11 @@ private Z8ControlState z8_control_state(Z8Object self) {
     self = z8_nonnull(self);
     if (!z8_native_is_instance(z8_control_name, self)) throw new Exception("invalid Control object");
     auto state = cast(Z8ControlState)self.z8_get_native_state(z8_control_name);
-    if (state is null) { state = new Z8ControlState(); self.z8_set_native_state(z8_control_name, state); }
+    if (state is null) {
+        state = new Z8ControlState();
+        if (z8_native_is_instance(z8_listbox_name, self)) state.editable = z8_optional_wrap(true);
+        self.z8_set_native_state(z8_control_name, state);
+    }
     return state;
 }
 private auto z8_control_address(string member)(Z8Object self) {
@@ -98,6 +103,35 @@ ref Z8ObjectArray!T z8_action_group_actions_ref(T)(Z8Object self) if (is(T : Z8O
     }
     return cell.value;
 }
+private class Z8ListboxState {
+    Z8Object query, link;
+    IZ8FieldOrderCell[string] arrays;
+}
+private Z8ListboxState z8_listbox_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_listbox_name, self)) throw new Exception("invalid Listbox object");
+    auto state = cast(Z8ListboxState)self.z8_get_native_state(z8_listbox_name);
+    if (state is null) { state = new Z8ListboxState(); self.z8_set_native_state(z8_listbox_name, state); }
+    return state;
+}
+private auto z8_listbox_address(string member)(Z8Object self) { return &__traits(getMember, z8_listbox_state(self), member); }
+ref Z8ObjectArray!T z8_listbox_array_ref(T, string name)(Z8Object self) if (is(T : Z8Object)) {
+    auto state = z8_listbox_state(self);
+    auto found = name in state.arrays;
+    auto cell = found is null ? null : cast(Z8FieldOrderCell!T)*found;
+    if (cell is null) {
+        if (found !is null) throw new Exception("incompatible Listbox array");
+        cell = new Z8FieldOrderCell!T(); state.arrays[name] = cell;
+    }
+    return cell.value;
+}
+private Z8Object[] z8_listbox_array(Z8Object self, string name) {
+    auto entry = name in z8_listbox_state(self).arrays;
+    if (entry is null || *entry is null || (*entry).view() is null) return [];
+    auto data = (*entry).view().z8_erased_data(); Z8Object[] result;
+    for (long i; i < data.z8_size(); ++i) result ~= z8_nonnull(cast(Z8Object)data.z8_get(i));
+    return result;
+}
 private class Z8SourceState { Z8Object query, valueFrom, filterField; }
 private Z8SourceState z8_source_state(Z8Object self) {
     self = z8_nonnull(self);
@@ -117,7 +151,8 @@ Z8Object[] z8_control_fields(Z8Object control) {
     void visit(Z8Object item) {
         item = z8_nonnull(item);
         if (z8_native_is_instance(z8_field_name, item)) { foreach (field; z8_field_fields(item)) add(field); return; }
-        if (z8_native_is_instance(z8_action_name, item) || z8_native_is_instance(z8_action_group_name, item)) return;
+        if (z8_native_is_instance(z8_action_name, item) || z8_native_is_instance(z8_action_group_name, item) ||
+            z8_native_is_instance(z8_listbox_name, item)) return;
         foreach (parent; path) if (parent is item) throw new Exception("cyclic section controls");
         path ~= item;
         scope(exit) path.length = path.length - 1;
@@ -322,6 +357,14 @@ private bool z8_control_metadata_visible(Z8Object item, Z8Object query, Z8Privil
     }
     if (z8_native_is_instance(z8_action_name, item)) return true;
     if (z8_native_is_instance(z8_action_group_name, item)) return true;
+    if (z8_native_is_instance(z8_listbox_name, item)) {
+        auto target = z8_listbox_state(item).query;
+        if (target is null || !z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, target))
+            throw new Exception("Listbox requires a table query");
+        auto key = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, target);
+        if (!privileges.getTableAccess(key).read) throw new Exception("Listbox table access denied");
+        return true;
+    }
     if (z8_native_is_instance(z8_tab_control_name, item)) return true;
     if (!z8_native_is_instance(z8_section_name, item)) throw new Exception("unsupported control metadata");
     if (z8_native_is_instance("org.zenframework.z8.server.base.form.Form"w, item)) {
@@ -363,6 +406,64 @@ private void z8_control_write_meta_tree(Z8Object item, Z8Object query, Z8Object 
                 writer.finish(']');
             }
         }
+        return;
+    }
+    if (z8_native_is_instance(z8_listbox_name, item)) {
+        auto state = z8_listbox_state(item);
+        auto target = z8_nonnull(state.query);
+        if (state.link !is null) throw new Exception("Listbox link metadata is not supported yet");
+        auto control = z8_control_state(item), queryState = z8_query_state(target);
+        auto savedReadOnly = control.readOnly;
+        control.readOnly = z8_optional_wrap((savedReadOnly.present && savedReadOnly.value) || (queryState.readOnly.present && queryState.readOnly.value));
+        scope(exit) control.readOnly = savedReadOnly;
+        z8_control_write_base_meta(item, target, context, privileges);
+        z8_monitor_property(writer, "isListbox"w, true);
+        auto key = z8_nonnull(z8_query_primary_key(target));
+        auto targetKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, target);
+        auto access = privileges.getTableAccess(targetKey);
+        writer.start('{', "query"w);
+        z8_monitor_property(writer, "request"w, context.z8_class_id());
+        z8_monitor_property(writer, "name"w, target.z8_id());
+        z8_monitor_property(writer, "primaryKey"w, key.z8_id());
+        if (queryState.period !is null && z8_application_query_field_readable(target, queryState.period, privileges))
+            z8_monitor_property(writer, "periodKey"w, queryState.period.z8_id());
+        writer.start('{', "access"w);
+        z8_monitor_property(writer, "read"w, access.read); z8_monitor_property(writer, "write"w, access.write);
+        z8_monitor_property(writer, "create"w, access.create); z8_monitor_property(writer, "copy"w, access.copy);
+        z8_monitor_property(writer, "destroy"w, access.destroy); writer.finish('}');
+        if (!control.readOnly.value) foreach (field; z8_query_declared_fields(target))
+            if (field.z8_get_attribute("lockKey"w) !is null) z8_monitor_property(writer, "lockKey"w, field.z8_id());
+        foreach (field; z8_query_declared_fields(target)) {
+            auto parent = field.z8_get_attribute("parentKey"w);
+            if (parent !is null && z8_str_compareNoCase(parent, "false"w) != 0) z8_monitor_property(writer, "parentKey"w, field.z8_id());
+        }
+        z8_monitor_property(writer, "totals"w, queryState.totals);
+        z8_monitor_property(writer, "limit"w, z8_query_limit(target));
+        z8_monitor_property(writer, "text"w, target.z8_get_attribute("displayName"w));
+        auto columns = z8_listbox_array(item, "columns");
+        auto fields = z8_query_form_fields(target);
+        foreach (field; columns) { bool found; foreach (previous; fields) if (previous is field) { found = true; break; } if (!found) fields ~= field; }
+        if (!columns.length) columns = z8_query_array(target, "columns"w);
+        void writeFields(wstring name, Z8Object[] list) {
+            Z8Object[] visible; foreach (field; list) if (z8_control_metadata_visible(field, target, privileges)) visible ~= field;
+            if (visible.length) {
+                writer.start('[', name);
+                foreach (field; visible) { writer.start('{'); z8_control_write_meta(field, target, context, privileges); writer.finish('}'); }
+                writer.finish(']');
+            }
+        }
+        writeFields("fields"w, fields); writeFields("columns"w, columns);
+        auto sort = z8_listbox_array(item, "sortFields");
+        if (!sort.length) sort = z8_query_array(target, "sortFields"w);
+        Z8Object[] readableSort; foreach (field; sort) if (z8_application_query_field_readable(target, field, privileges)) readableSort ~= field;
+        z8_application_query_write_order(readableSort, null);
+        auto actions = z8_listbox_array(item, "actions");
+        if (actions.length) {
+            writer.start('[', "actions"w);
+            foreach (action; actions) { writer.start('{'); z8_action_write_meta(action, target, context, privileges); writer.finish('}'); }
+            writer.finish(']');
+        }
+        writer.finish('}');
         return;
     }
     if (z8_native_is_instance(z8_tab_control_name, item)) {
@@ -445,5 +546,7 @@ void z8_bind_builtin_control() {
     z8_native_bind_field(source ~ "f_filterField"w, &z8_source_address!"filterField");
     z8_native_bind(source ~ "z8op_assign"w, &z8_source_assign);
     z8_native_bind_field(z8_section_name ~ ".f_colCount"w, &z8_section_col_count);
+    z8_native_bind_field(z8_listbox_name ~ ".f_query"w, &z8_listbox_address!"query");
+    z8_native_bind_field(z8_listbox_name ~ ".f_link"w, &z8_listbox_address!"link");
 }
 shared static this() { z8_bind_builtin_control(); }
