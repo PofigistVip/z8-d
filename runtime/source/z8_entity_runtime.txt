@@ -96,6 +96,48 @@ private Z8Optional!bool z8_entity_equal(Z8Object self, Z8Object other) {
     return z8_optional_wrap(a is b || (a !is null && b !is null && a == b));
 }
 private Z8Optional!bool z8_entity_not_equal(Z8Object self, Z8Object other) { return z8_optional_wrap(!z8_optional_require(z8_entity_equal(self, other))); }
+Z8Object z8_entity_copy_default(Z8Object self) {
+    auto state = z8_entity_state(self);
+    auto copy = z8_object_new_instance(self.z8_class_id());
+    copy.z8_set_container(z8_object_container(self));
+    z8_entity_set_map(copy, state.defaults); z8_entity_set_map(copy, state.changes);
+    z8_entity_set_id(copy, null); z8_entity_state(copy).initialized = state.initialized;
+    z8_entity_set_origin_id(copy, z8_entity_get_id(self));
+    return copy;
+}
+private Z8Object z8_entity_copy(Z8Object self, Z8Optional!bool withEntityId) {
+    auto copy = z8_nonnull(self).z8_entity_virtual_copy();
+    if (z8_optional_require(withEntityId)) z8_entity_set_id(copy, z8_entity_get_id(self));
+    return copy;
+}
+private Z8Array!Z8Guid z8_entity_as_ids(Z8ObjectArray!Z8Object entities) {
+    auto result = new Z8Array!Z8Guid(); auto values = z8_nonnull(entities).z8_erased_data();
+    for (long i; i < values.z8_size(); ++i) result.z8_add(z8_entity_get_id(cast(Z8Object)values.z8_get(i)));
+    return result;
+}
+private Z8Array!Z8Primary z8_entity_as_values(Z8ObjectArray!Z8Object entities, wstring field) {
+    auto result = new Z8Array!Z8Primary(); auto values = z8_nonnull(entities).z8_erased_data();
+    for (long i; i < values.z8_size(); ++i) result.z8_add(z8_entity_get(cast(Z8Object)values.z8_get(i), field));
+    return result;
+}
+private Z8Array!Z8Guid z8_entity_as_guids(Z8ObjectArray!Z8Object entities, wstring field) {
+    auto result = new Z8Array!Z8Guid(); auto values = z8_entity_as_values(entities, field);
+    for (long i; i < values.z8_size(); ++i) result.z8_add(z8_primary_cast!Z8Guid(values.z8_get(i)));
+    return result;
+}
+private Z8Array!wstring z8_entity_as_strings(Z8ObjectArray!Z8Object entities, wstring field) {
+    auto result = new Z8Array!wstring(); auto values = z8_entity_as_values(entities, field);
+    for (long i; i < values.z8_size(); ++i) result.z8_add(z8_primary_cast!wstring(values.z8_get(i)));
+    return result;
+}
+private Z8Object z8_entity_find(Z8ObjectArray!Z8Object entities, Z8Guid id) {
+    auto values = z8_nonnull(entities).z8_erased_data();
+    for (long i; i < values.z8_size(); ++i) {
+        auto entity = cast(Z8Object)values.z8_get(i); auto candidate = z8_entity_get_id(entity);
+        if (candidate is id || (candidate !is null && id !is null && candidate == id)) return entity;
+    }
+    return null;
+}
 private wstring z8_entity_string(Z8Object self, wstring key) { return z8_primary_cast!wstring(z8_entity_get(self, key)); }
 private Z8Optional!long z8_entity_int(Z8Object self, wstring key) { return z8_primary_cast!long(z8_entity_get(self, key)); }
 private Z8Optional!bool z8_entity_bool(Z8Object self, wstring key) {
@@ -137,6 +179,10 @@ void z8_bind_builtin_entity() {
     z8_native_bind(p ~ "m_getJsonObject"w, &z8_entity_json_object); z8_native_bind(p ~ "m_getJsonArray"w, &z8_entity_json_array);
     z8_native_bind(p ~ "m_getEntityId"w, &z8_entity_get_id); z8_native_bind(p ~ "m_setEntityId"w, &z8_entity_set_id);
     z8_native_bind(p ~ "m_getOriginId"w, &z8_entity_get_origin_id); z8_native_bind(p ~ "m_setOriginId"w, &z8_entity_set_origin_id);
+    z8_native_bind(p ~ "m_copy"w, &z8_entity_copy_default); z8_native_bind(p ~ "m_copy"w, &z8_entity_copy);
+    z8_native_bind(p ~ "m_asIds"w, &z8_entity_as_ids); z8_native_bind(p ~ "m_asValues"w, &z8_entity_as_values);
+    z8_native_bind(p ~ "m_asGuidValues"w, &z8_entity_as_guids); z8_native_bind(p ~ "m_asStringValues"w, &z8_entity_as_strings);
+    z8_native_bind(p ~ "m_find"w, &z8_entity_find);
     z8_native_bind(p ~ "m_onChange"w, &z8_entity_default_change);
     foreach (name; ["onRegister"w, "onCreate"w, "onDelete"w]) z8_native_bind(p ~ "m_"w ~ name, &z8_entity_default_hook);
 }

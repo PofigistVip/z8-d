@@ -36,6 +36,12 @@ public class NumberFilter extends Filter {
     virtual public bool accept(Entity entity) { calls = calls + 1; return entity.getInt("number") >= minimum; }
 }
 ''', encoding="utf-8")
+    (source / "CopyEntity.bl").write_text('''
+import org.zenframework.z8.base.entity.Entity;
+public class CopyEntity extends Entity {
+    virtual public Entity copy() { Entity result; result.set("custom", "yes"); return result; }
+}
+''', encoding="utf-8")
     (source / "CountVisitor.bl").write_text('''
 import org.zenframework.z8.base.entity.Entity;
 import org.zenframework.z8.base.entity.Visitor;
@@ -66,6 +72,21 @@ public class EntityProbe {
         registry.visitEntities(visitor);
     }
     public static Entity registerCurrent() { Entity item; item.create(guid.create(99)); item.register(); return item; }
+    public static bool copyAndCollections() {
+        TrackedEntity first; first.init("number", 1); first.set("number", 2); first.set("name", "first"); first.create(guid.create(10));
+        Entity copy = first.copy();
+        if (!(copy instanceof TrackedEntity) || !copy.isNull() || copy.getOriginId() != guid.create(10) || copy.getInt("number") != 2) return false;
+        Entity identified = first.copy(true);
+        if (identified.getEntityId() != guid.create(10) || identified.getOriginId() != guid.create(10)) return false;
+        CopyEntity custom; custom.create(guid.create(11)); Entity customCopy = custom.copy(true);
+        if (customCopy.getString("custom") != "yes" || customCopy.getEntityId() != guid.create(11)) return false;
+        Entity second; second.create(guid.create(12)); second.set("name", "second");
+        Entity[] values = {first, second}; guid[] ids = Entity.asIds(values); string[] names = Entity.asStringValues(values, "name");
+        guid[] links = Entity.asGuidValues(values, "recordId"); primary[] all = Entity.asValues(values, "name");
+        return ids.size() == 2 && ids[0] == guid.create(10) && ids[1] == guid.create(12) && names[1] == "second" &&
+            links[0] == guid.create(10) && (string)all[0] == "first" && Entity.find(values, guid.create(12)) == second &&
+            Entity.find(values, guid.create(13)) == null;
+    }
     public static bool registryVerify() {
         Registry registry; TrackedEntity first; TrackedEntity other;
         first.register(registry);
@@ -130,7 +151,7 @@ import z8.runtime;
 import z8gen.p_EntityProbe;
 void main() {
     alias P = Z8p_456E7469747950726F6265;
-    assert(z8_optional_require(P.m_verify()) && z8_optional_require(P.m_registryVerify()));
+    assert(z8_optional_require(P.m_verify()) && z8_optional_require(P.m_registryVerify()) && z8_optional_require(P.m_copyAndCollections()));
     bool changed; try { P.m_mutateDuringVisit(); } catch (Exception) { changed = true; } assert(changed);
     auto request = new Z8ApplicationRequest(); auto previous = z8_application_set_request(request);
     auto registry = P.m_currentRegistry(); auto item = P.m_registerCurrent();

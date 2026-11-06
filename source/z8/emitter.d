@@ -1013,6 +1013,8 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                     method.parameters[0].objectClass.emittedName ~ ")entity); }\n";
         }
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.entity.Entity"w) {
+            foreach (method; program.methods) if (method.name.text == "copy" && method.returnObjectClass !is null && !method.parameters.length)
+                result ~= "override Z8Object z8_entity_virtual_copy() { return this.m_copy(); }\n";
             foreach (method; program.methods) if (method.returnType == ValueType.voidType) {
                 if (method.name.text == "onChange" && method.parameters.length == 1 && method.parameters[0].type == ValueType.stringType)
                     result ~= "override void z8_entity_virtual_on_change(wstring key) { this.m_onChange(key); }\n";
