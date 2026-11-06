@@ -1,0 +1,32 @@
+// Physical fields of the Java-only ScheduledJobLogs system table.
+private enum z8_scheduled_job_logs_name = "org.zenframework.z8.server.base.table.system.ScheduledJobLogs"w;
+private class Z8ScheduledJobLogsState { Z8Object scheduledJobs; Z8Object[7] fields; }
+private void z8_scheduled_job_logs_new(Z8Object self) {
+    enum base = "org.zenframework.z8.server.base.table.value."w;
+    enum kinds = ["TextField"w, "Link"w, "DatetimeField"w, "DatetimeField"w, "BoolField"w, "FileField"w, "IntegerField"w];
+    enum indexes = ["description"w, "scheduledJob"w, "start"w, "finish"w, "errors"w, "file"w, "fileSize"w];
+    enum names = ["Description"w, "ScheduledJob"w, "Start"w, "Finish"w, "Errors"w, "Files"w, "File size"w];
+    auto state = new Z8ScheduledJobLogsState();
+    state.scheduledJobs = z8_native_new(z8_scheduled_jobs_name);
+    state.scheduledJobs.z8_set_container(self); state.scheduledJobs.z8_set_index("scheduledJobs"w);
+    foreach (i; 0 .. state.fields.length) state.fields[i] = z8_table_system_field(self, base ~ kinds[i], indexes[i], names[i]);
+    self.z8_set_native_state(z8_scheduled_job_logs_name, state);
+}
+private Z8ScheduledJobLogsState z8_scheduled_job_logs_state(Z8Object self) {
+    auto state = cast(Z8ScheduledJobLogsState)z8_nonnull(self, -1).z8_get_native_state(z8_scheduled_job_logs_name);
+    if (state is null) throw new Exception("ScheduledJobLogs members are not initialized");
+    return state;
+}
+private Z8Object* z8_scheduled_job_logs_table_address(Z8Object self) { return &z8_scheduled_job_logs_state(self).scheduledJobs; }
+private Z8Object* z8_scheduled_job_logs_field_address(size_t index)(Z8Object self) { return &z8_scheduled_job_logs_state(self).fields[index]; }
+void z8_scheduled_job_logs_configure(Z8Object self) {
+    auto state = z8_scheduled_job_logs_state(self);
+    z8_link_assign(state.fields[1], z8_nonnull(state.scheduledJobs));
+    state.fields[4].z8_set_attribute("icon"w, "fa-error"w);
+}
+shared static this() {
+    z8_native_bind(z8_scheduled_job_logs_name ~ ".m_new"w, &z8_scheduled_job_logs_new);
+    z8_native_bind_field(z8_scheduled_job_logs_name ~ ".f_scheduledJobs"w, &z8_scheduled_job_logs_table_address);
+    static foreach (i, name; ["description"w, "scheduledJob"w, "start"w, "finish"w, "errors"w, "file"w, "fileSize"w])
+        z8_native_bind_field(z8_scheduled_job_logs_name ~ ".f_"w ~ name, &z8_scheduled_job_logs_field_address!i);
+}

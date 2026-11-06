@@ -1,0 +1,22 @@
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.system.ScheduledJobs;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.TextField;
+import org.zenframework.z8.base.table.value.DatetimeField;
+import org.zenframework.z8.base.table.value.BoolField;
+import org.zenframework.z8.base.table.value.FileField;
+import org.zenframework.z8.base.table.value.IntField;
+
+// ScheduledJobLogs is a Java-only framework table in the original distribution.
+[name "SystemScheduledJobLogs"]
+[native "org.zenframework.z8.server.base.table.system.ScheduledJobLogs"]
+public class ScheduledJobLogs extends Table {
+    ScheduledJobs scheduledJobs;
+    [name "Description"] TextField description;
+    [name "ScheduledJob"] Link scheduledJob;
+    [name "Start"] DatetimeField start;
+    [name "Finish"] DatetimeField finish;
+    [name "Errors"] BoolField errors;
+    [name "Files"] FileField file;
+    [name "File size"] IntField fileSize;
+}

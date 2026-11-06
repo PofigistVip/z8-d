@@ -152,6 +152,7 @@ import org.zenframework.z8.base.table.system.Entries;
 import org.zenframework.z8.base.table.system.UserEntries;
 import org.zenframework.z8.base.table.system.Jobs;
 import org.zenframework.z8.base.table.system.ScheduledJobs;
+import org.zenframework.z8.base.table.system.ScheduledJobLogs;
 import org.zenframework.z8.base.security.User;
 import org.zenframework.z8.base.table.value.Field;
 public class Probe {
@@ -174,7 +175,9 @@ public class Probe {
     public static Sequences sequences() { Sequences value; return value; }
     public static Jobs jobs() { Jobs value; return value; }
     public static ScheduledJobs scheduledJobs() { ScheduledJobs value; return value; }
+    public static ScheduledJobLogs scheduledJobLogs() { ScheduledJobLogs value; return value; }
     public static void createSchedule(ScheduledJobs value, guid id, guid job) { value.job = job; value.create(id); }
+    public static void createScheduleLog(ScheduledJobLogs value, guid id, guid schedule) { value.scheduledJob = schedule; value.errors = true; value.create(id); }
     public static void setScheduleCron(ScheduledJobs value, guid id, string cron) { value.cron = cron; value.update(id); }
     public static Tables systemTables() { Tables value; return value; }
     public static Requests systemRequests() { Requests value; return value; }
@@ -601,7 +604,7 @@ void main(string[] args) {
     auto bootstrapJob = P.m_dailyJob(); bootstrapRegistry.registerJob(bootstrapJob);
     bootstrapRegistry.registerJob(P.m_disabledJob()); bootstrapRegistry.registerJob(P.m_manualJob());
     bootstrapRegistry.registerTable(bootstrapSample); bootstrapRegistry.registerRequest(bootstrapSample); bootstrapRegistry.registerEntry(bootstrapSample);
-    Z8Object[] bootstrapTables = [P.m_scheduledJobs(), P.m_jobs(), P.m_userRoles(), P.m_userEntries(), P.m_entries(), P.m_roles(), P.m_users(), P.m_sequences(), P.m_systemTables(), P.m_systemFields(),
+    Z8Object[] bootstrapTables = [P.m_scheduledJobLogs(), P.m_scheduledJobs(), P.m_jobs(), P.m_userRoles(), P.m_userEntries(), P.m_entries(), P.m_roles(), P.m_users(), P.m_sequences(), P.m_systemTables(), P.m_systemFields(),
         P.m_systemRequests(), P.m_roleTableAccess(), P.m_roleFieldAccess(), P.m_roleRequestAccess(), P.m_target()];
     db.execute(`CREATE SCHEMA "z8_bootstrap"`);
     auto bootstrapUser = new Z8UserData(); bootstrapUser.id = z8_guid_create(777); bootstrapUser.administrator = true;
@@ -623,6 +626,11 @@ void main(string[] args) {
     auto savedScheduleConnection = z8_connection_set_current(new Z8PostgresDatabase(db, "z8_bootstrap"w));
     auto scheduleId = z8_guid_create(0x999);
     P.m_createSchedule(schedule, scheduleId, z8_guid_create_name("DailyJob"w));
+    auto jobLogs = P.m_scheduledJobLogs(); auto logDDL = z8_postgres_create_table_sql("z8_bootstrap"w, jobLogs);
+    assert(logDDL.canFind(`"Description" bytea`) && logDDL.canFind(`"Files" bytea`) && logDDL.canFind(`"File size" bigint`));
+    assert(z8_postgres_create_foreign_keys_sql("z8_bootstrap"w, jobLogs).length == 1);
+    P.m_createScheduleLog(jobLogs, z8_guid_create(0x998), scheduleId);
+    assert(db.execute(`SELECT "Errors" FROM "z8_bootstrap"."SystemScheduledJobLogs" WHERE "RecordId" = '00000000-0000-0000-0000-000000000998'`).rows[0][0].text == "1");
     auto scheduleRows = db.execute(`SELECT "User"::text, "Cron", "Active", "Log errors only" FROM "z8_bootstrap"."SystemScheduledJobs" WHERE "RecordId" = '00000000-0000-0000-0000-000000000999'`);
     assert(scheduleRows.rows.length == 1 && scheduleRows.rows[0][0].text == "00000000-0000-0000-0000-000000000001");
     assert(scheduleRows.rows[0][1].text == "0 * * * *" && scheduleRows.rows[0][2].text == "1" && scheduleRows.rows[0][3].text == "1");
