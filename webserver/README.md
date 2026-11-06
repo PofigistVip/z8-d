@@ -49,7 +49,8 @@ the original client's `session` and `id` parameters and require the stored
 session; as with the original converter, the URL does not identify a table or
 record for a per-field permission check. Files are returned as attachments with
 UTF-8 filenames. A `preview` parameter serves PDFs inline; supported document
-and image formats are converted to PDF using the configured `office.home`.
+and image formats are converted to PDF using the configured `office.home`,
+including temporary files produced by exports.
 Files outside `SystemFiles` are not handled by this route, except short-lived
 archives created by `action=archive` and generated exports.
 The archive URL is bound to its session, user and database schema; archive data
