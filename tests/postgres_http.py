@@ -109,6 +109,14 @@ public class ImpersonateJob extends Executable {
     }
 }
 ''', encoding="utf-8")
+    (source / "DemoDesktop.bl").write_text('''
+import org.zenframework.z8.base.form.Desktop;
+[displayName "Dashboard"] public class DemoDesktop extends Desktop { UpdateJob visible; HiddenJob hidden; }
+''', encoding="utf-8")
+    (source / "HiddenJob.bl").write_text('''
+import org.zenframework.z8.base.Executable;
+public class HiddenJob extends Executable {}
+''', encoding="utf-8")
     (source / "Sample.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.IntField;
@@ -151,9 +159,11 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
         user.builtinAdministrator = id == "full"w;
         user.login = "Alice"w; user.firstName = "Alice"w; user.email = "old@example.org"w; user.settings = "{}"w; user.changePassword = true;
         user.roles = [z8_guid_create(9)]; user.roleNames = ["Operators"w];
-        user.entries = [Z8UserEntry(z8_guid_create_name("Sample"w), "Sample"w, "Sample"w), Z8UserEntry(z8_guid_create(9), "MissingEntry"w, "Missing"w)];
+        user.entries = [Z8UserEntry(z8_guid_create_name("Sample"w), "Sample"w, "Sample"w),
+            Z8UserEntry(z8_guid_create_name("DemoDesktop"w), "DemoDesktop"w, "Dashboard"w), Z8UserEntry(z8_guid_create(9), "MissingEntry"w, "Missing"w)];
         user.parameters.z8_add("theme"w, z8_primary_box("dark"w));
         user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
+        user.privileges.setRequestAccess(z8_guid_create_name("HiddenJob"w), Z8Access.init);
         if (id == "limited"w) {
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.Title"w), Z8Access.init);
             user.privileges.setTableAccess(z8_guid_create_name("Sample"w), Z8Access(true, false, false, false, false, true));
@@ -239,8 +249,17 @@ void main(string[] args) {
                 assert response.status == 200 and login["success"] and login["session"] == "full", login
                 assert login["user"]["login"] == "Alice" and login["user"]["administrator"] and login["user"]["changePassword"], login
                 assert login["user"]["roles"][0]["name"] == "Operators" and login["user"]["parameters"]["theme"] == "dark", login
-                assert len(login["user"]["entries"]) == 1 and login["user"]["entries"][0]["request"] == "Sample", login
+                assert len(login["user"]["entries"]) == 2 and login["user"]["entries"][0]["request"] == "Sample", login
                 assert login["maxUploadSize"] == 5 and "password" not in login["user"], login
+            finally:
+                conn.close()
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            try:
+                conn.request("GET", "/request.json?" + urlencode(dict(request="login", session="full", server="test", experimental="1")))
+                response = conn.getresponse(); login = json.loads(response.read())
+                assert response.status == 200 and login["success"] and len(login["user"]["data"]) == 2, login
+                dashboard = login["user"]["data"][1]
+                assert dashboard["text"] == "Dashboard" and len(dashboard["items"]) == 1 and dashboard["items"][0]["request"] == "UpdateJob", login
             finally:
                 conn.close()
             conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)

@@ -64,7 +64,8 @@ still supplied by `IZ8HttpAuthority`. Login-time email changes and password
 changes are supported. The password verifier locks the PostgreSQL user row until
 the update commits; `Z8ApplicationConfig.clientHashesPasswords` controls whether
 the client supplies the existing Z8 MD5 hashes or the server computes them.
-The experimental dashboard is not implemented.
+The optional experimental login response includes desktop actions visible to the
+current user and omits actions without request permission.
 `request=settings` saves `data` to the current session user's `SystemUsers`
 record through the active database backend.
 

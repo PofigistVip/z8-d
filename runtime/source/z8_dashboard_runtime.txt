@@ -19,6 +19,19 @@ private void z8_dashboard_write_entry(Z8JsonWriterState writer, Z8Object entry) 
     }
     writer.finish('}');
 }
+private void z8_dashboard_write_desktop(Z8JsonWriterState writer, Z8Object desktop, Z8Privileges privileges, wstring title) {
+    Z8Object[] visible;
+    foreach (member; z8_object_members(desktop)) {
+        if (!z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, member) &&
+            !z8_native_is_instance(z8_executable_name, member)) continue;
+        if (privileges !is null && privileges.getRequestAccess(z8_guid_create_name(member.z8_class_id())).execute) visible ~= member;
+    }
+    if (!visible.length) return;
+    writer.start('{'); z8_monitor_property(writer, "text"w, title);
+    z8_monitor_property(writer, "icon"w, desktop.z8_get_attribute("icon"w));
+    writer.start('[', "items"w); foreach (item; visible) z8_dashboard_write_entry(writer, item); writer.finish(']');
+    writer.finish('}');
+}
 private void z8_dashboard_login_info() {
     auto request = z8_application_require_request();
     auto session = z8_nonnull(request.session), user = z8_nonnull(session.user);
@@ -28,7 +41,6 @@ private void z8_dashboard_login_info() {
     if (newPassword !is null) { z8_dashboard_change_password(user, params.z8_get("password"w), newPassword); return; }
     auto email = params.z8_get("email"w);
     if (email !is null) { z8_dashboard_change_email(user, email); return; }
-    if (params.z8_get("experimental"w) !is null) throw new Exception("experimental dashboard is not implemented");
     Z8Object[] entries;
     foreach (entry; user.entries) {
         try { entries ~= z8_object_new_instance(entry.classId); }
@@ -51,6 +63,15 @@ private void z8_dashboard_login_info() {
         z8_monitor_property(writer, "name"w, index < user.roleNames.length ? user.roleNames[index] : null); writer.finish('}');
     }
     writer.finish(']');
+    if (params.z8_get("experimental"w) !is null) {
+        writer.start('[', "data"w);
+        foreach (entry; entries) {
+            if (z8_native_is_instance("org.zenframework.z8.server.base.form.Desktop"w, entry))
+                z8_dashboard_write_desktop(writer, entry, user.privileges, entry.z8_get_attribute("displayName"w));
+            else z8_dashboard_write_entry(writer, entry);
+        }
+        writer.finish(']');
+    }
     writer.start('{', "parameters"w);
     auto values = z8_nonnull(user.parameters); auto keys = values.z8_keys();
     for (long i; i < keys.z8_size(); ++i) {
