@@ -42,6 +42,7 @@ interface IZ8SchemaOperations {
     void renameField(wstring table, wstring field, wstring replacement);
     void dropTable(wstring table);
 }
+interface IZ8SchemaReconciler { void reconcileSchema(); }
 interface IZ8SystemInstallation { bool isSystemInstalled(); }
 private class Z8ConnectionState {
     IZ8DatabaseConnection backend;

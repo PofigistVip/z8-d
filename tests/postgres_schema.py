@@ -1051,6 +1051,17 @@ void main(string[] args) {
     auto reconcilePriorRequest = z8_application_set_request(null);
     assert(z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables).length == 0 && z8_application_request() is null);
     z8_application_set_request(reconcilePriorRequest);
+    wstring[] platformTypes;
+    foreach (platformTable; reconcileTables) platformTypes ~= platformTable.z8_class_id();
+    auto reconcileBackend = new Z8PostgresDatabase(db, "z8_reconcile"w, reconcileRegistry, platformTypes);
+    reconcileBackend.reconcileSchema();
+    assert(bootstrapRequest.eventsLevel() == Z8EventsLevel.user);
+    auto reconcileBackground = cast(IZ8BackgroundDatabaseConnection)reconcileBackend.openBackgroundConnection();
+    (cast(IZ8SchemaReconciler)reconcileBackground).reconcileSchema();
+    reconcileBackground.closeBackgroundConnection();
+    bool reconcileMissingRegistry;
+    try { (new Z8PostgresDatabase(db, "z8_reconcile"w)).reconcileSchema(); } catch (Z8PostgresException) { reconcileMissingRegistry = true; }
+    assert(reconcileMissingRegistry);
     auto jobRows = db.execute(`SELECT "RecordId"::text, "Name", "Lock" FROM "z8_bootstrap"."SystemJobs" WHERE "Class" = 'DailyJob'`);
     assert(jobRows.rows.length == 1 && z8_guid_literal(jobRows.rows[0][0].text) == z8_guid_create_name("DailyJob"w));
     assert(jobRows.rows[0][1].text == "Daily task" && jobRows.rows[0][2].text == "3");

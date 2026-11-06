@@ -41,10 +41,13 @@ void main(string[] args) {
     scope(exit) z8_runtime_set_registry(previousRegistry);
     enum prefix = "org.zenframework.z8.server.base.table.system."w;
     Z8Object[] systemTables;
+    wstring[] systemTableTypes;
     foreach (name; ["Users"w, "Roles"w, "UserRoles"w, "Entries"w, "UserEntries"w, "Sequences"w,
         "Tables"w, "Fields"w, "Requests"w, "RoleTableAccess"w, "RoleFieldAccess"w, "RoleRequestAccess"w, "Files"w, "Settings"w,
         "Jobs"w, "ScheduledJobs"w, "ScheduledJobLogs"w]) {
-        auto table = z8_native_new(prefix ~ name); table.z8_ensure(); systemTables ~= table;
+        auto typeName = prefix ~ name;
+        systemTableTypes ~= typeName;
+        auto table = z8_native_new(typeName); table.z8_ensure(); systemTables ~= table;
     }
     z8_postgres_reconcile_registered(db, schema, registry, systemTables);
     if (initialize) {
@@ -77,7 +80,7 @@ void main(string[] args) {
     IZ8SchedulerControl schedulerControl = applicationConfig.schedulerEnabled ? cast(IZ8SchedulerControl)scheduler : new DisabledSchedulerControl();
     auto server = new Z8CivetServer("127.0.0.1:0", (Z8HttpRequest request) {
         auto connection = db.openSibling(); scope(exit) connection.close();
-        auto previous = z8_connection_set_current(new Z8PostgresDatabase(connection, schema, registry));
+        auto previous = z8_connection_set_current(new Z8PostgresDatabase(connection, schema, registry, systemTableTypes));
         scope(exit) z8_connection_set_current(previous);
         z8_application_request().schedulerControl = schedulerControl;
         if (request.path.startsWith("/storage/")) z8_application_dispatch_file_download(request.path.to!wstring);

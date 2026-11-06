@@ -6,21 +6,29 @@ import z8.database.postgres;
 import z8.database.query;
 import z8.database.privileges : z8_postgres_read_user;
 import z8.database.plan : quoteIdentifier;
+import z8.database.bootstrap : z8_postgres_reconcile_registered;
 
 // Adapter for the request-local BL Connection and Query.setConnection APIs.
-class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8RawSqlConnection, IZ8SystemInstallation, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection, IZ8JobUserResolver, IZ8UserPasswordVerifier, IZ8UserProfileReader, IZ8DatabaseSchema, IZ8SchemaOperations, IZ8AfterCommit {
+class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8RawSqlConnection, IZ8SystemInstallation, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection, IZ8JobUserResolver, IZ8UserPasswordVerifier, IZ8UserProfileReader, IZ8DatabaseSchema, IZ8SchemaOperations, IZ8SchemaReconciler, IZ8AfterCommit {
     private Z8PostgresConnection connection;
     private wstring schema;
     private Z8RuntimeRegistry registry;
+    private wstring[] platformTables;
     private bool systemInstalled;
-    this(Z8PostgresConnection connection, wstring schema, Z8RuntimeRegistry registry = null) {
+    this(Z8PostgresConnection connection, wstring schema, Z8RuntimeRegistry registry = null, wstring[] platformTables = null) {
         if (connection is null || connection.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
         if (schema is null || !schema.length) throw new Z8PostgresException("empty PostgreSQL schema");
-        this.connection = connection; this.schema = schema.idup; this.registry = registry;
+        this.connection = connection; this.schema = schema.idup; this.registry = registry; this.platformTables = platformTables.dup;
     }
     void beginTransaction() { connection.beginTransaction(); }
     void afterCommit(void delegate() callback) { connection.afterCommit(callback); }
     wstring databaseSchema() { return schema; }
+    void reconcileSchema() {
+        if (registry is null) throw new Z8PostgresException("application registry is required for schema generation");
+        Z8Object[] tables;
+        foreach (name; platformTables) tables ~= z8_object_new_instance(z8_string_required(name));
+        z8_postgres_reconcile_registered(connection, schema, registry, tables);
+    }
     bool tableExists(wstring table) {
         auto rows = connection.execute(`SELECT 1 FROM information_schema.tables WHERE table_schema =
             CASE WHEN $1::text = 'pg_temp' THEN pg_my_temp_schema()::regnamespace::text ELSE $1::text END
@@ -95,7 +103,7 @@ class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8RawSqlConnection, IZ8System
     }
     // libpq executes immediately, so there is no pending JDBC batch to flush.
     void flush() { if (connection.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed"); }
-    IZ8DatabaseConnection openBackgroundConnection() { return new Z8PostgresDatabase(connection.openSibling(), schema, registry); }
+    IZ8DatabaseConnection openBackgroundConnection() { return new Z8PostgresDatabase(connection.openSibling(), schema, registry, platformTables); }
     void closeBackgroundConnection() { connection.close(); }
     Z8UserData resolveJobUser(Z8Guid id) { return z8_postgres_read_user(connection, schema, id, registry); }
     bool readUserProfile(Z8Guid id, out Z8UserProfile profile) {

@@ -30,6 +30,11 @@ executor use it and derive the table name from the BL query's `name` attribute.
 The static BL `Transaction.begin`, `commit`, `rollback` and `flush` methods use
 the same current-thread connection and its transaction nesting semantics.
 BL `Database.get`, `fromJson`, `schema`, `toJson` and `connection` are supported.
+For schema reconciliation, `Z8PostgresDatabase` accepts a registry and an
+optional list of additional platform table class IDs. `IZ8SchemaReconciler`
+creates fresh instances and applies the existing additive reconciliation; the
+same configuration is retained by background connections. The host must supply
+all required platform table classes.
 An embedding host may install a thread-local `IZ8DatabaseCatalog` with
 `z8_database_set_catalog` to provide the complete current descriptor and resolve
 external descriptors to connections; the catalog owns their lifetimes. Without a
