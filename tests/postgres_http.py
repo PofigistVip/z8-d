@@ -119,6 +119,11 @@ import org.zenframework.z8.base.form.Desktop;
 import org.zenframework.z8.base.Executable;
 public class HiddenJob extends Executable {}
 ''', encoding="utf-8")
+    (source / "NestedAttachment.bl").write_text('''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.AttachmentField;
+public class NestedAttachment extends Table { [name "Documents"] public AttachmentField documents; }
+''', encoding="utf-8")
     (source / "Sample.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.IntField;
@@ -133,6 +138,7 @@ public class Sample extends Table {
     [name "Blob"] public BinaryField blob;
     [name "Documents"] public AttachmentField documents;
     Table child; [name "ChildLink"] Link childLink = child;
+    NestedAttachment nested; [name "NestedLink"] Link nestedLink = nested;
     ApplyAction apply; NoTransactionAction noTransaction; IncrementAction increment; ContextAction inspect;
     actions = {apply, noTransaction, increment, inspect};
     CustomReport exported; reports = {exported};
@@ -160,7 +166,7 @@ __gshared string databaseInfo;
 
 class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
     Z8ApplicationSession authorize(Z8HttpRequest request, wstring id, wstring server) {
-        if (server != "test"w || (id != "full"w && id != "full2"w && id != "limited"w && id != "denied"w && id != "field-denied"w)) return null;
+        if (server != "test"w || (id != "full"w && id != "full2"w && id != "limited"w && id != "denied"w && id != "field-denied"w && id != "relation-denied"w)) return null;
         auto user = new Z8UserData(); user.id = z8_guid_create(id == "full"w || id == "full2"w ? 2 : 3);
         user.builtinAdministrator = id == "full"w || id == "full2"w;
         user.login = "Alice"w; user.firstName = "Alice"w; user.email = "old@example.org"w; user.settings = "{}"w; user.changePassword = true;
@@ -175,7 +181,11 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
             user.privileges.setTableAccess(z8_guid_create_name("Sample"w), Z8Access(true, false, false, false, false, true));
         }
         if (id == "denied"w) user.privileges.setRequestAccess(z8_guid_create_name("Sample"w), Z8Access.init);
-        if (id == "field-denied"w) user.privileges.setFieldAccess(z8_guid_create_name("Sample.Documents"w), Z8Access.init);
+        if (id == "field-denied"w) {
+            user.privileges.setFieldAccess(z8_guid_create_name("Sample.Documents"w), Z8Access.init);
+            user.privileges.setFieldAccess(z8_guid_create_name("NestedAttachment.Documents"w), Z8Access.init);
+        }
+        if (id == "relation-denied"w) user.privileges.setFieldAccess(z8_guid_create_name("Sample.NestedLink"w), Z8Access.init);
         return new Z8ApplicationSession(id, user, user);
     }
     Z8ApplicationSession login(Z8HttpRequest request, wstring login, wstring password) {
@@ -191,7 +201,9 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
 void main(string[] args) {
     databaseInfo = args[1];
     auto setup = new Z8PostgresConnection(databaseInfo);
-    setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Blob" bytea, "Documents" bytea, "ChildLink" uuid, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
+    setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Blob" bytea, "Documents" bytea, "ChildLink" uuid, "NestedLink" uuid, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
+    setup.execute(`CREATE TABLE "NestedAttachment" ("RecordId" uuid PRIMARY KEY, "Documents" bytea, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
+    setup.execute(`INSERT INTO "NestedAttachment" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000088')`);
     setup.execute(`CREATE TABLE "SystemFiles" ("RecordId" uuid PRIMARY KEY, "Name" text, "File" bytea, "Path" text, "Size" bigint, "Time" bigint, "Last modified" bigint, "Location" bigint, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     setup.execute(`CREATE TABLE "ContentLog" (value integer)`);
     setup.execute(`CREATE TABLE "SystemUsers" ("RecordId" uuid PRIMARY KEY, "Settings" bytea, "Password" text, "Change Password" smallint, "Email" text, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
@@ -479,9 +491,11 @@ void main(string[] args) {
                 assert response.status == 200 and result["success"], result
             finally:
                 conn.close()
-            def attach_file(session, record_id, filename, content, details='{"kind":"document"}'):
+            def attach_file(session, record_id, filename, content, details='{"kind":"document"}', nested=False):
                 params = {"request": "Sample", "session": session, "server": "test", "action": "attach",
                           "recordId": record_id, "field": "documents", "fields": '["documents"]', "details": details}
+                if nested:
+                    params.update(query="nested", field="nested.documents", fields='["nested.documents"]')
                 marker = "z8-attachment-boundary"
                 payload = b""
                 for key, value in params.items():
@@ -525,6 +539,18 @@ void main(string[] args) {
                     client.close()
             status, headers, content = download(download_path, "full", first_id)
             assert status == 200 and content == bytes([0, 255, 65]), (status, headers, content)
+            nested_target = "00000000-0000-0000-0000-000000000088"
+            result = attach_file("field-denied", nested_target, "denied.txt", b"no", nested=True)
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = attach_file("relation-denied", nested_target, "denied.txt", b"no", nested=True)
+            assert not result["success"] and "relation access denied" in result["info"]["messages"][-1]["text"], result
+            result = attach_file("full", nested_target, "nested.txt", b"nested", nested=True)
+            assert result["success"], result
+            nested_file = json.loads(result["data"][0]["nested.documents"])[0]
+            assert download("/" + quote(nested_file["path"], safe="/"), "full", nested_file["id"])[2] == b"nested"
+            result = request(action="detach", query="nested", field="nested.documents", fields='["nested.documents"]',
+                             recordId=nested_target, data=json.dumps([nested_file["id"]]))
+            assert result["success"] and json.loads(result["data"][0]["nested.documents"]) == [], result
             assert headers["Content-Type"] == "application/octet-stream" and "filename*=UTF-8''" + quote("данные.txt") in headers["Content-Disposition"], headers
             assert download(download_path, "unknown", first_id)[0] == 401
             status, headers, content = download(download_path, "full", "00000000-0000-0000-0000-000000000099")

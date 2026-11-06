@@ -14,11 +14,14 @@ private void z8_application_dispatch_query_attachment_target(wstring className, 
         if (name is null) throw new Exception("invalid attachment parameter");
         if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w ||
             name == "action"w || name == "recordId"w || name == "field"w || name == "fields"w ||
-            name == "values"w || (!detach && name == "details"w) || (detach && name == "data"w)) continue;
+            name == "values"w || name == "query"w || (!detach && name == "details"w) || (detach && name == "data"w)) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported attachment parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
     if (!z8_native_is_instance(z8_table_name, query)) throw new Exception("attachment action requires a Table");
+    auto privileges = z8_nonnull(session.user).privileges;
+    if (privileges is null) throw new Exception("attachment access denied");
+    query = z8_application_nested_query(query, privileges, params.z8_get("query"w));
     auto fieldId = params.z8_get("field"w);
     if (fieldId is null || !fieldId.length) throw new Exception("attachment field is required");
     auto field = z8_query_find_field_id(query, fieldId);
@@ -27,10 +30,9 @@ private void z8_application_dispatch_query_attachment_target(wstring className, 
     auto recordId = params.z8_get("recordId"w);
     auto id = recordId is null || !recordId.length ? z8_guid_zero() : z8_guid_parse(recordId);
     if (detach && id == z8_guid_zero()) throw new Exception("detach requires a record id");
-    auto privileges = z8_nonnull(session.user).privileges;
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
     auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
-    if (privileges is null || !(id == z8_guid_zero() ? privileges.getTableAccess(queryKey).create : privileges.getTableAccess(queryKey).write) ||
+    if (!(id == z8_guid_zero() ? privileges.getTableAccess(queryKey).create : privileges.getTableAccess(queryKey).write) ||
         !privileges.getFieldAccess(queryKey, fieldKey).write) throw new Exception("attachment access denied");
     auto selected = z8_application_query_fields(query, privileges, params);
     z8_application_query_context_values(query, privileges, params, false);
