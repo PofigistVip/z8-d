@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package z8.authority.v1;
+
+// The two unsigned words correspond to Java UUID's most/least significant bits.
+message Guid {
+  fixed64 most_significant_bits = 1;
+  fixed64 least_significant_bits = 2;
+}
+
+// Transport and authentication are intentionally specified separately.
+message UserChanged {
+  Guid user_id = 1;
+  string schema = 2;
+}
+
+message RoleChanged {
+  Guid role_id = 1;
+  string schema = 2;
+}
