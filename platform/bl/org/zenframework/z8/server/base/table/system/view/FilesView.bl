@@ -1,0 +1,9 @@
+import org.zenframework.z8.base.table.system.Files;
+
+// The original Java FilesView is a read-only system tool over SystemFiles.
+[request] [displayName "$Files.title$"]
+public class FilesView extends Files {
+    readOnly = true;
+    path.colSpan = 4;
+    controls = {name, createdAt, path};
+}

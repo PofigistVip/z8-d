@@ -47,6 +47,8 @@ The host also starts the local scheduled-job service and stops it on shutdown.
 `TasksJob` is a disabled example until its `SystemScheduledJobs` row has an
 active CRON expression. Scheduler errors are written to stderr; task logs are
 stored under `logs/scheduler` in the configured working directory.
+The administrator's SystemTools entry currently includes the read-only files
+view; other original system tools remain to be implemented.
 
 Optionally add `--config C:/path/to/server.properties` to initialization and
 server commands. The example applies the configured working and storage paths,

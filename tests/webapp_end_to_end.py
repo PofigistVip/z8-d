@@ -157,11 +157,17 @@ with tempfile.TemporaryDirectory() as directory:
             status, login = browser_login(port, "Admin", password)
             assert status == 200 and login["success"], login
             assert sum(entry["request"] == "Tasks" for entry in login["user"]["entries"]) == 1, login
+            tools_class = "org.zenframework.z8.server.base.table.system.SystemTools"
+            files_view = "org.zenframework.z8.server.base.table.system.view.FilesView"
+            assert any(entry["request"] == tools_class for entry in login["user"]["entries"]), login
+            assert any(item.get("request") == files_view for group in login["user"]["data"] for item in group.get("items", [])), login
             session = login["session"]
             status, replacement = browser_login(port, "Admin", password)
             assert status == 200 and replacement["success"] and replacement["session"] != session
             assert request(port, request="login", session=session)[0] == 401
             session = replacement["session"]
+            status, files_metadata = request(port, request=files_view, session=session, action="meta")
+            assert status == 200 and files_metadata["success"] and [item["name"] for item in files_metadata["controls"]] == ["name", "createdAt", "path"], files_metadata
             status, metadata = request(port, request="Tasks", session=session, action="meta")
             assert status == 200 and metadata["success"], metadata
             assert [control["name"] for control in metadata["controls"]] == ["title", "done", "documents"], metadata
