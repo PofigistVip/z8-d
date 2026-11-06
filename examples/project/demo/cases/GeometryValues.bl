@@ -73,6 +73,11 @@ public class GeometryValues {
         mutablePoints.add(geometry.point(9, 12, 4326));
         if (liveLine.points().size() != 4 || liveLine.length() != 10.0 || liveLine.width() != 6.0 || liveLine.toString() != cachedHex) return 41;
         if (geometry.line(mutablePoints).length() != 15.0) return 42;
+        geometry[] mixed = {geometry.none(4326), point, geometry.none(4326)};
+        if (geometry.collection(mixed).toGeoJson() != "{\"type\":\"GeometryCollection\",\"geometries\":[{\"type\":\"Point\",\"coordinates\":[1.5,-2.25]}]}") return 43;
+        if (geometry.line(mixed).toGeoJson() != "{\"type\":\"LineString\",\"coordinates\":[[0.0,0.0],[1.5,-2.25],[0.0,0.0]]}") return 44;
+        geometry[] onlyEmpty = {geometry.none(4326), geometry.none(4326)};
+        if (geometry.collection(onlyEmpty).toGeoJson() != "{\"type\":\"GeometryCollection\",\"geometries\":[]}") return 45;
         return 199;
     }
 }

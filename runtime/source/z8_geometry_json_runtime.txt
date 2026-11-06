@@ -54,14 +54,16 @@ wstring z8_geometry_toGeoJson(Z8Geometry value) {
         z8_geometry_ensure(item);
         return "[" ~ z8_java_double_string(item.x) ~ "," ~ z8_java_double_string(item.y) ~ "]";
     }
-    string coordinates(Z8Geometry item) {
+    // Java writes coordinate nesting according to the outer geometry's type,
+    // even when a supplied child has a different shape.
+    string coordinates(Z8Geometry item, int depth) {
         z8_geometry_ensure(item);
-        if (item.shape == 1) return point(item);
+        if (!depth) return point(item);
         if (!item.hasChildren) throw new Exception("geometry has no components");
         string result = "[";
         foreach (i, child; item.children) {
             if (i) result ~= ",";
-            result ~= coordinates(child);
+            result ~= coordinates(child, depth - 1);
         }
         return result ~ "]";
     }
@@ -82,13 +84,19 @@ wstring z8_geometry_toGeoJson(Z8Geometry value) {
         if (item.shape == 7) {
             if (!item.hasChildren) throw new Exception("geometry has no components");
             result ~= "\"geometries\":[";
-            foreach (i, child; item.children) {
-                if (i) result ~= ",";
+            bool first = true;
+            foreach (child; item.children) {
+                child = z8_nonnull(child);
+                if (child.shape == -1 && child.rawHex is null) continue;
+                if (!first) result ~= ",";
+                first = false;
                 result ~= geometryJSON(child);
             }
             return result ~ "]}";
         }
-        return result ~ "\"coordinates\":" ~ coordinates(item) ~ "}";
+        auto depth = item.shape == 1 ? 0 : item.shape == 2 || item.shape == 4 ? 1 :
+            item.shape == 3 || item.shape == 5 ? 2 : 3;
+        return result ~ "\"coordinates\":" ~ coordinates(item, depth) ~ "}";
     }
     return geometryJSON(value).to!wstring;
 }
