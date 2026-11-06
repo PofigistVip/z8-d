@@ -1,4 +1,4 @@
-// Initial CommandAction adapter: direct query context and no action parameters.
+// CommandAction adapter for direct query contexts and typed parameters.
 private Z8Object z8_action_find(Z8Object query, wstring id) {
     import std.array : split;
     id = z8_string_required(id);
@@ -56,12 +56,27 @@ private void z8_application_dispatch_query_action_target(wstring className, Z8Ob
     if (!z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, query)) throw new Exception("action requires a Query");
     auto action = z8_action_find(query, params.z8_get("name"w));
     auto state = z8_action_state(action);
-    if (state.parameters !is null && state.parameters.view() !is null && state.parameters.view().z8_erased_data().z8_size())
-        throw new Exception("action parameters are not supported");
     auto parameterValues = params.z8_get("parameters"w);
     if (parameterValues !is null && parameterValues.length) {
         auto parsed = z8_json_parse(parameterValues.to!string);
-        if (parsed.type != JSONType.array || parsed.array.length) throw new Exception("action parameters are not supported");
+        if (parsed.type != JSONType.array) throw new Exception("action parameters must be an array");
+        foreach (entry; parsed.array) {
+            if (entry.type != JSONType.object) throw new Exception("invalid action parameter");
+            auto id = "id" in entry.object;
+            if (id is null || id.type != JSONType.string) throw new Exception("action parameter requires an id");
+            Z8Object parameter;
+            if (state.parameters !is null && state.parameters.view() !is null) {
+                auto candidates = state.parameters.view().z8_erased_data();
+                for (long i; i < candidates.z8_size(); ++i) {
+                    auto candidate = cast(Z8Object)candidates.z8_get(i);
+                    if (z8_parameter_state(candidate).text == id.str.to!wstring) { parameter = candidate; break; }
+                }
+            }
+            if (parameter is null) throw new Exception("unknown action parameter: " ~ id.str);
+            auto value = "value" in entry.object;
+            if (value !is null && (value.type == JSONType.array || value.type == JSONType.object)) throw new Exception("invalid action parameter value");
+            z8_parameter_parse(parameter, value is null ? ""w : z8_json_value_text(*value));
+        }
     }
     auto records = z8_action_guid_list(params.z8_get("records"w));
     auto selected = z8_action_guid_list(params.z8_get("selection"w));

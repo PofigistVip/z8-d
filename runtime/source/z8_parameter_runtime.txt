@@ -62,6 +62,22 @@ T z8_parameter_create_type(T, E)(wstring text, E type, Z8Optional!bool visible) 
     return item;
 }
 private auto z8_parameter_cast(T)(Z8Object self) { return z8_primary_cast!T(z8_parameter_state(self).value); }
+private void z8_parameter_parse(Z8Object item, wstring text) {
+    auto state = z8_parameter_state(item);
+    auto type = z8_parameter_type(state);
+    // Parameter.getType caches an inferred type before replacing its value.
+    state.type = type;
+    switch (type) {
+        case "string"w: case "text"w: state.value = z8_primary_box(text); break;
+        case "int"w: state.value = z8_primary_box(z8_int_parse(text)); break;
+        case "float"w: state.value = z8_primary_box(z8_decimal_parse(text)); break;
+        case "boolean"w: state.value = z8_primary_box(z8_bool_parse(text)); break;
+        case "guid"w: state.value = z8_primary_box(z8_guid_parse(text)); break;
+        case "date"w: case "datetime"w: state.value = z8_primary_box(text.length ? z8_date_parse(text) : z8_date_now()); break;
+        case "datespan"w: state.value = z8_primary_box(text.length ? z8_datespan_parse(text) : new Z8Datespan()); break;
+        default: throw new Exception("unsupported parameter type: " ~ type.to!string);
+    }
+}
 private void z8_parameter_write_meta(Z8Object item, Z8JsonWriterState writer) {
     auto state = z8_parameter_state(item);
     if (state.source !is null) throw new Exception("parameter source metadata is not supported");

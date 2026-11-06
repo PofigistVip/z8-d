@@ -44,6 +44,22 @@ public class ApplyAction extends Action {
     (source / "NoTransactionAction.bl").write_text('''
 public class NoTransactionAction extends ApplyAction { useTransaction = false; }
 ''', encoding="utf-8")
+    (source / "IncrementAction.bl").write_text('''
+import org.zenframework.z8.base.form.action.Action;
+import org.zenframework.z8.base.form.action.Parameter;
+import org.zenframework.z8.base.query.Query;
+import org.zenframework.z8.base.sql.Connection;
+public class IncrementAction extends Action {
+    Parameter delta = Parameter.create("delta", 1);
+    Parameter enabled = Parameter.create("enabled", true);
+    Parameter message = Parameter.create("message", "ready");
+    parameters = {delta, enabled, message};
+    virtual protected void execute(guid id, Query context, guid[] selected, Query query) {
+        if (!(bool)enabled || (string)message != "ready") throw "invalid parameters";
+        Connection.get().execute("UPDATE \\"Sample\\" SET \\"Amount\\" = \\"Amount\\" + " + ((int)delta).toString() + " WHERE \\"RecordId\\" = '" + id.toString() + "'");
+    }
+}
+''', encoding="utf-8")
     (source / "Sample.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.IntField;
@@ -53,7 +69,7 @@ public class Sample extends Table {
     [name "Title"] public StringField title;
     [name "Amount"] public IntField amount;
     [name "Blob"] public BinaryField blob;
-    ApplyAction apply; NoTransactionAction noTransaction; actions = {apply, noTransaction};
+    ApplyAction apply; NoTransactionAction noTransaction; IncrementAction increment; actions = {apply, noTransaction, increment};
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -178,6 +194,17 @@ void main(string[] args) {
             assert not result["success"], result
             result = request(sort='[{"property":"amount"}]')
             assert [row["amount"] for row in result["data"]] == [7, 11], result
+            one = '["00000000-0000-0000-0000-000000000001"]'
+            result = request(action="action", name="increment", records=one)
+            assert result["success"], result
+            result = request(action="action", name="increment", records=one, parameters='[{"id":"delta","value":3},{"id":"enabled","value":true},{"id":"message","value":"ready"}]')
+            assert result["success"], result
+            result = request(action="action", name="increment", records=one, parameters='[{"id":"delta","value":"invalid"}]')
+            assert not result["success"], result
+            result = request(action="action", name="increment", records=one, parameters='[{"id":"enabled","value":false}]')
+            assert not result["success"] and "invalid parameters" in result["info"]["messages"][-1]["text"], result
+            result = request(sort='[{"property":"amount"}]')
+            assert [row["amount"] for row in result["data"]] == [11, 11], result
             new_record = '[{"recordId":"00000000-0000-0000-0000-000000000003","title":"Third","amount":25}]'
             result = request(session="limited", action="create", data=new_record)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
