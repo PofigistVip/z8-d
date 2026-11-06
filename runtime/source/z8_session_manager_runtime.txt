@@ -52,6 +52,23 @@ class Z8SessionManager : IZ8UserChangeNotifier, IZ8RoleChangeNotifier {
             return new Z8ApplicationSession(original.id, original.user, original.system);
         }
     }
+    Z8ApplicationSession getSessionInSchema(wstring id, wstring schema) {
+        if (id is null) return null;
+        synchronized (mutex) {
+            auto found = id in sessions;
+            if (found is null || (*found).schema != schema) return null;
+            auto original = (*found).session;
+            original.touch();
+            return new Z8ApplicationSession(original.id, original.user, original.system);
+        }
+    }
+    void dropSessionInSchema(wstring id, wstring schema) {
+        if (id is null) return;
+        synchronized (mutex) {
+            auto found = id in sessions;
+            if (found !is null && (*found).schema == schema) removeEntry(*found);
+        }
+    }
     void dropUserSessions(Z8Guid id, wstring schema) {
         auto userKey = key(id, schema);
         synchronized (mutex) { auto found = userKey in users; if (found !is null) removeEntry(*found); }

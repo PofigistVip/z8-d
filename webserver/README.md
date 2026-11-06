@@ -77,6 +77,17 @@ receive the Z8 error envelope with HTTP 401. The authority supplies the
 `Z8ApplicationSession` used by `Application.user()` and related methods. With
 no authority, the host handler is responsible for access control. Providers
 must handle concurrent calls and decide how to synchronize session state.
+For a single PostgreSQL schema, the optional integration module
+`z8.integration.postgres_authority` supplies `Z8PostgresHttpAuthority`. Add
+`integrations/postgres_webserver/source`, `postgres/source` and
+`webserver/source` to the D import and build paths. It checks passwords against
+PostgreSQL, creates session tokens using the operating system's secure random
+generator, enforces the supplied session manager's timeout on requests, and
+handles local user and role invalidation. Its source connection must remain
+open; each login opens an independent sibling connection. The authority's
+password-hashing configuration must match `Z8ApplicationConfig` for login-time
+password changes. `logout(sessionId)` revokes a session; an HTTP logout endpoint
+and cross-server session synchronization remain to be implemented.
 An authority may also implement `IZ8UserChangeNotifier`. User updates, deletion,
 and the BL `Users.notifyUserChange` call then notify it with the user ID and
 database schema, so it can invalidate cached sessions for the correct tenant.

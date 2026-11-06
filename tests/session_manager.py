@@ -25,6 +25,7 @@ void main() {
     assert(original is duplicate && manager.getSession("unused"w) is null);
     auto copy = manager.getSession("first"w);
     assert(copy !is original && copy.user is user && copy.system is system);
+    assert(manager.getSessionInSchema("first"w, "a"w) !is null && manager.getSessionInSchema("first"w, "b"w) is null);
     copy.switchUser(makeUser(2)); copy.restoreUser(); assert(copy.user is user && original.user is user);
     auto administrator = makeUser(3); administrator.administrator = true; administrator.roles = [role];
     auto otherSchema = makeUser(4); otherSchema.roles = [role];
@@ -45,6 +46,10 @@ void main() {
     assert(rejected && single.getSession("old"w) !is null);
     single.create("new"w, user, system, "a"w);
     assert(single.getSession("old"w) is null && single.getSession("new"w) !is null);
+    single.dropSessionInSchema("old"w, "a"w); single.dropSessionInSchema("new"w, "b"w);
+    assert(single.getSession("new"w) !is null);
+    single.dropSessionInSchema("new"w, "a"w); assert(single.getSession("new"w) is null);
+    single.create("new"w, user, system, "a"w);
     single.check(long.max); assert(single.getSession("new"w) !is null);
     auto concurrent = new Z8SessionManager();
     Thread[] threads;
