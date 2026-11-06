@@ -513,6 +513,16 @@ private string emitExprRaw(Expression e) {
                 return e.targetClass ~ ".m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
             }
             if (isArray(e.inferredType)) {
+                if (e.inferredType == ValueType.enumArray && e.token.text == "join") {
+                    auto enumClass = e.objectClass;
+                    string[] values, names;
+                    foreach (value; enumClass.enumValues) {
+                        values ~= enumClass.emittedName ~ ".e_" ~ value.text;
+                        names ~= emitWStringLiteral(value.text.to!wstring);
+                    }
+                    auto separator = e.arguments.length ? ", " ~ emitExpr(e.arguments[0]) : "";
+                    return "z8_enum_array_join(" ~ emitExpr(e.left) ~ ", cast(" ~ enumClass.emittedName ~ "[])[" ~ values.join(", ") ~ "], cast(wstring[])[" ~ names.join(", ") ~ "]" ~ separator ~ ")";
+                }
                 if (e.inferredType == ValueType.encodingArray && e.token.text == "sort")
                     return "z8_encoding_array_sort(" ~ emitExpr(e.left) ~ ")";
                 if (e.inferredType == ValueType.ftsQueryArray && e.token.text == "sort")

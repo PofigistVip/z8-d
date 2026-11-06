@@ -21,6 +21,21 @@ Z8Array!T z8_enum_array_sort(T)(Z8Array!T array, T[] order) if (is(T == class)) 
     return array;
 }
 
+wstring z8_enum_array_join(T)(Z8Array!T array, T[] values, wstring[] names, wstring separator = ""w) if (is(T == class)) {
+    array = z8_nonnull(array);
+    wstring result;
+    foreach (i; 0 .. array.z8_size()) {
+        if (i) result ~= z8_string_required(separator);
+        auto value = z8_nonnull(array.z8_get(i));
+        bool found;
+        foreach (index, candidate; values) if (value is candidate) {
+            result ~= names[index]; found = true; break;
+        }
+        if (!found) throw new Exception("invalid enum array element");
+    }
+    return result;
+}
+
 class Z8Array(T) {
     enum isPrimitive = is(T == long) || is(T == bool) || is(T == Z8Decimal);
     enum sharePrimary = isPrimitive || is(T == wstring) || is(T == Z8Guid) || is(T == Z8File);

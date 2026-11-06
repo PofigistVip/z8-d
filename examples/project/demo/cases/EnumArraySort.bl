@@ -15,6 +15,10 @@ public class EnumArraySort {
         try { invalid.sort(); return 5; } catch (exception expected) {}
         if (colors().sort().first() != SortColor.Red) return 6;
         try { for (SortColor item : values) values.sort(); return 7; } catch (exception expectedModification) {}
+        if (colors().join(",") != "Blue,Red" || colors().join() != "BlueRed") return 8;
+        if (empty.join(null) != "") return 9;
+        try { string ignored = invalid.join(","); return 10; } catch (exception expected) {}
+        try { string ignored = colors().join(null); return 11; } catch (exception expected) {}
         return 0;
     }
 }

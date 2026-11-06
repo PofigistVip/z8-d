@@ -1881,6 +1881,8 @@ class Checker {
                         auto primaryJoin = e.token.text == "join" && [ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray,
                             ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.primaryArray, ValueType.selfArray,
                             ValueType.encodingArray, ValueType.ftsQueryArray].canFind(receiver);
+                        auto enumJoin = receiver == ValueType.enumArray && e.token.text == "join" &&
+                            e.left.objectClass !is null && !e.left.objectClass.isNative;
                         auto guidSort = receiver == ValueType.guidArray && e.token.text == "sort";
                         auto encodingSort = receiver == ValueType.encodingArray && e.token.text == "sort";
                         auto ftsQuerySort = receiver == ValueType.ftsQueryArray && e.token.text == "sort";
@@ -1891,7 +1893,7 @@ class Checker {
                             enumSortOrder(e.left.objectClass, enumOrder);
                         if (receiver == ValueType.enumArray && e.token.text == "sort" && !enumSort)
                             fail("native enum sort order is unavailable or stale", e.token);
-                        if (!primaryJoin && !guidSort && !encodingSort && !ftsQuerySort && !objectSort && !enumSort && !["size", "isEmpty", "clear", "first", "last", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
+                        if (!primaryJoin && !enumJoin && !guidSort && !encodingSort && !ftsQuerySort && !objectSort && !enumSort && !["size", "isEmpty", "clear", "first", "last", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
                             fail("this method is not yet supported for object arrays", e.token);
                     }
                     switch (e.token.text) {
