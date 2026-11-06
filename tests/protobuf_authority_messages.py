@@ -40,9 +40,23 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
 import z8.runtime;
 import z8.authority.messages;
 import z8.authority.session;
+import z8.authority.service;
+import z8.authority.notifications;
 import z8.protobuf.wire;
 import std.file : read, write;
 import std.path : buildPath;
+class Endpoint : IZ8AuthorityEndpoint {
+    int users, roles;
+    Z8ApplicationSession makeSession(wstring id) {
+        auto user = new Z8UserData(); user.id = z8_guid_create(42); user.privileges = new Z8Privileges();
+        auto system = new Z8UserData(); system.id = z8_guid_create(1); system.privileges = new Z8Privileges();
+        return new Z8ApplicationSession(id, user, system);
+    }
+    Z8ApplicationSession login(Z8AuthorityLogin request) { return request.password == "ok"w ? makeSession("token"w) : null; }
+    Z8ApplicationSession authorize(Z8AuthorityAuthorize request) { return request.sessionId == "wrong"w ? makeSession("other"w) : makeSession(request.sessionId); }
+    void userChanged(Z8Guid id, wstring schema) { assert(id == z8_guid_create(42) && schema == "схема"w); ++users; }
+    void roleChanged(Z8Guid id, wstring schema) { assert(id == z8_guid_create(42) && schema == "схема"w); ++roles; }
+}
 void main(string[] args) {
     auto dir = args[1];
     if (args[2] == "generate") {
@@ -67,11 +81,27 @@ void main(string[] args) {
     try { z8_decode_authority_login(cast(const(ubyte)[])read(buildPath(dir, "missing-password.bin"))); } catch (Z8ProtobufException) { rejected = true; }
     assert(rejected);
     rejected = false; try { z8_decode_authority_reply([]); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
+    auto endpoint = new Endpoint(); auto service = new Z8ProtobufAuthorityService(endpoint);
+    auto loginRequest = Z8AuthorityLogin("Alice"w, "ok"w, "схема"w, null);
+    auto response = z8_decode_authority_reply(service.login(z8_encode_authority_login(loginRequest)));
+    assert(!response.denied && response.session.session.id == "token"w && response.session.schema == "схема"w);
+    loginRequest.password = "bad"w;
+    assert(z8_decode_authority_reply(service.login(z8_encode_authority_login(loginRequest))).denied);
+    auto authRequest = Z8AuthorityAuthorize("token"w, "схема"w, null);
+    assert(!z8_decode_authority_reply(service.authorize(z8_encode_authority_authorize(authRequest))).denied);
+    authRequest.sessionId = "wrong"w; rejected = false;
+    try { service.authorize(z8_encode_authority_authorize(authRequest)); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
+    Z8AuthorityChange change; change.id = z8_guid_create(42); change.schema = "схема"w;
+    assert(service.userChanged(z8_encode_authority_change(change)).length == 0);
+    assert(service.roleChanged(z8_encode_authority_change(change)).length == 0 && endpoint.users == 1 && endpoint.roles == 1);
+    change.schema = ""w; rejected = false;
+    try { service.userChanged(z8_encode_authority_change(change)); } catch (Z8ProtobufException) { rejected = true; } assert(rejected && endpoint.users == 1);
 }
 ''', encoding="utf-8")
     exe = temp / ("messages.exe" if os.name == "nt" else "messages")
     modules = ("z8/protobuf/wire.d", "z8/protobuf/guid.d", "z8/authority/file.d", "z8/authority/custom_primary.d",
-               "z8/authority/primary.d", "z8/authority/privileges.d", "z8/authority/session.d", "z8/authority/messages.d")
+               "z8/authority/primary.d", "z8/authority/privileges.d", "z8/authority/session.d", "z8/authority/messages.d",
+               "z8/authority/notifications.d", "z8/authority/service.d")
     subprocess.run(["dmd", "-I" + str(root / "protocol/source"), *import_args(), str(source),
                     *[str(root / "protocol/source" / module) for module in modules], str(runtime), "-of=" + str(exe)], check=True)
     subprocess.run([str(exe), str(temp), "generate"], cwd=temp, check=True)

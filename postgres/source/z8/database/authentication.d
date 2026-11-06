@@ -46,7 +46,7 @@ class Z8PostgresAuthenticator {
         this.userNotifier = userNotifier; this.roleNotifier = roleNotifier;
         ns = quoteIdentifier(schema);
     }
-    Z8UserData authenticate(wstring login, wstring password, Z8Date now = null) {
+    Z8UserData authenticate(wstring login, wstring password, Z8Date now = null, wstring address = null) {
         if (db.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
         if (db.inTransaction()) throw new Z8PostgresException("authentication requires its own transaction");
         if (login is null || password is null) return null;
@@ -71,6 +71,7 @@ class Z8PostgresAuthenticator {
             request.monitor = new Z8RequestMonitor();
             request.userChangeNotifier = userNotifier; request.roleChangeNotifier = roleNotifier;
             request.parameters.z8_add("login"w, login); request.parameters.z8_add("schema"w, schema);
+            if (address !is null) request.parameters.z8_add("address"w, address);
             z8_application_set_request(request);
             z8_connection_set_current(new Z8PostgresDatabase(db, schema, registry));
             try { z8_user_before_load(customUser, login); }

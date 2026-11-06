@@ -5,6 +5,7 @@ import z8.database.authentication;
 import z8.database.postgres;
 import z8.database.privileges : z8_postgres_read_user;
 import z8.webserver.civetweb : IZ8HttpAuthority, Z8HttpRequest;
+import std.conv : to;
 
 version (Windows) {
     pragma(lib, "bcrypt.lib");
@@ -65,7 +66,8 @@ class Z8PostgresHttpAuthority : IZ8HttpAuthority, IZ8UserChangeNotifier, IZ8Role
         sessions.check(z8_date_ticks(z8_date_now()));
         auto connection = source.openSibling();
         scope(exit) connection.close();
-        auto user = new Z8PostgresAuthenticator(connection, schema, registry, config, this, this).authenticate(login, password);
+        auto address = request is null || request.remoteAddress is null ? null : request.remoteAddress.to!wstring;
+        auto user = new Z8PostgresAuthenticator(connection, schema, registry, config, this, this).authenticate(login, password, null, address);
         if (user is null) return null;
         auto system = z8_postgres_read_user(connection, schema, z8_guid_create(1), registry);
         if (system is null) throw new Z8PostgresException("system user is missing");
@@ -79,6 +81,10 @@ class Z8PostgresHttpAuthority : IZ8HttpAuthority, IZ8UserChangeNotifier, IZ8Role
         sessions.dropRoleSessions(id, schema);
         if (remoteRoles !is null) remoteRoles.roleChanged(id, schema);
     }
+    wstring databaseSchema() { return schema; }
+    // Incoming peer events affect local sessions only; do not rebroadcast them.
+    void applyRemoteUserChange(Z8Guid id, wstring schema) { sessions.dropUserSessions(id, schema); }
+    void applyRemoteRoleChange(Z8Guid id, wstring schema) { sessions.dropRoleSessions(id, schema); }
     void logout(wstring id) {
         sessions.dropSessionInSchema(id, schema);
     }

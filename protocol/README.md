@@ -36,6 +36,10 @@ operation to fail.
 notification operations. `z8.authority.messages` encodes and decodes the login,
 authorization and session reply envelopes, including explicit empty passwords
 and denied replies. It does not open sockets or choose an RPC implementation.
+`Z8ProtobufAuthorityService` dispatches these encoded operations to an
+`IZ8AuthorityEndpoint`. The optional `Z8ProtobufPostgresAuthority` adapter
+connects it to the single-schema PostgreSQL/CivetWeb authority; incoming
+notifications invalidate local sessions without being forwarded back to peers.
 `Z8ProtobufAuthorityNotifier` implements the runtime's user and role notifier
 interfaces and forwards encoded events to a host-provided
 `IZ8AuthorityChangePublisher`. A receiving host dispatches them with

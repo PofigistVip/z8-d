@@ -35,8 +35,11 @@ import org.zenframework.z8.base.table.value.StringField;
 ''', encoding="utf-8")
     (source / "CustomUser.bl").write_text('''
 import org.zenframework.z8.base.security.User;
+import org.zenframework.z8.base.application.Application;
 [name "User"] public class CustomUser extends User {
-    virtual protected bool authenticate(string password) { return login == "Bob" && password == "override"; }
+    bool hasAddress;
+    virtual protected void onBeforeLoad(string input) { hasAddress = Application.requestParameters().containsKey("address"); }
+    virtual protected bool authenticate(string password) { return login == "Bob" && password == "override" && hasAddress; }
     virtual protected void onLoad() { parameters.add("custom", true); }
 }
 ''', encoding="utf-8")
@@ -81,7 +84,10 @@ import z8.database.bootstrap;
 import z8.database.authentication;
 import z8.webserver.civetweb;
 import z8.integration.postgres_authority;
+import z8.integration.protobuf_postgres_authority;
 import z8.authority.notifications;
+import z8.authority.messages;
+import z8.authority.service;
 import z8gen.p_Probe;
 import z8gen.p_CustomUser;
 import std.stdio : writeln, stdout, readln;
@@ -113,6 +119,27 @@ void main(string[] args) {
     auto expiredUser = new Z8UserData(); expiredUser.id = z8_guid_create(500);
     auto expired = sessions.create("expired"w, expiredUser, expiredUser, "public"w); expired.lastAccessTime = 0;
     assert(authority.authorize(null, "expired"w, "test"w) is null);
+    auto service = new Z8ProtobufAuthorityService(new Z8ProtobufPostgresAuthority(authority));
+    auto loginRequest = Z8AuthorityLogin("Bob"w, "override"w, "public"w, "10.0.0.1"w);
+    auto rpcLogin = z8_decode_authority_reply(service.login(z8_encode_authority_login(loginRequest)));
+    assert(!rpcLogin.denied && rpcLogin.session.session.user.login == "Bob"w);
+    auto rpcAuth = Z8AuthorityAuthorize(rpcLogin.session.session.id, "public"w, "test"w);
+    assert(!z8_decode_authority_reply(service.authorize(z8_encode_authority_authorize(rpcAuth))).denied);
+    rpcAuth.schema = "other"w;
+    assert(z8_decode_authority_reply(service.authorize(z8_encode_authority_authorize(rpcAuth))).denied);
+    Z8AuthorityChange roleChange; roleChange.id = z8_guid_literal("421A8413-A8EC-4DAB-9235-9A5FF83341C5"); roleChange.schema = "public"w;
+    assert(service.roleChanged(z8_encode_authority_change(roleChange)).length == 0);
+    assert(remoteSessions.getSession("remote-bob"w) !is null);
+    rpcAuth.schema = "public"w;
+    assert(z8_decode_authority_reply(service.authorize(z8_encode_authority_authorize(rpcAuth))).denied);
+    rpcLogin = z8_decode_authority_reply(service.login(z8_encode_authority_login(loginRequest)));
+    rpcAuth.sessionId = rpcLogin.session.session.id;
+    Z8AuthorityChange userChange; userChange.id = z8_guid_create(85); userChange.schema = "public"w;
+    assert(service.userChanged(z8_encode_authority_change(userChange)).length == 0);
+    assert(z8_decode_authority_reply(service.authorize(z8_encode_authority_authorize(rpcAuth))).denied);
+    assert(remoteSessions.getSession("remote-bob"w) !is null);
+    roleChange.schema = "other"w; bool rejected;
+    try { service.roleChanged(z8_encode_authority_change(roleChange)); } catch (Exception) { rejected = true; } assert(rejected);
     z8_runtime_set_registry(registry);
     auto server = new Z8CivetServer("127.0.0.1:0", (Z8HttpRequest request) {
         auto db = connection.openSibling(); scope(exit) db.close();
@@ -130,13 +157,15 @@ void main(string[] args) {
 ''', encoding="utf-8")
     exe = temp / ("authority.exe" if os.name == "nt" else "authority")
     args = ["dmd", "-I" + str(generated), "-I" + str(root / "postgres/source"),
-            "-I" + str(root / "webserver/source"), "-I" + str(root / "integrations/postgres_webserver/source"), "-I" + str(root / "protocol/source"),
+            "-I" + str(root / "webserver/source"), "-I" + str(root / "integrations/postgres_webserver/source"),
+            "-I" + str(root / "integrations/protobuf_postgres_webserver/source"), "-I" + str(root / "protocol/source"),
             *import_args(), *map(str, generated.rglob("*.d")),
             *map(str, (root / "postgres/source/z8/database").glob("*.d")),
             str(root / "webserver/source/z8/webserver/civetweb.d"),
             str(root / "integrations/postgres_webserver/source/z8/integration/postgres_authority.d"),
-            str(root / "protocol/source/z8/protobuf/wire.d"), str(root / "protocol/source/z8/authority/notifications.d"),
-            str(root / "protocol/source/z8/protobuf/guid.d"),
+            str(root / "integrations/protobuf_postgres_webserver/source/z8/integration/protobuf_postgres_authority.d"),
+            *map(str, (root / "protocol/source/z8/protobuf").glob("*.d")),
+            *map(str, (root / "protocol/source/z8/authority").glob("*.d")),
             str(harness), str(civet), str(runtime), "-of=" + str(exe)]
     args += [str(bin_dir.parent / "lib/libpq.lib")] if os.name == "nt" else ["-L-lpq", "-L-lpthread", "-L-ldl"]
     response = temp / "dmd.rsp"
