@@ -29,7 +29,7 @@ private void z8_application_dispatch_query_meta_target(wstring className, Z8Obje
     auto groups = z8_query_array(query, "groupBy"w);
     auto selected = z8_application_query_fields(query, privileges, params, !groups.length);
     foreach (field; groups) {
-        if (z8_application_query_field_path(query, field, privileges).length || !z8_application_query_field_readable(query, field, privileges))
+        if (!z8_application_query_field_readable(query, field, privileges))
             throw new Exception("unsupported query metadata group field");
         bool present;
         foreach (existing; selected) if (existing is field) { present = true; break; }

@@ -114,7 +114,8 @@ BL-defined direct `groupBy` fields and JSON `having` conditions are supported;
 all participating fields must be readable. Array and distinct aggregations are
 accepted; the serialized value follows the original field's `get()` and
 `wasNull()` semantics, and BL code can retrieve elements with `array()`.
-Linked groups and changes to `groupBy` from `beforeRead` are not supported.
+Linked groups are allowed through readable Link paths. Changes to `groupBy` from
+`beforeRead` are not supported.
 The client `group` parameter places its fields first in the sort order; it
 does not turn ordinary rows into SQL aggregates.
 `totals=true` returns a `data` object with supported sum and average totals over
@@ -124,8 +125,7 @@ As in the Java `ReadAction`, a nonempty `recordId` list replaces the request
 filters and query scope; an empty list keeps the normal filters and scope.
 Direct Link paths may be selected, filtered, searched and sorted when every
 intermediate link and target table is readable; selected linked fields include
-their link fields in the response. Linked SQL-group, HAVING and context fields, custom
-Join paths, other read
+their link fields in the response. Linked context fields, custom Join paths, other read
 options and custom request parameters are rejected. The host must open the
 application response before calling it.
 Ordinary computed fields can be selected, filtered and sorted only when all

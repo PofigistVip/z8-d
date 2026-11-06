@@ -234,7 +234,6 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     auto groups = z8_query_array(query, "groupBy"w);
     auto selected = z8_application_query_fields(query, privileges, params, !groups.length);
     foreach (field; groups) {
-        if (field.z8_get_owner() !is query) throw new Exception("linked group fields are not supported");
         if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("query group field access denied");
         bool exists;
         foreach (existing; selected) if (existing is field) { exists = true; break; }
@@ -403,7 +402,6 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         if (!groups.length) throw new Exception("query having requires grouped results");
         read.having = z8_application_query_filter(query, having);
         foreach (field; z8_sql_collect_fields(read.having)) {
-            if (field.z8_get_owner() !is query) throw new Exception("linked having fields are not supported");
             if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("query having field access denied");
         }
     }
