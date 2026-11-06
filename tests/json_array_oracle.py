@@ -184,6 +184,7 @@ class JsonArrayOracle {
         System.out.println("custom:" + shapes.z8_getString(new integer(1)).get() + ":" + shapes.string().get());
         try { org.zenframework.z8.server.base.json.parser.JsonPath.z8_path(new string("[1]")).get().z8_getString(shapesClass); System.out.println("bad"); }
         catch (RuntimeException expected) { System.out.println("custom:path:error"); }
+        custom.text = null; System.out.println("custom:null-guid:" + shapes.z8_getGuid(new integer(1)).toString());
         file attachment = new file(); attachment.name = new string("report.txt"); attachment.size = new integer(42);
         attachment.time = new date(0L); attachment.details.put(new string("key"), new string("value"));
         JsonArray attachments = parse("[]"); attachments.z8_add(attachment);
@@ -399,6 +400,7 @@ void main() {
     auto custom = new Custom(); P.m_add(shapes, z8_primary_box(custom)); custom.text = "changed"w;
     writeln("custom:", P.m_text(shapes, 1).to!string, ":", P.m_render(shapes).to!string);
     try { P.m_pathStringArray(P.m_path("[1]"w), shapes); writeln("bad"); } catch (Exception) { writeln("custom:path:error"); }
+    custom.text = null; writeln("custom:null-guid:", z8_guid_to_string(P.m_id(shapes, 1)).to!string);
     auto attachment = new Z8File(); attachment.name = "report.txt"w; attachment.size = z8_optional_wrap(42L);
     attachment.time = z8_date_from_ticks(0); attachment.details.z8_add("key"w, "value"w);
     auto attachments = P.m_parse("[]"w); P.m_add(attachments, z8_primary_box(attachment));

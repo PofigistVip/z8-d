@@ -134,7 +134,10 @@ class JsonObjectOracle {
         geometryObject.z8_set(new string("shape"), custom);
         System.out.println("custom:" + geometryObject.z8_getString(new string("shape")).get() + ":" + geometryObject.string().get());
         custom.text = "changed"; System.out.println("custom:changed:" + geometryObject.string().get());
+        custom.text = "00112233-4455-6677-8899-aabbccddeeff";
+        System.out.println("custom:guid:" + geometryObject.z8_getGuid(new string("shape")).toString());
         custom.text = null; System.out.println("custom:null:" + geometryObject.string().get());
+        System.out.println("custom:null-guid:" + geometryObject.z8_getGuid(new string("shape")).toString());
         org.zenframework.z8.server.runtime.OBJECT parent = new org.zenframework.z8.server.runtime.OBJECT.CLASS<org.zenframework.z8.server.runtime.OBJECT>(null).get();
         org.zenframework.z8.server.base.table.value.IntegerField.CLASS<org.zenframework.z8.server.base.table.value.IntegerField> field =
             new org.zenframework.z8.server.base.table.value.IntegerField.CLASS<>(parent);
@@ -279,7 +282,10 @@ void main() {
     auto custom = new Custom(); P.m_put(geometryObject, "shape"w, z8_primary_box(custom));
     writeln("custom:", P.m_text(geometryObject, "shape"w).to!string, ":", P.m_render(geometryObject).to!string);
     custom.text = "changed"w; writeln("custom:changed:", P.m_render(geometryObject).to!string);
+    custom.text = "00112233-4455-6677-8899-aabbccddeeff"w;
+    writeln("custom:guid:", z8_guid_to_string(P.m_id(geometryObject, "shape"w)).to!string);
     custom.text = null; writeln("custom:null:", P.m_render(geometryObject).to!string);
+    writeln("custom:null-guid:", z8_guid_to_string(P.m_id(geometryObject, "shape"w)).to!string);
     auto field = P.m_makeField(); field.z8_set_container(new Z8Object()); field.z8_set_index("amount"w);
     z8_field_set(field, z8_primary_box(42L)); auto fieldObject = P.m_parse("{}"w);
     writeln("field:self:", P.m_putField(fieldObject, field) is fieldObject);

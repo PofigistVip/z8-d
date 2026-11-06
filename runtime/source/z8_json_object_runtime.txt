@@ -230,7 +230,13 @@ private Z8Optional!Z8Decimal z8_json_object_get_decimal(Z8Object self, wstring n
 }
 private Z8Guid z8_json_object_get_guid(Z8Object self, wstring name) {
     auto state = z8_json_object_state(self);
-    auto decimalValue = z8_string_required(name).to!string in state.decimals;
+    auto key = z8_string_required(name).to!string;
+    auto child = key in state.children;
+    if (child !is null && (cast(Z8Geometry)*child !is null || cast(Z8Object)*child !is null)) {
+        auto text = z8_json_child_text(*child);
+        return text is null ? z8_guid_zero() : z8_guid_parse(text);
+    }
+    auto decimalValue = key in state.decimals;
     if (decimalValue !is null) return z8_guid_parse(z8_json_bigdecimal_text(*decimalValue).to!wstring);
     auto value = z8_json_object_get(self, name);
     return value.type == JSONType.null_ ? null : z8_guid_parse(z8_json_value_text(value));

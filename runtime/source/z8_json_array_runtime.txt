@@ -118,7 +118,9 @@ private Z8Optional!Z8Decimal z8_json_array_get_decimal(Z8Object self, Z8Optional
 private Z8Guid z8_json_array_get_guid(Z8Object self, Z8Optional!long index) {
     auto state = z8_json_array_state(self);
     auto position = z8_json_array_position(state, index);
-    return state.value.array[position].type == JSONType.null_ ? null : z8_guid_parse(z8_json_array_text_at(state, position));
+    if (state.value.array[position].type == JSONType.null_) return null;
+    auto text = z8_json_array_text_at(state, position);
+    return text is null ? z8_guid_zero() : z8_guid_parse(text);
 }
 private Z8Array!long z8_json_array_to_ints(Z8Object self) {
     auto result = new Z8Array!long();
