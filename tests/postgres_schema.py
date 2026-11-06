@@ -233,6 +233,7 @@ import org.zenframework.z8.base.table.value.FileField;
 ''', encoding="utf-8")
     (source / "Probe.bl").write_text('''
 import org.zenframework.z8.base.table.system.Roles;
+import org.zenframework.z8.base.table.system.Settings;
 import org.zenframework.z8.base.table.system.Users;
 import org.zenframework.z8.base.table.system.Sequences;
 import org.zenframework.z8.base.table.Sequencer;
@@ -253,6 +254,7 @@ import org.zenframework.z8.base.security.User;
 import org.zenframework.z8.base.table.value.Field;
 public class Probe {
     public static MigrationHook migrationHook() { MigrationHook value; return value; }
+    public static Settings settings() { Settings value; return value; }
     public static DailyJob dailyJob() { DailyJob value; return value; }
     public static DisabledJob disabledJob() { DisabledJob value; return value; }
     public static ManualJob manualJob() { ManualJob value; return value; }
@@ -1026,10 +1028,19 @@ void main(string[] args) {
     auto reconcileRegistry = new Z8RuntimeRegistry();
     auto reconcileSample = P.m_make(); reconcileRegistry.registerTable(reconcileSample); reconcileRegistry.registerRequest(reconcileSample);
     reconcileRegistry.registerJob(P.m_dailyJob());
-    Z8Object[] reconcileTables = [P.m_scheduledJobLogs(), P.m_scheduledJobs(), P.m_jobs(), P.m_userRoles(), P.m_userEntries(), P.m_entries(), P.m_roles(), P.m_users(), P.m_sequences(), P.m_systemTables(), P.m_systemFields(),
+    Z8Object[] reconcileTables = [P.m_settings(), P.m_scheduledJobLogs(), P.m_scheduledJobs(), P.m_jobs(), P.m_userRoles(), P.m_userEntries(), P.m_entries(), P.m_roles(), P.m_users(), P.m_sequences(), P.m_systemTables(), P.m_systemFields(),
         P.m_systemRequests(), P.m_roleTableAccess(), P.m_roleFieldAccess(), P.m_roleRequestAccess(), P.m_target()];
     auto firstReconcile = z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables);
     assert(firstReconcile.length != 0 && bootstrapRequest.eventsLevel() == Z8EventsLevel.user && z8_application_request() is bootstrapRequest);
+    auto revisionBefore = z8_runtime_version(reconcileRegistry, reconcileTables);
+    bool versionIncludesSettings;
+    foreach (item; revisionBefore.details) if (item.classId == "org.zenframework.z8.server.base.table.system.Settings"w) versionIncludesSettings = true;
+    assert(versionIncludesSettings);
+    auto versionId = Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("system.version"w)).to!string);
+    auto detailsId = Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("system.version.details"w)).to!string);
+    assert(db.execute(`SELECT convert_from("Value", 'UTF8') FROM "z8_reconcile"."SystemSettings" WHERE "RecordId" = $1::uuid`, [versionId]).rows[0][0].text == revisionBefore.number.to!string);
+    auto savedDetails = db.execute(`SELECT convert_from("Value", 'UTF8') FROM "z8_reconcile"."SystemSettings" WHERE "RecordId" = $1::uuid`, [detailsId]).rows[0][0].text;
+    assert(parseJSON(savedDetails).array.length == revisionBefore.details.length);
     auto reconcileJobKey = Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("DailyJob"w)).to!string);
     assert(db.execute(`SELECT count(*) FROM "z8_reconcile"."SystemScheduledJobs" WHERE "Job" = $1::uuid`, [reconcileJobKey]).rows[0][0].text == "1");
     db.execute(`UPDATE "z8_reconcile"."SystemScheduledJobs" SET "Cron" = '*/30 * * * *', "Active" = 0 WHERE "Job" = $1::uuid`, [reconcileJobKey]);
@@ -1043,11 +1054,25 @@ void main(string[] args) {
     try { z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables); }
     catch (Z8PostgresException) { reconcileRolledBack = true; }
     assert(reconcileRolledBack && !db.inTransaction() && bootstrapRequest.eventsLevel() == Z8EventsLevel.user);
+    assert(db.execute(`SELECT convert_from("Value", 'UTF8') FROM "z8_reconcile"."SystemSettings" WHERE "RecordId" = $1::uuid`, [versionId]).rows[0][0].text == revisionBefore.number.to!string);
     assert(z8_postgres_describe_table(db, "z8_reconcile"w, "StaticSample"w) is null);
     foreach (column; z8_postgres_describe_table(db, "z8_reconcile"w, "Sample;--"w).columns) assert(column.name != "Amount");
     db.execute(`ALTER TABLE "z8_reconcile"."SystemTables" DROP CONSTRAINT "reject_new_static"`);
+    db.execute(`ALTER TABLE "z8_reconcile"."SystemSettings" ADD CONSTRAINT "reject_new_version" CHECK (convert_from("Value", 'UTF8') NOT LIKE '%StaticSample%') NOT VALID`);
+    bool versionWriteRolledBack;
+    try { z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables); }
+    catch (Z8PostgresException) { versionWriteRolledBack = true; }
+    assert(versionWriteRolledBack && !db.inTransaction());
+    assert(z8_postgres_describe_table(db, "z8_reconcile"w, "StaticSample"w) is null);
+    assert(db.execute(`SELECT convert_from("Value", 'UTF8') FROM "z8_reconcile"."SystemSettings" WHERE "RecordId" = $1::uuid`, [versionId]).rows[0][0].text == revisionBefore.number.to!string);
+    db.execute(`ALTER TABLE "z8_reconcile"."SystemSettings" DROP CONSTRAINT "reject_new_version"`);
     auto secondReconcile = z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables);
     assert(secondReconcile.length >= 2 && bootstrapRequest.eventsLevel() == Z8EventsLevel.user);
+    auto revisionAfter = z8_runtime_version(reconcileRegistry, reconcileTables);
+    assert(revisionAfter.number != revisionBefore.number);
+    assert(db.execute(`SELECT convert_from("Value", 'UTF8') FROM "z8_reconcile"."SystemSettings" WHERE "RecordId" = $1::uuid`, [versionId]).rows[0][0].text == revisionAfter.number.to!string);
+    savedDetails = db.execute(`SELECT convert_from("Value", 'UTF8') FROM "z8_reconcile"."SystemSettings" WHERE "RecordId" = $1::uuid`, [detailsId]).rows[0][0].text;
+    assert(parseJSON(savedDetails).array.length == revisionAfter.details.length);
     assert(db.execute(`SELECT count(*) FROM "z8_reconcile"."StaticSample"`).rows[0][0].text == "3");
     assert(db.execute(`SELECT count(*) FROM "z8_reconcile"."SystemTables" WHERE "Name" = 'StaticSample'`).rows[0][0].text == "1");
     assert(db.execute(`SELECT count(*) FROM "z8_reconcile"."SystemRoleTableAccess" WHERE "Table" = $1::uuid AND "Read" <> 0`, [reconcileKey]).rows[0][0].text == "0");

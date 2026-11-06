@@ -109,6 +109,13 @@ private void z8_settings_save(Z8Guid id, Z8Guid parent, wstring name, wstring de
     else z8_query_create_id(table, id);
 }
 private void z8_settings_set(Z8Guid id, Z8Primary value) { z8_settings_save(id, null, null, null, value, -1, true); }
+// Called only after the host has made the settings table available.
+void z8_settings_save_runtime_version(Z8RuntimeVersion revision) {
+    z8_settings_save(z8_guid_create_name("system.version"w), z8_guid_zero(), "Version"w,
+        "Schema version"w, z8_primary_box(revision.number), 0, true);
+    z8_settings_save(z8_guid_create_name("system.version.details"w), z8_guid_zero(), "Version details"w,
+        "Schema version details"w, z8_primary_box(z8_runtime_version_details_json(revision)), 0, true);
+}
 private void z8_settings_register(Z8Guid id, wstring name, wstring description, Z8Primary value) {
     z8_settings_save(id, z8_guid_zero(), z8_string_required(name), z8_string_required(description), value, -1, false);
 }

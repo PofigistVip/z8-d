@@ -8,6 +8,7 @@ import z8.database.compare;
 import z8.database.metadata : z8_postgres_sync_registry;
 import z8.database.plan : quoteIdentifier;
 import z8.database.postgres : Z8PostgresConnection, Z8PostgresException;
+import z8.database.connection : Z8PostgresDatabase;
 import z8.database.schema : fieldType, fieldDefault, foreignKeyTarget, z8_postgres_create_table_sql,
     z8_postgres_ensure_null_record, z8_postgres_apply_static_records, z8_postgres_lock_schema;
 
@@ -238,6 +239,11 @@ private string[] applyAdditiveSchema(Z8PostgresConnection db, wstring schema, Z8
         foreach (index, table; tables) {
             auto actual = z8_postgres_describe_table(db, schema, names[index]);
             foreach (sql; z8_postgres_plan_add_foreign_keys(schema, table, actual)) { db.execute(sql); applied ~= sql; }
+        }
+        if (syncRegistry && z8_postgres_describe_table(db, schema, "SystemSettings"w) !is null) {
+            auto previous = z8_connection_set_current(new Z8PostgresDatabase(db, schema, registry));
+            scope(exit) z8_connection_set_current(previous);
+            z8_settings_save_runtime_version(z8_runtime_version(registry, tables));
         }
         db.commit(); return applied;
     } catch (Throwable failure) {

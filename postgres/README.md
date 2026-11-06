@@ -303,7 +303,9 @@ remains a separate operation for these two APIs.
 `z8_postgres_sync_registry` in the same transaction. It takes the runtime registry
 and any additional platform tables, creates missing registered tables, and
 updates table, field, request, entry and job metadata. Existing permission
-settings and schedules are preserved; obsolete entries are not removed. As in
+settings and schedules are preserved; obsolete entries are not removed. When
+`SystemSettings` exists, it also saves the version number and JSON details for
+the registered and supplied platform tables in the same transaction. As in
 the original schema generator, null and declared static records are checked for
 all tables, including existing ones: missing records are created and declared
 values are refreshed. Protected built-in user and role settings are retained.

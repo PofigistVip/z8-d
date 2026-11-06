@@ -73,11 +73,17 @@ private wstring z8_version_format(int sum) {
 }
 // The original control-object list combines tables, jobs and entries by class
 // ID, excludes SystemTools entries, and sorts by Java's UTF-16 string order.
-Z8RuntimeVersion z8_runtime_version(Z8RuntimeRegistry registry) {
+Z8RuntimeVersion z8_runtime_version(Z8RuntimeRegistry registry, Z8Object[] additionalTables = null) {
     import std.algorithm.sorting : sort;
     registry = z8_nonnull(registry);
     Z8Object[wstring] objects;
     foreach (entry; registry.tables() ~ registry.jobs()) objects[entry.classId] = z8_object_new_instance(entry.classId);
+    foreach (table; additionalTables) {
+        if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, z8_nonnull(table)))
+            throw new Exception("runtime version requires a Table");
+        auto classId = table.z8_class_id();
+        objects[classId] = z8_object_new_instance(classId);
+    }
     foreach (entry; registry.entries()) {
         auto object = z8_object_new_instance(entry.classId);
         if (!z8_is_system_tools(object)) objects[entry.classId] = object;
@@ -97,6 +103,21 @@ Z8RuntimeVersion z8_runtime_version(Z8RuntimeRegistry registry) {
     result.details = [Z8VersionRecord(z8_guid_create_name("system.version"w), "Version"w, "Version"w,
         "Database version"w, result.number)] ~ result.details;
     return result;
+}
+wstring z8_runtime_version_details_json(Z8RuntimeVersion revision) {
+    auto writer = new Z8JsonWriterState();
+    writer.start('[');
+    foreach (record; revision.details) {
+        writer.start('{');
+        z8_monitor_property(writer, "recordId"w, record.id);
+        z8_monitor_property(writer, "className"w, record.classId);
+        z8_monitor_property(writer, "name"w, record.name);
+        z8_monitor_property(writer, "displayName"w, record.displayName);
+        z8_monitor_property(writer, "controlSum"w, record.controlSum);
+        writer.finish('}');
+    }
+    writer.finish(']');
+    return writer.stream;
 }
 class Z8RuntimeRegistry {
     private Z8RuntimeRegistration[] tableEntries, requestEntries, jobEntries, entryEntries, executableEntries, namedEntries;
