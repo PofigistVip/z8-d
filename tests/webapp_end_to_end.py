@@ -132,6 +132,9 @@ with tempfile.TemporaryDirectory() as directory:
             session = login["session"]
             status, metadata = request(port, request="Tasks", session=session, action="meta")
             assert status == 200 and metadata["success"], metadata
+            assert [control["name"] for control in metadata["controls"]] == ["title", "done", "documents"], metadata
+            assert [column["name"] for column in metadata["columns"]] == ["title", "done"], metadata
+            assert {field["name"] for field in metadata["fields"]} >= {"title", "done", "documents", "recordId"}, metadata
             status, created = request(port, request="Tasks", session=session, action="create", fields='["title","done"]',
                                       data='[{"title":"First task","done":false}]')
             assert status == 200 and created["success"], created

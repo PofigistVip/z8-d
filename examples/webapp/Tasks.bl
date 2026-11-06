@@ -8,4 +8,6 @@ public class Tasks extends Table {
     [name "Title"] public StringField title;
     [name "Done"] public BoolField done;
     [name "Documents"] public AttachmentField documents;
+    controls = {title, done, documents};
+    columns = {title, done};
 }
