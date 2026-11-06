@@ -34,6 +34,14 @@ interface IZ8UserPasswordVerifier { bool lockMatchingPassword(Z8Guid id, wstring
 struct Z8UserProfile { wstring email, settings; bool changePassword; }
 interface IZ8UserProfileReader { bool readUserProfile(Z8Guid id, out Z8UserProfile profile); }
 interface IZ8DatabaseSchema { wstring databaseSchema(); }
+// Operations exposed to BL SchemaGenerator migration hooks.
+interface IZ8SchemaOperations {
+    bool tableExists(wstring table);
+    bool fieldExists(wstring table, wstring field);
+    void renameTable(wstring table, wstring replacement);
+    void renameField(wstring table, wstring field, wstring replacement);
+    void dropTable(wstring table);
+}
 interface IZ8SystemInstallation { bool isSystemInstalled(); }
 private class Z8ConnectionState {
     IZ8DatabaseConnection backend;

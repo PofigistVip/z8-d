@@ -8,7 +8,7 @@ import z8.database.privileges : z8_postgres_read_user;
 import z8.database.plan : quoteIdentifier;
 
 // Adapter for the request-local BL Connection and Query.setConnection APIs.
-class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8RawSqlConnection, IZ8SystemInstallation, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection, IZ8JobUserResolver, IZ8UserPasswordVerifier, IZ8UserProfileReader, IZ8DatabaseSchema, IZ8AfterCommit {
+class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8RawSqlConnection, IZ8SystemInstallation, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection, IZ8JobUserResolver, IZ8UserPasswordVerifier, IZ8UserProfileReader, IZ8DatabaseSchema, IZ8SchemaOperations, IZ8AfterCommit {
     private Z8PostgresConnection connection;
     private wstring schema;
     private Z8RuntimeRegistry registry;
@@ -21,6 +21,30 @@ class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8RawSqlConnection, IZ8System
     void beginTransaction() { connection.beginTransaction(); }
     void afterCommit(void delegate() callback) { connection.afterCommit(callback); }
     wstring databaseSchema() { return schema; }
+    bool tableExists(wstring table) {
+        auto rows = connection.execute(`SELECT 1 FROM information_schema.tables WHERE table_schema =
+            CASE WHEN $1::text = 'pg_temp' THEN pg_my_temp_schema()::regnamespace::text ELSE $1::text END
+            AND table_name = $2::text LIMIT 1`, [Z8PostgresParameter.value(schema.to!string), Z8PostgresParameter.value(z8_string_required(table).to!string)]);
+        return rows.rows.length != 0;
+    }
+    bool fieldExists(wstring table, wstring field) {
+        auto rows = connection.execute(`SELECT 1 FROM information_schema.columns WHERE table_schema =
+            CASE WHEN $1::text = 'pg_temp' THEN pg_my_temp_schema()::regnamespace::text ELSE $1::text END
+            AND table_name = $2::text AND column_name = $3::text LIMIT 1`,
+            [Z8PostgresParameter.value(schema.to!string), Z8PostgresParameter.value(z8_string_required(table).to!string), Z8PostgresParameter.value(z8_string_required(field).to!string)]);
+        return rows.rows.length != 0;
+    }
+    void renameTable(wstring table, wstring replacement) {
+        connection.execute("ALTER TABLE IF EXISTS " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(table) ~ " RENAME TO " ~ quoteIdentifier(replacement));
+    }
+    void renameField(wstring table, wstring field, wstring replacement) {
+        if (!fieldExists(table, field)) return;
+        connection.execute("ALTER TABLE " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(table) ~
+            " RENAME COLUMN " ~ quoteIdentifier(field) ~ " TO " ~ quoteIdentifier(replacement));
+    }
+    void dropTable(wstring table) {
+        connection.execute("DROP TABLE IF EXISTS " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(table) ~ " CASCADE");
+    }
     bool isSystemInstalled() {
         synchronized (connection) {
             if (systemInstalled) return true;

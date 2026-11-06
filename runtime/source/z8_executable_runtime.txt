@@ -29,6 +29,27 @@ private void z8_executable_default_execute(Z8Object self) {
     z8_nonnull(self).z8_executable_virtual_execute_parameters();
 }
 private void z8_executable_default_parameters(Z8Object self, Z8ObjectArray!Z8Object parameters) { z8_nonnull(self); }
+private IZ8SchemaOperations z8_schema_operations(Z8Object self) {
+    z8_nonnull(self);
+    auto backend = cast(IZ8SchemaOperations)z8_connection_current_backend();
+    if (backend is null) throw new Exception("schema operations are not configured");
+    return backend;
+}
+private Z8Optional!bool z8_schema_table_exists(Z8Object self, wstring table) {
+    return z8_optional_wrap(z8_schema_operations(self).tableExists(z8_string_required(table)));
+}
+private Z8Optional!bool z8_schema_field_exists(Z8Object self, wstring table, wstring field) {
+    return z8_optional_wrap(z8_schema_operations(self).fieldExists(z8_string_required(table), z8_string_required(field)));
+}
+private void z8_schema_rename_table(Z8Object self, wstring table, wstring replacement) {
+    z8_schema_operations(self).renameTable(z8_string_required(table), z8_string_required(replacement));
+}
+private void z8_schema_rename_field(Z8Object self, wstring table, wstring field, wstring replacement) {
+    z8_schema_operations(self).renameField(z8_string_required(table), z8_string_required(field), z8_string_required(replacement));
+}
+private void z8_schema_drop_table(Z8Object self, wstring table) {
+    z8_schema_operations(self).dropTable(z8_string_required(table));
+}
 private void z8_executable_progress(Z8Object self, Z8Optional!long percent) {
     z8_nonnull(self);
     auto monitor = cast(IZ8JobProgress)z8_application_require_request().monitor;
@@ -77,6 +98,12 @@ bool z8_executable_run(Z8Object self) {
 void z8_bind_builtin_executable() {
     z8_native_bind(z8_executable_name ~ ".m_execute"w, &z8_executable_default_execute);
     z8_native_bind(z8_executable_name ~ ".m_execute"w, &z8_executable_default_parameters);
+    enum schema = "org.zenframework.z8.server.db.generator.SchemaGenerator.m_"w;
+    z8_native_bind(schema ~ "tableExists"w, &z8_schema_table_exists);
+    z8_native_bind(schema ~ "fieldExists"w, &z8_schema_field_exists);
+    z8_native_bind(schema ~ "renameTable"w, &z8_schema_rename_table);
+    z8_native_bind(schema ~ "renameField"w, &z8_schema_rename_field);
+    z8_native_bind(schema ~ "dropTable"w, &z8_schema_drop_table);
     z8_native_bind(z8_executable_name ~ ".m_switchUser"w, &z8_executable_switch_user);
     z8_native_bind(z8_executable_name ~ ".m_resetUser"w, &z8_executable_reset_user);
     z8_native_bind(z8_executable_name ~ ".m_progress"w, &z8_executable_progress);

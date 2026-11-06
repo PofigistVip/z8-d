@@ -25,6 +25,16 @@ import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.IntField;
 [name "Reports"] public class Report extends Table { [name "Amount"] public IntField amount; }
 ''', encoding="utf-8")
+    (source / "MigrationProbe.bl").write_text('''
+import org.zenframework.z8.base.table.SchemaGenerator;
+public class MigrationProbe extends SchemaGenerator {
+    public static bool hasTable(string name) { MigrationProbe probe; return probe.tableExists(name); }
+    public static bool hasField(string table, string field) { MigrationProbe probe; return probe.fieldExists(table, field); }
+    public static void renameTableTest(string name, string replacement) { MigrationProbe probe; probe.renameTable(name, replacement); }
+    public static void renameFieldTest(string table, string field, string replacement) { MigrationProbe probe; probe.renameField(table, field, replacement); }
+    public static void dropTableTest(string name) { MigrationProbe probe; probe.dropTable(name); }
+}
+''', encoding="utf-8")
     (source / "Probe.bl").write_text('''
 import org.zenframework.z8.base.sql.Connection;
 import org.zenframework.z8.base.sql.Transaction;
@@ -78,6 +88,7 @@ import z8.database.postgres;
 import z8.database.connection;
 import z8.database.schema : z8_postgres_create_table_sql, z8_postgres_apply_static_records;
 import z8gen.p_Probe;
+import z8gen.p_MigrationProbe;
 import core.thread : Thread;
 import std.conv : to;
 import std.json : JSONValue;
@@ -109,6 +120,23 @@ void main(string[] args) {
     backgroundDb.execute(`INSERT INTO public.z8_background_probe VALUES (5)`w); background.closeBackgroundConnection();
     assert(first.execute(`SELECT value FROM public.z8_background_probe`).rows[0][0].text == "5");
     auto previous = z8_connection_set_current(db1);
+    alias Migration = Z8p_4D6967726174696F6E50726F6265;
+    first.execute(`CREATE TEMP TABLE "Migration""quoted" ("Old""column" bigint)`);
+    assert(z8_optional_require(Migration.m_hasTable(`Migration"quoted`w)));
+    assert(z8_optional_require(Migration.m_hasField(`Migration"quoted`w, `Old"column`w)));
+    assert(!z8_optional_require(Migration.m_hasField(`Migration"quoted`w, "missing"w)));
+    first.beginTransaction();
+    Migration.m_renameFieldTest(`Migration"quoted`w, "missing"w, "unused"w);
+    Migration.m_renameFieldTest(`Migration"quoted`w, `Old"column`w, "New"w);
+    Migration.m_renameTableTest(`Migration"quoted`w, "Renamed"w);
+    assert(z8_optional_require(Migration.m_hasField("Renamed"w, "New"w)));
+    Migration.m_dropTableTest("Renamed"w);
+    assert(!z8_optional_require(Migration.m_hasTable("Renamed"w)));
+    first.rollback();
+    assert(z8_optional_require(Migration.m_hasField(`Migration"quoted`w, `Old"column`w)));
+    Migration.m_dropTableTest(`Migration"quoted`w);
+    Migration.m_dropTableTest("missing"w);
+    Migration.m_renameTableTest("missing"w, "unused"w);
     auto settings = P.m_settingsTable();
     first.execute(z8_postgres_create_table_sql("pg_temp"w, settings));
     auto settingsUser = new Z8UserData(); settingsUser.id = z8_guid_create(42);
