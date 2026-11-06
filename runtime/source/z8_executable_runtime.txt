@@ -43,6 +43,8 @@ void z8_schema_generator_execute(Z8Object self) {
     if (backend is null) throw new Exception("schema reconciliation is not configured");
     auto scheduler = cast(IZ8SchedulerSuspension)request.schedulerControl;
     if (request.schedulerControl !is null && scheduler is null) throw new Exception("scheduler cannot be suspended");
+    auto progress = cast(IZ8JobProgress)request.monitor;
+    if (progress !is null) progress.setWorked(0);
     if (scheduler !is null) scheduler.suspend();
     scope(exit) if (scheduler !is null) scheduler.resume();
     request.setEventsLevel(Z8EventsLevel.system);
@@ -50,6 +52,7 @@ void z8_schema_generator_execute(Z8Object self) {
     self.z8_schema_generator_virtual_before_start();
     backend.reconcileSchema();
     self.z8_schema_generator_virtual_after_finish();
+    if (progress !is null) progress.setWorked(100);
 }
 private IZ8SchemaOperations z8_schema_operations(Z8Object self) {
     z8_nonnull(self);

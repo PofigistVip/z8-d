@@ -1144,9 +1144,11 @@ void main(string[] args) {
     bootstrapRequest.monitor = new Z8RequestMonitor();
     auto generator = P.m_migrationHook();
     assert(z8_executable_run(generator) && generator.m_observed() == "BA"w);
+    assert((cast(Z8RequestMonitor)bootstrapRequest.monitor).worked == 100);
     assert(generatorScheduler.pauses == 1 && generatorScheduler.resumes == 1 && bootstrapRequest.eventsLevel() == Z8EventsLevel.user);
     generator.m_failNext();
     assert(!z8_executable_run(generator) && generator.m_observed() == "BAB"w);
+    assert((cast(Z8RequestMonitor)bootstrapRequest.monitor).worked == 0);
     assert(generatorScheduler.pauses == 2 && generatorScheduler.resumes == 2 && bootstrapRequest.eventsLevel() == Z8EventsLevel.user);
     bootstrapUser.administrator = false;
     assert(!z8_executable_run(generator) && generator.m_observed() == "BAB"w && generatorScheduler.pauses == 2);

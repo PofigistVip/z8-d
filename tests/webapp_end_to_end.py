@@ -195,7 +195,7 @@ with tempfile.TemporaryDirectory() as directory:
                 time.sleep(0.05)
             else:
                 raise AssertionError("schema generator did not finish")
-            assert not generation_messages, generation_messages
+            assert progress["worked"] == 100 and not generation_messages, generation_messages
             restored = subprocess.check_output([str(psql), "-tAc", '''SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='Tasks' AND column_name='Done' ''', connection], env=environment, text=True).strip()
             assert restored == "1", restored
             status, files_metadata = request(port, request=files_view, session=session, action="meta")
