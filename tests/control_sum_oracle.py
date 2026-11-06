@@ -43,6 +43,11 @@ class ControlSumOracle {
         }
         return Math.abs((field.name() + " " + type).hashCode());
     }
+    static int tableSum(Table table) {
+        int sum = 0;
+        for (Field field : table.getPrimaryFields()) sum += fieldSum(field);
+        return Math.abs(Integer.toString(sum).hashCode());
+    }
     static void show(Table table) {
         int sum = 0;
         for (Field field : table.getPrimaryFields()) { int value = fieldSum(field); sum += value; System.out.println(field.name() + ":" + value); }
@@ -63,6 +68,9 @@ class ControlSumOracle {
         unicodeField.getCLASS().setName("Поле 😀");
         System.out.println("unicode:" + fieldSum(unicodeField));
         System.out.println("object:" + Math.abs("Класс 😀".hashCode()));
+        int sum = tableSum(new Table.CLASS<Table>(null).get()) + tableSum(new Roles.CLASS<Roles>(null).get());
+        String number = String.format("%010d", Math.abs(sum));
+        System.out.println("version:" + number.substring(0, 1) + "." + number.substring(1, 4) + "." + number.substring(4, 7) + "." + number.substring(7));
     }
 }
 ''', encoding="utf-8")
@@ -101,6 +109,8 @@ void main() {
     field.z8_set_attribute("name"w, "Поле 😀"w);
     writeln("unicode:", z8_object_control_sum(field));
     writeln("object:", z8_object_control_sum(new UnicodeObject()));
+    auto registry = new Z8RuntimeRegistry(); registry.registerTable(P.m_table()); registry.registerTable(P.m_roles());
+    writeln("version:", z8_runtime_version(registry).number.to!string);
 }
 ''', encoding="utf-8")
     exe = temp / ("control-sum.exe" if os.name == "nt" else "control-sum")

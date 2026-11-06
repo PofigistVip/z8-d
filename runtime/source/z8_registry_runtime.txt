@@ -51,6 +51,53 @@ struct Z8RuntimeRegistration {
     Z8RuntimeFieldRegistration[] fields;
     private TypeInfo_Class runtimeType;
 }
+struct Z8VersionRecord {
+    Z8Guid id;
+    wstring classId, name, displayName, controlSum;
+}
+struct Z8RuntimeVersion { wstring number; Z8VersionRecord[] details; }
+private bool z8_is_system_tools(Z8Object value) {
+    import std.string : lastIndexOf;
+    enum className = "org.zenframework.z8.server.base.table.system.SystemTools";
+    for (auto type = value.classinfo; type !is null; type = type.base) {
+        auto dot = type.name.lastIndexOf('.');
+        auto symbol = dot < 0 ? type.name : type.name[dot + 1 .. $];
+        if (z8_object_class_symbol_name(symbol) == className) return true;
+    }
+    return false;
+}
+private wstring z8_version_format(int sum) {
+    auto number = z8_control_abs(sum).to!wstring;
+    while (number.length < 10) number = "0"w ~ number;
+    return number[0 .. 1] ~ "."w ~ number[1 .. 4] ~ "."w ~ number[4 .. 7] ~ "."w ~ number[7 .. $];
+}
+// The original control-object list combines tables, jobs and entries by class
+// ID, excludes SystemTools entries, and sorts by Java's UTF-16 string order.
+Z8RuntimeVersion z8_runtime_version(Z8RuntimeRegistry registry) {
+    import std.algorithm.sorting : sort;
+    registry = z8_nonnull(registry);
+    Z8Object[wstring] objects;
+    foreach (entry; registry.tables() ~ registry.jobs()) objects[entry.classId] = z8_object_new_instance(entry.classId);
+    foreach (entry; registry.entries()) {
+        auto object = z8_object_new_instance(entry.classId);
+        if (!z8_is_system_tools(object)) objects[entry.classId] = object;
+    }
+    auto names = objects.keys;
+    sort(names);
+    Z8RuntimeVersion result;
+    uint sum;
+    foreach (classId; names) {
+        auto object = objects[classId];
+        auto control = z8_object_control_sum(object);
+        sum += cast(uint)control;
+        result.details ~= Z8VersionRecord(z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, object),
+            classId, z8_object_name(object), z8_object_display_name(object), control.to!wstring);
+    }
+    result.number = z8_version_format(cast(int)sum);
+    result.details = [Z8VersionRecord(z8_guid_create_name("system.version"w), "Version"w, "Version"w,
+        "Database version"w, result.number)] ~ result.details;
+    return result;
+}
 class Z8RuntimeRegistry {
     private Z8RuntimeRegistration[] tableEntries, requestEntries, jobEntries, entryEntries, executableEntries, namedEntries;
     private Z8Object[wstring] namedSingletons;

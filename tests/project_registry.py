@@ -76,6 +76,13 @@ public class TableFactory { public static Object find(string name) { return Tabl
     }
     for name, code in classes.items():
         (source / (name + ".bl")).write_text(code, encoding="utf-8")
+    system_tools = source / "org/zenframework/z8/server/base/table/system/SystemTools.bl"
+    system_tools.parent.mkdir(parents=True, exist_ok=True)
+    system_tools.write_text("public class SystemTools {}", encoding="utf-8")
+    (source / "DerivedTools.bl").write_text('''
+import org.zenframework.z8.server.base.table.system.SystemTools;
+public class DerivedTools extends SystemTools {}
+''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "main.d"
     harness.write_text('''
@@ -90,6 +97,18 @@ void main() {
     auto registry = new Z8RuntimeRegistry(); z8_register_project(registry);
     auto tables = registry.tables(), requests = registry.requests();
     assert(tables.length == 2 && requests.length == 6 && registry.jobs().length == 2 && registry.entries().length == 1);
+    auto revision = z8_runtime_version(registry);
+    assert(revision.details.length == 6 && revision.details[0].classId == "Version"w && revision.details[0].controlSum == revision.number);
+    assert(revision.details[0].id == z8_guid_create_name("system.version"w));
+    assert(revision.details[1].classId == "DailyJob"w && revision.details[2].classId == "DerivedTable"w &&
+           revision.details[3].classId == "MenuEntry"w && revision.details[4].classId == "Orders"w && revision.details[5].classId == "ScheduledJob"w);
+    foreach (record; revision.details[1 .. $]) {
+        auto object = z8_object_new_instance(record.classId);
+        assert(record.controlSum == z8_object_control_sum(object).to!wstring);
+        assert(record.id == z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, object));
+    }
+    auto excluded = new Z8RuntimeRegistry(); excluded.registerEntry(z8_object_new_instance("DerivedTools"w));
+    assert(z8_runtime_version(excluded).details.length == 1 && z8_runtime_version(excluded).number == "0.000.000.000"w);
     bool disabledSchedule, activeSchedule;
     foreach (job; registry.jobs()) {
         if (job.classId == "DailyJob"w) disabledSchedule = job.hasSchedule && job.cron !is null && job.cron.length == 0;
