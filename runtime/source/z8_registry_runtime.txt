@@ -1,5 +1,42 @@
 // Host-populated subset of AbstractRuntime's application registry.
 // Keys use table names for tables and class IDs for requests, as in Java.
+private class Z8ControlSumState { int value; }
+private int z8_control_abs(int value) { return value == int.min ? value : value < 0 ? -value : value; }
+private int z8_control_string_hash(wstring value) {
+    uint hash;
+    foreach (wchar code; z8_string_required(value)) hash = 31u * hash + code;
+    return cast(int)hash;
+}
+private wstring z8_control_field_sql_type(Z8Object field) {
+    if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field)) return "null"w;
+    switch (z8_field_type_id(field)) {
+        case "int"w: case "date"w: case "datetime"w: case "datespan"w: return "bigint"w;
+        case "boolean"w: return "smallint"w;
+        case "float"w: return "numeric"w;
+        case "string"w: return "character varying"w;
+        case "guid"w: return "uuid"w;
+        case "binary"w: case "text"w: case "file"w: case "attachments"w: return "bytea"w;
+        case "geometry"w: return "geometry(Geometry, "w ~ z8_optional_require(z8_field_srs(field)).to!wstring ~ ")"w;
+        default: throw new Exception("unsupported control sum field type");
+    }
+}
+// OBJECT caches nonzero sums; Table and Field override its calculation.
+int z8_object_control_sum(Z8Object value) {
+    value = z8_nonnull(value);
+    enum stateName = "org.zenframework.z8.server.runtime.OBJECT.controlSum"w;
+    auto state = cast(Z8ControlSumState)value.z8_get_native_state(stateName);
+    if (state is null) { state = new Z8ControlSumState(); value.z8_set_native_state(stateName, state); }
+    if (state.value != 0) return state.value;
+    if (z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, value)) {
+        uint sum;
+        foreach (field; z8_query_declared_fields(value, true)) sum += cast(uint)z8_object_control_sum(field);
+        state.value = z8_control_abs(z8_control_string_hash((cast(int)sum).to!wstring));
+    } else if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Field"w, value)) {
+        auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, value);
+        state.value = z8_control_abs(z8_control_string_hash(name ~ " "w ~ z8_control_field_sql_type(value)));
+    } else state.value = z8_control_abs(z8_control_string_hash(value.z8_class_id()));
+    return state.value;
+}
 struct Z8RuntimeFieldRegistration {
     wstring index, name, displayName, description, type;
     long ordinal;
