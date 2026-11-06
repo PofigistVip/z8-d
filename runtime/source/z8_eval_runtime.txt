@@ -231,6 +231,52 @@ private Z8Primary z8_eval_string_method(wstring value, wstring name, Z8EvalValue
         return z8_primary_box(z8_string_new(z8_str_replace(value, intArg(0), intArg(1), textArg(2))));
     throw new Exception("unsupported Eval string method");
 }
+private Z8Primary z8_eval_number_method(Z8Primary value, wstring name, Z8EvalValue[] arguments) {
+    long intArg(size_t i) {
+        if (i >= arguments.length || arguments[i].primary is null || arguments[i].primary.kind != Z8PrimaryKind.integer)
+            throw new Exception("invalid Eval numeric argument");
+        return arguments[i].primary.integerValue;
+    }
+    bool integral = value.kind == Z8PrimaryKind.integer;
+    auto number = integral ? z8_decimal_from_int(value.integerValue) : value.decimalValue;
+    if (!arguments.length) {
+        if (name == "toString"w) return z8_primary_box(z8_string_new(z8_primary_to_string(value)));
+        if (name == "get"w) return value;
+        if (integral) {
+            auto n = value.integerValue;
+            if (name == "abs"w) return z8_primary_box(z8_int_abs(n));
+            if (name == "signum"w) return z8_primary_box(z8_int_signum(n));
+            if (name == "not"w) return z8_primary_box(z8_int_not(n));
+            if (name == "toHexString"w) return z8_primary_box(z8_string_new(z8_int_toHexString(n)));
+            if (name == "toBinaryString"w) return z8_primary_box(z8_string_new(z8_int_toBinaryString(n)));
+        } else {
+            if (name == "signum"w) return z8_primary_box(number.z8_signum());
+            if (name == "ceil"w) return z8_primary_box(number.z8_ceil());
+            if (name == "floor"w) return z8_primary_box(number.z8_floor());
+            if (name == "round"w) return z8_primary_box(number.z8_round_int());
+        }
+        static foreach (method; ["abs", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "toRadians", "toDegrees", "exp", "ln", "log10", "sqrt", "cbrt"]) {
+            if (name == method.to!wstring) return z8_primary_box(z8_decimal_math!method(number));
+        }
+    } else if (arguments.length == 1) {
+        if (integral) {
+            auto n = value.integerValue;
+            if (name == "and"w) return z8_primary_box(z8_int_and(n, intArg(0)));
+            if (name == "or"w) return z8_primary_box(z8_int_or(n, intArg(0)));
+            if (name == "xor"w) return z8_primary_box(z8_int_xor(n, intArg(0)));
+            if (name == "leftShift"w) return z8_primary_box(z8_int_leftShift(n, intArg(0)));
+            if (name == "rightShift"w) return z8_primary_box(z8_int_rightShift(n, intArg(0)));
+            if (name == "toString"w) return z8_primary_box(z8_string_new(z8_int_toString(n, intArg(0))));
+        } else if (name == "round"w) return z8_primary_box(number.z8_round(intArg(0)));
+        if (name == "power"w) {
+            auto exponent = arguments[0].primary;
+            if (exponent is null || exponent.kind != Z8PrimaryKind.decimal) throw new Exception("invalid Eval power argument");
+            return z8_primary_box(integral ? z8_int_power(value.integerValue, exponent.decimalValue) : z8_decimal_math!"power"(number, exponent.decimalValue));
+        }
+    } else if (!integral && arguments.length == 2 && name == "round"w)
+        return z8_primary_box(number.z8_round(intArg(0), intArg(1)));
+    throw new Exception("unsupported Eval numeric method");
+}
 private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue[] arguments) {
     bool evaluated = object.evaluated;
     foreach (argument; arguments) evaluated = evaluated && argument.evaluated;
@@ -243,6 +289,8 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
         return z8_eval_json_aggregate(name, arguments);
     if (object.primary !is null && object.primary.kind == Z8PrimaryKind.text)
         return Z8EvalValue(true, z8_eval_string_method(object.primary.textValue, name, arguments), null, null);
+    if (object.primary !is null && (object.primary.kind == Z8PrimaryKind.integer || object.primary.kind == Z8PrimaryKind.decimal))
+        return Z8EvalValue(true, z8_eval_number_method(object.primary, name, arguments), null, null);
     throw new Exception("unsupported Eval method");
 }
 private wstring z8_eval_format_decimal(Z8Decimal number, wstring pattern) {
