@@ -305,8 +305,9 @@ grouping. An optional second grouping and its `HAVING` run in the outer select.
 Expressions and joins requiring unprojected root fields, and row locks on these
 queries, are rejected. Numeric sum and average totals retain linked fields' joins
 and apply after grouping. `HAVING` filters over
-projected root aggregates and linked fields run after the initial grouping;
-HAVING defined by a linked query itself is not yet supported.
+projected root aggregates and linked fields run after the initial grouping.
+HAVING defined by a linked query is supported in the outer select; if the same
+linked query is required by the inner filter, this combination is rejected.
 Nontrivial HAVING without grouping is also rejected. Filter-based updates and deletes select
 matching records and invoke the BL events for each record. Record copying reads
 the source through the executor and preserves an active query cursor. Table audit

@@ -316,7 +316,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         foreach (field; linked) plan.includeField(field);
         foreach (condition; [request.having, request.queryHaving]) if (!trivialTrue(condition)) plan.includeExpression(condition);
         plan.finish(true);
-        if (plan.having.length) throw new Z8PostgresException("aggregateBy linked HAVING is not implemented");
+        auto groupFilters = plan.having ~ [request.having, request.queryHaving];
         Z8Object[] checked;
         void checkDependency(Z8Object field) {
             if (containsField(checked, field)) return;
@@ -329,7 +329,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             foreach (dependency; z8_field_query_dependencies(field)) if (dependency !is field) checkDependency(dependency);
         }
         foreach (field; linked) checkDependency(field);
-        foreach (condition; plan.where ~ plan.joinConditions() ~ [request.having, request.queryHaving])
+        foreach (condition; plan.where ~ plan.joinConditions() ~ groupFilters)
             foreach (field; z8_sql_collect_fields(condition)) checkDependency(field);
         foreach (index, field; inner.fields) z8_field_bind_sql(field, "t"w, ("z8_" ~ index.to!string).to!wstring);
         Z8PostgresRootAggregation result;
@@ -363,7 +363,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
         sql ~= " FROM " ~ plan.fromClause(inner.sql);
         string[] filters;
-        foreach (condition; plan.where ~ (outerGroups.length ? null : [request.having, request.queryHaving]))
+        foreach (condition; plan.where ~ (outerGroups.length ? null : groupFilters))
             if (!trivialTrue(condition)) filters ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
         if (filters.length) { sql ~= " WHERE "; foreach (index, filter; filters) { if (index) sql ~= " AND "; sql ~= filter; } }
         if (outerGroups.length) {
@@ -375,7 +375,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             }
             z8_sql_set_field_options(Z8SqlFieldFormatOptions(true, false));
             string[] having;
-            foreach (condition; [request.having, request.queryHaving]) if (!trivialTrue(condition))
+            foreach (condition; groupFilters) if (!trivialTrue(condition))
                 having ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
             if (having.length) { sql ~= " HAVING "; foreach (index, filter; having) { if (index) sql ~= " AND "; sql ~= filter; } }
         }

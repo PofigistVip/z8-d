@@ -132,6 +132,35 @@ import org.zenframework.z8.base.table.value.Aggregation;
     aggregateBy = {customerId}; groupBy = {customer.label};
 }
 ''',
+        "HavingCustomer": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.StringField;
+[name "HavingCustomers"] public class HavingCustomer extends Table {
+    [name "Label"] public StringField label;
+    virtual protected sql_bool having() { return label == "Alice"; }
+}
+''',
+        "HavingOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.IntField;
+[name "HavingOrders"] public class HavingOrder extends Table {
+    public HavingCustomer customer; [name "CustomerId"] public Link customerId = customer;
+    [name "Amount"] public IntField amount; aggregateBy = {customerId};
+}
+''',
+        "GroupedHavingOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.IntField;
+import org.zenframework.z8.base.table.value.Aggregation;
+[name "GroupedHavingOrders"] public class GroupedHavingOrder extends Table {
+    public HavingCustomer customer; [name "CustomerId"] public Link customerId = customer;
+    [name "Amount"] public IntField amount;
+    customer.label.aggregation = Aggregation.None;
+    aggregateBy = {customerId}; groupBy = {customer.label};
+}
+''',
         "FilteredCustomer": '''
 public class FilteredCustomer extends Customer {
     virtual protected sql_bool scope() { return label != "Bob"; }
@@ -376,6 +405,9 @@ void main(string[] args) {
     db.execute(`INSERT INTO "GroupCustomers" VALUES ('00000000-0000-0000-0000-000000000501','Alice'), ('00000000-0000-0000-0000-000000000502','Alice'), ('00000000-0000-0000-0000-000000000503','Bob')`);
     db.execute(`CREATE TEMP TABLE "GroupedOrders" ("RecordId" uuid PRIMARY KEY, "CustomerId" uuid, "Amount" bigint)`);
     db.execute(`INSERT INTO "GroupedOrders" VALUES ('00000000-0000-0000-0000-000000000511','00000000-0000-0000-0000-000000000501',4), ('00000000-0000-0000-0000-000000000512','00000000-0000-0000-0000-000000000501',6), ('00000000-0000-0000-0000-000000000513','00000000-0000-0000-0000-000000000502',3), ('00000000-0000-0000-0000-000000000514','00000000-0000-0000-0000-000000000503',7)`);
+    db.execute(`CREATE TEMP TABLE "HavingCustomers" AS SELECT * FROM "GroupCustomers"`);
+    db.execute(`CREATE TEMP TABLE "HavingOrders" AS SELECT * FROM "GroupedOrders"`);
+    db.execute(`CREATE TEMP TABLE "GroupedHavingOrders" AS SELECT * FROM "GroupedOrders"`);
     db.execute(`CREATE TEMP TABLE "Nodes" ("RecordId" uuid PRIMARY KEY, "ParentId" uuid)`);
     db.execute(`INSERT INTO "Nodes" VALUES ('00000000-0000-0000-0000-000000000401','00000000-0000-0000-0000-000000000402'), ('00000000-0000-0000-0000-000000000402',NULL), ('00000000-0000-0000-0000-000000000403','00000000-0000-0000-0000-000000000401')`);
     db.execute(`INSERT INTO "Cities" VALUES ('00000000-0000-0000-0000-000000000101','Moscow')`);
@@ -593,6 +625,17 @@ void main(string[] args) {
     totalResponse = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "GroupedOrder"w, "read"w, null,
         `{"property":"amount","operator":"gt","value":"10"}`w, null, "true"w).to!string);
     assert(totalResponse["data"]["amount"].integer == 13);
+    auto targetHaving = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "HavingOrder"w).to!string);
+    assert(targetHaving["data"].array.length == 2);
+    foreach (row; targetHaving["data"].array) assert(row["customer.label"].str == "Alice");
+    targetHaving = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "GroupedHavingOrder"w).to!string);
+    assert(targetHaving["data"].array.length == 1 && targetHaving["data"][0]["customer.label"].str == "Alice" && targetHaving["data"][0]["amount"].integer == 13);
+    totalResponse = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "GroupedHavingOrder"w, "read"w, null, null, null, "true"w).to!string);
+    assert(totalResponse["data"]["amount"].integer == 13);
+    bool innerTargetHavingRejected;
+    try { requestFields(`["customer.label","amount"]`w, `{"property":"customer.label","value":"Alice"}`w, null, null, null, "HavingOrder"w); }
+    catch (Z8PostgresException) { innerTargetHavingRejected = true; }
+    assert(innerTargetHavingRejected);
     auto aggregateMeta = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "AggregateOrder"w, "meta"w).to!string);
     assert(aggregateMeta["isQuery"].boolean && aggregateMeta["readOnly"].boolean && "primaryKey" !in aggregateMeta.object);
     aggregateResponse = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "AggregateOrder"w, null).to!string);
