@@ -1,0 +1,67 @@
+// Native fields and path lookup from TreeTable.java.
+private enum z8_tree_table_name = "org.zenframework.z8.server.base.table.TreeTable"w;
+private class Z8TreeTableState { Z8Object[8] fields; }
+private void z8_tree_table_new(Z8Object self) {
+    enum base = "org.zenframework.z8.server.base.table.value."w;
+    enum indexes = ["parentId"w, "path"w, "parent1"w, "parent2"w, "parent3"w, "parent4"w, "parent5"w, "parent6"w];
+    enum names = ["ParentId"w, "Path"w, "Parent1"w, "Parent2"w, "Parent3"w, "Parent4"w, "Parent5"w, "Parent6"w];
+    auto state = new Z8TreeTableState();
+    foreach (i; 0 .. state.fields.length) {
+        auto kind = i == 0 ? "Link"w : i == 1 ? "StringField"w : "GuidField"w;
+        state.fields[i] = z8_table_system_field(self, base ~ kind, indexes[i], names[i]);
+    }
+    state.fields[0].z8_set_attribute("parentKey"w, ""w);
+    self.z8_set_native_state(z8_tree_table_name, state);
+}
+private Z8TreeTableState z8_tree_table_state(Z8Object self) {
+    auto state = cast(Z8TreeTableState)z8_nonnull(self).z8_get_native_state(z8_tree_table_name);
+    if (state is null) throw new Exception("TreeTable fields are not initialized");
+    return state;
+}
+private Z8Object* z8_tree_table_field_address(size_t index)(Z8Object self) { return &z8_tree_table_state(self).fields[index]; }
+void z8_tree_table_configure(Z8Object self) {
+    auto fields = z8_tree_table_state(self).fields;
+    foreach (field; fields) { z8_nonnull(field); z8_field_state(field).indexed = z8_optional_wrap(true); }
+    z8_field_state(fields[1]).length = z8_optional_wrap(1000L);
+}
+private Z8Array!Z8Guid z8_tree_table_parse_path(wstring path) {
+    import std.array : split;
+    path = z8_string_required(path);
+    if (!path.length) return new Z8Array!Z8Guid([z8_guid_zero()]);
+    auto parts = path.split("."w);
+    // Java String.split drops trailing empty segments except for an empty input.
+    while (parts.length && !parts[$ - 1].length) parts.length--;
+    auto result = new Z8Array!Z8Guid();
+    foreach (part; parts) result.z8_add(z8_guid_parse(part));
+    return result;
+}
+private wstring z8_tree_table_path_to(Z8Object self, Z8Guid id) {
+    z8_nonnull(id);
+    if (id == z8_guid_zero()) return ""w;
+    auto path = z8_tree_table_state(self).fields[1];
+    auto saved = new Z8QuerySavedState(self, [path]); scope(exit) saved.restore();
+    auto fields = new Z8ObjectArray!Z8Object(); fields.z8_add(path);
+    if (!z8_optional_require(z8_query_read_record(self, id, fields))) throw new Exception("TreeTable record was not found");
+    return z8_string_or_empty(z8_primary_cast!wstring(z8_field_primary(path)));
+}
+private Z8Array!Z8Guid z8_tree_table_path_to_array(Z8Object self, Z8Guid id) {
+    return z8_tree_table_parse_path(z8_tree_table_path_to(self, id));
+}
+private Z8Array!Z8Guid z8_tree_table_parents_of(Z8Object self, Z8Guid id) {
+    auto result = z8_tree_table_path_to_array(self, id);
+    if (!result.z8_size()) throw new Exception("invalid TreeTable path");
+    result.z8_removeAt(result.z8_size() - 1);
+    return result;
+}
+private Z8Array!Z8Guid z8_tree_table_current_path(Z8Object self) {
+    return z8_tree_table_parse_path(z8_string_or_empty(z8_primary_cast!wstring(z8_field_primary(z8_tree_table_state(self).fields[1]))));
+}
+void z8_bind_builtin_tree_table() {
+    z8_native_bind(z8_tree_table_name ~ ".m_new"w, &z8_tree_table_new);
+    static foreach (i, name; ["parentId"w, "path"w, "parent1"w, "parent2"w, "parent3"w, "parent4"w, "parent5"w, "parent6"w])
+        z8_native_bind_field(z8_tree_table_name ~ ".f_"w ~ name, &z8_tree_table_field_address!i);
+    z8_native_bind(z8_tree_table_name ~ ".m_getPath"w, &z8_tree_table_current_path);
+    z8_native_bind(z8_tree_table_name ~ ".m_getPathTo"w, &z8_tree_table_path_to_array);
+    z8_native_bind(z8_tree_table_name ~ ".m_getParentsOf"w, &z8_tree_table_parents_of);
+}
+shared static this() { z8_bind_builtin_tree_table(); }

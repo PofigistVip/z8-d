@@ -162,8 +162,11 @@ private Z8Object[] z8_application_query_fields(Z8Object query, Z8Privileges priv
     }
     if (includeKeys) {
         requested ~= key;
-        foreach (field; z8_query_declared_fields(query))
-            if (field.z8_get_attribute("lockKey"w) !is null) requested ~= field;
+        foreach (field; z8_query_declared_fields(query)) {
+            auto parent = field.z8_get_attribute("parentKey"w);
+            if (field.z8_get_attribute("lockKey"w) !is null ||
+                (parent !is null && z8_str_compareNoCase(parent, "false"w) != 0)) requested ~= field;
+        }
     }
     Z8Object[] expanded;
     foreach (field; requested) {
@@ -305,6 +308,10 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     auto start = number("start"w, 0), limit = number("limit"w, z8_query_limit(query));
     if (start < 0 || start > int.max || limit < 0 || limit > int.max) throw new Exception("invalid query pagination");
     if (!limit) limit = z8_query_limit(query);
+    if (!groups.length && !aggregates.length) foreach (field; z8_query_declared_fields(query)) {
+        auto parent = field.z8_get_attribute("parentKey"w);
+        if (parent !is null && z8_str_compareNoCase(parent, "false"w) != 0) { limit = -1; break; }
+    }
     Z8QueryReadRequest read;
     read.fields = selected; read.start = cast(int)start; read.limit = cast(int)limit; read.excludeNullRecord = true;
     auto recordIds = params.z8_get("recordId"w);

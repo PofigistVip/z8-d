@@ -317,6 +317,10 @@ import org.zenframework.z8.base.table.value.Link;
     [name "ParentId"] public Link parentId = parent;
 }
 ''',
+        "NativeTree": '''
+import org.zenframework.z8.base.table.TreeTable;
+[name "TreeNodes"] public class NativeTree extends TreeTable {}
+''',
         "ConditionOrder": '''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.Link;
@@ -366,6 +370,13 @@ import org.zenframework.z8.base.table.value.Field;
 import org.zenframework.z8.base.table.value.Aggregation;
 import org.zenframework.z8.base.table.SortDirection;
 public class Probe {
+    public static NativeTree tree() { NativeTree value; return value; }
+    public static guid[] treePath(NativeTree tree, guid id) { return tree.getPathTo(id); }
+    public static guid[] treeParents(NativeTree tree, guid id) { return tree.getParentsOf(id); }
+    public static guid[] treeCurrent(NativeTree tree) { return tree.getPath(); }
+    public static void readTree(NativeTree tree) { Field[] fields = {tree.path}; tree.read(fields); }
+    public static bool nextTree(NativeTree tree) { return tree.next(); }
+    public static guid createTree(NativeTree tree) { return tree.create(); }
     public static NestedAggregateOrder nestedAggregate() { NestedAggregateOrder value; return value; }
     public static void readNestedAggregate(NestedAggregateOrder order) { Field[] fields; order.read(fields); }
     public static bool nextNestedAggregate(NestedAggregateOrder order) { return order.next(); }
@@ -480,9 +491,11 @@ import z8.runtime;
 import z8.database.postgres;
 import z8.database.query;
 import z8.database.connection;
+import z8.database.schema;
 import z8gen.p_Probe;
 import std.conv : to;
 import std.json : parseJSON;
+import std.algorithm.searching : canFind;
 void main(string[] args) {
     alias P = Z8p_50726F6265;
     auto db = new Z8PostgresConnection(args[1]);
@@ -511,6 +524,10 @@ void main(string[] args) {
     db.execute(`CREATE TEMP TABLE "GroupedHavingOrders" AS SELECT * FROM "GroupedOrders"`);
     db.execute(`CREATE TEMP TABLE "Nodes" ("RecordId" uuid PRIMARY KEY, "ParentId" uuid)`);
     db.execute(`INSERT INTO "Nodes" VALUES ('00000000-0000-0000-0000-000000000401','00000000-0000-0000-0000-000000000402'), ('00000000-0000-0000-0000-000000000402',NULL), ('00000000-0000-0000-0000-000000000403','00000000-0000-0000-0000-000000000401')`);
+    db.execute(`CREATE TEMP TABLE "TreeNodes" ("RecordId" uuid PRIMARY KEY, "ParentId" uuid, "Path" text, "Parent1" uuid, "Parent2" uuid, "Parent3" uuid, "Parent4" uuid, "Parent5" uuid, "Parent6" uuid, "Lock" bigint DEFAULT 0)`);
+    db.execute(`INSERT INTO "TreeNodes" ("RecordId","ParentId","Path") VALUES ` ~
+        `('00000000-0000-0000-0000-000000000401',NULL,'00000000-0000-0000-0000-000000000401'),` ~
+        `('00000000-0000-0000-0000-000000000402','00000000-0000-0000-0000-000000000401','00000000-0000-0000-0000-000000000401.00000000-0000-0000-0000-000000000402')`);
     db.execute(`INSERT INTO "Cities" VALUES ('00000000-0000-0000-0000-000000000101','Moscow')`);
     db.execute(`INSERT INTO "Customers" VALUES ('00000000-0000-0000-0000-000000000201','Alice','00000000-0000-0000-0000-000000000101'), ('00000000-0000-0000-0000-000000000202','Bob',NULL), ('00000000-0000-0000-0000-000000000203','Ghost',NULL), ('00000000-0000-0000-0000-000000000000','Sentinel',NULL)`);
     db.execute(`ALTER TABLE "Customers" ADD COLUMN "Lock" bigint DEFAULT 0`);
@@ -518,6 +535,22 @@ void main(string[] args) {
     db.execute(`INSERT INTO "Orders" ("RecordId","Title","CustomerId","CityId") VALUES ('00000000-0000-0000-0000-000000000301','First','00000000-0000-0000-0000-000000000201','00000000-0000-0000-0000-000000000101'), ('00000000-0000-0000-0000-000000000302','Second','00000000-0000-0000-0000-000000000202',NULL), ('00000000-0000-0000-0000-000000000303','No customer',NULL,NULL), ('00000000-0000-0000-0000-000000000304','Missing customer','00000000-0000-0000-0000-000000000299',NULL)`);
     auto inner = P.m_inner(); auto left = P.m_left(); auto right = P.m_right(); auto full = P.m_full(); auto filtered = P.m_filtered(); auto recursive = P.m_recursive(); auto conditional = P.m_conditional(); auto cyclic = P.m_cyclic();
     auto aggregate = P.m_aggregateOrder();
+    auto tree = P.m_tree(); z8_query_set_executor(tree, new Z8PostgresQueryExecutor(db, "pg_temp"w, "TreeNodes"w));
+    auto treeFields = z8_query_declared_fields(tree, true);
+    assert(treeFields.length == 14 && tree.f_parentId.z8_get_attribute("parentKey"w) !is null);
+    auto treeSchema = z8_postgres_create_table_sql("pg_temp"w, tree);
+    assert(treeSchema.canFind(`"ParentId" uuid`) && treeSchema.canFind(`"Path" character varying`));
+    assert(z8_optional_require(tree.f_path.f_length) == 1000);
+    assert(z8_postgres_create_indexes_sql("pg_temp"w, tree).length >= 8);
+    auto path = P.m_treePath(tree, z8_guid_create(0x402));
+    assert(path.z8_size() == 2 && path.z8_get(0) == z8_guid_create(0x401) && path.z8_get(1) == z8_guid_create(0x402));
+    auto parents = P.m_treeParents(tree, z8_guid_create(0x402));
+    assert(parents.z8_size() == 1 && parents.z8_get(0) == z8_guid_create(0x401));
+    assert(P.m_treePath(tree, z8_guid_zero()).z8_size() == 1 && P.m_treeParents(tree, z8_guid_zero()).z8_size() == 0);
+    P.m_readTree(tree); assert(z8_optional_require(P.m_nextTree(tree)));
+    auto currentPath = P.m_treeCurrent(tree); assert(currentPath.z8_size() > 0);
+    P.m_treePath(tree, z8_guid_create(0x402)); assert(z8_optional_require(P.m_nextTree(tree)));
+    assert(!z8_optional_require(P.m_nextTree(tree)));
     auto nestedAggregate = P.m_nestedAggregate();
     z8_query_set_executor(nestedAggregate, new Z8PostgresQueryExecutor(db, "pg_temp"w, "NestedAggregateOrders"w));
     P.m_readNestedAggregate(nestedAggregate);
@@ -672,8 +705,14 @@ void main(string[] args) {
     auto user = new Z8UserData(); user.id = z8_guid_create(1);
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     auto session = new Z8ApplicationSession("join"w, user, user);
+    auto treeRequest = new Z8ApplicationRequest(); treeRequest.session = session;
+    auto oldTreeRequest = z8_application_set_request(treeRequest);
+    bool hierarchyRejected;
+    try { P.m_createTree(tree); } catch (Exception error) { hierarchyRejected = error.msg == "TreeTable hierarchy updates are not implemented yet"; }
+    z8_application_set_request(oldTreeRequest);
+    assert(hierarchyRejected);
     auto priorBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "pg_temp"w));
-    wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null, wstring className = "HttpOrder"w, wstring action = "read"w, wstring groupSession = null, wstring having = null, wstring values = null, wstring totals = null, wstring count = null, wstring queryId = null, wstring linkId = null) {
+    wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null, wstring className = "HttpOrder"w, wstring action = "read"w, wstring groupSession = null, wstring having = null, wstring values = null, wstring totals = null, wstring count = null, wstring queryId = null, wstring linkId = null, wstring limit = null) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, className); request.parameters.z8_add("action"w, action); request.parameters.z8_add("fields"w, fields);
         if (filter !is null) request.parameters.z8_add("filter"w, filter);
@@ -687,6 +726,7 @@ void main(string[] args) {
         if (count !is null) request.parameters.z8_add("count"w, count);
         if (queryId !is null) request.parameters.z8_add("query"w, queryId);
         if (linkId !is null) request.parameters.z8_add("link"w, linkId);
+        if (limit !is null) request.parameters.z8_add("limit"w, limit);
         auto priorRequest = z8_application_set_request(request); scope(exit) z8_application_set_request(priorRequest);
         z8_application_start_response(request, "HttpOrder"w); z8_application_dispatch_request();
         z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
@@ -695,6 +735,10 @@ void main(string[] args) {
     db.execute(`CREATE TEMP TABLE "JoinOrders" AS SELECT * FROM "Orders"`);
     db.execute(`CREATE TEMP TABLE "DependencyOrders" AS SELECT * FROM "Orders"`);
     auto response = parseJSON(requestFields(`["title","customer.label","customer.city.label"]`w).to!string);
+    auto treeResponse = parseJSON(requestFields(`["path"]`w, null, null, null, null, "NativeTree"w,
+        "read"w, null, null, null, null, null, null, null, "1"w).to!string);
+    assert(treeResponse["data"].array.length == 2);
+    foreach (row; treeResponse["data"].array) assert("parentId" in row.object);
     assert(response["data"].array.length == 1 && response["data"][0]["customer.label"].str == "Alice" && response["data"][0]["customer.city.label"].str == "Moscow");
     assert(response["data"][0]["customerId"].str == "00000000-0000-0000-0000-000000000201");
     assert(response["data"][0]["customer.cityId"].str == "00000000-0000-0000-0000-000000000101");

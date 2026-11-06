@@ -1219,6 +1219,12 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 result ~= "}\n";
             }
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.TreeTable"w) {
+            result ~= "override void z8_init_members() {\nsuper.z8_init_members();\n";
+            foreach (name; ["parentId", "path", "parent1", "parent2", "parent3", "parent4", "parent5", "parent6"])
+                result ~= "this.f_objects().z8_add(this.f_" ~ name ~ "());\n";
+            result ~= "}\n";
+        }
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Roles"w) {
             result ~= "override void z8_init_members() {\nsuper.z8_init_members();\n";
             foreach (name; ["name", "description", "read", "write", "create", "copy", "destroy", "execute"])
@@ -1313,6 +1319,8 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
             result ~= "}\n";
         }
         result ~= "override void z8_init_values() {\nsuper.z8_init_values();\n";
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.TreeTable"w)
+            result ~= "z8_tree_table_configure(this);\n";
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Roles"w)
             result ~= "z8_roles_configure(this);\n";
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Users"w)
