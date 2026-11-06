@@ -69,22 +69,42 @@ class Z8FileSecurityLogSink : IZ8SecurityLogSink {
                 continue;
             }
             size_t argument;
-            if (pattern[i] == '<') { argument = lastArgument; ++i; }
-            else {
-                auto start = i;
+            auto start = i;
+            size_t number;
+            while (i < pattern.length && pattern[i] >= '0' && pattern[i] <= '9') {
+                number = number * 10 + pattern[i] - '0'; ++i;
+                if (number > 1_000_000) throw new Exception("security log format number is too large");
+            }
+            bool explicitArgument = i > start && i < pattern.length && pattern[i] == '$';
+            if (explicitArgument) { argument = number; ++i; }
+            else { i = start; argument = implicitArgument++; }
+            bool leftAligned, reuse;
+            while (i < pattern.length && (pattern[i] == '-' || pattern[i] == '<')) {
+                if (pattern[i] == '-') { if (leftAligned) throw new Exception("duplicate security log flag"); leftAligned = true; }
+                else { if (reuse) throw new Exception("duplicate security log flag"); reuse = true; }
+                ++i;
+            }
+            if (reuse) { argument = lastArgument; if (!explicitArgument) --implicitArgument; }
+            size_t width;
+            while (i < pattern.length && pattern[i] >= '0' && pattern[i] <= '9') {
+                width = width * 10 + pattern[i++] - '0';
+                if (width > 1_000_000) throw new Exception("security log format width is too large");
+            }
+            if (leftAligned && !width) throw new Exception("security log format width is required");
+            size_t precision; bool hasPrecision;
+            if (i < pattern.length && pattern[i] == '.') {
+                hasPrecision = true; ++i; auto precisionStart = i;
                 while (i < pattern.length && pattern[i] >= '0' && pattern[i] <= '9') {
-                    argument = argument * 10 + pattern[i] - '0'; ++i;
-                    if (argument > 8) throw new Exception("invalid security log argument");
+                    precision = precision * 10 + pattern[i++] - '0';
+                    if (precision > 1_000_000) throw new Exception("security log format precision is too large");
                 }
-                if (i > start) {
-                    if (i >= pattern.length || pattern[i] != '$') throw new Exception("unsupported security log format");
-                    ++i;
-                } else argument = implicitArgument++;
+                if (i == precisionStart) throw new Exception("security log format precision is missing");
             }
             if (!argument || argument > 8 || i >= pattern.length) throw new Exception("invalid security log argument");
             lastArgument = argument;
+            wstring partText;
             if (pattern[i] == 't' || pattern[i] == 'T') {
-                if (argument != 1 || ++i >= pattern.length) throw new Exception("invalid security log date format");
+                if (argument != 1 || hasPrecision || ++i >= pattern.length) throw new Exception("invalid security log date format");
                 string part;
                 switch (pattern[i]) {
                     case 'F': part = format("%04d-%02d-%02d", now.year, cast(int)now.month, now.day); break;
@@ -98,11 +118,21 @@ class Z8FileSecurityLogSink : IZ8SecurityLogSink {
                     case 'L': part = format("%03d", now.fracSecs.total!"msecs"); break;
                     default: throw new Exception("unsupported security log date format");
                 }
-                lineText ~= part.to!wstring;
-            } else if (pattern[i] == 's' || pattern[i] == 'b') {
-                if (argument == 1 || (pattern[i] == 'b' && argument != 7)) throw new Exception("unsupported security log conversion");
-                lineText ~= z8_string_or_empty(args[argument]);
+                partText = part.to!wstring;
+            } else if (pattern[i] == 's' || pattern[i] == 'S' || pattern[i] == 'b' || pattern[i] == 'B') {
+                if (pattern[i] == 'b' || pattern[i] == 'B')
+                    partText = argument == 7 ? args[7] : argument == 2 && args[2] is null ? "false"w : "true"w;
+                else {
+                    if (argument == 1) throw new Exception("unsupported security log conversion");
+                    partText = z8_string_or_empty(args[argument]);
+                }
+                if (hasPrecision && precision < partText.length) partText = partText[0 .. precision];
+                if (pattern[i] == 'S' || pattern[i] == 'B') partText = z8_str_toUpperCase(partText);
             } else throw new Exception("unsupported security log format");
+            if (width > partText.length) {
+                auto padding = new wchar[width - partText.length]; padding[] = ' ';
+                lineText ~= leftAligned ? partText ~ cast(wstring)padding : cast(wstring)padding ~ partText;
+            } else lineText ~= partText;
         }
         auto line = lineText.to!string;
         synchronized (this) {

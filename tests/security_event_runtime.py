@@ -163,6 +163,18 @@ void main(string[] args) {
     z8_security_events_commit(request); z8_application_set_request(previous);
     auto custom = readText(buildPath(args[1], "configured.log"));
     assert(custom.indexOf("skip/skip true") >= 0 && custom.indexOf("update/update false denied %") >= 0);
+    request.securityLogSink = new Z8FileSecurityLogSink(buildPath(args[1], "width.log"), 10000, 2,
+        "%5$8.3s|%5$-8.3S|%7$6.1b|%<B|%5$s|%<-8.2s%n"w);
+    previous = z8_application_set_request(request); P.m_add(id); z8_security_events_set_result(request, false, "denied"w);
+    z8_security_events_commit(request); z8_application_set_request(previous);
+    auto padded = readText(buildPath(args[1], "width.log"));
+    assert(padded.indexOf("     upd|UPD     |     f|FALSE|update|up      ") >= 0);
+    request.securityLogSink = new Z8FileSecurityLogSink(buildPath(args[1], "indices.log"), 10000, 2,
+        "%tY|%5$s|%8.4s|%<-8.3s|%s%n"w);
+    previous = z8_application_set_request(request); P.m_add(id); z8_security_events_commit(request);
+    z8_application_set_request(previous);
+    auto indices = readText(buildPath(args[1], "indices.log"));
+    assert(indices.indexOf("|update|    0000|000     |Alice Smith (alice)") >= 0);
 }
 ''', encoding="utf-8")
     executable = temp / ("security-event.exe" if os.name == "nt" else "security-event")
