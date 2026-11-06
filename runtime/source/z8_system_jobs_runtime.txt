@@ -1,0 +1,26 @@
+// Physical fields of the Java-only Jobs system table.
+private enum z8_system_jobs_name = "org.zenframework.z8.server.base.table.system.Jobs"w;
+private class Z8SystemJobsState { Z8Object[2] fields; }
+private void z8_system_jobs_new(Z8Object self) {
+    enum base = "org.zenframework.z8.server.base.table.value.StringField"w;
+    auto state = new Z8SystemJobsState();
+    state.fields[0] = z8_table_system_field(self, base, "name"w, "Name"w);
+    state.fields[1] = z8_table_system_field(self, base, "classId"w, "Class"w);
+    self.z8_set_native_state(z8_system_jobs_name, state);
+}
+private Z8SystemJobsState z8_system_jobs_state(Z8Object self) {
+    auto state = cast(Z8SystemJobsState)z8_nonnull(self, -1).z8_get_native_state(z8_system_jobs_name);
+    if (state is null) throw new Exception("Jobs fields are not initialized");
+    return state;
+}
+private Z8Object* z8_system_jobs_field_address(size_t index)(Z8Object self) { return &z8_system_jobs_state(self).fields[index]; }
+void z8_system_jobs_configure(Z8Object self) {
+    auto fields = z8_system_jobs_state(self).fields;
+    z8_field_state(fields[0]).length = z8_optional_wrap(256L);
+    z8_field_state(fields[1]).length = z8_optional_wrap(1024L);
+}
+shared static this() {
+    z8_native_bind(z8_system_jobs_name ~ ".m_new"w, &z8_system_jobs_new);
+    static foreach (i, name; ["name"w, "classId"w])
+        z8_native_bind_field(z8_system_jobs_name ~ ".f_"w ~ name, &z8_system_jobs_field_address!i);
+}

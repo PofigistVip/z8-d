@@ -20,6 +20,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     temp = Path(directory)
     source, generated = temp / "bl", temp / "generated"
     shutil.copytree(language, source)
+    shutil.copytree(root / "platform/bl", source, dirs_exist_ok=True)
     (source / "Sample.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.StringField;
@@ -137,6 +138,7 @@ import org.zenframework.z8.base.table.system.RoleRequestAccess;
 import org.zenframework.z8.base.table.system.UserRoles;
 import org.zenframework.z8.base.table.system.Entries;
 import org.zenframework.z8.base.table.system.UserEntries;
+import org.zenframework.z8.base.table.system.Jobs;
 import org.zenframework.z8.base.security.User;
 import org.zenframework.z8.base.table.value.Field;
 public class Probe {
@@ -154,6 +156,7 @@ public class Probe {
     public static Roles roles() { Roles value; return value; }
     public static Users users() { Users value; return value; }
     public static Sequences sequences() { Sequences value; return value; }
+    public static Jobs jobs() { Jobs value; return value; }
     public static Tables systemTables() { Tables value; return value; }
     public static Requests systemRequests() { Requests value; return value; }
     public static Fields systemFields() { Fields value; return value; }
@@ -448,6 +451,16 @@ void main(string[] args) {
     assert(roleRecords[0].values[0].value.textValue == "Administrator"w && roleRecords[0].values[2].value.booleanValue);
     assert(roleRecords[1].values[2].value.booleanValue && !roleRecords[1].values[3].value.booleanValue);
     assert(!roleRecords[2].values[2].value.booleanValue && roleRecords[2].values[8].value.integerValue == 3);
+    auto jobs = P.m_jobs(); auto jobsDDL = z8_postgres_create_table_sql("z8_test"w, jobs);
+    assert(jobsDDL.canFind(`"SystemJobs"`) && jobsDDL.canFind(`"Name" character varying`) && jobsDDL.canFind(`"Class" character varying`));
+    foreach (field; z8_query_declared_fields(jobs, true)) {
+        if (field.z8_index() != "name"w && field.z8_index() != "classId"w) continue;
+        auto length = z8_native_field!(Z8Optional!long)("org.zenframework.z8.server.base.table.value.StringField.f_length"w, field);
+        assert(z8_optional_require(length) == (field.z8_index() == "name"w ? 256 : 1024));
+    }
+    z8_postgres_create_tables(db, "z8_test"w, [jobs]);
+    db.execute(`INSERT INTO "z8_test"."SystemJobs" ("RecordId", "Name", "Class") VALUES ('00000000-0000-0000-0000-000000000088', 'Daily', 'example.Daily')`);
+    assert(db.execute(`SELECT "Name", "Class" FROM "z8_test"."SystemJobs" WHERE "RecordId" = '00000000-0000-0000-0000-000000000088'`).rows[0][1].text == "example.Daily");
     auto sequences = P.m_sequences();
     auto sequenceDDL = z8_postgres_create_table_sql("z8_test"w, sequences);
     assert(sequenceDDL.canFind(`"Description" bytea`) && sequenceDDL.canFind(`"Key" character varying`) && sequenceDDL.canFind(`"Value" bigint`));

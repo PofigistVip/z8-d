@@ -1,0 +1,10 @@
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.StringField;
+
+// Jobs is a Java-only framework table in the original Z8 distribution.
+[name "SystemJobs"]
+[native "org.zenframework.z8.server.base.table.system.Jobs"]
+public class Jobs extends Table {
+    [name "Name"] StringField name;
+    [name "Class"] StringField classId;
+}
