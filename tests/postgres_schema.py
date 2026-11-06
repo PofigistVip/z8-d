@@ -475,6 +475,13 @@ void main(string[] args) {
     auto expectedSource = P.m_references();
     assert(z8_postgres_compare_table(expectedSource, sourceInfo).length == 0);
     db.execute(`ALTER TABLE "z8_test"."Source" DROP CONSTRAINT "FK0_Source"`);
+    db.execute(`ALTER TABLE "z8_test"."Source" ADD CONSTRAINT "z8_fk_0" CHECK ("TargetId" IS NOT NULL)`);
+    auto missingForeignKeys = z8_postgres_plan_add_foreign_keys("z8_test"w, expectedSource, z8_postgres_describe_table(db, "z8_test"w, "Source"w));
+    assert(missingForeignKeys.length == 1 && missingForeignKeys[0].canFind(`ADD CONSTRAINT "z8_fk_1" FOREIGN KEY ("TargetId") REFERENCES "z8_test"."Target;--" ("RecordId")`));
+    db.execute(missingForeignKeys[0]);
+    assert(z8_postgres_compare_table(expectedSource, z8_postgres_describe_table(db, "z8_test"w, "Source"w)).length == 0);
+    assert(z8_postgres_plan_add_foreign_keys("z8_test"w, expectedSource, z8_postgres_describe_table(db, "z8_test"w, "Source"w)).length == 0);
+    db.execute(`ALTER TABLE "z8_test"."Source" DROP CONSTRAINT "z8_fk_1", DROP CONSTRAINT "z8_fk_0"`);
     db.execute(`ALTER TABLE "z8_test"."Source" ADD CONSTRAINT "WrongAction" FOREIGN KEY ("TargetId") REFERENCES "z8_test"."Target;--" ("RecordId") ON DELETE CASCADE`);
     auto foreignDifferences = z8_postgres_compare_table(expectedSource, z8_postgres_describe_table(db, "z8_test"w, "Source"w));
     bool missingForeign, extraForeign;
@@ -483,8 +490,24 @@ void main(string[] args) {
         if (difference.kind == Z8SchemaDifferenceKind.extraForeignKey && difference.actual.canFind("WrongAction")) extraForeign = true;
     }
     assert(missingForeign && extraForeign && foreignDifferences.length == 2);
+    bool conflictingForeignRejected;
+    try { z8_postgres_plan_add_foreign_keys("z8_test"w, expectedSource, z8_postgres_describe_table(db, "z8_test"w, "Source"w)); }
+    catch (Z8PostgresException) { conflictingForeignRejected = true; }
+    assert(conflictingForeignRejected);
+    bool wrongForeignSchemaRejected;
+    try { z8_postgres_plan_add_foreign_keys("other"w, expectedSource, sourceInfo); } catch (Z8PostgresException) { wrongForeignSchemaRejected = true; }
+    assert(wrongForeignSchemaRejected);
+    auto emptySource = new Z8PostgresTableDescription(); emptySource.schema = "z8_test"; emptySource.name = "Source";
+    bool missingForeignColumnRejected;
+    try { z8_postgres_plan_add_foreign_keys("z8_test"w, expectedSource, emptySource); } catch (Z8PostgresException) { missingForeignColumnRejected = true; }
+    assert(missingForeignColumnRejected);
     auto targetInfo = z8_postgres_describe_table(db, "pg_temp"w, "Target;--"w);
     assert(targetInfo !is null && targetInfo.schema.canFind("pg_temp_") && targetInfo.name == "Target;--");
+    db.execute(`ALTER TABLE "pg_temp"."Source" DROP CONSTRAINT "FK0_Source"`);
+    auto tempForeignKeys = z8_postgres_plan_add_foreign_keys("pg_temp"w, expectedSource, z8_postgres_describe_table(db, "pg_temp"w, "Source"w));
+    assert(tempForeignKeys.length == 1 && tempForeignKeys[0].canFind(`REFERENCES "pg_temp"."Target;--"`));
+    db.execute(tempForeignKeys[0]);
+    assert(z8_postgres_compare_table(expectedSource, z8_postgres_describe_table(db, "pg_temp"w, "Source"w)).length == 0);
     assert(z8_postgres_describe_table(db, "z8_test"w, "Source' OR true --"w) is null);
     assert(z8_postgres_describe_table(db, "does_not_exist"w, "Source"w) is null);
     db.execute(`CREATE TABLE "z8_test"."Composite" ("B" integer, "A" integer, PRIMARY KEY ("A", "B"))`);

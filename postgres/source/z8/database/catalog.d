@@ -24,6 +24,7 @@ class Z8PostgresTableDescription {
     string schema, name, primaryKeyName;
     Z8PostgresColumnDescription[] columns;
     string[] primaryKeyColumns;
+    string[] constraintNames;
     Z8PostgresIndexDescription[] indexes;
     Z8PostgresForeignKeyDescription[] foreignKeys;
 }
@@ -56,6 +57,9 @@ Z8PostgresTableDescription z8_postgres_describe_table(Z8PostgresConnection db, w
         JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = keycols.attnum` ~ whereTable ~
         ` ORDER BY keycols.position`, params);
     foreach (row; keys.rows) { description.primaryKeyName = row[0].text; description.primaryKeyColumns ~= row[1].text; }
+    auto constraints = db.execute(`SELECT k.conname FROM pg_catalog.pg_class c
+        JOIN pg_catalog.pg_constraint k ON k.conrelid = c.oid` ~ whereTable ~ ` ORDER BY k.conname`, params);
+    foreach (row; constraints.rows) description.constraintNames ~= row[0].text;
     auto indexes = db.execute(`SELECT i.relname, pg_catalog.pg_get_indexdef(i.oid), x.indisunique, x.indisprimary
         FROM pg_catalog.pg_class c JOIN pg_catalog.pg_index x ON x.indrelid = c.oid
         JOIN pg_catalog.pg_class i ON i.oid = x.indexrelid` ~ whereTable ~ ` ORDER BY i.relname`, params);

@@ -222,9 +222,11 @@ or extra foreign keys. Foreign keys are compared by their columns, target and
 PostgreSQL constraint behavior. It does not yet compare defaults or indexes,
 and never changes the schema.
 `z8_postgres_plan_add_columns` in `z8.database.migration` returns SQL for
-missing non-primary columns with their BL defaults and nullability. The caller
-can review and execute the statements; other differences, indexes and foreign
-keys require separate handling.
+missing non-primary columns with their BL defaults and nullability.
+`z8_postgres_plan_add_foreign_keys` plans missing single-column BL foreign keys;
+it avoids existing constraint names and rejects missing source columns or
+conflicting foreign keys. The caller can review and execute the statements;
+other differences and indexes require separate handling.
 
 `z8_postgres_sync_registry` in `z8.database.metadata` inserts or updates the
 registered table, field and request metadata and creates initial access rows
