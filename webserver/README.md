@@ -57,7 +57,7 @@ must be routed to that process. The archive cache has size and count limits.
 The initial `meta` adapter writes query attributes, access rights, keys and
 metadata for direct and linked fields, including basic presentation, dependencies,
 permitted source information and BL `writeMeta` overrides. Nested sections,
-fieldsets, field groups, tab controls, independent forms and forms with a readable Link are also supported.
+fieldsets, field groups, tab controls, action groups, independent forms and forms with a readable Link are also supported.
 Actions and their parameters are described in metadata and can execute with a
 direct or nested query, respecting their `useTransaction` setting. Report metadata
 and custom BL report hooks are supported; built-in BIRT and POI engines remain

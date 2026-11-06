@@ -32,6 +32,7 @@ import org.zenframework.z8.base.form.Fieldset;
 import org.zenframework.z8.base.form.Section;
 import org.zenframework.z8.base.form.Tab;
 import org.zenframework.z8.base.form.TabControl;
+import org.zenframework.z8.base.form.ActionGroup;
 import org.zenframework.z8.base.form.action.Action;
 import org.zenframework.z8.base.form.action.ActionType;
 import org.zenframework.z8.base.form.action.Parameter;
@@ -46,13 +47,14 @@ public class CustomTable extends Table {
     label.dependency = recordId; label.dependsOn = recordId; label.dependencies = {recordId};
     Fieldset panel; Section nested; TabControl tabControl; Tab tab;
     panel.controls = {nested}; nested.controls = {label};
-    tabControl.tabs = {tab}; tab.controls = {label}; controls = {panel, tabControl};
+    tabControl.tabs = {tab}; tab.controls = {label};
     Action publish; publish.type = ActionType.Primary;
     publish.parameters = {Parameter.create("Count", 7), Parameter.create("Enabled", true), Parameter.create("Note", FieldType.Text, false),
         Parameter.create("Owner", ParameterSource.create(destination, destination.recordId, destination.recordId)),
         Parameter.create("Default", ParameterSource.create(destination, destination.recordId)),
         Parameter.create("By name", "fallback", ParameterSource.create(destination, destination.recordId))};
     actions = {publish};
+    ActionGroup group; group.actions = {publish}; controls = {panel, tabControl, group};
     Report monthly; monthly.template = "monthly"; monthly.format = Report.Excel; Report daily; reports = {monthly, daily};
 }
 ''', encoding="utf-8")
@@ -104,9 +106,16 @@ import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.GuidField;
 import org.zenframework.z8.base.table.value.StringField;
 import org.zenframework.z8.base.form.Section;
+import org.zenframework.z8.base.form.ActionGroup;
 import org.zenframework.z8.base.form.action.Action;
 import org.zenframework.z8.base.form.action.Parameter;
 public class ControlProbe {
+    public static bool groupVerify() {
+        ActionGroup group; Action first; Action second;
+        group.actions.add(first); group.actions.add(second);
+        if (group.actions.size() != 2 || group.actions.first() != first) return false;
+        group.actions.remove(first); return group.actions.size() == 1 && group.actions.first() == second;
+    }
     public static CustomField makeCustom() { CustomField value; return value; }
     public static CustomTable makeTable() { CustomTable value; return value; }
     public static CyclicTable cyclicTable() { CyclicTable value; return value; }
@@ -145,6 +154,7 @@ import std.conv : to;
 void main() {
     alias P = Z8p_436F6E74726F6C50726F6265;
     assert(z8_optional_require(P.m_verify()));
+    assert(z8_optional_require(P.m_groupVerify()));
     auto request = new Z8ApplicationRequest(); auto monitor = new Z8RequestMonitor(); request.monitor = monitor;
     z8_application_set_request(request); z8_application_start_response(request, "meta"w);
     z8_control_write_custom_meta(P.m_makeCustom(), null, null);
@@ -188,6 +198,9 @@ void main() {
     assert(meta["controls"][0]["controls"][0]["isSection"].boolean && meta["controls"][0]["controls"][0]["controls"][0]["name"].str == "label");
     assert(meta["controls"][1]["isTabControl"].boolean && meta["controls"][1]["tabs"][0]["isTab"].boolean);
     assert(meta["controls"][1]["tabs"][0]["colCount"].integer == 1 && meta["controls"][1]["tabs"][0]["controls"][0]["name"].str == "label");
+    assert(meta["controls"][2]["isActionGroup"].boolean && meta["controls"][2]["isSection"].boolean);
+    assert(meta["controls"][2]["actions"].array.length == 1 && meta["controls"][2]["actions"][0]["name"].str == "publish");
+    assert(meta["controls"][2]["actions"][0]["parameters"].array.length == 6);
     assert(meta["actions"][0]["name"].str == "publish" && meta["actions"][0]["isAction"].boolean && meta["actions"][0]["type"].str == "primary");
     assert(meta["actions"][0]["request"].str == "CustomTable" && meta["actions"][0]["parameters"].array.length == 6);
     auto parameters = meta["actions"][0]["parameters"].array;

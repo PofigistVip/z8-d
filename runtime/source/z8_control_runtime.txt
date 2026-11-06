@@ -3,6 +3,7 @@ private enum z8_control_name = "org.zenframework.z8.server.base.form.Control"w;
 private enum z8_source_name = "org.zenframework.z8.server.base.form.Source"w;
 private enum z8_section_name = "org.zenframework.z8.server.base.form.Section"w;
 private enum z8_tab_control_name = "org.zenframework.z8.server.base.form.TabControl"w;
+private enum z8_action_group_name = "org.zenframework.z8.server.base.form.ActionGroup"w;
 private class Z8ControlState {
     Z8Optional!long colSpan = z8_optional_wrap(1L), flex = z8_optional_wrap(0L), height;
     Z8Optional!bool readOnly = z8_optional_wrap(false), required = z8_optional_wrap(false),
@@ -80,6 +81,23 @@ ref Z8ObjectArray!T z8_tab_control_tabs_ref(T)(Z8Object self) if (is(T : Z8Objec
     }
     return cell.value;
 }
+private class Z8ActionGroupState { IZ8FieldOrderCell actions; }
+private Z8ActionGroupState z8_action_group_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_action_group_name, self)) throw new Exception("invalid ActionGroup object");
+    auto state = cast(Z8ActionGroupState)self.z8_get_native_state(z8_action_group_name);
+    if (state is null) { state = new Z8ActionGroupState(); self.z8_set_native_state(z8_action_group_name, state); }
+    return state;
+}
+ref Z8ObjectArray!T z8_action_group_actions_ref(T)(Z8Object self) if (is(T : Z8Object)) {
+    auto state = z8_action_group_state(self);
+    auto cell = cast(Z8FieldOrderCell!T)state.actions;
+    if (cell is null) {
+        if (state.actions !is null) throw new Exception("incompatible ActionGroup actions array");
+        cell = new Z8FieldOrderCell!T(); state.actions = cell;
+    }
+    return cell.value;
+}
 private class Z8SourceState { Z8Object query, valueFrom, filterField; }
 private Z8SourceState z8_source_state(Z8Object self) {
     self = z8_nonnull(self);
@@ -99,7 +117,7 @@ Z8Object[] z8_control_fields(Z8Object control) {
     void visit(Z8Object item) {
         item = z8_nonnull(item);
         if (z8_native_is_instance(z8_field_name, item)) { foreach (field; z8_field_fields(item)) add(field); return; }
-        if (z8_native_is_instance(z8_action_name, item)) return;
+        if (z8_native_is_instance(z8_action_name, item) || z8_native_is_instance(z8_action_group_name, item)) return;
         foreach (parent; path) if (parent is item) throw new Exception("cyclic section controls");
         path ~= item;
         scope(exit) path.length = path.length - 1;
@@ -303,6 +321,7 @@ private bool z8_control_metadata_visible(Z8Object item, Z8Object query, Z8Privil
         return z8_application_query_field_readable(query, item, privileges);
     }
     if (z8_native_is_instance(z8_action_name, item)) return true;
+    if (z8_native_is_instance(z8_action_group_name, item)) return true;
     if (z8_native_is_instance(z8_tab_control_name, item)) return true;
     if (!z8_native_is_instance(z8_section_name, item)) throw new Exception("unsupported control metadata");
     if (z8_native_is_instance("org.zenframework.z8.server.base.form.Form"w, item)) {
@@ -326,6 +345,26 @@ private void z8_control_write_meta_tree(Z8Object item, Z8Object query, Z8Object 
     scope(exit) path.length = path.length - 1;
     auto writer = z8_application_require_request().writer;
     if (z8_native_is_instance(z8_action_name, item)) { z8_action_write_meta(item, query, context, privileges); return; }
+    if (z8_native_is_instance(z8_action_group_name, item)) {
+        z8_control_write_base_meta(item, query, context, privileges);
+        z8_monitor_property(writer, "isSection"w, true);
+        z8_monitor_property(writer, "colCount"w, 3L);
+        z8_monitor_property(writer, "isActionGroup"w, true);
+        auto actions = z8_action_group_state(item).actions;
+        if (actions !is null && actions.view() !is null) {
+            auto items = actions.view().z8_erased_data();
+            if (items.z8_size()) {
+                writer.start('[', "actions"w);
+                for (long i; i < items.z8_size(); ++i) {
+                    auto action = z8_nonnull(cast(Z8Object)items.z8_get(i));
+                    if (!z8_native_is_instance(z8_action_name, action)) throw new Exception("invalid ActionGroup action");
+                    writer.start('{'); z8_action_write_meta(action, query, context, privileges); writer.finish('}');
+                }
+                writer.finish(']');
+            }
+        }
+        return;
+    }
     if (z8_native_is_instance(z8_tab_control_name, item)) {
         z8_control_write_base_meta(item, query, context, privileges);
         z8_monitor_property(writer, "isTabControl"w, true);
