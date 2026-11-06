@@ -1,0 +1,177 @@
+// The Java FileConverter renders EmlUtils.emailToString as a text document.
+// This parser handles common MIME encodings without a Java mail dependency.
+private string z8_email_unfold(string text) {
+    import std.string : replace;
+    return text.replace("\r\n ", " ").replace("\r\n\t", " ").replace("\n ", " ").replace("\n\t", " ");
+}
+private string[string] z8_email_headers(string text) {
+    import std.string : indexOf, splitLines, strip, toLower;
+    string[string] result;
+    foreach (line; z8_email_unfold(text).splitLines()) {
+        auto colon = line.indexOf(':');
+        if (colon <= 0) continue;
+        auto name = line[0 .. colon].strip().toLower();
+        if (name !in result) result[name] = line[colon + 1 .. $].strip().idup;
+    }
+    return result;
+}
+private string z8_email_header(string[string] headers, string name, string fallback = "") {
+    auto value = name in headers;
+    return value is null ? fallback : *value;
+}
+private string z8_email_parameter(string header, string parameter) {
+    import std.string : indexOf, split, strip, toLower;
+    foreach (part; header.split(";")) {
+        auto eq = part.indexOf('=');
+        if (eq < 0 || part[0 .. eq].strip().toLower() != parameter) continue;
+        auto value = part[eq + 1 .. $].strip();
+        if (value.length >= 2 && value[0] == '"' && value[$ - 1] == '"') value = value[1 .. $ - 1];
+        return value.idup;
+    }
+    return "";
+}
+private ubyte[] z8_email_quoted_printable(string text, bool encodedWord = false) {
+    import std.ascii : isHexDigit;
+    int hex(char c) { return c <= '9' ? c - '0' : (c | 32) - 'a' + 10; }
+    ubyte[] result;
+    for (size_t i; i < text.length; ++i) {
+        auto c = text[i];
+        if (encodedWord && c == '_') result ~= cast(ubyte)' ';
+        else if (c == '=' && i + 1 < text.length && text[i + 1] == '\n') ++i;
+        else if (c == '=' && i + 2 < text.length && text[i + 1] == '\r' && text[i + 2] == '\n') i += 2;
+        else if (c == '=' && i + 2 < text.length && isHexDigit(text[i + 1]) && isHexDigit(text[i + 2])) {
+            result ~= cast(ubyte)((hex(text[i + 1]) << 4) | hex(text[i + 2])); i += 2;
+        } else result ~= cast(ubyte)c;
+    }
+    return result;
+}
+private ubyte[] z8_email_base64(string text) {
+    import std.base64 : Base64;
+    import std.ascii : isWhite;
+    char[] encoded;
+    foreach (c; text) if (!isWhite(c)) encoded ~= c;
+    return Base64.decode(encoded);
+}
+private wstring z8_email_decode(const(ubyte)[] bytes, string charset) {
+    import std.string : toLower, strip;
+    charset = charset.strip().toLower();
+    int id;
+    switch (charset) {
+        case "": case "us-ascii": case "ascii": id = 3; break;
+        case "utf8": case "utf-8": id = 0; break;
+        case "utf-16": id = 5; break;
+        case "utf-16be": id = 6; break;
+        case "utf-16le": id = 7; break;
+        case "windows-1251": case "cp1251": id = 9; break;
+        case "windows-1252": case "cp1252": id = 10; break;
+        case "koi8-r": id = 2; break;
+        case "cp866": case "ibm866": id = 1; break;
+        case "iso-8859-1": case "latin1":
+            wchar[] value; foreach (b; bytes) value ~= cast(wchar)b; return value.idup;
+        default: throw new Exception("unsupported email charset: " ~ charset);
+    }
+    return z8_encoding_decode(bytes, z8_encoding_by_id(id));
+}
+private wstring z8_email_decode_words(string text) {
+    import std.string : indexOf, toLower;
+    wstring result;
+    size_t position;
+    while (position < text.length) {
+        auto start = text[position .. $].indexOf("=?");
+        if (start < 0) { result ~= z8_email_decode(cast(const(ubyte)[])text[position .. $], "utf-8"); break; }
+        start += position;
+        result ~= z8_email_decode(cast(const(ubyte)[])text[position .. start], "utf-8");
+        auto charsetEnd = text[start + 2 .. $].indexOf('?');
+        if (charsetEnd < 0) { result ~= "=?"w; position = start + 2; continue; }
+        charsetEnd += start + 2;
+        if (charsetEnd + 3 >= text.length || text[charsetEnd + 2] != '?') { result ~= "=?"w; position = start + 2; continue; }
+        auto end = text[charsetEnd + 3 .. $].indexOf("?=");
+        if (end < 0) { result ~= "=?"w; position = start + 2; continue; }
+        end += charsetEnd + 3;
+        auto kind = text[charsetEnd + 1] | 32;
+        if (kind != 'b' && kind != 'q') { result ~= "=?"w; position = start + 2; continue; }
+        auto encoded = text[charsetEnd + 3 .. end];
+        auto bytes = kind == 'b' ? z8_email_base64(encoded) : z8_email_quoted_printable(encoded, true);
+        result ~= z8_email_decode(bytes, text[start + 2 .. charsetEnd]);
+        position = end + 2;
+        auto next = position;
+        while (next < text.length && (text[next] == ' ' || text[next] == '\t')) ++next;
+        if (next + 1 < text.length && text[next .. next + 2] == "=?") position = next;
+    }
+    return result;
+}
+private ptrdiff_t z8_email_header_end(string message, out size_t length) {
+    import std.string : indexOf;
+    auto crlf = message.indexOf("\r\n\r\n");
+    auto lf = message.indexOf("\n\n");
+    if (crlf >= 0 && (lf < 0 || crlf < lf)) { length = 4; return crlf; }
+    length = 2;
+    return lf;
+}
+private wstring z8_email_part(string message, size_t depth) {
+    import std.string : indexOf, splitLines, strip, toLower;
+    if (depth > 32) throw new Exception("email MIME nesting limit exceeded");
+    size_t separatorLength;
+    auto separator = z8_email_header_end(message, separatorLength);
+    if (separator < 0) throw new Exception("invalid email MIME headers");
+    auto headers = z8_email_headers(message[0 .. separator]);
+    auto body = message[separator + separatorLength .. $];
+    auto contentType = z8_email_header(headers, "content-type", "text/plain");
+    auto semicolon = contentType.indexOf(';');
+    auto mediaType = (semicolon < 0 ? contentType : contentType[0 .. semicolon]).strip().toLower();
+    if (mediaType.length >= 10 && mediaType[0 .. 10] == "multipart/") {
+        auto boundary = z8_email_parameter(contentType, "boundary");
+        if (!boundary.length || boundary.length > 200) throw new Exception("invalid email MIME boundary");
+        string[] parts; string current; bool inside;
+        foreach (line; body.splitLines()) {
+            if (line == "--" ~ boundary || line == "--" ~ boundary ~ "--") {
+                // The line break immediately before a MIME delimiter belongs
+                // to the delimiter, not to the preceding part's body.
+                if (inside) parts ~= current.length ? current[0 .. $ - 1] : current;
+                current = ""; inside = line == "--" ~ boundary;
+                if (!inside) break;
+            } else if (inside) current ~= line ~ "\n";
+        }
+        wstring fallback;
+        foreach (part; parts) {
+            auto text = z8_email_part(part, depth + 1);
+            if (text is null) continue;
+            if (mediaType != "multipart/alternative") return text;
+            auto split = part.indexOf("\n\n");
+            auto partHeaders = split < 0 ? null : z8_email_headers(part[0 .. split]);
+            auto partType = z8_email_header(partHeaders, "content-type", "text/plain").toLower();
+            if (partType.length >= 10 && partType[0 .. 10] == "text/plain") return text;
+            if (fallback is null) fallback = text;
+        }
+        return fallback;
+    }
+    if (mediaType.length < 5 || mediaType[0 .. 5] != "text/") return null;
+    auto encoding = z8_email_header(headers, "content-transfer-encoding").strip().toLower();
+    ubyte[] decoded;
+    if (encoding == "base64") decoded = z8_email_base64(body);
+    else if (encoding == "quoted-printable") decoded = z8_email_quoted_printable(body);
+    else if (encoding == "" || encoding == "7bit" || encoding == "8bit" || encoding == "binary") decoded = cast(ubyte[])body.dup;
+    else throw new Exception("unsupported email transfer encoding: " ~ encoding);
+    auto text = z8_email_decode(decoded, z8_email_parameter(contentType, "charset"));
+    if (mediaType == "text/html") {
+        wchar[] plain; bool tag;
+        foreach (c; text) { if (c == '<') tag = true; else if (c == '>') tag = false; else if (!tag) plain ~= c; }
+        text = plain.idup;
+    }
+    return text;
+}
+wstring z8_email_message_text(Z8Binary source) {
+    if (z8_binary_remaining(z8_nonnull(source)) > 64UL * 1024 * 1024)
+        throw new Exception("email MIME input exceeds size limit");
+    auto bytes = z8_binary_read_all(source);
+    auto message = cast(string)bytes;
+    size_t separatorLength;
+    auto separator = z8_email_header_end(message, separatorLength);
+    if (separator < 0) throw new Exception("invalid email MIME headers");
+    auto headers = z8_email_headers(message[0 .. separator]);
+    auto subject = z8_email_decode_words(z8_email_header(headers, "subject", "null"));
+    auto sender = z8_email_decode_words(z8_email_header(headers, "from", "null"));
+    auto body = z8_email_part(message, 0);
+    return "Тема : "w ~ subject ~ "\nОтправитель : "w ~ sender ~ "\n----------------------------\nСообщение :\n"w ~
+        (body is null ? "null"w : body) ~ "\n"w;
+}

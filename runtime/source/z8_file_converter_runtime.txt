@@ -121,7 +121,13 @@ private Z8File z8_file_converter_copy(Z8Binary source, wstring extension, Z8File
     }
     if (!exists(path) || reset) {
         if (!pdf || !z8_file_converter_pdf(extension).value) {
-            z8_file_converter_office_convert(source, extension, path, parameters);
+            if (pdf && z8_file_converter_email(extension).value) {
+                // The BOM makes LibreOffice's text import reliably choose UTF-8
+                // even when the host's default encoding is a legacy code page.
+                auto text = z8_binary_from_string("\uFEFF"w ~ z8_email_message_text(source));
+                scope(exit) z8_binary_close(text);
+                z8_file_converter_office_convert(text, "txt"w, path, parameters);
+            } else z8_file_converter_office_convert(source, extension, path, parameters);
             return z8_file_from_disk(absolutePath(path));
         }
         auto parent = dirName(path);

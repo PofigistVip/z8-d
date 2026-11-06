@@ -37,6 +37,17 @@ public class OfficeProbe {
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     (temp / "source.txt").write_text("Hello from Z8. Привет!", encoding="utf-8")
+    (temp / "message.eml").write_bytes(
+        b'From: sender@example.com\r\nSubject: =?UTF-8?B?0J/RgNC40LLQtdGC?=\r\n'
+        b'MIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary="part"\r\n\r\n'
+        b'--part\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<b>HTML fallback</b>\r\n'
+        b'--part\r\nContent-Type: text/plain; charset=windows-1251\r\n'
+        b'Content-Transfer-Encoding: quoted-printable\r\n\r\n=C4=EE=E1=F0=FB=E9 =E4=E5=ED=FC\r\n'
+        b'--part--\r\n')
+    (temp / "single.eml").write_bytes(
+        b'From: plain@example.com\nSubject: =?UTF-8?Q?Hello?=\n =?UTF-8?Q?_world?=\n'
+        b'Content-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: base64\n\n'
+        b'0J/RgNC40LLQtdGC\n')
     def png_chunk(kind, contents):
         return struct.pack("!I", len(contents)) + kind + contents + struct.pack("!I", zlib.crc32(kind + contents) & 0xffffffff)
     pixels = b"\0" + b"\xff\0\0" * 2 + b"\0" + b"\0\xff\0" * 2
@@ -52,6 +63,7 @@ import z8.runtime;
 import z8gen.OfficeProbe;
 import std.conv : to;
 import std.path : buildPath;
+import std.algorithm.searching : canFind;
 import core.thread : Thread;
 void main(string[] args) {
     alias P = Z8p_4F666669636550726F6265;
@@ -62,6 +74,18 @@ void main(string[] args) {
     assert(z8_file_exists(output) && z8_optional_require(output.size) > 100);
     auto pdf = z8_file_from_path(buildPath(args[1], "result", "report.pdf").to!wstring);
     assert(z8_file_exists(P.m_convert(document, pdf)));
+    auto email = z8_file_from_path(buildPath(args[1], "message.eml").to!wstring);
+    auto emailText = z8_email_message_text(z8_file_to_binary(email));
+    assert(emailText.canFind("Привет"w) && emailText.canFind("sender@example.com"w));
+    assert(emailText.canFind("Добрый день"w) && !emailText.canFind("HTML fallback"w));
+    auto single = z8_file_from_path(buildPath(args[1], "single.eml").to!wstring);
+    auto singleText = z8_email_message_text(z8_file_to_binary(single));
+    assert(singleText.canFind("Hello world"w) && singleText.canFind("Привет"w));
+    bool invalidEmail;
+    try { z8_email_message_text(z8_binary_from_string("not an email"w)); } catch (Exception) { invalidEmail = true; }
+    assert(invalidEmail);
+    auto emailPdf = z8_file_from_path(buildPath(args[1], "result", "email.pdf").to!wstring);
+    assert(z8_file_exists(P.m_convert(email, emailPdf)));
     auto archive = z8_file_from_path(buildPath(args[1], "result", "archive.pdf").to!wstring);
     auto pdfOptions = new Z8StringMap(); pdfOptions.z8_add("format"w, "PDF/A-1b"w);
     assert(z8_file_exists(P.m_convertWithOptions(document, archive, pdfOptions)));
@@ -106,6 +130,7 @@ void main(string[] args) {
     with zipfile.ZipFile(temp / "result" / "документ.docx") as document:
         assert b"Hello from Z8" in document.read("word/document.xml")
     assert (temp / "result" / "report.pdf").read_bytes().startswith(b"%PDF-")
+    assert (temp / "result" / "email.pdf").read_bytes().startswith(b"%PDF-")
     archive = (temp / "result" / "archive.pdf").read_bytes()
     assert archive.startswith(b"%PDF-") and b"pdfaid:part" in archive
     with zipfile.ZipFile(temp / "result" / "binary.odt") as document:
