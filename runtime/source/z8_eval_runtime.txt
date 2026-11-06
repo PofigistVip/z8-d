@@ -193,6 +193,91 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
         return z8_eval_json_aggregate(name, arguments);
     throw new Exception("unsupported Eval method");
 }
+private wstring z8_eval_format_decimal(Z8Decimal number, wstring pattern) {
+    import std.math : signbit;
+    wstring result; size_t implicitArgument, lastArgument;
+    for (size_t i; i < pattern.length; ++i) {
+        if (pattern[i] != '%') { result ~= pattern[i]; continue; }
+        if (++i == pattern.length) throw new Exception("incomplete Eval format");
+        if (pattern[i] == '%') { result ~= '%'; continue; }
+        if (pattern[i] == 'n') { version (Windows) result ~= "\r\n"w; else result ~= "\n"w; continue; }
+        size_t start = i, argument;
+        while (i < pattern.length && pattern[i] >= '0' && pattern[i] <= '9') argument = argument * 10 + pattern[i++] - '0';
+        bool explicitArgument = i > start && i < pattern.length && pattern[i] == '$';
+        if (explicitArgument) ++i; else { i = start; argument = ++implicitArgument; }
+        bool left, plus, space, zero, group, parens, alternate, reuse;
+        while (i < pattern.length) {
+            auto flag = pattern[i];
+            if (flag == '-') { if (left) throw new Exception("duplicate Eval format flag"); left = true; }
+            else if (flag == '+') { if (plus) throw new Exception("duplicate Eval format flag"); plus = true; }
+            else if (flag == ' ') { if (space) throw new Exception("duplicate Eval format flag"); space = true; }
+            else if (flag == '0') { if (zero) throw new Exception("duplicate Eval format flag"); zero = true; }
+            else if (flag == ',') { if (group) throw new Exception("duplicate Eval format flag"); group = true; }
+            else if (flag == '(') { if (parens) throw new Exception("duplicate Eval format flag"); parens = true; }
+            else if (flag == '#') { if (alternate) throw new Exception("duplicate Eval format flag"); alternate = true; }
+            else if (flag == '<') { if (reuse) throw new Exception("duplicate Eval format flag"); reuse = true; }
+            else break;
+            ++i;
+        }
+        if (reuse) { argument = lastArgument; if (!explicitArgument) --implicitArgument; }
+        size_t width;
+        while (i < pattern.length && pattern[i] >= '0' && pattern[i] <= '9') {
+            width = width * 10 + pattern[i++] - '0';
+            if (width > 1_000_000) throw new Exception("Eval format width too large");
+        }
+        size_t precision = 6;
+        if (i < pattern.length && pattern[i] == '.') {
+            precision = 0; ++i; auto digits = i;
+            while (i < pattern.length && pattern[i] >= '0' && pattern[i] <= '9') {
+                precision = precision * 10 + pattern[i++] - '0';
+                if (precision > 1000) throw new Exception("Eval format precision too large");
+            }
+            if (i == digits) throw new Exception("missing Eval format precision");
+        }
+        if (argument != 1 || i >= pattern.length || pattern[i] != 'f' || (left && zero) || (plus && space) || ((left || zero) && !width))
+            throw new Exception("unsupported Eval decimal format");
+        lastArgument = argument;
+        auto value = number.z8_as_double();
+        auto rounded = z8_math_result(value).z8_round(cast(long)precision, 4);
+        auto magnitude = rounded.z8_string();
+        bool negative = signbit(value) != 0;
+        if (magnitude.length && magnitude[0] == '-') magnitude = magnitude[1 .. $];
+        auto body = z8_message_number(magnitude, precision, group);
+        if (!precision && alternate) body ~= ',';
+        wstring prefix = negative ? (parens ? "("w : "-"w) : plus ? "+"w : space ? " "w : ""w;
+        wstring suffix = negative && parens ? ")"w : ""w;
+        auto length = prefix.length + body.length + suffix.length;
+        if (width > length) {
+            auto padding = new wchar[width - length]; padding[] = zero ? '0' : ' ';
+            if (left) suffix ~= cast(wstring)padding;
+            else if (zero) prefix ~= cast(wstring)padding;
+            else prefix = cast(wstring)padding ~ prefix;
+        }
+        result ~= prefix ~ body ~ suffix;
+    }
+    return result;
+}
+private Z8EvalValue z8_eval_function(wstring name, Z8EvalValue[] arguments) {
+    bool evaluated = true;
+    foreach (argument; arguments) evaluated = evaluated && argument.evaluated;
+    if (!evaluated) {
+        wstring call = name ~ "("w;
+        foreach (i, argument; arguments) { if (i) call ~= ", "w; call ~= z8_eval_value_text(argument); }
+        return Z8EvalValue(false, null, null, call ~ ")"w);
+    }
+    if (name != "format"w || arguments.length != 2 || arguments[0].json !is null || arguments[0].context != Z8EvalContext.none ||
+        arguments[1].json !is null || arguments[1].context != Z8EvalContext.none ||
+        (arguments[1].primary !is null && arguments[1].primary.kind != Z8PrimaryKind.text))
+        throw new Exception("unsupported Eval function or arguments");
+    auto value = arguments[0].primary;
+    auto pattern = arguments[1].primary is null ? null : arguments[1].primary.textValue;
+    wstring formatted;
+    if (value is null) formatted = "<null>"w;
+    else if (value.kind == Z8PrimaryKind.date) formatted = z8_date_toString(value.dateValue, pattern is null ? "dd.MM.yyy"w : pattern);
+    else if (value.kind == Z8PrimaryKind.decimal) formatted = pattern is null ? z8_eval_formatted_text(arguments[0]) : z8_eval_format_decimal(value.decimalValue, pattern);
+    else formatted = z8_primary_to_string(value);
+    return Z8EvalValue(true, z8_primary_box(z8_string_new(formatted)), null, null);
+}
 private Z8EvalValue z8_eval_item(Z8EvalState state, Z8EvalValue object, Z8EvalValue index) {
     if (!object.evaluated || !index.evaluated)
         return Z8EvalValue(false, null, null, z8_eval_expression_repr(object) ~ "["w ~ z8_eval_expression_repr(index) ~ "]"w);
@@ -314,6 +399,14 @@ private class Z8EvalParser {
         if (position + token.length > text.length || text[position .. position + token.length] != token) return false;
         position += token.length; return true;
     }
+    Z8EvalValue[] arguments() {
+        Z8EvalValue[] result;
+        if (!take(")"w)) {
+            do { result ~= conditional(); } while (take(","w));
+            if (!take(")"w)) throw new Exception("unclosed Eval arguments");
+        }
+        return result;
+    }
     Z8EvalValue primary() {
         import std.uni : isAlpha, isNumber;
         whitespace();
@@ -342,6 +435,11 @@ private class Z8EvalParser {
         } else if (isAlpha(c) || c == '_') {
             ++position;
             while (position < text.length && (isAlpha(text[position]) || isNumber(text[position]) || text[position] == '_')) ++position;
+            auto name = text[start .. position];
+            if (take("("w)) {
+                auto values = arguments();
+                return evaluating ? z8_eval_function(name, values) : Z8EvalValue.init;
+            }
         } else throw new Exception("unsupported Eval expression");
         return evaluating ? z8_eval_atom(state, text[start .. position]) : Z8EvalValue.init;
     }
@@ -357,12 +455,8 @@ private class Z8EvalParser {
                 while (position < text.length && (isAlpha(text[position]) || isNumber(text[position]) || text[position] == '_')) ++position;
                 auto name = text[start .. position];
                 if (take("("w)) {
-                    Z8EvalValue[] arguments;
-                    if (!take(")"w)) {
-                        do { arguments ~= conditional(); } while (take(","w));
-                        if (!take(")"w)) throw new Exception("unclosed Eval method arguments");
-                    }
-                    if (evaluating) value = z8_eval_method(value, name, arguments);
+                    auto values = arguments();
+                    if (evaluating) value = z8_eval_method(value, name, values);
                 } else if (evaluating) value = z8_eval_property(value, name);
             } else if (take("["w)) {
                 auto index = conditional();

@@ -80,7 +80,12 @@ public class EvalOracle {
         org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> dictionary = new org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<>();
         dictionary.get().operatorAssign(new string("{\\\"a\\\":{\\\"n\\\":7},\\\"b\\\":{\\\"n\\\":2}}"));
         jsonEval.z8_setVariable(new string("dictionary"), dictionary);
+        jsonEval.z8_setVariable(new string("day"), new date(2024, 2, 29));
         for (String pattern : new String[]{"${json.min(rows, 'n')}", "${json.max(rows, 'n')}", "${json.min(rows, 'missing')}", "${json.max(rows, 'missing')}", "${json.min(nil, 'n')}", "${json.min(decimals, 'n')}", "${json.max(decimals, 'n')}", "${json.min(dictionary, 'n')}", "${json.max(dictionary, 'n')}", "${json.min(rows, nil)}", "${false ? json.min(rows, 'n') : 42}", "${json.min(rows)}", "${json.unknown(rows, 'n')}"}) {
+            try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
+            catch (Exception error) { System.out.println("error"); }
+        }
+        for (String pattern : new String[]{"${format(42, 'unused')}", "${format('text', 'unused')}", "${format(nil, 'unused')}", "${format(1.25, '%.1f')}", "${format(1234.5, '% ,.2f')}", "${format(1.25, '%+08.2f')}", "${format(1.25, '%-8.2f')}", "${format(1.25, 'value=%.2f%%')}", "${format(1.25, nil)}", "${format(0.0 - 1.25, '%(08.2f')}", "${format(1.25, '%#.0f')}", "${format(1.25, '%.2f %<.1f')}", "${format(1.25, 'literal')}", "${format(day, 'yyyy-MM-dd')}", "${format(day, nil)}", "${format(missing, 'x')}", "${false ? format(1.25) : 'safe'}", "${format(1.25)}", "${unknown(1)}"}) {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
         }
@@ -109,7 +114,7 @@ import org.zenframework.z8.base.json.JsonArray;
 public class EvalProbe {
     public static Eval make() { Eval e; e.setVariable("name", "Ada"); e.setVariable("count", 7); e.setVariable("flag", true); primary nil = null; e.setVariable("nil", nil); return e; }
     public static Eval withJson() { Eval e; JsonObject obj; JsonObject child; JsonArray arr; child.set("title", "Ada"); arr.add(3); arr.add("tail"); obj.set("count", 7); obj.set("child", child); obj.set("items", arr); obj.set("price", 1.25); obj.set("yes", true); e.setVariable("obj", obj); e.setVariable("arr", arr); primary nil = null; e.setVariable("nil", nil); obj.set("after", 42); obj = "{}"; arr = "[]"; return e; }
-    public static Eval withRows(Eval e) { JsonArray rows; JsonArray decimals; JsonObject dictionary; rows = "[{\\\"n\\\":7},{\\\"n\\\":2},{\\\"n\\\":5}]"; decimals = "[{\\\"n\\\":1.75},{\\\"n\\\":1.25},{\\\"n\\\":3}]"; dictionary = "{\\\"a\\\":{\\\"n\\\":7},\\\"b\\\":{\\\"n\\\":2}}"; e.setVariable("rows", rows); e.setVariable("decimals", decimals); e.setVariable("dictionary", dictionary); return e; }
+    public static Eval withRows(Eval e) { JsonArray rows; JsonArray decimals; JsonObject dictionary; rows = "[{\\\"n\\\":7},{\\\"n\\\":2},{\\\"n\\\":5}]"; decimals = "[{\\\"n\\\":1.75},{\\\"n\\\":1.25},{\\\"n\\\":3}]"; dictionary = "{\\\"a\\\":{\\\"n\\\":7},\\\"b\\\":{\\\"n\\\":2}}"; e.setVariable("rows", rows); e.setVariable("decimals", decimals); e.setVariable("dictionary", dictionary); date day = '29/02/2024'; e.setVariable("day", day); return e; }
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -150,6 +155,13 @@ void main() {
                        "${json.max(rows, 'missing')}"w, "${json.min(nil, 'n')}"w, "${json.min(decimals, 'n')}"w,
                        "${json.max(decimals, 'n')}"w, "${json.min(dictionary, 'n')}"w, "${json.max(dictionary, 'n')}"w, "${json.min(rows, nil)}"w,
                        "${false ? json.min(rows, 'n') : 42}"w, "${json.min(rows)}"w, "${json.unknown(rows, 'n')}"w])
+        try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
+    foreach (pattern; ["${format(42, 'unused')}"w, "${format('text', 'unused')}"w, "${format(nil, 'unused')}"w,
+                       "${format(1.25, '%.1f')}"w, "${format(1234.5, '% ,.2f')}"w, "${format(1.25, '%+08.2f')}"w,
+                       "${format(1.25, '%-8.2f')}"w, "${format(1.25, 'value=%.2f%%')}"w, "${format(1.25, nil)}"w,
+                       "${format(0.0 - 1.25, '%(08.2f')}"w, "${format(1.25, '%#.0f')}"w, "${format(1.25, '%.2f %<.1f')}"w,
+                       "${format(1.25, 'literal')}"w, "${format(day, 'yyyy-MM-dd')}"w, "${format(day, nil)}"w,
+                       "${format(missing, 'x')}"w, "${false ? format(1.25) : 'safe'}"w, "${format(1.25)}"w, "${unknown(1)}"w])
         try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
 }
 ''', encoding="utf-8")
