@@ -22,8 +22,12 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
 import org.zenframework.z8.base.query.Query;
 import org.zenframework.z8.base.table.value.IntField;
 import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.table.value.GeometryField;
+import org.zenframework.z8.base.table.value.GeometryExpression;
 public class Report extends Query {
     public IntField amount; public StringField title;
+    public GeometryField shape; public GeometryExpression calculatedShape;
+    shape.srs = 4326; calculatedShape.srs = 3395;
     public string readEvents = ""; public bool filterFromHook = false; public bool observe = false; public int observed;
     virtual protected void beforeRead() { readEvents += "B"; if (observe) observed = amount.get(); if (filterFromHook) setWhere(amount > 9); }
     virtual protected void afterRead() { readEvents += "A"; }
@@ -37,6 +41,7 @@ import org.zenframework.z8.base.table.value.Field;
 import org.zenframework.z8.base.table.value.Aggregation;
 public class Probe {
     public static Report make() { Report query; query.limit = 7; return query; }
+    public static void whereJson(Report query, string json) { query.setWhere(json); }
     public static void all(Report query) { Field[] fields = {query.amount, query.title}; query.read(fields); }
     public static void filtered(Report query) { Field[] fields = {query.amount}; query.read(fields, fields, query.amount > 3, 2, 1); }
     public static bool first(Report query) { Field[] fields = {query.amount}; return query.readFirst(fields); }
@@ -79,6 +84,8 @@ public class Probe {
 import z8.runtime;
 import z8gen.p_Probe;
 import std.algorithm.searching : canFind;
+import std.conv : to;
+import std.json : JSONValue;
 class Rows : IZ8QueryCursor {
     Z8Object amount, title;
     Z8Object[] selected;
@@ -187,6 +194,24 @@ void main() {
     auto previous = z8_application_set_request(request);
     P.m_all(query); assert(z8_optional_require(P.m_count(query)) == 2 && P.m_events(query) == "BABABABA"w);
     P.m_close(query); z8_application_set_request(previous);
+    auto point = JSONValue(`{"type":"Point","coordinates":[1,2]}`).toString();
+    auto filter = `{"property":"shape","operator":"contains","value":` ~ point ~ `}`;
+    P.m_whereJson(query, filter.to!wstring);
+    auto condition = z8_query_where(query).left;
+    assert(condition.kind == Z8SqlBoolKind.geometryCompare && condition.geometryOperator == "&&");
+    assert(condition.geometryLeft.field is query.f_shape);
+    assert(z8_geometry_srs(condition.geometryRight.constant) == 4326);
+    assert(condition.geometryRight.constant.x == 1.0 && condition.geometryRight.constant.y == 2.0);
+    z8_field_bind_sql(query.f_shape, null, null, "T.shape"w);
+    assert(z8_sql_bool_format(condition, true).canFind("st_intersects("w));
+    filter = `{"property":"calculatedShape","value":` ~ point ~ `}`;
+    P.m_whereJson(query, filter.to!wstring);
+    assert(z8_geometry_srs(z8_query_where(query).left.geometryRight.constant) == 3395);
+    P.m_whereJson(query, `{"property":"shape"}`w);
+    assert(z8_geometry_shape(z8_query_where(query).left.geometryRight.constant) == -1);
+    bool badGeometry;
+    try { P.m_whereJson(query, `{"property":"shape","value":"invalid"}`w); } catch (Exception) { badGeometry = true; }
+    assert(badGeometry);
 }
 ''', encoding="utf-8")
     exe = temp / ("query-read.exe" if os.name == "nt" else "query-read")

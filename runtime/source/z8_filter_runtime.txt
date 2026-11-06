@@ -109,6 +109,14 @@ private Z8SqlBool z8_filter_compare(Z8Object field, wstring operation, wstring[]
         bool number = operation == "istrue"w ? true : operation == "isfalse"w ? false : z8_bool_parse(value);
         return z8_sql_bool_binary!"=="(z8_bool_field_sql(field), z8_sql_bool_const(number));
     }
+    if (type == "geometry"w) {
+        enum prefix = "org.zenframework.z8.server.base.table.value."w;
+        if (!z8_native_is_instance(prefix ~ "GeometryField"w, field) &&
+            !z8_native_is_instance(prefix ~ "GeometryExpression"w, field))
+            throw new Exception("geometry JSON filter requires a geometry field or expression");
+        auto geometry = z8_geometry_fromGeoJson(value is null ? ""w : value, z8_optional_require(z8_field_srs(field)));
+        return z8_sql_geometry_intersects(z8_geometry_field_sql(field), z8_sql_geometry_const(geometry));
+    }
     if (operation == "issimilarto"w || operation == "isnotsimilarto"w) {
         enum prefix = "org.zenframework.z8.server.base.table.value."w;
         if (!z8_native_is_instance(prefix ~ "StringField"w, field) && !z8_native_is_instance(prefix ~ "StringExpression"w, field))

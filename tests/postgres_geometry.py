@@ -32,7 +32,7 @@ import z8.runtime;
 import z8.database.postgres;
 import z8.database.connection;
 import z8.database.schema;
-import std.json : parseJSON, JSONType;
+import std.json : parseJSON, JSONType, JSONValue;
 import std.conv : to;
 
 void main(string[] args) {
@@ -46,12 +46,13 @@ void main(string[] args) {
     auto user = new Z8UserData(); user.id = z8_guid_create(1);
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     auto session = new Z8ApplicationSession("geo"w, user, user);
-    wstring invoke(wstring action, wstring data, wstring ids = null) {
+    wstring invoke(wstring action, wstring data, wstring ids = null, wstring filter = null) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, "GeoSample"w); request.parameters.z8_add("action"w, action);
         request.parameters.z8_add("fields"w, `["shape"]`w);
         if (data !is null) request.parameters.z8_add("data"w, data);
         if (ids !is null) request.parameters.z8_add("recordId"w, ids);
+        if (filter !is null) request.parameters.z8_add("filter"w, filter);
         auto prior = z8_application_set_request(request); scope(exit) z8_application_set_request(prior);
         z8_application_start_response(request, "GeoSample"w); z8_application_dispatch_request();
         z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor);
@@ -62,6 +63,12 @@ void main(string[] args) {
     assert(created["data"][0]["shape"]["coordinates"][0].floating == 1.25);
     auto dbPoint = db.execute(`SELECT ST_AsEWKT("Shape") FROM "geo_test"."GeoSample" WHERE "RecordId"='00000000-0000-0000-0000-000000000011'`);
     assert(dbPoint.rows[0][0].text == "SRID=3857;POINT(1.25 2.5)");
+    invoke("create"w, `[{"recordId":"00000000-0000-0000-0000-000000000013","shape":{"type":"Point","coordinates":[9,9]}}]`w);
+    auto point = JSONValue(`{"type":"Point","coordinates":[1.25,2.5]}`).toString();
+    auto filter = (`{"property":"shape","value":` ~ point ~ `}`).to!wstring;
+    auto matching = parseJSON(invoke("read"w, null, null, filter).to!string);
+    assert(matching["success"].boolean && matching["data"].array.length == 1);
+    assert(matching["data"][0]["shape"]["coordinates"][0].floating == 1.25);
     auto updated = parseJSON(invoke("update"w, `[{"recordId":"00000000-0000-0000-0000-000000000011","shape":{"type":"LineString","coordinates":[[0,0],[3,4]]}}]`w).to!string);
     assert(updated["data"][0]["shape"]["type"].str == "LineString");
     auto copied = parseJSON(invoke("copy"w, `[{"recordId":"00000000-0000-0000-0000-000000000012"}]`w, "00000000-0000-0000-0000-000000000011"w).to!string);

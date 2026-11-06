@@ -162,6 +162,8 @@ Direct Link paths may be selected, filtered, searched and sorted when every
 intermediate link and target table is readable; selected linked fields include
 their link fields in the response. Context `values` may also reference readable
 linked and computed fields; supplied values are detached while serializing rows.
+Geometry filter values are GeoJSON strings: as in Z8, they select geometries
+intersecting the supplied shape, using the field or expression's configured SRS.
 Other unsupported read options and custom request parameters are rejected. The host must open the
 application response before calling it.
 Ordinary computed fields can be selected, filtered and sorted only when all
