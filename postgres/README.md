@@ -115,9 +115,9 @@ all participating fields must be readable. Group arrays and distinct arrays,
 linked groups and changes to `groupBy` from `beforeRead` are not supported.
 The client `group` parameter places its fields first in the sort order; it
 does not turn ordinary rows into SQL aggregates.
-For ungrouped queries, `totals=true` returns a `data` object with supported
-sum and average totals over readable fields. The filters and query scope still
-apply; grouped totals and linked HAVING filters are not yet supported.
+`totals=true` returns a `data` object with supported sum and average totals over
+readable fields, including totals of grouped results. Filters, HAVING and the
+query scope still apply. Totals over `aggregateBy` links are not yet supported.
 As in the Java `ReadAction`, a nonempty `recordId` list replaces the request
 filters and query scope; an empty list keeps the normal filters and scope.
 Direct Link paths may be selected, filtered, searched and sorted when every

@@ -377,7 +377,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     }
     auto totals = params.z8_get("totals"w);
     if (totals !is null && z8_bool_parse(totals)) {
-        if (groups.length || z8_query_array(query, "aggregateBy"w).length) throw new Exception("totals for grouped queries are not supported");
+        if (z8_query_array(query, "aggregateBy"w).length) throw new Exception("totals for aggregateBy queries are not supported");
         Z8Object[] fields;
         Z8FieldAggregation[] aggregations;
         foreach (field; selected) {
@@ -393,11 +393,11 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
             fields ~= field; aggregations ~= aggregation;
         }
         read.fields = fields; read.sortFields = null; read.start = 0; read.limit = -1;
-        read.disableGrouping = true; read.aggregateAll = true;
+        read.aggregateAll = true;
         z8_query_prepare_read(query, read);
         try {
             verifyGroups();
-            if (read.queryHaving !is null && (read.queryHaving.kind != Z8SqlBoolKind.constant || !read.queryHaving.constant))
+            if (!groups.length && read.queryHaving !is null && (read.queryHaving.kind != Z8SqlBoolKind.constant || !read.queryHaving.constant))
                 throw new Exception("query having is not supported for totals");
             foreach (i, field; fields) if (z8_field_aggregation(field) != aggregations[i])
                 throw new Exception("changing query aggregations during beforeRead is not supported");

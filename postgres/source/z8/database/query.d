@@ -326,7 +326,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         foreach (field; groups) plan.includeField(field);
         foreach (condition; [request.where, request.queryWhere, request.queryScope, request.having, request.queryHaving]) plan.includeExpression(condition);
         plan.finish(!request.byRecordId && !request.byRecordIds);
-        if (request.aggregateAll && plan.having.length) throw new Z8PostgresException("PostgreSQL linked HAVING filters are not supported for totals");
+        if (request.aggregateAll && !groups.length && plan.having.length) throw new Z8PostgresException("PostgreSQL linked HAVING filters are not supported for totals");
         if (!request.disableGrouping && !grouped && plan.having.length)
             throw new Z8PostgresException("PostgreSQL HAVING filters require grouped query support");
         auto previous = z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
@@ -341,7 +341,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             z8_sql_set_field_options(Z8SqlFieldFormatOptions(grouped, false));
             auto expression = z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string;
             auto aggregation = z8_field_aggregation(field);
-            if (grouped && kind == "int"w && aggregation == Z8FieldAggregation.average)
+            if (grouped && kind == "int"w && aggregation == Z8FieldAggregation.average && !(request.aggregateAll && groups.length))
                 expression = "trunc(" ~ expression ~ ")::bigint";
             bool raw = !grouped || aggregation == Z8FieldAggregation.none || aggregation == Z8FieldAggregation.bitwiseOr || aggregation == Z8FieldAggregation.bitwiseAnd;
             if (kind == "binary"w && raw) expression = "encode(" ~ expression ~ ", 'hex')";
@@ -386,6 +386,30 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                 sql ~= " HAVING ";
                 foreach (index, condition; having) { if (index) sql ~= " AND "; sql ~= condition; }
             }
+        }
+        if (request.aggregateAll && groups.length) {
+            Z8Object[] totalsFields;
+            wstring[] totalsKinds;
+            string outer = "SELECT ";
+            foreach (field; uniqueFields(requested)) {
+                size_t position = size_t.max;
+                foreach (i, projected; selected) if (projected is field) { position = i; break; }
+                if (position == size_t.max) continue;
+                auto aggregation = z8_field_aggregation(field);
+                if (aggregation != Z8FieldAggregation.sum && aggregation != Z8FieldAggregation.average)
+                    throw new Z8PostgresException("unsupported PostgreSQL grouped totals aggregation");
+                auto kind = z8_field_type_id(field);
+                auto expression = (aggregation == Z8FieldAggregation.sum ? "SUM(" : "AVG(") ~
+                    "z8_groups." ~ quoteIdentifier(("z8_" ~ position.to!string).to!wstring) ~ ")";
+                if (kind == "int"w && aggregation == Z8FieldAggregation.average)
+                    expression = "trunc(" ~ expression ~ ")::bigint";
+                if (totalsFields.length) outer ~= ", ";
+                outer ~= expression ~ " AS " ~ quoteIdentifier(("z8_" ~ totalsFields.length.to!string).to!wstring);
+                totalsFields ~= field; totalsKinds ~= kind;
+            }
+            if (!totalsFields.length) outer ~= "count(0) AS z8_0";
+            sql = outer ~ " FROM (" ~ sql ~ ") AS z8_groups";
+            selected = totalsFields; kinds = totalsKinds;
         }
         if (request.sortFields.length) {
             z8_sql_set_field_options(Z8SqlFieldFormatOptions(grouped, true));

@@ -60,6 +60,7 @@ import org.zenframework.z8.base.application.Application;
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-hook") { amount = 999; addWhere(amount >= 40); }
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-values") addWhere(amount >= amount.get());
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-group") { groupBy = {flag}; amount.aggregation = Aggregation.Sum; }
+        if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-group-average") { groupBy = {flag}; amount.aggregation = Aggregation.Average; }
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "with-average") amount.aggregation = Aggregation.Average;
     }
 }
@@ -660,11 +661,12 @@ void main(string[] args) {
     assert(rejectedRead("fields"w, `["title"]`w));
     queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
     db.execute(`INSERT INTO "z8_bootstrap"."Sample;--" ("RecordId", "Title", "Amount") VALUES ('00000000-0000-0000-0000-00000000012E', 'Second', 10)`);
-    wstring totalRead(wstring fields, wstring filter = null, wstring session = null) {
+    wstring totalRead(wstring fields, wstring filter = null, wstring session = null, wstring having = null) {
         auto request = new Z8ApplicationRequest(); request.session = querySession; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("action"w, "read"w); request.parameters.z8_add("fields"w, fields); request.parameters.z8_add("totals"w, "true"w);
         if (filter !is null) request.parameters.z8_add("filter"w, filter);
         if (session !is null) request.parameters.z8_add("session"w, session);
+        if (having !is null) request.parameters.z8_add("having"w, having);
         z8_application_set_request(request); z8_application_start_response(request, "Sample"w); z8_application_dispatch_query_read("Sample"w);
         z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
     }
@@ -678,9 +680,18 @@ void main(string[] args) {
     totalsJson = parseJSON(totalRead(`["amount"]`w, null, "with-average"w).to!string);
     assert(totalsJson["data"]["amount"].integer == 26);
     db.execute(`UPDATE "z8_bootstrap"."Sample;--" SET "Amount" = 10 WHERE "RecordId" = '00000000-0000-0000-0000-00000000012E'`);
-    bool groupedTotalsDenied;
-    try { totalRead(`["amount"]`w, null, "with-group"w); } catch (Exception) { groupedTotalsDenied = true; }
-    assert(groupedTotalsDenied);
+    db.execute(`UPDATE "z8_bootstrap"."Sample;--" SET "Flag" = 0 WHERE "RecordId" = '00000000-0000-0000-0000-00000000012E'`);
+    totalsJson = parseJSON(totalRead(`["amount"]`w, null, "with-group"w).to!string);
+    assert(totalsJson["data"]["amount"].integer == 52);
+    totalsJson = parseJSON(totalRead(`["amount"]`w, null, "with-group"w, `{"property":"amount","operator":"gt","value":"20"}`w).to!string);
+    assert(totalsJson["data"]["amount"].integer == 42);
+    totalsJson = parseJSON(totalRead(`["amount"]`w, null, "with-group"w, `{"property":"amount","operator":"gt","value":"100"}`w).to!string);
+    assert(totalsJson["data"]["amount"].integer == 7);
+    db.execute(`INSERT INTO "z8_bootstrap"."Sample;--" ("RecordId", "Title", "Amount", "Flag") VALUES ('00000000-0000-0000-0000-000000000140', 'Average 1', 11, 1), ('00000000-0000-0000-0000-000000000141', 'Average 2', 13, 0)`);
+    totalsJson = parseJSON(totalRead(`["amount"]`w, null, "with-group-average"w).to!string);
+    assert(totalsJson["data"]["amount"].integer == 19);
+    db.execute(`DELETE FROM "z8_bootstrap"."Sample;--" WHERE "RecordId" IN ('00000000-0000-0000-0000-000000000140', '00000000-0000-0000-0000-000000000141')`);
+    db.execute(`UPDATE "z8_bootstrap"."Sample;--" SET "Flag" = 1 WHERE "RecordId" = '00000000-0000-0000-0000-00000000012E'`);
     auto amountKey = z8_guid_create_name("Sample;--.Amount"w);
     queryUser.privileges.setFieldAccess(amountKey, Z8Access.init);
     totalsJson = parseJSON(totalRead(`["amount"]`w).to!string);
