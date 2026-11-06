@@ -82,6 +82,17 @@ void z8_postgres_sync_registry(Z8PostgresConnection db, wstring schema, Z8Runtim
                 `VALUES ($1::uuid, $2::text, $3::text, 3) ON CONFLICT ("RecordId") DO UPDATE ` ~
                 `SET "Name" = EXCLUDED."Name", "Class" = EXCLUDED."Class", "Lock" = 3`, params);
         }
+        // Jobs.java is optional until its framework table is included in the
+        // bootstrap. Preserve obsolete rows until scheduled jobs and logs can
+        // be migrated together, rather than orphaning user configuration.
+        auto jobsTable = db.execute("SELECT pg_catalog.to_regclass($1::text) IS NOT NULL",
+            [Z8PostgresParameter.value(ns ~ `."SystemJobs"`)]);
+        if (jobsTable.rows[0][0].text == "t") foreach (job; registry.jobs()) {
+            auto params = [guidParameter(job.key), textParameter(job.displayName), textParameter(job.classId)];
+            db.execute("INSERT INTO " ~ ns ~ `."SystemJobs" ("RecordId", "Name", "Class", "Lock") ` ~
+                `VALUES ($1::uuid, $2::text, $3::text, 3) ON CONFLICT ("RecordId") DO UPDATE ` ~
+                `SET "Name" = EXCLUDED."Name", "Class" = EXCLUDED."Class", "Lock" = 3`, params);
+        }
         if (ownsTransaction) db.commit();
     } catch (Throwable failure) {
         if (ownsTransaction) { try { db.rollback(); } catch (Throwable ignored) { } }
