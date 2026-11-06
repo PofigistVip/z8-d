@@ -444,6 +444,8 @@ public class Probe {
     public static void configureAggregateJoin(AggregateJoinOrder order) { order.customer.cityJoin = order.otherId.sql_guid() == order.customer.city.recordId.sql_guid(); }
     public static void readAggregateJoin(AggregateJoinOrder order) { Field[] fields = {order.customer.city.label}; order.read(fields); }
     public static void readAggregate(AggregateOrder order) { Field[] fields = {order.customerId, order.amount}; order.read(fields); }
+    public static bool readAggregateRecord(AggregateOrder order, guid id) { Field[] fields = {order.customerId, order.amount}; return order.readRecord(id, fields); }
+    public static bool readAggregateLinkedRecord(AggregateOrder order, guid id) { Field[] fields = {order.customer.label, order.amount}; return order.readRecord(id, fields); }
     public static void readAggregateSorted(AggregateOrder order) { order.amount.sortDirection = SortDirection.Desc; Field[] fields = {order.customerId, order.amount}; Field[] sort = {order.amount}; order.read(fields, sort); }
     public static void readAggregateAverage(AggregateOrder order) { order.amount.aggregation = Aggregation.Average; Field[] fields = {order.customerId, order.amount}; Field[] sort = {order.amount}; order.read(fields, sort, null, 1, 1); }
     public static void readAggregateLinked(AggregateOrder order) { Field[] fields = {order.customer.label}; order.read(fields); }
@@ -627,6 +629,19 @@ void main(string[] args) {
         sum += amount; ++aggregateRows;
     }
     assert(aggregateRows == 2 && sum == 17);
+    assert(z8_optional_require(P.m_readAggregateRecord(aggregate, z8_guid_create(0x311))));
+    assert(P.m_aggregateCustomer(aggregate) == z8_guid_create(0x201) && z8_optional_require(P.m_aggregateAmount(aggregate)) == 4);
+    assert(z8_optional_require(P.m_readAggregateLinkedRecord(aggregate, z8_guid_create(0x312))));
+    assert(P.m_aggregateName(aggregate) == "Alice"w && z8_optional_require(P.m_aggregateAmount(aggregate)) == 6);
+    assert(!z8_optional_require(P.m_readAggregateRecord(aggregate, z8_guid_create(0x999))));
+    Z8QueryReadRequest countRecord; countRecord.byRecordId = true; countRecord.recordId = z8_guid_create(0x311);
+    assert(aggregateExecutor.count(aggregate, countRecord) == 1);
+    countRecord.recordId = z8_guid_create(0x999); assert(aggregateExecutor.count(aggregate, countRecord) == 0);
+    Z8QueryReadRequest totalRecord; totalRecord.byRecordId = true; totalRecord.recordId = z8_guid_create(0x312);
+    totalRecord.aggregateAll = true; totalRecord.fields = [aggregate.f_amount];
+    auto totalCursor = aggregateExecutor.read(aggregate, totalRecord); bool totalWasNull;
+    assert(totalCursor.next() && z8_optional_require(z8_primary_cast!long(totalCursor.read(aggregate.f_amount, false, totalWasNull))) == 6);
+    totalCursor.close();
     auto countString = P.m_countStringOrder();
     z8_query_set_executor(countString, new Z8PostgresQueryExecutor(db, "pg_temp"w, "CountStringOrders"w));
     P.m_readCountString(countString); int countStringRows;
@@ -886,6 +901,18 @@ void main(string[] args) {
     db.execute(`CREATE TEMP TABLE "JoinOrders" AS SELECT * FROM "Orders"`);
     db.execute(`CREATE TEMP TABLE "DependencyOrders" AS SELECT * FROM "Orders"`);
     auto response = parseJSON(requestFields(`["title","customer.label","customer.city.label"]`w).to!string);
+    wstring readAggregateIds(wstring ids) {
+        auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
+        request.parameters.z8_add("request"w, "AggregateOrder"w); request.parameters.z8_add("action"w, "read"w);
+        request.parameters.z8_add("fields"w, `["customer.label","amount"]`w); request.parameters.z8_add("recordId"w, ids);
+        auto previous = z8_application_set_request(request); scope(exit) z8_application_set_request(previous);
+        z8_application_start_response(request, "AggregateOrder"w); z8_application_dispatch_request();
+        z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
+    }
+    auto aggregateIds = parseJSON(readAggregateIds(`["00000000-0000-0000-0000-000000000311"]`w).to!string);
+    assert(aggregateIds["data"].array.length == 1 && aggregateIds["data"][0]["customer.label"].str == "Alice" && aggregateIds["data"][0]["amount"].integer == 4);
+    aggregateIds = parseJSON(readAggregateIds(`["00000000-0000-0000-0000-000000000311","00000000-0000-0000-0000-000000000312"]`w).to!string);
+    assert(aggregateIds["data"].array.length == 1 && aggregateIds["data"][0]["amount"].integer == 10);
     auto treeResponse = parseJSON(requestFields(`["path"]`w, null, null, null, null, "TreeLimited"w,
         "read"w, null, null, null, null, null, null, null, "1"w).to!string);
     assert(treeResponse["data"].array.length == 2);

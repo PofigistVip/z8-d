@@ -445,7 +445,8 @@ The executor supports `aggregateBy` grouping over root Link fields with numeric
 sum, average, count, minimum and maximum, count for string, text, binary, boolean, temporal and geometry fields, and scalar minimum/maximum for strings, text,
 booleans, dates, durations and GUIDs. Filters can reference linked tables, and a
 subselect joins target fields, including chained links and computed fields, after
-grouping. An optional second grouping and its `HAVING` run in the outer select.
+grouping. Record-ID filters apply before the initial grouping, including in reads,
+counts and totals. An optional second grouping and its `HAVING` run in the outer select.
 As with JDBC, a boolean count can be read only when its result is 0 or 1; temporal
 fields interpret the count as milliseconds, and binary fields receive the decimal
 count as bytes. Binary count conversion also applies to ordinary `groupBy` queries;
