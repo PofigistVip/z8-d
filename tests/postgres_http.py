@@ -121,6 +121,11 @@ void main(string[] args) {
             assert result["success"] and result["data"][0]["title"] == "Second", result
             result = request(session="limited")
             assert result["success"] and len(result["data"]) == 2 and all("title" not in row for row in result["data"]), result
+            result = request(action="meta")
+            assert result["success"] and result["isQuery"] and result["primaryKey"] == "recordId", result
+            assert {field["name"] for field in result["fields"]} == {"title", "amount", "recordId", "lock"}, result
+            result = request(session="limited", action="meta")
+            assert result["success"] and "title" not in {field["name"] for field in result["fields"]}, result
             result = request(session="limited", filter='{"property":"title","value":"First"}')
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(session="denied")

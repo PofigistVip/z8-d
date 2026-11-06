@@ -131,6 +131,8 @@ their declared and SQL expression dependencies are readable.
 `z8_application_dispatch_request` selects this adapter for a table request;
 the CivetWeb host must explicitly call the dispatcher and install a backend for
 the worker thread. The separately supported write actions are described below.
+The initial `meta` action describes direct table fields and query access, and
+rejects non-field controls, linked metadata, actions, reports and `aggregateBy`.
 The direct-table `create` action accepts a nonempty `data` array of objects,
 checks table create access, and inserts the records in a transaction with the
 BL creation hooks. Missing or zero primary keys receive random GUIDs. As in

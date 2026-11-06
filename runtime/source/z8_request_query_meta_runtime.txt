@@ -1,0 +1,90 @@
+// Direct-table subset of MetaAction. Complex controls and linked metadata
+// require their respective adapters and are rejected instead of omitted.
+void z8_application_dispatch_query_meta(wstring className) {
+    z8_application_dispatch_query_meta_target(className, null);
+}
+private void z8_application_dispatch_query_meta_target(wstring className, Z8Object query) {
+    auto request = z8_application_require_request();
+    auto session = z8_nonnull(request.session);
+    auto params = z8_nonnull(request.parameters);
+    auto writer = request.writer;
+    if (writer.scopes.length != 2) throw new Exception("response object is not open");
+    if (params.z8_get("action"w) != "meta"w) throw new Exception("unsupported query action");
+    if (!z8_application_may_execute(session, className, "meta"w)) throw new Exception("request access denied");
+    auto keys = params.z8_keys();
+    for (long i; i < keys.z8_size(); ++i) {
+        auto name = keys.z8_get(i);
+        if (name is null) throw new Exception("invalid query metadata parameter");
+        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "fields"w || name == "values"w) continue;
+        if (params.z8_get(name).length) throw new Exception("unsupported query metadata parameter: " ~ name.to!string);
+    }
+    if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
+    if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, query))
+        throw new Exception("query metadata requires a Table");
+    auto privileges = z8_nonnull(session.user).privileges;
+    auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
+    if (privileges is null || !privileges.getTableAccess(queryKey).read) throw new Exception("query metadata access denied");
+    z8_application_query_context_values(query, privileges, params, true);
+    if (z8_query_user_events_enabled()) query.z8_query_virtual_onReadAction();
+    auto groups = z8_query_array(query, "groupBy"w);
+    auto selected = z8_application_query_fields(query, privileges, params, !groups.length);
+    foreach (field; groups) {
+        if (z8_application_query_field_path(query, field, privileges).length || !z8_application_query_field_readable(query, field, privileges))
+            throw new Exception("unsupported query metadata group field");
+        bool present;
+        foreach (existing; selected) if (existing is field) { present = true; break; }
+        if (!present) selected ~= field;
+    }
+    Z8QueryReadRequest read;
+    z8_query_prepare_read(query, read);
+    auto actualGroups = z8_query_array(query, "groupBy"w);
+    if (actualGroups.length != groups.length) throw new Exception("changing query groups during beforeRead is not supported");
+    foreach (i, field; actualGroups) if (field !is groups[i]) throw new Exception("changing query groups during beforeRead is not supported");
+    if (z8_query_array(query, "actions"w).length || z8_query_array(query, "reports"w).length || z8_query_array(query, "aggregateBy"w).length)
+        throw new Exception("query actions, reports and aggregateBy metadata are not supported");
+    void fields(wstring property, Z8Object[] values) {
+        Z8Object[] readable;
+        foreach (field; values) {
+            if (!z8_native_is_instance(z8_field_name, field)) throw new Exception("non-field control metadata is not supported");
+            if (z8_application_query_field_path(query, field, privileges).length) throw new Exception("linked field metadata is not supported");
+            if (z8_application_query_field_readable(query, field, privileges)) readable ~= field;
+        }
+        if (!readable.length) return;
+        writer.start('[', property);
+        foreach (field; readable) {
+            writer.start('{'); z8_control_write_field_meta(field, query, query, privileges); writer.finish('}');
+        }
+        writer.finish(']');
+    }
+    z8_monitor_property(writer, "isQuery"w, true);
+    z8_monitor_property(writer, "id"w, query.z8_id());
+    foreach (attribute; ["icon"w, "ui"w, "presentation"w]) z8_monitor_property(writer, attribute, query.z8_get_attribute(attribute));
+    z8_monitor_property(writer, "text"w, query.z8_get_attribute("displayName"w));
+    auto sourceCode = query.z8_class_id();
+    import std.string : indexOf;
+    auto separator = sourceCode.indexOf(".__"w);
+    if (separator >= 0) sourceCode = sourceCode[0 .. cast(size_t)separator];
+    z8_monitor_property(writer, "sourceCode"w, sourceCode);
+    foreach (name; ["controls"w, "columns"w, "names"w, "quickFilters"w, "filterFields"w])
+        fields(name == "names"w ? "nameFields"w : name, z8_query_array(query, name));
+    fields("fields"w, selected);
+    auto access = privileges.getTableAccess(queryKey);
+    writer.start('{', "access"w);
+    z8_monitor_property(writer, "read"w, access.read); z8_monitor_property(writer, "write"w, access.write);
+    z8_monitor_property(writer, "create"w, access.create); z8_monitor_property(writer, "copy"w, access.copy);
+    z8_monitor_property(writer, "destroy"w, access.destroy); writer.finish('}');
+    auto key = z8_query_primary_key(query);
+    foreach (field; selected) {
+        if (field is key) z8_monitor_property(writer, "primaryKey"w, field.z8_id());
+        if (field.z8_get_attribute("lockKey"w) !is null) z8_monitor_property(writer, "lockKey"w, field.z8_id());
+        auto parent = field.z8_get_attribute("parentKey"w);
+        if (parent !is null && z8_str_compareNoCase(parent, "false"w) != 0) z8_monitor_property(writer, "parentKey"w, field.z8_id());
+    }
+    auto state = z8_query_state(query);
+    if (state.period !is null && z8_application_query_field_readable(query, state.period, privileges))
+        z8_monitor_property(writer, "periodKey"w, state.period.z8_id());
+    z8_monitor_property(writer, "readOnly"w, groups.length != 0 || (state.readOnly.present && state.readOnly.value));
+    z8_monitor_property(writer, "limit"w, z8_query_limit(query));
+    z8_monitor_property(writer, "totals"w, state.totals);
+    z8_monitor_property(writer, "colCount"w, state.colCount);
+}

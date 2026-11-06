@@ -31,16 +31,17 @@ need specialized adapters and are not handled by this function.
 Alternatively, a handler can call `z8_application_dispatch_request()` in
 application response mode. It resolves the `request` parameter, verifies the
 session user's request permission, and routes ordinary objects or the supported
-table `read`, `create`, `copy`, `update` and `destroy` operations to the corresponding adapter. Before a table action, the
+table `meta`, `read`, `create`, `copy`, `update` and `destroy` operations to the corresponding adapter. Before a table action, the
 host must install a database backend for the worker thread and restore the
 previous backend afterward. The authority is responsible for providing a
 current privilege snapshot. Executable jobs and other query actions still need
 adapters; selecting this handler is explicit rather than automatic.
 
-`z8_control_write_field_meta` can write metadata for a direct field into the
-current response object, including basic presentation, dependencies, permitted
-source information and a BL `writeMeta` override. Complete query/form metadata
-and automatic `meta` or default action responses are still pending.
+The initial `meta` adapter writes query attributes, access rights, keys and
+metadata for direct fields, including basic presentation, dependencies,
+permitted source information and BL `writeMeta` overrides. Non-field controls,
+linked field metadata, actions and reports are rejected for now. The default
+action combining metadata and data is still pending.
 
 An optional `IZ8HttpAuthority` constructor argument connects a host authority
 to the transport. With an authority present, each request must have a session

@@ -88,6 +88,23 @@ void main() {
     z8_application_set_request(request); z8_application_start_response(request, "meta"w);
     z8_control_write_field_meta(table.f_label, table, table, privileges); z8_application_finish_response(request, monitor);
     assert("source" !in parseJSON(z8_application_response_text(request).to!string).object);
+    auto user = new Z8UserData(); user.id = z8_guid_create(1);
+    user.privileges = new Z8Privileges(Z8Access(true, false, false, false, false, true));
+    request = new Z8ApplicationRequest(); monitor = new Z8RequestMonitor(); request.monitor = monitor;
+    request.session = new Z8ApplicationSession("test"w, user, user);
+    request.parameters.z8_add("request"w, "CustomTable"w); request.parameters.z8_add("action"w, "meta"w);
+    request.parameters.z8_add("fields"w, `["label"]`w);
+    z8_application_set_request(request); z8_application_start_response(request, "CustomTable"w);
+    z8_application_dispatch_request(); z8_application_finish_response(request, monitor);
+    meta = parseJSON(z8_application_response_text(request).to!string);
+    assert(meta["isQuery"].boolean && meta["fields"].array.length == 3 && meta["primaryKey"].str == "recordId" && meta["lockKey"].str == "lock");
+    assert(meta["fields"][0]["name"].str == "label" && meta["fields"][0]["custom"].str == "enabled" && meta["access"]["read"].boolean && !meta["access"]["write"].boolean);
+    assert(meta["limit"].integer == 200 && meta["colCount"].integer == 4 && "data" !in meta.object);
+    user.privileges.setTableAccess(z8_guid_create_name("CustomTable"w), Z8Access.init);
+    request = new Z8ApplicationRequest(); request.session = new Z8ApplicationSession("test"w, user, user);
+    request.parameters.z8_add("request"w, "CustomTable"w); request.parameters.z8_add("action"w, "meta"w);
+    z8_application_set_request(request); z8_application_start_response(request, "CustomTable"w);
+    bool denied; try { z8_application_dispatch_request(); } catch (Exception) { denied = true; } assert(denied);
     z8_application_set_request(null);
 }
 ''', encoding="utf-8")
