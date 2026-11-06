@@ -448,7 +448,7 @@ subselect joins target fields, including chained links and computed fields, afte
 grouping. An optional second grouping and its `HAVING` run in the outer select.
 As with JDBC, a boolean count can be read only when its result is 0 or 1; temporal
 fields interpret the count as milliseconds, and binary fields receive the decimal
-count as bytes.
+count as bytes. Binary count conversion also applies to ordinary `groupBy` queries.
 To check those conversions against a PostgreSQL JDBC driver, run
 `python tests/postgres_count_jdbc_oracle.py <postgres-bin> <postgresql-jdbc.jar>`.
 Expressions and joins requiring unprojected root fields, and row locks on these

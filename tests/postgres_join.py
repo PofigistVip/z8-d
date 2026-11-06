@@ -399,6 +399,7 @@ public class Probe {
     public static void readCountString(CountStringOrder order) { Field[] fields = {order.customerId, order.title, order.description, order.flag, order.instant, order.duration, order.payload}; order.read(fields); }
     public static void readCountStringLinked(CountStringOrder order) { Field[] fields = {order.customer.label, order.title, order.description, order.flag, order.instant, order.duration, order.payload}; order.read(fields); }
     public static void groupCountString(CountStringOrder order) { order.customer.label.aggregation = Aggregation.None; order.groupBy = {order.customer.label}; }
+    public static void directCountStringGroup(CountStringOrder order) { order.aggregateBy.clear(); order.groupBy = {order.customerId}; }
     public static bool nextCountString(CountStringOrder order) { return order.next(); }
     public static guid countStringCustomer(CountStringOrder order) { return order.customerId.get(); }
     public static string countStringTitle(CountStringOrder order) { return order.title.get(); }
@@ -655,6 +656,16 @@ void main(string[] args) {
         assert(z8_optional_require(P.m_countStringFlag(countString)) && z8_optional_require(P.m_countStringInstant(countString)) == 1);
         assert(z8_optional_require(P.m_countStringDuration(countString)) == 1);
         assert(P.m_countStringPayload(countString) == "1"w);
+        ++countStringRows;
+    }
+    assert(countStringRows == 2);
+    auto directCount = P.m_countStringOrder();
+    z8_query_set_executor(directCount, new Z8PostgresQueryExecutor(db, "pg_temp"w, "CountStringOrders"w));
+    P.m_directCountStringGroup(directCount); P.m_readCountString(directCount); countStringRows = 0;
+    while (z8_optional_require(P.m_nextCountString(directCount))) {
+        auto customer = P.m_countStringCustomer(directCount);
+        assert(P.m_countStringPayload(directCount) == (customer == z8_guid_create(0x201) ? "3"w : "0"w));
+        assert(P.m_countStringTitle(directCount) == (customer == z8_guid_create(0x201) ? "2"w : "1"w));
         ++countStringRows;
     }
     assert(countStringRows == 2);

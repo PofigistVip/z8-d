@@ -644,7 +644,9 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             if (grouped && kind == "int"w && aggregation == Z8FieldAggregation.average && !(request.aggregateAll && groups.length))
                 expression = "trunc(" ~ expression ~ ")::bigint";
             bool raw = !grouped || aggregation == Z8FieldAggregation.none || aggregation == Z8FieldAggregation.bitwiseOr || aggregation == Z8FieldAggregation.bitwiseAnd;
-            if (kind == "binary"w && raw) expression = "encode(" ~ expression ~ ", 'hex')";
+            if (kind == "binary"w && grouped && aggregation == Z8FieldAggregation.count)
+                expression = "encode(convert_to((" ~ expression ~ ")::text, 'UTF8'), 'hex')";
+            else if (kind == "binary"w && raw) expression = "encode(" ~ expression ~ ", 'hex')";
             else if (kind == "geometry"w && raw) expression = "encode(ST_AsEWKB(" ~ expression ~ ", 'NDR'), 'hex')";
             else if (raw && z8_native_is_instance("org.zenframework.z8.server.base.table.value.TextField"w, field))
                 expression = "convert_from(" ~ expression ~ ", 'UTF8')";
