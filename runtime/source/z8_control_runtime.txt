@@ -1,6 +1,7 @@
 // Native state of base.form.Control and its separately owned Source object.
 private enum z8_control_name = "org.zenframework.z8.server.base.form.Control"w;
 private enum z8_source_name = "org.zenframework.z8.server.base.form.Source"w;
+private enum z8_section_name = "org.zenframework.z8.server.base.form.Section"w;
 private class Z8ControlState {
     Z8Optional!long colSpan = z8_optional_wrap(1L), flex = z8_optional_wrap(0L), height;
     Z8Optional!bool readOnly = z8_optional_wrap(false), required = z8_optional_wrap(false),
@@ -33,6 +34,27 @@ ref Z8ObjectArray!T z8_control_dependencies_ref(T)(Z8Object self) if (is(T : Z8O
     if (cell is null) {
         if (state.dependencies !is null) throw new Exception("incompatible Control dependency array");
         cell = new Z8FieldOrderCell!T(); state.dependencies = cell;
+    }
+    return cell.value;
+}
+private class Z8SectionState {
+    Z8Optional!long colCount = z8_optional_wrap(3L);
+    IZ8FieldOrderCell controls;
+}
+private Z8SectionState z8_section_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_section_name, self)) throw new Exception("invalid Section object");
+    auto state = cast(Z8SectionState)self.z8_get_native_state(z8_section_name);
+    if (state is null) { state = new Z8SectionState(); self.z8_set_native_state(z8_section_name, state); }
+    return state;
+}
+private Z8Optional!long* z8_section_col_count(Z8Object self) { return &z8_section_state(self).colCount; }
+ref Z8ObjectArray!T z8_section_controls_ref(T)(Z8Object self) if (is(T : Z8Object)) {
+    auto state = z8_section_state(self);
+    auto cell = cast(Z8FieldOrderCell!T)state.controls;
+    if (cell is null) {
+        if (state.controls !is null) throw new Exception("incompatible Section controls array");
+        cell = new Z8FieldOrderCell!T(); state.controls = cell;
     }
     return cell.value;
 }
@@ -166,5 +188,6 @@ void z8_bind_builtin_control() {
     z8_native_bind_field(source ~ "f_valueFrom"w, &z8_source_address!"valueFrom");
     z8_native_bind_field(source ~ "f_filterField"w, &z8_source_address!"filterField");
     z8_native_bind(source ~ "z8op_assign"w, &z8_source_assign);
+    z8_native_bind_field(z8_section_name ~ ".f_colCount"w, &z8_section_col_count);
 }
 shared static this() { z8_bind_builtin_control(); }
