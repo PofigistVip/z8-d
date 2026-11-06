@@ -80,7 +80,65 @@ private string z8_pdf_hex(uint value, size_t digits) {
     return cast(string)result;
 }
 
-private ubyte[] z8_export_pdf(wstring[] ids, wstring[] headers, wstring[] types, JSONValue rows) {
+private struct Z8PdfPageLayout {
+    int width, height, left, right, top, bottom;
+}
+// PrintOptions and PageFormat in the Java server use millimeters.
+private Z8PdfPageLayout z8_pdf_page_layout(wstring options) {
+    import std.json : JSONType;
+    import std.math : isFinite, round;
+    import std.string : strip, toLower;
+    double width = 210, height = 297, left = 10, right = 10, top = 10, bottom = 10;
+    bool portrait;
+    if (options !is null && options.length) {
+        auto json = z8_json_parse(options.to!string);
+        if (json.type != JSONType.object) throw new Exception("invalid print options");
+        if (auto format = "pageFormat" in json.object) {
+            if (format.type != JSONType.string) throw new Exception("invalid page format");
+            switch (format.str.toLower()) {
+                case "a0": width = 841; height = 1189; break;
+                case "a1": width = 594; height = 841; break;
+                case "a2": width = 420; height = 594; break;
+                case "a3": width = 297; height = 420; break;
+                case "a4": width = 210; height = 297; break;
+                case "a5": width = 148; height = 210; break;
+                case "a6": width = 105; height = 148; break;
+                case "c3": width = 324; height = 458; break;
+                case "c4": width = 229; height = 324; break;
+                case "c5": width = 162; height = 229; break;
+                case "c6": width = 114; height = 162; break;
+                case "letter": width = 215.9; height = 355.6; break;
+                default: throw new Exception("unknown page format");
+            }
+        }
+        if (auto orientation = "pageOrientation" in json.object) {
+            if (orientation.type != JSONType.string) throw new Exception("invalid page orientation");
+            auto value = orientation.str.toLower();
+            if (value != "portrait" && value != "landscape") throw new Exception("unknown page orientation");
+            portrait = value == "portrait";
+        }
+        double margin(string name, double fallback) {
+            auto value = name in json.object;
+            if (value is null) return fallback;
+            if (value.type != JSONType.string && value.type != JSONType.integer &&
+                value.type != JSONType.uinteger && value.type != JSONType.float_)
+                throw new Exception("invalid page margin");
+            auto number = z8_json_value_text(*value).to!string.strip().to!double;
+            if (!isFinite(number) || number < 0 || number > 10000) throw new Exception("invalid page margin");
+            return number;
+        }
+        left = margin("leftMargin", left); right = margin("rightMargin", right);
+        top = margin("topMargin", top); bottom = margin("bottomMargin", bottom);
+    }
+    if (!portrait) { auto temporary = width; width = height; height = temporary; }
+    int points(double millimeters) { return cast(int)round(millimeters * 72.0 / 25.4); }
+    auto result = Z8PdfPageLayout(points(width), points(height), points(left), points(right), points(top), points(bottom));
+    if (result.left + result.right >= result.width || result.top + result.bottom >= result.height)
+        throw new Exception("page margins exceed page size");
+    return result;
+}
+
+private ubyte[] z8_export_pdf(wstring[] ids, wstring[] headers, wstring[] types, JSONValue rows, wstring options = null) {
     import std.json : JSONType;
     ubyte[] bytes;
     synchronized (z8_pdf_font_lock) bytes = z8_pdf_font_data;
@@ -101,12 +159,12 @@ private ubyte[] z8_export_pdf(wstring[] ids, wstring[] headers, wstring[] types,
         }
         return result;
     }
-    // Use landscape pages when there are many columns. Each cell is clipped,
-    // so one long value cannot overwrite its neighbors.
-    int pageWidth = ids.length > 4 ? 842 : 595, pageHeight = ids.length > 4 ? 595 : 842;
-    int margin = 30, rowHeight = 18, columns = cast(int)ids.length;
-    int rowLimit = (pageHeight - 2 * margin) / rowHeight - 1;
-    int cellWidth = (pageWidth - 2 * margin) / columns;
+    // Each cell is clipped so a long value cannot overwrite its neighbors.
+    auto layout = z8_pdf_page_layout(options);
+    int pageWidth = layout.width, pageHeight = layout.height, rowHeight = 18, columns = cast(int)ids.length;
+    int rowLimit = (pageHeight - layout.top - layout.bottom) / rowHeight - 1;
+    int cellWidth = (pageWidth - layout.left - layout.right) / columns;
+    if (rowLimit < 1) throw new Exception("page has no room for export rows");
     if (cellWidth < 8) throw new Exception("too many PDF columns");
     string[] contents;
     size_t position;
@@ -114,7 +172,7 @@ private ubyte[] z8_export_pdf(wstring[] ids, wstring[] headers, wstring[] types,
         string content;
         void line(wstring[] values, int row) {
             foreach (i, value; values) {
-                auto x = margin + cast(int)i * cellWidth, y = pageHeight - margin - (row + 1) * rowHeight;
+                auto x = layout.left + cast(int)i * cellWidth, y = pageHeight - layout.top - (row + 1) * rowHeight;
                 content ~= "q " ~ x.to!string ~ " " ~ y.to!string ~ " " ~ cellWidth.to!string ~ " " ~ rowHeight.to!string ~
                     " re W n BT /F1 9 Tf " ~ (x + 2).to!string ~ " " ~ (y + 5).to!string ~ " Td <" ~ text(value) ~ "> Tj ET Q\n";
             }
