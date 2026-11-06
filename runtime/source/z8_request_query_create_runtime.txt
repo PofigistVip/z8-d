@@ -13,15 +13,17 @@ private void z8_application_dispatch_query_create_target(wstring className, Z8Ob
     for (long i; i < keys.z8_size(); ++i) {
         auto name = keys.z8_get(i);
         if (name is null) throw new Exception("invalid query create parameter");
-        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "data"w || name == "fields"w || name == "values"w) continue;
+        if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w || name == "data"w || name == "fields"w || name == "values"w || name == "query"w) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported query create parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
     if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, query))
         throw new Exception("query create requires a Table");
     auto privileges = z8_nonnull(session.user).privileges;
+    if (privileges is null) throw new Exception("query create access denied");
+    query = z8_application_nested_query(query, privileges, params.z8_get("query"w));
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
-    if (privileges is null || !privileges.getTableAccess(queryKey).create) throw new Exception("query create access denied");
+    if (!privileges.getTableAccess(queryKey).create) throw new Exception("query create access denied");
     auto key = z8_query_primary_key(query);
     if (key is null) throw new Exception("query has no primary key");
     auto selected = z8_application_query_fields(query, privileges, params);

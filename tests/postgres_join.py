@@ -514,6 +514,7 @@ void main(string[] args) {
     db.execute(`INSERT INTO "Cities" VALUES ('00000000-0000-0000-0000-000000000101','Moscow')`);
     db.execute(`INSERT INTO "Customers" VALUES ('00000000-0000-0000-0000-000000000201','Alice','00000000-0000-0000-0000-000000000101'), ('00000000-0000-0000-0000-000000000202','Bob',NULL), ('00000000-0000-0000-0000-000000000203','Ghost',NULL), ('00000000-0000-0000-0000-000000000000','Sentinel',NULL)`);
     db.execute(`ALTER TABLE "Customers" ADD COLUMN "Lock" bigint DEFAULT 0`);
+    db.execute(`ALTER TABLE "Customers" ADD COLUMN "CreatedAt" bigint, ADD COLUMN "CreatedBy" uuid, ADD COLUMN "ModifiedAt" bigint, ADD COLUMN "ModifiedBy" uuid`);
     db.execute(`INSERT INTO "Orders" ("RecordId","Title","CustomerId","CityId") VALUES ('00000000-0000-0000-0000-000000000301','First','00000000-0000-0000-0000-000000000201','00000000-0000-0000-0000-000000000101'), ('00000000-0000-0000-0000-000000000302','Second','00000000-0000-0000-0000-000000000202',NULL), ('00000000-0000-0000-0000-000000000303','No customer',NULL,NULL), ('00000000-0000-0000-0000-000000000304','Missing customer','00000000-0000-0000-0000-000000000299',NULL)`);
     auto inner = P.m_inner(); auto left = P.m_left(); auto right = P.m_right(); auto full = P.m_full(); auto filtered = P.m_filtered(); auto recursive = P.m_recursive(); auto conditional = P.m_conditional(); auto cyclic = P.m_cyclic();
     auto aggregate = P.m_aggregateOrder();
@@ -833,6 +834,29 @@ void main(string[] args) {
     auto nestedDefault = parseJSON(requestFields(`["customer.label"]`w, null, null, null, null,
         "HttpOrder"w, null, null, null, null, null, null, "customer"w).to!string);
     assert(nestedDefault["isQuery"].boolean && nestedDefault["id"].str == "customer" && nestedDefault["data"].array.length == 3);
+    wstring nestedWrite(wstring action, wstring data) {
+        auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
+        request.parameters.z8_add("request"w, "HttpOrder"w); request.parameters.z8_add("action"w, action);
+        request.parameters.z8_add("query"w, "customer"w); request.parameters.z8_add("data"w, data);
+        if (action != "destroy"w) request.parameters.z8_add("fields"w, `["customer.label"]`w);
+        auto previous = z8_application_set_request(request); scope(exit) z8_application_set_request(previous);
+        z8_application_start_response(request, "HttpOrder"w); z8_application_dispatch_request();
+        z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
+    }
+    auto inserted = parseJSON(nestedWrite("create"w, `[{"customer.label":"Cara"}]`w).to!string);
+    assert(inserted["data"].array.length == 1 && inserted["data"][0]["customer.label"].str == "Cara");
+    auto insertedId = inserted["data"][0]["customer.recordId"].str;
+    user.privileges.setFieldAccess(z8_guid_create_name("Customers.Label"w), Z8Access.init);
+    bool nestedWriteDenied;
+    try { nestedWrite("update"w, (`[{"customer.recordId":"` ~ insertedId ~ `","customer.label":"Denied"}]`).to!wstring); }
+    catch (Exception) { nestedWriteDenied = true; }
+    assert(nestedWriteDenied);
+    assert(db.execute(`SELECT "Label" FROM "Customers" WHERE "RecordId" = '` ~ insertedId ~ `'::uuid`).rows[0][0].text == "Cara");
+    user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
+    auto modified = parseJSON(nestedWrite("update"w, (`[{"customer.recordId":"` ~ insertedId ~ `","customer.label":"Changed"}]`).to!wstring).to!string);
+    assert(modified["data"][0]["customer.label"].str == "Changed");
+    nestedWrite("destroy"w, (`[{"customer.recordId":"` ~ insertedId ~ `"}]`).to!wstring);
+    assert(db.execute(`SELECT count(*)::text FROM "Customers" WHERE "RecordId" = '` ~ insertedId ~ `'::uuid`).rows[0][0].text == "0");
     auto dependencyResponse = parseJSON(requestFields(`["title"]`w, null, null, null, null, "HttpDependencyOrder"w).to!string);
     assert(dependencyResponse["data"].array.length == 2 && dependencyResponse["data"][0]["title"].str.length);
     assert("customer.label" in dependencyResponse["data"][0].object && "cityId" !in dependencyResponse["data"][0].object);
@@ -912,6 +936,10 @@ void main(string[] args) {
     blocked = false;
     try { requestFields(`["customer.label"]`w, null, null, null, null, "HttpOrder"w, "read"w, null, null, null, null, null, "customer"w); } catch (Exception) { blocked = true; }
     assert(blocked);
+    foreach (action; ["create"w, "update"w, "destroy"w]) {
+        blocked = false; try { nestedWrite(action, `[]`w); } catch (Exception error) { blocked = error.msg == "nested query relation access denied"; }
+        assert(blocked);
+    }
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     user.privileges.setFieldAccess(z8_guid_create_name("Customers.CityId"w), denied);
     blocked = false; try { requestFields(`["customer.city.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
