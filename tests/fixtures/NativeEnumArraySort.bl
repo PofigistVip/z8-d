@@ -7,6 +7,7 @@ import org.zenframework.z8.base.table.value.JoinType;
 import org.zenframework.z8.ie.ImportPolicy;
 import org.zenframework.z8.lang.encoding;
 import org.zenframework.z8.base.fts.FtsQueryType;
+import org.zenframework.z8.base.fts.Fts;
 
 public class NativeEnumArraySort {
     public static int run() {
@@ -87,6 +88,18 @@ public class NativeEnumArraySort {
         if (byQuery[null] != "null-key" || byQuery.remove(FtsQueryType.Plain) != "plain") return 35;
         FtsQueryType[][FtsQueryType] arraysByType = {(FtsQueryType.Phrase, types)};
         if (arraysByType[FtsQueryType.Phrase][1] != FtsQueryType.Plain) return 36;
+        Fts first = new Fts; first.configuration = "first";
+        Fts second = new Fts; second.configuration = "second";
+        Fts[] configs = {first, second, first};
+        if (configs.unique().size() != 2 || configs.join("|") != "||") return 37;
+        try { configs.sort(); return 38; } catch (exception expected) {}
+        Fts[] one = {first}; if (one.sort().first().configuration != "first") return 39;
+        Fts[][] nestedConfigs = {configs};
+        if (nestedConfigs[0][1].configuration != "second") return 40;
+        Fts[string] configByName = {("one", first), ("two", second)};
+        if (configByName["one"].configuration != "first" || configByName.values().size() != 2) return 41;
+        string[Fts] namesByConfig = {(first, "one"), (second, "two")};
+        if (namesByConfig[first] != "one" || namesByConfig.keys().size() != 2) return 42;
         return 0;
     }
 }

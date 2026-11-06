@@ -1001,7 +1001,7 @@ class Checker {
                             fail("null literal is not supported in a map initializer pair", entry.token);
                         if ([ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(keyType) && typeOf(entry.left) != keyType)
                             fail("map key type mismatch", entry.left.token);
-                        if ([ValueType.exceptionType, ValueType.encodingType, ValueType.ftsQueryType].canFind(keyType) && typeOf(entry.left) != keyType)
+                        if ([ValueType.exceptionType, ValueType.encodingType, ValueType.ftsQueryType, ValueType.ftsType].canFind(keyType) && typeOf(entry.left) != keyType)
                             fail("map key type mismatch", entry.left.token);
                         if (isSqlType(keyType)) {
                             auto actualKey = typeOf(entry.left);
@@ -1880,7 +1880,7 @@ class Checker {
                         e.keyObjectClasses = e.left.keyObjectClasses;
                         auto primaryJoin = e.token.text == "join" && [ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray,
                             ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.primaryArray, ValueType.selfArray,
-                            ValueType.encodingArray, ValueType.ftsQueryArray].canFind(receiver);
+                            ValueType.encodingArray, ValueType.ftsQueryArray, ValueType.ftsArray].canFind(receiver);
                         string[] enumJoinValues, enumJoinTexts;
                         auto enumJoin = receiver == ValueType.enumArray && e.token.text == "join" &&
                             enumJoinNames(e.left.objectClass, enumJoinValues, enumJoinTexts);
@@ -1889,6 +1889,7 @@ class Checker {
                         auto guidSort = receiver == ValueType.guidArray && e.token.text == "sort";
                         auto encodingSort = receiver == ValueType.encodingArray && e.token.text == "sort";
                         auto ftsQuerySort = receiver == ValueType.ftsQueryArray && e.token.text == "sort";
+                        auto ftsSort = receiver == ValueType.ftsArray && e.token.text == "sort";
                         auto objectSort = receiver == ValueType.selfArray && e.token.text == "sort" &&
                             e.left.objectClass !is null && !isPrimaryClass(e.left.objectClass);
                         string[] enumOrder;
@@ -1896,7 +1897,7 @@ class Checker {
                             enumSortOrder(e.left.objectClass, enumOrder);
                         if (receiver == ValueType.enumArray && e.token.text == "sort" && !enumSort)
                             fail("native enum sort order is unavailable or stale", e.token);
-                        if (!primaryJoin && !enumJoin && !guidSort && !encodingSort && !ftsQuerySort && !objectSort && !enumSort && !["size", "isEmpty", "clear", "first", "last", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
+                        if (!primaryJoin && !enumJoin && !guidSort && !encodingSort && !ftsQuerySort && !ftsSort && !objectSort && !enumSort && !["size", "isEmpty", "clear", "first", "last", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
                             fail("this method is not yet supported for object arrays", e.token);
                     }
                     switch (e.token.text) {

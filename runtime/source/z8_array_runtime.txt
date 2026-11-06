@@ -235,7 +235,11 @@ class Z8Array(T) {
     Z8Array!T z8_sort() {
         import std.algorithm.sorting : sort;
         import std.algorithm.mutation : SwapStrategy;
-        static if (is(T == Z8Guid)) {
+        static if (is(T == Z8Fts)) {
+            if (z8_size() > 1) throw new Exception("object array elements are not comparable");
+            ++z8_version;
+            return this;
+        } else static if (is(T == Z8Guid)) {
             if (z8_size() <= 1) { ++z8_version; return this; }
             Z8Guid[] values;
             foreach (i; 0 .. z8_size()) { auto value = z8_get(i); values ~= z8_nonnull(value); }
@@ -290,6 +294,14 @@ class Z8Array(T) {
         return result;
     }
     wstring z8_join(wstring separator = ""w) {
+        static if (is(T == Z8Fts)) {
+            wstring ftsJoined;
+            foreach (i; 0 .. z8_size()) {
+                if (i) ftsJoined ~= z8_string_required(separator);
+                z8_nonnull(z8_get(i));
+            }
+            return ftsJoined;
+        }
         static if (is(T == Z8Encoding) || is(T == Z8FtsQueryType)) {
             wstring enumJoined;
             foreach (i; 0 .. z8_size()) {

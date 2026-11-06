@@ -20,7 +20,7 @@ enum ValueType : uint {
     fileMatrix, exceptionArray, exceptionMatrix, encodingArray, encodingMatrix, primaryArray,
     primaryMatrix, selfArray, selfMatrix, nullType, nullableString, enumType,
     enumArray, enumMatrix, optionalInt, optionalBool, optionalDecimal,
-    ftsQueryArray, ftsQueryMatrix,
+    ftsQueryArray, ftsQueryMatrix, ftsArray, ftsMatrix,
     mapStart = 65536,
     dynamicMapStart = 1 << 18,
     dynamicArrayStep = 1 << 20
@@ -95,6 +95,8 @@ package ValueType arrayOf(ValueType type) {
     if (type == ValueType.encodingArray) return ValueType.encodingMatrix;
     if (type == ValueType.ftsQueryType) return ValueType.ftsQueryArray;
     if (type == ValueType.ftsQueryArray) return ValueType.ftsQueryMatrix;
+    if (type == ValueType.ftsType) return ValueType.ftsArray;
+    if (type == ValueType.ftsArray) return ValueType.ftsMatrix;
     if (type == ValueType.primaryType) return ValueType.primaryArray;
     if (type == ValueType.primaryArray) return ValueType.primaryMatrix;
     if (type == ValueType.selfType) return ValueType.selfArray;
@@ -110,7 +112,7 @@ package ValueType arrayOf(ValueType type) {
     return ValueType.voidType;
 }
 package bool isArray(ValueType type) {
-    return isDynamicArray(type) || isSqlArray(type) || [ValueType.intArray, ValueType.intMatrix, ValueType.decimalArray, ValueType.decimalMatrix, ValueType.boolArray, ValueType.boolMatrix, ValueType.stringArray, ValueType.stringMatrix, ValueType.guidArray, ValueType.guidMatrix, ValueType.binaryArray, ValueType.binaryMatrix, ValueType.datespanArray, ValueType.datespanMatrix, ValueType.dateArray, ValueType.dateMatrix, ValueType.geometryArray, ValueType.geometryMatrix, ValueType.fileArray, ValueType.fileMatrix, ValueType.exceptionArray, ValueType.exceptionMatrix, ValueType.encodingArray, ValueType.encodingMatrix, ValueType.ftsQueryArray, ValueType.ftsQueryMatrix, ValueType.primaryArray, ValueType.primaryMatrix, ValueType.selfArray, ValueType.selfMatrix, ValueType.enumArray, ValueType.enumMatrix].canFind(type);
+    return isDynamicArray(type) || isSqlArray(type) || [ValueType.intArray, ValueType.intMatrix, ValueType.decimalArray, ValueType.decimalMatrix, ValueType.boolArray, ValueType.boolMatrix, ValueType.stringArray, ValueType.stringMatrix, ValueType.guidArray, ValueType.guidMatrix, ValueType.binaryArray, ValueType.binaryMatrix, ValueType.datespanArray, ValueType.datespanMatrix, ValueType.dateArray, ValueType.dateMatrix, ValueType.geometryArray, ValueType.geometryMatrix, ValueType.fileArray, ValueType.fileMatrix, ValueType.exceptionArray, ValueType.exceptionMatrix, ValueType.encodingArray, ValueType.encodingMatrix, ValueType.ftsQueryArray, ValueType.ftsQueryMatrix, ValueType.ftsArray, ValueType.ftsMatrix, ValueType.primaryArray, ValueType.primaryMatrix, ValueType.selfArray, ValueType.selfMatrix, ValueType.enumArray, ValueType.enumMatrix].canFind(type);
 }
 // Whether a nested collection can be widened through a user class or key.
 package bool hasCovariantObjects(ValueType type) {
@@ -118,7 +120,7 @@ package bool hasCovariantObjects(ValueType type) {
     if (isMap(type)) return mapKeyType(type) == ValueType.selfType || hasCovariantObjects(mapValueType(type));
     return type == ValueType.selfType;
 }
-package bool isReferenceArray(ValueType type) { return isDynamicArray(type) || isSqlArray(type) || [ValueType.selfArray, ValueType.enumArray, ValueType.primaryArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.encodingArray, ValueType.ftsQueryArray, ValueType.ftsQueryMatrix, ValueType.intMatrix, ValueType.decimalMatrix, ValueType.boolMatrix, ValueType.stringMatrix, ValueType.guidMatrix, ValueType.binaryMatrix, ValueType.datespanMatrix, ValueType.dateMatrix, ValueType.geometryMatrix, ValueType.fileMatrix, ValueType.exceptionMatrix, ValueType.encodingMatrix, ValueType.primaryMatrix, ValueType.selfMatrix, ValueType.enumMatrix].canFind(type); }
+package bool isReferenceArray(ValueType type) { return isDynamicArray(type) || isSqlArray(type) || [ValueType.selfArray, ValueType.enumArray, ValueType.primaryArray, ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray, ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.exceptionArray, ValueType.encodingArray, ValueType.ftsQueryArray, ValueType.ftsQueryMatrix, ValueType.ftsArray, ValueType.ftsMatrix, ValueType.intMatrix, ValueType.decimalMatrix, ValueType.boolMatrix, ValueType.stringMatrix, ValueType.guidMatrix, ValueType.binaryMatrix, ValueType.datespanMatrix, ValueType.dateMatrix, ValueType.geometryMatrix, ValueType.fileMatrix, ValueType.exceptionMatrix, ValueType.encodingMatrix, ValueType.primaryMatrix, ValueType.selfMatrix, ValueType.enumMatrix].canFind(type); }
 // A map is identified by its value and key type, mirroring VariableType in Z8.
 // Its encoded value is kept outside the range of named scalar and array types.
 private enum ValueType[] mapValueTypes = [
@@ -142,6 +144,7 @@ private enum ValueType[] mapValueTypes = [
     ValueType.sqlIntMatrix, ValueType.sqlDecimalMatrix, ValueType.sqlStringMatrix, ValueType.sqlGuidMatrix,
     ValueType.sqlDateMatrix, ValueType.sqlDatespanMatrix, ValueType.sqlBinaryMatrix, ValueType.sqlGeometryMatrix,
     ValueType.sqlPrimaryMatrix, ValueType.ftsQueryType, ValueType.ftsQueryArray, ValueType.ftsQueryMatrix,
+    ValueType.ftsType, ValueType.ftsArray, ValueType.ftsMatrix,
 ];
 private enum ValueType[] mapKeyTypes = [
     ValueType.selfType, ValueType.enumType, ValueType.dateType, ValueType.datespanType,
@@ -198,7 +201,7 @@ package ValueType mapType(ValueType value, ValueType key) {
     foreach (i, candidateValue; mapValueTypes) if (candidateValue == value)
         foreach (j, candidateKey; mapKeyTypes) if (candidateKey == key)
             return cast(ValueType)(cast(uint)ValueType.mapStart + i * mapKeyTypes.length + j);
-    if (key == ValueType.ftsQueryType) {
+    if (key == ValueType.ftsQueryType || key == ValueType.ftsType) {
         if (!mapValueTypes.canFind(value) && !isArray(value) && !isMap(value)) return ValueType.voidType;
     } else if (!mapKeyTypes.canFind(key) || (!isArray(value) && !isMap(value))) return ValueType.voidType;
     auto signature = (cast(ulong)cast(uint)value << 32) | cast(uint)key;
@@ -224,7 +227,7 @@ unittest {
     assert(cast(uint)ValueType.optionalDecimal < cast(uint)ValueType.mapStart);
     assert(cast(uint)ValueType.mapStart + mapValueTypes.length * mapKeyTypes.length < cast(uint)ValueType.dynamicMapStart);
     assert(!isMap(ValueType.intType));
-    assert(mapType(ValueType.intType, ValueType.ftsType) == ValueType.voidType);
+    assert(mapType(ValueType.intType, ValueType.voidType) == ValueType.voidType);
     auto ftsKeys = mapType(ValueType.intType, ValueType.ftsQueryType);
     assert(isMap(ftsKeys) && mapKeyType(ftsKeys) == ValueType.ftsQueryType && mapValueType(ftsKeys) == ValueType.intType);
     assert(mapKeyArrayType(ftsKeys) == ValueType.ftsQueryArray);
@@ -354,6 +357,8 @@ package ValueType elementType(ValueType type) {
         case ValueType.encodingMatrix: return ValueType.encodingArray;
         case ValueType.ftsQueryArray: return ValueType.ftsQueryType;
         case ValueType.ftsQueryMatrix: return ValueType.ftsQueryArray;
+        case ValueType.ftsArray: return ValueType.ftsType;
+        case ValueType.ftsMatrix: return ValueType.ftsArray;
         case ValueType.selfArray: return ValueType.selfType;
         case ValueType.selfMatrix: return ValueType.selfArray;
         case ValueType.enumArray: return ValueType.enumType;

@@ -48,7 +48,7 @@ private string dType(ValueType type, Program objectClass = null, Program[] keyOb
         string storage;
         if (key == ValueType.selfType)
             storage = "Z8ReferenceKeyMap!(" ~ storedKey ~ ", " ~ storedValue ~ ")";
-        else if ([ValueType.enumType, ValueType.exceptionType, ValueType.encodingType, ValueType.ftsQueryType].canFind(key) || isSqlType(key))
+        else if ([ValueType.enumType, ValueType.exceptionType, ValueType.encodingType, ValueType.ftsQueryType, ValueType.ftsType].canFind(key) || isSqlType(key))
             storage = "Z8ObjectKeyMap!(" ~ storedKey ~ ", " ~ storedValue ~ ")";
         else if ([ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(key))
             storage = "Z8ReferenceKeyMap!(" ~ storedKey ~ ", " ~ storedValue ~ ")";
@@ -120,6 +120,8 @@ private string dType(ValueType type, Program objectClass = null, Program[] keyOb
         case ValueType.encodingMatrix: return "Z8Array!(Z8Array!Z8Encoding)";
         case ValueType.ftsQueryArray: return "Z8Array!Z8FtsQueryType";
         case ValueType.ftsQueryMatrix: return "Z8Array!(Z8Array!Z8FtsQueryType)";
+        case ValueType.ftsArray: return "Z8Array!Z8Fts";
+        case ValueType.ftsMatrix: return "Z8Array!(Z8Array!Z8Fts)";
         case ValueType.nullType: assert(0, "null has no concrete D type");
         case ValueType.nullableString: return "wstring";
         case ValueType.enumType: assert(objectClass !is null); return objectClass.emittedName;

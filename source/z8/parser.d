@@ -120,6 +120,7 @@ class Parser {
                         case "exception": key = ValueType.exceptionType; break;
                         case "encoding": key = ValueType.encodingType; break;
                         case "FtsQueryType": key = ValueType.ftsQueryType; break;
+                        case "Fts": key = ValueType.ftsType; break;
                         case "sql_bool": key = ValueType.sqlBoolType; break;
                         case "sql_int": key = ValueType.sqlIntType; break;
                         case "sql_decimal": key = ValueType.sqlDecimalType; break;
