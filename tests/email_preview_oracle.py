@@ -48,6 +48,8 @@ messages = [
     b'Subject: Named sender\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nBody',
     b'From: "Doe, Jane" <jane@example.com>, other@example.com\r\n'
     b'Subject: Multiple senders\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nBody',
+    b'From: html@example.com\r\nSubject: Partial HTML\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n'
+    b'First <not closed\r\nline> Second <b>bold</b> End <unfinished',
 ]
 with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     temp = Path(directory)
@@ -73,11 +75,11 @@ public class EmailOracle {
     source = temp / "main.d"
     source.write_text('''import z8.runtime;
 import std.conv : to;
-import std.stdio : write;
+import std.file : write;
 void main(string[] args) {
     auto data = z8_binary_from_file(args[1]);
     scope(exit) z8_binary_close(data);
-    write(z8_email_message_text(data).to!string);
+    write(args[2], z8_email_message_text(data).to!string);
 }''', encoding="utf-8")
     executable = temp / ("email.exe" if os.name == "nt" else "email")
     subprocess.run(["dmd", *import_args(), str(source), str(runtime), "-of=" + str(executable)], check=True)
@@ -85,6 +87,8 @@ void main(string[] args) {
         message = temp / (str(index) + ".eml")
         message.write_bytes(contents)
         expected = subprocess.check_output([str(java_runtime), "-cp", classpath, "EmailOracle", str(message)]).decode("utf-8").replace("\r\n", "\n")
-        actual = subprocess.check_output([str(executable), str(message)]).decode("utf-8").replace("\r\n", "\n")
+        output = temp / "d-output.txt"
+        subprocess.run([str(executable), str(message), str(output)], check=True)
+        actual = output.read_bytes().decode("utf-8").replace("\r\n", "\n")
         assert actual == expected, (index, expected, actual)
 print("Email preview text matches the Java oracle")

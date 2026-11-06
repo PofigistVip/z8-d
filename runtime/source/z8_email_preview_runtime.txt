@@ -175,8 +175,15 @@ private wstring z8_email_part(string message, size_t depth) {
     auto text = z8_email_decode_words(z8_email_decode(decoded, z8_email_parameter(contentType, "charset")).to!string);
     if (mediaType == "text/html") {
         import std.string : strip, replace;
-        wchar[] plain; bool tag;
-        foreach (c; text) { if (c == '<') tag = true; else if (c == '>') tag = false; else if (!tag) plain ~= c; }
+        wchar[] plain;
+        for (size_t i; i < text.length; ++i) {
+            if (text[i] == '<') {
+                auto end = i + 1;
+                while (end < text.length && text[end] != '>' && text[end] != '\r' && text[end] != '\n') ++end;
+                if (end < text.length && text[end] == '>') { i = end; continue; }
+            }
+            plain ~= text[i];
+        }
         text = plain.idup.strip().idup;
         while (text.canFind("  "w)) text = text.replace("  "w, " "w);
         while (text.canFind("\r\n\r\n"w)) text = text.replace("\r\n\r\n"w, "\r\n"w);
