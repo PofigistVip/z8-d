@@ -132,14 +132,30 @@ public class NestedAttachment extends Table {
     virtual protected binary processContentRequest(string[string] parameters, file[] files) { return '78, 69, 83, 84'; }
 }
 ''', encoding="utf-8")
+    (source / "LeafQuery.bl").write_text('''
+import org.zenframework.z8.base.query.Query;
+import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.json.JsonArray;
+import org.zenframework.z8.base.application.Application;
+public class LeafQuery extends Query {
+    public StringField title; columns = {title};
+    NestedAttachment innerTable; [name "TableLink"] Link tableLink = innerTable;
+    virtual protected void beforeRead() { if (title.get() == "context") Application.info("leaf context"); }
+    virtual protected JsonArray getData(string[string] parameters) { return JsonArray.parse("[{title:'leaf'}]"); }
+    virtual protected binary processContentRequest(string[string] parameters, file[] files) { return '76, 69, 65, 70'; }
+}
+''', encoding="utf-8")
     (source / "MemoryQuery.bl").write_text('''
 import org.zenframework.z8.base.query.Query;
 import org.zenframework.z8.base.table.value.GuidField;
 import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.table.value.Link;
 import org.zenframework.z8.base.json.JsonArray;
 import org.zenframework.z8.base.application.Application;
 [request] public class MemoryQuery extends Query {
     GuidField recordId; StringField title;
+    LeafQuery leaf; [name "LeafLink"] Link leafLink = leaf;
     controls = {title}; columns = {recordId, title}; readOnly = true;
     virtual protected void beforeRead() { Application.info("before data"); }
     virtual protected void afterRead() { Application.info("after data"); }
@@ -220,7 +236,7 @@ __gshared string databaseInfo;
 
 class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
     Z8ApplicationSession authorize(Z8HttpRequest request, wstring id, wstring server) {
-        if (server != "test"w || (id != "full"w && id != "full2"w && id != "limited"w && id != "denied"w && id != "field-denied"w && id != "relation-denied"w && id != "target-denied"w && id != "query-denied"w)) return null;
+        if (server != "test"w || (id != "full"w && id != "full2"w && id != "limited"w && id != "denied"w && id != "field-denied"w && id != "relation-denied"w && id != "target-denied"w && id != "query-denied"w && id != "leaf-denied"w && id != "leaf-link-denied"w)) return null;
         auto user = new Z8UserData(); user.id = z8_guid_create(id == "full"w || id == "full2"w ? 2 : 3);
         user.builtinAdministrator = id == "full"w || id == "full2"w;
         user.login = "Alice"w; user.firstName = "Alice"w; user.email = "old@example.org"w; user.settings = "{}"w; user.changePassword = true;
@@ -249,6 +265,8 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
         }
         if (id == "target-denied"w) user.privileges.setTableAccess(z8_guid_create_name("NestedAttachment"w), Z8Access.init);
         if (id == "query-denied"w) user.privileges.setTableAccess(z8_guid_create_name("MemoryQuery"w), Z8Access.init);
+        if (id == "leaf-denied"w) user.privileges.setTableAccess(z8_guid_create_name("LeafQuery"w), Z8Access.init);
+        if (id == "leaf-link-denied"w) user.privileges.setFieldAccess(z8_guid_create_name("LeafQuery.TableLink"w), Z8Access.init);
         return new Z8ApplicationSession(id, user, user);
     }
     Z8ApplicationSession login(Z8HttpRequest request, wstring login, wstring password) {
@@ -445,6 +463,26 @@ void main(string[] args) {
                     for session in ("query-denied", "relation-denied"):
                         result = request(session=session, action=action, fields='["embedded.title"]', **target)
                         assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            for target in ({"link": "embedded.leafLink", "query": "missing"}, {"query": "embedded.leaf"}):
+                result = request(action="meta", fields='["embedded.leaf.title"]', **target)
+                assert result["success"] and any(field["name"] == "embedded.leaf.title" for field in result["fields"]), result
+                result = request(action="read", fields='["embedded.leaf.title"]', **target)
+                assert result["success"] and result["data"][0]["title"] == "leaf", result
+                result = request(action="read", fields='["embedded.leaf.title"]', values='{"embedded.leaf.title":"context"}', **target)
+                assert result["success"] and any(message["text"] == "leaf context" for message in result["info"]["messages"]), result
+                for session in ("query-denied", "leaf-denied", "relation-denied"):
+                    result = request(session=session, action="read", fields='["embedded.leaf.title"]', **target)
+                    assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            for session in ("query-denied", "leaf-denied", "relation-denied"):
+                result = request(session=session, values='{"embedded.leaf.title":"context"}')
+                assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            for target in ({"link": "embedded.leaf.tableLink"}, {"query": "embedded.leaf.innerTable"}):
+                result = request(action="read", fields='["embedded.leaf.innerTable.title"]',
+                                 recordId="00000000-0000-0000-0000-000000000088", **target)
+                assert result["success"] and len(result["data"]) == 1, result
+                for session in ("query-denied", "leaf-denied", "leaf-link-denied", "target-denied"):
+                    result = request(session=session, action="read", fields='["embedded.leaf.innerTable.title"]', **target)
+                    assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(action=None)
             assert result["success"] and result["isQuery"] and len(result["data"]) == 2, result
             # A Z8 form sends its FileField value as a JSON array in the
@@ -515,6 +553,12 @@ void main(string[] args) {
                     kwargs = {"name": "inspect", "records": one} if action == "action" else {"id": "exported"} if action == "report" else {}
                     result = request(session="query-denied", action=action, **target, **kwargs)
                     assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            for target in ({"link": "embedded.leafLink"}, {"query": "embedded.leaf"}):
+                result = request(action="action", name="inspect", records=one, **target)
+                assert result["success"] and result["info"]["messages"][0]["text"] == "embedded.leaf", result
+                for session in ("query-denied", "leaf-denied", "relation-denied"):
+                    result = request(session=session, action="action", name="inspect", records=one, **target)
+                    assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             for action in ("action", "content"):
                 kwargs = {"name": "inspect", "records": one} if action == "action" else {}
                 for target in ({"link": "nestedLink"}, {"query": "nested"}, {"link": "otherJoin"}):
@@ -554,6 +598,13 @@ void main(string[] args) {
                 conn.request("GET", "/request.json?" + urlencode(dict(request="Sample", session="full", server="test", action="content", link="memoryLink")))
                 response = conn.getresponse()
                 assert response.status == 200 and response.read() == b"MEM"
+            finally:
+                conn.close()
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            try:
+                conn.request("GET", "/request.json?" + urlencode(dict(request="Sample", session="full", server="test", action="content", link="embedded.leafLink")))
+                response = conn.getresponse()
+                assert response.status == 200 and response.read() == b"LEAF"
             finally:
                 conn.close()
             result = request(action="content", empty="true")

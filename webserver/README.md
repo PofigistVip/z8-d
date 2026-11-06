@@ -84,6 +84,8 @@ update, destroy, attach, detach and export requests can select a nested table.
 The target is selected using `query` or a `Link`/`Join` field in `link`; the root request, containing
 tables, their connecting relations and the selected table are checked. As in the
 original action factory, a nonempty `link` takes precedence over `query`.
+For reads and metadata, paths and context values can also cross intermediate
+non-table queries; access is checked at each level.
 Commands, reports and content requests also accept nested query targets,
 including `Link` and `Join`; access to the containing query, relation and target
 query is checked before executing BL code. Reports are resolved from the request

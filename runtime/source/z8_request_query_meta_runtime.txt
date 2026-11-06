@@ -26,7 +26,7 @@ private void z8_application_dispatch_query_meta_target(wstring className, Z8Obje
     query = z8_application_action_query(context, privileges, params.z8_get("query"w), params.z8_get("link"w), false);
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
     if (!privileges.getTableAccess(queryKey).read) throw new Exception("query metadata access denied");
-    z8_application_query_context_values(query, privileges, params, true, context);
+    z8_application_query_context_values(query, privileges, params, true, context, true);
     if (z8_query_user_events_enabled()) query.z8_query_virtual_onReadAction();
     z8_query_before_read(query);
     auto groups = z8_query_array(query, "groupBy"w);

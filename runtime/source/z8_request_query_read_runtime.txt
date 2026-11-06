@@ -129,7 +129,7 @@ private Z8Object z8_application_nested_query(Z8Object context, Z8Privileges priv
 // ActionFactory gives a nonempty link precedence over the query parameter.
 private Z8Object z8_application_action_query(Z8Object context, Z8Privileges privileges, wstring queryId, wstring linkId, bool tableOnly = true) {
     if (linkId is null || !linkId.length) return z8_application_nested_query(context, privileges, queryId, tableOnly);
-    auto link = z8_application_context_field(context, privileges, linkId);
+    auto link = z8_application_context_field(context, privileges, linkId, !tableOnly);
     if (!z8_native_is_instance(z8_link_name, link) && !z8_native_is_instance(z8_join_name, link))
         throw new Exception("query link access denied");
     auto target = z8_link_query(link);
@@ -154,19 +154,19 @@ private bool z8_application_query_field_readable(Z8Object root, Z8Object field, 
     }
     return check(field);
 }
-private Z8Object z8_application_context_field(Z8Object context, Z8Privileges privileges, wstring name) {
+private Z8Object z8_application_context_field(Z8Object context, Z8Privileges privileges, wstring name, bool allowNonTable = false) {
     auto field = z8_query_find_field_id(context, name);
     auto owner = z8_object_container(field);
     while (owner !is null && !z8_native_is_instance(z8_query_name, owner)) owner = z8_object_container(owner);
     if (owner is null) throw new Exception("query context field has no owner");
-    if (owner !is context && z8_application_nested_query(context, privileges, owner.z8_id()) !is owner)
+    if (owner !is context && z8_application_nested_query(context, privileges, owner.z8_id(), !allowNonTable) !is owner)
         throw new Exception("query context field is outside the request");
     auto ownerKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, owner);
     if (!privileges.getTableAccess(ownerKey).read || !z8_application_query_field_readable(owner, field, privileges))
         throw new Exception("query context field access denied");
     return field;
 }
-private Z8Object[] z8_application_query_context_values(Z8Object query, Z8Privileges privileges, Z8StringMap params, bool apply, Z8Object context = null) {
+private Z8Object[] z8_application_query_context_values(Z8Object query, Z8Privileges privileges, Z8StringMap params, bool apply, Z8Object context = null, bool allowNonTable = false) {
     Z8Object[] applied;
     auto contextValues = params.z8_get("values"w);
     if (contextValues is null || !contextValues.length) return applied;
@@ -176,7 +176,7 @@ private Z8Object[] z8_application_query_context_values(Z8Object query, Z8Privile
     if (parsed.type != JSONType.object) throw new Exception("query values must be an object");
     foreach (name, value; parsed.object) {
         auto field = context is null ? z8_query_find_field_id(query, name.to!wstring) :
-            z8_application_context_field(context, privileges, name.to!wstring);
+            z8_application_context_field(context, privileges, name.to!wstring, allowNonTable);
         if (context is null && !z8_application_query_field_readable(query, field, privileges)) throw new Exception("query context field access denied");
         if (z8_field_type_id(field) == "binary"w) continue;
         auto boxed = z8_application_query_parse_value(field, value);
@@ -324,7 +324,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
     if (!privileges.getTableAccess(queryKey).read) throw new Exception("query read access denied");
     if (!z8_native_is_instance(z8_table_name, query)) {
-        z8_application_query_context_values(query, privileges, params, true, context);
+        z8_application_query_context_values(query, privileges, params, true, context, true);
         if (z8_query_user_events_enabled()) query.z8_query_virtual_onReadAction();
         z8_query_before_read(query);
         auto selected = z8_application_query_fields(query, privileges, params);
@@ -341,7 +341,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     }
     auto key = z8_query_primary_key(query);
     if (key is null) throw new Exception("query has no primary key");
-    auto contextFields = z8_application_query_context_values(query, privileges, params, true, context);
+    auto contextFields = z8_application_query_context_values(query, privileges, params, true, context, true);
     if (z8_query_user_events_enabled()) query.z8_query_virtual_onReadAction();
     z8_query_before_read(query);
     auto groups = z8_query_array(query, "groupBy"w);
