@@ -86,6 +86,52 @@ private Z8Array!Z8File z8_attachment_remove(Z8Object self, Z8Guid id, Z8Array!Z8
     }
     z8_attachment_save(self, id, result); return result;
 }
+// The original AttachmentUtils creates a PDF preview and asks a PDF reader
+// for its page count. pdfinfo supplies the reader without a Java runtime.
+private long z8_attachment_pdf_page_count(Z8File source) {
+    import std.file : exists, mkdir, rmdirRecurse, tempDir;
+    import std.path : absolutePath, buildPath;
+    import std.process : execute, Config;
+    import std.string : splitLines, strip, startsWith;
+    import std.uuid : randomUUID;
+    source = z8_nonnull(source);
+    auto extension = z8_file_extension_instance(source);
+    if (!z8_optional_require(z8_file_converter_convertible(extension))) return 0;
+    source = z8_system_files_get_file(source);
+    auto input = z8_file_system_path(source);
+    string temporary;
+    bool ownsTemporary;
+    scope(exit) if (ownsTemporary && exists(temporary)) rmdirRecurse(temporary);
+    if (!z8_optional_require(z8_file_converter_pdf(extension))) {
+        temporary = buildPath(absolutePath(tempDir()), "z8-preview-" ~ randomUUID().toString());
+        mkdir(temporary);
+        ownsTemporary = true;
+        auto preview = z8_file_from_path(buildPath(temporary, "preview.pdf").to!wstring);
+        input = z8_file_system_path(z8_file_converter_files(source, preview, null));
+    }
+    auto configured = z8_server_config_value("pdf.info.executable"w);
+    auto executable = configured is null || !configured.length ? "pdfinfo" : configured.to!string;
+    enum size_t maxOutput = 1024 * 1024;
+    auto result = execute([executable, input], ["LC_ALL": "C", "LANG": "C"], Config.suppressConsole, maxOutput);
+    if (result.status != 0) return 0; // PdfReader likewise treats malformed PDFs as an I/O failure.
+    if (result.output.length >= maxOutput) throw new Exception("pdfinfo output exceeds limit");
+    foreach (line; result.output.splitLines()) {
+        if (!line.startsWith("Pages:")) continue;
+        auto count = line[6 .. $].strip().to!long;
+        if (count < 0 || count > int.max) throw new Exception("invalid PDF page count");
+        return count;
+    }
+    throw new Exception("pdfinfo did not report a page count");
+}
+private Z8Optional!long z8_attachment_total_page_count(Z8Object self, Z8Guid id) {
+    auto files = z8_attachment_read(self, id);
+    long count;
+    foreach (i; 0 .. files.z8_size()) {
+        count += z8_attachment_pdf_page_count(files.z8_get(i));
+        if (count > int.max) throw new Exception("attachment page count exceeds integer range");
+    }
+    return z8_optional_wrap(count);
+}
 shared static this() {
     z8_native_bind("org.zenframework.z8.server.base.table.value.FileField.m_getAttachmentProcessor"w, &z8_attachment_processor_new);
     z8_native_bind(z8_attachment_processor_name ~ ".m_parse"w, &z8_file_parse);
@@ -93,4 +139,5 @@ shared static this() {
     z8_native_bind(z8_attachment_processor_name ~ ".m_create"w, &z8_attachment_create);
     z8_native_bind(z8_attachment_processor_name ~ ".m_update"w, &z8_attachment_update);
     z8_native_bind(z8_attachment_processor_name ~ ".m_remove"w, &z8_attachment_remove);
+    z8_native_bind(z8_attachment_processor_name ~ ".m_getTotalPageCount"w, &z8_attachment_total_page_count);
 }

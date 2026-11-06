@@ -288,6 +288,8 @@ public class Probe {
     public static file[] attach(AttachmentSample value, guid id, file[] files) { return value.documents.getAttachmentProcessor().update(id, files); }
     public static file[] detach(AttachmentSample value, guid id, file[] files) { return value.documents.getAttachmentProcessor().remove(id, files); }
     public static file[] singleAttachments(AttachmentSample value, guid id) { return value.single.getAttachmentProcessor().read(id); }
+    public static int attachmentPages(AttachmentSample value, guid id) { return value.documents.getAttachmentProcessor().getTotalPageCount(id); }
+    public static int singlePages(AttachmentSample value, guid id) { return value.single.getAttachmentProcessor().getTotalPageCount(id); }
     public static void createSchedule(ScheduledJobs value, guid id, guid job) { value.job = job; value.create(id); }
     public static void createScheduleLog(ScheduledJobLogs value, guid id, guid schedule) { value.scheduledJob = schedule; value.errors = true; value.create(id); }
     public static void setScheduleCron(ScheduledJobs value, guid id, string cron) { value.cron = cron; value.update(id); }
@@ -875,6 +877,39 @@ void main(string[] args) {
     auto attachmentRecord = z8_guid_create(0x88a); P.m_createAttachmentRecord(attachmentTable, attachmentRecord);
     assert(P.m_attachments(attachmentTable, attachmentRecord).z8_size() == 0);
     assert(P.m_singleAttachments(attachmentTable, attachmentRecord).z8_size() == 0);
+    assert(z8_optional_require(P.m_attachmentPages(attachmentTable, attachmentRecord)) == 0);
+    assert(z8_optional_require(P.m_singlePages(attachmentTable, attachmentRecord)) == 0);
+    auto unsupportedFile = z8_file_from_upload("ignored.unknown"w, [cast(ubyte)1]);
+    auto unsupportedFiles = new Z8Array!Z8File(); unsupportedFiles.z8_add(unsupportedFile);
+    db.beginTransaction(); P.m_attach(attachmentTable, attachmentRecord, unsupportedFiles); db.commit();
+    assert(z8_optional_require(P.m_attachmentPages(attachmentTable, attachmentRecord)) == 0);
+    db.beginTransaction(); P.m_detach(attachmentTable, attachmentRecord, unsupportedFiles); db.commit();
+    auto pdfInfo = environment.get("Z8_TEST_PDFINFO", "");
+    if (pdfInfo.length) {
+        import std.file : read;
+        wstring[wstring] properties = ["pdf.info.executable"w: pdfInfo.to!wstring];
+        auto office = environment.get("Z8_TEST_OFFICE_HOME", "");
+        if (office.length) properties["office.home"w] = office.to!wstring;
+        z8_server_config_replace(properties);
+        auto pdf = z8_file_from_upload("two-pages.pdf"w, cast(ubyte[])read(environment.get("Z8_TEST_PDF")));
+        auto files = new Z8Array!Z8File(); files.z8_add(pdf);
+        db.beginTransaction(); P.m_attach(attachmentTable, attachmentRecord, files); db.commit();
+        assert(z8_optional_require(P.m_attachmentPages(attachmentTable, attachmentRecord)) == 2);
+        auto invalidPdf = z8_file_from_upload("invalid.pdf"w, cast(ubyte[])"not a PDF".dup);
+        auto invalidFiles = new Z8Array!Z8File(); invalidFiles.z8_add(invalidPdf);
+        db.beginTransaction(); P.m_attach(attachmentTable, attachmentRecord, invalidFiles); db.commit();
+        assert(z8_optional_require(P.m_attachmentPages(attachmentTable, attachmentRecord)) == 2);
+        db.beginTransaction(); P.m_detach(attachmentTable, attachmentRecord, invalidFiles); db.commit();
+        if (office.length) {
+            auto text = z8_file_from_upload("preview.txt"w, cast(ubyte[])"Hello preview".dup);
+            auto more = new Z8Array!Z8File(); more.z8_add(text);
+            db.beginTransaction(); P.m_attach(attachmentTable, attachmentRecord, more); db.commit();
+            assert(z8_optional_require(P.m_attachmentPages(attachmentTable, attachmentRecord)) == 3);
+            db.beginTransaction(); P.m_detach(attachmentTable, attachmentRecord, more); db.commit();
+        }
+        db.beginTransaction(); P.m_detach(attachmentTable, attachmentRecord, files); db.commit();
+        z8_server_config_replace(null);
+    }
     auto document = z8_file_from_upload("тест.txt"w, [cast(ubyte)0x44, 0x55]);
     auto documents = new Z8Array!Z8File(); documents.z8_add(document);
     db.beginTransaction(); auto attached = P.m_attach(attachmentTable, attachmentRecord, documents); db.commit();
@@ -2305,6 +2340,23 @@ void main(string[] args) {
     subprocess.run([*command, "-of=" + str(exe)], cwd=temp, check=True)
     with temporary_postgres(bin_dir) as (connection, environment):
         environment["Z8_SCHEDULER_TEST_DIR"] = str(temp / "scheduler-logs")
+        if environment.get("Z8_TEST_PDFINFO"):
+            # Minimal two-page PDF with an explicit xref table for pdfinfo.
+            objects = [b"<< /Type /Catalog /Pages 2 0 R >>",
+                       b"<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] >>",
+                       b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>",
+                       b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>"]
+            pdf, offsets = bytearray(b"%PDF-1.4\n"), []
+            for number, obj in enumerate(objects, 1):
+                offsets.append(len(pdf))
+                pdf.extend(f"{number} 0 obj\n".encode() + obj + b"\nendobj\n")
+            xref = len(pdf)
+            pdf.extend(f"xref\n0 {len(objects)+1}\n0000000000 65535 f \n".encode())
+            for offset in offsets: pdf.extend(f"{offset:010d} 00000 n \n".encode())
+            pdf.extend(f"trailer\n<< /Size {len(objects)+1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
+            pdf_path = temp / "two pages.pdf"
+            pdf_path.write_bytes(pdf)
+            environment["Z8_TEST_PDF"] = str(pdf_path)
         result = subprocess.run([str(exe), connection], env=environment, cwd=temp, capture_output=True, text=True,
                                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
         if result.returncode:
