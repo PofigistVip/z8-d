@@ -54,6 +54,13 @@ void main() {
     auto custom = new Z8Fts(); custom.configuration = "a'b"w;
     auto escaped = z8_sql_string_ftsLike(z8_sql_string_const("text"w), z8_sql_string_const("word"w), custom);
     assert(z8_sql_bool_format(escaped) == "plainto_tsquery('a''b', 'word') @@ to_tsvector('a''b', 'text')"w);
+    auto json = z8_sql_json_build_object(["na'me"w, "count"w],
+        [cast(Z8SqlPrimary)z8_sql_string_const("Ada"w), z8_sql_int_const(3)]);
+    assert(z8_sql_string_format(json) == "json_strip_nulls(json_build_object('na''me', 'Ada', 'count', 3))"w);
+    assert(z8_sql_string_format(json, Z8SqlVendor.Oracle) == "JSON_OBJECT(KEY 'na''me' VALUE N'Ada', KEY 'count' VALUE 3)"w);
+    auto emptyJson = z8_sql_json_build_object(null, null);
+    assert(z8_sql_string_format(emptyJson) == "'{}'::json"w);
+    assert(z8_sql_string_format(emptyJson, Z8SqlVendor.SqlServer) == "'{}'"w);
 }
 ''', encoding="utf-8")
     executable = temp / ("sql-string.exe" if os.name == "nt" else "sql-string")

@@ -27,6 +27,7 @@ Z8Object[] z8_sql_collect_fields(Z8SqlPrimary expression) {
             visit(value.textOperand); visit(value.textQuery); visit(value.geometryLeft); visit(value.geometryRight);
         } else if (auto value = cast(Z8SqlString)token) {
             add(value.field); visit(value.left); visit(value.right); visit(value.replacement); visit(value.flags);
+            foreach (item; value.jsonValues) visit(item);
             visit(value.position); visit(value.length); visit(value.condition); visit(value.numericOperand);
             visit(value.guidOperand); visit(value.dateOperand); visit(value.spanOperand); visit(value.binaryOperand); visit(value.geometryOperand);
         } else if (auto value = cast(Z8SqlGuid)token) {

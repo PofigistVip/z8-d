@@ -1,4 +1,4 @@
-enum Z8SqlStringKind { constant, field, textField, group, concat, lower, upper, trimLeft, trimRight, choose, replace, regReplace, substring, reverse, padLeft, padRight, quote, jsonString, jsonInt, fromBool, fromNumeric, fromGuid, fromDate, fromDatespan, fromBinary, fromGeometry, geometryFunction }
+enum Z8SqlStringKind { constant, field, textField, group, concat, lower, upper, trimLeft, trimRight, choose, replace, regReplace, substring, reverse, padLeft, padRight, quote, jsonString, jsonInt, jsonObject, fromBool, fromNumeric, fromGuid, fromDate, fromDatespan, fromBinary, fromGeometry, geometryFunction }
 class Z8SqlString : Z8SqlPrimary {
     Z8SqlStringKind kind;
     Z8Object field;
@@ -14,6 +14,8 @@ class Z8SqlString : Z8SqlPrimary {
     Z8SqlBinary binaryOperand;
     Z8SqlGeometry geometryOperand;
     wstring geometryFunction;
+    wstring[] jsonNames;
+    Z8SqlPrimary[] jsonValues;
     this(Z8SqlStringKind kind, wstring constant = null, Z8SqlString left = null,
          Z8SqlString right = null, Z8SqlBool condition = null) {
         this.kind = kind; this.constant = constant; this.left = left; this.right = right; this.condition = condition;
@@ -85,6 +87,11 @@ Z8SqlString z8_sql_geometry_toString(Z8SqlGeometry value) {
 }
 Z8SqlString z8_sql_string_quote(Z8SqlString value) { return new Z8SqlString(Z8SqlStringKind.quote, null, z8_nonnull(value)); }
 Z8SqlString z8_sql_string_jsonString(Z8SqlString value, Z8SqlString key) { return new Z8SqlString(Z8SqlStringKind.jsonString, null, z8_nonnull(value), key); }
+Z8SqlString z8_sql_json_build_object(wstring[] names, Z8SqlPrimary[] values) {
+    if (names.length != values.length) throw new Exception("JSON SQL property count mismatch");
+    auto result = new Z8SqlString(Z8SqlStringKind.jsonObject);
+    result.jsonNames = names.dup; result.jsonValues = values.dup; return result;
+}
 Z8SqlString z8_sql_string_jsonInt(Z8SqlString value, Z8SqlInt index) {
     auto result = new Z8SqlString(Z8SqlStringKind.jsonInt, null, z8_nonnull(value));
     result.position = index; return result;
@@ -228,6 +235,27 @@ private wstring z8_sql_to_string_format(wstring value, bool numeric, Z8SqlVendor
 wstring z8_sql_string_format(Z8SqlString value, Z8SqlVendor vendor = Z8SqlVendor.Postgres, bool logical = false) {
     z8_nonnull(value);
     final switch (value.kind) {
+        case Z8SqlStringKind.jsonObject:
+            import std.string : replace;
+            if (!value.jsonNames.length) {
+                if (vendor == Z8SqlVendor.Postgres) return "'{}'::json"w;
+                if (vendor == Z8SqlVendor.SqlServer) return "'{}'"w;
+                return "JSON_OBJECT()"w;
+            }
+            wstring result;
+            if (vendor == Z8SqlVendor.Postgres) result = "json_strip_nulls(json_build_object("w;
+            else if (vendor == Z8SqlVendor.SqlServer) result = "( SELECT "w;
+            else result = "JSON_OBJECT("w;
+            foreach (i, name; value.jsonNames) {
+                if (i) result ~= ", "w;
+                auto expression = z8_sql_functions_format(z8_nonnull(value.jsonValues[i]), vendor);
+                if (vendor == Z8SqlVendor.SqlServer) result ~= expression ~ " AS ["w ~ z8_string_required(name).replace("]"w, "]]"w) ~ "]"w;
+                else {
+                    auto quoted = "'"w ~ z8_string_required(name).replace("'"w, "''"w) ~ "'"w;
+                    result ~= vendor == Z8SqlVendor.Postgres ? quoted ~ ", "w ~ expression : "KEY "w ~ quoted ~ " VALUE "w ~ expression;
+                }
+            }
+            return result ~ (vendor == Z8SqlVendor.Postgres ? "))"w : vendor == Z8SqlVendor.SqlServer ? " FOR JSON PATH, WITHOUT_ARRAY_WRAPPER )"w : ")"w);
         case Z8SqlStringKind.field: return z8_field_sql_format(value.field, vendor);
         case Z8SqlStringKind.textField:
             auto field = z8_field_sql_format(value.field, vendor);
