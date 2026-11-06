@@ -46,7 +46,7 @@ import org.zenframework.z8.base.application.Application;
     [name "Duration"] public DatespanField duration;
     [name "Details"] public TextField details;
     [name "Blob"] public BinaryField blob;
-    public IntExpression computed;
+    public IntExpression computed; computed = amount + 1;
     public string actionEvents = "";
     public string getActionEvents() { return actionEvents; }
     virtual protected void onCopyAction(guid id) { actionEvents = "C"; }
@@ -736,6 +736,22 @@ void main(string[] args) {
     assert(arrayJson["data"].array.length == 1 && arrayJson["data"][0]["amount"].integer == 0, arrayJson.toString());
     auto titles = parseJSON(arrayJson["data"][0]["title"].str).array;
     assert(titles.length == 2 && titles[0].str == "Second" && titles[1].str == "Visible");
+    auto computedRequest = new Z8ApplicationRequest(); computedRequest.session = querySession; computedRequest.monitor = new Z8RequestMonitor();
+    computedRequest.parameters.z8_add("action"w, "read"w); computedRequest.parameters.z8_add("session"w, "with-group"w);
+    computedRequest.parameters.z8_add("fields"w, `["flag","computed"]`w);
+    z8_application_set_request(computedRequest); z8_application_start_response(computedRequest, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+    z8_application_finish_response(computedRequest, cast(Z8RequestMonitor)computedRequest.monitor);
+    auto computedJson = parseJSON(z8_application_response_text(computedRequest).to!string);
+    assert(computedJson["data"].array.length == 1 && computedJson["data"][0]["computed"].integer == 54, computedJson.toString());
+    queryUser.privileges.setFieldAccess(amountKey, Z8Access.init);
+    computedRequest = new Z8ApplicationRequest(); computedRequest.session = querySession; computedRequest.monitor = new Z8RequestMonitor();
+    computedRequest.parameters.z8_add("action"w, "read"w); computedRequest.parameters.z8_add("session"w, "with-group"w);
+    computedRequest.parameters.z8_add("fields"w, `["flag","computed"]`w);
+    z8_application_set_request(computedRequest); z8_application_start_response(computedRequest, "Sample"w); z8_application_dispatch_query_read("Sample"w);
+    z8_application_finish_response(computedRequest, cast(Z8RequestMonitor)computedRequest.monitor);
+    computedJson = parseJSON(z8_application_response_text(computedRequest).to!string);
+    assert("computed" !in computedJson["data"][0].object);
+    queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
     queryUser.privileges.setFieldAccess(z8_guid_create_name("Sample;--.Flag"w), Z8Access.init);
     bool groupDenied;
     try { groupedRead(`{"property":"amount","operator":"ge","value":"50"}`w); } catch (Exception) { groupDenied = true; }

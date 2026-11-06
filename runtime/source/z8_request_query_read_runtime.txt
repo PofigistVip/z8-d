@@ -242,10 +242,6 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         foreach (existing; selected) if (existing is field) { exists = true; break; }
         if (!exists) selected ~= field;
     }
-    if (groups.length) foreach (field; selected) {
-        if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
-            throw new Exception("computed fields in grouped results are not supported");
-    }
     void verifyGroups() {
         auto actual = z8_query_array(query, "groupBy"w);
         if (actual.length != groups.length) throw new Exception("changing query groups during beforeRead is not supported");
