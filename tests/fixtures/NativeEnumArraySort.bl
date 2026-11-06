@@ -6,6 +6,7 @@ import org.zenframework.z8.base.table.value.FieldType;
 import org.zenframework.z8.base.table.value.JoinType;
 import org.zenframework.z8.ie.ImportPolicy;
 import org.zenframework.z8.lang.encoding;
+import org.zenframework.z8.base.fts.FtsQueryType;
 
 public class NativeEnumArraySort {
     public static int run() {
@@ -48,6 +49,24 @@ public class NativeEnumArraySort {
         encoding[] singleEncoding = {null};
         singleEncoding.sort();
         if (singleEncoding.size() != 1 || singleEncoding[0] != null) return 12;
+        FtsQueryType[] types = {FtsQueryType.Phrase, FtsQueryType.Query, FtsQueryType.Plain};
+        FtsQueryType[] aliasTypes = types.sort();
+        if (types[0] != FtsQueryType.Query || types[1] != FtsQueryType.Plain || types[2] != FtsQueryType.Phrase) return 13;
+        aliasTypes.set(0, FtsQueryType.Phrase);
+        if (types[0] != FtsQueryType.Phrase) return 14;
+        FtsQueryType[][] matrix = {types};
+        if (matrix[0][1] != FtsQueryType.Plain) return 15;
+        FtsQueryType[] nullTypes = {FtsQueryType.Query, null};
+        try { nullTypes.sort(); return 16; } catch (exception expected) {}
+        FtsQueryType[][][] cube = {matrix};
+        if (cube[0][0][2] != FtsQueryType.Phrase) return 17;
+        FtsQueryType[string] typeMap = {("query", FtsQueryType.Query), ("phrase", FtsQueryType.Phrase)};
+        if (typeMap["query"] != FtsQueryType.Query || typeMap.values().size() != 2) return 18;
+        FtsQueryType[][string] arraysByName = {("types", types)};
+        if (arraysByName["types"][1] != FtsQueryType.Plain) return 19;
+        int count = 0;
+        for (FtsQueryType type : types) if (type == FtsQueryType.Phrase) count += 1;
+        if (count != 2) return 20;
         return 0;
     }
 }

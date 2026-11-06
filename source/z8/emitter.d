@@ -118,6 +118,8 @@ private string dType(ValueType type, Program objectClass = null, Program[] keyOb
         case ValueType.exceptionMatrix: return "Z8Array!(Z8Array!Throwable)";
         case ValueType.encodingArray: return "Z8Array!Z8Encoding";
         case ValueType.encodingMatrix: return "Z8Array!(Z8Array!Z8Encoding)";
+        case ValueType.ftsQueryArray: return "Z8Array!Z8FtsQueryType";
+        case ValueType.ftsQueryMatrix: return "Z8Array!(Z8Array!Z8FtsQueryType)";
         case ValueType.nullType: assert(0, "null has no concrete D type");
         case ValueType.nullableString: return "wstring";
         case ValueType.enumType: assert(objectClass !is null); return objectClass.emittedName;
@@ -513,6 +515,8 @@ private string emitExprRaw(Expression e) {
             if (isArray(e.inferredType)) {
                 if (e.inferredType == ValueType.encodingArray && e.token.text == "sort")
                     return "z8_encoding_array_sort(" ~ emitExpr(e.left) ~ ")";
+                if (e.inferredType == ValueType.ftsQueryArray && e.token.text == "sort")
+                    return "z8_fts_query_array_sort(" ~ emitExpr(e.left) ~ ")";
                 if (e.inferredType == ValueType.enumArray && e.token.text == "sort") {
                     auto enumClass = e.objectClass;
                     string[] values, order;

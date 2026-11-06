@@ -120,6 +120,9 @@ __gshared Z8FtsQueryType z8_fts_query_Query, z8_fts_query_Plain, z8_fts_query_Ph
 shared static this() {
     z8_fts_query_Query = new Z8FtsQueryType(0); z8_fts_query_Plain = new Z8FtsQueryType(1); z8_fts_query_Phrase = new Z8FtsQueryType(2);
 }
+Z8Array!Z8FtsQueryType z8_fts_query_array_sort(Z8Array!Z8FtsQueryType array) {
+    return z8_enum_array_sort(array, [z8_fts_query_Query, z8_fts_query_Plain, z8_fts_query_Phrase]);
+}
 class Z8Fts {
     wstring configuration;
     Z8FtsQueryType queryType;
