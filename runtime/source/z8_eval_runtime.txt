@@ -25,7 +25,11 @@ private Z8Object z8_eval_set_json(Z8Object self, wstring name, Z8Object value) {
     if (!z8_native_is_instance(z8_json_object_name, value) && !z8_native_is_instance(z8_json_array_name, value))
         throw new Exception("invalid Eval JSON value");
     if ((name in state.variables) is null) state.order.add(name);
-    state.variables[name] = Z8EvalVariable(null, value); return self;
+    // Java stores the underlying JSON collection, so replacing the wrapper's
+    // collection later must not replace the value held in the Eval context.
+    Object jsonState = z8_native_is_instance(z8_json_object_name, value) ?
+        cast(Object)z8_json_object_state(value) : cast(Object)z8_json_array_state(value);
+    state.variables[name] = Z8EvalVariable(null, z8_json_wrap_state(jsonState)); return self;
 }
 private Z8Object z8_eval_clear(Z8Object self) {
     auto state = z8_eval_state(self); state.variables.clear(); state.order.clear(); state.errors = null; return self;
@@ -88,11 +92,86 @@ private Z8EvalValue z8_eval_atom(Z8EvalState state, wstring source) {
 }
 private wstring z8_eval_expression_repr(Z8EvalValue value) {
     if (!value.evaluated) return value.expression;
+    if (value.json !is null) {
+        import std.string : replace;
+        return "\""w ~ z8_eval_value_text(value).replace("\""w, "\\\""w) ~ "\""w;
+    }
     if (value.primary !is null && value.primary.kind == Z8PrimaryKind.text) {
         import std.string : replace;
         return "\""w ~ z8_string_required(value.primary.textValue).replace("\""w, "\\\""w) ~ "\""w;
     }
     return z8_eval_value_text(value);
+}
+private Z8EvalValue z8_eval_json_scalar(JSONValue value, Z8Decimal* exact = null) {
+    Z8Primary result;
+    if (exact !is null) result = z8_primary_box(*exact);
+    else final switch (value.type) {
+        case JSONType.null_: break;
+        case JSONType.true_: case JSONType.false_: result = z8_primary_box(value.type == JSONType.true_); break;
+        case JSONType.integer: result = z8_primary_box(value.integer); break;
+        case JSONType.uinteger: result = z8_primary_box(cast(long)value.uinteger); break;
+        case JSONType.float_: result = z8_primary_box(z8_decimal_parse(z8_json_value_text(value))); break;
+        case JSONType.string: result = z8_primary_box(z8_string_new(z8_json_value_text(value))); break;
+        case JSONType.object: case JSONType.array: throw new Exception("nested JSON value expected");
+    }
+    return Z8EvalValue(true, result, null, null);
+}
+private Z8EvalValue z8_eval_json_property(Z8Object object, wstring name) {
+    auto state = z8_json_object_state(object);
+    auto value = z8_json_object_get(object, name);
+    if (value.type == JSONType.object || value.type == JSONType.array)
+        return Z8EvalValue(true, null, value.type == JSONType.object ?
+            z8_json_object_get_object(object, name) : z8_json_object_get_array(object, name), null);
+    return z8_eval_json_scalar(value, name.to!string in state.decimals);
+}
+private Z8EvalValue z8_eval_property(Z8EvalValue object, wstring name) {
+    if (!object.evaluated)
+        return Z8EvalValue(false, null, null, z8_eval_expression_repr(object) ~ "."w ~ name);
+    if (object.json is null || !z8_native_is_instance(z8_json_object_name, object.json))
+        throw new Exception("unsupported Eval property");
+    return z8_eval_json_property(object.json, name);
+}
+private Z8EvalValue z8_eval_item(Z8EvalState state, Z8EvalValue object, Z8EvalValue index) {
+    if (!object.evaluated || !index.evaluated)
+        return Z8EvalValue(false, null, null, z8_eval_expression_repr(object) ~ "["w ~ z8_eval_expression_repr(index) ~ "]"w);
+    if ((object.primary is null && object.json is null) || (index.primary is null && index.json is null)) return object;
+    auto key = index.primary;
+    if (key !is null && key.kind == Z8PrimaryKind.text && object.json !is null &&
+        z8_native_is_instance(z8_json_object_name, object.json))
+        return z8_eval_json_property(object.json, key.textValue);
+    long number;
+    if (key !is null && (key.kind == Z8PrimaryKind.integer || key.kind == Z8PrimaryKind.decimal)) {
+        if (key.kind == Z8PrimaryKind.integer) number = key.integerValue;
+        else {
+            import std.math : floor, isNaN;
+            auto realNumber = key.decimalValue.z8_as_double();
+            number = isNaN(realNumber) ? 0 : realNumber >= long.max ? long.max :
+                realNumber <= long.min ? long.min : cast(long)floor(realNumber + 0.5);
+        }
+        if (object.json !is null && z8_native_is_instance(z8_json_array_name, object.json)) {
+            auto array = z8_json_array_state(object.json);
+            auto itemIndex = z8_optional_wrap(number);
+            auto position = z8_json_array_position(array, itemIndex);
+            auto value = array.value.array[position];
+            if (value.type == JSONType.object || value.type == JSONType.array)
+                return Z8EvalValue(true, null, value.type == JSONType.object ?
+                    z8_json_array_get_object(object.json, itemIndex) : z8_json_array_get_array(object.json, itemIndex), null);
+            return z8_eval_json_scalar(value, position in array.decimals);
+        }
+    } else if (key is null || key.kind != Z8PrimaryKind.text) throw new Exception("invalid Eval index");
+    wstring className;
+    if (object.json !is null) className = z8_native_is_instance(z8_json_object_name, object.json) ?
+        "org.zenframework.z8.server.json.parser.JsonObject"w : "org.zenframework.z8.server.json.parser.JsonArray"w;
+    else if (object.primary !is null) {
+        auto kind = object.primary.kind;
+        className = "org.zenframework.z8.server.types."w ~
+            (kind == Z8PrimaryKind.text ? "string"w : kind == Z8PrimaryKind.integer ? "integer"w :
+             kind == Z8PrimaryKind.decimal ? "decimal"w : kind == Z8PrimaryKind.boolean ? "bool"w : "primary"w);
+    }
+    auto shownIndex = key.kind == Z8PrimaryKind.text ? "\""w ~ key.textValue ~ "\""w :
+        (cast(int)number).to!wstring;
+    state.errors ~= "Illegal operator "w ~ className ~ "["w ~ shownIndex ~ "]"w;
+    return Z8EvalValue(true, null, null, null);
 }
 private Z8EvalValue z8_eval_unary(wstring op, Z8EvalValue value) {
     if (!value.evaluated) return Z8EvalValue(false, null, null, op ~ z8_eval_expression_repr(value));
@@ -203,11 +282,30 @@ private class Z8EvalParser {
         } else throw new Exception("unsupported Eval expression");
         return evaluating ? z8_eval_atom(state, text[start .. position]) : Z8EvalValue.init;
     }
+    Z8EvalValue postfix() {
+        import std.uni : isAlpha, isNumber;
+        auto value = primary();
+        for (;;) {
+            if (take("."w)) {
+                whitespace(); auto start = position;
+                if (position == text.length || !(isAlpha(text[position]) || text[position] == '_'))
+                    throw new Exception("missing Eval property name");
+                ++position;
+                while (position < text.length && (isAlpha(text[position]) || isNumber(text[position]) || text[position] == '_')) ++position;
+                if (evaluating) value = z8_eval_property(value, text[start .. position]);
+            } else if (take("["w)) {
+                auto index = conditional();
+                if (!take("]"w)) throw new Exception("unclosed Eval index");
+                if (evaluating) value = z8_eval_item(state, value, index);
+            } else break;
+        }
+        return value;
+    }
     Z8EvalValue unary() {
         if (take("!"w)) { auto value = unary(); return evaluating ? z8_eval_unary("!"w, value) : Z8EvalValue.init; }
         if (take("+"w)) { auto value = unary(); return evaluating ? z8_eval_unary("+"w, value) : Z8EvalValue.init; }
         if (take("-"w)) { auto value = unary(); return evaluating ? z8_eval_unary("-"w, value) : Z8EvalValue.init; }
-        return primary();
+        return postfix();
     }
     Z8EvalValue binary(int minimum) {
         auto left = unary();
