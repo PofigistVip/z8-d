@@ -115,16 +115,39 @@ string[] z8_postgres_plan_add_indexes(wstring schema, Z8Object table, Z8Postgres
 
 // These PostgreSQL conversions preserve all existing values. More complex
 // conversions still require an explicit migration rather than an implicit cast.
-private bool safeWidening(Z8SchemaDifference difference) {
+private bool characterStorage(string type) {
     import std.algorithm.searching : startsWith;
+    if (type == "text" || type == "character varying") return true;
+    enum prefix = "character varying(";
+    if (!type.startsWith(prefix) || type.length <= prefix.length + 1 || type[$ - 1] != ')') return false;
+    foreach (ch; type[prefix.length .. $ - 1]) if (ch < '0' || ch > '9') return false;
+    return true;
+}
+private bool safeWidening(Z8SchemaDifference difference) {
     if (difference.kind != Z8SchemaDifferenceKind.columnType) return false;
     if (difference.expected == "bigint" && (difference.actual == "integer" || difference.actual == "smallint")) return true;
-    if (difference.expected != "character varying") return false;
-    if (difference.actual == "text") return true;
-    enum prefix = "character varying(";
-    if (!difference.actual.startsWith(prefix) || difference.actual.length <= prefix.length + 1 || difference.actual[$ - 1] != ')') return false;
-    foreach (ch; difference.actual[prefix.length .. $ - 1]) if (ch < '0' || ch > '9') return false;
-    return true;
+    return difference.expected == "character varying" && characterStorage(difference.actual);
+}
+// Original Z8 converts character data and byte-backed TextField values as
+// UTF-8 when the BL field type changes. PostgreSQL rejects invalid input.
+private string textConversion(wstring schema, wstring tableName, Z8Object table, Z8SchemaDifference difference) {
+    if (difference.kind != Z8SchemaDifferenceKind.columnType) return null;
+    foreach (field; z8_query_declared_fields(table, true)) {
+        auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, field);
+        if (name.to!string != difference.column) continue;
+        auto kind = z8_field_type_id(field);
+        auto column = quoteIdentifier(name);
+        string expression;
+        if (kind == "text"w && difference.expected == "bytea" && characterStorage(difference.actual))
+            expression = "convert_to(" ~ column ~ ", 'UTF8')";
+        else if (kind == "string"w && difference.expected == "character varying" && difference.actual == "bytea")
+            expression = "convert_from(" ~ column ~ ", 'UTF8')";
+        else return null;
+        return "ALTER TABLE " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(tableName) ~
+            " ALTER COLUMN " ~ column ~ " DROP DEFAULT, ALTER COLUMN " ~ column ~ " TYPE " ~ difference.expected ~
+            " USING " ~ expression ~ ", ALTER COLUMN " ~ column ~ " SET DEFAULT " ~ fieldDefault(field);
+    }
+    return null;
 }
 private string[] applyAdditiveSchema(Z8PostgresConnection db, wstring schema, Z8Object[] tables,
                                       bool createMissing, Z8RuntimeRegistry registry, bool syncRegistry) {
@@ -161,6 +184,10 @@ private string[] applyAdditiveSchema(Z8PostgresConnection db, wstring schema, Z8
                     widenings ~= "ALTER TABLE " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(names[index]) ~
                         " ALTER COLUMN " ~ quoteIdentifier(difference.column.to!wstring) ~ " TYPE " ~ difference.expected;
                     continue;
+                }
+                if (syncRegistry) {
+                    auto conversion = textConversion(schema, names[index], table, difference);
+                    if (conversion !is null) { widenings ~= conversion; continue; }
                 }
                 if (difference.kind == Z8SchemaDifferenceKind.columnType || difference.kind == Z8SchemaDifferenceKind.nullability ||
                     difference.kind == Z8SchemaDifferenceKind.primaryKey)

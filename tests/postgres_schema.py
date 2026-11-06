@@ -1085,6 +1085,23 @@ void main(string[] args) {
     assert(z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables).length == 2);
     preserved = db.execute(`SELECT "Title", "Amount"::text FROM "z8_reconcile"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-000000000084'`);
     assert(preserved.rows[0][0].text == "kept" && preserved.rows[0][1].text == "123");
+    db.execute(`UPDATE "z8_reconcile"."Sample;--" SET "Title" = 'Привет 😀', "Details" = convert_to('Текст 😀', 'UTF8') WHERE "RecordId" = '00000000-0000-0000-0000-000000000084'`);
+    db.execute(`ALTER TABLE "z8_reconcile"."Sample;--" ALTER COLUMN "Title" DROP DEFAULT, ALTER COLUMN "Title" TYPE bytea USING convert_to("Title", 'UTF8'), ALTER COLUMN "Details" TYPE text USING convert_from("Details", 'UTF8')`);
+    db.execute(`UPDATE "z8_reconcile"."Sample;--" SET "Title" = decode('ff', 'hex') WHERE "RecordId" = '00000000-0000-0000-0000-000000000084'`);
+    bool invalidUtf8Rejected;
+    try { z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables); } catch (Z8PostgresException) { invalidUtf8Rejected = true; }
+    assert(invalidUtf8Rejected && !db.inTransaction());
+    foreach (column; z8_postgres_describe_table(db, "z8_reconcile"w, "Sample;--"w).columns) {
+        if (column.name == "Title") assert(column.type == "bytea");
+        if (column.name == "Details") assert(column.type == "text");
+    }
+    db.execute(`UPDATE "z8_reconcile"."Sample;--" SET "Title" = convert_to('Привет 😀', 'UTF8') WHERE "RecordId" = '00000000-0000-0000-0000-000000000084'`);
+    assert(z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables).length == 2);
+    auto converted = db.execute(`SELECT "Title", convert_from("Details", 'UTF8') FROM "z8_reconcile"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-000000000084'`);
+    assert(converted.rows[0][0].text == "Привет 😀" && converted.rows[0][1].text == "Текст 😀");
+    db.execute(`INSERT INTO "z8_reconcile"."Sample;--" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000085')`);
+    auto convertedDefaults = db.execute(`SELECT "Title", "Details" IS NULL FROM "z8_reconcile"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-000000000085'`);
+    assert(convertedDefaults.rows[0][0].text == "O'Reilly 😀" && convertedDefaults.rows[0][1].text == "t");
     auto reconcilePriorRequest = z8_application_set_request(null);
     assert(z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables).length == 0 && z8_application_request() is null);
     z8_application_set_request(reconcilePriorRequest);

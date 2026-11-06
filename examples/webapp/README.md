@@ -53,8 +53,8 @@ tables, files and sequences. The users form rejects duplicate role assignments
 and excludes assigned roles from the selection list. Its scheduler action wakes
 the local service to reload schedules immediately.
 The administrator can run the schema generator as a background job. It adds
-missing schema objects and widens selected column types without losing values;
-other incompatible definitions are rejected.
+missing schema objects, widens selected column types and converts strings and
+`TextField` values through UTF-8; other incompatible definitions are rejected.
 The tables report and other original system tools remain to be implemented.
 
 Optionally add `--config C:/path/to/server.properties` to initialization and

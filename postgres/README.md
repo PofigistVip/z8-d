@@ -308,8 +308,10 @@ the original schema generator, null and declared static records are checked for
 all tables, including existing ones: missing records are created and declared
 values are refreshed. Protected built-in user and role settings are retained.
 It also widens `smallint` or `integer` to `bigint`, and bounded `varchar` or
-`text` to unbounded `varchar`, preserving existing values. Other incompatible
-type changes are rejected. The returned list contains DDL, not static-record
+`text` to unbounded `varchar`, preserving existing values. Changes between a BL
+string field and a byte-backed text field use UTF-8; invalid byte sequences
+abort and roll back the reconciliation. Other incompatible type changes are
+rejected. The returned list contains DDL, not static-record
 or registry changes.
 Table creation, additive migration and registry synchronization take a
 transaction-scoped PostgreSQL advisory lock per schema, so cooperating hosts
