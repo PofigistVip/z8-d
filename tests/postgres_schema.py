@@ -1082,6 +1082,25 @@ void main(string[] args) {
     assert(z8_application_request() is callerRequest && z8_connection_current_backend() is callerConnection);
     auto fallbackBuiltin = customAuth.authenticate("Admin"w, ""w, z8_date_from_ticks(1700000001000));
     assert(fallbackBuiltin !is null && fallbackBuiltin.builtinAdministrator);
+    auto trusted = customAuth.authenticateTrusted(z8_guid_create(0xAAA), "ignored name"w, z8_date_from_ticks(1700000001000), "permit"w);
+    assert(trusted !is null && trusted.login == "Auth Alice"w && z8_optional_require(z8_primary_cast!bool(trusted.parameters.z8_get("verified"w))));
+    assert(z8_primary_cast!wstring(trusted.parameters.z8_get("address"w)) == "permit"w);
+    assert(db.execute(`SELECT "Failed Auth Count" FROM "z8_bootstrap"."SystemUsers" WHERE "Name" = 'Auth Alice'`).rows[0][0].text == "0");
+    assert(customAuth.authenticateTrusted(null, "auth alice"w, z8_date_from_ticks(1700000001000), "permit"w) !is null);
+    assert(customAuth.authenticateTrusted(z8_guid_create(0xAAA), null, z8_date_from_ticks(1700000001000), "deny"w) is null);
+    assert(customAuth.authenticateTrusted(z8_guid_create(0xAAA), null, z8_date_from_ticks(1700000001000), "fail"w) is null);
+    assert(customAuth.authenticateTrusted(z8_guid_zero()) is null && customAuth.authenticateTrusted(null) is null);
+    assert(customAuth.authenticateTrusted(z8_guid_create(0xABC)) is null);
+    db.execute(`UPDATE "z8_bootstrap"."SystemUsers" SET "Banned" = 1 WHERE "Name" = 'Auth Alice'`);
+    assert(customAuth.authenticateTrusted(z8_guid_create(0xAAA), null, z8_date_from_ticks(1700000001000)) is null);
+    db.execute(`UPDATE "z8_bootstrap"."SystemUsers" SET "Banned" = 0, "Banned Until" = 1700000002000 WHERE "Name" = 'Auth Alice'`);
+    assert(customAuth.authenticateTrusted(z8_guid_create(0xAAA), null, z8_date_from_ticks(1700000001000)) is null);
+    assert(customAuth.authenticateTrusted(z8_guid_create(0xAAA), null, z8_date_from_ticks(1700000002000)) !is null);
+    db.execute(`UPDATE "z8_bootstrap"."SystemUsers" SET "Banned Until" = 0 WHERE "Name" = 'Auth Alice'`);
+    db.beginTransaction(); bool trustedTransactionRejected;
+    try { customAuth.authenticateTrusted(z8_guid_create(0xAAA)); } catch (Z8PostgresException) { trustedTransactionRejected = true; }
+    assert(trustedTransactionRejected && db.inTransaction()); db.rollback();
+    assert(z8_application_request() is callerRequest && z8_connection_current_backend() is callerConnection);
     auto directPreviousRequest = z8_application_set_request(null);
     auto direct = z8_postgres_read_user(db, "z8_bootstrap"w, z8_guid_create(0xAAA), customRegistry);
     assert(direct !is null && z8_primary_cast!Z8Guid(direct.parameters.z8_get("principal"w)) == z8_guid_create(1));

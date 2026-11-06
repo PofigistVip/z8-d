@@ -307,7 +307,11 @@ the fallback. Hook execution uses a system-user request and the current schema.
 The registered `SystemUsers` specialization can also populate or reject a
 user through either `getParameters` overload. If that hook throws, the built-in
 system and administrator accounts retain the original fallback behavior.
-Trusted login and a network transport for cross-server notifications are still pending.
+`authenticateTrusted` resolves an existing user by ID or case-insensitive login
+without checking a password; it still applies bans, user hooks and additional
+parameter checks. Only a host that has authenticated and authorized the caller
+may invoke it. It does not create missing users or expose an HTTP endpoint.
+A network transport for cross-server notifications is still pending.
 The optional `z8.integration.postgres_authority`
 module connects it to CivetWeb.
 

@@ -52,9 +52,19 @@ class Z8PostgresAuthenticator {
         ns = quoteIdentifier(schema);
     }
     Z8UserData authenticate(wstring login, wstring password, Z8Date now = null, wstring address = null) {
+        if (login is null || password is null) return null;
+        return authenticateIdentity(null, login, password, false, now, address);
+    }
+    // Only a host that has already authenticated the caller may use this API.
+    // Existing users are resolved by ID when supplied, otherwise by login.
+    Z8UserData authenticateTrusted(Z8Guid userId, wstring login = null, Z8Date now = null, wstring address = null) {
+        if (userId !is null && userId == z8_guid_zero()) return null;
+        if (userId is null && (login is null || !login.length)) return null;
+        return authenticateIdentity(userId, login, null, true, now, address);
+    }
+    private Z8UserData authenticateIdentity(Z8Guid userId, wstring login, wstring password, bool trusted, Z8Date now, wstring address) {
         if (db.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
         if (db.inTransaction()) throw new Z8PostgresException("authentication requires its own transaction");
-        if (login is null || password is null) return null;
         if (now is null) now = z8_date_now();
         auto ticks = z8_date_ticks(now);
         Z8Object customUser;
@@ -92,10 +102,12 @@ class Z8PostgresAuthenticator {
         }
         db.beginTransaction();
         try {
+            auto lookup = userId is null ? `lower("Name") = lower($1::text)` : `"RecordId" = $1::uuid`;
+            auto lookupValue = userId is null ? login.to!string : z8_guid_to_string(userId).to!string;
             auto rows = db.execute("SELECT \"RecordId\"::text, \"Password\", COALESCE(\"Banned\", 0)::text, " ~
                 `COALESCE("Banned Until", 0)::text, COALESCE("Failed Auth Count", 0)::text FROM ` ~ ns ~
-                `."SystemUsers" WHERE lower("Name") = lower($1::text) AND "RecordId" <> '00000000-0000-0000-0000-000000000000'::uuid FOR UPDATE`,
-                [Z8PostgresParameter.value(login.to!string)]);
+                `."SystemUsers" WHERE ` ~ lookup ~ ` AND "RecordId" <> '00000000-0000-0000-0000-000000000000'::uuid FOR UPDATE`,
+                [Z8PostgresParameter.value(lookupValue)]);
             if (!rows.rows.length) { db.commit(); return null; }
             if (rows.rows.length != 1) throw new Z8PostgresException("duplicate case-insensitive user login");
             auto row = rows.rows[0];
@@ -111,6 +123,7 @@ class Z8PostgresAuthenticator {
                 try { accepted = z8_user_authenticate(customUser, password); }
                 catch (Throwable failure) { z8_application_request().monitor.log(Z8MonitorLevel.error, failure.msg.to!wstring); }
             }
+            if (trusted) accepted = true;
             auto candidate = password;
             if (!accepted && !config.clientHashesPasswords)
                 candidate = z8_native_call!wstring("org.zenframework.z8.server.crypto.Digest.m_md5"w, password);
