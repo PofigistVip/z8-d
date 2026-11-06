@@ -138,6 +138,84 @@ private Z8Object z8_entity_find(Z8ObjectArray!Z8Object entities, Z8Guid id) {
     }
     return null;
 }
+private int z8_entity_compare_values(Z8Primary left, Z8Primary right) {
+    if (left is right) return 0;
+    if (left is null) return -1;
+    if (right is null) return 1;
+    int compare(T)(T a, T b) { return a < b ? -1 : a > b ? 1 : 0; }
+    if (left.kind == Z8PrimaryKind.integer && right.kind == Z8PrimaryKind.decimal) {
+        if (right.decimalValue.nan) return -1;
+        return compare(left.integerValue, right.decimalValue.z8_round_int());
+    }
+    if (left.kind == Z8PrimaryKind.decimal && right.kind == Z8PrimaryKind.integer)
+        return left.decimalValue.opCmp(z8_decimal_from_int(right.integerValue));
+    if (left.kind == Z8PrimaryKind.binary || left.kind == Z8PrimaryKind.file) return 0;
+    if (left.kind != right.kind) return -1;
+    final switch (left.kind) {
+        case Z8PrimaryKind.integer: return compare(left.integerValue, right.integerValue);
+        case Z8PrimaryKind.boolean: return compare(cast(int)left.booleanValue, cast(int)right.booleanValue);
+        case Z8PrimaryKind.decimal: return left.decimalValue.opCmp(right.decimalValue);
+        case Z8PrimaryKind.text: return compare(left.textValue, right.textValue);
+        case Z8PrimaryKind.guid:
+            auto a = z8_nonnull(left.guidValue), b = z8_nonnull(right.guidValue);
+            auto major = compare(cast(long)a.majorBits, cast(long)b.majorBits);
+            return major ? major : compare(cast(long)a.minorBits, cast(long)b.minorBits);
+        case Z8PrimaryKind.date: return compare(z8_date_ticks(left.dateValue), z8_date_ticks(right.dateValue));
+        case Z8PrimaryKind.datespan:
+            // datespan.compareTo in the reference assigns the negated right ticks.
+            auto span = z8_nonnull(left.datespanValue); span.ticks = -z8_nonnull(right.datespanValue).ticks;
+            return compare(span.ticks, 0L);
+        case Z8PrimaryKind.geometry: return compare(z8_geometry_to_string(left.geometryValue), z8_geometry_to_string(right.geometryValue));
+        case Z8PrimaryKind.binary: case Z8PrimaryKind.file: return 0;
+        case Z8PrimaryKind.user: return -1;
+    }
+}
+private Z8ObjectArray!Z8Object z8_entity_sort(Z8ObjectArray!Z8Object entities, wstring field) {
+    import std.algorithm.sorting : sort;
+    import std.algorithm.mutation : SwapStrategy;
+    auto storage = z8_nonnull(entities).z8_erased_data();
+    auto items = storage.items.dup;
+    sort!((a, b) {
+        if (a is b) return false;
+        auto first = cast(Z8Object)a, second = cast(Z8Object)b;
+        auto left = first is null ? null : z8_entity_get(first, field);
+        auto right = second is null ? null : z8_entity_get(second, field);
+        return z8_entity_compare_values(left, right) < 0;
+    }, SwapStrategy.stable)(items);
+    storage.items = items; ++storage.z8_version;
+    return entities;
+}
+private wstring z8_entity_to_string_flags(Z8Object self, Z8Optional!bool defaults, Z8Optional!bool values, Z8Optional!bool changes) {
+    import std.string : lastIndexOf;
+    auto state = z8_entity_state(self); auto id = z8_entity_get_id(self);
+    auto name = self.z8_class_id(); auto dot = name.lastIndexOf('.');
+    if (dot >= 0) name = name[dot + 1 .. $];
+    auto result = name ~ "["w ~ (id is null ? "-"w : z8_guid_to_string(id)) ~ " "w ~
+        (state.initialized ? "i"w : "-"w) ~ (state.persistent ? "p"w : "-"w) ~
+        (state.deleted ? "d"w : "-"w) ~ (!state.changes.z8_isEmpty() ? "c"w : "-"w) ~ "]"w;
+    wstring mapText(Z8PrimaryMap map, bool differences) {
+        wstring text = "{"w; auto keys = map.z8_keys();
+        for (long i; i < keys.z8_size(); ++i) {
+            if (i) text ~= ", "w;
+            auto key = keys.z8_get(i); auto value = map.z8_get(key);
+            text ~= (key is null ? "null"w : key) ~ "="w;
+            if (differences) {
+                auto before = state.defaults.z8_get(key);
+                text ~= "["w ~ (before is null ? "null"w : z8_primary_to_string(before)) ~ ", "w;
+            }
+            text ~= value is null ? "null"w : z8_primary_to_string(value);
+            if (differences) text ~= "]"w;
+        }
+        return text ~ "}"w;
+    }
+    if (z8_optional_require(defaults)) result ~= "\n\tdefaults: "w ~ mapText(state.defaults, false);
+    if (z8_optional_require(values)) result ~= "\n\tvalues: "w ~ mapText(state.changes, false);
+    if (z8_optional_require(changes)) result ~= "\n\tvalues: "w ~ mapText(state.changes, true);
+    return result;
+}
+private wstring z8_entity_to_string(Z8Object self) {
+    return z8_entity_to_string_flags(self, z8_optional_wrap(false), z8_optional_wrap(false), z8_optional_wrap(false));
+}
 private wstring z8_entity_string(Z8Object self, wstring key) { return z8_primary_cast!wstring(z8_entity_get(self, key)); }
 private Z8Optional!long z8_entity_int(Z8Object self, wstring key) { return z8_primary_cast!long(z8_entity_get(self, key)); }
 private Z8Optional!bool z8_entity_bool(Z8Object self, wstring key) {
@@ -183,6 +261,9 @@ void z8_bind_builtin_entity() {
     z8_native_bind(p ~ "m_asIds"w, &z8_entity_as_ids); z8_native_bind(p ~ "m_asValues"w, &z8_entity_as_values);
     z8_native_bind(p ~ "m_asGuidValues"w, &z8_entity_as_guids); z8_native_bind(p ~ "m_asStringValues"w, &z8_entity_as_strings);
     z8_native_bind(p ~ "m_find"w, &z8_entity_find);
+    z8_native_bind(p ~ "m_sort"w, &z8_entity_sort);
+    z8_native_bind(p ~ "m_toString"w, &z8_entity_to_string);
+    z8_native_bind(p ~ "m_toString"w, &z8_entity_to_string_flags);
     z8_native_bind(p ~ "m_onChange"w, &z8_entity_default_change);
     foreach (name; ["onRegister"w, "onCreate"w, "onDelete"w]) z8_native_bind(p ~ "m_"w ~ name, &z8_entity_default_hook);
 }

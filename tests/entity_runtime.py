@@ -83,6 +83,11 @@ public class EntityProbe {
         Entity second; second.create(guid.create(12)); second.set("name", "second");
         Entity[] values = {first, second}; guid[] ids = Entity.asIds(values); string[] names = Entity.asStringValues(values, "name");
         guid[] links = Entity.asGuidValues(values, "recordId"); primary[] all = Entity.asValues(values, "name");
+        Entity empty = null; Entity[] sorted = {second, first, empty};
+        Entity.sort(sorted, "name");
+        if (sorted[0] != null || sorted[1] != first || sorted[2] != second) return false;
+        second.set("number", 1); sorted = Entity.sort(values, "number");
+        if (sorted[0] != second || sorted[1] != first) return false;
         return ids.size() == 2 && ids[0] == guid.create(10) && ids[1] == guid.create(12) && names[1] == "second" &&
             links[0] == guid.create(10) && (string)all[0] == "first" && Entity.find(values, guid.create(12)) == second &&
             Entity.find(values, guid.create(13)) == null;
@@ -121,6 +126,7 @@ public class EntityProbe {
         item.set("number", 1); if (item.changes != 0) return false;
         item.set("number", 2); item.set("new", "value");
         if (!item.isChanged() || !item.isChanged("number") || !item.has("new") || item.getInt("number") != 2 || item.changes != 2) return false;
+        if (item.toString() != "TrackedEntity[- i--c]" || item.toString(true, true, true).indexOf("number=[1, 2]") < 0) return false;
         primary[string] values = item.values();
         if ((int)values["number"] != 1 || values.containsKey("new")) return false;
         string[] keys = {"number", "new"}; values = item.values(keys);

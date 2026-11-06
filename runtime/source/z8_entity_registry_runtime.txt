@@ -54,15 +54,19 @@ private Z8Object z8_entity_registry_flush(Z8Object self) {
             if (phase == 0 && !values.persistent && !values.deleted) {
                 values.persistent = true;
                 auto table = z8_entity_registry_table(state, entity);
-                z8_entity_registry_log(state, "REGISTRY CREATE: "w ~ z8_object_name(table));
+                if (state.logEnabled) z8_entity_registry_log(state, "REGISTRY CREATE: "w ~ z8_entity_to_string(entity) ~
+                    " in "w ~ table.z8_class_id() ~ " ("w ~ z8_object_name(table) ~ ")"w);
                 z8_query_create_id(table, id);
             } else if (phase == 1 && z8_optional_require(z8_entity_changed(entity))) {
                 auto table = z8_entity_registry_table(state, entity);
-                z8_entity_registry_log(state, "REGISTRY UPDATE: "w ~ z8_object_name(table));
+                if (state.logEnabled) z8_entity_registry_log(state, "REGISTRY UPDATE: "w ~
+                    z8_entity_to_string_flags(entity, z8_optional_wrap(false), z8_optional_wrap(false), z8_optional_wrap(true)) ~
+                    " in "w ~ table.z8_class_id() ~ " ("w ~ z8_object_name(table) ~ ")"w);
                 z8_entity_table_update(table, entity);
             } else if (phase == 2 && values.persistent && values.deleted) {
                 auto table = z8_entity_registry_table(state, entity);
-                z8_entity_registry_log(state, "REGISTRY DESTROY: "w ~ z8_object_name(table));
+                if (state.logEnabled) z8_entity_registry_log(state, "REGISTRY DESTROY: "w ~ z8_entity_to_string(entity) ~
+                    " in "w ~ table.z8_class_id() ~ " ("w ~ z8_object_name(table) ~ ")"w);
                 z8_entity_table_destroy(table, entity);
             }
         }
