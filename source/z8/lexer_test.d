@@ -2,8 +2,6 @@ module z8.lexer_test;
 
 import z8.lexer;
 
-version (unittest) void main() {}
-
 private Token[] scan(string source) {
     auto lexer = new Lexer(source);
     Token[] result;
