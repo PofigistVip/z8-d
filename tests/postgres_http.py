@@ -60,16 +60,30 @@ public class IncrementAction extends Action {
     }
 }
 ''', encoding="utf-8")
+    (source / "ContextAction.bl").write_text('''
+import org.zenframework.z8.base.form.action.Action;
+import org.zenframework.z8.base.query.Query;
+import org.zenframework.z8.base.application.Application;
+public class ContextAction extends Action {
+    virtual protected void execute(guid id, Query context, guid[] selected, Query query) {
+        if (context == query) Application.info("root");
+        else Application.info(query.id());
+    }
+}
+''', encoding="utf-8")
     (source / "Sample.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.IntField;
 import org.zenframework.z8.base.table.value.StringField;
 import org.zenframework.z8.base.table.value.BinaryField;
+import org.zenframework.z8.base.table.value.Link;
 public class Sample extends Table {
     [name "Title"] public StringField title;
     [name "Amount"] public IntField amount;
     [name "Blob"] public BinaryField blob;
-    ApplyAction apply; NoTransactionAction noTransaction; IncrementAction increment; actions = {apply, noTransaction, increment};
+    Table child; [name "ChildLink"] Link childLink = child;
+    ApplyAction apply; NoTransactionAction noTransaction; IncrementAction increment; ContextAction inspect;
+    actions = {apply, noTransaction, increment, inspect};
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -101,7 +115,7 @@ class Authority : IZ8HttpAuthority {
 void main(string[] args) {
     databaseInfo = args[1];
     auto setup = new Z8PostgresConnection(databaseInfo);
-    setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Blob" bytea, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
+    setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Blob" bytea, "ChildLink" uuid, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     setup.execute(`INSERT INTO "Sample" ("RecordId", "Title", "Amount") VALUES ('00000000-0000-0000-0000-000000000001', 'First', 5), ('00000000-0000-0000-0000-000000000002', 'Second', 10)`);
     setup.close();
     auto server = new Z8CivetServer("127.0.0.1:0", (Z8HttpRequest request) {
@@ -203,6 +217,14 @@ void main(string[] args) {
             assert not result["success"], result
             result = request(action="action", name="increment", records=one, parameters='[{"id":"enabled","value":false}]')
             assert not result["success"] and "invalid parameters" in result["info"]["messages"][-1]["text"], result
+            result = request(action="action", name="inspect", records=one)
+            assert result["success"] and result["info"]["messages"][0]["text"] == "root", result
+            result = request(action="action", name="inspect", records=one, query="child")
+            assert result["success"] and result["info"]["messages"][0]["text"] == "child", result
+            result = request(action="action", name="inspect", records=one, link="childLink", query="missing")
+            assert result["success"] and result["info"]["messages"][0]["text"] == "child", result
+            result = request(action="action", name="inspect", records=one, query="missing")
+            assert not result["success"], result
             result = request(sort='[{"property":"amount"}]')
             assert [row["amount"] for row in result["data"]] == [11, 11], result
             new_record = '[{"recordId":"00000000-0000-0000-0000-000000000003","title":"Third","amount":25}]'

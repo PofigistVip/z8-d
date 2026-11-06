@@ -1,22 +1,26 @@
-// CommandAction adapter for direct query contexts and typed parameters.
-private Z8Object z8_action_find(Z8Object query, wstring id) {
+// CommandAction adapter for query contexts and typed parameters.
+private Z8Object z8_action_find_member(Z8Object query, wstring id) {
     import std.array : split;
     id = z8_string_required(id);
     auto own = query.z8_id();
-    if (id.length < own.length || id[0 .. own.length] != own) throw new Exception("action not found");
+    if (id.length < own.length || id[0 .. own.length] != own) throw new Exception("query member not found");
     auto path = id[own.length .. $];
     if (own.length && path.length) {
-        if (path[0] != '.') throw new Exception("action not found");
+        if (path[0] != '.') throw new Exception("query member not found");
         path = path[1 .. $];
     }
     auto current = query;
     foreach (part; path.split("."w)) {
-        if (!part.length) throw new Exception("action not found");
+        if (!part.length) throw new Exception("query member not found");
         Z8Object found;
         foreach (member; z8_object_members(current)) if (member.z8_index() == part) { found = member; break; }
-        if (found is null) throw new Exception("action not found");
+        if (found is null) throw new Exception("query member not found");
         current = found;
     }
+    return current;
+}
+private Z8Object z8_action_find(Z8Object query, wstring id) {
+    auto current = z8_action_find_member(query, id);
     if (!z8_native_is_instance(z8_action_name, current)) throw new Exception("action not found");
     return current;
 }
@@ -49,12 +53,23 @@ private void z8_application_dispatch_query_action_target(wstring className, Z8Ob
         auto name = keys.z8_get(i);
         if (name is null) throw new Exception("invalid action parameter");
         if (name == "request"w || name == "session"w || name == "server"w || name == "ip"w || name == "action"w ||
-            name == "name"w || name == "records"w || name == "selection"w || name == "parameters"w || name == "recordId"w) continue;
+            name == "name"w || name == "records"w || name == "selection"w || name == "parameters"w || name == "recordId"w ||
+            name == "query"w || name == "link"w) continue;
         if (params.z8_get(name).length) throw new Exception("unsupported action parameter: " ~ name.to!string);
     }
     if (query is null) query = z8_object_new_instance_native(z8_string_required(className));
     if (!z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, query)) throw new Exception("action requires a Query");
-    auto action = z8_action_find(query, params.z8_get("name"w));
+    auto context = query;
+    auto linkId = params.z8_get("link"w), queryId = params.z8_get("query"w);
+    if (linkId !is null && linkId.length) {
+        auto link = z8_action_find_member(context, linkId);
+        if (!z8_native_is_instance("org.zenframework.z8.server.base.table.value.Link"w, link)) throw new Exception("action link not found");
+        query = z8_nonnull(z8_link_query(link));
+    } else if (queryId !is null && queryId.length) {
+        query = z8_action_find_member(context, queryId);
+        if (!z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, query)) throw new Exception("action query not found");
+    }
+    auto action = z8_action_find(context, params.z8_get("name"w));
     auto state = z8_action_state(action);
     auto parameterValues = params.z8_get("parameters"w);
     if (parameterValues !is null && parameterValues.length) {
@@ -85,6 +100,6 @@ private void z8_application_dispatch_query_action_target(wstring className, Z8Ob
     if (z8_optional_require(state.useTransaction) && connection is null) throw new Exception("no current database connection");
     if (connection !is null) connection.beginTransaction();
     scope(failure) if (connection !is null) connection.rollback();
-    action.z8_action_virtual_execute_many(records, query, selected, query);
+    action.z8_action_virtual_execute_many(records, context, selected, query);
     if (connection !is null) connection.commit();
 }
