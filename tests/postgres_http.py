@@ -495,7 +495,8 @@ void main(string[] args) {
                 params = {"request": "Sample", "session": session, "server": "test", "action": "attach",
                           "recordId": record_id, "field": "documents", "fields": '["documents"]', "details": details}
                 if nested:
-                    params.update(query="nested", field="nested.documents", fields='["nested.documents"]')
+                    params.update(query="nested", field="nested.documents", fields='["nested.documents"]',
+                                  values=json.dumps({"recordId": "00000000-0000-0000-0000-000000000001"}))
                 marker = "z8-attachment-boundary"
                 payload = b""
                 for key, value in params.items():
@@ -549,7 +550,8 @@ void main(string[] args) {
             nested_file = json.loads(result["data"][0]["nested.documents"])[0]
             assert download("/" + quote(nested_file["path"], safe="/"), "full", nested_file["id"])[2] == b"nested"
             result = request(action="detach", query="nested", field="nested.documents", fields='["nested.documents"]',
-                             recordId=nested_target, data=json.dumps([nested_file["id"]]))
+                             recordId=nested_target, data=json.dumps([nested_file["id"]]),
+                             values=json.dumps({"recordId": "00000000-0000-0000-0000-000000000001"}))
             assert result["success"] and json.loads(result["data"][0]["nested.documents"]) == [], result
             assert headers["Content-Type"] == "application/octet-stream" and "filename*=UTF-8''" + quote("данные.txt") in headers["Content-Disposition"], headers
             assert download(download_path, "unknown", first_id)[0] == 401

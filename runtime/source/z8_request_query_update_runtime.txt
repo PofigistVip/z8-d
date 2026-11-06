@@ -31,10 +31,10 @@ private void z8_application_query_set_value(Z8Object field, JSONValue value, boo
 }
 
 private void z8_application_query_write_affected(Z8Object query, Z8Object[] selected, Z8Guid[] ids,
-        Z8JsonWriterState writer, Z8Privileges privileges, Z8StringMap params) {
+        Z8JsonWriterState writer, Z8Privileges privileges, Z8StringMap params, Z8Object context) {
     auto key = z8_nonnull(z8_query_primary_key(query));
     foreach (field; z8_query_declared_fields(query, true)) z8_field_reset(field);
-    auto contextFields = z8_application_query_context_values(query, privileges, params, true);
+    auto contextFields = z8_application_query_context_values(query, privileges, params, true, context);
     auto filter = new Z8SqlBool(Z8SqlBoolKind.inVector);
     filter.vectorValue = new Z8SqlFieldToken(key);
     foreach (id; ids) filter.vectorItems ~= new Z8SqlBoxedConstant(z8_primary_box(id));
@@ -70,13 +70,14 @@ private void z8_application_dispatch_query_update_target(wstring className, Z8Ob
         throw new Exception("query update requires a Table");
     auto privileges = z8_nonnull(session.user).privileges;
     if (privileges is null) throw new Exception("query update access denied");
-    query = z8_application_nested_query(query, privileges, params.z8_get("query"w));
+    auto context = query;
+    query = z8_application_nested_query(context, privileges, params.z8_get("query"w));
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
     if (!privileges.getTableAccess(queryKey).write) throw new Exception("query update access denied");
     auto key = z8_query_primary_key(query);
     if (key is null) throw new Exception("query has no primary key");
     auto selected = z8_application_query_fields(query, privileges, params);
-    z8_application_query_context_values(query, privileges, params, false);
+    z8_application_query_context_values(query, privileges, params, false, context);
     auto json = params.z8_get("data"w);
     if (json is null || !json.length) throw new Exception("query update requires records");
     auto records = z8_json_parse(json.to!string);
@@ -106,5 +107,5 @@ private void z8_application_dispatch_query_update_target(wstring className, Z8Ob
         ids ~= id;
     }
     connection.commit();
-    z8_application_query_write_affected(query, selected, ids, request.writer, privileges, params);
+    z8_application_query_write_affected(query, selected, ids, request.writer, privileges, params, context);
 }

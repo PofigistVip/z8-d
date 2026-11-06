@@ -21,13 +21,14 @@ private void z8_application_dispatch_query_create_target(wstring className, Z8Ob
         throw new Exception("query create requires a Table");
     auto privileges = z8_nonnull(session.user).privileges;
     if (privileges is null) throw new Exception("query create access denied");
-    query = z8_application_nested_query(query, privileges, params.z8_get("query"w));
+    auto context = query;
+    query = z8_application_nested_query(context, privileges, params.z8_get("query"w));
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
     if (!privileges.getTableAccess(queryKey).create) throw new Exception("query create access denied");
     auto key = z8_query_primary_key(query);
     if (key is null) throw new Exception("query has no primary key");
     auto selected = z8_application_query_fields(query, privileges, params);
-    z8_application_query_context_values(query, privileges, params, false);
+    z8_application_query_context_values(query, privileges, params, false, context);
     auto json = params.z8_get("data"w);
     if (json is null || !json.length) throw new Exception("query create requires records");
     auto records = z8_json_parse(json.to!string);
@@ -60,5 +61,5 @@ private void z8_application_dispatch_query_create_target(wstring className, Z8Ob
         ids ~= id;
     }
     connection.commit();
-    z8_application_query_write_affected(query, selected, ids, request.writer, privileges, params);
+    z8_application_query_write_affected(query, selected, ids, request.writer, privileges, params, context);
 }

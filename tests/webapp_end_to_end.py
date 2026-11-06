@@ -228,8 +228,12 @@ with tempfile.TemporaryDirectory() as directory:
                 return {row["form.userRoles.roles.recordId"].lower() for row in response["data"]}
             initial_roles = available_roles(user_id)
             assert role_id in initial_roles, initial_roles
+            status, nested_meta = request(port, request=users_view, session=session, action="meta", query="form.userRoles.roles",
+                                          values=json.dumps({"recordId": user_id}))
+            assert status == 200 and nested_meta.get("success"), str(nested_meta)[:2000]
             assignment = json.dumps([{"form.userRoles.user": user_id, "form.userRoles.role": "421a8413-a8ec-4dab-9235-9a5ff83341c5"}])
-            status, assigned = request(port, request=users_view, session=session, action="create", query="form.userRoles", fields='["form.userRoles.user","form.userRoles.role"]', data=assignment)
+            status, assigned = request(port, request=users_view, session=session, action="create", query="form.userRoles", fields='["form.userRoles.user","form.userRoles.role"]', data=assignment,
+                                       values=json.dumps({"recordId": user_id}))
             assert status == 200 and assigned["success"], assigned
             status, duplicate = request(port, request=users_view, session=session, action="create", query="form.userRoles", fields='["form.userRoles.user","form.userRoles.role"]', data=assignment)
             assert status == 200 and not duplicate["success"], duplicate

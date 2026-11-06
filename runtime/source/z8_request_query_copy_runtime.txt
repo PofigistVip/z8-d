@@ -22,7 +22,8 @@ private void z8_application_dispatch_query_copy_target(wstring className, Z8Obje
         throw new Exception("query copy requires a Table");
     auto privileges = z8_nonnull(session.user).privileges;
     if (privileges is null) throw new Exception("query copy access denied");
-    query = z8_application_nested_query(query, privileges, params.z8_get("query"w));
+    auto context = query;
+    query = z8_application_nested_query(context, privileges, params.z8_get("query"w));
     auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
     if (!privileges.getTableAccess(queryKey).copy) throw new Exception("query copy access denied");
     foreach (field; z8_query_declared_fields(query, true)) {
@@ -30,7 +31,7 @@ private void z8_application_dispatch_query_copy_target(wstring className, Z8Obje
         if (!privileges.getFieldAccess(queryKey, fieldKey).write) throw new Exception("query copy field access denied");
     }
     auto selected = z8_application_query_fields(query, privileges, params);
-    z8_application_query_context_values(query, privileges, params, false);
+    z8_application_query_context_values(query, privileges, params, false, context);
     auto data = params.z8_get("data"w), sourceIds = params.z8_get("recordId"w);
     if (data is null || !data.length || sourceIds is null || !sourceIds.length) throw new Exception("query copy requires records and record ids");
     auto records = z8_json_parse(data.to!string);
@@ -59,5 +60,5 @@ private void z8_application_dispatch_query_copy_target(wstring className, Z8Obje
         ids ~= z8_query_copy(query, id);
     }
     connection.commit();
-    z8_application_query_write_affected(query, selected, ids, request.writer, privileges, params);
+    z8_application_query_write_affected(query, selected, ids, request.writer, privileges, params, context);
 }

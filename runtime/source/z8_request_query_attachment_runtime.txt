@@ -21,7 +21,8 @@ private void z8_application_dispatch_query_attachment_target(wstring className, 
     if (!z8_native_is_instance(z8_table_name, query)) throw new Exception("attachment action requires a Table");
     auto privileges = z8_nonnull(session.user).privileges;
     if (privileges is null) throw new Exception("attachment access denied");
-    query = z8_application_nested_query(query, privileges, params.z8_get("query"w));
+    auto context = query;
+    query = z8_application_nested_query(context, privileges, params.z8_get("query"w));
     auto fieldId = params.z8_get("field"w);
     if (fieldId is null || !fieldId.length) throw new Exception("attachment field is required");
     auto field = z8_query_find_field_id(query, fieldId);
@@ -35,7 +36,7 @@ private void z8_application_dispatch_query_attachment_target(wstring className, 
     if (!(id == z8_guid_zero() ? privileges.getTableAccess(queryKey).create : privileges.getTableAccess(queryKey).write) ||
         !privileges.getFieldAccess(queryKey, fieldKey).write) throw new Exception("attachment access denied");
     auto selected = z8_application_query_fields(query, privileges, params);
-    z8_application_query_context_values(query, privileges, params, false);
+    z8_application_query_context_values(query, privileges, params, false, context);
     auto files = new Z8Array!Z8File();
     if (detach) {
         auto data = params.z8_get("data"w);
@@ -87,5 +88,5 @@ private void z8_application_dispatch_query_attachment_target(wstring className, 
         } else z8_attachment_update(processor, id, files);
         connection.commit();
     }
-    z8_application_query_write_affected(query, selected, [id], request.writer, privileges, params);
+    z8_application_query_write_affected(query, selected, [id], request.writer, privileges, params, context);
 }
