@@ -29,6 +29,13 @@ request ends. `Connection.get()` uses that backend; queries without an explicit
 executor use it and derive the table name from the BL query's `name` attribute.
 The static BL `Transaction.begin`, `commit`, `rollback` and `flush` methods use
 the same current-thread connection and its transaction nesting semantics.
+BL `Database.get`, `fromJson`, `schema`, `toJson` and `connection` are supported.
+An embedding host may install a thread-local `IZ8DatabaseCatalog` with
+`z8_database_set_catalog` to provide the complete current descriptor and resolve
+external descriptors to connections; the catalog owns their lifetimes. Without a
+catalog, `Database.get()` exposes the current connection's schema and connection,
+but cannot provide its other configuration values, and a descriptor created by
+`fromJson` cannot open an external connection.
 `Query.setConnection` binds a query to a specific connection. `flush()` is a
 no-op because this client executes statements immediately. `Connection.call`
 invokes a procedure in the configured schema with parameterized scalar, GUID,

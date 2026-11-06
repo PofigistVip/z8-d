@@ -28,6 +28,8 @@ import org.zenframework.z8.base.table.value.IntField;
     (source / "Probe.bl").write_text('''
 import org.zenframework.z8.base.sql.Connection;
 import org.zenframework.z8.base.sql.Transaction;
+import org.zenframework.z8.base.sql.Database;
+import org.zenframework.z8.base.json.JsonObject;
 public class Probe {
     public static Connection current() { return Connection.get(); }
     public static Report make() { Report value; return value; }
@@ -42,6 +44,12 @@ public class Probe {
     public static void transactionCommit() { Transaction.commit(); }
     public static void transactionRollback() { Transaction.rollback(); }
     public static void transactionFlush() { Transaction.flush(); }
+    public static Database database() { return Database.get(); }
+    public static Database databaseFromText(string json) { return Database.fromJson(json); }
+    public static Database databaseFromObject(JsonObject json) { return Database.fromJson(json); }
+    public static JsonObject databaseJson(Database database) { return database.toJson(); }
+    public static string databaseSchema(Database database) { return database.schema(); }
+    public static Connection databaseConnection(Database database) { return database.connection(); }
     public static void insert(Report report, guid id, int amount) { report.amount = amount; report.create(id); }
     public static int count(Report report) { return report.count(); }
 }
@@ -54,6 +62,13 @@ import z8.database.postgres;
 import z8.database.connection;
 import z8gen.p_Probe;
 import core.thread : Thread;
+class Catalog : IZ8DatabaseCatalog {
+    IZ8DatabaseConnection target;
+    Z8DatabaseDescriptor observed;
+    this(IZ8DatabaseConnection target) { this.target = target; }
+    Z8DatabaseDescriptor currentDatabase() { return Z8DatabaseDescriptor("pg_temp"w, "user"w, "secret"w, "dsn"w, "postgres"w, "UTF-8"w); }
+    IZ8DatabaseConnection connectionFor(Z8DatabaseDescriptor descriptor) { observed = descriptor; return target; }
+}
 void main(string[] args) {
     alias P = Z8p_50726F6265;
     bool missing; try { P.m_current(); } catch (Exception) { missing = true; } assert(missing);
@@ -73,6 +88,22 @@ void main(string[] args) {
     backgroundDb.execute(`INSERT INTO public.z8_background_probe VALUES (5)`w); background.closeBackgroundConnection();
     assert(first.execute(`SELECT value FROM public.z8_background_probe`).rows[0][0].text == "5");
     auto previous = z8_connection_set_current(db1);
+    auto defaultDatabase = P.m_database();
+    assert(P.m_databaseSchema(defaultDatabase) == "pg_temp"w);
+    auto catalog = new Catalog(db2);
+    auto previousCatalog = z8_database_set_catalog(catalog);
+    auto currentDatabase = P.m_database(); auto currentJson = P.m_databaseJson(currentDatabase);
+    assert(currentJson.m_getString("user"w) == "user"w && currentJson.m_getString("password"w) == "secret"w);
+    auto parsedDatabase = P.m_databaseFromText(`{schema:'other',user:'alice',password:'pw',connection:'dsn2',driver:'postgres',charset:'utf-16le'}`w);
+    assert(P.m_databaseSchema(parsedDatabase) == "other"w);
+    auto json = P.m_databaseJson(parsedDatabase);
+    assert(json.m_getString("charset"w) == "UTF-16LE"w && json.m_getString("connection"w) == "dsn2"w);
+    auto copiedDatabase = P.m_databaseFromObject(json);
+    assert(P.m_databaseSchema(copiedDatabase) == "other"w);
+    auto external = P.m_make(); P.m_attach(external, P.m_databaseConnection(copiedDatabase));
+    assert(catalog.observed.schema == "other"w && catalog.observed.user == "alice"w);
+    assert(z8_optional_require(P.m_count(external)) == 0);
+    z8_database_set_catalog(previousCatalog);
     auto thread = new Thread({ assert(z8_connection_current_backend() is null); z8_connection_set_current(db2); assert(z8_connection_current_backend() is db2); });
     thread.start(); thread.join(); assert(z8_connection_current_backend() is db1);
     auto report = P.m_make(); auto wrapper = P.m_current();

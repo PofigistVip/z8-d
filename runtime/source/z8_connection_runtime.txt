@@ -42,13 +42,13 @@ private IZ8DatabaseConnection z8_connection_backend(Z8Object self) {
     if (state is null || state.backend is null) throw new Exception("database connection is not configured");
     return state.backend;
 }
-private Z8Object z8_connection_get() {
-    auto backend = z8_connection_current;
+private Z8Object z8_connection_wrap(IZ8DatabaseConnection backend) {
     if (backend is null) throw new Exception("no current database connection");
     auto wrapper = z8_native_new(z8_connection_name);
     wrapper.z8_set_native_state(z8_connection_name, new Z8ConnectionState(backend));
     return wrapper;
 }
+private Z8Object z8_connection_get() { return z8_connection_wrap(z8_connection_current); }
 private void z8_connection_begin(Z8Object self) { z8_connection_backend(self).beginTransaction(); }
 private void z8_connection_commit(Z8Object self) { z8_connection_backend(self).commit(); }
 private void z8_connection_rollback(Z8Object self) { z8_connection_backend(self).rollback(); }

@@ -1,0 +1,92 @@
+// Database descriptors are independent of the host's connection implementation.
+struct Z8DatabaseDescriptor {
+    wstring schema, user, password, connection, driver;
+    wstring charset = "UTF-8"w;
+}
+// The host owns connections returned by the catalog and their lifecycle.
+interface IZ8DatabaseCatalog {
+    Z8DatabaseDescriptor currentDatabase();
+    IZ8DatabaseConnection connectionFor(Z8DatabaseDescriptor descriptor);
+}
+private IZ8DatabaseCatalog z8_database_catalog;
+IZ8DatabaseCatalog z8_database_set_catalog(IZ8DatabaseCatalog catalog) {
+    auto previous = z8_database_catalog; z8_database_catalog = catalog; return previous;
+}
+private enum z8_database_name = "org.zenframework.z8.server.base.sql.Database"w;
+private class Z8DatabaseState {
+    Z8DatabaseDescriptor descriptor;
+    IZ8DatabaseCatalog catalog;
+    IZ8DatabaseConnection current;
+}
+private Z8DatabaseState z8_database_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_database_name, self)) throw new Exception("invalid Database object");
+    auto state = cast(Z8DatabaseState)self.z8_get_native_state(z8_database_name);
+    if (state is null) throw new Exception("database is not configured");
+    return state;
+}
+private Z8Object z8_database_wrap(Z8DatabaseState state) {
+    auto value = z8_native_new(z8_database_name);
+    value.z8_set_native_state(z8_database_name, state);
+    return value;
+}
+private wstring z8_database_charset(wstring name) {
+    if (name is null) return "UTF-8"w;
+    foreach (value; ["CP866"w, "KOI8-R"w, "US-ASCII"w, "UTF-8"w, "UTF-16"w, "UTF-16BE"w, "UTF-16LE"w,
+        "Windows-1250"w, "Windows-1251"w, "Windows-1252"w, "Windows-1253"w, "Windows-1254"w, "Windows-1257"w])
+        if (z8_str_compareNoCase(name, value) == 0) return value;
+    throw new Exception("unknown database encoding");
+}
+private Z8Object z8_database_from_value(JSONValue object) {
+    if (object.type != JSONType.object) throw new Exception("database JSON object expected");
+    wstring value(string key) {
+        auto entry = key in object.object;
+        return entry is null || entry.type == JSONType.null_ ? null : z8_json_value_text(*entry);
+    }
+    auto state = new Z8DatabaseState(); state.catalog = z8_database_catalog;
+    state.descriptor = Z8DatabaseDescriptor(value("schema"), value("user"), value("password"),
+        value("connection"), value("driver"), z8_database_charset(value("charset")));
+    return z8_database_wrap(state);
+}
+private Z8Object z8_database_from_string(wstring json) { return z8_database_from_value(z8_json_object_read(z8_string_required(json))); }
+private Z8Object z8_database_from_object(Z8Object json) { return z8_database_from_value(z8_json_object_state(json).value); }
+private Z8Object z8_database_get() {
+    auto backend = z8_connection_current_backend();
+    if (backend is null) throw new Exception("no current database connection");
+    auto state = new Z8DatabaseState(); state.current = backend; state.catalog = z8_database_catalog;
+    if (state.catalog !is null) state.descriptor = state.catalog.currentDatabase();
+    else {
+        auto schema = cast(IZ8DatabaseSchema)backend;
+        if (schema is null) throw new Exception("current database descriptor is not configured");
+        state.descriptor.schema = schema.databaseSchema();
+    }
+    return z8_database_wrap(state);
+}
+private wstring z8_database_schema(Z8Object self) { return z8_string_new(z8_database_state(self).descriptor.schema); }
+private Z8Object z8_database_connection(Z8Object self) {
+    auto state = z8_database_state(self);
+    if (state.current !is null) return z8_connection_wrap(state.current);
+    if (state.catalog is null) throw new Exception("database connection catalog is not configured");
+    return z8_connection_wrap(state.catalog.connectionFor(state.descriptor));
+}
+private Z8Object z8_database_to_json(Z8Object self) {
+    auto info = z8_database_state(self).descriptor;
+    auto json = z8_native_new(z8_json_object_name);
+    z8_json_object_set_primary(json, "schema"w, z8_primary_box(info.schema));
+    z8_json_object_set_primary(json, "user"w, z8_primary_box(info.user));
+    z8_json_object_set_primary(json, "password"w, z8_primary_box(info.password));
+    z8_json_object_set_primary(json, "connection"w, z8_primary_box(info.connection));
+    z8_json_object_set_primary(json, "driver"w, z8_primary_box(info.driver));
+    z8_json_object_set_primary(json, "charset"w, z8_primary_box(z8_database_charset(info.charset)));
+    return json;
+}
+void z8_bind_builtin_database() {
+    enum prefix = z8_database_name ~ ".m_"w;
+    z8_native_bind(prefix ~ "get"w, &z8_database_get);
+    z8_native_bind(prefix ~ "fromJson"w, &z8_database_from_string);
+    z8_native_bind(prefix ~ "fromJson"w, &z8_database_from_object);
+    z8_native_bind(prefix ~ "toJson"w, &z8_database_to_json);
+    z8_native_bind(prefix ~ "schema"w, &z8_database_schema);
+    z8_native_bind(prefix ~ "connection"w, &z8_database_connection);
+}
+shared static this() { z8_bind_builtin_database(); }
