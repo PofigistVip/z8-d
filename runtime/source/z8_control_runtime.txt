@@ -1,0 +1,70 @@
+// Native state of base.form.Control and its separately owned Source object.
+private enum z8_control_name = "org.zenframework.z8.server.base.form.Control"w;
+private enum z8_source_name = "org.zenframework.z8.server.base.form.Source"w;
+private class Z8ControlState {
+    Z8Optional!long colSpan = z8_optional_wrap(1L), flex = z8_optional_wrap(0L), height;
+    Z8Optional!bool readOnly = z8_optional_wrap(false), required = z8_optional_wrap(false),
+        editable = z8_optional_wrap(false), important = z8_optional_wrap(false);
+    Z8Object dependency, dependsOn, source;
+    bool sourceInitialized;
+    IZ8FieldOrderCell dependencies;
+}
+private Z8ControlState z8_control_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_control_name, self)) throw new Exception("invalid Control object");
+    auto state = cast(Z8ControlState)self.z8_get_native_state(z8_control_name);
+    if (state is null) { state = new Z8ControlState(); self.z8_set_native_state(z8_control_name, state); }
+    return state;
+}
+private auto z8_control_address(string member)(Z8Object self) {
+    return &__traits(getMember, z8_control_state(self), member);
+}
+private Z8Object* z8_control_source_address(Z8Object self) {
+    auto state = z8_control_state(self);
+    if (!state.sourceInitialized) {
+        state.source = z8_native_new(z8_source_name); state.source.z8_set_container(self);
+        state.sourceInitialized = true;
+    }
+    return &state.source;
+}
+ref Z8ObjectArray!T z8_control_dependencies_ref(T)(Z8Object self) if (is(T : Z8Object)) {
+    auto state = z8_control_state(self);
+    auto cell = cast(Z8FieldOrderCell!T)state.dependencies;
+    if (cell is null) {
+        if (state.dependencies !is null) throw new Exception("incompatible Control dependency array");
+        cell = new Z8FieldOrderCell!T(); state.dependencies = cell;
+    }
+    return cell.value;
+}
+private class Z8SourceState { Z8Object query, valueFrom, filterField; }
+private Z8SourceState z8_source_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_source_name, self)) throw new Exception("invalid Source object");
+    auto state = cast(Z8SourceState)self.z8_get_native_state(z8_source_name);
+    if (state is null) { state = new Z8SourceState(); self.z8_set_native_state(z8_source_name, state); }
+    return state;
+}
+private auto z8_source_address(string member)(Z8Object self) { return &__traits(getMember, z8_source_state(self), member); }
+private void z8_source_assign(Z8Object self, Z8Object query) {
+    if (query !is null && !z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, query))
+        throw new Exception("Source target is not a Query");
+    z8_source_state(self).query = query;
+}
+void z8_bind_builtin_control() {
+    enum control = z8_control_name ~ "."w, source = z8_source_name ~ "."w;
+    z8_native_bind_field(control ~ "f_colSpan"w, &z8_control_address!"colSpan");
+    z8_native_bind_field(control ~ "f_flex"w, &z8_control_address!"flex");
+    z8_native_bind_field(control ~ "f_height"w, &z8_control_address!"height");
+    z8_native_bind_field(control ~ "f_readOnly"w, &z8_control_address!"readOnly");
+    z8_native_bind_field(control ~ "f_required"w, &z8_control_address!"required");
+    z8_native_bind_field(control ~ "f_editable"w, &z8_control_address!"editable");
+    z8_native_bind_field(control ~ "f_important"w, &z8_control_address!"important");
+    z8_native_bind_field(control ~ "f_dependency"w, &z8_control_address!"dependency");
+    z8_native_bind_field(control ~ "f_dependsOn"w, &z8_control_address!"dependsOn");
+    z8_native_bind_field(control ~ "f_source"w, &z8_control_source_address);
+    z8_native_bind_field(source ~ "f_query"w, &z8_source_address!"query");
+    z8_native_bind_field(source ~ "f_valueFrom"w, &z8_source_address!"valueFrom");
+    z8_native_bind_field(source ~ "f_filterField"w, &z8_source_address!"filterField");
+    z8_native_bind(source ~ "z8op_assign"w, &z8_source_assign);
+}
+shared static this() { z8_bind_builtin_control(); }

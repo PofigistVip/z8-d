@@ -1053,6 +1053,10 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 !field.isStatic && field.type == ValueType.selfArray && field.objectClass !is null) {
                 result ~= "@property ref " ~ storageType ~ " f_" ~ field.name.text ~ "() { return z8_query_array_ref!(" ~
                     field.objectClass.emittedName ~ ", \"" ~ field.name.text ~ "\")(this); }\n";
+            } else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.form.Control"w &&
+                field.name.text == "dependencies" && !field.isStatic && field.type == ValueType.selfArray && field.objectClass !is null) {
+                result ~= "@property ref " ~ storageType ~ " f_dependencies() { return z8_control_dependencies_ref!(" ~
+                    field.objectClass.emittedName ~ ")(this); }\n";
             } else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.query.Query"w &&
                 field.name.text == "readLock" && !field.isStatic && field.type == ValueType.enumType && field.objectClass !is null) {
                 result ~= "@property ref " ~ storageType ~ " f_readLock() { return z8_query_lock_ref!(" ~
