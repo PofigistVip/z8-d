@@ -35,6 +35,55 @@ private Z8Optional!bool z8_file_converter_convertible(wstring extension) {
     return z8_optional_wrap(z8_file_converter_pdf(extension).value || z8_file_converter_text(extension).value ||
         z8_file_converter_image(extension).value || z8_file_converter_email(extension).value || z8_file_converter_office(extension).value);
 }
+// PDF-to-PDF conversion is a byte copy in the original implementation.
+private Z8File z8_file_converter_copy(Z8Binary source, wstring extension, Z8File target, Z8StringMap parameters) {
+    import std.file : exists, mkdirRecurse;
+    import std.path : absolutePath, buildPath, dirName;
+    import std.stdio : File;
+    z8_nonnull(source); z8_nonnull(target);
+    auto path = z8_file_system_path(target);
+    auto resetText = parameters is null ? null : parameters.z8_get("reset"w);
+    auto reset = resetText !is null && z8_str_compareNoCase(resetText, "true"w) == 0;
+    auto pdf = z8_file_converter_pdf(z8_file_extension_instance(target)).value;
+    if (pdf && parameters !is null) {
+        auto background = parameters.z8_get("background"w);
+        if (background !is null && exists(buildPath(z8_file_working_root, background.to!string)))
+            throw new Exception("PDF backgrounds are not implemented");
+        auto stamps = parameters.z8_get("stamps"w);
+        if (stamps !is null && z8_json_array_read(stamps).array.length)
+            throw new Exception("PDF stamps are not implemented");
+    }
+    if (!exists(path) || reset) {
+        if (!pdf || !z8_file_converter_pdf(extension).value) throw new Exception("file conversion engine is not implemented");
+        auto parent = dirName(path);
+        if (parent.length) mkdirRecurse(parent);
+        auto output = File(path, "wb");
+        scope(exit) output.close();
+        z8_binary_copy_to(source, output);
+    }
+    return z8_file_from_disk(absolutePath(path));
+}
+private Z8File z8_file_converter_files(Z8File source, Z8File target, Z8StringMap parameters) {
+    import std.path : absolutePath;
+    z8_nonnull(source);
+    auto reset = parameters is null ? null : parameters.z8_get("reset"w);
+    if (reset !is null && z8_str_compareNoCase(reset, "true"w) == 0 &&
+        absolutePath(z8_file_system_path(source)) == absolutePath(z8_file_system_path(z8_nonnull(target))))
+        throw new Exception("source and target of a reset conversion are the same file");
+    auto input = z8_file_to_binary(source);
+    scope(exit) z8_binary_close(input);
+    return z8_file_converter_copy(input, z8_file_extension_instance(source), target, parameters);
+}
+private Z8File z8_file_converter_files_default(Z8File source, Z8File target) { return z8_file_converter_files(source, target, null); }
+private Z8File z8_file_converter_binary(Z8Binary source, Z8File target) { return z8_file_converter_copy(source, null, target, null); }
+private Z8File z8_file_converter_binary_map(Z8Binary source, Z8File target, Z8StringMap parameters) { return z8_file_converter_copy(source, null, target, parameters); }
+private Z8File z8_file_converter_binary_type(Z8Binary source, wstring type, Z8File target) { return z8_file_converter_copy(source, type, target, null); }
+private Z8File z8_file_converter_binary_type_map(Z8Binary source, wstring type, Z8File target, Z8StringMap parameters) { return z8_file_converter_copy(source, type, target, parameters); }
+private Z8File z8_file_converter_docx_file(Z8File source, Z8File target) {
+    auto input = z8_file_to_binary(z8_nonnull(source));
+    scope(exit) z8_binary_close(input);
+    return z8_file_converter_binary(input, target);
+}
 void z8_bind_builtin_file_converter() {
     enum prefix = "org.zenframework.z8.server.base.file.FileConverter.m_"w;
     z8_native_bind(prefix ~ "getExtension"w, &z8_file_converter_extension);
@@ -45,5 +94,16 @@ void z8_bind_builtin_file_converter() {
     z8_native_bind(prefix ~ "isEmailExtension"w, &z8_file_converter_email);
     z8_native_bind(prefix ~ "isOfficeExtension"w, &z8_file_converter_office);
     z8_native_bind(prefix ~ "isConvertableToPdf"w, &z8_file_converter_convertible);
+    z8_native_bind(prefix ~ "convert"w, &z8_file_converter_files_default);
+    z8_native_bind(prefix ~ "convert"w, &z8_file_converter_files);
+    z8_native_bind(prefix ~ "convert"w, &z8_file_converter_binary);
+    z8_native_bind(prefix ~ "convert"w, &z8_file_converter_binary_map);
+    z8_native_bind(prefix ~ "convert"w, &z8_file_converter_binary_type);
+    z8_native_bind(prefix ~ "convert"w, &z8_file_converter_binary_type_map);
+    z8_native_bind(prefix ~ "convertToPdf"w, &z8_file_converter_files_default);
+    z8_native_bind(prefix ~ "convertToPdf"w, &z8_file_converter_files);
+    z8_native_bind(prefix ~ "convertToPdf"w, &z8_file_converter_binary_type);
+    z8_native_bind(prefix ~ "convertToDocx"w, &z8_file_converter_docx_file);
+    z8_native_bind(prefix ~ "convertToDocx"w, &z8_file_converter_binary);
 }
 shared static this() { z8_bind_builtin_file_converter(); }

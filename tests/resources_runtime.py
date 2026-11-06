@@ -29,17 +29,23 @@ public class ResourceProbe {
     public static bool email(string value) { return FileConverter.isEmailExtension(value); }
     public static bool office(string value) { return FileConverter.isOfficeExtension(value); }
     public static bool convertible(string value) { return FileConverter.isConvertableToPdf(value); }
+    public static file convert(file source, file target) { return FileConverter.convert(source, target); }
+    public static file convertOptions(file source, file target, string[string] options) { return FileConverter.convert(source, target, options); }
+    public static file convertBinary(binary source, string type, file target) { return FileConverter.convert(source, type, target); }
 }
 ''', encoding="utf-8")
     application, working = temp / "application", temp / "working"
     (application / "data").mkdir(parents=True)
     working.mkdir()
     (application / "data" / "resource.txt").write_bytes(b"hello resource")
+    (application / "data" / "sample.pdf").write_bytes(b"%PDF-test")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
 import z8gen.p_ResourceProbe;
+import std.conv : to;
+import std.path : buildPath;
 void main(string[] args) {
     alias P = Z8p_5265736F7572636550726F6265;
     z8_file_set_roots(args[2]);
@@ -62,6 +68,21 @@ void main(string[] args) {
     z8_server_config_replace(["file.converter.text"w:" md, csv "w]);
     assert(z8_optional_require(P.m_text("MD"w)) && z8_optional_require(P.m_convertible("csv"w)));
     assert(!z8_optional_require(P.m_text("txt"w)));
+    auto source = z8_file_from_path(buildPath(args[1], "data", "sample.pdf").to!wstring);
+    auto target = z8_file_from_path(buildPath(args[2], "out", "copy.pdf").to!wstring);
+    auto converted = P.m_convert(source, target);
+    assert(z8_file_read(converted) == "%PDF-test"w && z8_optional_require(converted.size) == 9);
+    z8_file_write(target, "existing"w);
+    assert(z8_file_read(P.m_convert(source, target)) == "existing"w);
+    auto options = new Z8StringMap(); options.z8_add("reset"w, "true"w);
+    assert(z8_file_read(P.m_convertOptions(source, target, options)) == "%PDF-test"w);
+    auto binaryTarget = z8_file_from_path(buildPath(args[2], "out", "binary.pdf").to!wstring);
+    assert(z8_file_read(P.m_convertBinary(z8_binary_from_string("%PDF-binary"w), "pdf"w, binaryTarget)) == "%PDF-binary"w);
+    bool unsupported; try { P.m_convertOptions(z8_file_from_path(buildPath(args[1], "data", "resource.txt").to!wstring), target, options); }
+    catch (Exception) { unsupported = true; }
+    assert(unsupported && z8_file_read(target) == "%PDF-test"w);
+    bool same; try { P.m_convertOptions(source, source, options); } catch (Exception) { same = true; }
+    assert(same && z8_file_read(source) == "%PDF-test"w);
 }
 ''', encoding="utf-8")
     executable = temp / ("resources.exe" if os.name == "nt" else "resources")
