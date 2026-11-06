@@ -128,9 +128,9 @@ private bool safeWidening(Z8SchemaDifference difference) {
     if (difference.expected == "bigint" && (difference.actual == "integer" || difference.actual == "smallint")) return true;
     return difference.expected == "character varying" && characterStorage(difference.actual);
 }
-// Original Z8 converts character data and byte-backed TextField values as
-// UTF-8 when the BL field type changes. PostgreSQL rejects invalid input.
-private string textConversion(wstring schema, wstring tableName, Z8Object table, Z8SchemaDifference difference) {
+// Match original Z8's UTF-8 text and legacy timestamp conversions.
+// PostgreSQL rejects invalid UTF-8 and out-of-range timestamps.
+private string fieldConversion(wstring schema, wstring tableName, Z8Object table, Z8SchemaDifference difference) {
     if (difference.kind != Z8SchemaDifferenceKind.columnType) return null;
     foreach (field; z8_query_declared_fields(table, true)) {
         auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, field);
@@ -142,6 +142,9 @@ private string textConversion(wstring schema, wstring tableName, Z8Object table,
             expression = "convert_to(" ~ column ~ ", 'UTF8')";
         else if (kind == "string"w && difference.expected == "character varying" && difference.actual == "bytea")
             expression = "convert_from(" ~ column ~ ", 'UTF8')";
+        else if ((kind == "date"w || kind == "datetime"w) && difference.expected == "bigint" &&
+                 (difference.actual == "timestamp without time zone" || difference.actual == "timestamp with time zone"))
+            expression = "CASE WHEN " ~ column ~ " < '1900-01-01 00:00:00' THEN -62135769600000 ELSE EXTRACT(EPOCH FROM " ~ column ~ ") * 1000 END";
         else return null;
         return "ALTER TABLE " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(tableName) ~
             " ALTER COLUMN " ~ column ~ " DROP DEFAULT, ALTER COLUMN " ~ column ~ " TYPE " ~ difference.expected ~
@@ -186,7 +189,7 @@ private string[] applyAdditiveSchema(Z8PostgresConnection db, wstring schema, Z8
                     continue;
                 }
                 if (syncRegistry) {
-                    auto conversion = textConversion(schema, names[index], table, difference);
+                    auto conversion = fieldConversion(schema, names[index], table, difference);
                     if (conversion !is null) { widenings ~= conversion; continue; }
                 }
                 if (difference.kind == Z8SchemaDifferenceKind.columnType || difference.kind == Z8SchemaDifferenceKind.nullability ||

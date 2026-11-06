@@ -1102,6 +1102,20 @@ void main(string[] args) {
     db.execute(`INSERT INTO "z8_reconcile"."Sample;--" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000085')`);
     auto convertedDefaults = db.execute(`SELECT "Title", "Details" IS NULL FROM "z8_reconcile"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-000000000085'`);
     assert(convertedDefaults.rows[0][0].text == "O'Reilly 😀" && convertedDefaults.rows[0][1].text == "t");
+    db.execute(`ALTER TABLE "z8_reconcile"."Sample;--" ALTER COLUMN "Moment" DROP DEFAULT, ALTER COLUMN "Moment" TYPE timestamp USING timestamp '2024-02-29 12:34:56.123'`);
+    db.execute(`UPDATE "z8_reconcile"."Sample;--" SET "Moment" = timestamp '1899-12-31 23:59:59' WHERE "RecordId" = '00000000-0000-0000-0000-000000000085'`);
+    auto expectedMoment = db.execute(`SELECT (extract(epoch FROM "Moment") * 1000)::bigint::text FROM "z8_reconcile"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-000000000084'`).rows[0][0].text;
+    db.execute(`UPDATE "z8_reconcile"."Sample;--" SET "Moment" = 'infinity' WHERE "RecordId" = '00000000-0000-0000-0000-000000000084'`);
+    bool infiniteTimestampRejected;
+    try { z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables); } catch (Z8PostgresException) { infiniteTimestampRejected = true; }
+    assert(infiniteTimestampRejected && !db.inTransaction());
+    db.execute(`UPDATE "z8_reconcile"."Sample;--" SET "Moment" = timestamp '2024-02-29 12:34:56.123' WHERE "RecordId" = '00000000-0000-0000-0000-000000000084'`);
+    assert(z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables).length == 1);
+    auto moments = db.execute(`SELECT "Moment"::text FROM "z8_reconcile"."Sample;--" WHERE "RecordId" IN ('00000000-0000-0000-0000-000000000084', '00000000-0000-0000-0000-000000000085') ORDER BY "RecordId"`);
+    assert(moments.rows[0][0].text == expectedMoment && moments.rows[1][0].text == "-62135769600000");
+    db.execute(`ALTER TABLE "z8_reconcile"."Sample;--" ALTER COLUMN "Moment" DROP DEFAULT, ALTER COLUMN "Moment" TYPE timestamptz USING timestamptz '2020-01-01 00:00:00+00'`);
+    assert(z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables).length == 1);
+    assert(db.execute(`SELECT "Moment"::text FROM "z8_reconcile"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-000000000084'`).rows[0][0].text == "1577836800000");
     auto reconcilePriorRequest = z8_application_set_request(null);
     assert(z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables).length == 0 && z8_application_request() is null);
     z8_application_set_request(reconcilePriorRequest);

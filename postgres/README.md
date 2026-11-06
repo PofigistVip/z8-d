@@ -310,8 +310,9 @@ values are refreshed. Protected built-in user and role settings are retained.
 It also widens `smallint` or `integer` to `bigint`, and bounded `varchar` or
 `text` to unbounded `varchar`, preserving existing values. Changes between a BL
 string field and a byte-backed text field use UTF-8; invalid byte sequences
-abort and roll back the reconciliation. Other incompatible type changes are
-rejected. The returned list contains DDL, not static-record
+abort and roll back the reconciliation. Legacy `timestamp` columns migrate to
+Z8 date/datetime milliseconds, with dates before 1900 mapped to Z8's minimum as
+in the original. Other incompatible type changes are rejected. The returned list contains DDL, not static-record
 or registry changes.
 Table creation, additive migration and registry synchronization take a
 transaction-scoped PostgreSQL advisory lock per schema, so cooperating hosts
