@@ -18,8 +18,17 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     shutil.copytree(language, source)
     (source / "ResourceProbe.bl").write_text('''
 import org.zenframework.z8.base.application.Resources;
+import org.zenframework.z8.base.file.FileConverter;
 public class ResourceProbe {
     public static file load(string path) { return Resources.loadResource(path); }
+    public static string extension(string path) { return FileConverter.getExtension(path); }
+    public static string fileExtension(file value) { return FileConverter.getExtension(value); }
+    public static bool pdf(string value) { return FileConverter.isPdfExtension(value); }
+    public static bool text(string value) { return FileConverter.isTextExtension(value); }
+    public static bool image(string value) { return FileConverter.isImageExtension(value); }
+    public static bool email(string value) { return FileConverter.isEmailExtension(value); }
+    public static bool office(string value) { return FileConverter.isOfficeExtension(value); }
+    public static bool convertible(string value) { return FileConverter.isConvertableToPdf(value); }
 }
 ''', encoding="utf-8")
     application, working = temp / "application", temp / "working"
@@ -44,6 +53,15 @@ void main(string[] args) {
     auto missing = P.m_load("data/missing.txt"w);
     assert(!z8_file_exists(missing) && z8_optional_require(missing.size) == 0);
     assert(z8_date_ticks(missing.time) == 0);
+    assert(P.m_extension("A.B/тест.TxT"w) == "txt"w && P.m_fileExtension(file) == "txt"w);
+    assert(P.m_extension("file"w) == ""w);
+    assert(z8_optional_require(P.m_pdf("pdf"w)) && !z8_optional_require(P.m_pdf("PDF"w)));
+    assert(z8_optional_require(P.m_text("XML"w)) && z8_optional_require(P.m_image("JpG"w)));
+    assert(z8_optional_require(P.m_email("EML"w)) && z8_optional_require(P.m_office("DOCX"w)));
+    assert(z8_optional_require(P.m_convertible("docx"w)) && !z8_optional_require(P.m_convertible("zip"w)));
+    z8_server_config_replace(["file.converter.text"w:" md, csv "w]);
+    assert(z8_optional_require(P.m_text("MD"w)) && z8_optional_require(P.m_convertible("csv"w)));
+    assert(!z8_optional_require(P.m_text("txt"w)));
 }
 ''', encoding="utf-8")
     executable = temp / ("resources.exe" if os.name == "nt" else "resources")

@@ -1,0 +1,49 @@
+// Classification follows FileConverter and the ServerConfig extension lists.
+private wstring z8_file_converter_extension(wstring name) {
+    return z8_string_new(z8_str_toLowerCase(z8_file_extension(z8_string_required(name))));
+}
+private wstring z8_file_converter_file_extension(Z8File file) {
+    return z8_string_new(z8_file_extension_instance(file));
+}
+private bool z8_file_converter_in_list(wstring extension, wstring setting, wstring[] defaults) {
+    import std.array : split;
+    import std.string : strip;
+    if (extension is null) return false;
+    auto configured = z8_server_config_value(setting);
+    wstring[] values = defaults;
+    if (configured !is null && configured.strip().length) values = configured.split(","w);
+    auto lower = z8_str_toLowerCase(extension);
+    foreach (value; values) if (value.strip() == lower) return true;
+    return false;
+}
+private Z8Optional!bool z8_file_converter_pdf(wstring extension) { return z8_optional_wrap(extension == "pdf"w); }
+private Z8Optional!bool z8_file_converter_text(wstring extension) {
+    return z8_optional_wrap(z8_file_converter_in_list(extension, "file.converter.text"w, ["txt"w, "xml"w]));
+}
+private Z8Optional!bool z8_file_converter_image(wstring extension) {
+    return z8_optional_wrap(z8_file_converter_in_list(extension, "file.converter.image"w, ["tif"w, "tiff"w, "jpg"w, "jpeg"w, "gif"w, "png"w, "bmp"w]));
+}
+private Z8Optional!bool z8_file_converter_email(wstring extension) {
+    return z8_optional_wrap(z8_file_converter_in_list(extension, "file.converter.email"w, ["eml"w, "mime"w]));
+}
+private Z8Optional!bool z8_file_converter_office(wstring extension) {
+    return z8_optional_wrap(z8_file_converter_in_list(extension, "file.converter.office"w,
+        ["doc"w, "docx"w, "rtf"w, "xls"w, "xlsx"w, "ppt"w, "pptx"w, "odt"w, "odp"w, "ods"w, "odf"w, "odg"w,
+         "wpd"w, "sxw"w, "sxi"w, "sxc"w, "sxd"w, "stw"w, "vsd"w]));
+}
+private Z8Optional!bool z8_file_converter_convertible(wstring extension) {
+    return z8_optional_wrap(z8_file_converter_pdf(extension).value || z8_file_converter_text(extension).value ||
+        z8_file_converter_image(extension).value || z8_file_converter_email(extension).value || z8_file_converter_office(extension).value);
+}
+void z8_bind_builtin_file_converter() {
+    enum prefix = "org.zenframework.z8.server.base.file.FileConverter.m_"w;
+    z8_native_bind(prefix ~ "getExtension"w, &z8_file_converter_extension);
+    z8_native_bind(prefix ~ "getExtension"w, &z8_file_converter_file_extension);
+    z8_native_bind(prefix ~ "isPdfExtension"w, &z8_file_converter_pdf);
+    z8_native_bind(prefix ~ "isTextExtension"w, &z8_file_converter_text);
+    z8_native_bind(prefix ~ "isImageExtension"w, &z8_file_converter_image);
+    z8_native_bind(prefix ~ "isEmailExtension"w, &z8_file_converter_email);
+    z8_native_bind(prefix ~ "isOfficeExtension"w, &z8_file_converter_office);
+    z8_native_bind(prefix ~ "isConvertableToPdf"w, &z8_file_converter_convertible);
+}
+shared static this() { z8_bind_builtin_file_converter(); }
