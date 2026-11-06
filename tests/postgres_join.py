@@ -319,7 +319,8 @@ import org.zenframework.z8.base.table.value.Link;
 ''',
         "NativeTree": '''
 import org.zenframework.z8.base.table.TreeTable;
-[name "TreeNodes"] public class NativeTree extends TreeTable {}
+import org.zenframework.z8.base.table.value.StringField;
+[name "TreeNodes"] public class NativeTree extends TreeTable { [name "Title"] public StringField title; }
 ''',
         "ConditionOrder": '''
 import org.zenframework.z8.base.table.Table;
@@ -377,6 +378,7 @@ public class Probe {
     public static void readTree(NativeTree tree) { Field[] fields = {tree.path}; tree.read(fields); }
     public static bool nextTree(NativeTree tree) { return tree.next(); }
     public static guid createTree(NativeTree tree, guid id, guid parent) { tree.parentId = parent; return tree.create(id); }
+    public static void moveTree(NativeTree tree, guid id, guid parent, string title) { tree.parentId = parent; tree.title = title; tree.update(id); }
     public static NestedAggregateOrder nestedAggregate() { NestedAggregateOrder value; return value; }
     public static void readNestedAggregate(NestedAggregateOrder order) { Field[] fields; order.read(fields); }
     public static bool nextNestedAggregate(NestedAggregateOrder order) { return order.next(); }
@@ -524,7 +526,7 @@ void main(string[] args) {
     db.execute(`CREATE TEMP TABLE "GroupedHavingOrders" AS SELECT * FROM "GroupedOrders"`);
     db.execute(`CREATE TEMP TABLE "Nodes" ("RecordId" uuid PRIMARY KEY, "ParentId" uuid)`);
     db.execute(`INSERT INTO "Nodes" VALUES ('00000000-0000-0000-0000-000000000401','00000000-0000-0000-0000-000000000402'), ('00000000-0000-0000-0000-000000000402',NULL), ('00000000-0000-0000-0000-000000000403','00000000-0000-0000-0000-000000000401')`);
-    db.execute(`CREATE TEMP TABLE "TreeNodes" ("RecordId" uuid PRIMARY KEY, "ParentId" uuid, "Path" text, "Parent1" uuid, "Parent2" uuid, "Parent3" uuid, "Parent4" uuid, "Parent5" uuid, "Parent6" uuid, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
+    db.execute(`CREATE TEMP TABLE "TreeNodes" ("RecordId" uuid PRIMARY KEY, "ParentId" uuid, "Path" text, "Parent1" uuid, "Parent2" uuid, "Parent3" uuid, "Parent4" uuid, "Parent5" uuid, "Parent6" uuid, "Title" text, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     db.execute(`INSERT INTO "TreeNodes" ("RecordId","ParentId","Path") VALUES ` ~
         `('00000000-0000-0000-0000-000000000401',NULL,'00000000-0000-0000-0000-000000000401'),` ~
         `('00000000-0000-0000-0000-000000000402','00000000-0000-0000-0000-000000000401','00000000-0000-0000-0000-000000000401.00000000-0000-0000-0000-000000000402')`);
@@ -537,7 +539,7 @@ void main(string[] args) {
     auto aggregate = P.m_aggregateOrder();
     auto tree = P.m_tree(); z8_query_set_executor(tree, new Z8PostgresQueryExecutor(db, "pg_temp"w, "TreeNodes"w));
     auto treeFields = z8_query_declared_fields(tree, true);
-    assert(treeFields.length == 14 && tree.f_parentId.z8_get_attribute("parentKey"w) !is null);
+    assert(treeFields.length == 15 && tree.f_parentId.z8_get_attribute("parentKey"w) !is null);
     auto treeSchema = z8_postgres_create_table_sql("pg_temp"w, tree);
     assert(treeSchema.canFind(`"ParentId" uuid`) && treeSchema.canFind(`"Path" character varying`));
     assert(z8_optional_require(tree.f_path.f_length) == 1000);
@@ -707,20 +709,40 @@ void main(string[] args) {
     auto session = new Z8ApplicationSession("join"w, user, user);
     auto treeRequest = new Z8ApplicationRequest(); treeRequest.session = session;
     auto oldTreeRequest = z8_application_set_request(treeRequest);
+    auto priorBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "pg_temp"w));
     db.beginTransaction();
-    auto newRoot = z8_guid_create(0x411), newChild = z8_guid_create(0x412);
+    auto newRoot = z8_guid_create(0x411), newChild = z8_guid_create(0x412), newGrandchild = z8_guid_create(0x413);
     assert(P.m_createTree(tree, newRoot, z8_guid_zero()) == newRoot);
     assert(P.m_createTree(tree, newChild, newRoot) == newChild);
+    assert(P.m_createTree(tree, newGrandchild, newChild) == newGrandchild);
     auto createdPath = P.m_treePath(tree, newChild);
     assert(createdPath.z8_size() == 2 && createdPath.z8_get(0) == newRoot && createdPath.z8_get(1) == newChild);
     auto hierarchyRow = db.execute(`SELECT "Parent1"::text, "Parent2"::text FROM "TreeNodes" WHERE "RecordId" = '00000000-0000-0000-0000-000000000412'`);
     assert(hierarchyRow.rows[0][0].text == "00000000-0000-0000-0000-000000000411" && hierarchyRow.rows[0][1].text == "00000000-0000-0000-0000-000000000412");
     bool missingParent;
-    try { P.m_createTree(tree, z8_guid_create(0x413), z8_guid_create(0x499)); } catch (Exception) { missingParent = true; }
+    try { P.m_createTree(tree, z8_guid_create(0x414), z8_guid_create(0x499)); } catch (Exception) { missingParent = true; }
     assert(missingParent);
+    // A failed create leaves field values on the wrapper; use a fresh instance.
+    tree = P.m_tree(); z8_query_set_executor(tree, new Z8PostgresQueryExecutor(db, "pg_temp"w, "TreeNodes"w));
+    P.m_moveTree(tree, newChild, z8_guid_create(0x401), "Moved"w);
+    auto movedPath = P.m_treePath(tree, newGrandchild);
+    assert(movedPath.z8_size() == 3 && movedPath.z8_get(0) == z8_guid_create(0x401) && movedPath.z8_get(1) == newChild && movedPath.z8_get(2) == newGrandchild);
+    auto movedRow = db.execute(`SELECT "ParentId"::text, "Title", "Parent1"::text, "Parent2"::text FROM "TreeNodes" WHERE "RecordId" = '00000000-0000-0000-0000-000000000412'`);
+    assert(movedRow.rows[0][0].text == "00000000-0000-0000-0000-000000000401" && movedRow.rows[0][1].text == "Moved");
+    assert(movedRow.rows[0][2].text == "00000000-0000-0000-0000-000000000401" && movedRow.rows[0][3].text == "00000000-0000-0000-0000-000000000412");
+    P.m_readTree(tree); assert(z8_optional_require(P.m_nextTree(tree)));
+    P.m_moveTree(tree, newChild, z8_guid_zero(), "Rooted"w);
+    assert(z8_optional_require(P.m_nextTree(tree)));
+    movedPath = P.m_treePath(tree, newGrandchild);
+    assert(movedPath.z8_size() == 2 && movedPath.z8_get(0) == newChild && movedPath.z8_get(1) == newGrandchild);
+    bool invalidMove;
+    try { P.m_moveTree(tree, newChild, z8_guid_create(0x499), "Denied"w); } catch (Exception) { invalidMove = true; }
+    assert(invalidMove);
+    auto unchanged = db.execute(`SELECT "Title", "Path" FROM "TreeNodes" WHERE "RecordId" = '00000000-0000-0000-0000-000000000412'`);
+    assert(unchanged.rows[0][0].text == "Rooted" && unchanged.rows[0][1].text == "00000000-0000-0000-0000-000000000412");
     db.rollback();
+    assert(db.execute(`SELECT count(*)::text FROM "TreeNodes" WHERE "RecordId" = '00000000-0000-0000-0000-000000000412'`).rows[0][0].text == "0");
     z8_application_set_request(oldTreeRequest);
-    auto priorBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "pg_temp"w));
     wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null, wstring className = "HttpOrder"w, wstring action = "read"w, wstring groupSession = null, wstring having = null, wstring values = null, wstring totals = null, wstring count = null, wstring queryId = null, wstring linkId = null, wstring limit = null) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, className); request.parameters.z8_add("action"w, action); request.parameters.z8_add("fields"w, fields);

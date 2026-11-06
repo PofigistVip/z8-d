@@ -316,7 +316,7 @@ private long z8_query_update_id_run(Z8Object self, Z8Guid id, bool resetChanged)
     auto writer = z8_query_writer(self);
     if (id !is null && id == z8_guid_zero()) return 0;
     if (id !is null) {
-        z8_table_before_write(self, false);
+        z8_table_before_write(self, false, id);
         if (z8_query_user_events_enabled() && z8_native_is_instance(z8_role_table_access_name, self)) z8_role_table_access_before_update(self, id);
         if (z8_query_user_events_enabled() && z8_native_is_instance(z8_role_field_access_name, self)) z8_role_field_access_before_update(self);
         if (z8_query_user_events_enabled()) self.z8_query_virtual_beforeUpdate(id);

@@ -1,6 +1,6 @@
 // Native fields and path lookup from TreeTable.java.
 private enum z8_tree_table_name = "org.zenframework.z8.server.base.table.TreeTable"w;
-private class Z8TreeTableState { Z8Object[8] fields; }
+private class Z8TreeTableState { Z8Object[8] fields; bool updating; }
 private void z8_tree_table_new(Z8Object self) {
     enum base = "org.zenframework.z8.server.base.table.value."w;
     enum indexes = ["parentId"w, "path"w, "parent1"w, "parent2"w, "parent3"w, "parent4"w, "parent5"w, "parent6"w];
@@ -63,6 +63,34 @@ private void z8_tree_table_before_create(Z8Object self) {
     auto parent = z8_field_is_changed(fields[0]) ? z8_primary_cast!Z8Guid(z8_field_primary(fields[0])) : z8_guid_zero();
     auto path = z8_tree_table_path_to(self, z8_nonnull(parent));
     z8_tree_table_set_path(self, path ~ (path.length ? "."w : ""w) ~ z8_guid_to_string(recordId));
+}
+private void z8_tree_table_before_update(Z8Object self, Z8Guid id) {
+    import std.string : replace;
+    auto state = z8_tree_table_state(self);
+    if (!z8_field_is_changed(state.fields[0])) return;
+    auto parent = z8_nonnull(z8_primary_cast!Z8Guid(z8_field_primary(state.fields[0])));
+    auto prefix = z8_tree_table_path_to(self, parent);
+    auto newPath = prefix ~ (prefix.length ? "."w : ""w) ~ z8_guid_to_string(z8_nonnull(id));
+    auto oldPath = z8_tree_table_path_to(self, id);
+    auto connection = z8_connection_current_backend();
+    if (connection is null) throw new Exception("TreeTable update requires a database connection");
+    state.updating = true; scope(exit) state.updating = false;
+    auto saved = new Z8QuerySavedState(self); scope(exit) saved.restore();
+    connection.beginTransaction(); scope(failure) connection.rollback();
+    z8_field_set(state.fields[0], z8_primary_box(parent));
+    z8_query_update_id_run(self, id, true);
+    Z8QueryReadRequest read;
+    read.fields = [state.fields[1]];
+    read.where = z8_sql_string_like(z8_string_field_sql(state.fields[1]), z8_sql_string_const(oldPath ~ "%"w));
+    z8_query_open(self, read, false);
+    while (z8_optional_require(z8_query_next(self))) {
+        auto childId = z8_query_record_id(self);
+        auto previousPath = z8_string_or_empty(z8_primary_cast!wstring(z8_field_primary(state.fields[1])));
+        auto childPath = oldPath.length ? previousPath.replace(oldPath, newPath) : newPath;
+        z8_tree_table_set_path(self, childPath);
+        z8_query_update_id_run(self, childId, true);
+    }
+    connection.commit();
 }
 private Z8Array!Z8Guid z8_tree_table_path_to_array(Z8Object self, Z8Guid id) {
     return z8_tree_table_parse_path(z8_tree_table_path_to(self, id));
