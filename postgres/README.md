@@ -298,8 +298,11 @@ the SQL transaction is controlled by the connection's caller.
 An empty field list selects the query's direct field controls, names, columns
 and extra fields; nested form controls are not yet supported.
 
-The executor currently rejects `aggregateBy` links, geometry, and nontrivial
-HAVING without grouping. Filter-based updates and deletes select
+The executor supports root-only `aggregateBy` grouping over Link fields with
+numeric sum, average, minimum and maximum; filters can reference linked tables.
+Linked projections, a second grouping, HAVING, totals and row locks on these
+queries are rejected. The HTTP metadata path for `aggregateBy` is not yet supported.
+Nontrivial HAVING without grouping is also rejected. Filter-based updates and deletes select
 matching records and invoke the BL events for each record. Record copying reads
 the source through the executor and preserves an active query cursor. Table audit
 values use the active request's session and event level; standalone use without
