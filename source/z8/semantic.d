@@ -1880,7 +1880,9 @@ class Checker {
                         auto primaryJoin = e.token.text == "join" && [ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray,
                             ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.primaryArray, ValueType.selfArray].canFind(receiver);
                         auto guidSort = receiver == ValueType.guidArray && e.token.text == "sort";
-                        if (!primaryJoin && !guidSort && !["size", "isEmpty", "clear", "first", "last", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
+                        auto objectSort = receiver == ValueType.selfArray && e.token.text == "sort" &&
+                            e.left.objectClass !is null && !isPrimaryClass(e.left.objectClass);
+                        if (!primaryJoin && !guidSort && !objectSort && !["size", "isEmpty", "clear", "first", "last", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
                             fail("this method is not yet supported for object arrays", e.token);
                     }
                     switch (e.token.text) {

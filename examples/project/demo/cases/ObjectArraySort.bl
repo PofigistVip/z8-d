@@ -1,0 +1,14 @@
+public class ObjectArraySort {
+    public static int run() {
+        ObjectArraySort[] values = {};
+        ObjectArraySort[] same = values.sort();
+        ObjectArraySort value;
+        same.add(value);
+        if (values.size() != 1 || values.sort().size() != 1) return 1;
+        values.add(new ObjectArraySort);
+        try { values.sort(); return 2; } catch (exception expected) {}
+        ObjectArraySort[] single = {null};
+        if (single.sort().size() != 1) return 3;
+        return 0;
+    }
+}

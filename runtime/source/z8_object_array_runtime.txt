@@ -70,6 +70,12 @@ class Z8ObjectArray(T) : IZ8ObjectArrayView if (is(T : Z8Object)) {
     Z8ObjectArray!T z8_removeAll(T value) { data.z8_removeAll(value); return this; }
     Z8ObjectArray!T z8_removeAll(Z8ObjectArray!T values) { data.z8_removeAll(z8_nonnull(values).data); return this; }
     Z8ObjectArray!T z8_reverse() { data.z8_reverse(); return this; }
+    // Java RCollection.sort compares CLASS wrappers, which are not Comparable.
+    Z8ObjectArray!T z8_sort() {
+        if (z8_size() > 1) throw new Exception("object array elements are not comparable");
+        ++data.z8_version;
+        return this;
+    }
     Z8ObjectArray!T z8_unique() { return new Z8ObjectArray!T(data.z8_unique()); }
     wstring z8_join(wstring separator = ""w) {
         wstring result;
