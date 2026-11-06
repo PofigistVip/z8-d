@@ -3,7 +3,12 @@ private enum z8_report_name = "org.zenframework.z8.server.base.form.report.Repor
 private __gshared wstring z8_report_birt = "birt"w, z8_report_poi = "poi"w,
     z8_report_pdf = "pdf"w, z8_report_excel = "xls"w, z8_report_word = "doc"w,
     z8_report_wordx = "docx"w, z8_report_html = "html"w, z8_report_powerpoint = "ppt"w;
-private class Z8ReportState { wstring engine = "birt"w, name, templateName, format; }
+private class Z8ReportState {
+    wstring engine = "birt"w, name, templateName, format;
+    IZ8FieldOrderCell ranges;
+    Z8IntMap!(Z8Array!wstring) hiddenColumns;
+    Z8Object[wstring] sources;
+}
 private Z8ReportState z8_report_state(Z8Object self) {
     self = z8_nonnull(self);
     if (!z8_native_is_instance(z8_report_name, self)) throw new Exception("invalid Report object");
@@ -12,6 +17,31 @@ private Z8ReportState z8_report_state(Z8Object self) {
     return state;
 }
 private auto z8_report_address(string member)(Z8Object self) { return &__traits(getMember, z8_report_state(self), member); }
+ref Z8ObjectArray!T z8_report_ranges_ref(T)(Z8Object self) if (is(T : Z8Object)) {
+    auto state = z8_report_state(self); auto cell = cast(Z8FieldOrderCell!T)state.ranges;
+    if (cell is null) {
+        if (state.ranges !is null) throw new Exception("incompatible report ranges array");
+        cell = new Z8FieldOrderCell!T(); state.ranges = cell;
+    }
+    return cell.value;
+}
+private Z8IntMap!(Z8Array!wstring)* z8_report_hidden_columns(Z8Object self) {
+    auto state = z8_report_state(self);
+    if (state.hiddenColumns is null) state.hiddenColumns = new Z8IntMap!(Z8Array!wstring)();
+    return &state.hiddenColumns;
+}
+void z8_report_register_data_source(Z8Object self, Z8Object source) {
+    auto object = z8_report_source_object(source);
+    z8_report_state(self).sources[object.z8_index()] = source;
+}
+private Z8Object z8_report_get_data_source(Z8Object self, wstring index) {
+    auto found = z8_string_required(index) in z8_report_state(self).sources;
+    if (found is null) throw new Exception("report data source is not registered");
+    return z8_nonnull(*found);
+}
+private Z8Object z8_report_get_data_source_object(Z8Object self, Z8Object source) {
+    return z8_report_get_data_source(self, z8_nonnull(source).z8_index());
+}
 private wstring* z8_report_constant(string name)() {
     static if (name == "BIRT") return &z8_report_birt;
     else static if (name == "POI") return &z8_report_poi;
@@ -50,10 +80,13 @@ void z8_bind_builtin_report() {
     z8_native_bind_field(z8_report_name ~ ".f_name"w, &z8_report_address!"name");
     z8_native_bind_field(z8_report_name ~ ".f_template"w, &z8_report_address!"templateName");
     z8_native_bind_field(z8_report_name ~ ".f_format"w, &z8_report_address!"format");
+    z8_native_bind_field(z8_report_name ~ ".f_hiddenColumns"w, &z8_report_hidden_columns);
     static foreach (name; ["BIRT", "POI", "Pdf", "Excel", "Word", "WordX", "Html", "Powerpoint"])
         z8_native_bind_field(z8_report_name ~ ".f_"w ~ name.to!wstring, &z8_report_constant!name);
     z8_native_bind(z8_report_name ~ ".m_prepare"w, &z8_report_default_prepare);
     z8_native_bind(z8_report_name ~ ".m_execute"w, &z8_report_default_execute);
     z8_native_bind(z8_report_name ~ ".m_run"w, &z8_report_run);
+    z8_native_bind(z8_report_name ~ ".m_getDataSource"w, &z8_report_get_data_source);
+    z8_native_bind(z8_report_name ~ ".m_getDataSource"w, &z8_report_get_data_source_object);
 }
 shared static this() { z8_bind_builtin_report(); }

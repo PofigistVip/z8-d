@@ -36,12 +36,35 @@ public class SourceProbe {
     public static JsonArray values() { JsonArray result; result.add("one"); result.add("two"); return result; }
 }
 ''', encoding="utf-8")
+    (source / "ConfiguredReport.bl").write_text('''
+import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+import org.zenframework.z8.base.form.report.DataSource;
+import org.zenframework.z8.base.json.JsonArray;
+import org.zenframework.z8.lang.Object;
+public class ConfiguredReport extends Report {
+    [address "A1:B2"] public Range parent;
+    public Range child;
+    parent.ranges = {child}; ranges = {parent};
+    public void configure(JsonArray rows) {
+        parent.source = rows;
+        string[] columns = {"B", "C"}; hiddenColumns.add(0, columns);
+    }
+    public bool verify() {
+        return ranges.size() == 1 && parent.ranges.size() == 1 && parent.ranges[0] == child &&
+            hiddenColumns.get(0).size() == 2 && Range.Vertical == 0 && Range.Horizontal == 1;
+    }
+    public DataSource sourceByName(string name) { return getDataSource(name); }
+    public DataSource sourceByObject(Object value) { return getDataSource(value); }
+}
+''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
 import z8gen.p_SourceProbe;
 import z8gen.p_CustomRows;
+import z8gen.p_ConfiguredReport;
 void main() {
     alias P = Z8p_536F7572636550726F6265;
     auto rows = z8_new!Z8p_437573746F6D526F7773(); z8_nonnull(rows);
@@ -57,6 +80,13 @@ void main() {
     assert(z8_report_source_count(json) == 2 && z8_report_source_next(json) && z8_report_source_next(json) && !z8_report_source_next(json));
     auto simple = P.m_simple(values); z8_report_source_open(simple, 0);
     assert(z8_report_source_count(simple) == 1 && z8_report_source_next(simple) && !z8_report_source_next(simple));
+    auto report = z8_new!Z8p_436F6E666967757265645265706F7274(); z8_nonnull(report);
+    values.z8_set_container(report); values.z8_set_index("rows"w);
+    report.m_configure(values); assert(z8_optional_require(report.m_verify()));
+    auto range = report.f_parent; assert(range.z8_get_attribute("address"w) == "A1:B2"w);
+    auto rangeSource = range.f_source; assert(z8_report_source_object(rangeSource) is values);
+    z8_report_register_data_source(report, rangeSource);
+    assert(report.m_sourceByName("rows"w) is rangeSource && report.m_sourceByObject(values) is rangeSource);
 }
 ''', encoding="utf-8")
     executable = temp / ("report-source.exe" if os.name == "nt" else "report-source")

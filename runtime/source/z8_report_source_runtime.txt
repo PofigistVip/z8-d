@@ -1,6 +1,11 @@
 // BL report data sources and host-facing iteration, adapted from POI sources.
 private enum z8_report_source_name = "org.zenframework.z8.server.base.form.report.DataSource"w;
 private enum z8_report_custom_name = "org.zenframework.z8.server.base.form.report.CustomData"w;
+private enum z8_report_range_name = "org.zenframework.z8.server.base.form.report.Range"w;
+private __gshared Z8Optional!long z8_report_range_vertical = Z8Optional!long(true, 0);
+private __gshared Z8Optional!long z8_report_range_horizontal = Z8Optional!long(true, 1);
+private Z8Optional!long* z8_report_range_vertical_address() { return &z8_report_range_vertical; }
+private Z8Optional!long* z8_report_range_horizontal_address() { return &z8_report_range_horizontal; }
 enum Z8ReportSourceKind { simple, json, custom, query }
 private class Z8ReportSourceState {
     Z8Object source;
@@ -9,6 +14,31 @@ private class Z8ReportSourceState {
     bool initialized;
 }
 private class Z8ReportCustomState { long index, sheet; bool initialized; }
+private class Z8ReportRangeState { Z8Object source; bool sourceInitialized; IZ8FieldOrderCell ranges; }
+private Z8ReportRangeState z8_report_range_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_report_range_name, self)) throw new Exception("invalid report range");
+    auto state = cast(Z8ReportRangeState)self.z8_get_native_state(z8_report_range_name);
+    if (state is null) { state = new Z8ReportRangeState(); self.z8_set_native_state(z8_report_range_name, state); }
+    return state;
+}
+private Z8Object* z8_report_range_source(Z8Object self) {
+    auto state = z8_report_range_state(self);
+    if (!state.sourceInitialized) {
+        state.source = z8_native_new(z8_report_source_name);
+        z8_report_source_assign!(Z8ReportSourceKind.simple)(state.source, z8_native_new("org.zenframework.z8.server.runtime.OBJECT"w));
+        state.sourceInitialized = true;
+    }
+    return &state.source;
+}
+ref Z8ObjectArray!T z8_report_range_ranges_ref(T)(Z8Object self) if (is(T : Z8Object)) {
+    auto state = z8_report_range_state(self); auto cell = cast(Z8FieldOrderCell!T)state.ranges;
+    if (cell is null) {
+        if (state.ranges !is null) throw new Exception("incompatible nested report ranges array");
+        cell = new Z8FieldOrderCell!T(); state.ranges = cell;
+    }
+    return cell.value;
+}
 private Z8ReportSourceState z8_report_source_state(Z8Object self) {
     self = z8_nonnull(self);
     if (!z8_native_is_instance(z8_report_source_name, self)) throw new Exception("invalid report data source");
@@ -84,5 +114,8 @@ void z8_bind_builtin_report_sources() {
     z8_native_bind(c ~ "getIndex"w, &z8_report_custom_index); z8_native_bind(c ~ "getSheet"w, &z8_report_custom_sheet);
     z8_native_bind(c ~ "count"w, &z8_report_custom_default_count);
     z8_native_bind(c ~ "open"w, &z8_report_custom_default_hook); z8_native_bind(c ~ "close"w, &z8_report_custom_default_hook);
+    z8_native_bind_field(z8_report_range_name ~ ".f_source"w, &z8_report_range_source);
+    z8_native_bind_field(z8_report_range_name ~ ".f_Vertical"w, &z8_report_range_vertical_address);
+    z8_native_bind_field(z8_report_range_name ~ ".f_Horizontal"w, &z8_report_range_horizontal_address);
 }
 shared static this() { z8_bind_builtin_report_sources(); }

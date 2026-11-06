@@ -1222,6 +1222,12 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 field.name.text == "controls" && !field.isStatic && field.type == ValueType.selfArray && field.objectClass !is null) {
                 result ~= "@property ref " ~ storageType ~ " f_controls() { return z8_section_controls_ref!(" ~
                     field.objectClass.emittedName ~ ")(this); }\n";
+            } else if (program.isNative && ["org.zenframework.z8.server.base.form.report.Report"w,
+                       "org.zenframework.z8.server.base.form.report.Range"w].canFind(program.nativeName) &&
+                field.name.text == "ranges" && !field.isStatic && field.type == ValueType.selfArray && field.objectClass !is null) {
+                auto helper = program.nativeName == "org.zenframework.z8.server.base.form.report.Report"w ? "z8_report_ranges_ref" : "z8_report_range_ranges_ref";
+                result ~= "@property ref " ~ storageType ~ " f_ranges() { return " ~ helper ~ "!(" ~
+                    field.objectClass.emittedName ~ ")(this); }\n";
             } else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.form.TabControl"w &&
                 field.name.text == "tabs" && !field.isStatic && field.type == ValueType.selfArray && field.objectClass !is null) {
                 result ~= "@property ref " ~ storageType ~ " f_tabs() { return z8_tab_control_tabs_ref!(" ~
