@@ -1,10 +1,12 @@
 // Native User wrappers backed by an identity supplied by the host.
 private enum z8_user_name = "org.zenframework.z8.server.base.security.User"w;
+struct Z8UserEntry { Z8Guid id; wstring classId, title; }
 class Z8UserData {
     Z8Guid id;
     wstring login, firstName, middleName, lastName, description, phone, email;
     Z8PrimaryMap parameters;
     Z8Guid[] roles;
+    Z8UserEntry[] entries;
     Z8Privileges privileges;
     bool administrator, builtinAdministrator, builtinSystem;
     // Java's User.initialize populates public fields only for users with roles.

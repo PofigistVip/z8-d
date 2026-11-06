@@ -589,9 +589,19 @@ void main(string[] args) {
     auto bootFieldKey = z8_guid_create_name("Sample;--.Title"w);
     auto bootRequestKey = z8_guid_create_name("Sample"w);
     auto adminPrivileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2));
-    auto loadedAdmin = z8_postgres_read_user(db, "z8_bootstrap"w, z8_guid_create(2));
+    db.execute(`INSERT INTO "z8_bootstrap"."SystemUserEntries" ("RecordId", "UserId", "EntryId", "Position") VALUES ($1::uuid, $2::uuid, $3::uuid, 5)`,
+        [Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create(0x555)).to!string),
+         Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create(2)).to!string),
+         Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("Sample"w)).to!string)]);
+    auto loadedAdmin = z8_postgres_read_user(db, "z8_bootstrap"w, z8_guid_create(2), bootstrapRegistry);
     assert(loadedAdmin !is null && loadedAdmin.login == "Admin"w && loadedAdmin.builtinAdministrator && loadedAdmin.administrator);
     assert(loadedAdmin.privileges.getRequestAccess(bootRequestKey).execute && loadedAdmin.roles.length == 1);
+    assert(loadedAdmin.entries.length == 2 && loadedAdmin.entries[1].classId == "Sample"w && loadedAdmin.entries[1].title == "Renamed entry"w);
+    db.beginTransaction();
+    db.execute(`DELETE FROM "z8_bootstrap"."SystemUserEntries" WHERE "RecordId" = 'D53F3EBE-4D11-4ACE-99D7-07608B68B6C2'`);
+    auto fallbackAdmin = z8_postgres_read_user(db, "z8_bootstrap"w, z8_guid_create(2), bootstrapRegistry);
+    assert(fallbackAdmin.entries.length == 2 && fallbackAdmin.entries[1].classId == "org.zenframework.z8.server.base.table.system.SystemTools"w);
+    db.rollback();
     auto loadedSystem = (cast(IZ8JobUserResolver)new Z8PostgresDatabase(db, "z8_bootstrap"w)).resolveJobUser(z8_guid_create(1));
     assert(loadedSystem !is null && loadedSystem.login == "System"w && loadedSystem.builtinSystem);
     assert(z8_postgres_read_user(db, "z8_bootstrap"w, z8_guid_create(999999)) is null);

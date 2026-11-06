@@ -71,7 +71,34 @@ void z8_postgres_refresh_user_privileges(Z8PostgresConnection db, wstring schema
 }
 // Resolve the standard Users record together with its current role grants.
 // A host can supply its own resolver for project-specific user parameters.
-Z8UserData z8_postgres_read_user(Z8PostgresConnection db, wstring schema, Z8Guid id) {
+Z8UserEntry[] z8_postgres_load_user_entries(Z8PostgresConnection db, wstring schema, Z8Guid id, Z8RuntimeRegistry registry = null) {
+    if (db is null || db.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
+    if (id is null) throw new Z8PostgresException("user GUID is required");
+    if (registry is null) registry = z8_runtime_get_registry();
+    auto ns = quoteIdentifier(schema);
+    auto rows = db.execute(`SELECT e."RecordId"::text, e."Class" FROM ` ~ ns ~ `."SystemUserEntries" ue JOIN ` ~
+        ns ~ `."SystemEntries" e ON e."RecordId" = ue."EntryId" WHERE ue."UserId" = $1::uuid ` ~
+        `AND ue."RecordId" <> '00000000-0000-0000-0000-000000000000'::uuid ` ~
+        `AND e."RecordId" <> '00000000-0000-0000-0000-000000000000'::uuid ORDER BY ue."Position" ASC`,
+        [Z8PostgresParameter.value(z8_guid_to_string(id).to!string)]);
+    auto descriptors = registry is null ? null : registry.entries();
+    Z8UserEntry[] result;
+    foreach (row; rows.rows) {
+        auto classId = row[1].isNull ? ""w : row[1].text.to!wstring;
+        auto title = "<entry removed>"w;
+        foreach (entry; descriptors) if (entry.classId == classId) { title = entry.displayName; break; }
+        result ~= Z8UserEntry(z8_guid_literal(row[0].text), classId, title);
+    }
+    if (id == z8_guid_create(2)) {
+        enum systemTools = "org.zenframework.z8.server.base.table.system.SystemTools"w;
+        auto systemId = z8_guid_create_name(systemTools);
+        bool present;
+        foreach (entry; result) if (entry.id == systemId) { present = true; break; }
+        if (!present) result ~= Z8UserEntry(systemId, systemTools, z8_string_new("$SystemTools.title$"w));
+    }
+    return result;
+}
+Z8UserData z8_postgres_read_user(Z8PostgresConnection db, wstring schema, Z8Guid id, Z8RuntimeRegistry registry = null) {
     if (db is null || db.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
     if (id is null || id == z8_guid_zero()) return null;
     auto rows = db.execute(`SELECT "Name", "First Name", "Middle Name", "Last Name", "Phone", "Email", ` ~
@@ -86,6 +113,7 @@ Z8UserData z8_postgres_read_user(Z8PostgresConnection db, wstring schema, Z8Guid
     user.phone = text(4); user.email = text(5); user.description = text(6);
     user.builtinAdministrator = id == z8_guid_create(2); user.builtinSystem = id == z8_guid_create(1);
     z8_postgres_refresh_user_privileges(db, schema, user);
+    user.entries = z8_postgres_load_user_entries(db, schema, id, registry);
     user.administrator = user.builtinAdministrator;
     foreach (role; user.roles) if (role == z8_guid_literal("DC08CA72-C668-412F-91B7-022F1C82AC09")) user.administrator = true;
     return user;

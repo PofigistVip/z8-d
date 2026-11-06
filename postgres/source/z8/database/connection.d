@@ -56,7 +56,7 @@ class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection, IZ8Back
     void flush() { if (connection.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed"); }
     IZ8DatabaseConnection openBackgroundConnection() { return new Z8PostgresDatabase(connection.openSibling(), schema, registry); }
     void closeBackgroundConnection() { connection.close(); }
-    Z8UserData resolveJobUser(Z8Guid id) { return z8_postgres_read_user(connection, schema, id); }
+    Z8UserData resolveJobUser(Z8Guid id) { return z8_postgres_read_user(connection, schema, id, registry); }
     long nextSequence(wstring key, long increment, long defaultValue) {
         key = z8_string_required(key);
         synchronized (connection) {

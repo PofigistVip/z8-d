@@ -90,6 +90,9 @@ table is present; existing user assignments are retained and obsolete entries
 are not deleted by the additive synchronizer.
 `SystemEntries.Name` and `SystemRequests.Name` resolve their display names through
 the active runtime registry, with `Class` included as a field dependency.
+`z8_postgres_read_user` loads the user's ordered entry assignments as well as
+role privileges, and supplies the built-in system-tools entry for an administrator
+when it has not been assigned explicitly.
 `UserRoles` provides links to users and roles, built-in administrator
 assignments, a read-only flag based on the current user and protection against
 removing the built-in assignments. The flag is metadata; general access
