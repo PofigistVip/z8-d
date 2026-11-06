@@ -1,0 +1,11 @@
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.AttachmentField;
+import org.zenframework.z8.base.table.value.BoolField;
+import org.zenframework.z8.base.table.value.StringField;
+
+[name "Tasks"] [displayName "Tasks"] [generatable] [request] [entry]
+public class Tasks extends Table {
+    [name "Title"] public StringField title;
+    [name "Done"] public BoolField done;
+    [name "Documents"] public AttachmentField documents;
+}

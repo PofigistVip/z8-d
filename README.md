@@ -78,6 +78,9 @@ Z8**: компилятор, runtime, серверные сервисы и сов
 
 Требуются DMD и DUB. Внешние пакеты D не используются.
 
+Пример небольшого BL-приложения с PostgreSQL и CivetWeb, включая сборку и
+сквозную проверку, описан в [examples/webapp/README.md](examples/webapp/README.md).
+
 ```sh
 dub build
 dub test
