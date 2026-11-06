@@ -8,6 +8,11 @@ same wire layout but must be routed to their respective handlers.
 
 `z8.authority.notifications` provides D encoding, decoding and application to a
 `Z8SessionManager`; `z8.protobuf.wire` contains the necessary wire primitives.
+`privileges.proto` and `z8.authority.privileges` represent default access and
+the original, uncombined table, field and request overrides. Explicit denies
+remain present. Conversion into runtime privileges rejects duplicate IDs and
+entries without an ID or access; an omitted default grants nothing. The wire
+representation preserves unknown fields and limits the number of entries.
 `Z8ProtobufAuthorityNotifier` implements the runtime's user and role notifier
 interfaces and forwards encoded events to a host-provided
 `IZ8AuthorityChangePublisher`. A receiving host dispatches them with
@@ -25,5 +30,6 @@ Transport, endpoint authentication, delivery guarantees and the rest of the
 original RMI interfaces remain to be implemented. Do not accept these messages
 from an untrusted peer without an authenticated transport.
 
-Run `python tests/protobuf_notifications.py` to cross-check serialization with
-Google's Python protobuf runtime; the test requires the `protobuf` Python package.
+Run `python tests/protobuf_notifications.py` and `python tests/protobuf_privileges.py`
+to cross-check serialization with Google's Python protobuf runtime; the tests
+require the `protobuf` Python package.

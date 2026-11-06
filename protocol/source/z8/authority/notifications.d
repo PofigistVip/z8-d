@@ -3,6 +3,7 @@ module z8.authority.notifications;
 import std.conv : to;
 import z8.runtime : Z8Guid, Z8SessionManager, IZ8UserChangeNotifier, IZ8RoleChangeNotifier;
 import z8.protobuf.wire;
+import z8.protobuf.guid;
 
 // UserChanged and RoleChanged share a wire layout, but are separate message
 // types in the schema and must be routed to the appropriate handler.
@@ -12,15 +13,9 @@ struct Z8AuthorityChange {
     ubyte[] unknownFields, unknownGuidFields;
 }
 private void parseGuid(ref Z8AuthorityChange result, const(ubyte)[] data) {
-    if (result.id is null) result.id = new Z8Guid();
-    auto reader = Z8ProtobufReader(data);
-    while (!reader.empty()) {
-        auto start = reader.position;
-        uint field, wire; reader.tag(field, wire);
-        if (field == 1 && wire == 1) result.id.majorBits = reader.fixed64();
-        else if (field == 2 && wire == 1) result.id.minorBits = reader.fixed64();
-        else { reader.skip(field, wire); result.unknownGuidFields ~= data[start .. reader.position]; }
-    }
+    auto guid = Z8ProtobufGuid(result.id, result.unknownGuidFields);
+    z8_proto_merge_guid(guid, data);
+    result.id = guid.value; result.unknownGuidFields = guid.unknownFields;
 }
 Z8AuthorityChange z8_decode_authority_change(const(ubyte)[] data) {
     if (data.length > 1024 * 1024) throw new Z8ProtobufException("protobuf notification exceeds size limit");
@@ -41,10 +36,7 @@ Z8AuthorityChange z8_decode_authority_change(const(ubyte)[] data) {
 ubyte[] z8_encode_authority_change(Z8AuthorityChange value) {
     ubyte[] output;
     if (value.id !is null) {
-        ubyte[] id;
-        if (value.id.majorBits) { z8_proto_tag(id, 1, 1); z8_proto_fixed64(id, value.id.majorBits); }
-        if (value.id.minorBits) { z8_proto_tag(id, 2, 1); z8_proto_fixed64(id, value.id.minorBits); }
-        id ~= value.unknownGuidFields;
+        auto id = z8_proto_encode_guid(Z8ProtobufGuid(value.id, value.unknownGuidFields));
         z8_proto_tag(output, 1, 2); z8_proto_bytes(output, id);
     }
     if (value.schema.length) {

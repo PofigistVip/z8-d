@@ -9,19 +9,24 @@ from runtime_support import import_args, runtime_library
 
 root = Path(__file__).resolve().parents[1]
 schema = (root / "protocol/proto/z8/authority/v1/notifications.proto").read_text(encoding="utf-8")
-for declaration in ("fixed64 most_significant_bits = 1;", "fixed64 least_significant_bits = 2;",
-                    "Guid user_id = 1;", "Guid role_id = 1;", "string schema = 2;"):
+common_schema = (root / "protocol/proto/z8/authority/v1/common.proto").read_text(encoding="utf-8")
+for declaration in ("fixed64 most_significant_bits = 1;", "fixed64 least_significant_bits = 2;"):
+    assert declaration in common_schema
+for declaration in ("Guid user_id = 1;", "Guid role_id = 1;", "string schema = 2;"):
     assert declaration in schema
 
-file = descriptor_pb2.FileDescriptorProto(name="z8/authority/v1/notifications.proto", package="z8.authority.v1", syntax="proto3")
-guid = file.message_type.add(name="Guid")
+common = descriptor_pb2.FileDescriptorProto(name="z8/authority/v1/common.proto", package="z8.authority.v1", syntax="proto3")
+guid = common.message_type.add(name="Guid")
 for name, number in (("most_significant_bits", 1), ("least_significant_bits", 2)):
     guid.field.add(name=name, number=number, label=1, type=descriptor_pb2.FieldDescriptorProto.TYPE_FIXED64)
+file = descriptor_pb2.FileDescriptorProto(name="z8/authority/v1/notifications.proto", package="z8.authority.v1", syntax="proto3")
+file.dependency.append(common.name)
 for name, field in (("UserChanged", "user_id"), ("RoleChanged", "role_id")):
     message = file.message_type.add(name=name)
     message.field.add(name=field, number=1, label=1, type=descriptor_pb2.FieldDescriptorProto.TYPE_MESSAGE, type_name=".z8.authority.v1.Guid")
     message.field.add(name="schema", number=2, label=1, type=descriptor_pb2.FieldDescriptorProto.TYPE_STRING)
 pool = descriptor_pool.DescriptorPool()
+pool.Add(common)
 pool.Add(file)
 Guid = message_factory.GetMessageClass(pool.FindMessageTypeByName("z8.authority.v1.Guid"))
 UserChanged = message_factory.GetMessageClass(pool.FindMessageTypeByName("z8.authority.v1.UserChanged"))
@@ -94,6 +99,7 @@ void main(string[] args) {
     exe = temp / ("protobuf.exe" if os.name == "nt" else "protobuf")
     subprocess.run(["dmd", "-I" + str(root / "protocol/source"), *import_args(), str(source),
                     str(root / "protocol/source/z8/protobuf/wire.d"),
+                    str(root / "protocol/source/z8/protobuf/guid.d"),
                     str(root / "protocol/source/z8/authority/notifications.d"), str(runtime), "-of=" + str(exe)], check=True)
 
     first = Guid(most_significant_bits=0xFEDCBA9876543210).SerializeToString() + b"\x18\x7b"

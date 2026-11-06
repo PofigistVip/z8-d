@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package z8.authority.v1;
+
+import "z8/authority/v1/common.proto";
+
+message Access {
+  bool read = 1;
+  bool write = 2;
+  bool create = 3;
+  bool copy = 4;
+  bool destroy = 5;
+  bool execute = 6;
+}
+
+message PrivilegeEntry {
+  Guid id = 1;
+  Access access = 2;
+}
+
+message Privileges {
+  Access default_access = 1;
+  repeated PrivilegeEntry tables = 2;
+  repeated PrivilegeEntry fields = 3;
+  repeated PrivilegeEntry requests = 4;
+}

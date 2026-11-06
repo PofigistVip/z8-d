@@ -136,6 +136,7 @@ void main(string[] args) {
             str(root / "webserver/source/z8/webserver/civetweb.d"),
             str(root / "integrations/postgres_webserver/source/z8/integration/postgres_authority.d"),
             str(root / "protocol/source/z8/protobuf/wire.d"), str(root / "protocol/source/z8/authority/notifications.d"),
+            str(root / "protocol/source/z8/protobuf/guid.d"),
             str(harness), str(civet), str(runtime), "-of=" + str(exe)]
     args += [str(bin_dir.parent / "lib/libpq.lib")] if os.name == "nt" else ["-L-lpq", "-L-lpthread", "-L-ldl"]
     response = temp / "dmd.rsp"

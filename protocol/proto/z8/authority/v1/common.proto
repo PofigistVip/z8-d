@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package z8.authority.v1;
+
+// The unsigned words correspond to Java UUID's most/least significant bits.
+message Guid {
+  fixed64 most_significant_bits = 1;
+  fixed64 least_significant_bits = 2;
+}
