@@ -28,6 +28,19 @@ private SourceUnit[] readProject(string root) {
     return units;
 }
 
+// Merge source roots deterministically: the main root shadows dependencies,
+// and earlier dependencies shadow later ones in the generated module set.
+private SourceUnit[] readProjectWithDependencies(string root, string[] dependencies) {
+    SourceUnit[] units;
+    bool[string] seen;
+    foreach (path; [root] ~ dependencies) foreach (unit; readProject(path)) {
+        if (unit.name in seen) continue;
+        seen[unit.name] = true;
+        units ~= unit;
+    }
+    return units;
+}
+
 private string runtimeRoot() {
     auto configured = environment.get("Z8_RUNTIME_ROOT", "");
     auto root = configured.length ? absolutePath(configured) : buildPath(dirName(thisExePath()), "runtime");
@@ -120,16 +133,28 @@ private int buildExecutable(GeneratedModule[] modules, string outputPath) {
 }
 
 int main(string[] args) {
-    bool valid = args.length == 3 && (args[1] == "lex" || args[1] == "compile") ||
-                 args.length == 4 && args[1] == "project" ||
-                 args.length == 5 && (args[1] == "build" || args[1] == "check-resources");
+    size_t required;
+    if (args.length > 1) {
+        if (args[1] == "lex" || args[1] == "compile") required = 3;
+        else if (args[1] == "project") required = 4;
+        else if (args[1] == "build" || args[1] == "check-resources") required = 5;
+    }
+    bool valid = required && args.length >= required;
+    string[] dependencies;
+    if (valid && (args[1] == "lex" || args[1] == "compile")) valid = args.length == required;
+    else if (valid) {
+        for (size_t i = required; i < args.length; i += 2) {
+            if (args[i] != "--dependency" || i + 1 >= args.length || !args[i + 1].length) { valid = false; break; }
+            dependencies ~= args[i + 1];
+        }
+    }
     if (!valid) {
-        stderr.writeln("Usage: z8d <lex|compile> <file.bl> | z8d project <source-root> <output-dir> | z8d build <source-root> <class.method> <output> | z8d check-resources <source-root> <resources-dir> <language>");
+        stderr.writeln("Usage: z8d <lex|compile> <file.bl> | z8d project <source-root> <output-dir> [--dependency <source-root>]... | z8d build <source-root> <class.method> <output> [--dependency <source-root>]... | z8d check-resources <source-root> <resources-dir> <language> [--dependency <source-root>]...");
         return 2;
     }
     try {
         if (args[1] == "check-resources") {
-            auto units = readProject(args[2]);
+            auto units = readProjectWithDependencies(args[2], dependencies);
             compileSources(units);
             size_t count;
             auto missing = checkResources(units, args[3], args[4], count);
@@ -142,12 +167,12 @@ int main(string[] args) {
         }
         if (args[1] == "compile") { write(compile(readText(fileSystemPath(args[2])))); return 0; }
         if (args[1] == "project") {
-            auto modules = compileSources(readProject(args[2]));
+            auto modules = compileSources(readProjectWithDependencies(args[2], dependencies));
             writeModules(modules, args[3]);
             writeln("Generated ", modules.length, " D modules in ", absolutePath(args[3]));
             return 0;
         }
-        if (args[1] == "build") return buildExecutable(compileSources(readProject(args[2]), args[3]), args[4]);
+        if (args[1] == "build") return buildExecutable(compileSources(readProjectWithDependencies(args[2], dependencies), args[3]), args[4]);
         auto lexer = new Lexer(readText(fileSystemPath(args[2])));
         while (true) {
             auto t = lexer.next();

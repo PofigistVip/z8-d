@@ -57,7 +57,9 @@ dub run -- lex path/to/file.bl
 dub run -- compile examples/math.bl
 dub run -- project examples/project generated
 dub run -- build examples/project demo.Main.run example-app
+z8d project app/src generated --dependency standard/src --dependency other/src
 python tests/integration.py
+python tests/project_dependencies.py
 python tests/compound_assignment.py
 python tests/map_initializers.py
 python tests/integer_maps.py
@@ -119,6 +121,12 @@ python tests/string_oracle.py
 python tests/lexer_oracle.py path/to/original-z8 --corpus
 python tests/z8_compiler_oracle.py path/to/original-z8
 ```
+
+Команды `project`, `build` и `check-resources` принимают повторяемый параметр
+`--dependency <корень-BL>`. Исходники объединяются в один набор: основной
+корень имеет приоритет, затем зависимости в порядке перечисления. Поэтому при
+совпадении полного имени генерируется одна версия класса; независимое разрешение
+одноимённых классов внутри разных проектов пока не реализовано.
 
 Интеграционные проверки требуют Python 3 и DMD в `PATH`; двум проверкам с суффиксом
 `oracle` также нужен JDK с `java` и `javac`. Они компилируют сгенерированный D-код
