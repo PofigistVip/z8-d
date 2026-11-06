@@ -3,6 +3,7 @@ enum Z8MonitorLevel { info, warning, error }
 // in their original categories and returned in Java's order, after the PDF type.
 class Z8ApplicationConfig {
     bool multitenant;
+    bool clientHashesPasswords = true;
     int uploadMaxMiB = 5, downloadMaxMiB = 1;
     wstring[] textExtensions = ["txt"w, "xml"w];
     wstring[] imageExtensions = ["tif"w, "tiff"w, "jpg"w, "jpeg"w, "gif"w, "png"w, "bmp"w];
@@ -11,7 +12,7 @@ class Z8ApplicationConfig {
         "odt"w, "odp"w, "ods"w, "odf"w, "odg"w, "wpd"w, "sxw"w, "sxi"w, "sxc"w, "sxd"w, "stw"w, "vsd"w];
     Z8ApplicationConfig copy() {
         auto result = new Z8ApplicationConfig();
-        result.multitenant = multitenant; result.uploadMaxMiB = uploadMaxMiB; result.downloadMaxMiB = downloadMaxMiB;
+        result.multitenant = multitenant; result.clientHashesPasswords = clientHashesPasswords; result.uploadMaxMiB = uploadMaxMiB; result.downloadMaxMiB = downloadMaxMiB;
         result.textExtensions = textExtensions.dup; result.imageExtensions = imageExtensions.dup;
         result.emailExtensions = emailExtensions.dup; result.officeExtensions = officeExtensions.dup;
         return result;

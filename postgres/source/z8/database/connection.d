@@ -8,7 +8,7 @@ import z8.database.privileges : z8_postgres_read_user;
 import z8.database.plan : quoteIdentifier;
 
 // Adapter for the request-local BL Connection and Query.setConnection APIs.
-class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection, IZ8JobUserResolver {
+class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection, IZ8JobUserResolver, IZ8UserPasswordVerifier {
     private Z8PostgresConnection connection;
     private wstring schema;
     private Z8RuntimeRegistry registry;
@@ -57,6 +57,12 @@ class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection, IZ8Back
     IZ8DatabaseConnection openBackgroundConnection() { return new Z8PostgresDatabase(connection.openSibling(), schema, registry); }
     void closeBackgroundConnection() { connection.close(); }
     Z8UserData resolveJobUser(Z8Guid id) { return z8_postgres_read_user(connection, schema, id, registry); }
+    bool lockMatchingPassword(Z8Guid id, wstring passwordHash) {
+        if (!connection.inTransaction()) throw new Z8PostgresException("password verification requires a transaction");
+        auto rows = connection.execute("SELECT 1 FROM " ~ quoteIdentifier(schema) ~ `."SystemUsers" WHERE "RecordId" = $1::uuid AND "Password" = $2::text FOR UPDATE`,
+            [Z8PostgresParameter.value(z8_guid_to_string(z8_nonnull(id)).to!string), Z8PostgresParameter.value(z8_string_required(passwordHash).to!string)]);
+        return rows.rows.length == 1;
+    }
     long nextSequence(wstring key, long increment, long defaultValue) {
         key = z8_string_required(key);
         synchronized (connection) {

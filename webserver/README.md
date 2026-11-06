@@ -60,8 +60,11 @@ implement it, or the PostgreSQL backend can resolve standard users and privilege
 
 For `request=login`, the dispatcher writes the authenticated session, user
 profile, roles, parameters and available entry descriptors. Authentication is
-still supplied by `IZ8HttpAuthority`. Login-time password/email changes and the
-experimental dashboard are not implemented.
+still supplied by `IZ8HttpAuthority`. Login-time email changes and password
+changes are supported. The password verifier locks the PostgreSQL user row until
+the update commits; `Z8ApplicationConfig.clientHashesPasswords` controls whether
+the client supplies the existing Z8 MD5 hashes or the server computes them.
+The experimental dashboard is not implemented.
 `request=settings` saves `data` to the current session user's `SystemUsers`
 record through the active database backend.
 

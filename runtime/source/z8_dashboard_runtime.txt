@@ -24,8 +24,10 @@ private void z8_dashboard_login_info() {
     auto session = z8_nonnull(request.session), user = z8_nonnull(session.user);
     auto params = z8_nonnull(request.parameters);
     if (request.writer.scopes.length != 2) throw new Exception("response object is not open");
-    if (params.z8_get("newPassword"w) !is null || params.z8_get("email"w) !is null)
-        throw new Exception("login profile changes are not implemented");
+    auto newPassword = params.z8_get("newPassword"w);
+    if (newPassword !is null) { z8_dashboard_change_password(user, params.z8_get("password"w), newPassword); return; }
+    auto email = params.z8_get("email"w);
+    if (email !is null) { z8_dashboard_change_email(user, email); return; }
     if (params.z8_get("experimental"w) !is null) throw new Exception("experimental dashboard is not implemented");
     Z8Object[] entries;
     foreach (entry; user.entries) {
@@ -56,15 +58,45 @@ private void z8_dashboard_login_info() {
     }
     writer.finish('}'); writer.finish('}');
 }
+private Z8Object z8_dashboard_users_table() {
+    auto registry = z8_runtime_get_registry();
+    auto users = registry is null ? null : registry.newTableByName("SystemUsers"w);
+    if (users is null) users = z8_native_new(z8_users_name);
+    if (!z8_native_is_instance(z8_users_name, users)) throw new Exception("SystemUsers is not a Users table");
+    return users;
+}
+private void z8_dashboard_change_password(Z8UserData user, wstring oldPassword, wstring newPassword) {
+    auto connection = z8_connection_current_backend();
+    auto verifier = cast(IZ8UserPasswordVerifier)connection;
+    if (verifier is null) throw new Exception("database does not support password verification");
+    oldPassword = oldPassword is null ? ""w : oldPassword;
+    if (!z8_application_configuration().clientHashesPasswords) {
+        oldPassword = z8_crypto_md5(oldPassword); newPassword = z8_crypto_md5(newPassword);
+    }
+    {
+        connection.beginTransaction();
+        scope(failure) connection.rollback();
+        if (!verifier.lockMatchingPassword(z8_nonnull(user.id), oldPassword)) throw new Exception("access denied");
+        auto users = z8_dashboard_users_table(); auto fields = z8_users_state(users).fields;
+        z8_field_set(fields[2], z8_primary_box(newPassword)); z8_field_set(fields[12], z8_primary_box(false));
+        if (!z8_query_update_id_run(users, user.id, true)) throw new Exception("user was not updated");
+        connection.commit();
+    }
+    user.changePassword = false;
+}
+private void z8_dashboard_change_email(Z8UserData user, wstring email) {
+    if (z8_str_compareNoCase(z8_string_or_empty(user.email), email) == 0) return;
+    auto users = z8_dashboard_users_table();
+    z8_field_set(z8_users_state(users).fields[7], z8_primary_box(email));
+    if (!z8_query_update_id_run(users, z8_nonnull(user.id), true)) throw new Exception("user was not updated");
+    user.email = email;
+}
 private void z8_dashboard_save_settings() {
     auto request = z8_application_require_request();
     auto user = z8_nonnull(z8_nonnull(request.session).user);
     if (request.writer.scopes.length != 2) throw new Exception("response object is not open");
     auto settings = z8_nonnull(request.parameters).z8_get("data"w);
-    auto registry = z8_runtime_get_registry();
-    auto users = registry is null ? null : registry.newTableByName("SystemUsers"w);
-    if (users is null) users = z8_native_new(z8_users_name);
-    if (!z8_native_is_instance(z8_users_name, users)) throw new Exception("SystemUsers is not a Users table");
+    auto users = z8_dashboard_users_table();
     auto field = z8_nonnull(z8_users_state(users).fields[13]);
     z8_field_set(field, z8_primary_box(settings));
     z8_query_update_id_run(users, z8_nonnull(user.id), true);

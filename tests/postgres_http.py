@@ -149,7 +149,7 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
         if (server != "test"w || (id != "full"w && id != "limited"w && id != "denied"w)) return null;
         auto user = new Z8UserData(); user.id = z8_guid_create(id == "full"w ? 2 : 3);
         user.builtinAdministrator = id == "full"w;
-        user.login = "Alice"w; user.firstName = "Alice"w; user.settings = "{}"w; user.changePassword = true;
+        user.login = "Alice"w; user.firstName = "Alice"w; user.email = "old@example.org"w; user.settings = "{}"w; user.changePassword = true;
         user.roles = [z8_guid_create(9)]; user.roleNames = ["Operators"w];
         user.entries = [Z8UserEntry(z8_guid_create_name("Sample"w), "Sample"w, "Sample"w), Z8UserEntry(z8_guid_create(9), "MissingEntry"w, "Missing"w)];
         user.parameters.z8_add("theme"w, z8_primary_box("dark"w));
@@ -176,17 +176,18 @@ void main(string[] args) {
     auto setup = new Z8PostgresConnection(databaseInfo);
     setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Blob" bytea, "ChildLink" uuid, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     setup.execute(`CREATE TABLE "ContentLog" (value integer)`);
-    setup.execute(`CREATE TABLE "SystemUsers" ("RecordId" uuid PRIMARY KEY, "Settings" bytea, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
-    setup.execute(`INSERT INTO "SystemUsers" ("RecordId", "Settings") VALUES ('00000000-0000-0000-0000-000000000002', convert_to('{}','UTF8'))`);
+    setup.execute(`CREATE TABLE "SystemUsers" ("RecordId" uuid PRIMARY KEY, "Settings" bytea, "Password" text, "Change Password" smallint, "Email" text, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
+    setup.execute(`INSERT INTO "SystemUsers" ("RecordId", "Settings", "Password", "Change Password", "Email") VALUES ('00000000-0000-0000-0000-000000000002', convert_to('{}','UTF8'), 'oldhash', 1, 'old@example.org')`);
     setup.execute(`INSERT INTO "Sample" ("RecordId", "Title", "Amount") VALUES ('00000000-0000-0000-0000-000000000001', 'First', 5), ('00000000-0000-0000-0000-000000000002', 'Second', 10)`);
     setup.close();
+    auto authority = new Authority();
     auto server = new Z8CivetServer("127.0.0.1:0", (Z8HttpRequest request) {
         auto connection = new Z8PostgresConnection(databaseInfo);
         scope(exit) connection.close();
         auto previous = z8_connection_set_current(new Z8PostgresDatabase(connection, "public"w));
         scope(exit) z8_connection_set_current(previous);
         z8_application_dispatch_request();
-    }, 2048, Z8ResponseMode.application, "test"w, new Authority(), "Denied"w, null, "/request.json");
+    }, 2048, Z8ResponseMode.application, "test"w, authority, "Denied"w, null, "/request.json");
     scope(exit) server.stop();
     writeln(server.port()); stdout.flush(); readln(); server.stop();
     auto verify = new Z8PostgresConnection(databaseInfo);
@@ -195,7 +196,22 @@ void main(string[] args) {
     row = verify.execute(`SELECT "CreatedAt" FROM "Sample" WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
     assert(row.rows.length == 1 && row.rows[0][0].text == "10");
     assert(verify.execute(`SELECT convert_from("Settings", 'UTF8') FROM "SystemUsers" WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`).rows[0][0].text == `{"theme":"ночь"}`);
-    assert(verify.execute(`SELECT count(*) FROM "ContentLog"`).rows[0][0].text == "2"); verify.close();
+    row = verify.execute(`SELECT "Password", "Change Password", "Email" FROM "SystemUsers" WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
+    assert(row.rows[0][0].text == "newhash" && row.rows[0][1].text == "0" && row.rows[0][2].text == "new@example.org");
+    assert(verify.execute(`SELECT count(*) FROM "ContentLog"`).rows[0][0].text == "2");
+    verify.execute(`UPDATE "SystemUsers" SET "Password" = md5('old secret') WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
+    auto originalConfig = z8_application_configuration(), plainConfig = z8_application_configuration();
+    plainConfig.clientHashesPasswords = false; z8_application_configure(plainConfig);
+    auto plainUser = new Z8UserData(); plainUser.id = z8_guid_create(2);
+    auto plainRequest = new Z8ApplicationRequest(); plainRequest.session = new Z8ApplicationSession("plain"w, plainUser, plainUser);
+    plainRequest.monitor = new Z8RequestMonitor(); plainRequest.parameters.z8_add("request"w, "login"w);
+    plainRequest.parameters.z8_add("password"w, "old secret"w); plainRequest.parameters.z8_add("newPassword"w, "new secret"w);
+    auto previousRequest = z8_application_set_request(plainRequest);
+    auto previousBackend = z8_connection_set_current(new Z8PostgresDatabase(verify, "public"w));
+    z8_application_start_response(plainRequest, "login"w); z8_application_dispatch_request();
+    z8_connection_set_current(previousBackend); z8_application_set_request(previousRequest); z8_application_configure(originalConfig);
+    assert(verify.execute(`SELECT "Password" = md5('new secret') FROM "SystemUsers" WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`).rows[0][0].text == "t");
+    verify.close();
 }
 ''', encoding="utf-8")
     exe = temp / ("postgres-http.exe" if os.name == "nt" else "postgres-http")
@@ -259,6 +275,14 @@ void main(string[] args) {
                     return json.loads(response.read())
                 finally:
                     conn.close()
+            result = request(request="login", action=None, password="wrong", newPassword="newhash")
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = request(request="login", action=None, password="oldhash", newPassword="newhash")
+            assert result["success"], result
+            result = request(request="login", action=None, email="OLD@EXAMPLE.ORG")
+            assert result["success"], result
+            result = request(request="login", action=None, email="new@example.org")
+            assert result["success"], result
             result = request(sort='[{"property":"amount","direction":"DESC"}]', limit="1")
             assert result["success"] and result["data"][0]["title"] == "Second", result
             result = request(session="limited")
