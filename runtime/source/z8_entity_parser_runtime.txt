@@ -50,6 +50,27 @@ private Z8Object z8_entity_parser_from_json(Z8Object self, Z8Object json) {
     z8_entity_parser_set_json(self, json); z8_entity_parser_set_entity(self, null);
     return z8_entity_parser_get_entity(z8_nonnull(self.z8_entity_parser_virtual_read()));
 }
+private long z8_entity_parser_json_long(JSONValue value) {
+    import std.math : isNaN;
+    switch (value.type) {
+        case JSONType.integer: return value.integer;
+        case JSONType.uinteger: return cast(long)value.uinteger;
+        case JSONType.float_:
+            if (isNaN(value.floating)) return 0;
+            if (value.floating >= cast(double)long.max) return long.max;
+            if (value.floating <= cast(double)long.min) return long.min;
+            return cast(long)value.floating;
+        case JSONType.string:
+            if (value.str.length && (value.str[$ - 1] == 'L' || value.str[$ - 1] == 'l')) throw new Exception("invalid JSON integer");
+            return z8_int_parse(value.str.to!wstring);
+        default: throw new Exception("invalid JSON integer");
+    }
+}
+private Z8Date z8_entity_parser_json_date(JSONValue value) {
+    if (value.type == JSONType.null_) return null;
+    try { return z8_date_from_ticks(z8_entity_parser_json_long(value)); }
+    catch (Exception) { return z8_date_parse(z8_json_value_text(value)); }
+}
 private Z8Object z8_entity_parser_to_json_array(Z8Object self, Z8ObjectArray!Z8Object entities) {
     z8_entity_parser_state(self);
     if (entities is null) return null;
@@ -84,7 +105,10 @@ private Z8Object z8_entity_parser_read_kind(string kind)(Z8Object self, wstring 
         else static if (kind == "Decimal") boxed = z8_primary_box(z8_optional_require(z8_json_object_get_decimal(json, key)));
         else static if (kind == "Guid") boxed = z8_primary_box(z8_json_object_get_guid(json, key));
         else static if (kind == "Bool") boxed = z8_primary_box(value.type == JSONType.true_);
-        else static if (kind == "Date") boxed = z8_primary_box(z8_json_object_get_date(json, key));
+        else static if (kind == "Date") {
+            auto exact = key.to!string in z8_json_object_state(json).decimals;
+            boxed = z8_primary_box(exact is null ? z8_entity_parser_json_date(value) : z8_date_from_ticks(z8_json_bigdecimal_long(*exact)));
+        }
         else static if (kind == "Datespan") boxed = z8_primary_box(z8_datespan_parse(z8_json_object_get_string(json, key)));
         z8_entity_set(z8_entity_parser_get_entity(self), key, boxed);
     }
@@ -162,6 +186,46 @@ private Z8Object z8_entity_parser_write_keys(bool nonempty)(Z8Object self, Z8Arr
     if (keys !is null) for (long i; i < keys.z8_size(); ++i) z8_entity_parser_write_key!nonempty(self, keys.z8_get(i));
     return z8_nonnull(self);
 }
+private Z8Primary z8_entity_parser_get_json_value(JSONValue value, wstring type, bool arrayValue) {
+    if (!["string"w, "boolean"w, "guid"w, "date"w, "decimal"w, "int"w].canFind(type))
+        throw new Exception("unsupported EntityParser value type");
+    if (type == "string"w) {
+        if (value.type == JSONType.null_) { auto result = new Z8Primary(); result.kind = Z8PrimaryKind.text; return result; }
+        return z8_primary_box(z8_json_value_text(value));
+    }
+    if (value.type == JSONType.null_ && (type != "int"w || arrayValue)) return null;
+    if (type == "boolean"w) return z8_primary_box(value.type == JSONType.true_);
+    if (type == "guid"w) return z8_primary_box(z8_guid_parse(z8_json_value_text(value)));
+    if (type == "date"w) return z8_primary_box(z8_entity_parser_json_date(value));
+    if (type == "decimal"w) return z8_primary_box(z8_json_value_decimal(value));
+    if (type == "int"w) return z8_primary_box(arrayValue ? z8_entity_parser_json_long(value) : cast(long)z8_json_array_integer(value));
+    throw new Exception("unsupported EntityParser value type");
+}
+private Z8Primary z8_entity_parser_get_value(Z8Object selfOrJson, wstring key, wstring type) {
+    if (key is null) return null;
+    auto json = z8_native_is_instance(z8_entity_parser_name, z8_nonnull(selfOrJson)) ? z8_entity_parser_get_json(selfOrJson) : selfOrJson;
+    auto state = z8_json_object_state(json);
+    auto value = z8_json_object_get(json, key);
+    if (auto exact = key.to!string in state.decimals) {
+        if (type == "int"w) return z8_primary_box(cast(long)cast(int)z8_json_bigdecimal_long(*exact));
+        if (type == "decimal"w) return z8_primary_box(z8_math_result(z8_literal_parse_double(z8_json_bigdecimal_text(*exact))));
+        if (type == "date"w) return z8_primary_box(z8_date_from_ticks(z8_json_bigdecimal_long(*exact)));
+        if (type == "string"w) return z8_primary_box(z8_json_bigdecimal_text(*exact).to!wstring);
+    }
+    return z8_entity_parser_get_json_value(value, type, false);
+}
+private Z8Primary z8_entity_parser_get_array_value(Z8Object json, Z8Optional!long index, wstring type) {
+    auto state = z8_json_array_state(json);
+    auto position = z8_json_array_position(state, index);
+    auto value = state.value.array[position];
+    if (auto exact = position in state.decimals) {
+        if (type == "int"w) return z8_primary_box(z8_json_bigdecimal_long(*exact));
+        if (type == "decimal"w) return z8_primary_box(z8_math_result(z8_literal_parse_double(z8_json_bigdecimal_text(*exact))));
+        if (type == "date"w) return z8_primary_box(z8_date_from_ticks(z8_json_bigdecimal_long(*exact)));
+        if (type == "string"w) return z8_primary_box(z8_json_bigdecimal_text(*exact).to!wstring);
+    }
+    return z8_entity_parser_get_json_value(value, type, true);
+}
 void z8_bind_builtin_entity_parser() {
     enum p = z8_entity_parser_name ~ ".m_"w;
     z8_native_bind(p ~ "getRegistry"w, &z8_entity_parser_get_registry); z8_native_bind(p ~ "setRegistry"w, &z8_entity_parser_set_registry);
@@ -191,5 +255,7 @@ void z8_bind_builtin_entity_parser() {
     z8_native_bind(p ~ "writeNonEmpty"w, &z8_entity_parser_write_nested!true);
     z8_native_bind(p ~ "writeNonEmpty"w, &z8_entity_parser_write_key!true);
     z8_native_bind(p ~ "writeNonEmpty"w, &z8_entity_parser_write_keys!true);
+    z8_native_bind(p ~ "getValue"w, &z8_entity_parser_get_value);
+    z8_native_bind(p ~ "getValue"w, &z8_entity_parser_get_array_value);
 }
 shared static this() { z8_bind_builtin_entity_parser(); }

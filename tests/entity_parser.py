@@ -32,7 +32,7 @@ public class SampleParser extends EntityParser {
     virtual public EntityParser write() { writes += 1; getJson().set("title", getEntity().getString("title")); return this; }
     public void readParts() {
         readString("text"); readInt("number"); readDecimal("amount"); readBool("flag");
-        readGuid("id"); readDate("day"); readDatespan("span");
+        readGuid("id"); readDate("day"); readDate("epoch"); readDatespan("span");
         readJsonObject("object"); readJsonArray("array");
         readValue("csv", "decimal"); readValue("integerText", "integer");
         readValue("booleanText", "boolean"); readValue("text", "string");
@@ -46,6 +46,9 @@ public class SampleParser extends EntityParser {
         writeNonEmpty("keep", "yes"); writeNonEmpty("rawBool");
         string[] nonempty = {"rawNumber", "rawBool"}; writeNonEmpty(nonempty);
     }
+    public primary ownValue(string key, string type) { return getValue(key, type); }
+    public static primary objectValue(JsonObject value, string key, string type) { return getValue(value, key, type); }
+    public static primary arrayValue(JsonArray value, int index, string type) { return getValue(value, index, type); }
 }
 ''', encoding="utf-8")
     (source / "ParserProbe.bl").write_text('''
@@ -79,7 +82,7 @@ public class ParserProbe {
         JsonObject input;
         input.set("text", "hello"); input.set("number", 12); input.set("amount", 3.5); input.set("flag", true);
         input.set("id", '00000000-0000-0000-0000-000000000007'); input.set("day", "2024-02-01T00:00:00");
-        input.set("span", "1 02:03:04"); input.set("csv", "1,25"); input.set("integerText", "42");
+        input.set("epoch", 1709199045000); input.set("span", "1 02:03:04"); input.set("csv", "1,25"); input.set("integerText", "42");
         input.set("booleanText", "true"); input.set("rawNumber", 77); input.set("rawBool", false);
         JsonObject nested; nested.set("value", "inside"); input.set("object", nested);
         JsonArray array; array.add("entry"); input.set("array", array);
@@ -87,10 +90,19 @@ public class ParserProbe {
         if (entity.getString("text") != "hello" || entity.getInt("number") != 12 ||
             (decimal)entity.get("amount") != 3.5 || !entity.getBool("flag") ||
             entity.getGuid("id") != '00000000-0000-0000-0000-000000000007') return false;
+        if (entity.getDate("epoch").ticks() != 1709199045000) return false;
         if (entity.getJsonObject("object").getString("value") != "inside" ||
             entity.getJsonArray("array").getString(0) != "entry") return false;
         if ((decimal)entity.get("csv") != 1.25 || entity.getInt("integerText") != 42 ||
             !entity.getBool("booleanText") || entity.getInt("rawNumber") != 77 || entity.getBool("rawBool")) return false;
+        if ((int)parser.ownValue("number", "int") != 12 ||
+            (date)parser.ownValue("epoch", "date") != entity.getDate("epoch") ||
+            (string)SampleParser.objectValue(input, "text", "string") != "hello" ||
+            (bool)SampleParser.objectValue(input, "flag", "boolean") != true) return false;
+        JsonArray typed; typed.add(4294967297); typed.add("value"); typed.add(false);
+        if ((int)SampleParser.arrayValue(typed, 0, "int") != 4294967297 ||
+            (string)SampleParser.arrayValue(typed, 1, "string") != "value" ||
+            (bool)SampleParser.arrayValue(typed, 2, "boolean")) return false;
         JsonObject empty; parser.setJson("{}"); parser.writeParts(nested, array, empty);
         JsonObject output = parser.getJson();
         if (output.getString("text") != "hello" || output.getInt("number") != 12 ||
