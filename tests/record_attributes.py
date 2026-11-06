@@ -12,7 +12,7 @@ public class RecordProbe extends BaseTable {
     public IntField count;
     public string label = "Prefix";
     public string makeTitle() { return label + "!"; }
-    records {
+    [tag label] [description "Static records"] records {
         [title "42 value"] [count -7] First = '00000000-0000-0000-0000-000000000001';
         [title makeTitle()] public Second = '00000000-0000-0000-0000-000000000002';
         Bare = '00000000-0000-0000-0000-000000000003';
@@ -85,4 +85,10 @@ void main() {
         result = subprocess.run([str(compiler), "project", str(source), str(temp / "invalid")], capture_output=True, text=True)
         if result.returncode == 0:
             raise SystemExit("Invalid record attribute accepted: " + attributes)
+    invalid_blocks = ['[tag missing]', '[name "1invalid"]', '[tag "a"] [tag "b"]']
+    for attributes in invalid_blocks:
+        probe.write_text("class RecordProbe { " + attributes + " records {} }", encoding="utf-8")
+        result = subprocess.run([str(compiler), "project", str(source), str(temp / "invalid")], capture_output=True, text=True)
+        if result.returncode == 0:
+            raise SystemExit("Invalid record block attribute accepted: " + attributes)
 print("Record attributes preserve values, field identity and inheritance")

@@ -346,7 +346,11 @@ class Parser {
                 if (current.text != ";") { init.assignmentOperator = take().text; init.expression = initializer(); }
                 expect(";"); result.memberInitializers ~= init; continue;
             }
-            if (accept("records")) { if (attributes.length) error("record block attributes are not supported yet"); parseRecords(result); continue; }
+            if (accept("records")) {
+                result.recordBlockAttributes ~= attributes;
+                parseRecords(result);
+                continue;
+            }
             auto declaredFinal = accept("final");
             bool isPriorityOperator = current.text == "operator" && look(1).text == "(";
             bool isCastOperator = current.text == "operator" && !isPriorityOperator;

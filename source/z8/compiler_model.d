@@ -212,6 +212,8 @@ class Program {
     Statement[] memberInitializers;
     Import[] imports;
     TypeAttribute[] attributes;
+    // Attributes belong to the records block, not to its individual records.
+    TypeAttribute[][] recordBlockAttributes;
     string qualifiedName, sourceName, emittedName;
     size_t sourceIndex;
     string baseName;

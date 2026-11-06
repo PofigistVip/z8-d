@@ -174,6 +174,7 @@ class Checker {
         foreach (field; program.fields) checkMember(field.attributes, field, null);
         foreach (init; program.memberInitializers) checkMember(init.attributes, null, init);
         foreach (method; program.methods) checkMember(method.attributes, null, null);
+        foreach (attributes; program.recordBlockAttributes) checkMember(attributes, null, null);
     }
     void prepareDeclarations(Program program, Program[string] programs) {
         currentProgram = program; allClasses = programs;
@@ -730,6 +731,8 @@ class Checker {
             if (hasObjectClass(field.type)) field.objectClass = resolveClass(program, field.objectName, field.name);
             if (hasMapKeyClass(field.type)) field.keyObjectClasses = resolveKeyClasses(program, field.keyObjectNames, field.name);
         }
+        foreach (attributes; program.recordBlockAttributes)
+            checkAttributeExpressions(attributes);
         // Record attributes name table fields and retain primary values, unlike
         // ordinary attributes, which become textual CLASS metadata.
         foreach (record; program.fields) if (record.isRecord) {
