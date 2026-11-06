@@ -483,6 +483,18 @@ private Z8Array!Z8Guid z8_query_find_records(Z8Object self, Z8SqlBool where) {
     z8_query_close(self);
     return result;
 }
+private Z8Optional!bool z8_query_aggregate_where(Z8Object self, Z8ObjectArray!Z8Object fields, Z8SqlBool where) {
+    Z8QueryReadRequest request;
+    request.fields = z8_query_read_fields(fields);
+    request.aggregateSourceFields = request.fields.dup;
+    request.where = where;
+    request.aggregateAll = true;
+    z8_query_open(self, request, false);
+    return z8_query_next(self);
+}
+private Z8Optional!bool z8_query_aggregate(Z8Object self, Z8ObjectArray!Z8Object fields) {
+    return z8_query_aggregate_where(self, fields, null);
+}
 private void z8_query_group_request(Z8Object self, Z8ObjectArray!Z8Object groups, Z8ObjectArray!Z8Object fields,
                                     Z8ObjectArray!Z8Object sort, Z8SqlBool where, Z8SqlBool having,
                                     Z8Optional!long start, Z8Optional!long limit) {
@@ -605,6 +617,8 @@ void z8_bind_builtin_query() {
     z8_native_bind(p ~ "m_hasRecord"w, &z8_query_has_record_id);
     z8_native_bind(p ~ "m_hasRecord"w, &z8_query_has_record_where);
     z8_native_bind(p ~ "m_findRecords"w, &z8_query_find_records);
+    z8_native_bind(p ~ "m_aggregate"w, &z8_query_aggregate);
+    z8_native_bind(p ~ "m_aggregate"w, &z8_query_aggregate_where);
     z8_native_bind(p ~ "m_group"w, &z8_query_group_1);
     z8_native_bind(p ~ "m_group"w, &z8_query_group_where);
     z8_native_bind(p ~ "m_group"w, &z8_query_group_fields);

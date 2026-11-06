@@ -158,6 +158,19 @@ public class Probe {
     public static void setGroup(Sales table) { table.groupBy = {table.flag}; }
     public static bool hasGroup(Sales table) { return table.groupBy.size() == 1; }
     public static int[] groupValues(Sales table) { return table.amount.array(); }
+    public static bool aggregateArray(Sales table) {
+        table.amount.aggregation = Aggregation.Array;
+        Field[] fields = {table.amount};
+        return table.aggregate(fields, table.amount > 10);
+    }
+    public static bool aggregateSum(Sales table) {
+        table.amount.aggregation = Aggregation.Sum;
+        Field[] fields = {table.amount}; return table.aggregate(fields);
+    }
+    public static bool aggregateEmpty(Sales table) {
+        table.amount.aggregation = Aggregation.Array;
+        Field[] fields = {table.amount}; return table.aggregate(fields, table.amount > 1000);
+    }
     public static bool groupFlag(Sales table) { return table.flag.get(); }
     public static void prepareCreate(Sales table) {
         table.amount = 33; table.title = "New O'Reilly"; table.flag = true;
@@ -199,6 +212,11 @@ void main(string[] args) {
     db.execute(`INSERT INTO "Sales""Quote" ("RecordId","Amount","Title","Flag","Info","Blob","When") VALUES ('00000000-0000-0000-0000-000000000003',-1,'hidden',1,NULL,NULL,NULL)`);
     auto table = P.m_make();
     z8_query_set_executor(table, new Z8PostgresQueryExecutor(db, "pg_temp"w, `Sales"Quote`w));
+    assert(z8_optional_require(P.m_aggregateArray(table)));
+    auto aggregateValues = P.m_groupValues(table);
+    assert(aggregateValues.z8_size() == 1 && aggregateValues.z8_get(0) == 20);
+    assert(z8_optional_require(P.m_aggregateEmpty(table)) && P.m_groupValues(table).z8_size() == 0);
+    assert(z8_optional_require(P.m_aggregateSum(table)) && z8_optional_require(P.m_amount(table)) == 30);
     P.m_read(table);
     assert(z8_optional_require(P.m_next(table)) && z8_optional_require(P.m_firstRow(table)));
     assert(z8_optional_require(P.m_count(table)) == 2 && z8_optional_require(P.m_countWhere(table)) == 1);
