@@ -986,6 +986,20 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                     result ~= "override void z8_query_virtual_" ~ method.name.text ~ "(Z8Guid id) { this.m_" ~ method.name.text ~ "(id); }\n";
             }
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.entity.EntityTable"w) {
+            foreach (method; program.methods) {
+                if (method.name.text == "newEntity" && method.returnObjectClass !is null) {
+                    if (!method.parameters.length)
+                        result ~= "override Z8Object z8_entity_table_virtual_new() { return this.m_newEntity(); }\n";
+                    else if (method.parameters.length == 1)
+                        result ~= "override Z8Object z8_entity_table_virtual_new_values(Z8PrimaryMap values) { return this.m_newEntity(values); }\n";
+                }
+                if (["beforeCreate", "afterCreate", "beforeUpdate", "afterUpdate", "beforeDestroy", "afterDestroy", "afterRead"].canFind(method.name.text) &&
+                    method.returnType == ValueType.voidType && method.parameters.length == 1 && method.parameters[0].objectClass !is null)
+                    result ~= "override void z8_entity_table_virtual_" ~ method.name.text ~ "(Z8Object entity) { this.m_" ~ method.name.text ~
+                        "(cast(" ~ method.parameters[0].objectClass.emittedName ~ ")entity); }\n";
+            }
+        }
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.entity.Filter"w) {
             foreach (method; program.methods) if (method.name.text == "accept" && method.returnType == ValueType.boolType &&
                 method.parameters.length == 1 && method.parameters[0].objectClass !is null)
@@ -1500,6 +1514,8 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                     (arguments.length ? ", " ~ arguments.join(", ") : "") ~ ")";
                 if (program.nativeName == "org.zenframework.z8.server.base.entity.Registry"w && m.name.text == "findEntities" && m.parameters.length == 1)
                     call = "z8_entity_registry_find_typed!(" ~ dStorageType(m.returnType, m.returnObjectClass, m.returnKeyObjectClasses) ~ ")(this, v_" ~ m.parameters[0].name.text ~ ")";
+                if (program.nativeName == "org.zenframework.z8.server.base.entity.EntityTable"w && m.name.text == "getEntities" && !m.parameters.length)
+                    call = "z8_entity_table_get_entities_typed!(" ~ dStorageType(m.returnType, m.returnObjectClass, m.returnKeyObjectClasses) ~ ")(this)";
                 if (program.nativeName == "org.zenframework.z8.server.base.table.value.Field"w &&
                     m.name.text == "getType" && !m.isStatic && m.parameters.length == 0 &&
                     m.returnType == ValueType.enumType && m.returnObjectClass !is null)

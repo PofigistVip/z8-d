@@ -1,0 +1,148 @@
+// EntityTable's direct-table reads and writes use the ordinary query executor.
+private enum z8_entity_table_name = "org.zenframework.z8.server.base.entity.EntityTable"w;
+private class Z8EntityTableState { Z8Object registry; }
+private Z8EntityTableState z8_entity_table_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_entity_table_name, self)) throw new Exception("invalid EntityTable");
+    auto state = cast(Z8EntityTableState)self.z8_get_native_state(z8_entity_table_name);
+    if (state is null) { state = new Z8EntityTableState(); self.z8_set_native_state(z8_entity_table_name, state); }
+    return state;
+}
+private Z8Object z8_entity_table_registry(Z8Object self) {
+    auto state = z8_entity_table_state(self);
+    if (state.registry is null) state.registry = z8_entity_registry_get_current();
+    return state.registry;
+}
+private Z8Object z8_entity_table_set_registry(Z8Object self, Z8Object registry) { z8_entity_table_state(self).registry = registry; return self; }
+Z8Object z8_entity_table_default_new(Z8Object self) {
+    auto entity = z8_native_new(z8_entity_name); entity.z8_set_container(z8_nonnull(self)); return entity;
+}
+private Z8Object z8_entity_table_default_new_values(Z8Object self, Z8PrimaryMap values) {
+    z8_nonnull(values); return z8_nonnull(self).z8_entity_table_virtual_new();
+}
+private Z8Object[] z8_entity_table_fields(Z8Object self) {
+    Z8Object[] result;
+    foreach (field; z8_query_declared_fields(self)) if (field.z8_get_attribute("entityValue"w) !is null) result ~= field;
+    return result;
+}
+private Z8Object[] z8_entity_table_collect(Z8Object self, Z8ObjectArray!Z8Object dependencies) {
+    auto result = z8_entity_table_fields(self);
+    if (dependencies !is null && dependencies.z8_size()) throw new Exception("EntityTable dependencies are not implemented");
+    auto key = z8_nonnull(z8_query_primary_key(self));
+    bool found; foreach (field; result) if (field is key) { found = true; break; }
+    if (!found) result ~= key;
+    return result;
+}
+private Z8ObjectArray!Z8Object z8_entity_table_collect_fields(Z8Object self, Z8ObjectArray!Z8Object dependencies) {
+    auto result = new Z8ObjectArray!Z8Object();
+    foreach (field; z8_entity_table_collect(self, z8_nonnull(dependencies))) result.z8_add(field);
+    return result;
+}
+private wstring z8_entity_table_relative_id(Z8Object self, Z8Object field) {
+    auto prefix = z8_nonnull(self).z8_id(), id = z8_nonnull(field).z8_id();
+    if (!prefix.length) return id;
+    if (id.length <= prefix.length || id[0 .. prefix.length] != prefix || id[prefix.length] != '.')
+        throw new Exception("EntityTable field is outside the table");
+    return id[prefix.length + 1 .. $];
+}
+private Z8Object z8_entity_table_init_fields(Z8Object self, Z8Object entity, Z8Optional!bool changedOnly) {
+    auto only = z8_optional_require(changedOnly);
+    auto keyField = z8_nonnull(z8_query_primary_key(self));
+    foreach (field; z8_entity_table_fields(self)) {
+        if (field is keyField) continue;
+        auto key = z8_entity_table_relative_id(self, field);
+        auto value = z8_entity_get(entity, key);
+        if (value !is null && (!only || z8_optional_require(z8_entity_changed_key(entity, key)))) z8_field_set(field, value);
+    }
+    return self;
+}
+private void z8_entity_flush_changes(Z8Object entity) {
+    auto state = z8_entity_state(entity); state.defaults.z8_add(state.changes); state.changes.z8_clear();
+}
+private Z8Object z8_entity_table_get_entity(Z8Object self) {
+    auto id = z8_query_record_id(self);
+    auto registry = z8_entity_table_registry(self);
+    auto entity = z8_entity_registry_find(registry, id);
+    if (entity !is null) return entity;
+    auto values = new Z8PrimaryMap();
+    foreach (field; z8_entity_table_collect(self, null)) values.z8_add(z8_entity_table_relative_id(self, field), z8_field_primary(field));
+    entity = z8_nonnull(self.z8_entity_table_virtual_new_values(values));
+    if (!z8_optional_require(z8_entity_initialized(entity))) z8_entity_init_map(entity, values);
+    z8_entity_state(entity).persistent = true;
+    z8_entity_register_to(entity, registry);
+    entity.z8_set_attribute("entityTable"w, self.z8_class_id());
+    self.z8_entity_table_virtual_afterRead(entity);
+    return entity;
+}
+private void z8_entity_table_read(Z8Object self, Z8ObjectArray!Z8Object dependencies, Z8ObjectArray!Z8Object sort,
+                                   Z8SqlBool where, Z8Guid id, bool byId, bool first) {
+    Z8QueryReadRequest request;
+    request.fields = z8_entity_table_collect(self, dependencies);
+    request.sortFields = z8_query_read_fields(sort);
+    request.where = where; request.recordId = id; request.byRecordId = byId;
+    request.limit = first ? 1 : -1;
+    z8_query_open(self, request, false);
+}
+private Z8Object z8_entity_table_read_id_deps(Z8Object self, Z8Guid id, Z8ObjectArray!Z8Object dependencies) {
+    if (id is null || id == z8_guid_zero()) return null;
+    z8_entity_table_read(self, dependencies, null, null, id, true, true);
+    return z8_optional_require(z8_query_next(self)) ? z8_entity_table_get_entity(self) : null;
+}
+private Z8Object z8_entity_table_read_id(Z8Object self, Z8Guid id) { return z8_entity_table_read_id_deps(self, id, null); }
+private Z8Object z8_entity_table_read_where_all(Z8Object self, Z8ObjectArray!Z8Object dependencies, Z8ObjectArray!Z8Object sort, Z8SqlBool where) {
+    z8_entity_table_read(self, dependencies, sort, where, null, false, true);
+    return z8_optional_require(z8_query_next(self)) ? z8_entity_table_get_entity(self) : null;
+}
+private Z8Object z8_entity_table_read_where(Z8Object self, Z8SqlBool where) { return z8_entity_table_read_where_all(self, null, null, where); }
+private Z8Object z8_entity_table_read_deps_where(Z8Object self, Z8ObjectArray!Z8Object deps, Z8SqlBool where) { return z8_entity_table_read_where_all(self, deps, null, where); }
+private Z8Object z8_entity_table_read_all(Z8Object self, Z8ObjectArray!Z8Object deps, Z8ObjectArray!Z8Object sort, Z8SqlBool where) {
+    z8_entity_table_read(self, deps, sort, where, null, false, false); return self;
+}
+private Z8Object z8_entity_table_read_none(Z8Object self) { return z8_entity_table_read_all(self, null, null, null); }
+private Z8Object z8_entity_table_read_filter(Z8Object self, Z8SqlBool where) { return z8_entity_table_read_all(self, null, null, where); }
+private Z8Object z8_entity_table_read_deps(Z8Object self, Z8ObjectArray!Z8Object deps, Z8SqlBool where) { return z8_entity_table_read_all(self, deps, null, where); }
+M z8_entity_table_get_entities_typed(M)(Z8Object self) {
+    auto result = new M();
+    while (z8_optional_require(z8_query_next(self))) {
+        auto entity = z8_entity_table_get_entity(self);
+        auto typed = cast(M.Element)entity;
+        if (typed is null) throw new Exception("invalid Entity type");
+        result.z8_add(z8_entity_get_id(entity), typed);
+    }
+    return result;
+}
+private Z8Object z8_entity_table_create(Z8Object self, Z8Object entity) {
+    auto id = z8_entity_get_id(entity);
+    if (id is null || id == z8_guid_zero()) { id = z8_guid_create_random(); z8_entity_set_id(entity, id); }
+    z8_entity_table_init_fields(self, entity, z8_optional_wrap(false));
+    self.z8_entity_table_virtual_beforeCreate(entity); z8_query_create_id(self, id); self.z8_entity_table_virtual_afterCreate(entity);
+    z8_entity_flush_changes(entity); z8_entity_state(entity).persistent = true; return entity;
+}
+private Z8Object z8_entity_table_update(Z8Object self, Z8Object entity) {
+    z8_entity_table_init_fields(self, entity, z8_optional_wrap(true));
+    self.z8_entity_table_virtual_beforeUpdate(entity); z8_query_update_id(self, z8_entity_get_id(entity)); self.z8_entity_table_virtual_afterUpdate(entity);
+    z8_entity_flush_changes(entity); return entity;
+}
+private Z8Object z8_entity_table_destroy(Z8Object self, Z8Object entity) {
+    self.z8_entity_table_virtual_beforeDestroy(entity); z8_query_destroy_id(self, z8_entity_get_id(entity)); self.z8_entity_table_virtual_afterDestroy(entity);
+    z8_entity_state(entity).persistent = false; return entity;
+}
+private Z8Optional!bool z8_entity_table_exists(Z8Object self, Z8Object entity) { return z8_query_has_record_id(self, z8_entity_get_id(entity)); }
+private void z8_entity_table_default_event(Z8Object self, Z8Object entity) { z8_nonnull(self); }
+void z8_bind_builtin_entity_table() {
+    enum p = z8_entity_table_name ~ ".m_"w;
+    z8_native_bind(p ~ "setRegistry"w, &z8_entity_table_set_registry); z8_native_bind(p ~ "getRegistry"w, &z8_entity_table_registry);
+    z8_native_bind(p ~ "newEntity"w, &z8_entity_table_default_new); z8_native_bind(p ~ "newEntity"w, &z8_entity_table_default_new_values);
+    z8_native_bind(p ~ "readEntity"w, &z8_entity_table_read_id); z8_native_bind(p ~ "readEntity"w, &z8_entity_table_read_id_deps);
+    z8_native_bind(p ~ "readEntity"w, &z8_entity_table_read_where); z8_native_bind(p ~ "readEntity"w, &z8_entity_table_read_deps_where);
+    z8_native_bind(p ~ "readEntity"w, &z8_entity_table_read_where_all);
+    z8_native_bind(p ~ "readEntities"w, &z8_entity_table_read_none); z8_native_bind(p ~ "readEntities"w, &z8_entity_table_read_filter);
+    z8_native_bind(p ~ "readEntities"w, &z8_entity_table_read_deps); z8_native_bind(p ~ "readEntities"w, &z8_entity_table_read_all);
+    z8_native_bind(p ~ "getEntity"w, &z8_entity_table_get_entity); z8_native_bind(p ~ "create"w, &z8_entity_table_create);
+    z8_native_bind(p ~ "update"w, &z8_entity_table_update); z8_native_bind(p ~ "destroy"w, &z8_entity_table_destroy);
+    z8_native_bind(p ~ "exists"w, &z8_entity_table_exists); z8_native_bind(p ~ "initFields"w, &z8_entity_table_init_fields);
+    z8_native_bind(p ~ "collectEntityFields"w, &z8_entity_table_collect_fields);
+    foreach (name; ["beforeCreate"w, "afterCreate"w, "beforeUpdate"w, "afterUpdate"w, "beforeDestroy"w, "afterDestroy"w, "afterRead"w])
+        z8_native_bind(p ~ name, &z8_entity_table_default_event);
+}
+shared static this() { z8_bind_builtin_entity_table(); }

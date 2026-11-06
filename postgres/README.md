@@ -397,6 +397,9 @@ migration when the application uses it. Bulk reads currently issue separate read
 for each requested key.
 `Application.isSystemInstalled()` checks for `SystemUsers` in the active schema;
 as in the original, a positive result is cached for that database adapter.
+`EntityTable` can read and mutate entities for a direct table, honoring annotated
+`entityValue` fields and BL lifecycle hooks. Dependencies and registry-wide flush
+are not yet implemented.
 `TreeTable` exposes its parent and path fields, schema indexes and path lookup
 methods. Reads include the parent key and are not limited by the page size.
 Creating a tree record calculates its path and ancestor columns. Changing a
