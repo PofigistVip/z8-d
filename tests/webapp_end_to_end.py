@@ -1,6 +1,5 @@
 """Build and exercise the example BL application with a real PostgreSQL server."""
 from pathlib import Path
-import hashlib
 import http.client
 import io
 import json
@@ -26,21 +25,23 @@ with tempfile.TemporaryDirectory() as directory:
     subprocess.run([sys.executable, str(root / "examples/webapp/build.py"), str(Path(sys.argv[1]).resolve()),
                     str(executable), "--postgres-bin", str(bin_dir)], check=True)
     public = temp / "public"
+    config = temp / "server.properties"
+    config.write_text("application.working.path=work\nstorage.path=storage-data\nsecurity.log.file=logs/security.log\nweb.client.hashPassword=false\n", encoding="ascii")
     subprocess.run([sys.executable, str(root / "webserver/prepare_client.py"), str(Path(sys.argv[1]).resolve()), str(public)], check=True)
 
     with temporary_postgres(bin_dir) as (connection, environment):
-        init = subprocess.run([str(executable), connection, "public", "--initialize"], env=environment,
+        init = subprocess.run([str(executable), connection, "public", "--initialize", "--config", str(config)], env=environment,
                               capture_output=True, text=True, encoding="utf-8", check=True)
         assert init.stdout.strip() == "initialized", init.stdout
         psql = bin_dir / ("psql.exe" if os.name == "nt" else "psql")
         subprocess.run([str(psql), "-v", "ON_ERROR_STOP=1", "-c",
                         '''UPDATE "SystemUsers" SET "Password"=md5('example-secret') WHERE "RecordId"='00000000-0000-0000-0000-000000000002' ''', connection],
                        env=environment, capture_output=True, check=True)
-        subprocess.run([str(executable), connection, "public", "--initialize"], env=environment,
+        subprocess.run([str(executable), connection, "public", "--initialize", "--config", str(config)], env=environment,
                        capture_output=True, text=True, encoding="utf-8", check=True)
 
         def start():
-            process = subprocess.Popen([str(executable), connection, "public", "--public-dir", str(public)], cwd=temp, env=environment,
+            process = subprocess.Popen([str(executable), connection, "public", "--public-dir", str(public), "--config", str(config)], cwd=temp, env=environment,
                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
             line = process.stdout.readline().strip()
             if not line.isdigit():
@@ -125,7 +126,7 @@ with tempfile.TemporaryDirectory() as directory:
                 assert response.status == 200 and script == (public / "revolt.js").read_bytes()
             finally:
                 client.close()
-            password = hashlib.md5(b"example-secret").hexdigest()
+            password = "example-secret"
             status, login = browser_login(port, "Admin", password)
             assert status == 200 and login["success"], login
             assert sum(entry["request"] == "Tasks" for entry in login["user"]["entries"]) == 1, login
@@ -152,6 +153,8 @@ with tempfile.TemporaryDirectory() as directory:
                 assert archive.read("first.txt") == b"first" and archive.read("second.txt") == bytes([0, 255, 42])
         finally:
             stop(process)
+        audit = (temp / "work/logs/security.log").read_text(encoding="utf-8")
+        assert "Action{login}" in audit and "Object{request:Tasks}" in audit and password not in audit
 
         process, port = start()
         try:

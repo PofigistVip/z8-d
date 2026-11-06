@@ -14,13 +14,15 @@ import z8.webserver.civetweb;
 import z8gen.project_registry;
 
 void main(string[] args) {
-    if (args.length < 3) throw new Exception("usage: webapp-host <postgres-connection> <schema> [--initialize] [--public-dir <path>]");
-    bool initialize; string publicDirectory;
+    if (args.length < 3) throw new Exception("usage: webapp-host <postgres-connection> <schema> [--initialize] [--public-dir <path>] [--config <path>]");
+    bool initialize; string publicDirectory, configPath;
     for (size_t i = 3; i < args.length; ++i) {
         if (args[i] == "--initialize" && !initialize) initialize = true;
         else if (args[i] == "--public-dir" && !publicDirectory.length && i + 1 < args.length) publicDirectory = args[++i];
+        else if (args[i] == "--config" && !configPath.length && i + 1 < args.length) configPath = args[++i];
         else throw new Exception("invalid option");
     }
+    if (configPath.length) z8_server_configure_from_file(configPath);
     auto db = new Z8PostgresConnection(args[1]); scope(exit) db.close();
     auto schema = args[2].to!wstring;
     auto registry = new Z8RuntimeRegistry(); z8_register_project(registry);
@@ -29,7 +31,7 @@ void main(string[] args) {
     enum prefix = "org.zenframework.z8.server.base.table.system."w;
     Z8Object[] systemTables;
     foreach (name; ["Users"w, "Roles"w, "UserRoles"w, "Entries"w, "UserEntries"w, "Sequences"w,
-        "Tables"w, "Fields"w, "Requests"w, "RoleTableAccess"w, "RoleFieldAccess"w, "RoleRequestAccess"w, "Files"w]) {
+        "Tables"w, "Fields"w, "Requests"w, "RoleTableAccess"w, "RoleFieldAccess"w, "RoleRequestAccess"w, "Files"w, "Settings"w]) {
         auto table = z8_native_new(prefix ~ name); table.z8_ensure(); systemTables ~= table;
     }
     z8_postgres_reconcile_registered(db, schema, registry, systemTables);
@@ -46,6 +48,12 @@ void main(string[] args) {
         writeln("initialized"); return;
     }
     Z8PostgresAuthenticationConfig config;
+    auto applicationConfig = z8_application_configuration();
+    config.clientHashesPasswords = applicationConfig.clientHashesPasswords;
+    if (applicationConfig.uploadMaxMiB <= 0 || cast(ulong)applicationConfig.uploadMaxMiB * 1_048_576UL > size_t.max)
+        throw new Exception("invalid upload limit");
+    auto bodyLimit = cast(size_t)applicationConfig.uploadMaxMiB * 1_048_576;
+    auto securityLog = z8_security_log_file_from_config();
     auto authority = new Z8PostgresHttpAuthority(db, schema, registry, config, null, "example"w);
     auto server = new Z8CivetServer("127.0.0.1:0", (Z8HttpRequest request) {
         auto connection = db.openSibling(); scope(exit) connection.close();
@@ -53,7 +61,7 @@ void main(string[] args) {
         scope(exit) z8_connection_set_current(previous);
         if (request.path.startsWith("/storage/")) z8_application_dispatch_file_download(request.path.to!wstring);
         else z8_application_dispatch_request();
-    }, 5 * 1024 * 1024, Z8ResponseMode.application, "example"w, authority, "Access denied"w, publicDirectory, "/request.json", true);
+    }, bodyLimit, Z8ResponseMode.application, "example"w, authority, "Access denied"w, publicDirectory, "/request.json", true, securityLog);
     scope(exit) server.stop();
     writeln(server.port()); stdout.flush(); readln();
 }

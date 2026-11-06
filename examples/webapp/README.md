@@ -44,6 +44,12 @@ endpoint is `/request.json`, and authenticated file downloads use
 preserves existing records. The automated test checks delivery of the original
 client files and the client's login request, not the entire browser UI.
 
+Optionally add `--config C:/path/to/server.properties` to initialization and
+server commands. The example applies the configured working and storage paths,
+upload limit, password hashing mode and supported file extensions. Setting
+`security.log.file` also enables a rotating request and login security log.
+The properties file's directory is used as the application root.
+
 Run the full automated example, including a temporary PostgreSQL instance and
 two server runs, with:
 

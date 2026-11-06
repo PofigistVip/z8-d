@@ -27,7 +27,7 @@ public class PropertiesProbe { public static string get(string key) { return Ser
         b"lines=first\\\r\n  second\\\n \t!not-a-comment\n"
         b"latin=caf\xe9\nunicode=\\u041f\\u0440\\u0438\\u0432\\u0435\\u0442 \\uD83D\\uDE00\n"
         b"escaped=one\\ttwo\\nthree\\\\four\\:five\\=six\\q\nnoSep\n"
-        b"trailing=pair\\\\\n"
+        b"trailing=pair\\\\\napplication.working.path=work\nstorage.path=files\n"
     )
     malformed = temp / "bad.properties"
     malformed.write_bytes(b"alpha=replace\nbad=\\uZZZZ\n")
@@ -56,6 +56,8 @@ import z8.runtime;
 import z8gen.p_PropertiesProbe;
 import std.base64 : Base64;
 import std.stdio : writeln;
+import std.file : exists;
+import std.path : buildPath, dirName;
 void main(string[] args) {
     alias P = Z8p_50726F7065727469657350726F6265;
     z8_server_config_load_file(args[1]);
@@ -70,6 +72,13 @@ void main(string[] args) {
     assert(P.m_get("alpha"w) == "override"w);
     auto dangling = z8_properties_parse([cast(ubyte)92]);
     assert(dangling.length == 1 && (""w in dangling) !is null && dangling[""w] == ""w);
+    z8_server_configure_from_file(args[1]);
+    z8_file_write(z8_file_from_path("probe.txt"w), "data"w);
+    assert(exists(buildPath(dirName(args[1]), "work", "probe.txt")));
+    z8_file_write(z8_file_from_path("storage/probe.txt"w), "data"w);
+    assert(exists(buildPath(dirName(args[1]), "work", "files", "probe.txt")));
+    auto resource = z8_native_call!Z8File("org.zenframework.z8.server.base.application.Resources.m_loadResource"w, "server.properties"w);
+    assert(z8_file_exists(resource));
 }
 ''', encoding="utf-8")
     executable = temp / ("properties.exe" if os.name == "nt" else "properties")

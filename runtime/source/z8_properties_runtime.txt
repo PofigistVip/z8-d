@@ -77,3 +77,17 @@ void z8_server_config_load_file(string path, wstring[wstring] overrides = null) 
     foreach (key, value; overrides) properties[z8_string_required(key)] = z8_string_required(value);
     z8_server_config_replace(properties);
 }
+// Development-mode layout: the properties directory is the application root
+// unless an embedding host supplies a different root explicitly.
+void z8_server_configure_from_file(string path, string applicationRoot = "", wstring[wstring] overrides = null) {
+    import std.path : absolutePath, buildPath, dirName, isAbsolute;
+    z8_server_config_load_file(path, overrides);
+    auto root = absolutePath(applicationRoot.length ? applicationRoot : dirName(absolutePath(path)));
+    auto working = z8_server_config_value("application.working.path"w);
+    auto workingPath = working is null || !working.length ? root : working.to!string;
+    if (!isAbsolute(workingPath)) workingPath = buildPath(root, workingPath);
+    auto storage = z8_server_config_value("storage.path"w);
+    z8_resources_set_application_root(root);
+    z8_file_set_roots(workingPath, storage is null || !storage.length ? "" : storage.to!string);
+    z8_application_configure_from_server();
+}
