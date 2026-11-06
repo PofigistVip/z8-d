@@ -403,6 +403,8 @@ void main(string[] args) {
             result = request(session="relation-denied", action="update",
                              data=json.dumps([{"recordId": "00000000-0000-0000-0000-000000000001", "nested.documents": []}]))
             assert not result["success"], result
+            result = request(action="create", data='[{"undefined":"unexpected"}]')
+            assert not result["success"], result
             result = request(action=None, count="true")
             assert result["success"] and result["isQuery"] and result["total"] == 2 and "data" not in result, result
             result = request(session="limited", filter='{"property":"title","value":"First"}')

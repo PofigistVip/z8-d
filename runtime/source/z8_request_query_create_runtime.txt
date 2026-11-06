@@ -49,6 +49,21 @@ private void z8_application_dispatch_query_create_target(wstring className, Z8Ob
         if (id is null || id == z8_guid_zero()) id = z8_guid_create_random();
         z8_query_on_new(query);
         foreach (name, value; record.object) {
+            if (name == "undefined" && context !is query) {
+                bool listboxWithoutDependency;
+                foreach (control; z8_query_array(context, "controls"w)) {
+                    if (!z8_native_is_instance(z8_listbox_name, control)) continue;
+                    auto list = z8_listbox_state(control);
+                    if (list.query is query && list.link !is null && z8_control_state(control).dependency is null &&
+                        (list.link.z8_id().to!string in record.object) !is null) {
+                        listboxWithoutDependency = true; break;
+                    }
+                }
+                // The unmodified Listbox client emits this key when no
+                // dependency field is configured. CreateAction in Z8 skips
+                // unknown fields; ignore only this scoped client placeholder.
+                if (listboxWithoutDependency) continue;
+            }
             auto field = z8_query_find_field_id(query, name.to!wstring);
             if (field is key) continue;
             if (field.z8_get_owner() !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
