@@ -12,6 +12,9 @@ private class Z8ReportSourceState {
     Z8ReportSourceKind kind;
     long index, sheet;
     bool initialized;
+    long cachedCount = -1;
+    Z8QuerySavedState savedQuery;
+    bool aggregate, aggregateAvailable;
 }
 private class Z8ReportCustomState { long index, sheet; bool initialized; }
 private class Z8ReportRangeState { Z8Object source; bool sourceInitialized; IZ8FieldOrderCell ranges; }
@@ -55,7 +58,9 @@ private Z8ReportCustomState z8_report_custom_state(Z8Object self) {
 }
 private void z8_report_source_assign(Z8ReportSourceKind kind)(Z8Object self, Z8Object source) {
     auto state = z8_report_source_state(self);
+    if (state.savedQuery !is null) throw new Exception("cannot replace an open query report source");
     state.source = z8_nonnull(source); state.kind = kind; state.initialized = false;
+    state.cachedCount = -1;
 }
 Z8Object z8_report_source_object(Z8Object self) { return z8_nonnull(z8_report_source_state(self).source); }
 private Z8Optional!long z8_report_source_index(Z8Object self) {
@@ -75,34 +80,58 @@ private Z8Optional!long z8_report_custom_sheet(Z8Object self) {
 }
 private Z8Optional!long z8_report_custom_default_count(Z8Object self) { z8_nonnull(self); return z8_optional_wrap(0L); }
 private void z8_report_custom_default_hook(Z8Object self) { z8_nonnull(self); }
-void z8_report_source_open(Z8Object self, long sheet) {
+void z8_report_source_open(Z8Object self, long sheet, Z8Object[] fields, bool aggregate = false) {
     auto state = z8_report_source_state(self); auto source = z8_nonnull(state.source);
-    if (state.kind == Z8ReportSourceKind.query) throw new Exception("query report data source requires a report engine");
+    if (state.savedQuery !is null) throw new Exception("query report source is already open");
+    if (state.kind == Z8ReportSourceKind.query) foreach (field; fields)
+        if (field is null || !z8_native_is_instance(z8_field_name, field)) throw new Exception("invalid report query field");
     state.index = -1; state.sheet = sheet; state.initialized = true;
-    if (state.kind == Z8ReportSourceKind.custom) {
+    if (state.kind == Z8ReportSourceKind.query) {
+        auto saved = new Z8QuerySavedState(source, fields);
+        scope(failure) { state.initialized = false; saved.restore(); }
+        Z8QueryReadRequest request;
+        request.fields = fields.dup;
+        if (aggregate) { request.aggregateAll = true; request.aggregateSourceFields = fields.dup; }
+        else request.sortFields = z8_query_array(source, "sortFields"w);
+        z8_query_open(source, request, !aggregate);
+        state.aggregate = aggregate;
+        state.aggregateAvailable = aggregate && z8_optional_require(z8_query_next(source));
+        state.savedQuery = saved;
+    } else if (state.kind == Z8ReportSourceKind.custom) {
         auto custom = z8_report_custom_state(source); custom.index = -1; custom.sheet = sheet; custom.initialized = true;
         source.z8_report_custom_virtual_open();
     }
 }
+void z8_report_source_open(Z8Object self, long sheet) { z8_report_source_open(self, sheet, null); }
 long z8_report_source_count(Z8Object self) {
     auto state = z8_report_source_state(self); auto source = z8_nonnull(state.source);
     final switch (state.kind) {
         case Z8ReportSourceKind.simple: return 1;
         case Z8ReportSourceKind.json: return z8_optional_require(z8_json_array_size(source));
         case Z8ReportSourceKind.custom: return z8_optional_require(source.z8_report_custom_virtual_count());
-        case Z8ReportSourceKind.query: return z8_optional_require(z8_query_count(source));
+        case Z8ReportSourceKind.query:
+            if (state.cachedCount < 0) state.cachedCount = z8_optional_require(z8_query_count(source));
+            return state.cachedCount;
     }
 }
 bool z8_report_source_next(Z8Object self) {
     auto state = z8_report_source_state(self);
     if (!state.initialized) throw new Exception("report data source is not open");
+    if (state.kind == Z8ReportSourceKind.query && state.savedQuery is null) throw new Exception("query report data source is not open");
     ++state.index;
+    if (state.kind == Z8ReportSourceKind.query) {
+        if (state.aggregate) { auto available = state.aggregateAvailable; state.aggregateAvailable = false; return available; }
+        return z8_optional_require(z8_query_next(state.source));
+    }
     if (state.kind == Z8ReportSourceKind.custom) z8_report_custom_state(state.source).index = state.index;
     return state.index < z8_report_source_count(self);
 }
 void z8_report_source_close(Z8Object self) {
     auto state = z8_report_source_state(self);
     if (state.kind == Z8ReportSourceKind.custom && state.initialized) state.source.z8_report_custom_virtual_close();
+    if (state.savedQuery !is null) {
+        auto saved = state.savedQuery; state.savedQuery = null; saved.restore();
+    }
 }
 void z8_bind_builtin_report_sources() {
     enum p = z8_report_source_name ~ "."w, c = z8_report_custom_name ~ ".m_"w;
