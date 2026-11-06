@@ -1,10 +1,12 @@
 import org.zenframework.z8.base.form.Desktop;
 import org.zenframework.z8.server.base.table.system.view.FilesView;
 import org.zenframework.z8.server.base.table.system.view.SequencesView;
+import org.zenframework.z8.server.base.table.system.view.TablesView;
 
 // Local system tools; further views can be added in the original's order.
 [request] [entry] [displayName "$SystemTools.title$"]
 public class SystemTools extends Desktop {
+    TablesView tables;
     SequencesView sequences;
     FilesView files;
 }

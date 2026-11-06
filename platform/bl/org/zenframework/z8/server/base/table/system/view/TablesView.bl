@@ -1,0 +1,30 @@
+import org.zenframework.z8.base.form.Listbox;
+import org.zenframework.z8.base.table.system.Fields;
+import org.zenframework.z8.base.table.system.Tables;
+
+// The report button depends on the original report engine and is not included yet.
+[request] [displayName "$Tables.title$"]
+public class TablesView extends Tables {
+    Fields fields;
+    Listbox fieldsListbox;
+
+    readOnly = true;
+    colCount = 6;
+    fields.readOnly = true;
+    fields.columns = {fields.name, fields.type, fields.displayName, fields.description};
+    fieldsListbox.query = fields;
+    fieldsListbox.link = fields.table;
+    fieldsListbox.sortFields = {fields.position};
+    fieldsListbox.colSpan = 6;
+    fieldsListbox.flex = 1;
+    classId.colSpan = 2;
+    name.colSpan = 2;
+    name.width = 100;
+    displayName.colSpan = 2;
+    displayName.width = 200;
+    description.colSpan = 6;
+    description.height = 2;
+    controls = {classId, name, displayName, description, fieldsListbox};
+    names = {displayName, name};
+    sortFields = {name};
+}

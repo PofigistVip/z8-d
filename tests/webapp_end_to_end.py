@@ -160,9 +160,11 @@ with tempfile.TemporaryDirectory() as directory:
             tools_class = "org.zenframework.z8.server.base.table.system.SystemTools"
             files_view = "org.zenframework.z8.server.base.table.system.view.FilesView"
             sequences_view = "org.zenframework.z8.server.base.table.system.view.SequencesView"
+            tables_view = "org.zenframework.z8.server.base.table.system.view.TablesView"
             assert any(entry["request"] == tools_class for entry in login["user"]["entries"]), login
             assert any(item.get("request") == files_view for group in login["user"]["data"] for item in group.get("items", [])), login
             assert any(item.get("request") == sequences_view for group in login["user"]["data"] for item in group.get("items", [])), login
+            assert any(item.get("request") == tables_view for group in login["user"]["data"] for item in group.get("items", [])), login
             session = login["session"]
             status, replacement = browser_login(port, "Admin", password)
             assert status == 200 and replacement["success"] and replacement["session"] != session
@@ -172,6 +174,11 @@ with tempfile.TemporaryDirectory() as directory:
             assert status == 200 and files_metadata["success"] and [item["name"] for item in files_metadata["controls"]] == ["name", "createdAt", "path"], files_metadata
             status, sequences_metadata = request(port, request=sequences_view, session=session, action="meta")
             assert status == 200 and sequences_metadata["success"] and [item["name"] for item in sequences_metadata["controls"]] == ["key", "value", "description"], sequences_metadata
+            status, tables_metadata = request(port, request=tables_view, session=session, action="meta")
+            assert status == 200 and tables_metadata["success"] and [item["name"] for item in tables_metadata["controls"]] == ["classId", "name", "displayName", "description", "fieldsListbox"], tables_metadata
+            fields_list = tables_metadata["controls"][-1]["query"]
+            assert fields_list["name"] == "fields" and fields_list["link"]["name"] == "fields.table", fields_list
+            assert [item["name"] for item in fields_list["columns"]] == ["fields.name", "fields.type", "fields.displayName", "fields.description"], fields_list
             status, metadata = request(port, request="Tasks", session=session, action="meta")
             assert status == 200 and metadata["success"], metadata
             assert [control["name"] for control in metadata["controls"]] == ["title", "done", "documents"], metadata
