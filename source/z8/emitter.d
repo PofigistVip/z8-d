@@ -9,7 +9,7 @@ import std.string : replace, startsWith, endsWith, split;
 import z8.compiler_model;
 import z8.lexer : TokenKind, decodeStringLiteral;
 import z8.d_writer : formatDSource;
-import z8.native_enum_order : enumSortOrder;
+import z8.native_enum_order : enumSortOrder, enumJoinNames;
 
 private string operatorDName(string symbol) {
     switch (symbol) {
@@ -515,10 +515,11 @@ private string emitExprRaw(Expression e) {
             if (isArray(e.inferredType)) {
                 if (e.inferredType == ValueType.enumArray && e.token.text == "join") {
                     auto enumClass = e.objectClass;
-                    string[] values, names;
-                    foreach (value; enumClass.enumValues) {
-                        values ~= enumClass.emittedName ~ ".e_" ~ value.text;
-                        names ~= emitWStringLiteral(value.text.to!wstring);
+                    string[] values, names, order, texts;
+                    if (!enumJoinNames(enumClass, order, texts)) throw new Exception("enum string representation was not resolved");
+                    foreach (i, value; order) {
+                        values ~= enumClass.emittedName ~ ".e_" ~ value;
+                        names ~= emitWStringLiteral(texts[i].to!wstring);
                     }
                     auto separator = e.arguments.length ? ", " ~ emitExpr(e.arguments[0]) : "";
                     return "z8_enum_array_join(" ~ emitExpr(e.left) ~ ", cast(" ~ enumClass.emittedName ~ "[])[" ~ values.join(", ") ~ "], cast(wstring[])[" ~ names.join(", ") ~ "]" ~ separator ~ ")";

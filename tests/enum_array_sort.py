@@ -28,4 +28,7 @@ with tempfile.TemporaryDirectory() as directory:
     (native / "NativeSort.bl").write_text('public class NativeSort { public static void run() { NativeColor[] values; values.sort(); } }', encoding="utf-8")
     rejected = subprocess.run([str(compiler), "project", str(native), str(temp / "native-output")], capture_output=True, text=True)
     assert rejected.returncode and "native enum sort order is unavailable or stale" in rejected.stderr, rejected.stderr
+    (native / "NativeSort.bl").write_text('public class NativeSort { public static void run() { NativeColor[] values; values.join(); } }', encoding="utf-8")
+    rejected = subprocess.run([str(compiler), "project", str(native), str(temp / "native-output")], capture_output=True, text=True)
+    assert rejected.returncode and "native enum string representation is unavailable or stale" in rejected.stderr, rejected.stderr
 print("BL enum-array sorting, null and aliasing verified")

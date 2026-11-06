@@ -73,6 +73,13 @@ public class NativeEnumArraySort {
         if (emptyTypes.join(null) != "") return 23;
         try { string ignored = nullTypes.join(","); return 24; } catch (exception expected) {}
         try { string ignored = types.join(null); return 25; } catch (exception expected) {}
+        if (aggregations.join("|") != "none|sum|min|max|average|count|array|distinct|concat|bitwise_or|bitwise_and") return 26;
+        if (fields.join("|") != "none|null|attachments|binary|boolean|date|datetime|datespan|float|file|geometry|guid|int|string|text") return 27;
+        if (actions.join("|") != "default|danger|primary|success") return 28;
+        if (locks.join("|") != "|for update|for share|for update nowait|for share nowait") return 29;
+        if (directions.join("|") != "asc|desc" || joins.join("|") != "inner|left|right|full") return 30;
+        if (policies.join("|") != "Keep|Override|Merge") return 31;
+        try { string ignored = nullable.join(","); return 32; } catch (exception expected) {}
         return 0;
     }
 }

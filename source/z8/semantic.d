@@ -5,7 +5,7 @@ import std.conv : to;
 import std.string : lastIndexOf, indexOf, icmp;
 import z8.compiler_model;
 import z8.lexer : Token, TokenKind;
-import z8.native_enum_order : enumSortOrder;
+import z8.native_enum_order : enumSortOrder, enumJoinNames;
 
 /// Checks the entire program before emitting code; unsupported constructs fail closed.
 class Checker {
@@ -1881,8 +1881,11 @@ class Checker {
                         auto primaryJoin = e.token.text == "join" && [ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray,
                             ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.primaryArray, ValueType.selfArray,
                             ValueType.encodingArray, ValueType.ftsQueryArray].canFind(receiver);
+                        string[] enumJoinValues, enumJoinTexts;
                         auto enumJoin = receiver == ValueType.enumArray && e.token.text == "join" &&
-                            e.left.objectClass !is null && !e.left.objectClass.isNative;
+                            enumJoinNames(e.left.objectClass, enumJoinValues, enumJoinTexts);
+                        if (receiver == ValueType.enumArray && e.token.text == "join" && !enumJoin)
+                            fail("native enum string representation is unavailable or stale", e.token);
                         auto guidSort = receiver == ValueType.guidArray && e.token.text == "sort";
                         auto encodingSort = receiver == ValueType.encodingArray && e.token.text == "sort";
                         auto ftsQuerySort = receiver == ValueType.ftsQueryArray && e.token.text == "sort";
