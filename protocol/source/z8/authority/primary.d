@@ -5,8 +5,9 @@ import std.conv : to;
 import z8.runtime;
 import z8.protobuf.guid;
 import z8.protobuf.wire;
+import z8.authority.file;
 
-enum Z8ProtobufPrimaryKind { none, nullValue, integer, boolean, decimal, text, guid, date, datespan, geometry, binary }
+enum Z8ProtobufPrimaryKind { none, nullValue, integer, boolean, decimal, text, guid, date, datespan, geometry, binary, file }
 struct Z8ProtobufDecimal { wstring coefficient; int scale; bool nan; ubyte[] unknownFields; }
 struct Z8ProtobufGeometry { wstring ewkbHex; int srid; ubyte[] unknownFields; }
 struct Z8ProtobufBinary { ubyte[] data; wstring name; bool hasName; ubyte[] unknownFields; }
@@ -19,6 +20,7 @@ struct Z8ProtobufPrimary {
     Z8ProtobufGuid guidValue;
     Z8ProtobufGeometry geometryValue;
     Z8ProtobufBinary binaryValue;
+    ubyte[] fileValue;
     ubyte[] unknownFields;
 }
 private wstring utf8(const(ubyte)[] bytes) {
@@ -26,7 +28,10 @@ private wstring utf8(const(ubyte)[] bytes) {
     catch (Exception) { throw new Z8ProtobufException("invalid UTF-8 in protobuf primary"); }
 }
 private void putText(ref ubyte[] output, uint field, wstring value) {
+    if (value.length > 1024 * 1024) throw new Z8ProtobufException("protobuf primary exceeds size limit");
     auto text = value.to!string;
+    if (text.length > 1024 * 1024 || output.length > 1024 * 1024 - text.length)
+        throw new Z8ProtobufException("protobuf primary exceeds size limit");
     z8_proto_tag(output, field, 2); z8_proto_bytes(output, cast(const(ubyte)[])text);
 }
 private void mergeDecimal(ref Z8ProtobufDecimal value, const(ubyte)[] data) {
@@ -115,6 +120,9 @@ Z8ProtobufPrimary z8_parse_protobuf_primary(const(ubyte)[] data) {
         } else if (field == 10 && wire == 2) {
             if (result.kind != Z8ProtobufPrimaryKind.binary) result.binaryValue = Z8ProtobufBinary.init;
             result.kind = Z8ProtobufPrimaryKind.binary; mergeBinary(result.binaryValue, reader.bytes());
+        } else if (field == 11 && wire == 2) {
+            if (result.kind != Z8ProtobufPrimaryKind.file) result.fileValue = null;
+            result.kind = Z8ProtobufPrimaryKind.file; result.fileValue ~= reader.bytes();
         } else { reader.skip(field, wire); result.unknownFields ~= data[start .. reader.position]; }
     }
     return result;
@@ -139,6 +147,8 @@ ubyte[] z8_serialize_protobuf_primary(Z8ProtobufPrimary value) {
             z8_proto_tag(output, 9, 2); z8_proto_bytes(output, encodeGeometry(value.geometryValue)); break;
         case Z8ProtobufPrimaryKind.binary:
             z8_proto_tag(output, 10, 2); z8_proto_bytes(output, encodeBinary(value.binaryValue)); break;
+        case Z8ProtobufPrimaryKind.file:
+            z8_proto_tag(output, 11, 2); z8_proto_bytes(output, value.fileValue); break;
         default: throw new Z8ProtobufException("invalid protobuf primary kind");
     }
     output ~= value.unknownFields;
@@ -184,6 +194,9 @@ Z8ProtobufPrimary z8_primary_to_protobuf(Z8Primary value) {
             catch (Exception failure) { throw new Z8ProtobufException("invalid binary: " ~ failure.msg); }
             result.binaryValue.name = value.binaryValue.name; result.binaryValue.hasName = value.binaryValue.name !is null;
             break;
+        case Z8PrimaryKind.file:
+            if (value.fileValue is null) throw new Z8ProtobufException("invalid file primary");
+            result.kind = Z8ProtobufPrimaryKind.file; result.fileValue = z8_encode_file_metadata(value.fileValue); break;
         default: throw new Z8ProtobufException("primary type is not supported by protobuf");
     }
     return result;
@@ -217,6 +230,7 @@ Z8Primary z8_primary_from_protobuf(Z8ProtobufPrimary value) {
             auto binary = new Z8Binary(value.binaryValue.data.dup);
             binary.name = value.binaryValue.hasName ? (value.binaryValue.name is null ? ""w : value.binaryValue.name) : null;
             return z8_primary_box(binary);
+        case Z8ProtobufPrimaryKind.file: return z8_primary_box(z8_decode_file_metadata(value.fileValue));
         case Z8ProtobufPrimaryKind.decimal:
             if (value.decimalValue.nan) return z8_primary_box(z8_decimal_nan());
             auto text = value.decimalValue.coefficient;

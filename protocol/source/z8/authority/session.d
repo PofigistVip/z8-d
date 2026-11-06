@@ -20,10 +20,15 @@ private wstring readText(const(ubyte)[] bytes) {
 }
 private void text(ref ubyte[] output, uint field, wstring value) {
     if (value is null) return;
+    if (value.length > 1024 * 1024) throw new Z8ProtobufException("protobuf session exceeds size limit");
     auto encoded = value.to!string;
+    if (encoded.length > 1024 * 1024 || output.length > 1024 * 1024 - encoded.length)
+        throw new Z8ProtobufException("protobuf session exceeds size limit");
     z8_proto_tag(output, field, 2); z8_proto_bytes(output, cast(const(ubyte)[])encoded);
 }
 private void nested(ref ubyte[] output, uint field, const(ubyte)[] value) {
+    if (value.length > 1024 * 1024 || output.length > 1024 * 1024 - value.length)
+        throw new Z8ProtobufException("protobuf session exceeds size limit");
     z8_proto_tag(output, field, 2); z8_proto_bytes(output, value);
 }
 private void guid(ref ubyte[] output, uint field, Z8Guid value) {

@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package z8.authority.v1;
+
+import "z8/authority/v1/common.proto";
+
+message StringEntry {
+  oneof key_kind { string key = 1; bool null_key = 2; }
+  oneof value_kind { string value = 3; bool null_value = 4; }
+}
+
+message FileDetails { repeated StringEntry entries = 1; }
+
+message FileMetadata {
+  Guid id = 1;
+  Guid user = 2;
+  optional string name = 3;
+  optional string path = 4;
+  optional string author = 5;
+  optional sint64 time_ticks = 6;
+  optional sint64 size = 7;
+  FileDetails details = 8;
+  optional bytes upload = 9;
+}

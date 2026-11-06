@@ -62,6 +62,13 @@ Z8File z8_file_from_upload(wstring name, const(ubyte)[] contents) {
     result.upload = contents.dup;
     return result;
 }
+bool z8_file_has_upload(Z8File value) { return z8_nonnull(value).hasUpload; }
+ubyte[] z8_file_upload_snapshot(Z8File value, ulong maximum) {
+    value = z8_nonnull(value);
+    if (!value.hasUpload) throw new Exception("file has no upload content");
+    if (value.upload.length > maximum) throw new Exception("file upload exceeds size limit");
+    return value.upload.dup;
+}
 wstring z8_file_path(Z8File value) { return z8_nonnull(value).path; }
 long z8_file_hashCode(Z8File value) { z8_nonnull(value); return value.id is null ? 0 : z8_guid_hash(value.id); }
 // JsonObject.quote in the Java runtime escapes only slashes following '<'

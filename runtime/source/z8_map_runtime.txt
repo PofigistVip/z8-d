@@ -59,6 +59,13 @@ class Z8StringMap {
         if (hasNullKey) result.z8_add(null);
         return result;
     }
+    // Stable order is needed when copying file details with equal hash buckets.
+    Z8Array!wstring z8_insertion_keys() {
+        auto result = new Z8Array!wstring();
+        foreach (key; insertionKeys) result.z8_add(key);
+        if (hasNullKey) result.z8_add(null);
+        return result;
+    }
     Z8Array!wstring z8_values() {
         auto result = new Z8Array!wstring();
         foreach (value; entries) result.z8_add(value);

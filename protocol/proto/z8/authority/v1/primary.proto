@@ -3,6 +3,7 @@ syntax = "proto3";
 package z8.authority.v1;
 
 import "z8/authority/v1/common.proto";
+import "z8/authority/v1/file.proto";
 
 message Decimal {
   string coefficient = 1;
@@ -33,5 +34,6 @@ message Primary {
     sint64 datespan_milliseconds = 8;
     Geometry geometry_value = 9;
     Binary binary_value = 10;
+    FileMetadata file_value = 11;
   }
 }
