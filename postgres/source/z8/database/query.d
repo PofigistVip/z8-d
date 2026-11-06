@@ -413,7 +413,12 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                 if (index) sql ~= ", ";
                 auto direction = z8_field_sort_direction(field);
                 if (direction != "asc"w && direction != "desc"w) throw new Z8PostgresException("invalid PostgreSQL sort direction");
-                sql ~= z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string ~ " " ~ direction.to!string;
+                auto ordering = z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string;
+                auto kind = z8_field_type_id(field);
+                if (!outerGroups.length && containsField(declared, field) && z8_field_aggregation(field) == Z8FieldAggregation.count &&
+                    (kind == "text"w || kind == "binary"w))
+                    ordering = "convert_from(" ~ ordering ~ ", 'UTF8')::bigint";
+                sql ~= ordering ~ " " ~ direction.to!string;
             }
         }
         if (!counting && request.limit >= 0) sql ~= " LIMIT " ~ request.limit.to!string;
