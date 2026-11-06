@@ -137,8 +137,14 @@ import org.zenframework.z8.base.table.system.RoleRequestAccess;
 import org.zenframework.z8.base.table.system.UserRoles;
 import org.zenframework.z8.base.table.system.Entries;
 import org.zenframework.z8.base.table.system.UserEntries;
+import org.zenframework.z8.base.security.User;
 import org.zenframework.z8.base.table.value.Field;
 public class Probe {
+    public static bool lookupSystemUser() {
+        User user = User.get(guid.create(1));
+        return user != null && user.login == "System" && user.isBuiltinSystem()
+            && User.get(guid.create(999999)) == null;
+    }
     public static Sample make() { Sample value; return value; }
     public static GeoSample geo() { GeoSample value; return value; }
     public static IndexSample indexes() { IndexSample value; return value; }
@@ -605,6 +611,9 @@ void main(string[] args) {
     db.rollback();
     auto loadedSystem = (cast(IZ8JobUserResolver)new Z8PostgresDatabase(db, "z8_bootstrap"w)).resolveJobUser(z8_guid_create(1));
     assert(loadedSystem !is null && loadedSystem.login == "System"w && loadedSystem.builtinSystem);
+    auto previousConnection = z8_connection_set_current(new Z8PostgresDatabase(db, "z8_bootstrap"w, bootstrapRegistry));
+    assert(z8_optional_require(P.m_lookupSystemUser()));
+    z8_connection_set_current(previousConnection);
     assert(z8_postgres_read_user(db, "z8_bootstrap"w, z8_guid_create(999999)) is null);
     assert(adminPrivileges.roleIds.length == 1 && adminPrivileges.privileges.getDefaultAccess().execute);
     assert(adminPrivileges.privileges.getTableAccess(bootTableKey).write && adminPrivileges.privileges.getFieldAccess(bootTableKey, bootFieldKey).read);

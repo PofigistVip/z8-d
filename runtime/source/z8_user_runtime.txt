@@ -49,6 +49,17 @@ Z8Object z8_user_wrap(Z8UserData data) {
     return user;
 }
 Z8UserData z8_user_data(Z8Object self) { return z8_user_state(self).user; }
+private Z8Object z8_user_get(Z8Guid id) {
+    id = z8_nonnull(id);
+    if (id == z8_guid_zero()) return null;
+    auto request = z8_application_request();
+    auto resolver = request is null ? null : request.jobUserResolver;
+    if (resolver is null) resolver = cast(IZ8JobUserResolver)z8_connection_current_backend();
+    if (resolver is null) throw new Exception("user resolver is not configured");
+    auto user = resolver.resolveJobUser(id);
+    if (user !is null && (user.id is null || user.id != id)) throw new Exception("invalid resolved user");
+    return z8_user_wrap(user);
+}
 private T* z8_user_field(string name, T)(Z8Object self) {
     return &__traits(getMember, z8_user_state(self), name);
 }
@@ -70,6 +81,7 @@ void z8_bind_builtin_user() {
     z8_native_bind_field(prefix ~ "f_phone"w, &z8_user_field!("phone", wstring));
     z8_native_bind_field(prefix ~ "f_email"w, &z8_user_field!("email", wstring));
     z8_native_bind_field(prefix ~ "f_parameters"w, &z8_user_field!("parameters", Z8PrimaryMap));
+    z8_native_bind(prefix ~ "m_get"w, &z8_user_get);
     z8_native_bind(prefix ~ "m_isAdministrator"w, &z8_user_is_administrator);
     z8_native_bind(prefix ~ "m_isBuiltinAdministrator"w, &z8_user_is_builtin_administrator);
     z8_native_bind(prefix ~ "m_isBuiltinSystem"w, &z8_user_is_builtin_system);

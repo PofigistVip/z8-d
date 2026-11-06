@@ -21,6 +21,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
 ''', encoding="utf-8")
     (source / "User.bl").write_text('''
 [native "org.zenframework.z8.server.base.security.User"] public class User extends Object {
+    public static User get(guid id);
     public guid id; public string login; public string firstName; public string middleName; public string lastName;
     public string description; public string phone; public string email; public primary[string] parameters;
     public bool isAdministrator(); public bool isBuiltinAdministrator(); public bool isBuiltinSystem();
@@ -37,6 +38,11 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     (source / "Probe.bl").write_text('''
 public class Probe {
     public static User create() { User user; return user; }
+    public static bool lookup() {
+        User user = User.get(guid.create(42));
+        return user != null && user.id == guid.create(42) && user.login == "alice"
+            && User.get(guid.create(999)) == null && User.get(guid.Null) == null;
+    }
     public static bool check(User u) {
         if (u.id != guid.create(42) || u.login != "alice" || u.firstName != "Alice" || u.email != "a@example.org") return false;
         if (!u.isAdministrator() || u.isBuiltinAdministrator() || !u.isBuiltinSystem()) return false;
@@ -69,6 +75,11 @@ public class Probe {
     harness.write_text('''
 import z8.runtime;
 import z8gen.p_Probe;
+class Resolver : IZ8JobUserResolver {
+    Z8UserData user;
+    this(Z8UserData user) { this.user = user; }
+    Z8UserData resolveJobUser(Z8Guid id) { return id == user.id ? user : null; }
+}
 void main() {
     alias P = Z8p_50726F6265;
     auto data = new Z8UserData(); data.id = z8_guid_create(42); data.login = "alice"w;
@@ -88,9 +99,11 @@ void main() {
     auto bobWrapper = P.m_create(); z8_user_attach(bobWrapper, bob);
     auto system = new Z8UserData(); system.id = z8_guid_create(1); system.builtinSystem = true;
     auto request = new Z8ApplicationRequest();
+    request.jobUserResolver = new Resolver(data);
     request.session = new Z8ApplicationSession("session"w, data, system);
     assert(request.session.lastAccessTime > 1_600_000_000_000L);
     z8_application_set_request(request);
+    assert(z8_optional_require(P.m_lookup()));
     assert(z8_optional_require(P.m_session(bobWrapper)));
     request.session.setUser(bob); request.session.switchUser(data); request.session.restoreUser();
     assert(request.session.user is bob);
