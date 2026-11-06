@@ -97,7 +97,8 @@ private void z8_application_dispatch_query_update_target(wstring className, Z8Ob
         auto id = z8_guid_parse(member.str.to!wstring);
         if (id is null) throw new Exception("invalid query update record id");
         foreach (name, value; record.object) {
-            auto field = z8_query_find_field_id(query, name.to!wstring);
+            auto field = z8_query_try_find_field_id(query, name.to!wstring);
+            if (field is null) continue;
             if (field is key) continue;
             if (field.z8_get_owner() !is query) {
                 // UpdateAction also sets values of linked fields from the

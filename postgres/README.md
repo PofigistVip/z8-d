@@ -212,6 +212,8 @@ supported by both write actions, as are GeoJSON geometry values when PostGIS
 is installed in the database. File and attachment field values are stored
 as text metadata; binary fields accept an index into the request's uploaded
 files. Linked or computed fields and additional write options are rejected.
+As in Java, create, update and copy ignore record properties that do not name a
+field; access checks still apply to fields that are found.
 The native `SystemFiles` table's fields and creation timestamps are available
 when the host includes it in schema bootstrap. `Files.get(id)` reads file path
 metadata, and `Files.get(file)` reads existing local content or database content,

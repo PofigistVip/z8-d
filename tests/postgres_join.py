@@ -1106,13 +1106,13 @@ void main(string[] args) {
     bool customRejected;
     try { nestedWrite("create"w, `[{"customer.label":"Rejected custom create"}]`w, null, "rejectCreate"w); } catch (Exception) { customRejected = true; }
     assert(customRejected && db.execute(`SELECT count(*) FROM "Customers" WHERE "Label" = 'Rejected custom create'`).rows[0][0].text == "0");
-    auto inserted = parseJSON(nestedWrite("create"w, `[{"customer.label":"Cara"}]`w).to!string);
+    auto inserted = parseJSON(nestedWrite("create"w, `[{"customer.label":"Cara","undefined":123,"unknown.field":"ignored"}]`w).to!string);
     assert(inserted["data"].array.length == 1 && inserted["data"][0]["customer.label"].str == "Cara");
     auto insertedId = inserted["data"][0]["customer.recordId"].str;
     customRejected = false;
     try { nestedWrite("copy"w, `[{"customer.label":"Rejected custom copy"}]`w, insertedId.to!wstring, "rejectCopy"w); } catch (Exception) { customRejected = true; }
     assert(customRejected && db.execute(`SELECT count(*) FROM "Customers" WHERE "Label" = 'Rejected custom copy'`).rows[0][0].text == "0");
-    auto copied = parseJSON(nestedWrite("copy"w, `[{"customer.label":"Copy"}]`w, insertedId.to!wstring).to!string);
+    auto copied = parseJSON(nestedWrite("copy"w, `[{"customer.label":"Copy","extra":"ignored"}]`w, insertedId.to!wstring).to!string);
     assert(copied["data"].array.length == 1 && copied["data"][0]["customer.label"].str == "Copy");
     auto copiedId = copied["data"][0]["customer.recordId"].str;
     assert(copiedId != insertedId);
@@ -1130,7 +1130,7 @@ void main(string[] args) {
     assert(nestedWriteDenied);
     assert(db.execute(`SELECT "Label" FROM "Customers" WHERE "RecordId" = '` ~ insertedId ~ `'::uuid`).rows[0][0].text == "Cara");
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
-    auto modified = parseJSON(nestedWrite("update"w, (`[{"customer.recordId":"` ~ insertedId ~ `","customer.label":"Changed"}]`).to!wstring).to!string);
+    auto modified = parseJSON(nestedWrite("update"w, (`[{"customer.recordId":"` ~ insertedId ~ `","customer.label":"Changed","unknown.field":"ignored"}]`).to!wstring).to!string);
     assert(modified["data"][0]["customer.label"].str == "Changed");
     nestedWrite("destroy"w, (`[{"customer.recordId":"` ~ insertedId ~ `"}]`).to!wstring);
     assert(db.execute(`SELECT count(*)::text FROM "Customers" WHERE "RecordId" = '` ~ insertedId ~ `'::uuid`).rows[0][0].text == "0");
