@@ -32,6 +32,10 @@ their IDs and privileges, and rejects duplicate parameter keys. Conversion to
 runtime objects intentionally discards unknown fields; it is not a wire-message
 proxy. A user-defined parameter without its registered codec causes the
 operation to fail.
+`service.proto` describes transport-independent login, authorization and change
+notification operations. `z8.authority.messages` encodes and decodes the login,
+authorization and session reply envelopes, including explicit empty passwords
+and denied replies. It does not open sockets or choose an RPC implementation.
 `Z8ProtobufAuthorityNotifier` implements the runtime's user and role notifier
 interfaces and forwards encoded events to a host-provided
 `IZ8AuthorityChangePublisher`. A receiving host dispatches them with
@@ -52,4 +56,6 @@ from an untrusted peer without an authenticated transport.
 Run `python tests/protobuf_notifications.py`, `python tests/protobuf_privileges.py`,
 `python tests/protobuf_primary.py` and `python tests/protobuf_session.py` to
 cross-check serialization with Google's Python protobuf runtime; the tests require
-the `protobuf` Python package.
+the `protobuf` Python package. `python tests/protobuf_authority_messages.py`
+checks the request/reply envelopes. `python tests/protobuf_schemas.py [protoc]`
+compiles every `.proto` file and inspects the resulting descriptors.

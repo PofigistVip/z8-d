@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package z8.authority.v1;
+
+import "z8/authority/v1/notifications.proto";
+import "z8/authority/v1/session.proto";
+
+message LoginRequest {
+  string login = 1;
+  optional string password = 2;
+  string schema = 3;
+  optional string address = 4;
+}
+
+message AuthorizeRequest {
+  string session_id = 1;
+  string schema = 2;
+  optional string server_id = 3;
+}
+
+message SessionReply {
+  oneof result {
+    SessionSnapshot session = 1;
+    bool access_denied = 2;
+  }
+}
+
+message Empty {}
+
+// This declares operations only; a concrete RPC transport is not selected.
+service Authority {
+  rpc Login(LoginRequest) returns (SessionReply);
+  rpc Authorize(AuthorizeRequest) returns (SessionReply);
+  rpc UserChanged(.z8.authority.v1.UserChanged) returns (Empty);
+  rpc RoleChanged(.z8.authority.v1.RoleChanged) returns (Empty);
+}
