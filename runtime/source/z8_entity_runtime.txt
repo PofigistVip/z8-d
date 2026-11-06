@@ -1,0 +1,143 @@
+// State and value operations of base.entity.Entity (Entity.java).
+private enum z8_entity_name = "org.zenframework.z8.server.base.entity.Entity"w;
+private __gshared wstring z8_entity_id_key = "recordId"w, z8_entity_origin_key = "originId"w;
+private wstring* z8_entity_id_key_address() { return &z8_entity_id_key; }
+private wstring* z8_entity_origin_key_address() { return &z8_entity_origin_key; }
+private class Z8EntityState {
+    Z8PrimaryMap defaults, changes;
+    bool initialized, persistent, deleted;
+    Z8Object registry;
+    this() { defaults = new Z8PrimaryMap(); changes = new Z8PrimaryMap(); }
+}
+private Z8EntityState z8_entity_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_entity_name, self)) throw new Exception("invalid Entity object");
+    auto state = cast(Z8EntityState)self.z8_get_native_state(z8_entity_name);
+    if (state is null) { state = new Z8EntityState(); self.z8_set_native_state(z8_entity_name, state); }
+    return state;
+}
+private Z8Primary z8_entity_get(Z8Object self, wstring key) {
+    auto state = z8_entity_state(self);
+    return state.changes.z8_containsKey(key) ? state.changes.z8_get(key) : state.defaults.z8_get(key);
+}
+private Z8Object z8_entity_init(Z8Object self, wstring key, Z8Primary value) {
+    auto state = z8_entity_state(self); state.defaults.z8_add(key, value); state.initialized = true; return self;
+}
+private Z8Object z8_entity_init_map(Z8Object self, Z8PrimaryMap values) {
+    auto state = z8_entity_state(self); state.defaults.z8_add(z8_nonnull(values)); state.initialized = true; return self;
+}
+private Z8Object z8_entity_set(Z8Object self, wstring key, Z8Primary value) {
+    auto state = z8_entity_state(self); state.initialized = true;
+    if (key == z8_entity_id_key) { state.defaults.z8_add(key, value); return self; }
+    auto current = state.changes.z8_get(key);
+    if (current is null) current = state.defaults.z8_get(key);
+    if (!z8_primary_collection_equals(value, current)) {
+        state.changes.z8_add(key, value); self.z8_entity_virtual_on_change(key);
+    }
+    return self;
+}
+private Z8Object z8_entity_set_map(Z8Object self, Z8PrimaryMap values) {
+    auto keys = z8_nonnull(values).z8_keys();
+    for (long i; i < keys.z8_size(); ++i) { auto key = keys.z8_get(i); z8_entity_set(self, key, values.z8_get(key)); }
+    return self;
+}
+private Z8Guid z8_entity_guid(Z8Object self, wstring key) {
+    auto value = z8_entity_get(self, key);
+    if (value is null) return null;
+    return value.kind == Z8PrimaryKind.guid ? value.guidValue : z8_guid_parse(z8_primary_to_string(value));
+}
+private Z8Guid z8_entity_get_id(Z8Object self) { return z8_entity_guid(self, z8_entity_id_key); }
+private Z8Guid z8_entity_get_origin_id(Z8Object self) { return z8_entity_guid(self, z8_entity_origin_key); }
+private Z8Object z8_entity_set_id(Z8Object self, Z8Guid id) { return z8_entity_set(self, z8_entity_id_key, z8_primary_box(id)); }
+private Z8Object z8_entity_set_origin_id(Z8Object self, Z8Guid id) { return z8_entity_set(self, z8_entity_origin_key, z8_primary_box(id)); }
+private Z8Object z8_entity_set_json_object(Z8Object self, wstring key, Z8Object value) {
+    if (value is null) return z8_entity_set(self, key, null);
+    return z8_entity_set(self, key, z8_primary_box(z8_json_object_to_string(value)));
+}
+private Z8Object z8_entity_set_json_array(Z8Object self, wstring key, Z8Object value) {
+    return value is null ? z8_entity_set(self, key, null) : z8_entity_set(self, key, z8_primary_box(z8_json_array_string(value)));
+}
+private Z8Object z8_entity_set_entity(Z8Object self, wstring key, Z8Object value) {
+    return z8_entity_set(self, key, z8_primary_box(value is null ? z8_guid_zero() : z8_entity_get_id(value)));
+}
+private Z8Optional!bool z8_entity_is_null(Z8Object self) {
+    auto id = z8_entity_get_id(self); return z8_optional_wrap(id is null || id == z8_guid_zero());
+}
+private Z8Optional!bool z8_entity_initialized(Z8Object self) { return z8_optional_wrap(z8_entity_state(self).initialized); }
+private Z8Optional!bool z8_entity_persistent(Z8Object self) { return z8_optional_wrap(z8_entity_state(self).persistent); }
+private Z8Optional!bool z8_entity_deleted(Z8Object self) { return z8_optional_wrap(z8_entity_state(self).deleted); }
+private Z8Optional!bool z8_entity_changed(Z8Object self) { return z8_optional_wrap(!z8_entity_state(self).changes.z8_isEmpty()); }
+private Z8Optional!bool z8_entity_changed_key(Z8Object self, wstring key) { return z8_optional_wrap(z8_entity_state(self).changes.z8_containsKey(key)); }
+private Z8Optional!bool z8_entity_has(Z8Object self, wstring key) {
+    auto state = z8_entity_state(self); return z8_optional_wrap(state.changes.z8_containsKey(key) || state.defaults.z8_containsKey(key));
+}
+private Z8Object z8_entity_create_id(Z8Object self, Z8Guid id) {
+    if (!z8_optional_require(z8_entity_is_null(self))) throw new Exception("Entity is already created");
+    z8_entity_set_id(self, id); self.z8_entity_virtual_on_create(); return self;
+}
+private Z8Object z8_entity_create(Z8Object self) { return z8_entity_create_id(self, z8_guid_create_random()); }
+private Z8Object z8_entity_delete(Z8Object self) { z8_entity_state(self).deleted = true; self.z8_entity_virtual_on_delete(); return self; }
+private Z8Object z8_entity_touch(Z8Object self, wstring key) { z8_entity_state(self); self.z8_entity_virtual_on_change(key); return self; }
+private Z8Object z8_entity_touch_many(Z8Object self, Z8Array!wstring keys) {
+    keys = z8_nonnull(keys); for (long i; i < keys.z8_size(); ++i) z8_entity_touch(self, keys.z8_get(i)); return self;
+}
+// The original values() copies defaults and then adds the result to itself.
+private Z8PrimaryMap z8_entity_values(Z8Object self) { auto result = new Z8PrimaryMap(); result.z8_add(z8_entity_state(self).defaults); return result; }
+private Z8Array!wstring z8_entity_keys(Z8Object self) { return z8_entity_values(self).z8_keys(); }
+private Z8PrimaryMap z8_entity_selected_values(Z8Object self, Z8Array!wstring keys) {
+    auto result = new Z8PrimaryMap(); keys = z8_nonnull(keys);
+    for (long i; i < keys.z8_size(); ++i) { auto key = keys.z8_get(i); result.z8_add(key, z8_entity_get(self, key)); }
+    return result;
+}
+private Z8Optional!bool z8_entity_equal(Z8Object self, Z8Object other) {
+    self = z8_nonnull(self);
+    if (other is null || self.classinfo !is other.classinfo) return z8_optional_wrap(false);
+    auto a = z8_entity_get_id(self), b = z8_entity_get_id(other);
+    return z8_optional_wrap(a is b || (a !is null && b !is null && a == b));
+}
+private Z8Optional!bool z8_entity_not_equal(Z8Object self, Z8Object other) { return z8_optional_wrap(!z8_optional_require(z8_entity_equal(self, other))); }
+private wstring z8_entity_string(Z8Object self, wstring key) { return z8_primary_cast!wstring(z8_entity_get(self, key)); }
+private Z8Optional!long z8_entity_int(Z8Object self, wstring key) { return z8_primary_cast!long(z8_entity_get(self, key)); }
+private Z8Optional!bool z8_entity_bool(Z8Object self, wstring key) {
+    auto value = z8_entity_get(self, key);
+    if (value is null) return Z8Optional!bool.init;
+    return value.kind == Z8PrimaryKind.boolean ? z8_optional_wrap(value.booleanValue) : z8_optional_wrap(z8_bool_parse(z8_primary_to_string(value)));
+}
+private Z8Date z8_entity_date(Z8Object self, wstring key) {
+    auto value = z8_entity_get(self, key); if (value is null) return null;
+    return value.kind == Z8PrimaryKind.date ? value.dateValue : z8_date_parse(z8_primary_to_string(value));
+}
+private Z8Datespan z8_entity_datespan(Z8Object self, wstring key) {
+    auto value = z8_entity_get(self, key); if (value is null) return null;
+    return value.kind == Z8PrimaryKind.datespan ? value.datespanValue : z8_datespan_parse(z8_primary_to_string(value));
+}
+private Z8Object z8_entity_json_object(Z8Object self, wstring key) { auto value = z8_entity_string(self, key); return value is null ? null : z8_json_object_parse(value); }
+private Z8Object z8_entity_json_array(Z8Object self, wstring key) { auto value = z8_entity_string(self, key); return value is null ? null : z8_json_array_parse(value); }
+private void z8_entity_default_change(Z8Object self, wstring key) { z8_nonnull(self); }
+private void z8_entity_default_hook(Z8Object self) { z8_nonnull(self); }
+void z8_bind_builtin_entity() {
+    enum p = z8_entity_name ~ "."w;
+    z8_native_bind_field(p ~ "f_EntityId"w, &z8_entity_id_key_address);
+    z8_native_bind_field(p ~ "f_OriginId"w, &z8_entity_origin_key_address);
+    z8_native_bind(p ~ "z8op_equal"w, &z8_entity_equal); z8_native_bind(p ~ "z8op_not_equal"w, &z8_entity_not_equal);
+    z8_native_bind(p ~ "m_isNull"w, &z8_entity_is_null); z8_native_bind(p ~ "m_isInitialized"w, &z8_entity_initialized);
+    z8_native_bind(p ~ "m_isPersistent"w, &z8_entity_persistent); z8_native_bind(p ~ "m_isDeleted"w, &z8_entity_deleted);
+    z8_native_bind(p ~ "m_isChanged"w, &z8_entity_changed); z8_native_bind(p ~ "m_isChanged"w, &z8_entity_changed_key);
+    z8_native_bind(p ~ "m_has"w, &z8_entity_has); z8_native_bind(p ~ "m_get"w, &z8_entity_get);
+    z8_native_bind(p ~ "m_init"w, &z8_entity_init); z8_native_bind(p ~ "m_init"w, &z8_entity_init_map);
+    z8_native_bind(p ~ "m_set"w, &z8_entity_set); z8_native_bind(p ~ "m_set"w, &z8_entity_set_map);
+    z8_native_bind(p ~ "m_set_json_object"w, &z8_entity_set_json_object); z8_native_bind(p ~ "m_set_json_array"w, &z8_entity_set_json_array);
+    z8_native_bind(p ~ "m_set_entity"w, &z8_entity_set_entity);
+    z8_native_bind(p ~ "m_create"w, &z8_entity_create); z8_native_bind(p ~ "m_create"w, &z8_entity_create_id);
+    z8_native_bind(p ~ "m_delete"w, &z8_entity_delete); z8_native_bind(p ~ "m_touch"w, &z8_entity_touch); z8_native_bind(p ~ "m_touch"w, &z8_entity_touch_many);
+    z8_native_bind(p ~ "m_keys"w, &z8_entity_keys); z8_native_bind(p ~ "m_values"w, &z8_entity_values); z8_native_bind(p ~ "m_values"w, &z8_entity_selected_values);
+    z8_native_bind(p ~ "m_getString"w, &z8_entity_string); z8_native_bind(p ~ "m_getInt"w, &z8_entity_int);
+    z8_native_bind(p ~ "m_getGuid"w, &z8_entity_guid); z8_native_bind(p ~ "m_getBool"w, &z8_entity_bool);
+    z8_native_bind(p ~ "m_getDate"w, &z8_entity_date); z8_native_bind(p ~ "m_getDatespan"w, &z8_entity_datespan);
+    z8_native_bind(p ~ "m_getJsonObject"w, &z8_entity_json_object); z8_native_bind(p ~ "m_getJsonArray"w, &z8_entity_json_array);
+    z8_native_bind(p ~ "m_getEntityId"w, &z8_entity_get_id); z8_native_bind(p ~ "m_setEntityId"w, &z8_entity_set_id);
+    z8_native_bind(p ~ "m_getOriginId"w, &z8_entity_get_origin_id); z8_native_bind(p ~ "m_setOriginId"w, &z8_entity_set_origin_id);
+    z8_native_bind(p ~ "m_onChange"w, &z8_entity_default_change);
+    foreach (name; ["onRegister"w, "onCreate"w, "onDelete"w]) z8_native_bind(p ~ "m_"w ~ name, &z8_entity_default_hook);
+}
+shared static this() { z8_bind_builtin_entity(); }

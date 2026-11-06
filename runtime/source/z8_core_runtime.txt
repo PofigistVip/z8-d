@@ -135,6 +135,10 @@ class Z8Object {
     wstring z8_security_object_virtual_type() { return null; }
     wstring z8_security_object_virtual_name() { return null; }
     Z8Guid z8_security_object_virtual_id() { return null; }
+    void z8_entity_virtual_on_change(wstring key) {}
+    void z8_entity_virtual_on_register() {}
+    void z8_entity_virtual_on_create() {}
+    void z8_entity_virtual_on_delete() {}
     void z8_action_virtual_execute_many(Z8Array!Z8Guid records, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) {}
     void z8_action_virtual_execute_one(Z8Guid record, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) {}
     void z8_report_virtual_prepare(Z8Guid record) {}

@@ -986,6 +986,16 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                     result ~= "override void z8_query_virtual_" ~ method.name.text ~ "(Z8Guid id) { this.m_" ~ method.name.text ~ "(id); }\n";
             }
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.entity.Entity"w) {
+            foreach (method; program.methods) if (method.returnType == ValueType.voidType) {
+                if (method.name.text == "onChange" && method.parameters.length == 1 && method.parameters[0].type == ValueType.stringType)
+                    result ~= "override void z8_entity_virtual_on_change(wstring key) { this.m_onChange(key); }\n";
+                if (!method.parameters.length && ["onRegister", "onCreate", "onDelete"].canFind(method.name.text)) {
+                    auto hook = method.name.text == "onRegister" ? "register" : method.name.text == "onCreate" ? "create" : "delete";
+                    result ~= "override void z8_entity_virtual_on_" ~ hook ~ "() { this.m_" ~ method.name.text ~ "(); }\n";
+                }
+            }
+        }
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.security.SecurityObject"w) {
             foreach (method; program.methods) if (!method.parameters.length) {
                 if (method.name.text == "getType" && method.returnType == ValueType.stringType)
@@ -1465,7 +1475,15 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 string[] arguments;
                 if (!m.isStatic) arguments ~= "this";
                 foreach (p; m.parameters) arguments ~= "v_" ~ p.name.text;
-                auto binding = emitRawWStringLiteral(program.nativeName ~ "."w ~ methodDName(m).to!wstring);
+                auto bindingName = methodDName(m).to!wstring;
+                if (program.nativeName == "org.zenframework.z8.server.base.entity.Entity"w && m.name.text == "set" &&
+                    m.parameters.length == 2 && m.parameters[1].objectClass !is null) {
+                    auto nativeType = m.parameters[1].objectClass.nativeName;
+                    if (nativeType == "org.zenframework.z8.server.base.entity.Entity"w) bindingName = "m_set_entity"w;
+                    else if (nativeType == "org.zenframework.z8.server.base.json.parser.JsonObject"w) bindingName = "m_set_json_object"w;
+                    else if (nativeType == "org.zenframework.z8.server.base.json.parser.JsonArray"w) bindingName = "m_set_json_array"w;
+                }
+                auto binding = emitRawWStringLiteral(program.nativeName ~ "."w ~ bindingName);
                 auto call = "z8_native_call!(" ~ dStorageType(m.returnType, m.returnObjectClass, m.returnKeyObjectClasses) ~ ")(" ~ binding ~
                     (arguments.length ? ", " ~ arguments.join(", ") : "") ~ ")";
                 if (program.nativeName == "org.zenframework.z8.server.base.table.value.Field"w &&
