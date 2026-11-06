@@ -116,6 +116,10 @@ Z8SqlBool z8_sql_string_regLike(Z8SqlString value, Z8SqlString pattern) {
 // before constructing expressions, just as Z8 does at Fts initialization.
 __gshared wstring z8_sql_fts_configuration;
 class Z8FtsQueryType { int id; this(int id) { this.id = id; } }
+wstring z8_fts_query_name(Z8FtsQueryType value) {
+    static immutable wstring[] names = ["Query"w, "Plain"w, "Phrase"w];
+    return names[z8_nonnull(value).id];
+}
 __gshared Z8FtsQueryType z8_fts_query_Query, z8_fts_query_Plain, z8_fts_query_Phrase;
 shared static this() {
     z8_fts_query_Query = new Z8FtsQueryType(0); z8_fts_query_Plain = new Z8FtsQueryType(1); z8_fts_query_Phrase = new Z8FtsQueryType(2);

@@ -5,6 +5,12 @@ class Z8Encoding {
 private __gshared Z8Encoding[14] z8_encodings;
 shared static this() { foreach (i; 0 .. z8_encodings.length) z8_encodings[i] = new Z8Encoding(cast(int)i); }
 Z8Encoding z8_encoding_by_id(int id) { return z8_encodings[id]; }
+wstring z8_encoding_name(Z8Encoding value) {
+    static immutable wstring[] names = ["UTF-8"w, "CP866"w, "KOI8-R"w, "US-ASCII"w, "UTF-8"w,
+        "UTF-16"w, "UTF-16BE"w, "UTF-16LE"w, "Windows-1250"w, "Windows-1251"w,
+        "Windows-1252"w, "Windows-1253"w, "Windows-1254"w, "Windows-1257"w];
+    return names[z8_nonnull(value).id];
+}
 Z8Array!Z8Encoding z8_encoding_array_sort(Z8Array!Z8Encoding array) {
     return z8_enum_array_sort(array, z8_encodings[]);
 }

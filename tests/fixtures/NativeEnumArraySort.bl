@@ -67,6 +67,12 @@ public class NativeEnumArraySort {
         int count = 0;
         for (FtsQueryType type : types) if (type == FtsQueryType.Phrase) count += 1;
         if (count != 2) return 20;
+        if (types.join(",") != "Phrase,Plain,Phrase" || types.join() != "PhrasePlainPhrase") return 21;
+        if (encodings.join("|") != "UTF-8|CP866|KOI8-R|US-ASCII|UTF-8|UTF-16|UTF-16BE|UTF-16LE|Windows-1250|Windows-1251|Windows-1252|Windows-1253|Windows-1254|Windows-1257") return 22;
+        FtsQueryType[] emptyTypes;
+        if (emptyTypes.join(null) != "") return 23;
+        try { string ignored = nullTypes.join(","); return 24; } catch (exception expected) {}
+        try { string ignored = types.join(null); return 25; } catch (exception expected) {}
         return 0;
     }
 }

@@ -1879,7 +1879,8 @@ class Checker {
                         e.objectClass = e.left.objectClass;
                         e.keyObjectClasses = e.left.keyObjectClasses;
                         auto primaryJoin = e.token.text == "join" && [ValueType.guidArray, ValueType.binaryArray, ValueType.datespanArray,
-                            ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.primaryArray, ValueType.selfArray].canFind(receiver);
+                            ValueType.dateArray, ValueType.geometryArray, ValueType.fileArray, ValueType.primaryArray, ValueType.selfArray,
+                            ValueType.encodingArray, ValueType.ftsQueryArray].canFind(receiver);
                         auto guidSort = receiver == ValueType.guidArray && e.token.text == "sort";
                         auto encodingSort = receiver == ValueType.encodingArray && e.token.text == "sort";
                         auto ftsQuerySort = receiver == ValueType.ftsQueryArray && e.token.text == "sort";

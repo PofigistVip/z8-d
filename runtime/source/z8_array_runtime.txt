@@ -275,6 +275,16 @@ class Z8Array(T) {
         return result;
     }
     wstring z8_join(wstring separator = ""w) {
+        static if (is(T == Z8Encoding) || is(T == Z8FtsQueryType)) {
+            wstring enumJoined;
+            foreach (i; 0 .. z8_size()) {
+                if (i) enumJoined ~= z8_string_required(separator);
+                auto item = z8_nonnull(z8_get(i));
+                static if (is(T == Z8Encoding)) enumJoined ~= z8_encoding_name(item);
+                else enumJoined ~= z8_fts_query_name(item);
+            }
+            return enumJoined;
+        }
         static if (is(T == Z8Guid) || is(T == Z8Binary) || is(T == Z8Datespan) || is(T == Z8Date) ||
                    is(T == Z8Geometry) || is(T == Z8File) || is(T == Z8Primary)) {
             wstring primaryJoined;
