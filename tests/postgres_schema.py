@@ -363,11 +363,12 @@ import core.sync.condition : Condition;
 import core.time : dur;
 import core.thread : Thread;
 class SchedulerObserver : IZ8SchedulerObserver {
-    Mutex gate; Condition wake; bool succeeded;
+    Mutex gate; Condition wake; bool succeeded, hold, entered;
     this() { gate = new Mutex(); wake = new Condition(gate); }
     void onRuns(Z8ScheduledRun[] runs) {
         synchronized (gate) {
             foreach (run; runs) if (run.classId == "DailyJob"w && run.success) succeeded = true;
+            if (hold) { entered = true; wake.notifyAll(); while (hold) wake.wait(); }
             wake.notifyAll();
         }
     }
@@ -1146,6 +1147,28 @@ void main(string[] args) {
     db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "LastStart" = 0 WHERE "RecordId" = $1::uuid`,
         [Z8PostgresParameter.value(dailyScheduleRow.rows[0][0].text)]);
     service.restart(); assert(observer.waitForSuccess());
+    service.suspend(); service.suspend();
+    synchronized (observer.gate) observer.succeeded = false;
+    db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "LastStart" = 0 WHERE "RecordId" = $1::uuid`,
+        [Z8PostgresParameter.value(dailyScheduleRow.rows[0][0].text)]);
+    service.restart(); service.resume();
+    Thread.sleep(dur!"msecs"(250));
+    synchronized (observer.gate) assert(!observer.succeeded);
+    service.resume(); assert(observer.waitForSuccess());
+    bool badResume; try { service.resume(); } catch (Z8PostgresException) { badResume = true; } assert(badResume);
+    synchronized (observer.gate) { observer.hold = true; observer.entered = false; }
+    db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "LastStart" = 0 WHERE "RecordId" = $1::uuid`,
+        [Z8PostgresParameter.value(dailyScheduleRow.rows[0][0].text)]);
+    service.restart();
+    synchronized (observer.gate) {
+        if (!observer.entered) observer.wake.wait(dur!"seconds"(10));
+        assert(observer.entered);
+    }
+    bool suspended;
+    auto pauseThread = new Thread({ service.suspend(); synchronized (observer.gate) suspended = true; });
+    pauseThread.start(); Thread.sleep(dur!"msecs"(100));
+    synchronized (observer.gate) { assert(!suspended); observer.hold = false; observer.wake.notifyAll(); }
+    pauseThread.join(); assert(suspended); service.resume();
     auto concurrentStop = new Thread({ service.stop(); }); concurrentStop.start();
     service.stop(); concurrentStop.join(); service.stop();
     assert(!service.isRunning() && service.lastError() is null && !db.isClosed() && serviceSessions.getSession("job-victim"w) is null);

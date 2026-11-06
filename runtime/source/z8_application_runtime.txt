@@ -90,6 +90,8 @@ interface IZ8UserChangeNotifier { void userChanged(Z8Guid id, wstring schema); }
 interface IZ8RoleChangeNotifier { void roleChanged(Z8Guid id, wstring schema); }
 // A host supplies the scheduler for the request's current database.
 interface IZ8SchedulerControl { void restart(); }
+// Used by schema generation to wait for local scheduled work and resume it.
+interface IZ8SchedulerSuspension { void suspend(); void resume(); }
 struct Z8MonitorEntry {
     Z8MonitorLevel level;
     wstring text, source;
