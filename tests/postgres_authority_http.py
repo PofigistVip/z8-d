@@ -124,7 +124,7 @@ void main(string[] args) {
     registry.registerNamedType("User"w, "CustomUser"w, typeid(Z8p_437573746F6D55736572));
     registry.registerNamedType("SystemUsers"w, "CustomUsers"w, typeid(Z8p_437573746F6D5573657273));
     z8_postgres_bootstrap(connection, "public"w, [P.m_userRoles(), P.m_userEntries(), P.m_entries(), P.m_roles(), P.m_users(), P.m_sequences(), P.m_tables(), P.m_fields(), P.m_requests(), P.m_tableAccess(), P.m_fieldAccess(), P.m_requestAccess(), sample], registry);
-    connection.execute(`UPDATE "SystemUsers" SET "Password" = md5('secret') WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
+    connection.execute(`UPDATE "SystemUsers" SET "Password" = md5('secret'), "Change Password" = 1 WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
     connection.execute(`INSERT INTO "SystemUsers" ("RecordId", "Name", "Password") VALUES ('00000000-0000-0000-0000-000000000055', 'Bob', md5('bobsecret'))`);
     connection.execute(`INSERT INTO "SystemUserRoles" ("RecordId", "User", "Role") VALUES ('00000000-0000-0000-0000-000000000056', '00000000-0000-0000-0000-000000000055', '421A8413-A8EC-4DAB-9235-9A5FF83341C5')`);
     auto applicationConfig = z8_application_configuration(); applicationConfig.clientHashesPasswords = false; z8_application_configure(applicationConfig);
@@ -222,6 +222,15 @@ void main(string[] args) {
             assert status == 200 and admin["success"] and admin["user"]["administrator"]
             admin_token = admin["session"]
             assert re.fullmatch(r"[0-9a-f]{64}", admin_token)
+            assert admin["user"]["changePassword"]
+            assert request(request="settings", session=admin_token, server="test", data='{"theme":"night"}')[1]["success"]
+            assert request(request="login", session=admin_token, server="test", email="first@example.org")[1]["success"]
+            assert request(request="login", session=admin_token, server="test", email="second@example.org")[1]["success"]
+            assert request(request="login", session=admin_token, server="test", password="secret", newPassword="new-secret")[1]["success"]
+            status, refreshed = request(request="login", session=admin_token, server="test")
+            assert status == 200 and refreshed["success"]
+            assert refreshed["user"]["settings"] == '{"theme":"night"}'
+            assert refreshed["user"]["email"] == "second@example.org" and not refreshed["user"]["changePassword"]
             status, bob = request(request="login", login="Bob", password="override")
             assert status == 200 and bob["success"] and not bob["user"]["administrator"] and bob["user"]["parameters"]["custom"]
             assert bob["user"]["parameters"]["tenant"] == "public"
@@ -233,7 +242,7 @@ void main(string[] args) {
             assert process.stdout.readline().strip() == "invalidated"
             assert request(request="login", session=bob_token, server="test")[0] == 401
             assert request(request="login", session=admin_token, server="test")[0] == 200
-            status, second_admin = request(request="login", login="Admin", password="secret")
+            status, second_admin = request(request="login", login="Admin", password="new-secret")
             assert status == 200 and second_admin["session"] != admin_token
             assert request(request="login", session=admin_token, server="test")[0] == 401
             admin_token = second_admin["session"]

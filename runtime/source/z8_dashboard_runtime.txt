@@ -39,8 +39,9 @@ private void z8_dashboard_login_info() {
     if (request.writer.scopes.length != 2) throw new Exception("response object is not open");
     auto newPassword = params.z8_get("newPassword"w);
     if (newPassword !is null) { z8_dashboard_change_password(user, params.z8_get("password"w), newPassword); return; }
+    auto profile = z8_dashboard_user_profile(user);
     auto email = params.z8_get("email"w);
-    if (email !is null) { z8_dashboard_change_email(user, email); return; }
+    if (email !is null) { z8_dashboard_change_email(user, profile.email, email); return; }
     Z8Object[] entries;
     foreach (entry; user.entries) {
         try { entries ~= z8_object_new_instance(entry.classId); }
@@ -54,8 +55,8 @@ private void z8_dashboard_login_info() {
     z8_monitor_property(writer, "administrator"w, user.id !is null && user.id == z8_guid_create(2));
     z8_monitor_property(writer, "firstName"w, user.firstName); z8_monitor_property(writer, "middleName"w, user.middleName);
     z8_monitor_property(writer, "lastName"w, user.lastName); z8_monitor_property(writer, "description"w, user.description);
-    z8_monitor_property(writer, "email"w, user.email); z8_monitor_property(writer, "phone"w, user.phone);
-    z8_monitor_property(writer, "changePassword"w, user.changePassword); z8_monitor_property(writer, "settings"w, user.settings);
+    z8_monitor_property(writer, "email"w, profile.email); z8_monitor_property(writer, "phone"w, user.phone);
+    z8_monitor_property(writer, "changePassword"w, profile.changePassword); z8_monitor_property(writer, "settings"w, profile.settings);
     writer.start('[', "entries"w); foreach (entry; entries) z8_dashboard_write_entry(writer, entry); writer.finish(']');
     writer.start('[', "roles"w);
     foreach (index, role; user.roles) {
@@ -78,6 +79,15 @@ private void z8_dashboard_login_info() {
         auto key = z8_string_required(keys.z8_get(i)); writer.property(key); z8_json_writer_primary(writer, values.z8_get(key));
     }
     writer.finish('}'); writer.finish('}');
+}
+private Z8UserProfile z8_dashboard_user_profile(Z8UserData user) {
+    Z8UserProfile profile = Z8UserProfile(user.email, user.settings, user.changePassword);
+    auto reader = cast(IZ8UserProfileReader)z8_connection_current_backend();
+    if (reader !is null && user.id !is null) {
+        Z8UserProfile current;
+        if (reader.readUserProfile(user.id, current)) profile = current;
+    }
+    return profile;
 }
 private Z8Object z8_dashboard_users_table() {
     auto registry = z8_runtime_get_registry();
@@ -105,8 +115,8 @@ private void z8_dashboard_change_password(Z8UserData user, wstring oldPassword, 
     }
     user.changePassword = false;
 }
-private void z8_dashboard_change_email(Z8UserData user, wstring email) {
-    if (z8_str_compareNoCase(z8_string_or_empty(user.email), email) == 0) return;
+private void z8_dashboard_change_email(Z8UserData user, wstring currentEmail, wstring email) {
+    if (z8_str_compareNoCase(z8_string_or_empty(currentEmail), email) == 0) return;
     auto users = z8_dashboard_users_table();
     z8_field_set(z8_users_state(users).fields[7], z8_primary_box(email));
     if (!z8_query_update_id_run(users, z8_nonnull(user.id), true)) throw new Exception("user was not updated");

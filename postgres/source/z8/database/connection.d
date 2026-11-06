@@ -8,7 +8,7 @@ import z8.database.privileges : z8_postgres_read_user;
 import z8.database.plan : quoteIdentifier;
 
 // Adapter for the request-local BL Connection and Query.setConnection APIs.
-class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection, IZ8JobUserResolver, IZ8UserPasswordVerifier, IZ8DatabaseSchema {
+class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection, IZ8JobUserResolver, IZ8UserPasswordVerifier, IZ8UserProfileReader, IZ8DatabaseSchema {
     private Z8PostgresConnection connection;
     private wstring schema;
     private Z8RuntimeRegistry registry;
@@ -58,6 +58,18 @@ class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection, IZ8Back
     IZ8DatabaseConnection openBackgroundConnection() { return new Z8PostgresDatabase(connection.openSibling(), schema, registry); }
     void closeBackgroundConnection() { connection.close(); }
     Z8UserData resolveJobUser(Z8Guid id) { return z8_postgres_read_user(connection, schema, id, registry); }
+    bool readUserProfile(Z8Guid id, out Z8UserProfile profile) {
+        auto rows = connection.execute(`SELECT "Email", convert_from("Settings", 'UTF8'), "Change Password" FROM ` ~
+            quoteIdentifier(schema) ~ `."SystemUsers" WHERE "RecordId" = $1::uuid`,
+            [Z8PostgresParameter.value(z8_guid_to_string(z8_nonnull(id)).to!string)]);
+        if (!rows.rows.length) return false;
+        if (rows.rows.length != 1) throw new Z8PostgresException("multiple users with the same id");
+        auto row = rows.rows[0];
+        profile.email = row[0].isNull ? ""w : row[0].text.to!wstring;
+        profile.settings = row[1].isNull ? ""w : row[1].text.to!wstring;
+        profile.changePassword = !row[2].isNull && row[2].text.to!int != 0;
+        return true;
+    }
     bool lockMatchingPassword(Z8Guid id, wstring passwordHash) {
         if (!connection.inTransaction()) throw new Z8PostgresException("password verification requires a transaction");
         auto rows = connection.execute("SELECT 1 FROM " ~ quoteIdentifier(schema) ~ `."SystemUsers" WHERE "RecordId" = $1::uuid AND "Password" = $2::text FOR UPDATE`,
