@@ -413,8 +413,6 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         Z8Object[] fields;
         Z8FieldAggregation[] aggregations;
         foreach (field; selected) {
-            if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
-                throw new Exception("computed fields in totals are not supported");
             auto fieldState = z8_field_state(field);
             auto aggregation = z8_field_aggregation(field);
             if ((fieldState.totals.present && !fieldState.totals.value) || aggregation == Z8FieldAggregation.none ||

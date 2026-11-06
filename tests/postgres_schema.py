@@ -687,6 +687,8 @@ void main(string[] args) {
     }
     auto totalsJson = parseJSON(totalRead(`["amount","title"]`w).to!string);
     assert(totalsJson["data"]["amount"].integer == 52 && "title" !in totalsJson["data"].object);
+    totalsJson = parseJSON(totalRead(`["computed"]`w).to!string);
+    assert(totalsJson["data"]["computed"].integer == 54, totalsJson.toString());
     totalsJson = parseJSON(totalRead(`["amount"]`w, `{"property":"amount","operator":"gt","value":"20"}`w).to!string);
     assert(totalsJson["data"]["amount"].integer == 42);
     totalsJson = parseJSON(totalRead(`["amount"]`w, `{"property":"amount","operator":"gt","value":"100"}`w).to!string);
@@ -698,6 +700,8 @@ void main(string[] args) {
     db.execute(`UPDATE "z8_bootstrap"."Sample;--" SET "Flag" = 0 WHERE "RecordId" = '00000000-0000-0000-0000-00000000012E'`);
     totalsJson = parseJSON(totalRead(`["amount"]`w, null, "with-group"w).to!string);
     assert(totalsJson["data"]["amount"].integer == 52);
+    totalsJson = parseJSON(totalRead(`["computed"]`w, null, "with-group"w).to!string);
+    assert(totalsJson["data"]["computed"].integer == 54, totalsJson.toString());
     totalsJson = parseJSON(totalRead(`["amount"]`w, null, "with-group"w, `{"property":"amount","operator":"gt","value":"20"}`w).to!string);
     assert(totalsJson["data"]["amount"].integer == 42);
     totalsJson = parseJSON(totalRead(`["amount"]`w, null, "with-group"w, `{"property":"amount","operator":"gt","value":"100"}`w).to!string);
@@ -711,6 +715,8 @@ void main(string[] args) {
     queryUser.privileges.setFieldAccess(amountKey, Z8Access.init);
     totalsJson = parseJSON(totalRead(`["amount"]`w).to!string);
     assert("amount" !in totalsJson["data"].object);
+    totalsJson = parseJSON(totalRead(`["computed"]`w).to!string);
+    assert("computed" !in totalsJson["data"].object);
     queryUser.privileges = adminPrivileges.privileges = z8_postgres_load_privileges(db, "z8_bootstrap"w, z8_guid_create(2)).privileges;
     wstring groupedRead(wstring having, bool count = false) {
         auto request = new Z8ApplicationRequest(); request.session = querySession; request.monitor = new Z8RequestMonitor();
