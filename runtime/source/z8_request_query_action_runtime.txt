@@ -42,21 +42,10 @@ void z8_application_dispatch_query_action(wstring className) {
     z8_application_dispatch_query_action_target(className, null);
 }
 // CommandAction, ContentAction and ReportAction permit ordinary nested Query
-// objects as well as tables. Tables and their links require read access.
+// objects as well as tables. Both query types and their links require read access.
 private Z8Object z8_application_accessible_action_query(Z8Object context, Z8Privileges privileges, wstring queryId, wstring linkId) {
-    auto query = context;
-    if (linkId !is null && linkId.length) {
-        auto link = z8_application_context_field(context, privileges, linkId);
-        if (!z8_native_is_instance(z8_link_name, link) && !z8_native_is_instance(z8_join_name, link))
-            throw new Exception("action link not found");
-        query = z8_nonnull(z8_link_query(link));
-        if (z8_native_is_instance(z8_table_name, query)) query = z8_application_action_query(context, privileges, queryId, linkId);
-    } else if (queryId !is null && queryId.length) {
-        query = z8_action_find_member(context, queryId);
-        if (!z8_native_is_instance(z8_query_name, query)) throw new Exception("action query not found");
-        if (z8_native_is_instance(z8_table_name, query)) query = z8_application_nested_query(context, privileges, queryId);
-    }
-    if (query !is context && z8_native_is_instance(z8_table_name, query)) {
+    auto query = z8_application_action_query(context, privileges, queryId, linkId, false);
+    if (query !is context) {
         auto key = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
         if (!privileges.getTableAccess(key).read) throw new Exception("action query access denied");
     }

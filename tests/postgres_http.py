@@ -143,6 +143,7 @@ import org.zenframework.z8.base.application.Application;
     controls = {title}; columns = {recordId, title}; readOnly = true;
     virtual protected void beforeRead() { Application.info("before data"); }
     virtual protected void afterRead() { Application.info("after data"); }
+    virtual protected binary processContentRequest(string[string] parameters, file[] files) { return '77, 69, 77'; }
     virtual protected JsonArray getData(string[string] parameters) {
         if (parameters.containsKey("lookup") && parameters["lookup"] == "empty") return null;
         return JsonArray.parse("[{recordId:'00000000-0000-0000-0000-000000000001',title:'row'}]");
@@ -183,6 +184,7 @@ public class Sample extends Table {
     Table child; [name "ChildLink"] Link childLink = child;
     NestedAttachment nested; [name "NestedLink"] Link nestedLink = nested;
     NestedAttachment otherNested; [name "OtherJoin"] Join otherJoin = otherNested;
+    MemoryQuery embedded; [name "MemoryLink"] Link memoryLink = embedded;
     ApplyAction apply; NoTransactionAction noTransaction; IncrementAction increment; ContextAction inspect;
     actions = {apply, noTransaction, increment, inspect};
     CustomReport exported; reports = {exported};
@@ -218,7 +220,7 @@ __gshared string databaseInfo;
 
 class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
     Z8ApplicationSession authorize(Z8HttpRequest request, wstring id, wstring server) {
-        if (server != "test"w || (id != "full"w && id != "full2"w && id != "limited"w && id != "denied"w && id != "field-denied"w && id != "relation-denied"w && id != "target-denied"w)) return null;
+        if (server != "test"w || (id != "full"w && id != "full2"w && id != "limited"w && id != "denied"w && id != "field-denied"w && id != "relation-denied"w && id != "target-denied"w && id != "query-denied"w)) return null;
         auto user = new Z8UserData(); user.id = z8_guid_create(id == "full"w || id == "full2"w ? 2 : 3);
         user.builtinAdministrator = id == "full"w || id == "full2"w;
         user.login = "Alice"w; user.firstName = "Alice"w; user.email = "old@example.org"w; user.settings = "{}"w; user.changePassword = true;
@@ -245,6 +247,7 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.OtherJoin"w), Z8Access.init);
         }
         if (id == "target-denied"w) user.privileges.setTableAccess(z8_guid_create_name("NestedAttachment"w), Z8Access.init);
+        if (id == "query-denied"w) user.privileges.setTableAccess(z8_guid_create_name("MemoryQuery"w), Z8Access.init);
         return new Z8ApplicationSession(id, user, user);
     }
     Z8ApplicationSession login(Z8HttpRequest request, wstring login, wstring password) {
@@ -260,7 +263,7 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
 void main(string[] args) {
     databaseInfo = args[1];
     auto setup = new Z8PostgresConnection(databaseInfo);
-    setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Blob" bytea, "Documents" bytea, "ChildLink" uuid, "NestedLink" uuid, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
+    setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Blob" bytea, "Documents" bytea, "ChildLink" uuid, "NestedLink" uuid, "MemoryLink" uuid, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     setup.execute(`CREATE TABLE "NestedAttachment" ("RecordId" uuid PRIMARY KEY, "Documents" bytea, "Title" text, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     setup.execute(`INSERT INTO "NestedAttachment" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000088'), ('00000000-0000-0000-0000-000000000089'), ('00000000-0000-0000-0000-000000000090'), ('00000000-0000-0000-0000-000000000091'), ('00000000-0000-0000-0000-000000000094')`);
     setup.execute(`CREATE TABLE "SystemFiles" ("RecordId" uuid PRIMARY KEY, "Name" text, "File" bytea, "Path" text, "Size" bigint, "Time" bigint, "Last modified" bigint, "Location" bigint, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
@@ -493,6 +496,13 @@ void main(string[] args) {
             assert result["success"] and result["info"]["messages"][0]["text"] == "child", result
             result = request(action="action", name="inspect", records=one, link="otherJoin", query="missing")
             assert result["success"] and result["info"]["messages"][0]["text"] == "otherNested", result
+            for target in ({"link": "memoryLink"}, {"query": "embedded"}):
+                result = request(action="action", name="inspect", records=one, **target)
+                assert result["success"] and result["info"]["messages"][0]["text"] == "embedded", result
+                for action in ("action", "content", "report"):
+                    kwargs = {"name": "inspect", "records": one} if action == "action" else {"id": "exported"} if action == "report" else {}
+                    result = request(session="query-denied", action=action, **target, **kwargs)
+                    assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             for action in ("action", "content"):
                 kwargs = {"name": "inspect", "records": one} if action == "action" else {}
                 for target in ({"link": "nestedLink"}, {"query": "nested"}, {"link": "otherJoin"}):
@@ -525,6 +535,13 @@ void main(string[] args) {
                 conn.request("GET", "/request.json?" + urlencode(dict(request="Sample", session="full", server="test", action="content", link="otherJoin", query="missing")))
                 response = conn.getresponse()
                 assert response.status == 200 and response.read() == b"NEST"
+            finally:
+                conn.close()
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            try:
+                conn.request("GET", "/request.json?" + urlencode(dict(request="Sample", session="full", server="test", action="content", link="memoryLink")))
+                response = conn.getresponse()
+                assert response.status == 200 and response.read() == b"MEM"
             finally:
                 conn.close()
             result = request(action="content", empty="true")

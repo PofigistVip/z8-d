@@ -95,19 +95,19 @@ private Z8Object[] z8_application_query_field_path(Z8Object root, Z8Object field
     if (!declared) throw new Exception("query field is not declared by its owner");
     return links;
 }
-// Resolve a nested table in the request object, checking each containing table
-// and any declared Link/Join that reaches the next query.
-private Z8Object z8_application_nested_query(Z8Object context, Z8Privileges privileges, wstring queryId) {
+// Resolve a nested query, checking each containing query and declared relation.
+// Table operations keep the more restrictive table-only default.
+private Z8Object z8_application_nested_query(Z8Object context, Z8Privileges privileges, wstring queryId, bool tableOnly = true) {
     if (queryId is null || !queryId.length) return context;
     auto query = z8_action_find_member(context, queryId);
-    if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, query))
-        throw new Exception("nested query requires a Table");
+    if (!z8_native_is_instance(z8_query_name, query) || (tableOnly && !z8_native_is_instance(z8_table_name, query)))
+        throw new Exception(tableOnly ? "nested query requires a Table" : "nested query requires a Query");
     auto current = query;
     Z8Object[] parents;
     while (current !is context) {
         auto parent = z8_object_container(current);
         while (parent !is null && !z8_native_is_instance(z8_query_name, parent)) parent = z8_object_container(parent);
-        if (parent is null || !z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, parent))
+        if (parent is null || (tableOnly && !z8_native_is_instance(z8_table_name, parent)))
             throw new Exception("nested query is outside the request");
         auto parentKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, parent);
         if (!privileges.getTableAccess(parentKey).read) throw new Exception("nested query parent access denied");
@@ -127,14 +127,14 @@ private Z8Object z8_application_nested_query(Z8Object context, Z8Privileges priv
     return query;
 }
 // ActionFactory gives a nonempty link precedence over the query parameter.
-private Z8Object z8_application_action_query(Z8Object context, Z8Privileges privileges, wstring queryId, wstring linkId) {
-    if (linkId is null || !linkId.length) return z8_application_nested_query(context, privileges, queryId);
+private Z8Object z8_application_action_query(Z8Object context, Z8Privileges privileges, wstring queryId, wstring linkId, bool tableOnly = true) {
+    if (linkId is null || !linkId.length) return z8_application_nested_query(context, privileges, queryId, tableOnly);
     auto link = z8_application_context_field(context, privileges, linkId);
     if (!z8_native_is_instance(z8_link_name, link) && !z8_native_is_instance(z8_join_name, link))
         throw new Exception("query link access denied");
     auto target = z8_link_query(link);
     if (target is null) throw new Exception("query link has no target");
-    auto query = target is context ? context : z8_application_nested_query(context, privileges, target.z8_id());
+    auto query = target is context ? context : z8_application_nested_query(context, privileges, target.z8_id(), tableOnly);
     if (query !is target) throw new Exception("query link target is outside the request");
     return query;
 }
