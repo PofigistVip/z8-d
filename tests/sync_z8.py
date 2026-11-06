@@ -2,8 +2,10 @@
 from contextlib import redirect_stdout
 import importlib.util
 import io
+import sys
 from pathlib import Path
 import tempfile
+from unittest.mock import patch
 
 root = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("sync_z8", root / "tools/sync_z8.py")
@@ -44,11 +46,17 @@ with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):
     assert sync.native_report(original, False)
     sync.native_report(original, True)
     java.write_bytes(b'class Value { int n = 2; }\n')
+    bl.write_bytes(b'[native "example.Value"]\r\nclass Value { int changed; }\r\n')
     assert sync.native_report(original, False)
+    with patch.object(sys, "argv", ["sync_z8.py", "bl", str(original), "--apply"]):
+        assert sync.main() == 1  # Applying BL must still flag unreviewed Java changes.
+    assert (sync.VENDOR / bl.relative_to(original)).read_bytes() == bl.read_bytes()
     sync.synchronize(original, "bl", True)
     assert sync.native_report(original, False)  # BL sync must not acknowledge Java changes.
     assert sync.native_report(original, True)
     assert not sync.native_report(original, False)
+    with patch.object(sys, "argv", ["sync_z8.py", "bl", str(original), "--apply"]):
+        assert sync.main() == 0
     target = sync.VENDOR / web.relative_to(original)
     target.write_bytes(b'local edit')
     web.write_bytes(b'upstream edit')
