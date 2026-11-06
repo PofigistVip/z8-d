@@ -1029,7 +1029,18 @@ void main(string[] args) {
     assert(db.execute(`SELECT count(*) FROM "z8_reconcile"."SystemRoleTableAccess" WHERE "Table" = $1::uuid AND "Read" <> 0`, [reconcileKey]).rows[0][0].text == "0");
     auto reconcileSchedule = db.execute(`SELECT "Cron", "Active" FROM "z8_reconcile"."SystemScheduledJobs" WHERE "Job" = $1::uuid`, [reconcileJobKey]);
     assert(reconcileSchedule.rows[0][0].text == "*/30 * * * *" && reconcileSchedule.rows[0][1].text == "0");
+    db.execute(`UPDATE "z8_reconcile"."StaticSample" SET "Label" = 'Changed', "Other" = 'Preserved' WHERE "RecordId" = '00000000-0000-0000-0000-000000000031'`);
+    db.execute(`DELETE FROM "z8_reconcile"."StaticSample" WHERE "RecordId" IN ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000032')`);
+    db.execute(`ALTER TABLE "z8_reconcile"."StaticSample" ADD CONSTRAINT "reject_seed" CHECK ("Label" <> 'Seed')`);
+    bool recordsRolledBack;
+    try { z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables); }
+    catch (Z8PostgresException) { recordsRolledBack = true; }
+    assert(recordsRolledBack && db.execute(`SELECT count(*) FROM "z8_reconcile"."StaticSample"`).rows[0][0].text == "1");
+    db.execute(`ALTER TABLE "z8_reconcile"."StaticSample" DROP CONSTRAINT "reject_seed"`);
     assert(z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables).length == 0);
+    auto refreshedRecords = db.execute(`SELECT "Label", "Other" FROM "z8_reconcile"."StaticSample" WHERE "RecordId" = '00000000-0000-0000-0000-000000000031'`);
+    assert(refreshedRecords.rows[0][0].text == "Seed" && refreshedRecords.rows[0][1].text == "Preserved");
+    assert(db.execute(`SELECT count(*) FROM "z8_reconcile"."StaticSample"`).rows[0][0].text == "3");
     auto reconcilePriorRequest = z8_application_set_request(null);
     assert(z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables).length == 0 && z8_application_request() is null);
     z8_application_set_request(reconcilePriorRequest);

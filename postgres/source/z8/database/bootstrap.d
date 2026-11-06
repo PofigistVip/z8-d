@@ -15,7 +15,8 @@ void z8_postgres_bootstrap_registered(Z8PostgresConnection db, wstring schema, Z
 }
 
 // Reconcile registered and platform tables and update the registry atomically.
-// Existing table data and existing permission settings are preserved.
+// Ordinary table data and existing built-in user/role settings are preserved;
+// declared static records are refreshed as part of schema generation.
 string[] z8_postgres_reconcile_registered(Z8PostgresConnection db, wstring schema, Z8RuntimeRegistry registry, Z8Object[] additionalTables = null) {
     if (registry is null) throw new Z8PostgresException("application registry is required");
     auto request = z8_application_request();

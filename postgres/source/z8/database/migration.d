@@ -153,10 +153,12 @@ private string[] applyAdditiveSchema(Z8PostgresConnection db, wstring schema, Z8
             auto actual = z8_postgres_describe_table(db, schema, names[index]);
             foreach (sql; z8_postgres_plan_add_columns(schema, table, actual)) { db.execute(sql); applied ~= sql; }
         }
-        // New tables need their null and declared static records before any
-        // foreign keys are enforced. Existing tables and their records are left alone.
-        foreach (table; created) z8_postgres_ensure_null_record(db, schema, table);
-        foreach (table; created) z8_postgres_apply_static_records(db, schema, table, registry);
+        // A complete registry reconciliation refreshes records for every table,
+        // as TableGenerator does, including tables whose schema did not change.
+        // The lower-level additive APIs seed only newly created tables.
+        auto recordsTables = syncRegistry ? tables : created;
+        foreach (table; recordsTables) z8_postgres_ensure_null_record(db, schema, table);
+        foreach (table; recordsTables) z8_postgres_apply_static_records(db, schema, table, registry);
         if (syncRegistry) z8_postgres_sync_registry(db, schema, registry);
         foreach (index, table; tables) {
             auto actual = z8_postgres_describe_table(db, schema, names[index]);
