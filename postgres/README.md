@@ -300,8 +300,9 @@ and extra fields; nested form controls are not yet supported.
 
 The executor supports `aggregateBy` grouping over root Link fields with numeric
 sum, average, minimum and maximum. Filters can reference linked tables, and a
-subselect joins direct target fields after grouping. Deeper linked projections,
-a second grouping, HAVING, totals and row locks on these queries are rejected.
+subselect joins target fields, including chained links, after grouping. Linked
+expressions and joins that require unprojected root fields are rejected, as are
+a second grouping, HAVING, totals and row locks on these queries.
 The HTTP metadata path for `aggregateBy` is not yet supported.
 Nontrivial HAVING without grouping is also rejected. Filter-based updates and deletes select
 matching records and invoke the BL events for each record. Record copying reads

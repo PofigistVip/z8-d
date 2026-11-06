@@ -263,8 +263,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         return false;
     }
     // SelectFactory's outer select joins grouped Link values to their targets.
-    // This first supports direct target fields; deeper paths and another GROUP BY
-    // are rejected rather than being evaluated against the wrong row set.
+    // Another GROUP BY is rejected until a second aggregation stage is supported.
     private Z8PostgresRootAggregation linkedRootAggregation(Z8Object query, Z8QueryReadRequest request, bool counting) {
         auto declared = z8_query_declared_fields(query);
         auto groups = uniqueFields(z8_query_array(query, "aggregateBy"w));
@@ -273,13 +272,15 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         foreach (field; requested ~ (counting ? null : request.sortFields)) {
             if (field is null) throw new Z8PostgresException("null aggregateBy field");
             if (containsField(declared, field)) continue;
-            bool direct;
+            bool reachable;
             foreach (link; groups) {
                 auto target = z8_link_query(link);
-                if (target !is null && containsField(z8_query_declared_fields(target), field)) { direct = true; break; }
+                for (auto container = z8_object_container(field); container !is null && container !is query; container = z8_object_container(container))
+                    if (container is target) { reachable = true; break; }
+                if (reachable) break;
             }
-            if (!direct || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
-                throw new Z8PostgresException("aggregateBy supports direct linked fields only");
+            if (!reachable || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
+                throw new Z8PostgresException("unsupported aggregateBy linked field");
             linked ~= field;
         }
         auto innerRequest = request;
@@ -295,9 +296,15 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         foreach (field; linked) plan.includeField(field);
         plan.finish(true);
         if (plan.having.length) throw new Z8PostgresException("aggregateBy linked HAVING is not implemented");
-        foreach (condition; plan.where) foreach (field; z8_sql_collect_fields(condition))
+        Z8Object[] checked;
+        void checkDependency(Z8Object field) {
+            if (containsField(checked, field)) return;
+            checked ~= field;
             if (containsField(declared, field) && !containsField(inner.fields, field))
-                throw new Z8PostgresException("aggregateBy linked filter requires an unprojected root field");
+                throw new Z8PostgresException("aggregateBy linked expression requires an unprojected root field");
+            foreach (dependency; z8_field_query_dependencies(field)) if (dependency !is field) checkDependency(dependency);
+        }
+        foreach (condition; plan.where ~ plan.joinConditions()) foreach (field; z8_sql_collect_fields(condition)) checkDependency(field);
         foreach (index, field; inner.fields) z8_field_bind_sql(field, "t"w, ("z8_" ~ index.to!string).to!wstring);
         Z8PostgresRootAggregation result;
         result.fields = uniqueFields(inner.fields ~ (counting ? null : requested));

@@ -64,6 +64,23 @@ import org.zenframework.z8.base.table.value.IntField;
     aggregateBy = {customerId};
 }
 ''',
+        "AggregateJoinCustomer": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Join;
+[name "JoinCustomers"] public class AggregateJoinCustomer extends Table {
+    public City city; public Join cityJoin = city;
+}
+''',
+        "AggregateJoinOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.GuidField;
+import org.zenframework.z8.base.table.value.Link;
+[name "AggregateJoinOrders"] public class AggregateJoinOrder extends Table {
+    public AggregateJoinCustomer customer; [name "CustomerId"] public Link customerId = customer;
+    [name "OtherId"] public GuidField otherId;
+    aggregateBy = {customerId};
+}
+''',
         "FilteredCustomer": '''
 public class FilteredCustomer extends Customer {
     virtual protected sql_bool scope() { return label != "Bob"; }
@@ -188,6 +205,9 @@ public class Probe {
     public static AggregateOrder aggregateOrder() { AggregateOrder value; return value; }
     public static AggregateLeftOrder aggregateLeftOrder() { AggregateLeftOrder value; return value; }
     public static AggregateFilteredOrder aggregateFilteredOrder() { AggregateFilteredOrder value; return value; }
+    public static AggregateJoinOrder aggregateJoinOrder() { AggregateJoinOrder value; return value; }
+    public static void configureAggregateJoin(AggregateJoinOrder order) { order.customer.cityJoin = order.otherId.sql_guid() == order.customer.city.recordId.sql_guid(); }
+    public static void readAggregateJoin(AggregateJoinOrder order) { Field[] fields = {order.customer.city.label}; order.read(fields); }
     public static void readAggregate(AggregateOrder order) { Field[] fields = {order.customerId, order.amount}; order.read(fields); }
     public static void readAggregateSorted(AggregateOrder order) { order.amount.sortDirection = SortDirection.Desc; Field[] fields = {order.customerId, order.amount}; Field[] sort = {order.amount}; order.read(fields, sort); }
     public static void readAggregateAverage(AggregateOrder order) { order.amount.aggregation = Aggregation.Average; Field[] fields = {order.customerId, order.amount}; Field[] sort = {order.amount}; order.read(fields, sort, null, 1, 1); }
@@ -201,11 +221,14 @@ public class Probe {
     public static guid aggregateCustomer(AggregateOrder order) { return order.customerId.get(); }
     public static int aggregateAmount(AggregateOrder order) { return order.amount.get(); }
     public static string aggregateName(AggregateOrder order) { return order.customer.label.get(); }
+    public static string aggregateCity(AggregateOrder order) { return order.customer.city.label.get(); }
     public static Field aggregateNameField(AggregateOrder order) { return order.customer.label; }
     public static void readAggregateLeft(AggregateLeftOrder order) { Field[] fields = {order.customer.label, order.amount}; order.read(fields); }
     public static bool nextAggregateLeft(AggregateLeftOrder order) { return order.next(); }
     public static string aggregateLeftName(AggregateLeftOrder order) { return order.customer.label.get(); }
     public static int aggregateLeftAmount(AggregateLeftOrder order) { return order.amount.get(); }
+    public static void readAggregateLeftCity(AggregateLeftOrder order) { Field[] fields = {order.customer.city.label}; order.read(fields); }
+    public static string aggregateLeftCity(AggregateLeftOrder order) { return order.customer.city.label.get(); }
     public static void readAggregateFiltered(AggregateFilteredOrder order) { Field[] fields = {order.customer.label}; order.read(fields); }
     public static bool nextAggregateFiltered(AggregateFilteredOrder order) { return order.next(); }
     public static string aggregateFilteredName(AggregateFilteredOrder order) { return order.customer.label.get(); }
@@ -320,8 +343,9 @@ void main(string[] args) {
     assert(z8_optional_require(P.m_nextAggregate(aggregate)) && z8_optional_require(P.m_aggregateAmount(aggregate)) == 7);
     Z8QueryReadRequest countLinked; countLinked.fields = [cast(Z8Object)P.m_aggregateNameField(aggregate)];
     assert(countLinked.fields[0] !is null && aggregateExecutor.count(aggregate, countLinked) == 2);
-    bool nestedAggregateRejected; try { P.m_readAggregateNested(aggregate); } catch (Z8PostgresException) { nestedAggregateRejected = true; }
-    assert(nestedAggregateRejected);
+    P.m_readAggregateNested(aggregate);
+    assert(z8_optional_require(P.m_nextAggregate(aggregate)) && P.m_aggregateCity(aggregate) == "Moscow"w);
+    assert(!z8_optional_require(P.m_nextAggregate(aggregate)));
     db.execute(`INSERT INTO "AggregateOrders" VALUES ('00000000-0000-0000-0000-000000000314','00000000-0000-0000-0000-000000000299',11)`);
     auto aggregateLeft = P.m_aggregateLeftOrder();
     z8_query_set_executor(aggregateLeft, new Z8PostgresQueryExecutor(db, "pg_temp"w, "AggregateOrders"w));
@@ -333,6 +357,18 @@ void main(string[] args) {
         ++leftAggregateRows;
     }
     assert(leftAggregateRows == 3 && leftAggregateMissing == 1);
+    P.m_readAggregateLeftCity(aggregateLeft); int aggregateCityRows, aggregateCities;
+    while (z8_optional_require(P.m_nextAggregateLeft(aggregateLeft))) {
+        if (P.m_aggregateLeftCity(aggregateLeft) == "Moscow"w) ++aggregateCities;
+        ++aggregateCityRows;
+    }
+    assert(aggregateCityRows == 3 && aggregateCities == 1);
+    auto aggregateJoin = P.m_aggregateJoinOrder();
+    z8_query_set_executor(aggregateJoin, new Z8PostgresQueryExecutor(db, "pg_temp"w, "AggregateOrders"w));
+    P.m_configureAggregateJoin(aggregateJoin);
+    bool unprojectedRootRejected;
+    try { P.m_readAggregateJoin(aggregateJoin); } catch (Z8PostgresException) { unprojectedRootRejected = true; }
+    assert(unprojectedRootRejected);
     assert(aggregateExecutor.count(aggregate, countLinked) == 2); // Inner join drops the unmatched group.
     auto aggregateFiltered = P.m_aggregateFilteredOrder();
     z8_query_set_executor(aggregateFiltered, new Z8PostgresQueryExecutor(db, "pg_temp"w, "AggregateOrders"w));

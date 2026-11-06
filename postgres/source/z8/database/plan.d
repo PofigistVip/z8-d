@@ -116,6 +116,11 @@ package class Z8PostgresQueryPlan {
         }
         return keys;
     }
+    Z8SqlBool[] joinConditions() {
+        Z8SqlBool[] result;
+        foreach (index; 1 .. nodes.length) if (nodes[index].active) result ~= z8_link_on(nodes[index].link);
+        return result;
+    }
     string fromClause(string rootSelect = null) {
         string result = rootSelect is null ? quoteIdentifier(schema) ~ "." ~ quoteIdentifier(rootTable) ~ " AS t" : "(" ~ rootSelect ~ ") AS t";
         Z8JoinType[] effective = [Z8JoinType.inner];
