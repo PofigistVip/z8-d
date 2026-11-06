@@ -27,6 +27,11 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     public JsonWriter startObject(); public JsonWriter finishObject(); public JsonWriter writeProperty(Field field); public string toString();
 }
 ''', encoding="utf-8")
+    (source / "JsonObject.bl").write_text('''
+[native "org.zenframework.z8.server.base.json.parser.JsonObject"] public class JsonObject extends Object {
+    public JsonObject set(Field value); public JsonObject put(Field value); public int getInt(string name); public string getString(string name);
+}
+''', encoding="utf-8")
     (source / "Probe.bl").write_text('''
 public class Probe {
     public static Field create() { Field value; return value; }
@@ -46,15 +51,23 @@ public class Probe {
     public static string json(Field value) {
         JsonWriter writer; writer.startObject().writeProperty(value).finishObject(); return writer.toString();
     }
+    public static bool jsonField(Field value) {
+        JsonObject data;
+        return data.set(value) == data && data.getInt("amount") == 42;
+    }
+    public static bool jsonFieldLegacy(Field value) {
+        JsonObject data;
+        return data.put(value) == data && data.getString("amount") == "new";
+    }
 }
 ''', encoding="utf-8")
     if len(sys.argv) == 2:
         language = Path(sys.argv[1]).resolve() / "org.zenframework.z8.lang/src/bl"
         if not language.is_dir(): raise SystemExit("Original BL standard library not found")
-        for name in ("Object", "Field", "JsonWriter"): (source / (name + ".bl")).unlink()
+        for name in ("Object", "Field", "JsonWriter", "JsonObject"): (source / (name + ".bl")).unlink()
         shutil.copytree(language, source, dirs_exist_ok=True)
         probe = source / "Probe.bl"
-        probe.write_text("import org.zenframework.z8.base.table.value.Field;\nimport org.zenframework.z8.base.json.JsonWriter;\n" + probe.read_text(encoding="utf-8"), encoding="utf-8")
+        probe.write_text("import org.zenframework.z8.base.table.value.Field;\nimport org.zenframework.z8.base.json.JsonWriter;\nimport org.zenframework.z8.base.json.JsonObject;\n" + probe.read_text(encoding="utf-8"), encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "main.d"
     harness.write_text('''
@@ -70,9 +83,11 @@ void main() {
     assert(state.valueFor is first);
     assert(z8_optional_require(P.m_original(field)));
     assert(P.m_json(field) == `{"amount":42}`w);
+    assert(z8_optional_require(P.m_jsonField(field)));
     z8_field_set(field, z8_primary_box("new"w)); state.wasNull = false;
     assert(z8_optional_require(P.m_changed(field)));
     assert(P.m_json(field) == `{"amount":"new"}`w);
+    assert(z8_optional_require(P.m_jsonFieldLegacy(field)));
     z8_field_set(field, z8_primary_box("another"w));
     z8_field_reset(field); state.wasNull = true;
     assert(z8_optional_require(P.m_original(field)));

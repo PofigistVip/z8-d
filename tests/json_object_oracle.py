@@ -31,6 +31,8 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     (source / "Probe.bl").write_text("""
 import org.zenframework.z8.base.json.JsonObject;
 import org.zenframework.z8.base.json.JsonUtil;
+import org.zenframework.z8.base.table.value.Field;
+import org.zenframework.z8.base.table.value.IntField;
 public class Probe {
     public static JsonObject parse(string text) { return JsonObject.parse(text); }
     public static void assign(JsonObject object, string text) { object = text; }
@@ -45,6 +47,9 @@ public class Probe {
     public static string[] names(JsonObject object) { return object.getNames(); }
     public static JsonObject put(JsonObject object, string name, primary entry) { return object.set(name, entry); }
     public static JsonObject putLegacy(JsonObject object, string name, primary entry) { return object.put(name, entry); }
+    public static IntField makeField() { IntField field; return field; }
+    public static JsonObject putField(JsonObject object, Field field) { return object.set(field); }
+    public static JsonObject putFieldLegacy(JsonObject object, Field field) { return object.put(field); }
     public static JsonObject nested(JsonObject object, string name) { return object.getJsonObject(name); }
     public static JsonObject remove(JsonObject object, string name) { return object.remove(name); }
     public static string render(JsonObject object) { return (string)object; }
@@ -130,6 +135,15 @@ class JsonObjectOracle {
         System.out.println("custom:" + geometryObject.z8_getString(new string("shape")).get() + ":" + geometryObject.string().get());
         custom.text = "changed"; System.out.println("custom:changed:" + geometryObject.string().get());
         custom.text = null; System.out.println("custom:null:" + geometryObject.string().get());
+        org.zenframework.z8.server.runtime.OBJECT parent = new org.zenframework.z8.server.runtime.OBJECT.CLASS<org.zenframework.z8.server.runtime.OBJECT>(null).get();
+        org.zenframework.z8.server.base.table.value.IntegerField.CLASS<org.zenframework.z8.server.base.table.value.IntegerField> field =
+            new org.zenframework.z8.server.base.table.value.IntegerField.CLASS<>(parent);
+        field.setIndex("amount"); field.get().set(42);
+        JsonObject fieldObject = JsonObject.z8_parse(new string("{}")).get();
+        System.out.println("field:self:" + (fieldObject.z8_set(field).get() == fieldObject));
+        System.out.println("field:" + fieldObject.z8_getInt(new string("amount")).get());
+        field.get().set(7); fieldObject.z8_put(field);
+        System.out.println("field:replaced:" + fieldObject.z8_getInt(new string("amount")).get());
         for (String input : new String[] {"12345678901234567890.2500", "1E+3", "1E-7", "-18446744073709551617.99"}) {
             value.z8_set(new string("decimal"), new org.zenframework.z8.server.types.decimal(input));
             System.out.println(value.z8_getString(new string("decimal")).get() + ":" + value.z8_getInt(new string("decimal")).get());
@@ -266,6 +280,12 @@ void main() {
     writeln("custom:", P.m_text(geometryObject, "shape"w).to!string, ":", P.m_render(geometryObject).to!string);
     custom.text = "changed"w; writeln("custom:changed:", P.m_render(geometryObject).to!string);
     custom.text = null; writeln("custom:null:", P.m_render(geometryObject).to!string);
+    auto field = P.m_makeField(); field.z8_set_container(new Z8Object()); field.z8_set_index("amount"w);
+    z8_field_set(field, z8_primary_box(42L)); auto fieldObject = P.m_parse("{}"w);
+    writeln("field:self:", P.m_putField(fieldObject, field) is fieldObject);
+    writeln("field:", z8_optional_require(P.m_integer(fieldObject, "amount"w)));
+    z8_field_set(field, z8_primary_box(7L)); P.m_putFieldLegacy(fieldObject, field);
+    writeln("field:replaced:", z8_optional_require(P.m_integer(fieldObject, "amount"w)));
     foreach (input; ["12345678901234567890.2500"w, "1E+3"w, "1E-7"w, "-18446744073709551617.99"w]) {
         P.m_put(value, "decimal"w, z8_primary_box(z8_decimal_parse(input)));
         writeln(P.m_text(value, "decimal"w).to!string, ":", z8_optional_require(P.m_integer(value, "decimal"w)));

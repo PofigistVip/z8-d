@@ -288,6 +288,11 @@ private Z8Object z8_json_object_set_primary(Z8Object self, wstring name, Z8Prima
     state.value.object[key] = converted.value;
     return self;
 }
+private Z8Object z8_json_object_set_field(Z8Object self, Z8Object field) {
+    field = z8_nonnull(field);
+    if (!z8_native_is_instance(z8_field_name, field)) throw new Exception("invalid JSON field");
+    return z8_json_object_set_primary(self, field.z8_id(), z8_field_primary(field));
+}
 private Z8Object z8_json_object_remove(Z8Object self, wstring name) {
     auto state = z8_json_object_state(self);
     auto key = z8_string_required(name).to!string;
@@ -392,6 +397,8 @@ void z8_bind_builtin_json_object() {
     z8_native_bind(prefix ~ "m_put"w, &z8_json_object_set_nested);
     z8_native_bind(prefix ~ "m_set"w, &z8_json_object_set_primary);
     z8_native_bind(prefix ~ "m_put"w, &z8_json_object_set_primary);
+    z8_native_bind(prefix ~ "m_set"w, &z8_json_object_set_field);
+    z8_native_bind(prefix ~ "m_put"w, &z8_json_object_set_field);
     z8_native_bind(prefix ~ "m_remove"w, &z8_json_object_remove);
 }
 shared static this() { z8_bind_builtin_json_object(); }
