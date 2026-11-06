@@ -1,0 +1,26 @@
+// Resources.loadResource resolves a file relative to the configured application root.
+private __gshared Object z8_resources_lock;
+private __gshared string z8_resources_application_root;
+void z8_resources_set_application_root(string root) {
+    import std.file : getcwd;
+    import std.path : absolutePath;
+    auto full = absolutePath(root.length ? root : getcwd());
+    synchronized (z8_resources_lock) z8_resources_application_root = full.idup;
+}
+private Z8File z8_resources_load(wstring path) {
+    import std.file : getcwd;
+    import std.path : dirSeparator;
+    auto child = z8_string_required(path).to!string;
+    string root;
+    synchronized (z8_resources_lock) root = z8_resources_application_root;
+    if (!root.length) root = getcwd();
+    // java.io.File(parent, child) resolves leading separators under parent.
+    version (Windows) {
+        while (child.length && (child[0] == '/' || child[0] == '\\')) child = child[1 .. $];
+    } else while (child.length && child[0] == '/') child = child[1 .. $];
+    return z8_file_from_disk(child.length ? root ~ dirSeparator ~ child : root);
+}
+void z8_bind_builtin_resources() {
+    z8_native_bind("org.zenframework.z8.server.base.application.Resources.m_loadResource"w, &z8_resources_load);
+}
+shared static this() { z8_resources_lock = new Object(); z8_bind_builtin_resources(); }
