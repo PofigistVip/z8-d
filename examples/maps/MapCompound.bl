@@ -57,6 +57,22 @@ public class MapCompound {
         calls = 0;
         try { absent["x"] += mark(); return 14; } catch (exception expected) {}
         if (calls != 0) return 15;
+        int[][string] groups;
+        int[] first = {1, 2}; int[] second = {3};
+        groups["one"] = first;
+        groups["one"] += second;
+        if (groups["one"].size() != 3 || groups["one"][2] != 3 || first.size() != 2) return 16;
+        string[string][string] maps;
+        string[string] left; left.add("a", "one");
+        string[string] right; right.add("b", "two");
+        maps["one"] = left;
+        maps["one"] += right;
+        if (maps["one"]["a"] != "one" || maps["one"]["b"] != "two" || left.containsKey("b")) return 17;
+        MapCompound[][string] objects;
+        MapCompound[] original = {this}; MapCompound[] extra = {this};
+        objects["one"] = original;
+        objects["one"] += extra;
+        if (objects["one"].size() != 2 || objects["one"][1] == null || original.size() != 1) return 18;
         return 191;
     }
     public static int run() { MapCompound test; return test.exercise(); }
