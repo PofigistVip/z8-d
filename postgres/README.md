@@ -172,6 +172,8 @@ destroy, attachment and action requests. The host must open the
 application response before calling it.
 Unknown field IDs in a requested field list are ignored, as in `QueryUtils`;
 an explicitly nonempty list containing only unknown IDs does not select all fields.
+Unknown sort and group fields are also ignored. For the default action the
+client's `sort` and `group` parameters are ignored, matching `ActionFactory`.
 Ordinary computed fields can be selected, filtered and sorted only when all
 their declared and SQL expression dependencies are readable.
 `JsonObjectExpression` builds JSON from field references or named SQL values;

@@ -400,11 +400,10 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     }
     Z8Object[] groupOrder, defaultGroups;
     auto group = params.z8_get("group"w);
-    if (defaultAction && group !is null && group.length) throw new Exception("group parameter requires an explicit read action");
     if (defaultAction) foreach (field; z8_query_array(query, "groupFields"w)) {
         foreach (item; selected) if (item is field) { defaultGroups ~= field; break; }
     }
-    if (group !is null && group.length) {
+    if (!defaultAction && group !is null && group.length) {
         auto parsed = z8_json_parse(group.to!string);
         JSONValue[] entries;
         if (parsed.type == JSONType.array) entries = parsed.array;
@@ -414,15 +413,15 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
             if (item.type != JSONType.object) throw new Exception("invalid query group entry");
             auto property = "property" in item.object;
             if (property is null || property.type != JSONType.string || !property.str.length) throw new Exception("invalid query group entry");
-            auto field = z8_query_find_field_id(query, property.str.to!wstring);
+            auto field = z8_query_try_find_field_id(query, property.str.to!wstring);
+            if (field is null) continue;
             bool exists;
             foreach (existing; groupOrder) if (existing is field) { exists = true; break; }
             if (!exists) groupOrder ~= field;
         }
     }
     auto sorting = params.z8_get("sort"w);
-    if (defaultAction && sorting !is null && sorting.length) throw new Exception("sort parameter requires an explicit read action");
-    if (sorting !is null && sorting.length) {
+    if (!defaultAction && sorting !is null && sorting.length) {
         auto parsed = z8_json_parse(sorting.to!string);
         if (parsed.type != JSONType.array) throw new Exception("query sort must be a JSON array");
         foreach (item; parsed.array) {
@@ -430,7 +429,8 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
             auto property = "property" in item.object, direction = "direction" in item.object;
             if (property is null || property.type != JSONType.string || !property.str.length ||
                 (direction !is null && direction.type != JSONType.string)) throw new Exception("invalid query sort entry");
-            auto field = z8_query_find_field_id(query, property.str.to!wstring);
+            auto field = z8_query_try_find_field_id(query, property.str.to!wstring);
+            if (field is null) continue;
             auto order = direction is null ? "asc"w : z8_str_toLowerCase(direction.str.to!wstring);
             z8_field_set_sort_direction(field, order);
             bool exists;

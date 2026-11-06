@@ -920,10 +920,11 @@ void main(string[] args) {
     assert(unknownFields["data"].array.length == 4 && "title" !in unknownFields["data"][0].object && "customer.label" !in unknownFields["data"][0].object);
     auto unknownMeta = parseJSON(requestFields(`["title","missing.field"]`w, null, null, null, null, "HttpOrder"w, "meta"w).to!string);
     foreach (field; unknownMeta["fields"].array) assert(field["name"].str != "missing.field");
-    wstring readCustomCustomer(wstring customer, wstring action = "read"w) {
+    wstring readCustomCustomer(wstring customer, wstring action = "read"w, bool ignoredOrder = false) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, "HttpOrder"w); if (action !is null) request.parameters.z8_add("action"w, action);
         request.parameters.z8_add("fields"w, `["title","customer.label"]`w); request.parameters.z8_add("customCustomer"w, customer);
+        if (ignoredOrder) { request.parameters.z8_add("sort"w, "not-json"w); request.parameters.z8_add("group"w, "not-json"w); }
         auto previous = z8_application_set_request(request); scope(exit) z8_application_set_request(previous);
         z8_application_start_response(request, "HttpOrder"w); z8_application_dispatch_request();
         z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
@@ -936,6 +937,18 @@ void main(string[] args) {
     assert(customResponse["isQuery"].boolean && "fields" in customResponse.object && "data" !in customResponse.object);
     customResponse = parseJSON(readCustomCustomer("Bob"w, null).to!string);
     assert(customResponse["isQuery"].boolean && customResponse["data"].array.length == 1 && customResponse["data"][0]["customer.label"].str == "Bob");
+    customResponse = parseJSON(readCustomCustomer("Bob"w, null, true).to!string);
+    assert(customResponse["isQuery"].boolean && customResponse["data"].array.length == 1 && customResponse["data"][0]["customer.label"].str == "Bob");
+    auto unknownOrder = new Z8ApplicationRequest(); unknownOrder.session = session; unknownOrder.monitor = new Z8RequestMonitor();
+    unknownOrder.parameters.z8_add("request"w, "HttpOrder"w); unknownOrder.parameters.z8_add("action"w, "read"w);
+    unknownOrder.parameters.z8_add("fields"w, `["title"]`w);
+    unknownOrder.parameters.z8_add("sort"w, `[{"property":"missing","direction":"invalid"}]`w);
+    unknownOrder.parameters.z8_add("group"w, `[{"property":"missing"}]`w);
+    auto priorUnknownOrder = z8_application_set_request(unknownOrder);
+    z8_application_start_response(unknownOrder, "HttpOrder"w); z8_application_dispatch_request();
+    z8_application_finish_response(unknownOrder, cast(Z8RequestMonitor)unknownOrder.monitor);
+    assert(parseJSON(z8_application_response_text(unknownOrder).to!string)["data"].array.length == 4);
+    z8_application_set_request(priorUnknownOrder);
     wstring readAggregateIds(wstring ids) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, "AggregateOrder"w); request.parameters.z8_add("action"w, "read"w);
