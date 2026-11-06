@@ -174,6 +174,9 @@ Unknown field IDs in a requested field list are ignored, as in `QueryUtils`;
 an explicitly nonempty list containing only unknown IDs does not select all fields.
 Unknown sort and group fields are also ignored. For the default action the
 client's `sort` and `group` parameters are ignored, matching `ActionFactory`.
+For HTTP reads, a nonpositive requested limit uses the query's configured
+limit. With no positive effective limit, Java opens an unframed cursor and
+ignores the offset; negative offsets otherwise behave as zero.
 Ordinary computed fields can be selected, filtered and sorted only when all
 their declared and SQL expression dependencies are readable.
 `JsonObjectExpression` builds JSON from field references or named SQL values;

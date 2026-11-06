@@ -1586,7 +1586,8 @@ void main(string[] args) {
     assert(rejectedRead("action"w, "write"w));
     assert(rejectedRead("fields"w, `{"id":"title"}`w));
     assert(!rejectedRead("fields"w, `["computed"]`w));
-    assert(rejectedRead("start"w, "-1"w));
+    assert(!rejectedRead("start"w, "-1"w));
+    assert(!rejectedRead("limit"w, "-1"w));
     assert(rejectedRead("filter"w, `{"logical":"or","expressions":[{"property":"title","value":"Visible"},{}]}`w));
     assert(rejectedRead("filter"w, `{"logical":"bad","expressions":[{"property":"title","value":"Visible"}]}`w));
     auto filtered = new Z8ApplicationRequest(); filtered.session = querySession; filtered.monitor = new Z8RequestMonitor();

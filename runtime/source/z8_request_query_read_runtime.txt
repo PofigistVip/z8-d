@@ -372,8 +372,9 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
         return value is null || !value.length ? fallback : z8_int_parse(value);
     }
     auto start = number("start"w, 0), limit = number("limit"w, z8_query_limit(query));
-    if (start < 0 || start > int.max || limit < 0 || limit > int.max) throw new Exception("invalid query pagination");
-    if (!limit) limit = z8_query_limit(query);
+    if (start < int.min || start > int.max || limit < int.min || limit > int.max) throw new Exception("invalid query pagination");
+    if (start < 0) start = 0;
+    if (limit <= 0) limit = z8_query_limit(query);
     if (!groups.length && !aggregates.length) foreach (field; z8_query_declared_fields(query)) {
         auto parent = field.z8_get_attribute("parentKey"w);
         if (parent !is null && z8_str_compareNoCase(parent, "false"w) != 0) { limit = -1; break; }

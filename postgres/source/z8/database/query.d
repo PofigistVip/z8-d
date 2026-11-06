@@ -174,7 +174,6 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             request.readLock != Z8QueryReadLock.none ||
             !trivialTrue(request.having) || !trivialTrue(request.queryHaving))
             throw new Z8PostgresException("unsupported PostgreSQL aggregateBy query option");
-        if (request.start < 0) throw new Z8PostgresException("negative PostgreSQL query offset");
         auto groups = uniqueFields(z8_query_array(query, "aggregateBy"w));
         auto declared = z8_query_declared_fields(query);
         foreach (field; groups) {
@@ -270,8 +269,10 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                 sql ~= z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string ~ " " ~ direction.to!string;
             }
         }
-        if (!counting && request.limit >= 0) sql ~= " LIMIT " ~ request.limit.to!string;
-        if (!counting && request.start) sql ~= " OFFSET " ~ request.start.to!string;
+        if (!counting && request.limit > 0) {
+            sql ~= " LIMIT " ~ request.limit.to!string;
+            if (request.start > 0) sql ~= " OFFSET " ~ request.start.to!string;
+        }
         result.sql = sql; return result;
     }
     private Z8Object[] aggregateRequestedFields(Z8Object query, Z8QueryReadRequest request) {
@@ -440,8 +441,10 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                 sql ~= ordering ~ " " ~ direction.to!string;
             }
         }
-        if (!counting && request.limit >= 0) sql ~= " LIMIT " ~ request.limit.to!string;
-        if (!counting && request.start) sql ~= " OFFSET " ~ request.start.to!string;
+        if (!counting && request.limit > 0) {
+            sql ~= " LIMIT " ~ request.limit.to!string;
+            if (request.start > 0) sql ~= " OFFSET " ~ request.start.to!string;
+        }
         result.sql = sql; return result;
     }
     private IZ8QueryCursor aggregateRootTotals(Z8Object query, Z8QueryReadRequest request) {
@@ -628,7 +631,6 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         bool grouped = groups.length != 0 || request.aggregateAll;
         if (!request.disableGrouping && !grouped && (!trivialTrue(request.having) || !trivialTrue(request.queryHaving)))
             throw new Z8PostgresException("PostgreSQL HAVING filters require grouped query support");
-        if (request.start < 0) throw new Z8PostgresException("negative PostgreSQL query offset");
         auto plan = new Z8PostgresQueryPlan(query, schema, table);
         auto requested = request.fields;
         if (!requested.length && !request.aggregateAll) requested = z8_query_form_fields(query);
@@ -753,8 +755,10 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                 sql ~= expression ~ " " ~ direction.to!string;
             }
         }
-        if (request.limit >= 0) sql ~= " LIMIT " ~ request.limit.to!string;
-        if (request.start) sql ~= " OFFSET " ~ request.start.to!string;
+        if (request.limit > 0) {
+            sql ~= " LIMIT " ~ request.limit.to!string;
+            if (request.start > 0) sql ~= " OFFSET " ~ request.start.to!string;
+        }
         final switch (request.readLock) {
             case Z8QueryReadLock.none: break;
             case Z8QueryReadLock.update: sql ~= " FOR UPDATE"; break;

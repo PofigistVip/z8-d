@@ -294,6 +294,7 @@ import org.zenframework.z8.base.application.Application;
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "context-filter") addWhere(customer.label == customer.label.get());
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "changed-link") customer.label = "Changed in hook";
         if (Application.requestParameters().containsKey("customCustomer")) addWhere(customer.label == Application.requestParameters()["customCustomer"]);
+        if (Application.requestParameters().containsKey("unlimited")) limit = 0;
     }
 }
 ''',
@@ -451,6 +452,8 @@ public class Probe {
     public static void configureAggregateJoin(AggregateJoinOrder order) { order.customer.cityJoin = order.otherId.sql_guid() == order.customer.city.recordId.sql_guid(); }
     public static void readAggregateJoin(AggregateJoinOrder order) { Field[] fields = {order.customer.city.label}; order.read(fields); }
     public static void readAggregate(AggregateOrder order) { Field[] fields = {order.customerId, order.amount}; order.read(fields); }
+    public static void readAggregatePage(AggregateOrder order, int start, int limit) { Field[] fields = {order.customerId, order.amount}; order.read(fields, null, null, start, limit); }
+    public static void readAggregateLinkedPage(AggregateOrder order, int start, int limit) { Field[] fields = {order.customer.label, order.amount}; order.read(fields, null, null, start, limit); }
     public static bool readAggregateRecord(AggregateOrder order, guid id) { Field[] fields = {order.customerId, order.amount}; return order.readRecord(id, fields); }
     public static bool readAggregateLinkedRecord(AggregateOrder order, guid id) { Field[] fields = {order.customer.label, order.amount}; return order.readRecord(id, fields); }
     public static void readAggregateSorted(AggregateOrder order) { order.amount.sortDirection = SortDirection.Desc; Field[] fields = {order.customerId, order.amount}; Field[] sort = {order.amount}; order.read(fields, sort); }
@@ -636,6 +639,15 @@ void main(string[] args) {
         sum += amount; ++aggregateRows;
     }
     assert(aggregateRows == 2 && sum == 17);
+    P.m_readAggregatePage(aggregate, z8_optional_wrap(1L), z8_optional_wrap(0L)); aggregateRows = 0;
+    while (z8_optional_require(P.m_nextAggregate(aggregate))) ++aggregateRows;
+    assert(aggregateRows == 2);
+    P.m_readAggregatePage(aggregate, z8_optional_wrap(-1L), z8_optional_wrap(1L)); aggregateRows = 0;
+    while (z8_optional_require(P.m_nextAggregate(aggregate))) ++aggregateRows;
+    assert(aggregateRows == 1);
+    P.m_readAggregateLinkedPage(aggregate, z8_optional_wrap(1L), z8_optional_wrap(0L)); aggregateRows = 0;
+    while (z8_optional_require(P.m_nextAggregate(aggregate))) ++aggregateRows;
+    assert(aggregateRows == 2);
     assert(z8_optional_require(P.m_readAggregateRecord(aggregate, z8_guid_create(0x311))));
     assert(P.m_aggregateCustomer(aggregate) == z8_guid_create(0x201) && z8_optional_require(P.m_aggregateAmount(aggregate)) == 4);
     assert(z8_optional_require(P.m_readAggregateLinkedRecord(aggregate, z8_guid_create(0x312))));
@@ -914,6 +926,20 @@ void main(string[] args) {
     db.execute(`CREATE TEMP TABLE "JoinOrders" AS SELECT * FROM "Orders"`);
     db.execute(`CREATE TEMP TABLE "DependencyOrders" AS SELECT * FROM "Orders"`);
     auto response = parseJSON(requestFields(`["title","customer.label","customer.city.label"]`w).to!string);
+    wstring readPagination(wstring start, wstring limit, bool unlimited = false) {
+        auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
+        request.parameters.z8_add("request"w, "HttpOrder"w); request.parameters.z8_add("action"w, "read"w);
+        request.parameters.z8_add("fields"w, `["title"]`w);
+        if (start !is null) request.parameters.z8_add("start"w, start);
+        if (limit !is null) request.parameters.z8_add("limit"w, limit);
+        if (unlimited) request.parameters.z8_add("unlimited"w, "yes"w);
+        auto previous = z8_application_set_request(request); scope(exit) z8_application_set_request(previous);
+        z8_application_start_response(request, "HttpOrder"w); z8_application_dispatch_request();
+        z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
+    }
+    assert(parseJSON(readPagination("-1"w, "2"w).to!string)["data"].array.length == 2);
+    assert(parseJSON(readPagination("1"w, "-1"w).to!string)["data"].array.length == 3);
+    assert(parseJSON(readPagination("1"w, "0"w, true).to!string)["data"].array.length == 4);
     auto partiallyKnownFields = parseJSON(requestFields(`["title","missing.field"]`w).to!string);
     assert(partiallyKnownFields["data"].array.length == 4 && "title" in partiallyKnownFields["data"][0].object && "missing.field" !in partiallyKnownFields["data"][0].object);
     auto unknownFields = parseJSON(requestFields(`["missing.field"]`w).to!string);
