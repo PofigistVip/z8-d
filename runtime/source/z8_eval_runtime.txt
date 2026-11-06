@@ -181,6 +181,56 @@ private Z8EvalValue z8_eval_json_aggregate(wstring name, Z8EvalValue[] arguments
     }
     return Z8EvalValue(true, result.value, null, null);
 }
+private Z8Primary z8_eval_string_method(wstring value, wstring name, Z8EvalValue[] arguments) {
+    long intArg(size_t i) {
+        if (i >= arguments.length || arguments[i].primary is null || arguments[i].primary.kind != Z8PrimaryKind.integer)
+            throw new Exception("invalid Eval method argument");
+        return arguments[i].primary.integerValue;
+    }
+    wstring textArg(size_t i) {
+        if (i >= arguments.length || arguments[i].primary is null || arguments[i].primary.kind != Z8PrimaryKind.text)
+            throw new Exception("invalid Eval method argument");
+        return arguments[i].primary.textValue;
+    }
+    if (!arguments.length) {
+        if (name == "length"w) return z8_primary_box(cast(long)value.length);
+        if (name == "isEmpty"w) return z8_primary_box(value.length == 0);
+        if (name == "toString"w || name == "get"w) return z8_primary_box(z8_string_new(value));
+        if (name == "trim"w) return z8_primary_box(z8_string_new(z8_str_trim(value)));
+        if (name == "trimLeft"w) return z8_primary_box(z8_string_new(z8_str_trimLeft(value)));
+        if (name == "trimRight"w) return z8_primary_box(z8_string_new(z8_str_trimRight(value)));
+        if (name == "toUpperCase"w) return z8_primary_box(z8_string_new(z8_str_toUpperCase(value)));
+        if (name == "toLowerCase"w) return z8_primary_box(z8_string_new(z8_str_toLowerCase(value)));
+        if (name == "firstToUpperCase"w) return z8_primary_box(z8_str_firstToUpperCase(value));
+        if (name == "firstToLowerCase"w) return z8_primary_box(z8_str_firstToLowerCase(value));
+    } else if (arguments.length == 1) {
+        if (name == "compare"w) return z8_primary_box(z8_str_compare(value, textArg(0)));
+        if (name == "compareNoCase"w) return z8_primary_box(z8_str_compareNoCase(value, textArg(0)));
+        if (name == "indexOf"w) return z8_primary_box(z8_str_indexOf(value, textArg(0)));
+        if (name == "lastIndexOf"w) return z8_primary_box(z8_str_lastIndexOf(value, textArg(0)));
+        if (name == "startsWith"w) return z8_primary_box(z8_str_startsWith(value, textArg(0)));
+        if (name == "endsWith"w) return z8_primary_box(z8_str_endsWith(value, textArg(0)));
+        if (name == "matches"w) return z8_primary_box(z8_regex_matches(value, textArg(0)));
+        if (name == "charAt"w) return z8_primary_box(z8_string_new(z8_str_charAt(value, intArg(0))));
+        if (name == "substring"w) return z8_primary_box(z8_string_new(z8_str_substring(value, intArg(0))));
+        if (name == "left"w) return z8_primary_box(z8_string_new(z8_str_left(value, intArg(0))));
+        if (name == "right"w) return z8_primary_box(z8_string_new(z8_str_right(value, intArg(0))));
+        if (name == "padLeft"w) return z8_primary_box(z8_string_new(z8_str_padLeft(value, intArg(0))));
+        if (name == "padRight"w) return z8_primary_box(z8_string_new(z8_str_padRight(value, intArg(0))));
+    } else if (arguments.length == 2) {
+        if (name == "indexOf"w) return z8_primary_box(z8_str_indexOf(value, textArg(0), intArg(1)));
+        if (name == "lastIndexOf"w) return z8_primary_box(z8_str_lastIndexOf(value, textArg(0), intArg(1)));
+        if (name == "startsWith"w) return z8_primary_box(z8_str_startsWith(value, textArg(0), intArg(1)));
+        if (name == "substring"w) return z8_primary_box(z8_string_new(z8_str_substring(value, intArg(0), intArg(1))));
+        if (name == "padLeft"w) return z8_primary_box(z8_string_new(z8_str_padLeft(value, intArg(0), textArg(1))));
+        if (name == "padRight"w) return z8_primary_box(z8_string_new(z8_str_padRight(value, intArg(0), textArg(1))));
+        if (name == "insert"w) return z8_primary_box(z8_string_new(z8_str_insert(value, intArg(0), textArg(1))));
+        if (name == "replaceFirst"w) return z8_primary_box(z8_string_new(z8_regex_replaceFirst(value, textArg(0), textArg(1))));
+        if (name == "replaceAll"w) return z8_primary_box(z8_string_new(z8_regex_replaceAll(value, textArg(0), textArg(1))));
+    } else if (arguments.length == 3 && name == "replace"w)
+        return z8_primary_box(z8_string_new(z8_str_replace(value, intArg(0), intArg(1), textArg(2))));
+    throw new Exception("unsupported Eval string method");
+}
 private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue[] arguments) {
     bool evaluated = object.evaluated;
     foreach (argument; arguments) evaluated = evaluated && argument.evaluated;
@@ -191,6 +241,8 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
     }
     if (object.context == Z8EvalContext.json && (name == "min"w || name == "max"w))
         return z8_eval_json_aggregate(name, arguments);
+    if (object.primary !is null && object.primary.kind == Z8PrimaryKind.text)
+        return Z8EvalValue(true, z8_eval_string_method(object.primary.textValue, name, arguments), null, null);
     throw new Exception("unsupported Eval method");
 }
 private wstring z8_eval_format_decimal(Z8Decimal number, wstring pattern) {
