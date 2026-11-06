@@ -302,8 +302,9 @@ update commits, including a successful login that resets the counter. A notifier
 failure is reported to the caller; the committed database update is retained.
 A registered named `User` subclass
 can implement the original `onBeforeLoad`, `authenticate` and `onLoad` hooks;
-if custom authentication returns false or throws, password verification remains
-the fallback. Hook execution uses a system-user request and the current schema.
+if custom authentication returns false, password verification remains the
+fallback. An exception from any of these hooks denies login, while redirects
+propagate to the host. Hook execution uses a system-user request and the current schema.
 The registered `SystemUsers` specialization can also populate or reject a
 user through either `getParameters` overload. If that hook throws, the built-in
 system and administrator accounts retain the original fallback behavior.

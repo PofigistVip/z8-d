@@ -47,14 +47,29 @@ import org.zenframework.z8.base.security.User;
 import org.zenframework.z8.base.application.Application;
 [name "User"] public class CustomUser extends User {
     bool checked;
+    int beforeCount = 0;
     virtual protected void onBeforeLoad(string input) {
-        checked = Application.userId() == guid.create(1) && Application.requestParameters()["login"] == input;
+        beforeCount += 1;
+        string marker = ""; if (Application.requestParameters().containsKey("address")) marker = Application.requestParameters()["address"];
+        if (marker == "before-error") throw "before failed";
+        if (marker == "second-error" && beforeCount == 2) throw "second before failed";
+        if (marker == "before-redirect") Application.redirect("/before");
+        checked = Application.userId() == guid.create(1);
+        if (input != null) checked = checked && Application.requestParameters()["login"] == input;
     }
     virtual protected bool authenticate(string password) {
-        if (password == "secret") throw "fallback";
+        string marker = ""; if (Application.requestParameters().containsKey("address")) marker = Application.requestParameters()["address"];
+        if (marker == "auth-error") throw "authentication failed";
+        if (marker == "auth-redirect") Application.redirect("/auth");
+        if (password == null) return false;
         return checked && password == "override";
     }
-    virtual protected void onLoad() { parameters.add("verified", true); }
+    virtual protected void onLoad() {
+        string marker = ""; if (Application.requestParameters().containsKey("address")) marker = Application.requestParameters()["address"];
+        if (marker == "load-error") throw "load failed";
+        if (marker == "load-redirect") Application.redirect("/load");
+        parameters.add("verified", true);
+    }
 }
 ''', encoding="utf-8")
     (source / "CustomUsers.bl").write_text('''
@@ -1071,6 +1086,22 @@ void main(string[] args) {
     assert(z8_application_request() is callerRequest && z8_connection_current_backend() is callerConnection);
     customAuthenticated = customAuth.authenticate("Auth Alice"w, "secret"w, z8_date_from_ticks(1700000001000));
     assert(customAuthenticated !is null && z8_optional_require(z8_primary_cast!bool(customAuthenticated.parameters.z8_get("verified"w))));
+    foreach (address; ["before-error"w, "auth-error"w, "load-error"w]) {
+        assert(customAuth.authenticate("Auth Alice"w, "secret"w, z8_date_from_ticks(1700000001000), address) is null);
+        assert(customAuth.authenticateTrusted(z8_guid_create(0xAAA), "Auth Alice"w, z8_date_from_ticks(1700000001000), address) is null);
+        assert(!db.inTransaction() && z8_application_request() is callerRequest && z8_connection_current_backend() is callerConnection);
+    }
+    foreach (address; ["before-redirect"w, "auth-redirect"w, "load-redirect"w]) {
+        bool redirected;
+        try { customAuth.authenticate("Auth Alice"w, "secret"w, z8_date_from_ticks(1700000001000), address); }
+        catch (Z8Redirect redirect) { redirected = redirect.location.length != 0; }
+        assert(redirected && !db.inTransaction() && z8_application_request() is callerRequest && z8_connection_current_backend() is callerConnection);
+    }
+    foreach (address; ["second-error"w, "auth-error"w]) {
+        assert(customAuth.authenticateTrusted(null, "Transient hook user"w, z8_date_from_ticks(1700000001000), address, true, "one-time-secret"w) is null);
+        assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemUsers" WHERE "Name" = 'Transient hook user'`).rows[0][0].text == "0");
+        assert(!db.inTransaction() && z8_application_request() is callerRequest && z8_connection_current_backend() is callerConnection);
+    }
     assert(customAuth.authenticate("Auth Alice"w, "wrong"w, z8_date_from_ticks(1700000001000)) is null);
     assert(customAuth.authenticate("Auth Alice"w, "secret"w, z8_date_from_ticks(1700000001000), "deny"w) is null);
     assert(customAuth.authenticate("Auth Alice"w, "secret"w, z8_date_from_ticks(1700000001000), "fail"w) is null);

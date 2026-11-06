@@ -101,7 +101,8 @@ class Z8PostgresAuthenticator {
             z8_connection_set_current(new Z8PostgresDatabase(db, schema, registry));
             if (customUser !is null) {
                 try { z8_user_before_load(customUser, login); }
-                catch (Throwable failure) { request.monitor.log(Z8MonitorLevel.error, failure.msg.to!wstring); }
+                catch (Z8Redirect redirect) { throw redirect; }
+                catch (Throwable failure) { request.monitor.log(Z8MonitorLevel.error, failure.msg.to!wstring); return null; }
             }
         }
         db.beginTransaction();
@@ -145,7 +146,8 @@ class Z8PostgresAuthenticator {
                 created = true;
                 if (customUser !is null) {
                     try { z8_user_before_load(customUser, login); }
-                    catch (Throwable failure) { request.monitor.log(Z8MonitorLevel.error, failure.msg.to!wstring); }
+                    catch (Z8Redirect redirect) { throw redirect; }
+                    catch (Throwable failure) { request.monitor.log(Z8MonitorLevel.error, failure.msg.to!wstring); db.rollback(); return null; }
                 }
             }
             if (!rows.rows.length) { db.commit(); return null; }
@@ -163,7 +165,8 @@ class Z8PostgresAuthenticator {
             if (customUser !is null) {
                 z8_user_attach(customUser, user);
                 try { accepted = z8_user_authenticate(customUser, password); }
-                catch (Throwable failure) { z8_application_request().monitor.log(Z8MonitorLevel.error, failure.msg.to!wstring); }
+                catch (Z8Redirect redirect) { throw redirect; }
+                catch (Throwable failure) { z8_application_request().monitor.log(Z8MonitorLevel.error, failure.msg.to!wstring); db.rollback(); return null; }
             }
             if (trusted) accepted = true;
             auto candidate = password;
@@ -188,7 +191,8 @@ class Z8PostgresAuthenticator {
             if (customUser !is null) {
                 z8_user_attach(customUser, user);
                 try { z8_user_on_load(customUser); }
-                catch (Throwable failure) { z8_application_request().monitor.log(Z8MonitorLevel.error, failure.msg.to!wstring); }
+                catch (Z8Redirect redirect) { throw redirect; }
+                catch (Throwable failure) { z8_application_request().monitor.log(Z8MonitorLevel.error, failure.msg.to!wstring); return null; }
             }
             return user;
         } catch (Throwable failure) {

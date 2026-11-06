@@ -39,7 +39,11 @@ import org.zenframework.z8.base.application.Application;
 [name "User"] public class CustomUser extends User {
     bool hasAddress;
     virtual protected void onBeforeLoad(string input) { hasAddress = Application.requestParameters().containsKey("address"); }
-    virtual protected bool authenticate(string password) { return login == "Bob" && password == "override" && hasAddress; }
+    virtual protected bool authenticate(string password) {
+        if (password == null) return false;
+        if (login == "Hooked" && password == "known") throw "hook denied";
+        return login == "Bob" && password == "override" && hasAddress;
+    }
     virtual protected void onLoad() { parameters.add("custom", true); parameters.add("plainPasswordVisible", Application.requestParameters().containsKey("plainPassword")); }
 }
 ''', encoding="utf-8")
@@ -141,6 +145,7 @@ void main(string[] args) {
     connection.execute(`UPDATE "SystemUsers" SET "Password" = md5('secret'), "Change Password" = 1 WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
     connection.execute(`INSERT INTO "SystemUsers" ("RecordId", "Name", "Password") VALUES ('00000000-0000-0000-0000-000000000055', 'Bob', md5('bobsecret'))`);
     connection.execute(`INSERT INTO "SystemUsers" ("RecordId", "Name", "Password") VALUES ('00000000-0000-0000-0000-000000000057', 'Fail', md5('secret'))`);
+    connection.execute(`INSERT INTO "SystemUsers" ("RecordId", "Name", "Password") VALUES ('00000000-0000-0000-0000-000000000058', 'Hooked', md5('known'))`);
     connection.execute(`INSERT INTO "SystemUserRoles" ("RecordId", "User", "Role") VALUES ('00000000-0000-0000-0000-000000000056', '00000000-0000-0000-0000-000000000055', '421A8413-A8EC-4DAB-9235-9A5FF83341C5')`);
     auto applicationConfig = z8_application_configuration(); applicationConfig.clientHashesPasswords = false; z8_application_configure(applicationConfig);
     Z8PostgresAuthenticationConfig config; config.clientHashesPasswords = false; config.maxFailedAttempts = 2; config.banMilliseconds = 60_000;
@@ -284,6 +289,8 @@ void main(string[] args) {
                 finally:
                     conn.close()
             status, denied = request(request="login", login="Admin", password="wrong")
+            assert status == 401 and not denied["success"]
+            status, denied = request(request="login", login="Hooked", password="known")
             assert status == 401 and not denied["success"]
             status, admin = request(request="login", login="admin", password="secret")
             assert status == 200 and admin["success"] and admin["user"]["administrator"]
