@@ -48,7 +48,7 @@ private string dType(ValueType type, Program objectClass = null, Program[] keyOb
         string storage;
         if (key == ValueType.selfType)
             storage = "Z8ReferenceKeyMap!(" ~ storedKey ~ ", " ~ storedValue ~ ")";
-        else if ([ValueType.enumType, ValueType.exceptionType, ValueType.encodingType].canFind(key) || isSqlType(key))
+        else if ([ValueType.enumType, ValueType.exceptionType, ValueType.encodingType, ValueType.ftsQueryType].canFind(key) || isSqlType(key))
             storage = "Z8ObjectKeyMap!(" ~ storedKey ~ ", " ~ storedValue ~ ")";
         else if ([ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(key))
             storage = "Z8ReferenceKeyMap!(" ~ storedKey ~ ", " ~ storedValue ~ ")";

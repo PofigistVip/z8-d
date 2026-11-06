@@ -31,4 +31,9 @@ with tempfile.TemporaryDirectory() as directory:
     (subset / "Subset.bl").write_text('public class Subset { public static void run() { Aggregation[] values; values.sort(); } }', encoding="utf-8")
     rejected = subprocess.run([str(compiler), "project", str(subset), str(temp / "stale")], capture_output=True, text=True)
     assert rejected.returncode and "native enum sort order is unavailable or stale" in rejected.stderr, rejected.stderr
+    (source / "BadFtsKey.bl").write_text('''import org.zenframework.z8.base.fts.FtsQueryType;
+import org.zenframework.z8.lang.encoding;
+public class BadFtsKey { public static void run() { int[FtsQueryType] values = {(encoding.UTF8, 1)}; } }''', encoding="utf-8")
+    rejected = subprocess.run([str(compiler), "project", str(source), str(temp / "bad-key"), "--dependency", str(language)], capture_output=True, text=True)
+    assert rejected.returncode and "map key type mismatch" in rejected.stderr, rejected.stderr
 print("BL native-enum sorting follows Java order, including shared core")

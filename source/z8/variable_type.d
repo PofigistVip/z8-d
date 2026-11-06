@@ -198,7 +198,9 @@ package ValueType mapType(ValueType value, ValueType key) {
     foreach (i, candidateValue; mapValueTypes) if (candidateValue == value)
         foreach (j, candidateKey; mapKeyTypes) if (candidateKey == key)
             return cast(ValueType)(cast(uint)ValueType.mapStart + i * mapKeyTypes.length + j);
-    if (!mapKeyTypes.canFind(key) || (!isArray(value) && !isMap(value))) return ValueType.voidType;
+    if (key == ValueType.ftsQueryType) {
+        if (!mapValueTypes.canFind(value) && !isArray(value) && !isMap(value)) return ValueType.voidType;
+    } else if (!mapKeyTypes.canFind(key) || (!isArray(value) && !isMap(value))) return ValueType.voidType;
     auto signature = (cast(ulong)cast(uint)value << 32) | cast(uint)key;
     synchronized (dynamicMapMonitor) {
         auto existing = signature in dynamicMapIds;
@@ -223,6 +225,9 @@ unittest {
     assert(cast(uint)ValueType.mapStart + mapValueTypes.length * mapKeyTypes.length < cast(uint)ValueType.dynamicMapStart);
     assert(!isMap(ValueType.intType));
     assert(mapType(ValueType.intType, ValueType.ftsType) == ValueType.voidType);
+    auto ftsKeys = mapType(ValueType.intType, ValueType.ftsQueryType);
+    assert(isMap(ftsKeys) && mapKeyType(ftsKeys) == ValueType.ftsQueryType && mapValueType(ftsKeys) == ValueType.intType);
+    assert(mapKeyArrayType(ftsKeys) == ValueType.ftsQueryArray);
     auto nestedMap = arrayOf(arrayOf(mapType(ValueType.selfType, ValueType.enumType)));
     assert(isDynamicArray(nestedMap) && hasObjectClass(nestedMap) && hasMapKeyClass(nestedMap));
     assert(mapKeyType(elementType(elementType(nestedMap))) == ValueType.enumType);

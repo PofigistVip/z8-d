@@ -1001,7 +1001,7 @@ class Checker {
                             fail("null literal is not supported in a map initializer pair", entry.token);
                         if ([ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(keyType) && typeOf(entry.left) != keyType)
                             fail("map key type mismatch", entry.left.token);
-                        if ([ValueType.exceptionType, ValueType.encodingType].canFind(keyType) && typeOf(entry.left) != keyType)
+                        if ([ValueType.exceptionType, ValueType.encodingType, ValueType.ftsQueryType].canFind(keyType) && typeOf(entry.left) != keyType)
                             fail("map key type mismatch", entry.left.token);
                         if (isSqlType(keyType)) {
                             auto actualKey = typeOf(entry.left);

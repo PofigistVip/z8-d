@@ -80,6 +80,13 @@ public class NativeEnumArraySort {
         if (directions.join("|") != "asc|desc" || joins.join("|") != "inner|left|right|full") return 30;
         if (policies.join("|") != "Keep|Override|Merge") return 31;
         try { string ignored = nullable.join(","); return 32; } catch (exception expected) {}
+        string[FtsQueryType] byQuery = {(FtsQueryType.Query, "query"), (FtsQueryType.Plain, "plain")};
+        if (byQuery[FtsQueryType.Query] != "query" || byQuery.keys().size() != 2) return 33;
+        if (byQuery.keys().sort().join(",") != "Query,Plain") return 34;
+        byQuery.add(null, "null-key");
+        if (byQuery[null] != "null-key" || byQuery.remove(FtsQueryType.Plain) != "plain") return 35;
+        FtsQueryType[][FtsQueryType] arraysByType = {(FtsQueryType.Phrase, types)};
+        if (arraysByType[FtsQueryType.Phrase][1] != FtsQueryType.Plain) return 36;
         return 0;
     }
 }
