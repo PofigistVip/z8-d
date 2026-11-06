@@ -105,10 +105,8 @@ Z8Object z8_object_new_instance(wstring className) {
     return value;
 }
 private Z8Object z8_object_new_instance_native(wstring className) {
-    auto value = z8_object_new_instance(className);
-    if (!z8_native_is_instance("org.zenframework.z8.server.runtime.OBJECT"w, value))
-        throw new Exception("class does not extend Object");
-    return value;
+    // BL classes without an explicit base still extend OBJECT in generated Java.
+    return z8_object_new_instance(className);
 }
 private wstring z8_object_get_attribute(Z8Object self, wstring name) {
     return z8_string_new(z8_string_or_empty(z8_nonnull(self).z8_get_attribute(z8_string_required(name))));

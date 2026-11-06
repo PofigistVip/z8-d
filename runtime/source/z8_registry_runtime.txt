@@ -18,8 +18,6 @@ class Z8RuntimeRegistry {
         value = z8_nonnull(value);
         if (table && !z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, value))
             throw new Exception("runtime table registration requires a Table");
-        if (!z8_native_is_instance("org.zenframework.z8.server.runtime.OBJECT"w, value))
-            throw new Exception("runtime registration requires an OBJECT");
         auto classId = value.z8_class_id();
         auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, value);
         if (classId is null || !classId.length || name is null || !name.length) throw new Exception("runtime class ID and name are required");

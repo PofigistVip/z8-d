@@ -1,0 +1,82 @@
+"""Verify generated startup registration against standard BL declarations."""
+from pathlib import Path
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from runtime_support import import_args, runtime_library
+
+if len(sys.argv) != 2:
+    raise SystemExit("Usage: python tests/project_registry.py <original-z8-root>")
+root = Path(__file__).resolve().parents[1]
+language = Path(sys.argv[1]).resolve() / "org.zenframework.z8.lang/src/bl"
+if not language.is_dir():
+    raise SystemExit("Original BL standard library not found")
+compiler = root / ("z8d.exe" if os.name == "nt" else "z8d")
+with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
+    temp = Path(directory)
+    source, generated = temp / "bl", temp / "generated"
+    shutil.copytree(language, source)
+    classes = {
+        "Orders": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.StringField;
+[name "Orders"] [generatable] [request true] public class Orders extends Table { [name "Title"] StringField title; }
+''',
+        "BaseTable": '''
+import org.zenframework.z8.base.table.Table;
+[name "Inherited"] public class BaseTable extends Table {}
+''',
+        "DerivedTable": '[generatable] public class DerivedTable extends BaseTable {}',
+        "Api": '[request] public class Api {}',
+        "ApiChild": 'public class ApiChild extends Api {}',
+        "PrivateApi": '[request false] public class PrivateApi extends Api {}',
+        "UnnamedTable": '''
+import org.zenframework.z8.base.table.Table;
+[generatable] public class UnnamedTable extends Table {}
+''',
+        "Other": 'public class Other {}',
+    }
+    for name, code in classes.items():
+        (source / (name + ".bl")).write_text(code, encoding="utf-8")
+    subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
+    harness = temp / "main.d"
+    harness.write_text('''
+import z8.runtime;
+import z8gen.project_registry;
+import std.json : parseJSON, JSONType;
+import std.conv : to;
+void main() {
+    auto registry = new Z8RuntimeRegistry(); z8_register_project(registry);
+    auto tables = registry.tables(), requests = registry.requests();
+    assert(tables.length == 2 && requests.length == 3);
+    bool orders, inherited, api, child, orderRequest;
+    foreach (table; tables) {
+        if (table.name == "Orders"w) orders = table.classId == "Orders"w && table.fields.length == 7;
+        if (table.name == "Inherited"w) inherited = table.classId == "DerivedTable"w;
+    }
+    foreach (request; requests) {
+        if (request.classId == "Api"w) api = true;
+        if (request.classId == "ApiChild"w) child = true;
+        if (request.classId == "Orders"w) orderRequest = true;
+        assert(request.classId != "PrivateApi"w);
+    }
+    assert(orders && inherited && api && child && orderRequest);
+    z8_register_project(registry); assert(registry.tables().length == 2 && registry.requests().length == 3);
+    auto user = new Z8UserData(); user.id = z8_guid_create(1);
+    user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
+    auto request = new Z8ApplicationRequest(); request.session = new Z8ApplicationSession("test"w, user, user);
+    request.monitor = new Z8RequestMonitor(); request.parameters.z8_add("request"w, "Api"w);
+    z8_application_set_request(request); z8_application_start_response(request, "Api"w); z8_application_dispatch_request();
+    z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor);
+    assert(parseJSON(z8_application_response_text(request).to!string)["data"].type == JSONType.null_);
+}
+''', encoding="utf-8")
+    exe = temp / ("registry.exe" if os.name == "nt" else "registry")
+    args = ["dmd", "-I" + str(generated), *import_args(), *map(str, generated.rglob("*.d")), str(harness), str(runtime), "-of=" + str(exe)]
+    response = temp / "dmd.rsp"
+    response.write_text("\n".join('"' + arg.replace('"', r'\"') + '"' for arg in args[1:]) + "\n", encoding="utf-8")
+    subprocess.run(["dmd", "@" + str(response)], cwd=temp, check=True)
+    subprocess.run([str(exe)], cwd=temp, check=True)
+print("Generated project registration for tables and requests verified")

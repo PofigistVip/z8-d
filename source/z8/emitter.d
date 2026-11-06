@@ -1435,5 +1435,37 @@ package GeneratedModule[] emitProjectModules(Program[] programs) {
         source ~= "}\n";
         modules ~= GeneratedModule("z8gen.native_registry", "z8gen/native_registry.d", "", formatDSource(source));
     }
+    // StartupCodeLines registers named generatable tables and request classes.
+    // Keep the generated registry explicit so applications choose when to
+    // instantiate classes and connect their runtime services.
+    bool directAttribute(Program program, string name) {
+        foreach (attribute; program.attributes) if (attribute.name.text == name) return true;
+        return false;
+    }
+    bool inheritedAttribute(Program program, string name) {
+        for (auto current = program; current !is null; current = current.baseClass)
+            if (directAttribute(current, name)) return true;
+        return false;
+    }
+    Program[] registrations;
+    foreach (program; programs) if (program.lexicalOwner is null && !program.isEnum && !isPrimaryClass(program) &&
+        (directAttribute(program, "generatable") || inheritedAttribute(program, "request"))) registrations ~= program;
+    if (registrations.length) {
+        string source = "module z8gen.project_registry;\n\nimport z8.runtime;\n";
+        foreach (program; registrations) source ~= "import " ~ moduleByClass[program.emittedName] ~ ";\n";
+        source ~= "\nvoid z8_register_project(Z8RuntimeRegistry registry) {\nregistry = z8_nonnull(registry);\n";
+        foreach (program; registrations) {
+            source ~= "{\nauto value = z8_new!(" ~ program.emittedName ~ ")();\n";
+            if (directAttribute(program, "generatable"))
+                source ~= "auto tableName = value.z8_get_attribute(\"name\"w);\n" ~
+                    "if (tableName !is null && tableName.length) registry.registerTable(value);\n";
+            if (inheritedAttribute(program, "request"))
+                source ~= "auto request = value.z8_get_attribute(\"request\"w);\n" ~
+                    "if (request !is null && (!request.length || z8_str_compareNoCase(request, \"true\"w) == 0)) registry.registerRequest(value);\n";
+            source ~= "}\n";
+        }
+        source ~= "}\n";
+        modules ~= GeneratedModule("z8gen.project_registry", "z8gen/project_registry.d", "", formatDSource(source));
+    }
     return modules;
 }
