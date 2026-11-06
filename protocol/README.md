@@ -40,6 +40,10 @@ and denied replies. It does not open sockets or choose an RPC implementation.
 `IZ8AuthorityEndpoint`. The optional `Z8ProtobufPostgresAuthority` adapter
 connects it to the single-schema PostgreSQL/CivetWeb authority; incoming
 notifications invalidate local sessions without being forwarded back to peers.
+`Z8ProtobufAuthorityClient` implements the same authority interface over an
+`IZ8AuthorityRpcTransport` supplied by the host. The client validates the
+returned schema and, for authorization, the session ID. The service's `dispatch`
+method routes the corresponding operation to its handler.
 `Z8ProtobufAuthorityNotifier` implements the runtime's user and role notifier
 interfaces and forwards encoded events to a host-provided
 `IZ8AuthorityChangePublisher`. A receiving host dispatches them with

@@ -6,6 +6,7 @@ import z8.authority.messages;
 import z8.authority.notifications;
 import z8.authority.session;
 import z8.protobuf.wire : Z8ProtobufException;
+import z8.authority.transport : Z8AuthorityMethod;
 
 // Transport-neutral authority operations. Implementations must be thread-safe.
 interface IZ8AuthorityEndpoint {
@@ -49,5 +50,14 @@ class Z8ProtobufAuthorityService {
         auto value = z8_decode_authority_change(payload);
         if (value.id is null || value.schema is null || !value.schema.length) throw new Z8ProtobufException("notification requires an ID and schema");
         endpoint.roleChanged(value.id, value.schema); return [];
+    }
+    ubyte[] dispatch(Z8AuthorityMethod method, const(ubyte)[] payload) {
+        switch (method) {
+            case Z8AuthorityMethod.login: return login(payload);
+            case Z8AuthorityMethod.authorize: return authorize(payload);
+            case Z8AuthorityMethod.userChanged: return userChanged(payload);
+            case Z8AuthorityMethod.roleChanged: return roleChanged(payload);
+            default: throw new Z8ProtobufException("unknown authority method");
+        }
     }
 }

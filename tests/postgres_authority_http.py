@@ -88,6 +88,8 @@ import z8.integration.protobuf_postgres_authority;
 import z8.authority.notifications;
 import z8.authority.messages;
 import z8.authority.service;
+import z8.authority.client;
+import z8.authority.transport;
 import z8gen.p_Probe;
 import z8gen.p_CustomUser;
 import std.stdio : writeln, stdout, readln;
@@ -97,6 +99,11 @@ class LoopbackPublisher : IZ8AuthorityChangePublisher {
     Z8SessionManager sessions;
     this(Z8SessionManager sessions) { this.sessions = sessions; }
     void publish(Z8AuthorityChangeKind kind, const(ubyte)[] payload) { z8_apply_authority_change(sessions, kind, payload); }
+}
+class LoopbackRpc : IZ8AuthorityRpcTransport {
+    Z8ProtobufAuthorityService service;
+    this(Z8ProtobufAuthorityService service) { this.service = service; }
+    ubyte[] call(Z8AuthorityMethod method, const(ubyte)[] payload) { return service.dispatch(method, payload); }
 }
 void main(string[] args) {
     alias P = Z8p_50726F6265;
@@ -138,6 +145,11 @@ void main(string[] args) {
     assert(service.userChanged(z8_encode_authority_change(userChange)).length == 0);
     assert(z8_decode_authority_reply(service.authorize(z8_encode_authority_authorize(rpcAuth))).denied);
     assert(remoteSessions.getSession("remote-bob"w) !is null);
+    auto client = new Z8ProtobufAuthorityClient(new LoopbackRpc(service));
+    auto remoteLogin = client.login(loginRequest); assert(remoteLogin !is null && remoteLogin.user.login == "Bob"w);
+    auto remoteRequest = Z8AuthorityAuthorize(remoteLogin.id, "public"w, "test"w);
+    assert(client.authorize(remoteRequest) !is null);
+    client.userChanged(z8_guid_create(85), "public"w); assert(client.authorize(remoteRequest) is null);
     roleChange.schema = "other"w; bool rejected;
     try { service.roleChanged(z8_encode_authority_change(roleChange)); } catch (Exception) { rejected = true; } assert(rejected);
     z8_runtime_set_registry(registry);

@@ -42,6 +42,8 @@ import z8.authority.messages;
 import z8.authority.session;
 import z8.authority.service;
 import z8.authority.notifications;
+import z8.authority.client;
+import z8.authority.transport;
 import z8.protobuf.wire;
 import std.file : read, write;
 import std.path : buildPath;
@@ -56,6 +58,15 @@ class Endpoint : IZ8AuthorityEndpoint {
     Z8ApplicationSession authorize(Z8AuthorityAuthorize request) { return request.sessionId == "wrong"w ? makeSession("other"w) : makeSession(request.sessionId); }
     void userChanged(Z8Guid id, wstring schema) { assert(id == z8_guid_create(42) && schema == "схема"w); ++users; }
     void roleChanged(Z8Guid id, wstring schema) { assert(id == z8_guid_create(42) && schema == "схема"w); ++roles; }
+}
+class Loopback : IZ8AuthorityRpcTransport {
+    Z8ProtobufAuthorityService service;
+    this(Z8ProtobufAuthorityService service) { this.service = service; }
+    ubyte[] call(Z8AuthorityMethod method, const(ubyte)[] payload) { return service.dispatch(method, payload); }
+}
+class Forged : IZ8AuthorityRpcTransport {
+    ubyte[] response;
+    ubyte[] call(Z8AuthorityMethod method, const(ubyte)[] payload) { return response; }
 }
 void main(string[] args) {
     auto dir = args[1];
@@ -96,12 +107,26 @@ void main(string[] args) {
     assert(service.roleChanged(z8_encode_authority_change(change)).length == 0 && endpoint.users == 1 && endpoint.roles == 1);
     change.schema = ""w; rejected = false;
     try { service.userChanged(z8_encode_authority_change(change)); } catch (Z8ProtobufException) { rejected = true; } assert(rejected && endpoint.users == 1);
+    auto client = new Z8ProtobufAuthorityClient(new Loopback(service));
+    loginRequest.password = "ok"w;
+    assert(client.login(loginRequest).user.id == z8_guid_create(42));
+    authRequest.sessionId = "token"w; assert(client.authorize(authRequest).id == "token"w);
+    client.userChanged(z8_guid_create(42), "схема"w); client.roleChanged(z8_guid_create(42), "схема"w);
+    assert(endpoint.users == 2 && endpoint.roles == 2);
+    auto forged = new Forged(); auto forgedClient = new Z8ProtobufAuthorityClient(forged);
+    Z8AuthoritySessionReply badReply; badReply.session = Z8SessionSnapshot("other"w, endpoint.makeSession("token"w));
+    forged.response = z8_encode_authority_reply(badReply); rejected = false;
+    try { forgedClient.login(loginRequest); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
+    badReply.session = Z8SessionSnapshot("схема"w, endpoint.makeSession("other"w)); forged.response = z8_encode_authority_reply(badReply);
+    rejected = false; try { forgedClient.authorize(authRequest); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
+    forged.response = [cast(ubyte)0]; rejected = false;
+    try { forgedClient.userChanged(z8_guid_create(42), "схема"w); } catch (Z8ProtobufException) { rejected = true; } assert(rejected);
 }
 ''', encoding="utf-8")
     exe = temp / ("messages.exe" if os.name == "nt" else "messages")
     modules = ("z8/protobuf/wire.d", "z8/protobuf/guid.d", "z8/authority/file.d", "z8/authority/custom_primary.d",
                "z8/authority/primary.d", "z8/authority/privileges.d", "z8/authority/session.d", "z8/authority/messages.d",
-               "z8/authority/notifications.d", "z8/authority/service.d")
+               "z8/authority/notifications.d", "z8/authority/service.d", "z8/authority/transport.d", "z8/authority/client.d")
     subprocess.run(["dmd", "-I" + str(root / "protocol/source"), *import_args(), str(source),
                     *[str(root / "protocol/source" / module) for module in modules], str(runtime), "-of=" + str(exe)], check=True)
     subprocess.run([str(exe), str(temp), "generate"], cwd=temp, check=True)
