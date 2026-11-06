@@ -7,7 +7,7 @@ import z8.database.query;
 import z8.database.plan : quoteIdentifier;
 
 // Adapter for the request-local BL Connection and Query.setConnection APIs.
-class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection {
+class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection {
     private Z8PostgresConnection connection;
     private wstring schema;
     private Z8RuntimeRegistry registry;
@@ -53,6 +53,8 @@ class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8SequenceConnection {
     }
     // libpq executes immediately, so there is no pending JDBC batch to flush.
     void flush() { if (connection.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed"); }
+    IZ8DatabaseConnection openBackgroundConnection() { return new Z8PostgresDatabase(connection.openSibling(), schema, registry); }
+    void closeBackgroundConnection() { connection.close(); }
     long nextSequence(wstring key, long increment, long defaultValue) {
         key = z8_string_required(key);
         synchronized (connection) {

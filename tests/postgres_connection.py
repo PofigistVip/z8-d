@@ -59,6 +59,13 @@ void main(string[] args) {
     first.execute(`CREATE PROCEDURE pg_temp."Capture"";quote" (bigint, integer, numeric, uuid, bigint, bigint, bytea, text, text, bytea) LANGUAGE plpgsql AS $$ BEGIN INSERT INTO "Calls" VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10); END $$`);
     first.execute(`CREATE PROCEDURE pg_temp."Noop" () LANGUAGE plpgsql AS $$ BEGIN NULL; END $$`);
     auto db1 = new Z8PostgresDatabase(first, "pg_temp"w), db2 = new Z8PostgresDatabase(second, "pg_temp"w);
+    first.execute(`CREATE TABLE public.z8_background_probe (value bigint)`);
+    auto background = cast(IZ8BackgroundDatabaseConnection)db1.openBackgroundConnection();
+    auto backgroundDb = cast(IZ8DatabaseConnection)background;
+    backgroundDb.beginTransaction(); backgroundDb.execute(`INSERT INTO public.z8_background_probe VALUES (3)`w); backgroundDb.rollback();
+    assert(first.execute(`SELECT count(*) FROM public.z8_background_probe`).rows[0][0].text == "0");
+    backgroundDb.execute(`INSERT INTO public.z8_background_probe VALUES (5)`w); background.closeBackgroundConnection();
+    assert(first.execute(`SELECT value FROM public.z8_background_probe`).rows[0][0].text == "5");
     auto previous = z8_connection_set_current(db1);
     auto thread = new Thread({ assert(z8_connection_current_backend() is null); z8_connection_set_current(db2); assert(z8_connection_current_backend() is db2); });
     thread.start(); thread.join(); assert(z8_connection_current_backend() is db1);

@@ -14,6 +14,11 @@ interface IZ8DatabaseConnection {
 interface IZ8SequenceConnection {
     long nextSequence(wstring key, long increment, long defaultValue);
 }
+// A background job owns an independent connection beyond the request lifetime.
+interface IZ8BackgroundDatabaseConnection {
+    IZ8DatabaseConnection openBackgroundConnection();
+    void closeBackgroundConnection();
+}
 private class Z8ConnectionState {
     IZ8DatabaseConnection backend;
     this(IZ8DatabaseConnection backend) { this.backend = backend; }
