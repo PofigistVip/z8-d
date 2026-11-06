@@ -51,6 +51,22 @@ import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.form.Section;
 public class CyclicTable extends Table { Section section; section.controls = {section}; controls = {section}; }
 ''', encoding="utf-8")
+    (source / "SingleAction.bl").write_text('''
+import org.zenframework.z8.base.form.action.Action;
+import org.zenframework.z8.base.query.Query;
+import org.zenframework.z8.base.application.Application;
+public class SingleAction extends Action {
+    virtual protected void execute(guid record, Query context, guid[] selected, Query query) { Application.info("one"); }
+}
+''', encoding="utf-8")
+    (source / "ManyAction.bl").write_text('''
+import org.zenframework.z8.base.form.action.Action;
+import org.zenframework.z8.base.query.Query;
+import org.zenframework.z8.base.application.Application;
+public class ManyAction extends Action {
+    virtual protected void execute(guid[] ids, Query context, guid[] selected, Query query) { Application.info("many"); }
+}
+''', encoding="utf-8")
     (source / "ControlProbe.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.GuidField;
@@ -60,6 +76,8 @@ import org.zenframework.z8.base.form.action.Action;
 public class ControlProbe {
     public static CustomField makeCustom() { CustomField value; return value; }
     public static CustomTable makeTable() { CustomTable value; return value; }
+    public static SingleAction single() { SingleAction value; return value; }
+    public static ManyAction many() { ManyAction value; return value; }
     public static bool verify() {
         StringField field; GuidField key; Table target; Section section; Action action;
         if (field.colSpan != 1 || field.flex != 0 || field.readOnly || field.required || field.editable || field.important) return false;
@@ -128,6 +146,11 @@ void main() {
     assert(meta["controls"][1]["tabs"][0]["colCount"].integer == 1 && meta["controls"][1]["tabs"][0]["controls"][0]["name"].str == "label");
     assert(meta["actions"][0]["name"].str == "publish" && meta["actions"][0]["isAction"].boolean && meta["actions"][0]["type"].str == "primary");
     assert(meta["actions"][0]["request"].str == "CustomTable" && meta["actions"][0]["parameters"].array.length == 0);
+    auto records = new Z8Array!Z8Guid([z8_guid_create(1), z8_guid_create(2)]);
+    auto selectedRecords = new Z8Array!Z8Guid();
+    z8_nonnull(P.m_single()).z8_action_virtual_execute_many(records, table, selectedRecords, table);
+    z8_nonnull(P.m_many()).z8_action_virtual_execute_many(records, table, selectedRecords, table);
+    assert(monitor.messages().length == 3 && monitor.messages()[0].text == "one"w && monitor.messages()[1].text == "one"w && monitor.messages()[2].text == "many"w);
     user.privileges.setFieldAccess(z8_guid_create_name("CustomTable.Label"w), Z8Access.init);
     request = new Z8ApplicationRequest(); monitor = new Z8RequestMonitor(); request.monitor = monitor;
     request.session = new Z8ApplicationSession("test"w, user, user); request.parameters.z8_add("request"w, "CustomTable"w);

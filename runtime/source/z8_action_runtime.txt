@@ -43,6 +43,15 @@ ref T z8_action_type_ref(T)(Z8Object self) {
     return cell.value;
 }
 private Z8Optional!bool* z8_action_use_transaction(Z8Object self) { return &z8_action_state(self).useTransaction; }
+private void z8_action_default_execute_one(Z8Object self, Z8Guid record, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) { z8_nonnull(self); }
+private void z8_action_default_execute_many(Z8Object self, Z8Array!Z8Guid records, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) {
+    z8_nonnull(self); z8_nonnull(records);
+    auto expectedVersion = records.z8_version;
+    for (long i; i < records.z8_size(); ++i) {
+        if (expectedVersion != records.z8_version) throw new Exception("array modified during action execution");
+        self.z8_action_virtual_execute_one(records.z8_get(i), context, selected, query);
+    }
+}
 private void z8_action_write_meta(Z8Object item, Z8Object query, Z8Object context, Z8Privileges privileges) {
     auto state = z8_action_state(item);
     if (state.parameters !is null && state.parameters.view() !is null && state.parameters.view().z8_erased_data().z8_size())
@@ -54,5 +63,9 @@ private void z8_action_write_meta(Z8Object item, Z8Object query, Z8Object contex
     z8_monitor_property(writer, "type"w, state.type is null ? "default"w : state.type.text());
     writer.start('[', "parameters"w); writer.finish(']');
 }
-void z8_bind_builtin_action() { z8_native_bind_field(z8_action_name ~ ".f_useTransaction"w, &z8_action_use_transaction); }
+void z8_bind_builtin_action() {
+    z8_native_bind_field(z8_action_name ~ ".f_useTransaction"w, &z8_action_use_transaction);
+    z8_native_bind(z8_action_name ~ ".m_execute"w, &z8_action_default_execute_one);
+    z8_native_bind(z8_action_name ~ ".m_execute"w, &z8_action_default_execute_many);
+}
 shared static this() { z8_bind_builtin_action(); }

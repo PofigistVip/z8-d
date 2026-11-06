@@ -995,6 +995,16 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 break;
             }
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.form.action.Action"w) {
+            foreach (method; program.methods) if (method.name.text == "execute" && method.returnType == ValueType.voidType && method.parameters.length == 4 &&
+                method.parameters[1].objectClass !is null && method.parameters[3].objectClass !is null && method.parameters[2].type == ValueType.guidArray &&
+                [ValueType.guidArray, ValueType.guidType].canFind(method.parameters[0].type)) {
+                auto many = method.parameters[0].type == ValueType.guidArray;
+                result ~= "override void z8_action_virtual_execute_" ~ (many ? "many(Z8Array!Z8Guid" : "one(Z8Guid") ~
+                    " records, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) { this.m_execute(records, cast(" ~
+                    method.parameters[1].objectClass.emittedName ~ ")context, selected, cast(" ~ method.parameters[3].objectClass.emittedName ~ ")query); }\n";
+            }
+        }
         if (extendsBuiltinPrimary(program)) {
             if (program.isNative) {
                 auto stringBinding = emitRawWStringLiteral(program.nativeName ~ ".m_toString"w);
