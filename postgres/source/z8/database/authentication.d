@@ -53,18 +53,24 @@ class Z8PostgresAuthenticator {
         if (now is null) now = z8_date_now();
         auto ticks = z8_date_ticks(now);
         Z8Object customUser;
+        bool needsHookContext;
         if (registry !is null) foreach (entry; registry.named()) if (entry.name == "User"w) {
             customUser = z8_user_wrap_with_registry(new Z8UserData(), registry);
             break;
         }
+        needsHookContext = customUser !is null;
+        if (registry !is null && !needsHookContext) {
+            foreach (entry; registry.named()) if (entry.name == "SystemUsers"w) { needsHookContext = true; break; }
+            if (!needsHookContext) foreach (entry; registry.tables()) if (entry.name == "SystemUsers"w) { needsHookContext = true; break; }
+        }
         auto previousRequest = z8_application_request();
         auto previousConnection = z8_connection_current_backend();
-        scope(exit) if (customUser !is null) {
+        scope(exit) if (needsHookContext) {
             z8_application_set_request(previousRequest);
             z8_connection_set_current(previousConnection);
         }
-        if (customUser !is null) {
-            auto system = z8_postgres_read_user(db, schema, z8_guid_create(1), registry);
+        if (needsHookContext) {
+            auto system = z8_postgres_read_user(db, schema, z8_guid_create(1), registry, null, false);
             if (system is null) throw new Z8PostgresException("system user is missing");
             auto request = new Z8ApplicationRequest();
             request.session = new Z8ApplicationSession("system"w, system, system);
@@ -74,8 +80,10 @@ class Z8PostgresAuthenticator {
             if (address !is null) request.parameters.z8_add("address"w, address);
             z8_application_set_request(request);
             z8_connection_set_current(new Z8PostgresDatabase(db, schema, registry));
-            try { z8_user_before_load(customUser, login); }
-            catch (Throwable failure) { request.monitor.log(Z8MonitorLevel.error, failure.msg.to!wstring); }
+            if (customUser !is null) {
+                try { z8_user_before_load(customUser, login); }
+                catch (Throwable failure) { request.monitor.log(Z8MonitorLevel.error, failure.msg.to!wstring); }
+            }
         }
         db.beginTransaction();
         try {
@@ -86,14 +94,14 @@ class Z8PostgresAuthenticator {
             if (!rows.rows.length) { db.commit(); return null; }
             if (rows.rows.length != 1) throw new Z8PostgresException("duplicate case-insensitive user login");
             auto row = rows.rows[0];
-            if (row[2].text != "0" || row[3].text.to!long > ticks) { db.commit(); return null; }
             auto id = z8_guid_literal(row[0].text);
             auto key = Z8PostgresParameter.value(row[0].text);
             auto failures = row[4].text.to!long;
-            Z8UserData user;
+            auto loginData = new Z8LoginParametersData(id, login, address, schema);
+            auto user = z8_postgres_read_user(db, schema, id, registry, loginData);
+            if (user is null || row[2].text != "0" || row[3].text.to!long > ticks) { db.commit(); return null; }
             bool accepted;
             if (customUser !is null) {
-                user = z8_postgres_read_user(db, schema, id, registry);
                 z8_user_attach(customUser, user);
                 try { accepted = z8_user_authenticate(customUser, password); }
                 catch (Throwable failure) { z8_application_request().monitor.log(Z8MonitorLevel.error, failure.msg.to!wstring); }
@@ -113,7 +121,6 @@ class Z8PostgresAuthenticator {
                 db.commit(); return null;
             }
             if (failures != 0) db.execute("UPDATE " ~ ns ~ `."SystemUsers" SET "Failed Auth Count" = 0 WHERE "RecordId" = $1::uuid`, [key]);
-            if (user is null) user = z8_postgres_read_user(db, schema, id, registry);
             db.commit();
             if (customUser !is null) {
                 z8_user_attach(customUser, user);

@@ -69,7 +69,7 @@ class Z8PostgresHttpAuthority : IZ8HttpAuthority, IZ8UserChangeNotifier, IZ8Role
         auto address = request is null || request.remoteAddress is null ? null : request.remoteAddress.to!wstring;
         auto user = new Z8PostgresAuthenticator(connection, schema, registry, config, this, this).authenticate(login, password, null, address);
         if (user is null) return null;
-        auto system = z8_postgres_read_user(connection, schema, z8_guid_create(1), registry);
+        auto system = z8_postgres_read_user(connection, schema, z8_guid_create(1), registry, null, false);
         if (system is null) throw new Z8PostgresException("system user is missing");
         return sessions.create(newSessionToken(), user, system, schema);
     }

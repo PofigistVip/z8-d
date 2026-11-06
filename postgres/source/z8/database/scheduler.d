@@ -103,7 +103,7 @@ class Z8PostgresScheduler {
         auto previousConnection = z8_connection_current_backend();
         try {
             auto user = z8_postgres_read_user(db, schema, userId, registry);
-            auto system = z8_postgres_read_user(db, schema, z8_guid_create(1), registry);
+            auto system = z8_postgres_read_user(db, schema, z8_guid_create(1), registry, null, false);
             if (user is null || system is null) throw new Z8PostgresException("scheduled job user does not exist");
             auto request = new Z8ApplicationRequest();
             request.session = new Z8ApplicationSession(""w, user, system); request.monitor = monitor;

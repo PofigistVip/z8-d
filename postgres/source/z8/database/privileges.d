@@ -4,6 +4,7 @@ import std.conv : to;
 import z8.runtime;
 import z8.database.plan : quoteIdentifier;
 import z8.database.postgres;
+import z8.database.connection : Z8PostgresDatabase;
 
 struct Z8LoadedPrivileges {
     Z8Privileges privileges;
@@ -100,7 +101,8 @@ Z8UserEntry[] z8_postgres_load_user_entries(Z8PostgresConnection db, wstring sch
     }
     return result;
 }
-Z8UserData z8_postgres_read_user(Z8PostgresConnection db, wstring schema, Z8Guid id, Z8RuntimeRegistry registry = null) {
+Z8UserData z8_postgres_read_user(Z8PostgresConnection db, wstring schema, Z8Guid id, Z8RuntimeRegistry registry = null,
+                                 Z8LoginParametersData loginParameters = null, bool loadParameters = true) {
     if (db is null || db.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
     if (id is null || id == z8_guid_zero()) return null;
     auto rows = db.execute(`SELECT "Name", "First Name", "Middle Name", "Last Name", "Phone", "Email", ` ~
@@ -119,5 +121,41 @@ Z8UserData z8_postgres_read_user(Z8PostgresConnection db, wstring schema, Z8Guid
     user.entries = z8_postgres_load_user_entries(db, schema, id, registry);
     user.administrator = user.builtinAdministrator;
     foreach (role; user.roles) if (role == z8_guid_literal("DC08CA72-C668-412F-91B7-022F1C82AC09")) user.administrator = true;
+    if (loadParameters && !z8_postgres_user_parameters(db, schema, user, registry, loginParameters)) return null;
     return user;
+}
+
+// Users.readInfo invokes getParameters before returning a user. A standalone
+// host receives a temporary system request; an existing request is preserved.
+private bool z8_postgres_user_parameters(Z8PostgresConnection db, wstring schema, Z8UserData user,
+                                          Z8RuntimeRegistry registry, Z8LoginParametersData login) {
+    if (registry is null) return true;
+    if (login is null) login = new Z8LoginParametersData(user.id, user.login, null, schema);
+    else login = new Z8LoginParametersData(user.id, login.login, login.address, schema);
+    auto previousRequest = z8_application_request();
+    auto previousConnection = z8_connection_current_backend();
+    scope(exit) { z8_application_set_request(previousRequest); z8_connection_set_current(previousConnection); }
+    if (previousRequest is null) {
+        auto system = new Z8UserData(); system.id = z8_guid_create(1); system.login = "System"w;
+        system.builtinSystem = true; system.administrator = true;
+        system.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
+        auto request = new Z8ApplicationRequest(); request.session = new Z8ApplicationSession("system"w, system, system);
+        request.monitor = new Z8RequestMonitor();
+        if (login.login !is null) request.parameters.z8_add("login"w, login.login);
+        if (login.address !is null) request.parameters.z8_add("address"w, login.address);
+        request.parameters.z8_add("schema"w, schema);
+        z8_application_set_request(request);
+    }
+    z8_connection_set_current(new Z8PostgresDatabase(db, schema, registry));
+    try {
+        auto users = registry.newNamedByName("SystemUsers"w);
+        if (users is null) users = registry.newTableByName("SystemUsers"w);
+        if (users is null) return true;
+        return z8_users_extra_parameters(users, login, user.parameters);
+    }
+    catch (Throwable failure) {
+        auto request = z8_application_request();
+        if (request !is null && request.monitor !is null) request.monitor.log(Z8MonitorLevel.error, failure.msg.to!wstring);
+        return user.builtinAdministrator || user.builtinSystem;
+    }
 }
