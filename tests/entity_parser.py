@@ -34,6 +34,7 @@ public class SampleParser extends EntityParser {
 import org.zenframework.z8.base.entity.Entity;
 import org.zenframework.z8.base.entity.Registry;
 import org.zenframework.z8.base.json.JsonObject;
+import org.zenframework.z8.base.json.JsonArray;
 public class ParserProbe {
     public static bool check() {
         SampleParser parser; Registry registry;
@@ -48,14 +49,27 @@ public class ParserProbe {
         if (result.getString("title") != "changed" || parser.writes != 1) return false;
         Entity noEntity = null;
         if (parser.toJson(noEntity) != null) return false;
-        return parser.getEntity() == entity;
+        if (parser.getEntity() != entity) return false;
+        Entity other; other.set("title", "world");
+        Entity[] values = {entity, other};
+        JsonArray encoded = parser.toJson(values);
+        if (encoded.length() != 2 || encoded.getJsonObject(0).getString("title") != "changed" ||
+            encoded.getJsonObject(1).getString("title") != "world") return false;
+        Entity[] decoded = parser.fromJson(encoded);
+        if (decoded.size() != 2 || decoded[0].getString("title") != "changed" ||
+            decoded[1].getString("title") != "world" || parser.reads != 3 || parser.writes != 3) return false;
+        return true;
     }
+    public static bool nullArray(SampleParser parser, JsonArray json) { return parser.fromJson(json).size() == 0; }
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "main.d"
-    harness.write_text('''import z8.runtime; import z8gen.p_ParserProbe;
-void main() { assert(z8_optional_require(Z8p_50617273657250726F6265.m_check())); }
+    harness.write_text('''import z8.runtime; import z8gen.p_ParserProbe; import z8gen.p_SampleParser;
+void main() {
+    assert(z8_optional_require(Z8p_50617273657250726F6265.m_check()));
+    assert(z8_optional_require(Z8p_50617273657250726F6265.m_nullArray(z8_new!Z8p_53616D706C65506172736572(), null)));
+}
 ''', encoding="utf-8")
     executable = temp / ("entity-parser.exe" if os.name == "nt" else "entity-parser")
     args = ["-I" + str(generated), *import_args(), *map(str, generated.rglob("*.d")),

@@ -50,6 +50,24 @@ private Z8Object z8_entity_parser_from_json(Z8Object self, Z8Object json) {
     z8_entity_parser_set_json(self, json); z8_entity_parser_set_entity(self, null);
     return z8_entity_parser_get_entity(z8_nonnull(self.z8_entity_parser_virtual_read()));
 }
+private Z8Object z8_entity_parser_to_json_array(Z8Object self, Z8ObjectArray!Z8Object entities) {
+    z8_entity_parser_state(self);
+    if (entities is null) return null;
+    auto result = z8_native_new(z8_json_array_name);
+    for (long i; i < entities.z8_size(); ++i) {
+        auto value = z8_entity_parser_to_json(self, entities.z8_get(i));
+        if (value is null) z8_json_array_add_primary(result, null);
+        else z8_json_array_add_nested(result, value);
+    }
+    return result;
+}
+private Z8ObjectArray!Z8Object z8_entity_parser_from_json_array(Z8Object self, Z8Object json) {
+    z8_entity_parser_state(self);
+    auto result = new Z8ObjectArray!Z8Object();
+    if (json !is null) for (long i; i < z8_optional_require(z8_json_array_size(json)); ++i)
+        result.z8_add(z8_entity_parser_from_json(self, z8_json_array_get_object(json, z8_optional_wrap(i))));
+    return result;
+}
 void z8_bind_builtin_entity_parser() {
     enum p = z8_entity_parser_name ~ ".m_"w;
     z8_native_bind(p ~ "getRegistry"w, &z8_entity_parser_get_registry); z8_native_bind(p ~ "setRegistry"w, &z8_entity_parser_set_registry);
@@ -59,5 +77,6 @@ void z8_bind_builtin_entity_parser() {
     z8_native_bind(p ~ "read"w, &z8_entity_parser_default_hook); z8_native_bind(p ~ "write"w, &z8_entity_parser_default_hook);
     z8_native_bind(p ~ "newEntity"w, &z8_entity_parser_default_new);
     z8_native_bind(p ~ "toJson"w, &z8_entity_parser_to_json); z8_native_bind(p ~ "fromJson"w, &z8_entity_parser_from_json);
+    z8_native_bind(p ~ "toJson"w, &z8_entity_parser_to_json_array); z8_native_bind(p ~ "fromJson"w, &z8_entity_parser_from_json_array);
 }
 shared static this() { z8_bind_builtin_entity_parser(); }
