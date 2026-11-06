@@ -34,7 +34,7 @@ private void z8_application_query_write_affected(Z8Object query, Z8Object[] sele
         Z8JsonWriterState writer, Z8Privileges privileges, Z8StringMap params) {
     auto key = z8_nonnull(z8_query_primary_key(query));
     foreach (field; z8_query_declared_fields(query, true)) z8_field_reset(field);
-    z8_application_query_context_values(query, privileges, params, true);
+    auto contextFields = z8_application_query_context_values(query, privileges, params, true);
     auto filter = new Z8SqlBool(Z8SqlBoolKind.inVector);
     filter.vectorValue = new Z8SqlFieldToken(key);
     foreach (id; ids) filter.vectorItems ~= new Z8SqlBoxedConstant(z8_primary_box(id));
@@ -42,7 +42,7 @@ private void z8_application_query_write_affected(Z8Object query, Z8Object[] sele
     read.fields = selected; read.where = filter; read.byRecordIds = true;
     z8_query_prepare_read(query, read);
     read.queryScope = z8_query_scope(query);
-    auto saved = new Z8QuerySavedState(query);
+    auto saved = new Z8QuerySavedState(query, contextFields);
     scope(exit) saved.restore();
     z8_query_open(query, read, true, true);
     z8_application_query_write_rows(query, writer, selected);

@@ -88,25 +88,22 @@ private bool z8_application_query_field_readable(Z8Object root, Z8Object field, 
     }
     return check(field);
 }
-private void z8_application_query_context_values(Z8Object query, Z8Privileges privileges, Z8StringMap params, bool apply) {
+private Z8Object[] z8_application_query_context_values(Z8Object query, Z8Privileges privileges, Z8StringMap params, bool apply) {
+    Z8Object[] applied;
     auto contextValues = params.z8_get("values"w);
-    if (contextValues is null || !contextValues.length) return;
+    if (contextValues is null || !contextValues.length) return applied;
     auto parsed = z8_json_parse(contextValues.to!string);
     if (parsed.type == JSONType.array) parsed = parsed.array.length ? parsed.array[0] : JSONValue.init;
-    if (parsed.type == JSONType.null_) return;
+    if (parsed.type == JSONType.null_) return applied;
     if (parsed.type != JSONType.object) throw new Exception("query values must be an object");
-    auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
-    auto key = z8_query_primary_key(query);
     foreach (name, value; parsed.object) {
         auto field = z8_query_find_field_id(query, name.to!wstring);
-        if (field.z8_get_owner() !is query || z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
-            throw new Exception("linked and computed context fields are not supported");
-        auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
-        if (field !is key && !privileges.getFieldAccess(queryKey, fieldKey).read) throw new Exception("query context field access denied");
+        if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("query context field access denied");
         if (z8_field_type_id(field) == "binary"w) continue;
         auto boxed = z8_application_query_parse_value(field, value);
-        if (apply) z8_field_set(field, boxed);
+        if (apply) { z8_field_set(field, boxed); applied ~= field; }
     }
+    return applied;
 }
 
 // Shared by read and mutation responses; field selection is checked before a
@@ -229,7 +226,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     if (privileges is null || !privileges.getTableAccess(queryKey).read) throw new Exception("query read access denied");
     auto key = z8_query_primary_key(query);
     if (key is null) throw new Exception("query has no primary key");
-    z8_application_query_context_values(query, privileges, params, true);
+    auto contextFields = z8_application_query_context_values(query, privileges, params, true);
     if (z8_query_user_events_enabled()) query.z8_query_virtual_onReadAction();
     auto groups = z8_query_array(query, "groupBy"w);
     auto selected = z8_application_query_fields(query, privileges, params, !groups.length);
@@ -434,7 +431,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
             if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();
             throw error;
         }
-        auto saved = new Z8QuerySavedState(query);
+        auto saved = new Z8QuerySavedState(query, contextFields);
         scope(exit) saved.restore();
         z8_query_open(query, read, false, true);
         writer.start('{', "data"w);
@@ -476,7 +473,7 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     }
     // ReadAction's FramedSelect saves changed field values before attaching
     // the cursor, then restores them after writing the rows.
-    auto saved = new Z8QuerySavedState(query);
+    auto saved = new Z8QuerySavedState(query, contextFields);
     scope(exit) saved.restore();
     z8_query_open(query, read, true, true);
     z8_application_query_write_rows(query, writer, selected);

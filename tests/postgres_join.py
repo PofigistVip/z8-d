@@ -80,6 +80,7 @@ import org.zenframework.z8.base.application.Application;
     Form details; details.dependency = customerId; details.controls = {customer.label}; controls = {details};
     virtual protected void onReadAction() {
         if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "group") groupBy = {customer.label};
+        if (Application.requestParameters().containsKey("session") && Application.requestParameters()["session"] == "context-filter") addWhere(customer.label == customer.label.get());
     }
 }
 ''',
@@ -279,7 +280,7 @@ void main(string[] args) {
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     auto session = new Z8ApplicationSession("join"w, user, user);
     auto priorBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "pg_temp"w));
-    wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null, wstring className = "HttpOrder"w, wstring action = "read"w, wstring groupSession = null, wstring having = null) {
+    wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null, wstring className = "HttpOrder"w, wstring action = "read"w, wstring groupSession = null, wstring having = null, wstring values = null) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, className); request.parameters.z8_add("action"w, action); request.parameters.z8_add("fields"w, fields);
         if (filter !is null) request.parameters.z8_add("filter"w, filter);
@@ -288,6 +289,7 @@ void main(string[] args) {
         if (lookupFields !is null) request.parameters.z8_add("lookupFields"w, lookupFields);
         if (groupSession !is null) request.parameters.z8_add("session"w, groupSession);
         if (having !is null) request.parameters.z8_add("having"w, having);
+        if (values !is null) request.parameters.z8_add("values"w, values);
         auto priorRequest = z8_application_set_request(request); scope(exit) z8_application_set_request(priorRequest);
         z8_application_start_response(request, "HttpOrder"w); z8_application_dispatch_request();
         z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
@@ -321,6 +323,15 @@ void main(string[] args) {
     assert(response["data"].array.length == 1 && response["data"][0]["title"].str == "Second");
     response = parseJSON(requestFields(`["title","nameLength"]`w, `{"property":"nameLength","operator":"gt","value":"3"}`w).to!string);
     assert(response["data"].array.length == 1 && response["data"][0]["title"].str == "First" && response["data"][0]["nameLength"].integer == 5);
+    response = parseJSON(requestFields(`["title","customer.label"]`w, null, null, null, null, "HttpOrder"w, "read"w, "context-filter"w, null,
+        `{"customer.label":"Bob"}`w).to!string);
+    assert(response["data"].array.length == 1 && response["data"][0]["title"].str == "Second" && response["data"][0]["customer.label"].str == "Bob", response.toString());
+    response = parseJSON(requestFields(`["customer.label"]`w, null, `[ {"property":"customer.label"} ]`w, null, null, "HttpOrder"w, "read"w, null, null,
+        `{"customer.label":"Changed only for context"}`w).to!string);
+    assert(response["data"].array.length == 2 && response["data"][0]["customer.label"].str == "Alice" && response["data"][1]["customer.label"].str == "Bob", response.toString());
+    response = parseJSON(requestFields(`["nameLength"]`w, null, `[{"property":"nameLength"}]`w, null, null, "HttpOrder"w, "read"w, null, null,
+        `{"nameLength":999}`w).to!string);
+    assert(response["data"].array.length == 2 && response["data"][0]["nameLength"].integer == 3 && response["data"][1]["nameLength"].integer == 5, response.toString());
     response = parseJSON(requestFields(`["title"]`w, null, `[{"property":"nameLength"}]`w).to!string);
     assert(response["data"].array.length == 2 && response["data"][0]["title"].str == "Second");
     response = parseJSON(requestFields(`["customer.label","nameLength"]`w, null, null, null, null, "HttpOrder"w, "read"w, "group"w,
@@ -359,6 +370,7 @@ void main(string[] args) {
     blocked = false; try { requestFields(`["title"]`w, null, null, "alice"w, `["customer.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
     blocked = false; try { requestFields(`["title"]`w, null, null, null, null, "HttpOrder"w, "read"w, "group"w); } catch (Exception) { blocked = true; } assert(blocked);
     blocked = false; try { requestFields(`["title"]`w, null, null, null, null, "HttpOrder"w, "meta"w, "group"w); } catch (Exception) { blocked = true; } assert(blocked);
+    blocked = false; try { requestFields(`["title"]`w, null, null, null, null, "HttpOrder"w, "read"w, null, null, `{"customer.label":"Bob"}`w); } catch (Exception) { blocked = true; } assert(blocked);
     response = parseJSON(requestFields(`["nameLength"]`w).to!string);
     foreach (row; response["data"].array) assert("nameLength" !in row.object);
     blocked = false; try { requestFields(`["title"]`w, `{"property":"nameLength","operator":"gt","value":"3"}`w); } catch (Exception) { blocked = true; } assert(blocked);

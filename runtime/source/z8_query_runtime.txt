@@ -176,12 +176,12 @@ private class Z8QuerySavedState {
     private IZ8QueryCursor cursor;
     private Z8Object[] cursorFields;
     private FieldState[] fields;
-    this(Z8Object query) {
+    this(Z8Object query, Z8Object[] additionalFields = null) {
         this.query = query;
         auto state = z8_query_state(query);
         cursor = state.cursor; cursorFields = state.cursorFields;
         auto all = z8_query_declared_fields(query);
-        foreach (field; cursorFields) {
+        foreach (field; cursorFields ~ additionalFields) {
             bool found;
             foreach (existing; all) if (existing is field) { found = true; break; }
             if (!found) all ~= field;
