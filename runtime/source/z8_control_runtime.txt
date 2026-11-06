@@ -50,6 +50,14 @@ private void z8_source_assign(Z8Object self, Z8Object query) {
         throw new Exception("Source target is not a Query");
     z8_source_state(self).query = query;
 }
+private void z8_control_default_write_meta(Z8Object self, Z8Object writer, Z8Object query, Z8Object context) { z8_nonnull(self); }
+// Writes an override into the current request's open JSON object.
+void z8_control_write_custom_meta(Z8Object self, Z8Object query, Z8Object context) {
+    if (!z8_native_is_instance(z8_control_name, z8_nonnull(self))) throw new Exception("invalid Control object");
+    auto request = z8_application_require_request();
+    if (request.writer.scopes.length < 2) throw new Exception("metadata response object is not open");
+    self.z8_control_virtual_write_meta(z8_application_response_writer(), query, context);
+}
 void z8_bind_builtin_control() {
     enum control = z8_control_name ~ "."w, source = z8_source_name ~ "."w;
     z8_native_bind_field(control ~ "f_colSpan"w, &z8_control_address!"colSpan");
@@ -62,6 +70,7 @@ void z8_bind_builtin_control() {
     z8_native_bind_field(control ~ "f_dependency"w, &z8_control_address!"dependency");
     z8_native_bind_field(control ~ "f_dependsOn"w, &z8_control_address!"dependsOn");
     z8_native_bind_field(control ~ "f_source"w, &z8_control_source_address);
+    z8_native_bind(control ~ "m_writeMeta"w, &z8_control_default_write_meta);
     z8_native_bind_field(source ~ "f_query"w, &z8_source_address!"query");
     z8_native_bind_field(source ~ "f_valueFrom"w, &z8_source_address!"valueFrom");
     z8_native_bind_field(source ~ "f_filterField"w, &z8_source_address!"filterField");

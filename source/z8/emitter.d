@@ -986,6 +986,15 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                     result ~= "override void z8_query_virtual_" ~ method.name.text ~ "(Z8Guid id) { this.m_" ~ method.name.text ~ "(id); }\n";
             }
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.form.Control"w) {
+            foreach (method; program.methods) if (method.name.text == "writeMeta" && method.returnType == ValueType.voidType && method.parameters.length == 3 &&
+                method.parameters[0].objectClass !is null && method.parameters[1].objectClass !is null && method.parameters[2].objectClass !is null) {
+                result ~= "override void z8_control_virtual_write_meta(Z8Object writer, Z8Object query, Z8Object context) { this.m_writeMeta(cast(" ~
+                    method.parameters[0].objectClass.emittedName ~ ")writer, cast(" ~ method.parameters[1].objectClass.emittedName ~ ")query, cast(" ~
+                    method.parameters[2].objectClass.emittedName ~ ")context); }\n";
+                break;
+            }
+        }
         if (extendsBuiltinPrimary(program)) {
             if (program.isNative) {
                 auto stringBinding = emitRawWStringLiteral(program.nativeName ~ ".m_toString"w);

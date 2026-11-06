@@ -126,6 +126,7 @@ class Z8Object {
     void z8_query_virtual_onCreateAction(Z8Guid id) {}
     void z8_query_virtual_onUpdateAction(Z8Guid id) {}
     void z8_query_virtual_onDestroyAction(Z8Guid id) {}
+    void z8_control_virtual_write_meta(Z8Object writer, Z8Object query, Z8Object context) {}
     void z8_query_virtual_onCopy(Z8Guid id) {}
     void z8_query_virtual_beforeRead() {}
     void z8_query_virtual_afterRead() {}
