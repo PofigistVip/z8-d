@@ -5,6 +5,7 @@ import std.string : startsWith;
 import z8.runtime;
 import z8.database.catalog;
 import z8.database.compare;
+import z8.database.metadata : z8_postgres_sync_registry;
 import z8.database.plan : quoteIdentifier;
 import z8.database.postgres : Z8PostgresConnection, Z8PostgresException;
 import z8.database.schema : fieldType, fieldDefault, foreignKeyTarget, z8_postgres_create_table_sql,
@@ -113,7 +114,7 @@ string[] z8_postgres_plan_add_indexes(wstring schema, Z8Object table, Z8Postgres
 }
 
 private string[] applyAdditiveSchema(Z8PostgresConnection db, wstring schema, Z8Object[] tables,
-                                      bool createMissing, Z8RuntimeRegistry registry) {
+                                      bool createMissing, Z8RuntimeRegistry registry, bool syncRegistry) {
     if (db is null || db.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
     if (db.inTransaction()) throw new Z8PostgresException("additive migration requires its own transaction");
     quoteIdentifier(schema);
@@ -155,6 +156,7 @@ private string[] applyAdditiveSchema(Z8PostgresConnection db, wstring schema, Z8
         // foreign keys are enforced. Existing tables and their records are left alone.
         foreach (table; created) z8_postgres_ensure_null_record(db, schema, table);
         foreach (table; created) z8_postgres_apply_static_records(db, schema, table, registry);
+        if (syncRegistry) z8_postgres_sync_registry(db, schema, registry);
         foreach (index, table; tables) {
             auto actual = z8_postgres_describe_table(db, schema, names[index]);
             foreach (sql; z8_postgres_plan_add_indexes(schema, table, actual)) { db.execute(sql); applied ~= sql; }
@@ -173,11 +175,16 @@ private string[] applyAdditiveSchema(Z8PostgresConnection db, wstring schema, Z8
 // Apply only additive changes to existing tables. Statements are returned
 // after a successful transaction; incompatible schemas cause a full rollback.
 string[] z8_postgres_apply_additive_migration(Z8PostgresConnection db, wstring schema, Z8Object[] tables) {
-    return applyAdditiveSchema(db, schema, tables, false, null);
+    return applyAdditiveSchema(db, schema, tables, false, null, false);
 }
 
 // Also create missing tables and seed their null/static records. Roles require
 // the same application registry and access tables as ordinary bootstrap.
 string[] z8_postgres_ensure_additive_schema(Z8PostgresConnection db, wstring schema, Z8Object[] tables, Z8RuntimeRegistry registry = null) {
-    return applyAdditiveSchema(db, schema, tables, true, registry);
+    return applyAdditiveSchema(db, schema, tables, true, registry, false);
+}
+
+package string[] z8_postgres_reconcile_schema(Z8PostgresConnection db, wstring schema, Z8Object[] tables, Z8RuntimeRegistry registry) {
+    if (registry is null) throw new Z8PostgresException("application registry is required");
+    return applyAdditiveSchema(db, schema, tables, true, registry, true);
 }

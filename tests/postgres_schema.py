@@ -862,6 +862,41 @@ void main(string[] args) {
     bootstrapRequest.setEventsLevel(Z8EventsLevel.user);
     auto savedBootstrapRequest = z8_application_set_request(bootstrapRequest);
     z8_postgres_bootstrap_registered(db, "z8_bootstrap"w, bootstrapRegistry, bootstrapTables);
+    db.execute(`CREATE SCHEMA "z8_reconcile"`);
+    auto reconcileRegistry = new Z8RuntimeRegistry();
+    auto reconcileSample = P.m_make(); reconcileRegistry.registerTable(reconcileSample); reconcileRegistry.registerRequest(reconcileSample);
+    reconcileRegistry.registerJob(P.m_dailyJob());
+    Z8Object[] reconcileTables = [P.m_scheduledJobLogs(), P.m_scheduledJobs(), P.m_jobs(), P.m_userRoles(), P.m_userEntries(), P.m_entries(), P.m_roles(), P.m_users(), P.m_sequences(), P.m_systemTables(), P.m_systemFields(),
+        P.m_systemRequests(), P.m_roleTableAccess(), P.m_roleFieldAccess(), P.m_roleRequestAccess(), P.m_target()];
+    auto firstReconcile = z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables);
+    assert(firstReconcile.length != 0 && bootstrapRequest.eventsLevel() == Z8EventsLevel.user && z8_application_request() is bootstrapRequest);
+    auto reconcileJobKey = Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("DailyJob"w)).to!string);
+    assert(db.execute(`SELECT count(*) FROM "z8_reconcile"."SystemScheduledJobs" WHERE "Job" = $1::uuid`, [reconcileJobKey]).rows[0][0].text == "1");
+    db.execute(`UPDATE "z8_reconcile"."SystemScheduledJobs" SET "Cron" = '*/30 * * * *', "Active" = 0 WHERE "Job" = $1::uuid`, [reconcileJobKey]);
+    auto reconcileKey = Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("Sample;--"w)).to!string);
+    assert(db.execute(`SELECT count(*) FROM "z8_reconcile"."SystemTables" WHERE "RecordId" = $1::uuid`, [reconcileKey]).rows[0][0].text == "1");
+    db.execute(`UPDATE "z8_reconcile"."SystemRoleTableAccess" SET "Read" = 0, "Write" = 0 WHERE "Table" = $1::uuid`, [reconcileKey]);
+    db.execute(`ALTER TABLE "z8_reconcile"."Sample;--" DROP COLUMN "Amount"`);
+    reconcileRegistry.registerTable(P.m_statics());
+    db.execute(`ALTER TABLE "z8_reconcile"."SystemTables" ADD CONSTRAINT "reject_new_static" CHECK ("Name" <> 'StaticSample')`);
+    bool reconcileRolledBack;
+    try { z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables); }
+    catch (Z8PostgresException) { reconcileRolledBack = true; }
+    assert(reconcileRolledBack && !db.inTransaction() && bootstrapRequest.eventsLevel() == Z8EventsLevel.user);
+    assert(z8_postgres_describe_table(db, "z8_reconcile"w, "StaticSample"w) is null);
+    foreach (column; z8_postgres_describe_table(db, "z8_reconcile"w, "Sample;--"w).columns) assert(column.name != "Amount");
+    db.execute(`ALTER TABLE "z8_reconcile"."SystemTables" DROP CONSTRAINT "reject_new_static"`);
+    auto secondReconcile = z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables);
+    assert(secondReconcile.length >= 2 && bootstrapRequest.eventsLevel() == Z8EventsLevel.user);
+    assert(db.execute(`SELECT count(*) FROM "z8_reconcile"."StaticSample"`).rows[0][0].text == "3");
+    assert(db.execute(`SELECT count(*) FROM "z8_reconcile"."SystemTables" WHERE "Name" = 'StaticSample'`).rows[0][0].text == "1");
+    assert(db.execute(`SELECT count(*) FROM "z8_reconcile"."SystemRoleTableAccess" WHERE "Table" = $1::uuid AND "Read" <> 0`, [reconcileKey]).rows[0][0].text == "0");
+    auto reconcileSchedule = db.execute(`SELECT "Cron", "Active" FROM "z8_reconcile"."SystemScheduledJobs" WHERE "Job" = $1::uuid`, [reconcileJobKey]);
+    assert(reconcileSchedule.rows[0][0].text == "*/30 * * * *" && reconcileSchedule.rows[0][1].text == "0");
+    assert(z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables).length == 0);
+    auto reconcilePriorRequest = z8_application_set_request(null);
+    assert(z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables).length == 0 && z8_application_request() is null);
+    z8_application_set_request(reconcilePriorRequest);
     auto jobRows = db.execute(`SELECT "RecordId"::text, "Name", "Lock" FROM "z8_bootstrap"."SystemJobs" WHERE "Class" = 'DailyJob'`);
     assert(jobRows.rows.length == 1 && z8_guid_literal(jobRows.rows[0][0].text) == z8_guid_create_name("DailyJob"w));
     assert(jobRows.rows[0][1].text == "Daily task" && jobRows.rows[0][2].text == "3");

@@ -2,6 +2,7 @@ module z8.database.bootstrap;
 
 import z8.runtime;
 import z8.database.metadata : z8_postgres_sync_registry;
+import z8.database.migration : z8_postgres_reconcile_schema;
 import z8.database.plan : quoteIdentifier;
 import z8.database.postgres : Z8PostgresConnection, Z8PostgresException;
 import z8.database.schema;
@@ -11,6 +12,23 @@ import z8.database.schema;
 void z8_postgres_bootstrap_registered(Z8PostgresConnection db, wstring schema, Z8RuntimeRegistry registry, Z8Object[] additionalTables = null) {
     if (registry is null) throw new Z8PostgresException("application registry is required");
     z8_postgres_bootstrap(db, schema, additionalTables ~ registry.newTables(), registry);
+}
+
+// Reconcile registered and platform tables and update the registry atomically.
+// Existing table data and existing permission settings are preserved.
+string[] z8_postgres_reconcile_registered(Z8PostgresConnection db, wstring schema, Z8RuntimeRegistry registry, Z8Object[] additionalTables = null) {
+    if (registry is null) throw new Z8PostgresException("application registry is required");
+    auto request = z8_application_request();
+    auto temporaryRequest = request is null;
+    if (temporaryRequest) {
+        request = new Z8ApplicationRequest(); request.setEventsLevel(Z8EventsLevel.none);
+        z8_application_set_request(request);
+    } else request.setEventsLevel(Z8EventsLevel.system);
+    scope(exit) {
+        if (temporaryRequest) z8_application_set_request(null);
+        else request.restoreEventsLevel();
+    }
+    return z8_postgres_reconcile_schema(db, schema, additionalTables ~ registry.newTables(), registry);
 }
 
 // Bootstrap new tables, built-in records and the additive access metadata in a

@@ -247,7 +247,13 @@ their null and declared static records before adding foreign keys. It leaves
 records in existing tables alone. Both functions return DDL statements after
 commit; record initialization is not included in that list. Creating the Roles
 table requires a registry and its access tables. Registry metadata synchronization
-remains a separate operation.
+remains a separate operation for these two APIs.
+`z8_postgres_reconcile_registered` combines this additive schema update with
+`z8_postgres_sync_registry` in the same transaction. It takes the runtime registry
+and any additional platform tables, creates missing registered tables, and
+updates table, field, request, entry and job metadata. Existing permission
+settings and schedules are preserved; obsolete entries are not removed. The
+returned list contains DDL, not static-record or registry changes.
 
 `z8_postgres_sync_registry` in `z8.database.metadata` inserts or updates the
 registered table, field and request metadata and creates initial access rows
