@@ -254,6 +254,16 @@ occurrence automatically.
 Both scheduler APIs accept optional user and role change notifiers, allowing
 jobs that modify security records to invalidate the authority's sessions.
 
+`Z8PostgresAuthenticator` in `z8.database.authentication` checks a login and
+password against `SystemUsers`, returning a user and privilege snapshot or null
+for denied credentials. It supports the original client-hashed and server-MD5
+password modes, case-insensitive login lookup, permanent and timed bans, and
+optional failed-attempt limits. Concurrent attempts lock the user row; failed
+attempts and timed bans commit even when access is denied. It requires a
+connection without an active transaction. Custom BL authentication hooks,
+trusted login and cross-server session notifications are not yet implemented
+by this password-checking API; the HTTP host must explicitly use it.
+
 `Z8PostgresQueryExecutor` connects BL `Query` reads to PostgreSQL tables.
 Construct it with a connection, schema and root table name, then attach it to
 the generated query with `z8_query_set_executor`. It supports explicit selected
