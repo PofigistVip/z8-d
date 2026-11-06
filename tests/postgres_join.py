@@ -30,8 +30,10 @@ import org.zenframework.z8.base.table.value.StringField;
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.Link;
 import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.table.value.IntExpression;
 [name "Customers"] public class Customer extends Table {
     [name "Label"] public StringField label;
+    public IntExpression labelLength = label.sql_string().length();
     public City city; [name "CityId"] public Link cityId = city;
 }
 ''',
@@ -247,6 +249,7 @@ public class Probe {
     public static void readAggregateLinkedSorted(AggregateOrder order) { Field[] fields = {order.customer.label, order.amount}; Field[] sort = {order.customer.label}; order.read(fields, sort); }
     public static void readAggregateSortOnly(AggregateOrder order) { Field[] fields = {order.amount}; Field[] sort = {order.customer.label}; order.read(fields, sort); }
     public static void readAggregateNested(AggregateOrder order) { Field[] fields = {order.customer.city.label}; order.read(fields); }
+    public static void readAggregateExpression(AggregateOrder order) { Field[] fields = {order.customer.labelLength, order.amount}; Field[] sort = {order.customer.labelLength}; order.read(fields, sort); }
     public static int aggregateCount(AggregateOrder order) { return order.count(); }
     public static int aggregateAlice(AggregateOrder order) { return order.count(order.customer.label == "Alice"); }
     public static bool nextAggregate(AggregateOrder order) { return order.next(); }
@@ -256,6 +259,7 @@ public class Probe {
     public static void aggregateHavingName(AggregateOrder order) { order.addHaving(order.customer.label == "Alice"); }
     public static string aggregateName(AggregateOrder order) { return order.customer.label.get(); }
     public static string aggregateCity(AggregateOrder order) { return order.customer.city.label.get(); }
+    public static int aggregateLabelLength(AggregateOrder order) { return order.customer.labelLength.get(); }
     public static Field aggregateNameField(AggregateOrder order) { return order.customer.label; }
     public static void readAggregateLeft(AggregateLeftOrder order) { Field[] fields = {order.customer.label, order.amount}; order.read(fields); }
     public static bool nextAggregateLeft(AggregateLeftOrder order) { return order.next(); }
@@ -368,6 +372,10 @@ void main(string[] args) {
     assert(z8_optional_require(P.m_nextAggregate(aggregate)) && z8_optional_require(P.m_aggregateAmount(aggregate)) == 7);
     P.m_readAggregateAverage(aggregate);
     assert(z8_optional_require(P.m_nextAggregate(aggregate)) && z8_optional_require(P.m_aggregateAmount(aggregate)) == 5);
+    assert(!z8_optional_require(P.m_nextAggregate(aggregate)));
+    P.m_readAggregateExpression(aggregate);
+    assert(z8_optional_require(P.m_nextAggregate(aggregate)) && z8_optional_require(P.m_aggregateLabelLength(aggregate)) == 3 && z8_optional_require(P.m_aggregateAmount(aggregate)) == 7);
+    assert(z8_optional_require(P.m_nextAggregate(aggregate)) && z8_optional_require(P.m_aggregateLabelLength(aggregate)) == 5 && z8_optional_require(P.m_aggregateAmount(aggregate)) == 5);
     assert(!z8_optional_require(P.m_nextAggregate(aggregate)));
     P.m_readAggregateLinked(aggregate); int linkedAggregateRows;
     while (z8_optional_require(P.m_nextAggregate(aggregate))) { assert(P.m_aggregateName(aggregate).length); ++linkedAggregateRows; }
@@ -501,14 +509,21 @@ void main(string[] args) {
     assert(aggregateResponse["data"].array.length == 2);
     assert(aggregateResponse["data"][0]["customer.label"].str == "Alice" && aggregateResponse["data"][0]["amount"].integer == 10);
     assert(aggregateResponse["data"][1]["customer.label"].str == "Bob" && aggregateResponse["data"][1]["amount"].integer == 7);
+    aggregateResponse = parseJSON(requestFields(`["customer.labelLength","amount"]`w, null, `[{"property":"customer.labelLength"}]`w, null, null, "AggregateOrder"w).to!string);
+    assert(aggregateResponse["data"].array.length == 2 && aggregateResponse["data"][0]["customer.labelLength"].integer == 3 && aggregateResponse["data"][1]["customer.labelLength"].integer == 5);
     aggregateResponse = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "AggregateOrder"w, "read"w, null,
         `{"property":"amount","operator":"gt","value":"9"}`w).to!string);
     assert(aggregateResponse["data"].array.length == 1 && aggregateResponse["data"][0]["customer.label"].str == "Alice");
     aggregateResponse = parseJSON(requestFields(`["amount"]`w, null, null, null, null, "AggregateOrder"w, "read"w, null,
         `{"property":"customer.label","value":"Alice"}`w).to!string);
     assert(aggregateResponse["data"].array.length == 1 && aggregateResponse["data"][0]["amount"].integer == 10);
+    aggregateResponse = parseJSON(requestFields(`["amount"]`w, null, null, null, null, "AggregateOrder"w, "read"w, null,
+        `{"property":"customer.labelLength","operator":"gt","value":"3"}`w).to!string);
+    assert(aggregateResponse["data"].array.length == 1 && aggregateResponse["data"][0]["amount"].integer == 10);
     auto totalResponse = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "AggregateOrder"w, "read"w, null, null, null, "true"w).to!string);
     assert(totalResponse["data"]["amount"].integer == 17);
+    totalResponse = parseJSON(requestFields(`["customer.labelLength","amount"]`w, null, null, null, null, "AggregateOrder"w, "read"w, null, null, null, "true"w).to!string);
+    assert(totalResponse["data"]["customer.labelLength"].integer == 8 && totalResponse["data"]["amount"].integer == 17);
     totalResponse = parseJSON(requestFields(`["amount"]`w, null, null, null, null, "AggregateOrder"w, "read"w, null,
         `{"property":"amount","operator":"gt","value":"9"}`w, null, "true"w).to!string);
     assert(totalResponse["data"]["amount"].integer == 21);
@@ -603,6 +618,10 @@ void main(string[] args) {
     blocked = false; try { requestFields(`["customer.city.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     user.privileges.setFieldAccess(z8_guid_create_name("Customers.Label"w), denied);
+    aggregateBlocked = false;
+    try { requestFields(`["amount"]`w, null, null, null, null, "AggregateOrder"w, "read"w, null,
+        `{"property":"customer.labelLength","operator":"gt","value":"3"}`w); } catch (Exception) { aggregateBlocked = true; }
+    assert(aggregateBlocked);
     response = parseJSON(requestFields(`["customer.label"]`w).to!string);
     foreach (row; response["data"].array) assert("customer.label" !in row.object);
     linkedMeta = parseJSON(requestFields(`["customer.label"]`w, null, null, null, null, "HttpOrder"w, "meta"w).to!string);
