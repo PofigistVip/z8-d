@@ -26,9 +26,7 @@ class Z8ProtobufPostgresAuthority : IZ8AuthorityEndpoint, IZ8AuthorityInvalidati
     Z8ApplicationSession trustedLogin(Z8AuthorityTrustedLogin request) {
         if (!allowTrustedLogin) throw new Z8ProtobufException("trusted login is disabled");
         if (request.schema != authority.databaseSchema()) return null;
-        auto session = authority.trustedLogin(request.userId, request.login, request.address);
-        if (session is null && request.createIfMissing) throw new Z8ProtobufException("trusted user creation is not implemented");
-        return session;
+        return authority.trustedLogin(request.userId, request.login, request.address, request.createIfMissing);
     }
     Z8ApplicationSession authorize(Z8AuthorityAuthorize request) {
         if (request.schema != authority.databaseSchema()) return null;

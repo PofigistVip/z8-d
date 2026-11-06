@@ -40,14 +40,24 @@ import org.zenframework.z8.base.application.Application;
     bool hasAddress;
     virtual protected void onBeforeLoad(string input) { hasAddress = Application.requestParameters().containsKey("address"); }
     virtual protected bool authenticate(string password) { return login == "Bob" && password == "override" && hasAddress; }
-    virtual protected void onLoad() { parameters.add("custom", true); }
+    virtual protected void onLoad() { parameters.add("custom", true); parameters.add("plainPasswordVisible", Application.requestParameters().containsKey("plainPassword")); }
 }
 ''', encoding="utf-8")
     (source / "CustomUsers.bl").write_text('''
 import org.zenframework.z8.base.table.system.Users;
 import org.zenframework.z8.base.security.LoginParameters;
+import org.zenframework.z8.base.application.Application;
 public class CustomUsers extends Users {
+    virtual protected void beforeCreate(guid id) {
+        if (name.get() == "New Trusted") {
+            if (!Application.requestParameters().containsKey("plainPassword")) throw "missing one-time password";
+            firstName = "hook-ok";
+        }
+        if (name.get() == "Banned New") banned = true;
+        if (name.get() == "Rejected New") throw "rejected by hook";
+    }
     virtual protected bool getParameters(LoginParameters login, primary[string] parameters) {
+        if (login.login() == "Denied New") return false;
         parameters.add("tenant", login.schema()); return true;
     }
 }
@@ -106,6 +116,7 @@ import z8gen.p_CustomUsers;
 import std.stdio : writeln, stdout, readln;
 import std.string : strip;
 import std.conv : to;
+import core.thread : Thread;
 class LoopbackPublisher : IZ8AuthorityChangePublisher {
     Z8SessionManager sessions;
     this(Z8SessionManager sessions) { this.sessions = sessions; }
@@ -164,9 +175,32 @@ void main(string[] args) {
     trustedRequest.userId = null; trustedRequest.login = "bob"w; trustedRequest.createIfMissing = true;
     assert(trustedClient.trustedLogin(trustedRequest) !is null);
     trustedRequest.schema = "other"w; assert(trustedClient.trustedLogin(trustedRequest) is null);
-    trustedRequest.schema = "public"w; trustedRequest.login = "missing"w; bool trustedCreateRejected;
-    try { trustedClient.trustedLogin(trustedRequest); } catch (Exception) { trustedCreateRejected = true; }
-    assert(trustedCreateRejected);
+    trustedRequest.schema = "public"w; trustedRequest.login = "New Trusted"w;
+    auto createdSession = trustedClient.trustedLogin(trustedRequest);
+    assert(createdSession !is null && createdSession.user.login == "New Trusted"w && createdSession.user.firstName == "hook-ok"w);
+    assert(!z8_optional_require(z8_primary_cast!bool(createdSession.user.parameters.z8_get("plainPasswordVisible"w))));
+    auto createdRow = connection.execute(`SELECT "Password", "Change Password" FROM "SystemUsers" WHERE "Name" = 'New Trusted'`);
+    assert(createdRow.rows.length == 1 && createdRow.rows[0][0].text.length == 32 && createdRow.rows[0][0].text != "d41d8cd98f00b204e9800998ecf8427e" && createdRow.rows[0][1].text == "1");
+    trustedRequest.login = "Denied New"w;
+    assert(trustedClient.trustedLogin(trustedRequest) is null);
+    assert(connection.execute(`SELECT count(*) FROM "SystemUsers" WHERE "Name" = 'Denied New'`).rows[0][0].text == "0");
+    trustedRequest.login = "Banned New"w;
+    assert(trustedClient.trustedLogin(trustedRequest) is null);
+    assert(connection.execute(`SELECT count(*) FROM "SystemUsers" WHERE "Name" = 'Banned New'`).rows[0][0].text == "0");
+    trustedRequest.login = "Rejected New"w; bool creationHookRejected;
+    try { trustedClient.trustedLogin(trustedRequest); } catch (Exception) { creationHookRejected = true; }
+    assert(creationHookRejected && connection.execute(`SELECT count(*) FROM "SystemUsers" WHERE "Name" = 'Rejected New'`).rows[0][0].text == "0");
+    trustedRequest.userId = z8_guid_create(99999); trustedRequest.login = "Requested ID"w; bool missingIdRejected;
+    try { trustedClient.trustedLogin(trustedRequest); } catch (Exception) { missingIdRejected = true; }
+    assert(missingIdRejected);
+    trustedRequest.userId = z8_guid_create(85); trustedRequest.login = null;
+    assert(trustedClient.trustedLogin(trustedRequest) !is null);
+    Z8ApplicationSession concurrentA, concurrentB; string concurrentErrorA, concurrentErrorB;
+    auto workerA = new Thread({ try { concurrentA = trustedClient.trustedLogin(Z8AuthorityTrustedLogin(null, "Concurrent"w, "public"w, null, true)); } catch (Throwable error) { concurrentErrorA = error.msg; } });
+    auto workerB = new Thread({ try { concurrentB = trustedClient.trustedLogin(Z8AuthorityTrustedLogin(null, "cOnCuRrEnT"w, "public"w, null, true)); } catch (Throwable error) { concurrentErrorB = error.msg; } });
+    workerA.start(); workerB.start(); workerA.join(); workerB.join();
+    assert(!concurrentErrorA.length && !concurrentErrorB.length && concurrentA !is null && concurrentB !is null && concurrentA.user.id == concurrentB.user.id);
+    assert(connection.execute(`SELECT count(*) FROM "SystemUsers" WHERE lower("Name") = 'concurrent'`).rows[0][0].text == "1");
     auto loginRequest = Z8AuthorityLogin("Bob"w, "override"w, "public"w, "10.0.0.1"w);
     auto rpcLogin = z8_decode_authority_reply(service.login(z8_encode_authority_login(loginRequest)));
     assert(!rpcLogin.denied && rpcLogin.session.session.user.login == "Bob"w);

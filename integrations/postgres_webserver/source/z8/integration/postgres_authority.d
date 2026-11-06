@@ -71,11 +71,12 @@ class Z8PostgresHttpAuthority : IZ8HttpAuthority, IZ8HttpSessionLogout, IZ8UserC
         return issueSession(connection, user);
     }
     // This method is for an already authorized trusted caller, not public HTTP.
-    Z8ApplicationSession trustedLogin(Z8Guid id, wstring login = null, wstring address = null) {
+    Z8ApplicationSession trustedLogin(Z8Guid id, wstring login = null, wstring address = null, bool createIfMissing = false) {
         sessions.check(z8_date_ticks(z8_date_now()));
         auto connection = source.openSibling();
         scope(exit) connection.close();
-        auto user = new Z8PostgresAuthenticator(connection, schema, registry, config, this, this).authenticateTrusted(id, login, null, address);
+        auto oneTimePassword = createIfMissing ? newSessionToken()[0 .. 32] : null;
+        auto user = new Z8PostgresAuthenticator(connection, schema, registry, config, this, this).authenticateTrusted(id, login, null, address, createIfMissing, oneTimePassword);
         return issueSession(connection, user);
     }
     private Z8ApplicationSession issueSession(Z8PostgresConnection connection, Z8UserData user) {

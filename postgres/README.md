@@ -312,7 +312,12 @@ without checking a password; it still applies bans, user hooks and additional
 parameter checks. Only a host that has authenticated and authorized the caller
 may invoke it. The protobuf authority adapter can expose this capability only
 when explicitly enabled by its host; peer authorization remains the transport's
-responsibility. It does not create missing users or expose an HTTP endpoint.
+responsibility. A caller may request creation by login and provide a one-time
+password; the PostgreSQL authority generates it from the operating system's
+secure random source. Creation runs the BL Users hooks and rolls back if the
+new user is denied or banned. Concurrent cooperating requests for the same
+login are serialized. Supplying an explicit missing user ID for creation is
+rejected. Trusted login is not exposed as a public HTTP endpoint.
 A network transport for cross-server notifications is still pending.
 The optional `z8.integration.postgres_authority`
 module connects it to CivetWeb.

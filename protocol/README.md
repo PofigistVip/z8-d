@@ -49,9 +49,11 @@ method routes the corresponding operation to its handler.
 `TrustedLogin` resolves an existing user by ID or login without a password and
 returns a normal session. The PostgreSQL adapter disables this operation by
 default; its host must explicitly enable it and authorize the calling peer for
-passwordless login at the transport boundary. User creation for an absent user
-is not yet implemented. The service and client both verify an explicitly
-requested user ID in the returned session.
+passwordless login at the transport boundary. With `create_if_missing`, an
+unknown login can create a user through the BL Users lifecycle using a random
+one-time password; creation by a missing explicit user ID is rejected. The
+service and client both verify an explicitly requested user ID in the returned
+session.
 Logout is an optional `IZ8AuthorityLogout` capability. Its request requires a
 session ID and schema; the PostgreSQL adapter rejects a different schema and
 revokes the matching session. Unknown or already revoked IDs are harmless.
