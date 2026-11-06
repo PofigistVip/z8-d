@@ -18,6 +18,11 @@ message AuthorizeRequest {
   optional string server_id = 3;
 }
 
+message LogoutRequest {
+  string session_id = 1;
+  string schema = 2;
+}
+
 message SessionReply {
   oneof result {
     SessionSnapshot session = 1;
@@ -31,6 +36,7 @@ message Empty {}
 service Authority {
   rpc Login(LoginRequest) returns (SessionReply);
   rpc Authorize(AuthorizeRequest) returns (SessionReply);
+  rpc Logout(LogoutRequest) returns (Empty);
   rpc UserChanged(.z8.authority.v1.UserChanged) returns (Empty);
   rpc RoleChanged(.z8.authority.v1.RoleChanged) returns (Empty);
   rpc ApplyUserChanged(.z8.authority.v1.UserChanged) returns (Empty);

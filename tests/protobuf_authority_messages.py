@@ -9,7 +9,8 @@ from runtime_support import import_args, runtime_library
 root = Path(__file__).resolve().parents[1]
 schema = (root / "protocol/proto/z8/authority/v1/service.proto").read_text(encoding="utf-8")
 for declaration in ("optional string password = 2;", "SessionSnapshot session = 1;", "bool access_denied = 2;",
-                    "rpc Login(LoginRequest) returns (SessionReply);", "rpc Authorize(AuthorizeRequest) returns (SessionReply);"):
+                    "rpc Login(LoginRequest) returns (SessionReply);", "rpc Authorize(AuthorizeRequest) returns (SessionReply);",
+                    "rpc Logout(LogoutRequest) returns (Empty);"):
     assert declaration in schema
 session_file = descriptor_pb2.FileDescriptorProto(name="z8/authority/v1/session.proto", package="z8.authority.v1", syntax="proto3")
 session = session_file.message_type.add(name="SessionSnapshot")
@@ -26,12 +27,15 @@ authorize = file.message_type.add(name="AuthorizeRequest")
 authorize.field.add(name="session_id", number=1, label=1, type=9); authorize.field.add(name="schema", number=2, label=1, type=9)
 authorize.oneof_decl.add(name="_server_id")
 authorize.field.add(name="server_id", number=3, label=1, type=9, proto3_optional=True, oneof_index=0)
+logout = file.message_type.add(name="LogoutRequest")
+logout.field.add(name="session_id", number=1, label=1, type=9); logout.field.add(name="schema", number=2, label=1, type=9)
 reply = file.message_type.add(name="SessionReply"); reply.oneof_decl.add(name="result")
 reply.field.add(name="session", number=1, label=1, type=11, type_name=".z8.authority.v1.SessionSnapshot", oneof_index=0)
 reply.field.add(name="access_denied", number=2, label=1, type=8, oneof_index=0)
 pool = descriptor_pool.DescriptorPool(); pool.Add(session_file); pool.Add(file)
 Login = message_factory.GetMessageClass(pool.FindMessageTypeByName("z8.authority.v1.LoginRequest"))
 Authorize = message_factory.GetMessageClass(pool.FindMessageTypeByName("z8.authority.v1.AuthorizeRequest"))
+Logout = message_factory.GetMessageClass(pool.FindMessageTypeByName("z8.authority.v1.LogoutRequest"))
 Reply = message_factory.GetMessageClass(pool.FindMessageTypeByName("z8.authority.v1.SessionReply"))
 
 with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
@@ -47,8 +51,8 @@ import z8.authority.transport;
 import z8.protobuf.wire;
 import std.file : read, write;
 import std.path : buildPath;
-class Endpoint : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink {
-    int users, roles, appliedUsers, appliedRoles;
+class Endpoint : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink, IZ8AuthorityLogout {
+    int users, roles, appliedUsers, appliedRoles, logouts;
     Z8ApplicationSession makeSession(wstring id) {
         auto user = new Z8UserData(); user.id = z8_guid_create(42); user.privileges = new Z8Privileges();
         auto system = new Z8UserData(); system.id = z8_guid_create(1); system.privileges = new Z8Privileges();
@@ -56,6 +60,7 @@ class Endpoint : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink {
     }
     Z8ApplicationSession login(Z8AuthorityLogin request) { return request.password == "ok"w ? makeSession("token"w) : null; }
     Z8ApplicationSession authorize(Z8AuthorityAuthorize request) { return request.sessionId == "wrong"w ? makeSession("other"w) : makeSession(request.sessionId); }
+    void logout(Z8AuthorityLogout request) { assert(request.sessionId == "token"w && request.schema == "схема"w); ++logouts; }
     void userChanged(Z8Guid id, wstring schema) { assert(id == z8_guid_create(42) && schema == "схема"w); ++users; }
     void roleChanged(Z8Guid id, wstring schema) { assert(id == z8_guid_create(42) && schema == "схема"w); ++roles; }
     void applyUserChanged(Z8Guid id, wstring schema) { assert(id == z8_guid_create(42) && schema == "схема"w); ++appliedUsers; }
@@ -75,6 +80,7 @@ void main(string[] args) {
     if (args[2] == "generate") {
         write(buildPath(dir, "d-login.bin"), z8_encode_authority_login(Z8AuthorityLogin("Alice"w, ""w, "схема"w, "127.0.0.1"w)));
         write(buildPath(dir, "d-authorize.bin"), z8_encode_authority_authorize(Z8AuthorityAuthorize("token"w, "схема"w, ""w)));
+        write(buildPath(dir, "d-logout.bin"), z8_encode_authority_logout(Z8AuthorityLogout("token"w, "схема"w)));
         auto user = new Z8UserData(); user.id = z8_guid_create(42); user.privileges = new Z8Privileges();
         auto system = new Z8UserData(); system.id = z8_guid_create(1); system.privileges = new Z8Privileges();
         Z8AuthoritySessionReply reply; reply.session = Z8SessionSnapshot("схема"w, new Z8ApplicationSession("token"w, user, system));
@@ -87,6 +93,8 @@ void main(string[] args) {
     assert(login.login == "Alice"w && login.schema == "схема"w && login.password !is null && !login.password.length && login.address is null);
     auto request = z8_decode_authority_authorize(cast(const(ubyte)[])read(buildPath(dir, "authorize.bin")));
     assert(request.sessionId == "token"w && request.schema == "схема"w && request.serverId !is null && !request.serverId.length);
+    auto logoutRequest = z8_decode_authority_logout(cast(const(ubyte)[])read(buildPath(dir, "logout.bin")));
+    assert(logoutRequest.sessionId == "token"w && logoutRequest.schema == "схема"w);
     auto reply = z8_decode_authority_reply(cast(const(ubyte)[])read(buildPath(dir, "reply.bin")));
     assert(!reply.denied && reply.session.session.id == "token"w && reply.session.session.user.id == z8_guid_create(42));
     assert(z8_decode_authority_reply(cast(const(ubyte)[])read(buildPath(dir, "denied.bin"))).denied);
@@ -113,6 +121,8 @@ void main(string[] args) {
     loginRequest.password = "ok"w;
     assert(client.login(loginRequest).user.id == z8_guid_create(42));
     authRequest.sessionId = "token"w; assert(client.authorize(authRequest).id == "token"w);
+    client.logout(Z8AuthorityLogout("token"w, "схема"w)); assert(endpoint.logouts == 1);
+    rejected = false; try { client.logout(Z8AuthorityLogout(""w, "схема"w)); } catch (Z8ProtobufException) { rejected = true; } assert(rejected && endpoint.logouts == 1);
     client.userChanged(z8_guid_create(42), "схема"w); client.roleChanged(z8_guid_create(42), "схема"w);
     assert(endpoint.users == 2 && endpoint.roles == 2);
     auto peer = new Z8ProtobufAuthorityPeerNotifier(client);
@@ -139,12 +149,16 @@ void main(string[] args) {
     assert decoded_login.login == "Alice" and decoded_login.schema == "схема" and decoded_login.HasField("password") and decoded_login.password == ""
     decoded_authorize = Authorize.FromString((temp / "d-authorize.bin").read_bytes())
     assert decoded_authorize.session_id == "token" and decoded_authorize.HasField("server_id") and decoded_authorize.server_id == ""
+    decoded_logout = Logout.FromString((temp / "d-logout.bin").read_bytes())
+    assert decoded_logout.session_id == "token" and decoded_logout.schema == "схема"
     decoded_reply = Reply.FromString((temp / "d-reply.bin").read_bytes())
     assert decoded_reply.WhichOneof("result") == "session" and decoded_reply.session.session_id == "token"
     assert Reply.FromString((temp / "d-denied.bin").read_bytes()).access_denied
     (temp / "login.bin").write_bytes(Login(login="Alice", password="", schema="схема").SerializeToString())
     (temp / "missing-password.bin").write_bytes(Login(login="Alice", schema="схема").SerializeToString())
     (temp / "authorize.bin").write_bytes(Authorize(session_id="token", schema="схема", server_id="").SerializeToString())
+    # Unknown length-delimited fields need not contain UTF-8.
+    (temp / "logout.bin").write_bytes(Logout(session_id="token", schema="схема").SerializeToString() + b"\x1a\x01\xff")
     # A later oneof member overrides an earlier one; preserve unknown session fields.
     (temp / "reply.bin").write_bytes(Reply(access_denied=False).SerializeToString() + decoded_reply.SerializeToString())
     (temp / "denied.bin").write_bytes(Reply(access_denied=False).SerializeToString())

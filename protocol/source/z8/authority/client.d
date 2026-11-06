@@ -4,11 +4,11 @@ import z8.runtime : Z8ApplicationSession, Z8Guid, IZ8UserChangeNotifier, IZ8Role
 import z8.authority.custom_primary;
 import z8.authority.messages;
 import z8.authority.notifications;
-import z8.authority.service : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink;
+import z8.authority.service : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink, IZ8AuthorityLogout;
 import z8.authority.transport;
 import z8.protobuf.wire;
 
-class Z8ProtobufAuthorityClient : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink, IZ8UserChangeNotifier, IZ8RoleChangeNotifier {
+class Z8ProtobufAuthorityClient : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink, IZ8AuthorityLogout, IZ8UserChangeNotifier, IZ8RoleChangeNotifier {
     private IZ8AuthorityRpcTransport transport;
     private Z8CustomPrimaryRegistry custom;
     this(IZ8AuthorityRpcTransport transport, Z8CustomPrimaryRegistry custom = null) {
@@ -29,14 +29,19 @@ class Z8ProtobufAuthorityClient : IZ8AuthorityEndpoint, IZ8AuthorityInvalidation
     Z8ApplicationSession authorize(Z8AuthorityAuthorize request) {
         return sessionReply(transport.call(Z8AuthorityMethod.authorize, z8_encode_authority_authorize(request)), request.schema, request.sessionId);
     }
+    private void emptyReply(ubyte[] reply) {
+        if (reply.length > 1024 * 1024) throw new Z8ProtobufException("authority response exceeds size limit");
+        auto reader = Z8ProtobufReader(reply);
+        while (!reader.empty()) { uint field, wire; reader.tag(field, wire); reader.skip(field, wire); }
+    }
+    void logout(Z8AuthorityLogout request) {
+        emptyReply(transport.call(Z8AuthorityMethod.logout, z8_encode_authority_logout(request)));
+    }
     private void changed(Z8AuthorityMethod method, Z8Guid id, wstring schema) {
         if (id is null || schema is null || !schema.length) throw new Z8ProtobufException("notification requires an ID and schema");
         Z8AuthorityChange change; change.id = id; change.schema = schema;
         auto reply = transport.call(method, z8_encode_authority_change(change));
-        if (reply.length > 1024 * 1024) throw new Z8ProtobufException("authority response exceeds size limit");
-        // Empty messages may carry unknown fields and must still be well formed.
-        auto reader = Z8ProtobufReader(reply);
-        while (!reader.empty()) { uint field, wire; reader.tag(field, wire); reader.skip(field, wire); }
+        emptyReply(reply);
     }
     void userChanged(Z8Guid id, wstring schema) { changed(Z8AuthorityMethod.userChanged, id, schema); }
     void roleChanged(Z8Guid id, wstring schema) { changed(Z8AuthorityMethod.roleChanged, id, schema); }

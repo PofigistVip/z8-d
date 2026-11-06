@@ -7,6 +7,7 @@ import z8.protobuf.wire;
 
 struct Z8AuthorityLogin { wstring login, password, schema, address; }
 struct Z8AuthorityAuthorize { wstring sessionId, schema, serverId; }
+struct Z8AuthorityLogout { wstring sessionId, schema; }
 struct Z8AuthoritySessionReply { bool denied; Z8SessionSnapshot session; }
 
 private wstring readText(const(ubyte)[] bytes) {
@@ -61,6 +62,22 @@ Z8AuthorityAuthorize z8_decode_authority_authorize(const(ubyte)[] data) {
         if (wire == 2 && field >= 1 && field <= 3) {
             auto value = readText(reader.bytes());
             if (field == 1) result.sessionId = value; else if (field == 2) result.schema = value; else result.serverId = value;
+        } else reader.skip(field, wire);
+    }
+    if (result.sessionId is null || !result.sessionId.length || result.schema is null || !result.schema.length)
+        throw new Z8ProtobufException("session ID and schema are required");
+    return result;
+}
+ubyte[] z8_encode_authority_logout(Z8AuthorityLogout value) {
+    return z8_encode_authority_authorize(Z8AuthorityAuthorize(value.sessionId, value.schema, null));
+}
+Z8AuthorityLogout z8_decode_authority_logout(const(ubyte)[] data) {
+    checkedSize(data.length); auto reader = Z8ProtobufReader(data); Z8AuthorityLogout result;
+    while (!reader.empty()) {
+        uint field, wire; reader.tag(field, wire);
+        if (wire == 2 && field >= 1 && field <= 2) {
+            auto value = readText(reader.bytes());
+            if (field == 1) result.sessionId = value; else result.schema = value;
         } else reader.skip(field, wire);
     }
     if (result.sessionId is null || !result.sessionId.length || result.schema is null || !result.schema.length)

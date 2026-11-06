@@ -20,6 +20,8 @@ interface IZ8AuthorityInvalidationSink {
     void applyUserChanged(Z8Guid id, wstring schema);
     void applyRoleChanged(Z8Guid id, wstring schema);
 }
+// Optional capability so existing authority implementations need not support logout.
+interface IZ8AuthorityLogout { void logout(Z8AuthorityLogout request); }
 
 // A transport authenticates the peer and maps its RPC methods to these calls.
 // A null session is an ordinary denial; malformed messages throw.
@@ -45,6 +47,11 @@ class Z8ProtobufAuthorityService {
         auto session = endpoint.authorize(request);
         if (session !is null && session.id != request.sessionId) throw new Z8ProtobufException("authority returned a different session ID");
         return reply(session, request.schema);
+    }
+    ubyte[] logout(const(ubyte)[] payload) {
+        auto target = cast(IZ8AuthorityLogout)endpoint;
+        if (target is null) throw new Z8ProtobufException("authority does not support logout");
+        target.logout(z8_decode_authority_logout(payload)); return [];
     }
     ubyte[] userChanged(const(ubyte)[] payload) {
         auto value = z8_decode_authority_change(payload);
@@ -74,6 +81,7 @@ class Z8ProtobufAuthorityService {
         switch (method) {
             case Z8AuthorityMethod.login: return login(payload);
             case Z8AuthorityMethod.authorize: return authorize(payload);
+            case Z8AuthorityMethod.logout: return logout(payload);
             case Z8AuthorityMethod.userChanged: return userChanged(payload);
             case Z8AuthorityMethod.roleChanged: return roleChanged(payload);
             case Z8AuthorityMethod.applyUserChanged: return applyUserChanged(payload);

@@ -2,15 +2,15 @@ module z8.integration.protobuf_postgres_authority;
 
 import std.conv : to;
 import z8.runtime : Z8ApplicationSession, Z8Guid;
-import z8.authority.messages : Z8AuthorityLogin, Z8AuthorityAuthorize;
-import z8.authority.service : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink;
+import z8.authority.messages : Z8AuthorityLogin, Z8AuthorityAuthorize, Z8AuthorityLogout;
+import z8.authority.service : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink, IZ8AuthorityLogout;
 import z8.protobuf.wire : Z8ProtobufException;
 import z8.integration.postgres_authority : Z8PostgresHttpAuthority;
 import z8.webserver.civetweb : Z8HttpRequest;
 
 // Bridges the single-schema PostgreSQL authority to the transport-neutral
 // protobuf service. Peer-application notifications are not rebroadcast.
-class Z8ProtobufPostgresAuthority : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink {
+class Z8ProtobufPostgresAuthority : IZ8AuthorityEndpoint, IZ8AuthorityInvalidationSink, IZ8AuthorityLogout {
     private Z8PostgresHttpAuthority authority;
     this(Z8PostgresHttpAuthority authority) {
         if (authority is null) throw new Z8ProtobufException("PostgreSQL authority is required");
@@ -25,6 +25,10 @@ class Z8ProtobufPostgresAuthority : IZ8AuthorityEndpoint, IZ8AuthorityInvalidati
     Z8ApplicationSession authorize(Z8AuthorityAuthorize request) {
         if (request.schema != authority.databaseSchema()) return null;
         return authority.authorize(null, request.sessionId, request.serverId);
+    }
+    void logout(Z8AuthorityLogout request) {
+        if (request.schema != authority.databaseSchema()) throw new Z8ProtobufException("authority schema mismatch");
+        authority.logout(request.sessionId);
     }
     void userChanged(Z8Guid id, wstring schema) {
         if (schema != authority.databaseSchema()) throw new Z8ProtobufException("authority schema mismatch");

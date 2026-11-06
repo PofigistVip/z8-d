@@ -171,6 +171,9 @@ void main(string[] args) {
     auto remoteLogin = client.login(loginRequest); assert(remoteLogin !is null && remoteLogin.user.login == "Bob"w);
     auto remoteRequest = Z8AuthorityAuthorize(remoteLogin.id, "public"w, "test"w);
     assert(client.authorize(remoteRequest) !is null);
+    bool badLogout;
+    try { client.logout(Z8AuthorityLogout(remoteLogin.id, "other"w)); } catch (Exception) { badLogout = true; }
+    assert(badLogout && client.authorize(remoteRequest) !is null);
     client.userChanged(z8_guid_create(85), "public"w); assert(client.authorize(remoteRequest) is null);
     assert(remoteSessions.getSession("remote-bob"w) is null);
     remoteSessions.create("remote-bob"w, remoteBob, remoteBob, "public"w);
@@ -190,7 +193,7 @@ void main(string[] args) {
     authority.roleChanged(z8_guid_literal("421A8413-A8EC-4DAB-9235-9A5FF83341C5"), "public"w);
     assert(remoteSessions.getSession("remote-bob"w) is null);
     writeln("invalidated"); stdout.flush();
-    authority.logout(readln().strip().to!wstring); writeln("logged out"); stdout.flush(); readln();
+    readln();
     server.stop(); connection.close();
 }
 ''', encoding="utf-8")
@@ -267,8 +270,8 @@ void main(string[] args) {
             assert status == 200 and second_admin["session"] != admin_token
             assert request(request="login", session=admin_token, server="test")[0] == 401
             admin_token = second_admin["session"]
-            process.stdin.write(admin_token + "\n"); process.stdin.flush()
-            assert process.stdout.readline().strip() == "logged out"
+            status, result = request(request="logout", session=admin_token, server="test")
+            assert status == 200 and result["success"]
             assert request(request="login", session=admin_token, server="test")[0] == 401
         finally:
             if process.poll() is None:

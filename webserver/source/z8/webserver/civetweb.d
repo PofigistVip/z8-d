@@ -256,6 +256,8 @@ interface IZ8HttpAuthority {
     Z8ApplicationSession authorize(Z8HttpRequest request, wstring sessionId, wstring serverId);
     Z8ApplicationSession login(Z8HttpRequest request, wstring login, wstring password);
 }
+// Optional explicit session revocation for request=logout.
+interface IZ8HttpSessionLogout { void logoutSession(Z8HttpRequest request, wstring sessionId); }
 class Z8CivetServer {
     private MgContext* context;
     private void delegate(Z8HttpRequest request) handler;
@@ -357,7 +359,11 @@ class Z8CivetServer {
             scope (exit) z8_application_set_request(previous);
             if (responseMode == Z8ResponseMode.application) z8_application_start_response(application, requestId);
             try {
-                handler(request);
+                if (responseMode == Z8ResponseMode.application && requestId == "logout"w) {
+                    auto logout = cast(IZ8HttpSessionLogout)authority;
+                    if (logout is null || application.session is null) throw new Exception("session logout is not supported");
+                    logout.logoutSession(request, application.session.id);
+                } else handler(request);
                 if (responseMode == Z8ResponseMode.application && !z8_application_has_binary_response(application))
                     z8_application_finish_response(application, request.monitor, serverId);
             } catch (Z8Redirect redirect) { throw redirect; }

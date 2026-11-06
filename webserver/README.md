@@ -93,6 +93,10 @@ adapter in `protocol` provides a transport-independent publisher interface.
 `integrations/protobuf_postgres_webserver` also exposes that authority through
 the transport-neutral protobuf service. A network transport must authenticate
 peers and supply the actual RPC delivery.
+An authority can implement `IZ8HttpSessionLogout` to support an authenticated
+`request=logout` application request. The server revokes the authorized session
+and returns the normal success response; subsequent requests using that session
+are denied. Both PostgreSQL and protobuf authority adapters support this API.
 An authority may also implement `IZ8UserChangeNotifier`. User updates, deletion,
 and the BL `Users.notifyUserChange` call then notify it with the user ID and
 database schema, so it can invalidate cached sessions for the correct tenant.
@@ -151,6 +155,5 @@ BL project into the host executable. On Unix also link pthread and dl. The test
 build and runs concurrent loopback HTTP requests through a BL handler.
 
 The bundled test build enables WebSockets, disables CGI, and does not include
-TLS. It is suitable for local integration. Session handling, authorization,
-application routing, the full Z8 response
-protocol, and TLS-capable deployment remain to be implemented.
+TLS. It is suitable for local integration. Full Z8 response compatibility and
+TLS-capable deployment remain to be implemented.

@@ -32,7 +32,7 @@ their IDs and privileges, and rejects duplicate parameter keys. Conversion to
 runtime objects intentionally discards unknown fields; it is not a wire-message
 proxy. A user-defined parameter without its registered codec causes the
 operation to fail.
-`service.proto` describes transport-independent login, authorization and change
+`service.proto` describes transport-independent login, authorization, logout and change
 notification operations. `z8.authority.messages` encodes and decodes the login,
 authorization and session reply envelopes, including explicit empty passwords
 and denied replies. It does not open sockets or choose an RPC implementation.
@@ -46,6 +46,9 @@ rebroadcasting. `Z8ProtobufAuthorityPeerNotifier` sends the latter operations.
 `IZ8AuthorityRpcTransport` supplied by the host. The client validates the
 returned schema and, for authorization, the session ID. The service's `dispatch`
 method routes the corresponding operation to its handler.
+Logout is an optional `IZ8AuthorityLogout` capability. Its request requires a
+session ID and schema; the PostgreSQL adapter rejects a different schema and
+revokes the matching session. Unknown or already revoked IDs are harmless.
 `Z8ProtobufAuthorityNotifier` implements the runtime's user and role notifier
 interfaces and forwards encoded events to a host-provided
 `IZ8AuthorityChangePublisher`. A receiving host dispatches them with

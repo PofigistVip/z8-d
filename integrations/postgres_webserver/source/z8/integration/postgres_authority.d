@@ -4,7 +4,7 @@ import z8.runtime;
 import z8.database.authentication;
 import z8.database.postgres;
 import z8.database.privileges : z8_postgres_read_user;
-import z8.webserver.civetweb : IZ8HttpAuthority, Z8HttpRequest;
+import z8.webserver.civetweb : IZ8HttpAuthority, IZ8HttpSessionLogout, Z8HttpRequest;
 import std.conv : to;
 
 version (Windows) {
@@ -37,7 +37,7 @@ private wstring newSessionToken() {
 
 // Single-schema authority. Each login uses an independent connection; the
 // synchronized session manager owns and invalidates the issued session IDs.
-class Z8PostgresHttpAuthority : IZ8HttpAuthority, IZ8UserChangeNotifier, IZ8RoleChangeNotifier {
+class Z8PostgresHttpAuthority : IZ8HttpAuthority, IZ8HttpSessionLogout, IZ8UserChangeNotifier, IZ8RoleChangeNotifier {
     private Z8PostgresConnection source;
     private wstring schema, serverId;
     private Z8RuntimeRegistry registry;
@@ -88,4 +88,5 @@ class Z8PostgresHttpAuthority : IZ8HttpAuthority, IZ8UserChangeNotifier, IZ8Role
     void logout(wstring id) {
         sessions.dropSessionInSchema(id, schema);
     }
+    void logoutSession(Z8HttpRequest request, wstring id) { logout(id); }
 }
