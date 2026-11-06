@@ -399,7 +399,8 @@ for each requested key.
 as in the original, a positive result is cached for that database adapter.
 `EntityTable` can read and mutate entities, honoring annotated `entityValue` fields
 and BL lifecycle hooks. Explicit dependencies are loaded through their links and
-registered recursively. Registry-wide flush is not yet implemented.
+registered recursively. Registry-wide flush creates, updates and deletes entities
+in separate passes using the caller's current transaction.
 `TreeTable` exposes its parent and path fields, schema indexes and path lookup
 methods. Reads include the parent key and are not limited by the page size.
 Creating a tree record calculates its path and ancestor columns. Changing a

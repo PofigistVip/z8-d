@@ -3,6 +3,7 @@ private enum z8_entity_registry_name = "org.zenframework.z8.server.base.entity.R
 private class Z8EntityRegistryState {
     Z8GuidMap!Z8Object entities;
     Z8Object[] pending;
+    Z8Object[wstring] tables;
     Z8ApplicationRequest request;
     bool checked = true, logEnabled;
     size_t changeCount;
@@ -18,7 +19,57 @@ private Z8EntityRegistryState z8_entity_registry_state(Z8Object self) {
 private Z8Object z8_entity_registry_local;
 private Z8Object z8_entity_registry_reset(Z8Object self) {
     auto state = z8_entity_registry_state(self);
-    state.pending = null; state.entities.z8_clear(); ++state.changeCount; state.checked = true; return self;
+    state.pending = null; state.tables = null; state.entities.z8_clear(); ++state.changeCount; state.checked = true; return self;
+}
+private Z8Object z8_entity_get_table(Z8Object entity) {
+    auto className = z8_nonnull(entity).z8_get_attribute("entityTable"w);
+    auto prototype = z8_object_new_instance_native(className);
+    auto registry = z8_runtime_get_registry();
+    if (registry is null) throw new Exception("runtime registry is not configured");
+    auto table = registry.newTableByName(z8_object_name(prototype));
+    if (table is null || !z8_native_is_instance(z8_entity_table_name, table))
+        throw new Exception("entity table is not registered");
+    return table;
+}
+private Z8Object z8_entity_registry_table(Z8EntityRegistryState state, Z8Object entity) {
+    auto className = z8_nonnull(entity).z8_get_attribute("entityTable"w);
+    if (auto table = className in state.tables) return *table;
+    auto table = z8_entity_get_table(entity); state.tables[className] = table; return table;
+}
+private void z8_entity_registry_log(Z8EntityRegistryState state, wstring text) {
+    if (state.logEnabled) z8_nonnull(z8_application_require_request().monitor).log(Z8MonitorLevel.info, text);
+}
+private Z8Object z8_entity_registry_flush(Z8Object self) {
+    auto state = z8_entity_registry_state(self);
+    z8_entity_registry_log(state, ">>> REGISTRY TRANSACTION BEGIN >>>"w);
+    z8_entity_registry_check(state);
+    auto keys = state.entities.z8_keys(); auto expectedCount = state.changeCount;
+    auto connection = z8_connection_current_backend();
+    if (connection is null) throw new Exception("no current database connection");
+    for (int phase; phase < 3; ++phase) {
+        for (long i; i < keys.z8_size(); ++i) {
+            if (state.changeCount != expectedCount) throw new Exception("entity registry modified during iteration");
+            auto id = keys.z8_get(i); auto entity = state.entities.z8_get(id);
+            auto values = z8_entity_state(entity);
+            if (phase == 0 && !values.persistent && !values.deleted) {
+                values.persistent = true;
+                auto table = z8_entity_registry_table(state, entity);
+                z8_entity_registry_log(state, "REGISTRY CREATE: "w ~ z8_object_name(table));
+                z8_query_create_id(table, id);
+            } else if (phase == 1 && z8_optional_require(z8_entity_changed(entity))) {
+                auto table = z8_entity_registry_table(state, entity);
+                z8_entity_registry_log(state, "REGISTRY UPDATE: "w ~ z8_object_name(table));
+                z8_entity_table_update(table, entity);
+            } else if (phase == 2 && values.persistent && values.deleted) {
+                auto table = z8_entity_registry_table(state, entity);
+                z8_entity_registry_log(state, "REGISTRY DESTROY: "w ~ z8_object_name(table));
+                z8_entity_table_destroy(table, entity);
+            }
+        }
+        connection.flush();
+    }
+    z8_entity_registry_log(state, "<<< REGISTRY TRANSACTION END <<<"w);
+    return self;
 }
 private Z8Object z8_entity_registry_get_current() {
     if (z8_entity_registry_local is null) z8_entity_registry_local = z8_native_new(z8_entity_registry_name);
@@ -160,6 +211,7 @@ void z8_bind_builtin_entity_registry() {
     z8_native_bind(r ~ "isLogEnabled"w, &z8_entity_registry_is_log_enabled);
     z8_native_bind(r ~ "getEntity"w, &z8_entity_registry_find);
     z8_native_bind(r ~ "reset"w, &z8_entity_registry_reset);
+    z8_native_bind(r ~ "flush"w, &z8_entity_registry_flush);
     z8_native_bind(r ~ "visitEntities"w, &z8_entity_registry_visit);
     z8_native_bind(r ~ "visitEntities"w, &z8_entity_registry_visit_filtered);
     z8_native_bind(r ~ "findEntity"w, &z8_entity_registry_find_first);
@@ -169,6 +221,7 @@ void z8_bind_builtin_entity_registry() {
     z8_native_bind(e ~ "unregister"w, &z8_entity_unregister);
     z8_native_bind(e ~ "isRegistered"w, &z8_entity_is_registered);
     z8_native_bind(e ~ "getRegistry"w, &z8_entity_get_registry);
+    z8_native_bind(e ~ "getTable"w, &z8_entity_get_table);
     z8_native_bind(e ~ "getEntity"w, &z8_entity_related);
     z8_native_bind(e ~ "getEntity"w, &z8_entity_related_key);
     z8_native_bind(e ~ "getOrigin"w, &z8_entity_origin);

@@ -20,7 +20,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     shutil.copytree(language, source)
     (source / "PersonEntity.bl").write_text('''
 import org.zenframework.z8.base.entity.Entity;
-public class PersonEntity extends Entity {}
+[entityTable "PersonTable"] public class PersonEntity extends Entity {}
 ''', encoding="utf-8")
     (source / "RegionTable.bl").write_text('''
 import org.zenframework.z8.base.entity.EntityTable;
@@ -80,6 +80,8 @@ public class EntityTableProbe {
     public static void change(Entity entity) { entity.set("amount", 9); }
     public static bool values(Entity entity, string title, int amount) { return entity.getString("title") == title && entity.getInt("amount") == amount; }
     public static bool personType(Entity entity) { return entity instanceof PersonEntity; }
+    public static EntityTable entityTable(Entity entity) { return entity.getTable(); }
+    public static Registry flush(Registry registry) { return registry.flush(); }
 }
 ''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
@@ -134,6 +136,31 @@ void main(string[] args) {
     auto soloLoaded = P.m_withGroup(soloTable, soloId);
     assert(soloLoaded !is null && soloLoaded.m_getEntity("groupId"w) is null);
     assert(registry.m_getEntity(groupId) is null && registry.m_getEntity(regionId) is null);
+    auto projectRegistry = new Z8RuntimeRegistry(); projectRegistry.registerTable(P.m_table());
+    auto previousRegistry = z8_runtime_set_registry(projectRegistry); scope(exit) z8_runtime_set_registry(previousRegistry);
+    assert(P.m_entityTable(soloLoaded).z8_class_id() == "PersonTable"w);
+    auto secondTable = P.m_table(); secondTable.m_setRegistry(registry);
+    auto second = P.m_person(); secondTable.m_create(second);
+    auto secondLoaded = secondTable.m_readEntity(second.m_getEntityId());
+    P.m_change(secondLoaded);
+    auto created = P.m_person(); created.m_create(); created.m_register(registry);
+    auto createdId = created.m_getEntityId();
+    soloLoaded.m_delete();
+    request.monitor = new Z8RequestMonitor(); registry.m_setLogEnabled(z8_optional_wrap(true));
+    backend.beginTransaction();
+    assert(P.m_flush(registry) is registry);
+    assert(z8_optional_require(created.m_isPersistent()) && !z8_optional_require(created.m_isChanged()));
+    assert(!z8_optional_require(secondLoaded.m_isChanged()));
+    assert(!z8_optional_require(soloLoaded.m_isPersistent()));
+    assert(connection.execute(`SELECT "Title", "Amount" FROM "People"`).rows[0][0].text == "Alice");
+    assert(connection.execute(`SELECT count(*), sum("Amount") FROM "People"`).rows[0][0].text == "2");
+    assert(connection.execute(`SELECT sum("Amount") FROM "People"`).rows[0][0].text == "14");
+    assert((cast(Z8RequestMonitor)request.monitor).logs().length == 6);
+    backend.rollback();
+    assert(connection.execute(`SELECT count(*), sum("Amount") FROM "People"`).rows[0][0].text == "2");
+    assert(connection.execute(`SELECT sum("Amount") FROM "People"`).rows[0][0].text == "10");
+    registry.m_reset();
+    assert(soloTable.m_readEntity(soloId) !is null && soloTable.m_readEntity(createdId) is null);
 }
 ''', encoding="utf-8")
     executable = temp / ("entity-table.exe" if os.name == "nt" else "entity-table")
