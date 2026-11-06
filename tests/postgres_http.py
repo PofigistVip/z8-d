@@ -122,8 +122,10 @@ public class HiddenJob extends Executable {}
     (source / "NestedAttachment.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.AttachmentField;
+import org.zenframework.z8.base.table.value.StringField;
 public class NestedAttachment extends Table {
     [name "Documents"] public AttachmentField documents;
+    [name "Title"] public StringField title;
     virtual protected void onDestroyAction(guid id) {
         if (id == '00000000-0000-0000-0000-000000000091') throw "nested delete blocked";
     }
@@ -252,7 +254,7 @@ void main(string[] args) {
     databaseInfo = args[1];
     auto setup = new Z8PostgresConnection(databaseInfo);
     setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Blob" bytea, "Documents" bytea, "ChildLink" uuid, "NestedLink" uuid, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
-    setup.execute(`CREATE TABLE "NestedAttachment" ("RecordId" uuid PRIMARY KEY, "Documents" bytea, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
+    setup.execute(`CREATE TABLE "NestedAttachment" ("RecordId" uuid PRIMARY KEY, "Documents" bytea, "Title" text, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     setup.execute(`INSERT INTO "NestedAttachment" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000088'), ('00000000-0000-0000-0000-000000000089'), ('00000000-0000-0000-0000-000000000090'), ('00000000-0000-0000-0000-000000000091')`);
     setup.execute(`CREATE TABLE "SystemFiles" ("RecordId" uuid PRIMARY KEY, "Name" text, "File" bytea, "Path" text, "Size" bigint, "Time" bigint, "Last modified" bigint, "Location" bigint, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     setup.execute(`CREATE TABLE "ContentLog" (value integer)`);
@@ -416,6 +418,10 @@ void main(string[] args) {
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(session="limited", action="meta")
             assert result["success"] and "title" not in {field["name"] for field in result["fields"]}, result
+            result = request(action="meta", link="nestedLink", query="missing", fields='["nested.title"]')
+            assert result["success"] and any(field["name"] == "nested.title" for field in result["fields"]), result
+            result = request(session="relation-denied", action="meta", link="nestedLink", fields='["nested.title"]')
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(action=None)
             assert result["success"] and result["isQuery"] and len(result["data"]) == 2, result
             # A Z8 form sends its FileField value as a JSON array in the
@@ -570,6 +576,26 @@ void main(string[] args) {
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(action="update", data=change)
             assert result["success"] and result["data"][0]["title"] == "Updated" and result["data"][0]["amount"] == 12, result
+            nested_id = "00000000-0000-0000-0000-000000000092"
+            nested_copy = "00000000-0000-0000-0000-000000000093"
+            nested_record = [{"nested.recordId": nested_id, "nested.title": "Nested"}]
+            for action in ("create", "update", "copy"):
+                source_id = {"recordId": nested_id} if action == "copy" else {}
+                result = request(session="relation-denied", action=action, link="nestedLink", fields='["nested.title"]',
+                                 data=json.dumps(nested_record), **source_id)
+                assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = request(action="create", link="nestedLink", query="missing", fields='["nested.title"]', data=json.dumps(nested_record))
+            assert result["success"] and result["data"][0]["nested.title"] == "Nested", result
+            result = request(action="update", link="nestedLink", fields='["nested.title"]',
+                             data=json.dumps([{"nested.recordId": nested_id, "nested.title": "Changed"}]))
+            assert result["success"] and result["data"][0]["nested.title"] == "Changed", result
+            result = request(action="copy", link="nestedLink", fields='["nested.title"]', recordId=nested_id,
+                             data=json.dumps([{"nested.recordId": nested_copy}]))
+            assert result["success"] and result["data"][0]["nested.title"] == "Changed", result
+            result = request(action="export", link="nestedLink", format="xls", columns='[{"id":"nested.title"}]')
+            assert result["success"] and result["info"]["files"][0]["name"].endswith(".xlsx"), result
+            result = request(session="relation-denied", action="export", link="nestedLink", format="xls", columns='[{"id":"nested.title"}]')
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             parts = {"request": "Sample", "session": "full", "server": "test", "action": "update",
                      "fields": '["title","amount"]',
                      "data": '[{"recordId":"00000000-0000-0000-0000-000000000002","blob":0}]'}
@@ -587,12 +613,14 @@ void main(string[] args) {
                 assert response.status == 200 and result["success"], result
             finally:
                 conn.close()
-            def attach_file(session, record_id, filename, content, details='{"kind":"document"}', nested=False):
+            def attach_file(session, record_id, filename, content, details='{"kind":"document"}', nested=False, link=False):
                 params = {"request": "Sample", "session": session, "server": "test", "action": "attach",
                           "recordId": record_id, "field": "documents", "fields": '["documents"]', "details": details}
                 if nested:
                     params.update(query="nested", field="nested.documents", fields='["nested.documents"]',
                                   values=json.dumps({"recordId": "00000000-0000-0000-0000-000000000001"}))
+                if link:
+                    params.update(link="nestedLink", query="missing")
                 marker = "z8-attachment-boundary"
                 payload = b""
                 for key, value in params.items():
@@ -639,13 +667,16 @@ void main(string[] args) {
             nested_target = "00000000-0000-0000-0000-000000000088"
             result = attach_file("field-denied", nested_target, "denied.txt", b"no", nested=True)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
-            result = attach_file("relation-denied", nested_target, "denied.txt", b"no", nested=True)
-            assert not result["success"] and "relation access denied" in result["info"]["messages"][-1]["text"], result
-            result = attach_file("full", nested_target, "nested.txt", b"nested", nested=True)
+            result = attach_file("relation-denied", nested_target, "denied.txt", b"no", nested=True, link=True)
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = attach_file("full", nested_target, "nested.txt", b"nested", nested=True, link=True)
             assert result["success"], result
             nested_file = json.loads(result["data"][0]["nested.documents"])[0]
             assert download("/" + quote(nested_file["path"], safe="/"), "full", nested_file["id"])[2] == b"nested"
-            result = request(action="detach", query="nested", field="nested.documents", fields='["nested.documents"]',
+            result = request(session="relation-denied", action="detach", link="nestedLink", field="nested.documents",
+                             fields='["nested.documents"]', recordId=nested_target, data=json.dumps([nested_file["id"]]))
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = request(action="detach", link="nestedLink", query="missing", field="nested.documents", fields='["nested.documents"]',
                              recordId=nested_target, data=json.dumps([nested_file["id"]]),
                              values=json.dumps({"recordId": "00000000-0000-0000-0000-000000000001"}))
             assert result["success"] and json.loads(result["data"][0]["nested.documents"]) == [], result

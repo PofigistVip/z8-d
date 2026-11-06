@@ -79,10 +79,10 @@ Without an explicit `fields` parameter, configured form controls, names, columns
 and extra fields determine the selected fields; if none are configured, z8-d
 uses the table's declared fields as a convenience fallback. Field dependencies
 are included in the selection, subject to the same access checks.
-Read, metadata, create, copy, update, destroy, attach and detach requests can select a nested table using
-`query`; the root request, containing tables, their connecting relations and
-the selected table are checked. A read can also select the target of a `link`;
-as in the original action factory, a nonempty `link` takes precedence over `query`.
+Read, metadata, create, copy, update, destroy, attach, detach and export requests
+can select a nested table using `query` or `link`; the root request, containing
+tables, their connecting relations and the selected table are checked. As in the
+original action factory, a nonempty `link` takes precedence over `query`.
 With no
 `action` parameter, the same metadata is followed by the table read response.
 

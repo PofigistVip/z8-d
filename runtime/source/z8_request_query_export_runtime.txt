@@ -13,7 +13,7 @@ private void z8_application_dispatch_query_export_target(wstring className, Z8Ob
         throw new Exception("invalid export columns");
     auto privileges = z8_nonnull(z8_nonnull(request.session).user).privileges;
     if (privileges is null) throw new Exception("query read access denied");
-    auto query = z8_application_nested_query(context, privileges, original.z8_get("query"w));
+    auto query = z8_application_action_query(context, privileges, original.z8_get("query"w), original.z8_get("link"w));
     wstring[] ids, headers, types;
     foreach (column; columns.array) {
         if (column.type != JSONType.object) throw new Exception("invalid export column");
