@@ -511,6 +511,8 @@ private string emitExprRaw(Expression e) {
                 return e.targetClass ~ ".m_" ~ e.token.text ~ "(" ~ args.join(", ") ~ ")";
             }
             if (isArray(e.inferredType)) {
+                if (e.inferredType == ValueType.encodingArray && e.token.text == "sort")
+                    return "z8_encoding_array_sort(" ~ emitExpr(e.left) ~ ")";
                 if (e.inferredType == ValueType.enumArray && e.token.text == "sort") {
                     auto enumClass = e.objectClass;
                     string[] values, order;

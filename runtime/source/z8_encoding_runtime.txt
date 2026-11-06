@@ -5,6 +5,9 @@ class Z8Encoding {
 private __gshared Z8Encoding[14] z8_encodings;
 shared static this() { foreach (i; 0 .. z8_encodings.length) z8_encodings[i] = new Z8Encoding(cast(int)i); }
 Z8Encoding z8_encoding_by_id(int id) { return z8_encodings[id]; }
+Z8Array!Z8Encoding z8_encoding_array_sort(Z8Array!Z8Encoding array) {
+    return z8_enum_array_sort(array, z8_encodings[]);
+}
 
 wstring z8_encoding_decode(const(ubyte)[] bytes, Z8Encoding encoding) {
     auto id = z8_nonnull(encoding).id;

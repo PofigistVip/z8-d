@@ -5,6 +5,7 @@ import org.zenframework.z8.base.table.value.Aggregation;
 import org.zenframework.z8.base.table.value.FieldType;
 import org.zenframework.z8.base.table.value.JoinType;
 import org.zenframework.z8.ie.ImportPolicy;
+import org.zenframework.z8.lang.encoding;
 
 public class NativeEnumArraySort {
     public static int run() {
@@ -34,6 +35,19 @@ public class NativeEnumArraySort {
         if (policies[0] != ImportPolicy.Keep || policies[1] != ImportPolicy.Override || policies[2] != ImportPolicy.Merge) return 8;
         Aggregation[] nullable = {Aggregation.Sum, null};
         try { nullable.sort(); return 9; } catch (exception expected) {}
+        encoding[] encodings = {encoding.Windows1257, encoding.Windows1254, encoding.Windows1253, encoding.Windows1252,
+            encoding.Windows1251, encoding.Windows1250, encoding.UTF16LE, encoding.UTF16BE, encoding.UTF16,
+            encoding.UTF8, encoding.USASCII, encoding.KOI8R, encoding.Cp866, encoding.Default};
+        encoding[] expectedEncodings = {encoding.Default, encoding.Cp866, encoding.KOI8R, encoding.USASCII,
+            encoding.UTF8, encoding.UTF16, encoding.UTF16BE, encoding.UTF16LE, encoding.Windows1250,
+            encoding.Windows1251, encoding.Windows1252, encoding.Windows1253, encoding.Windows1254, encoding.Windows1257};
+        encoding[] alias = encodings.sort();
+        for (int i = 0; i < encodings.size(); i += 1) if (encodings[i] != expectedEncodings[i] || alias[i] != expectedEncodings[i]) return 10;
+        encoding[] nullEncoding = {encoding.UTF8, null};
+        try { nullEncoding.sort(); return 11; } catch (exception expected) {}
+        encoding[] singleEncoding = {null};
+        singleEncoding.sort();
+        if (singleEncoding.size() != 1 || singleEncoding[0] != null) return 12;
         return 0;
     }
 }
