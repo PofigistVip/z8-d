@@ -273,9 +273,9 @@ void main(string[] args) {
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     auto session = new Z8ApplicationSession("join"w, user, user);
     auto priorBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "pg_temp"w));
-    wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null, wstring className = "HttpOrder"w) {
+    wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null, wstring className = "HttpOrder"w, wstring action = "read"w) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
-        request.parameters.z8_add("request"w, className); request.parameters.z8_add("action"w, "read"w); request.parameters.z8_add("fields"w, fields);
+        request.parameters.z8_add("request"w, className); request.parameters.z8_add("action"w, action); request.parameters.z8_add("fields"w, fields);
         if (filter !is null) request.parameters.z8_add("filter"w, filter);
         if (sort !is null) request.parameters.z8_add("sort"w, sort);
         if (lookup !is null) request.parameters.z8_add("lookup"w, lookup);
@@ -289,6 +289,19 @@ void main(string[] args) {
     assert(response["data"].array.length == 1 && response["data"][0]["customer.label"].str == "Alice" && response["data"][0]["customer.city.label"].str == "Moscow");
     assert(response["data"][0]["customerId"].str == "00000000-0000-0000-0000-000000000201");
     assert(response["data"][0]["customer.cityId"].str == "00000000-0000-0000-0000-000000000101");
+    auto linkedMeta = parseJSON(requestFields(`["customer.label","customer.city.label"]`w, null, null, null, null, "HttpOrder"w, "meta"w).to!string);
+    bool customerMeta, cityMeta;
+    foreach (field; linkedMeta["fields"].array) {
+        if (field["name"].str == "customer.label") {
+            customerMeta = field["isCombobox"].boolean && field["query"]["name"].str == "customer" && field["link"]["name"].str == "customerId";
+        }
+        if (field["name"].str == "customer.city.label") {
+            cityMeta = field["isCombobox"].boolean && field["link"]["owner"].str == "customer.cityId";
+        }
+    }
+    assert(customerMeta && cityMeta);
+    linkedMeta = parseJSON(requestFields(`["customer.label"]`w, null, null, null, null, "HttpOrder"w, null).to!string);
+    assert(linkedMeta["isQuery"].boolean && linkedMeta["data"].array.length == 2);
     response = parseJSON(requestFields(`["title"]`w, `{"property":"customer.label","value":"alice"}`w).to!string);
     assert(response["data"].array.length == 1 && response["data"][0]["title"].str == "First");
     response = parseJSON(requestFields(`["title"]`w, null, `[{"property":"customer.label","direction":"DESC"}]`w).to!string);
@@ -310,6 +323,7 @@ void main(string[] args) {
     auto denied = Z8Access.init;
     user.privileges.setTableAccess(z8_guid_create_name("Customers"w), denied);
     bool blocked; try { requestFields(`["customer.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
+    blocked = false; try { requestFields(`["customer.label"]`w, null, null, null, null, "HttpOrder"w, "meta"w); } catch (Exception) { blocked = true; } assert(blocked);
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     user.privileges.setFieldAccess(z8_guid_create_name("Orders.CustomerId"w), denied);
     blocked = false; try { requestFields(`["customer.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);
@@ -320,6 +334,8 @@ void main(string[] args) {
     user.privileges.setFieldAccess(z8_guid_create_name("Customers.Label"w), denied);
     response = parseJSON(requestFields(`["customer.label"]`w).to!string);
     foreach (row; response["data"].array) assert("customer.label" !in row.object);
+    linkedMeta = parseJSON(requestFields(`["customer.label"]`w, null, null, null, null, "HttpOrder"w, "meta"w).to!string);
+    foreach (field; linkedMeta["fields"].array) assert(field["name"].str != "customer.label");
     blocked = false; try { requestFields(`["title"]`w, `{"property":"customer.label","value":"alice"}`w); } catch (Exception) { blocked = true; } assert(blocked);
     blocked = false; try { requestFields(`["title"]`w, null, `[{"property":"customer.label"}]`w); } catch (Exception) { blocked = true; } assert(blocked);
     blocked = false; try { requestFields(`["title"]`w, null, null, "alice"w, `["customer.label"]`w); } catch (Exception) { blocked = true; } assert(blocked);

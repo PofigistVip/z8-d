@@ -117,16 +117,19 @@ private wstring z8_control_aggregation_name(Z8FieldAggregation value) {
         case Z8FieldAggregation.bitwiseAnd: return "bitwise_and"w;
     }
 }
-// Initial Field.writeMeta implementation for a directly owned field.
+// Field.writeMeta for direct fields and authorized Link paths.
 void z8_control_write_field_meta(Z8Object field, Z8Object query, Z8Object context, Z8Privileges privileges) {
     field = z8_nonnull(field); query = z8_nonnull(query); privileges = z8_nonnull(privileges);
     if (!z8_native_is_instance(z8_field_name, field)) throw new Exception("metadata control is not a Field");
-    if (z8_application_query_field_path(query, field, privileges).length) throw new Exception("linked field metadata is not supported");
+    auto path = z8_application_query_field_path(query, field, privileges);
     if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("field metadata access denied");
     auto request = z8_application_require_request();
     auto writer = request.writer;
     if (writer.scopes.length < 2) throw new Exception("metadata response object is not open");
     auto fieldState = z8_field_state(field), control = z8_control_state(field);
+    if (fieldState.writingMetadata) return;
+    fieldState.writingMetadata = true;
+    scope(exit) fieldState.writingMetadata = false;
     auto type = z8_field_type_id(field);
     if (type == "text"w && fieldState.singleLine.present && fieldState.singleLine.value) type = "string"w;
     z8_monitor_property(writer, "type"w, type);
@@ -135,18 +138,72 @@ void z8_control_write_field_meta(Z8Object field, Z8Object query, Z8Object contex
     z8_monitor_property(writer, "width"w, fieldState.width.present ? fieldState.width.value : 0L);
     auto aggregation = z8_field_aggregation(field);
     if (aggregation != Z8FieldAggregation.none) z8_monitor_property(writer, "aggregation"w, z8_control_aggregation_name(aggregation));
-    z8_monitor_property(writer, "isText"w, true);
-    if (field is z8_query_primary_key(query)) z8_monitor_property(writer, "isPrimaryKey"w, true);
+    if (path.length) {
+        auto first = path[0], last = path[$ - 1], target = z8_nonnull(z8_link_query(first));
+        auto primary = z8_nonnull(z8_query_primary_key(target));
+        z8_monitor_property(writer, "isCombobox"w, true);
+        if (fieldState.columnsCell !is null && fieldState.columnsCell.view() !is null) {
+            auto columns = fieldState.columnsCell.view().z8_erased_data();
+            Z8Object[] visible;
+            for (long i; i < columns.z8_size(); ++i) {
+                auto column = z8_nonnull(cast(Z8Object)columns.z8_get(i));
+                if (z8_control_metadata_visible(column, query, privileges)) visible ~= column;
+            }
+            if (visible.length) {
+                writer.start('[', "columns"w);
+                foreach (column; visible) { writer.start('{'); z8_control_write_meta(column, query, context, privileges); writer.finish('}'); }
+                writer.finish(']');
+            }
+        }
+        Z8Object parentKey, lockKey;
+        foreach (candidate; z8_query_declared_fields(target)) {
+            auto parent = candidate.z8_get_attribute("parentKey"w);
+            if (parent !is null && z8_str_compareNoCase(parent, "false"w) != 0) parentKey = candidate;
+            if (candidate.z8_get_attribute("lockKey"w) !is null) lockKey = candidate;
+        }
+        Z8Object[] sort;
+        foreach (candidate; z8_query_array(target, "sortFields"w))
+            if (z8_application_query_field_readable(query, candidate, privileges)) sort ~= candidate;
+        writer.start('{', "query"w);
+        z8_monitor_property(writer, "request"w, z8_nonnull(context).z8_class_id());
+        z8_monitor_property(writer, "name"w, target.z8_id());
+        z8_monitor_property(writer, "primaryKey"w, primary.z8_id());
+        z8_monitor_property(writer, "parentKey"w, parentKey is null ? null : parentKey.z8_id());
+        z8_monitor_property(writer, "lockKey"w, lockKey is null ? null : lockKey.z8_id());
+        z8_application_query_write_order(sort, null); writer.finish('}');
+        writer.start('{', "link"w);
+        z8_monitor_property(writer, "name"w, first.z8_id());
+        z8_monitor_property(writer, "owner"w, last.z8_id());
+        z8_monitor_property(writer, "isJoined"w, false);
+        z8_monitor_property(writer, "primaryKey"w, primary.z8_id());
+        auto parent = first.z8_get_attribute("parentKey"w);
+        if (parent !is null && z8_str_compareNoCase(parent, "false"w) != 0) {
+            z8_monitor_property(writer, "isParentKey"w, true); writer.start('[', "parentKeys"w); writer.finish(']');
+        }
+        writer.finish('}');
+        z8_application_query_write_order(sort, null);
+    } else {
+        z8_monitor_property(writer, "isText"w, true);
+        if (field is z8_query_primary_key(query)) z8_monitor_property(writer, "isPrimaryKey"w, true);
+    }
     if (fieldState.valueFrom !is null) z8_monitor_property(writer, "valueFrom"w, fieldState.valueFrom.z8_id());
     if (fieldState.valueFor !is null) z8_monitor_property(writer, "valueFor"w, fieldState.valueFor.z8_id());
-    auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
-    auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
+    auto accessField = path.length ? path[0] : field;
+    auto accessOwner = z8_nonnull(accessField.z8_get_owner());
+    auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, accessOwner);
+    auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, accessField);
     bool readOnly = (control.readOnly.present && control.readOnly.value) ||
-        z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field) ||
+        (!path.length && z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field)) ||
         !privileges.getFieldAccess(queryKey, fieldKey).write;
+    bool required = control.required.present && control.required.value;
+    foreach (link; path) {
+        auto linkState = z8_control_state(link);
+        readOnly = readOnly || (linkState.readOnly.present && linkState.readOnly.value);
+        required = required || (linkState.required.present && linkState.required.value);
+    }
     auto previousReadOnly = control.readOnly, previousRequired = control.required;
     control.readOnly = z8_optional_wrap(readOnly);
-    control.required = z8_optional_wrap(!readOnly && previousRequired.present && previousRequired.value);
+    control.required = z8_optional_wrap(!readOnly && required);
     scope(exit) { control.readOnly = previousReadOnly; control.required = previousRequired; }
     z8_control_write_base_meta(field, query, context, privileges);
 }
@@ -201,7 +258,7 @@ private void z8_control_write_base_meta(Z8Object item, Z8Object query, Z8Object 
 private bool z8_control_metadata_visible(Z8Object item, Z8Object query, Z8Privileges privileges) {
     item = z8_nonnull(item);
     if (z8_native_is_instance(z8_field_name, item)) {
-        if (z8_application_query_field_path(query, item, privileges).length) throw new Exception("linked field metadata is not supported");
+        z8_application_query_field_path(query, item, privileges);
         return z8_application_query_field_readable(query, item, privileges);
     }
     if (z8_native_is_instance(z8_tab_control_name, item)) return true;

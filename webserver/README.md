@@ -38,10 +38,10 @@ current privilege snapshot. Executable jobs and other query actions still need
 adapters; selecting this handler is explicit rather than automatic.
 
 The initial `meta` adapter writes query attributes, access rights, keys and
-metadata for direct fields, including basic presentation, dependencies,
+metadata for direct and linked fields, including basic presentation, dependencies,
 permitted source information and BL `writeMeta` overrides. Nested sections,
 fieldsets, field groups, tab controls and non-dependent forms are also supported.
-Other controls, dependent forms, linked field metadata, actions and reports are rejected for now. With no
+Other controls, dependent forms, custom Join metadata, actions and reports are rejected for now. With no
 `action` parameter, the same metadata is followed by the table read response.
 
 An optional `IZ8HttpAuthority` constructor argument connects a host authority

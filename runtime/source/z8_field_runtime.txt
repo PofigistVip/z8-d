@@ -94,7 +94,7 @@ class Z8FieldState {
     private Z8FieldAggregation initialAggregation;
     private Z8Primary originalValue;
     Z8SqlPrimary sqlExpression;
-    bool resolvingExpression;
+    bool resolvingExpression, writingMetadata;
     IZ8FieldCursor cursor;
     bool changed, wasNull = true;
     wstring format;
