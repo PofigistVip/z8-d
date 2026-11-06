@@ -1,0 +1,49 @@
+// Query Period: inclusive date bounds and JSON request parsing.
+private enum z8_period_name = "org.zenframework.z8.server.base.query.Period"w;
+private class Z8PeriodState { Z8Date start, finish; Z8Object field; }
+private Z8PeriodState z8_period_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_period_name, self)) throw new Exception("invalid Period object");
+    auto state = cast(Z8PeriodState)self.z8_get_native_state(z8_period_name);
+    if (state is null) {
+        state = new Z8PeriodState(); state.start = z8_date_min; state.finish = z8_date_max;
+        self.z8_set_native_state(z8_period_name, state);
+    }
+    return state;
+}
+private auto z8_period_address(string name)(Z8Object self) { return &__traits(getMember, z8_period_state(self), name); }
+private Z8SqlBool z8_period_where(Z8Object self) {
+    auto state = z8_period_state(self);
+    if (state.field is null) return z8_sql_bool_const(true);
+    auto field = z8_datetime_field_sql(state.field);
+    Z8SqlBool condition;
+    if (state.start !is null && z8_date_ticks(state.start) != z8_date_ticks(z8_date_min))
+        condition = z8_sql_date_compare!"<="(z8_sql_date_const(state.start), field);
+    if (state.finish !is null && z8_date_ticks(state.finish) != z8_date_ticks(z8_date_max)) {
+        auto upper = z8_sql_date_compare!"<="(field, z8_sql_date_const(state.finish));
+        condition = condition is null ? upper : z8_sql_bool_binary!"&&"(condition, upper);
+    }
+    return condition is null ? z8_sql_bool_const(true) : condition;
+}
+private Z8Object z8_period_from_json(Z8Object field, wstring json) {
+    z8_nonnull(field); z8_string_required(json);
+    auto object = z8_json_object_read(json);
+    auto period = z8_native_new(z8_period_name);
+    auto state = z8_period_state(period); state.field = field;
+    auto active = "active" in object.object;
+    if (active !is null && active.type == JSONType.null_) throw new Exception("null JSON boolean");
+    if (active !is null && active.type == JSONType.true_) {
+        if (auto start = "start" in object.object) state.start = z8_date_parse(z8_json_value_text(*start));
+        if (auto finish = "finish" in object.object) state.finish = z8_date_parse(z8_json_value_text(*finish));
+    }
+    return period;
+}
+void z8_bind_builtin_period() {
+    enum prefix = z8_period_name ~ "."w;
+    z8_native_bind_field(prefix ~ "f_start"w, &z8_period_address!"start");
+    z8_native_bind_field(prefix ~ "f_finish"w, &z8_period_address!"finish");
+    z8_native_bind_field(prefix ~ "f_field"w, &z8_period_address!"field");
+    z8_native_bind(prefix ~ "m_where"w, &z8_period_where);
+    z8_native_bind(prefix ~ "m_getPeriod"w, &z8_period_from_json);
+}
+shared static this() { z8_bind_builtin_period(); }

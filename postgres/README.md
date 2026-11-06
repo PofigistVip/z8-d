@@ -371,6 +371,8 @@ An empty field list selects fields in sections, forms and tabs, together with
 the query's names, columns and extra fields. Cyclic control trees are rejected.
 Listbox-dependent forms bind to the list query and add their fields to its extra
 fields; chained forms and separate requests for nested tables preserve this binding.
+The BL `Period` helper parses active JSON date bounds and builds inclusive SQL
+predicates for its field; inactive and unbounded periods produce `sql_bool.True`.
 `TreeTable` exposes its parent and path fields, schema indexes and path lookup
 methods. Reads include the parent key and are not limited by the page size.
 Creating a tree record calculates its path and ancestor columns. Changing a
