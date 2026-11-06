@@ -93,6 +93,7 @@ private void z8_application_start_job(Z8Object executable) {
     worker.jobUserResolver = request.jobUserResolver;
     worker.userChangeNotifier = request.userChangeNotifier;
     worker.roleChangeNotifier = request.roleChangeNotifier;
+    worker.schedulerControl = request.schedulerControl;
     worker.monitor = monitor; worker.setEventsLevel(request.eventsLevel());
     synchronized (z8_job_lock) z8_job_monitors[id] = monitor;
     scope(failure) if (!started) synchronized (z8_job_lock) z8_job_monitors.remove(id);

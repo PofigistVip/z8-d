@@ -85,6 +85,8 @@ interface IZ8JobUserResolver { Z8UserData resolveJobUser(Z8Guid id); }
 // Notifications carry the database schema so tenants remain isolated.
 interface IZ8UserChangeNotifier { void userChanged(Z8Guid id, wstring schema); }
 interface IZ8RoleChangeNotifier { void roleChanged(Z8Guid id, wstring schema); }
+// A host supplies the scheduler for the request's current database.
+interface IZ8SchedulerControl { void restart(); }
 struct Z8MonitorEntry {
     Z8MonitorLevel level;
     wstring text, source;
@@ -191,6 +193,7 @@ class Z8ApplicationRequest {
     IZ8JobUserResolver jobUserResolver;
     IZ8UserChangeNotifier userChangeNotifier;
     IZ8RoleChangeNotifier roleChangeNotifier;
+    IZ8SchedulerControl schedulerControl;
     Z8Object securityLog;
     IZ8SecurityLogSink securityLogSink;
     wstring securityLogin;

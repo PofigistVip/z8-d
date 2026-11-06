@@ -186,6 +186,9 @@ with tempfile.TemporaryDirectory() as directory:
             logs_list = jobs_metadata["controls"][-1]["query"]
             assert logs_list["name"] == "logs" and logs_list["link"]["name"] == "logs.scheduledJob", logs_list
             assert [item["name"] for item in logs_list["columns"]] == ["logs.start", "logs.finish", "logs.errors", "logs.file", "logs.fileSize", "logs.description"], logs_list
+            assert any(action["name"] == "restartScheduler" for action in jobs_metadata["actions"]), jobs_metadata
+            status, restarted = request(port, request=jobs_view, session=session, action="action", name="restartScheduler", records="[]", selection="[]", parameters="[]")
+            assert status == 200 and restarted["success"], restarted
             status, metadata = request(port, request="Tasks", session=session, action="meta")
             assert status == 200 and metadata["success"], metadata
             assert [control["name"] for control in metadata["controls"]] == ["title", "done", "documents"], metadata

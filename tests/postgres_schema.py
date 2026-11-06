@@ -1139,12 +1139,17 @@ void main(string[] args) {
     auto serviceSessions = new Z8SessionManager();
     auto serviceVictim = new Z8UserData(); serviceVictim.id = z8_guid_create(119);
     serviceSessions.create("job-victim"w, serviceVictim, bootstrapUser, "z8_bootstrap"w);
-    auto service = new Z8PostgresSchedulerService(db, "z8_bootstrap"w, bootstrapRegistry, 50, observer, serviceSessions, serviceSessions, logStore);
+    auto service = new Z8PostgresSchedulerService(db, "z8_bootstrap"w, bootstrapRegistry, 60_000, observer, serviceSessions, serviceSessions, logStore);
     service.start(); service.start();
     assert(observer.waitForSuccess());
+    synchronized (observer.gate) observer.succeeded = false;
+    db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "LastStart" = 0 WHERE "RecordId" = $1::uuid`,
+        [Z8PostgresParameter.value(dailyScheduleRow.rows[0][0].text)]);
+    service.restart(); assert(observer.waitForSuccess());
     auto concurrentStop = new Thread({ service.stop(); }); concurrentStop.start();
     service.stop(); concurrentStop.join(); service.stop();
     assert(!service.isRunning() && service.lastError() is null && !db.isClosed() && serviceSessions.getSession("job-victim"w) is null);
+    bool stoppedScheduler; try { service.restart(); } catch (Z8PostgresException) { stoppedScheduler = true; } assert(stoppedScheduler);
     db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "Cron" = '*/30 * * * *', "Active" = 0, "User" = '00000000-0000-0000-0000-000000000001' WHERE "RecordId" = $1::uuid`,
         [Z8PostgresParameter.value(dailyScheduleRow.rows[0][0].text)]);
     db.execute(`DELETE FROM "z8_bootstrap"."SystemUsers" WHERE "RecordId" = '00000000-0000-0000-0000-000000000054'`);

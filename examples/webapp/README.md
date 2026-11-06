@@ -48,8 +48,8 @@ The host also starts the local scheduled-job service and stops it on shutdown.
 active CRON expression. Scheduler errors are written to stderr; task logs are
 stored under `logs/scheduler` in the configured working directory.
 The administrator's SystemTools entry includes the jobs, tables, files and sequences
-views. The scheduler-restart action, tables report and other original system tools
-remain to be implemented.
+views. Its scheduler action wakes the local service to reload schedules immediately.
+The tables report and other original system tools remain to be implemented.
 
 Optionally add `--config C:/path/to/server.properties` to initialization and
 server commands. The example applies the configured working and storage paths,

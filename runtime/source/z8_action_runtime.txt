@@ -52,6 +52,12 @@ private void z8_action_default_execute_many(Z8Object self, Z8Array!Z8Guid record
         self.z8_action_virtual_execute_one(records.z8_get(i), context, selected, query);
     }
 }
+private void z8_action_restart_scheduler(Z8Object self, Z8Array!Z8Guid records, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) {
+    z8_nonnull(self);
+    auto control = z8_application_require_request().schedulerControl;
+    if (control is null) throw new Exception("scheduler is not configured");
+    control.restart();
+}
 private void z8_action_write_meta(Z8Object item, Z8Object query, Z8Object context, Z8Privileges privileges) {
     auto state = z8_action_state(item);
     z8_control_write_base_meta(item, query, context, privileges);
@@ -70,5 +76,6 @@ void z8_bind_builtin_action() {
     z8_native_bind_field(z8_action_name ~ ".f_useTransaction"w, &z8_action_use_transaction);
     z8_native_bind(z8_action_name ~ ".m_execute"w, &z8_action_default_execute_one);
     z8_native_bind(z8_action_name ~ ".m_execute"w, &z8_action_default_execute_many);
+    z8_native_bind("org.zenframework.z8.server.base.table.system.view.RestartSchedulerAction.m_execute"w, &z8_action_restart_scheduler);
 }
 shared static this() { z8_bind_builtin_action(); }

@@ -1,0 +1,8 @@
+import org.zenframework.z8.base.form.action.Action;
+import org.zenframework.z8.base.query.Query;
+
+[displayName "$ScheduledJobs.restartScheduler$"]
+[native "org.zenframework.z8.server.base.table.system.view.RestartSchedulerAction"]
+public class RestartSchedulerAction extends Action {
+    virtual protected void execute(guid[] recordIds, Query context, guid[] selected, Query query);
+}

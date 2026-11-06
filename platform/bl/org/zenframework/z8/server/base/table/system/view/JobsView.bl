@@ -4,12 +4,13 @@ import org.zenframework.z8.base.form.Listbox;
 import org.zenframework.z8.base.table.SortDirection;
 import org.zenframework.z8.base.table.system.ScheduledJobLogs;
 import org.zenframework.z8.base.table.system.ScheduledJobs;
+import org.zenframework.z8.server.base.table.system.view.RestartSchedulerAction;
 
-// The original restart action is deferred until the host exposes that operation.
 [request] [displayName "$ScheduledJobs.title$"]
 public class JobsView extends ScheduledJobs {
     ScheduledJobLogs logs;
     Listbox logsListbox;
+    RestartSchedulerAction restartScheduler;
     colCount = 12;
     readOnly = Application.isRequest() ? !Application.user().isAdministrator() : true;
     logsListbox.query = logs;
@@ -34,6 +35,7 @@ public class JobsView extends ScheduledJobs {
     controls = viewControls();
     names = {jobs.name, users.name};
     sortFields = {jobs.name};
+    actions = {restartScheduler};
     private Control[] viewControls() {
         cron.setAttribute("ui", "Z8.form.field.Cron");
         jobs.name.setDisplayName("$JobsView.job$");

@@ -5,7 +5,7 @@ import core.sync.mutex : Mutex;
 import core.thread : Thread;
 import core.time : dur;
 import std.conv : to;
-import z8.runtime : Z8RuntimeRegistry, IZ8UserChangeNotifier, IZ8RoleChangeNotifier;
+import z8.runtime : Z8RuntimeRegistry, IZ8UserChangeNotifier, IZ8RoleChangeNotifier, IZ8SchedulerControl;
 import z8.database.postgres : Z8PostgresConnection, Z8PostgresException;
 import z8.database.scheduler : Z8PostgresScheduler, Z8ScheduledRun;
 import z8.database.scheduler_logs : IZ8SchedulerLogStore;
@@ -16,7 +16,7 @@ interface IZ8SchedulerObserver {
     void onError(wstring message);
 }
 
-class Z8PostgresSchedulerService {
+class Z8PostgresSchedulerService : IZ8SchedulerControl {
     private Z8PostgresConnection source;
     private wstring schema;
     private Z8RuntimeRegistry registry;
@@ -28,7 +28,7 @@ class Z8PostgresSchedulerService {
     private Mutex gate;
     private Condition wake;
     private Thread worker;
-    private bool stopping, alive;
+    private bool stopping, alive, refreshRequested;
     private wstring lastFailure;
 
     this(Z8PostgresConnection source, wstring schema, Z8RuntimeRegistry registry,
@@ -51,11 +51,18 @@ class Z8PostgresSchedulerService {
             if (worker !is null) return;
             auto connection = source.openSibling();
             scope(failure) connection.close();
-            stopping = false; alive = true; lastFailure = null;
+            stopping = false; alive = true; refreshRequested = false; lastFailure = null;
             auto thread = new Thread({ run(connection); });
             worker = thread;
             try { thread.start(); }
             catch (Throwable failure) { worker = null; alive = false; throw failure; }
+        }
+    }
+    // This scheduler re-reads schedules on each pass; wake it immediately.
+    void restart() {
+        synchronized (gate) {
+            if (worker is null || stopping || !alive) throw new Z8PostgresException("scheduler is not running");
+            refreshRequested = true; wake.notifyAll();
         }
     }
     // Wait for the active synchronous job to finish; do not interrupt BL code.
@@ -81,7 +88,7 @@ class Z8PostgresSchedulerService {
     private void run(Z8PostgresConnection connection) {
         scope(exit) synchronized (gate) { alive = false; wake.notifyAll(); }
         try {
-            auto scheduler = new Z8PostgresScheduler(connection, schema, registry, userNotifier, roleNotifier, logStore);
+            auto scheduler = new Z8PostgresScheduler(connection, schema, registry, userNotifier, roleNotifier, logStore, this);
             for (;;) {
                 synchronized (gate) if (stopping) break;
                 try {
@@ -90,7 +97,8 @@ class Z8PostgresSchedulerService {
                 } catch (Throwable failure) { report(failure); }
                 synchronized (gate) {
                     if (stopping) break;
-                    wake.wait(dur!"msecs"(intervalMilliseconds));
+                    if (!refreshRequested) wake.wait(dur!"msecs"(intervalMilliseconds));
+                    refreshRequested = false;
                 }
             }
         } catch (Throwable failure) { report(failure); }

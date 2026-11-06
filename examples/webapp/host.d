@@ -76,6 +76,7 @@ void main(string[] args) {
         auto connection = db.openSibling(); scope(exit) connection.close();
         auto previous = z8_connection_set_current(new Z8PostgresDatabase(connection, schema, registry));
         scope(exit) z8_connection_set_current(previous);
+        z8_application_request().schedulerControl = scheduler;
         if (request.path.startsWith("/storage/")) z8_application_dispatch_file_download(request.path.to!wstring);
         else z8_application_dispatch_request();
     }, bodyLimit, Z8ResponseMode.application, "example"w, authority, "Access denied"w, publicDirectory, "/request.json", true, securityLog);
