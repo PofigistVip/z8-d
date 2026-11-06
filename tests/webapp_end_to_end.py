@@ -163,12 +163,14 @@ with tempfile.TemporaryDirectory() as directory:
             tables_view = "org.zenframework.z8.server.base.table.system.view.TablesView"
             jobs_view = "org.zenframework.z8.server.base.table.system.view.JobsView"
             roles_view = "org.zenframework.z8.server.base.table.system.view.RoleTableAccessView"
+            users_view = "org.zenframework.z8.server.base.table.system.view.UsersView"
             assert any(entry["request"] == tools_class for entry in login["user"]["entries"]), login
             assert any(item.get("request") == files_view for group in login["user"]["data"] for item in group.get("items", [])), login
             assert any(item.get("request") == sequences_view for group in login["user"]["data"] for item in group.get("items", [])), login
             assert any(item.get("request") == tables_view for group in login["user"]["data"] for item in group.get("items", [])), login
             assert any(item.get("request") == jobs_view for group in login["user"]["data"] for item in group.get("items", [])), login
             assert any(item.get("request") == roles_view for group in login["user"]["data"] for item in group.get("items", [])), login
+            assert any(item.get("request") == users_view for group in login["user"]["data"] for item in group.get("items", [])), login
             session = login["session"]
             status, replacement = browser_login(port, "Admin", password)
             assert status == 200 and replacement["success"] and replacement["session"] != session
@@ -206,6 +208,17 @@ with tempfile.TemporaryDirectory() as directory:
             assert status == 200 and rights_changed["success"] and not rights_changed["data"][0]["rta.read"], rights_changed
             updated_right = subprocess.check_output([str(psql), "-tAc", '''SELECT "Read" FROM "SystemRoleTableAccess" WHERE "RecordId"=''' + "'" + role_access_id + "'", connection], env=environment, text=True).strip()
             assert updated_right == "0", updated_right
+            status, users_metadata = request(port, request=users_view, session=session, action="meta")
+            assert status == 200 and users_metadata["success"] and [item["name"] for item in users_metadata.get("controls", [])] == ["form"], users_metadata
+            user_form = users_metadata["controls"][0]
+            assert any(item["name"] == "form.resetPassword" for item in user_form.get("controls", [])), user_form
+            status, new_user = request(port, request=users_view, session=session, action="create", fields='["name"]', data='[{"name":"Reset example","password":"abcdef0123456789abcdef0123456789"}]')
+            assert status == 200 and new_user["success"], new_user
+            user_id = new_user["data"][0]["recordId"]
+            status, reset = request(port, request=users_view, session=session, action="action", name="form.resetPassword", records=json.dumps([user_id]), selection="[]", parameters="[]")
+            assert status == 200 and reset["success"], reset
+            reset_value = subprocess.check_output([str(psql), "-tAc", '''SELECT "Password" || ':' || "Change Password"::text FROM "SystemUsers" WHERE "RecordId"=''' + "'" + user_id + "'", connection], env=environment, text=True).strip()
+            assert reset_value == "d41d8cd98f00b204e9800998ecf8427e:1", reset_value
             status, metadata = request(port, request="Tasks", session=session, action="meta")
             assert status == 200 and metadata["success"], metadata
             assert [control["name"] for control in metadata["controls"]] == ["title", "done", "documents"], metadata

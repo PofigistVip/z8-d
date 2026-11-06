@@ -1,0 +1,69 @@
+import org.zenframework.z8.base.application.Application;
+import org.zenframework.z8.base.form.Control;
+import org.zenframework.z8.base.form.Form;
+import org.zenframework.z8.base.form.Listbox;
+import org.zenframework.z8.base.form.Section;
+import org.zenframework.z8.base.form.action.ActionType;
+import org.zenframework.z8.base.table.system.UserEntries;
+import org.zenframework.z8.base.table.system.UserRoles;
+import org.zenframework.z8.base.table.system.Users;
+import org.zenframework.z8.server.base.table.system.view.ResetPasswordAction;
+import org.zenframework.z8.server.base.table.system.view.RoleTableAccessView;
+
+public class UserForm extends Form {
+    public Users users;
+    UserEntries userEntries;
+    UserRoles userRoles;
+    Listbox entriesListbox;
+    Listbox rolesListbox;
+    RoleTableAccessView rolesSource;
+    Section section3;
+    ResetPasswordAction resetPassword;
+
+    colCount = 12;
+    readOnly = Application.isRequest() ? !Application.user().isAdministrator() : true;
+    userEntries.position.editable = true;
+    userEntries.columns = {userEntries.entries.getFieldByIndex("name"), userEntries.position};
+    userEntries.sortFields = {userEntries.position};
+    entriesListbox.query = userEntries;
+    entriesListbox.link = userEntries.user;
+    entriesListbox.flex = 1;
+    entriesListbox.colSpan = 6;
+    userRoles.columns = {userRoles.roles.name};
+    rolesListbox.query = userRoles;
+    rolesListbox.link = userRoles.user;
+    rolesListbox.source = rolesSource;
+    rolesListbox.flex = 1;
+    rolesListbox.colSpan = 6;
+    users.name.colSpan = 3;
+    users.name.editable = true;
+    users.banned.colSpan = 3;
+    users.bannedUntil.colSpan = 3;
+    users.changePassword.colSpan = 3;
+    resetPassword.type = ActionType.Primary;
+    resetPassword.colSpan = 3;
+    users.firstName.colSpan = 3;
+    users.lastName.colSpan = 3;
+    users.lastName.editable = true;
+    users.middleName.colSpan = 3;
+    users.phone.colSpan = 3;
+    users.email.colSpan = 3;
+    section3.colSpan = 6;
+    users.company.colSpan = 3;
+    users.position.colSpan = 3;
+    users.description.colSpan = 12;
+    users.description.height = 3;
+    controls = viewControls();
+
+    private Control[] viewControls() {
+        users.banned.setAttribute("icon", "fa-ban");
+        users.changePassword.setAttribute("icon", "fa-key");
+        entriesListbox.setDisplayName("$UserEntries.title$");
+        rolesListbox.setDisplayName("$UserRoles.title$");
+        Control[] result = {users.name, users.banned, users.bannedUntil, users.changePassword,
+            users.lastName, users.firstName, users.middleName, resetPassword,
+            users.phone, users.email, section3, users.company, users.position,
+            users.description, rolesListbox, entriesListbox};
+        return result;
+    }
+}

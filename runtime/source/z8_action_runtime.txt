@@ -58,6 +58,13 @@ private void z8_action_restart_scheduler(Z8Object self, Z8Array!Z8Guid records, 
     if (control is null) throw new Exception("scheduler is not configured");
     control.restart();
 }
+private void z8_action_reset_password(Z8Object self, Z8Guid id, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) {
+    z8_nonnull(self);
+    auto users = z8_dashboard_users_table(); auto fields = z8_users_state(users).fields;
+    z8_field_set(fields[2], z8_primary_box("d41d8cd98f00b204e9800998ecf8427e"w));
+    z8_field_set(fields[12], z8_primary_box(true));
+    z8_query_update_id(users, id);
+}
 private void z8_action_write_meta(Z8Object item, Z8Object query, Z8Object context, Z8Privileges privileges) {
     auto state = z8_action_state(item);
     z8_control_write_base_meta(item, query, context, privileges);
@@ -77,5 +84,6 @@ void z8_bind_builtin_action() {
     z8_native_bind(z8_action_name ~ ".m_execute"w, &z8_action_default_execute_one);
     z8_native_bind(z8_action_name ~ ".m_execute"w, &z8_action_default_execute_many);
     z8_native_bind("org.zenframework.z8.server.base.table.system.view.RestartSchedulerAction.m_execute"w, &z8_action_restart_scheduler);
+    z8_native_bind("org.zenframework.z8.server.base.table.system.view.ResetPasswordAction.m_execute"w, &z8_action_reset_password);
 }
 shared static this() { z8_bind_builtin_action(); }

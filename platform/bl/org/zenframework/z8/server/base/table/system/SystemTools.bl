@@ -4,10 +4,12 @@ import org.zenframework.z8.server.base.table.system.view.SequencesView;
 import org.zenframework.z8.server.base.table.system.view.TablesView;
 import org.zenframework.z8.server.base.table.system.view.JobsView;
 import org.zenframework.z8.server.base.table.system.view.RoleTableAccessView;
+import org.zenframework.z8.server.base.table.system.view.UsersView;
 
 // Local system tools; further views can be added in the original's order.
 [request] [entry] [displayName "$SystemTools.title$"]
 public class SystemTools extends Desktop {
+    UsersView users;
     RoleTableAccessView roles;
     JobsView jobs;
     TablesView tables;

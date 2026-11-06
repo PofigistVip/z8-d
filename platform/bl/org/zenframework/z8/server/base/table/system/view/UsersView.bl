@@ -1,0 +1,15 @@
+import org.zenframework.z8.base.table.system.Users;
+import org.zenframework.z8.server.base.table.system.view.UserForm;
+
+[request] [displayName "$Users.title$"]
+public class UsersView extends Users {
+    UserForm form;
+    recordId.valueFor = recordId;
+    form.users = this;
+    form.flex = 1;
+    controls = {form};
+    colCount = 1;
+    sortFields = {name};
+    names = {name, lastName};
+    quickFilters = {name, lastName};
+}

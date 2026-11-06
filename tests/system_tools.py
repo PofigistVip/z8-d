@@ -35,10 +35,16 @@ void main() {
     assert(z8_optional_require(z8_native_field!(Z8Optional!long)("org.zenframework.z8.server.base.form.Control.f_colSpan"w, controls[2])) == 4);
     auto jobs = z8_object_new_instance("org.zenframework.z8.server.base.table.system.view.JobsView"w);
     assert(z8_optional_require(z8_native_field!(Z8Optional!bool)("org.zenframework.z8.server.base.query.Query.f_readOnly"w, jobs)));
+    auto users = z8_object_new_instance("org.zenframework.z8.server.base.table.system.view.UsersView"w);
+    auto form = z8_query_array(users, "controls"w)[0];
+    assert(z8_optional_require(z8_native_field!(Z8Optional!bool)("org.zenframework.z8.server.base.form.Control.f_readOnly"w, form)));
     user.administrator = true; view = z8_object_new_instance(name);
     assert(!z8_optional_require(z8_native_field!(Z8Optional!bool)("org.zenframework.z8.server.base.query.Query.f_readOnly"w, view)));
     jobs = z8_object_new_instance("org.zenframework.z8.server.base.table.system.view.JobsView"w);
     assert(!z8_optional_require(z8_native_field!(Z8Optional!bool)("org.zenframework.z8.server.base.query.Query.f_readOnly"w, jobs)));
+    users = z8_object_new_instance("org.zenframework.z8.server.base.table.system.view.UsersView"w);
+    form = z8_query_array(users, "controls"w)[0];
+    assert(!z8_optional_require(z8_native_field!(Z8Optional!bool)("org.zenframework.z8.server.base.form.Control.f_readOnly"w, form)));
     auto roles = z8_object_new_instance("org.zenframework.z8.server.base.table.system.view.RoleTableAccessView"w);
     assert(z8_query_array(roles, "controls"w).length == 4);
     auto action = z8_object_new_instance("org.zenframework.z8.server.base.table.system.view.RestartSchedulerAction"w);
