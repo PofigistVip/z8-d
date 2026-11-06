@@ -334,6 +334,7 @@ private Z8Optional!long z8_query_destroy_id(Z8Object self, Z8Guid id) {
     if (z8_query_user_events_enabled()) self.z8_query_virtual_beforeDestroy(id);
     if (z8_native_is_instance(z8_users_name, self)) z8_users_before_destroy(id);
     if (z8_native_is_instance(z8_user_roles_name, self)) z8_user_roles_before_destroy(id);
+    if (z8_native_is_instance(z8_system_entries_name, self)) z8_system_entries_before_destroy(id);
     if (z8_query_user_events_enabled() && z8_native_is_instance(z8_roles_name, self)) z8_roles_before_destroy(id);
     if (z8_query_user_events_enabled() && z8_native_is_instance(z8_roles_name, self)) {
         auto lifecycle = cast(IZ8RoleLifecycle)z8_query_executor(self);

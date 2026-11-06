@@ -1051,6 +1051,8 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
         bool hasRecords;
         foreach (record; program.fields) if (record.isRecord) hasRecords = true;
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.UserRoles"w) hasRecords = true;
+        if (program.isNative && ["org.zenframework.z8.server.base.table.system.Entries"w,
+            "org.zenframework.z8.server.base.table.system.UserEntries"w].canFind(program.nativeName)) hasRecords = true;
         if (hasRecords) {
             result ~= "override void z8_init_static_records() {\nsuper.z8_init_static_records();\n";
             if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Users"w)
@@ -1059,6 +1061,10 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 result ~= "z8_roles_initialize_static_records(this);\n";
             else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.UserRoles"w)
                 result ~= "z8_user_roles_initialize_static_records(this);\n";
+            else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Entries"w)
+                result ~= "z8_system_entries_initialize_static_records(this);\n";
+            else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.UserEntries"w)
+                result ~= "z8_user_entries_initialize_static_records(this);\n";
             else foreach (record; program.fields) if (record.isRecord && record.recordAttributes.length) {
                     string[] values;
                     foreach (attribute; record.recordAttributes)
@@ -1209,6 +1215,11 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 result ~= "this.f_objects().z8_add(this.f_" ~ name ~ "());\n";
             result ~= "}\n";
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Entries"w) {
+            result ~= "override void z8_init_members() {\nsuper.z8_init_members();\n";
+            foreach (name; ["name", "classId"]) result ~= "this.f_objects().z8_add(this.f_" ~ name ~ "());\n";
+            result ~= "}\n";
+        }
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Fields"w) {
             result ~= "override void z8_init_members() {\nsuper.z8_init_members();\n";
             foreach (name; ["name", "description", "classId", "table", "displayName", "type", "position", "tables"])
@@ -1239,6 +1250,11 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 result ~= "this.f_objects().z8_add(this.f_" ~ name ~ "());\n";
             result ~= "}\n";
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.UserEntries"w) {
+            result ~= "override void z8_init_members() {\nsuper.z8_init_members();\n";
+            foreach (name; ["user", "entry", "position", "users", "entries"]) result ~= "this.f_objects().z8_add(this.f_" ~ name ~ "());\n";
+            result ~= "}\n";
+        }
         result ~= "override void z8_init_values() {\nsuper.z8_init_values();\n";
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Roles"w)
             result ~= "z8_roles_configure(this);\n";
@@ -1250,6 +1266,8 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
             result ~= "z8_system_tables_configure(this);\n";
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Requests"w)
             result ~= "z8_system_requests_configure(this);\n";
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Entries"w)
+            result ~= "z8_system_entries_configure(this);\n";
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Fields"w)
             result ~= "z8_system_fields_configure(this);\n";
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.RoleTableAccess"w)
@@ -1260,6 +1278,8 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
             result ~= "z8_role_access_configure!(Z8RoleAccessKind.request)(this);\n";
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.UserRoles"w)
             result ~= "z8_user_roles_configure(this);\n";
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.UserEntries"w)
+            result ~= "z8_user_entries_configure(this);\n";
         // TypeBody.rearrangeMembers puts declarations before standalone member initializers.
         foreach (field; program.fields) {
             if (field.isStatic || program.isNative) continue;

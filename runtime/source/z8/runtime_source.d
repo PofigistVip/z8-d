@@ -52,12 +52,14 @@ package enum string runtimeSource = import("z8_core_runtime.txt") ~ import("z8_n
     import("z8_sequencer_runtime.txt") ~ "\n" ~
     import("z8_system_tables_runtime.txt") ~ "\n" ~
     import("z8_system_requests_runtime.txt") ~ "\n" ~
+    import("z8_system_entries_runtime.txt") ~ "\n" ~
     import("z8_system_fields_runtime.txt") ~ "\n" ~
     import("z8_role_access_runtime.txt") ~ "\n" ~
     import("z8_role_table_access_runtime.txt") ~ "\n" ~
     import("z8_role_field_access_runtime.txt") ~ "\n" ~
     import("z8_role_request_access_runtime.txt") ~ "\n" ~
     import("z8_user_roles_runtime.txt") ~ "\n" ~
+    import("z8_user_entries_runtime.txt") ~ "\n" ~
     import("z8_registry_runtime.txt") ~ "\n" ~
     import("z8_privileges_runtime.txt") ~ "\n" ~
     import("z8_request_query_read_runtime.txt") ~ "\n" ~

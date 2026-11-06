@@ -1,0 +1,36 @@
+// Native physical fields and built-in entry from Entries.java.
+private enum z8_system_entries_name = "org.zenframework.z8.server.base.table.system.Entries"w;
+private enum z8_system_tools_class = "org.zenframework.z8.server.base.table.system.SystemTools"w;
+private class Z8SystemEntriesState { Z8Object[2] fields; }
+private void z8_system_entries_new(Z8Object self) {
+    enum base = "org.zenframework.z8.server.base.table.value.StringField"w;
+    auto state = new Z8SystemEntriesState();
+    state.fields[0] = z8_table_system_field(self, base, "name"w, "Name"w);
+    state.fields[1] = z8_table_system_field(self, base, "classId"w, "Class"w);
+    self.z8_set_native_state(z8_system_entries_name, state);
+}
+private Z8SystemEntriesState z8_system_entries_state(Z8Object self) {
+    auto state = cast(Z8SystemEntriesState)z8_nonnull(self, -1).z8_get_native_state(z8_system_entries_name);
+    if (state is null) throw new Exception("Entries fields are not initialized");
+    return state;
+}
+private Z8Object* z8_system_entries_field_address(size_t index)(Z8Object self) { return &z8_system_entries_state(self).fields[index]; }
+void z8_system_entries_configure(Z8Object self) {
+    auto state = z8_system_entries_state(self);
+    foreach (field; state.fields) z8_field_state(z8_nonnull(field)).length = z8_optional_wrap(1024L);
+}
+void z8_system_entries_initialize_static_records(Z8Object self) {
+    auto state = z8_system_entries_state(self);
+    auto title = z8_string_new("$SystemTools.title$"w);
+    self.z8_add_static_record(z8_guid_create_name(z8_system_tools_class), [
+        Z8StaticRecordValue(state.fields[0], z8_primary_box(title)),
+        Z8StaticRecordValue(state.fields[1], z8_primary_box(z8_system_tools_class))]);
+}
+void z8_system_entries_before_destroy(Z8Guid id) {
+    if (id !is null && id == z8_guid_create_name(z8_system_tools_class)) throw new Exception("Unable to delete builtin system entrypoint !");
+}
+shared static this() {
+    z8_native_bind(z8_system_entries_name ~ ".m_new"w, &z8_system_entries_new);
+    static foreach (i, name; ["name"w, "classId"w])
+        z8_native_bind_field(z8_system_entries_name ~ ".f_"w ~ name, &z8_system_entries_field_address!i);
+}

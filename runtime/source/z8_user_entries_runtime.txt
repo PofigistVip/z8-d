@@ -1,0 +1,43 @@
+// Native UserEntries.java fields and built-in user-to-system-entry links.
+private enum z8_user_entries_name = "org.zenframework.z8.server.base.table.system.UserEntries"w;
+private class Z8UserEntriesState { Z8Object users, entries, user, entry, position; }
+private void z8_user_entries_new(Z8Object self) {
+    enum prefix = "org.zenframework.z8.server.base.table.value."w;
+    auto state = new Z8UserEntriesState();
+    state.users = z8_native_new(z8_users_name); state.users.z8_set_container(self); state.users.z8_set_index("users"w);
+    state.entries = z8_native_new(z8_system_entries_name); state.entries.z8_set_container(self); state.entries.z8_set_index("entries"w);
+    state.user = z8_table_system_field(self, prefix ~ "Link"w, "user"w, "UserId"w);
+    state.entry = z8_table_system_field(self, prefix ~ "Link"w, "entry"w, "EntryId"w);
+    state.position = z8_table_system_field(self, prefix ~ "IntegerField"w, "position"w, "Position"w);
+    self.z8_set_native_state(z8_user_entries_name, state);
+}
+private Z8UserEntriesState z8_user_entries_state(Z8Object self) {
+    auto state = cast(Z8UserEntriesState)z8_nonnull(self, -1).z8_get_native_state(z8_user_entries_name);
+    if (state is null) throw new Exception("UserEntries members are not initialized");
+    return state;
+}
+private Z8Object* z8_user_entries_address(string member)(Z8Object self) { return &__traits(getMember, z8_user_entries_state(self), member); }
+void z8_user_entries_configure(Z8Object self) {
+    auto state = z8_user_entries_state(self);
+    z8_link_assign(z8_nonnull(state.user), z8_nonnull(state.users));
+    z8_link_assign(z8_nonnull(state.entry), z8_nonnull(state.entries));
+    auto request = z8_application_request();
+    if (request !is null && request.session !is null && request.session.user !is null)
+        z8_query_state(self).readOnly = z8_optional_wrap(!request.session.user.administrator);
+}
+void z8_user_entries_initialize_static_records(Z8Object self) {
+    auto state = z8_user_entries_state(self);
+    auto table = cast(Z8TableState)self.z8_get_native_state(z8_table_name);
+    if (table is null) throw new Exception("Table fields are not initialized");
+    foreach (index, id; ["D53F3EBE-4D11-4ACE-99D7-07608B68B6C2", "4A50E864-CFD0-4439-88E9-E4AC2A9B08A5"]) {
+        self.z8_add_static_record(z8_guid_literal(id), [
+            Z8StaticRecordValue(state.user, z8_primary_box(index == 0 ? z8_user_administrator : z8_user_system)),
+            Z8StaticRecordValue(state.entry, z8_primary_box(z8_guid_create_name(z8_system_tools_class))),
+            Z8StaticRecordValue(table.lock, z8_primary_box(3L))]);
+    }
+}
+shared static this() {
+    z8_native_bind(z8_user_entries_name ~ ".m_new"w, &z8_user_entries_new);
+    static foreach (name; ["users", "entries", "user", "entry", "position"])
+        z8_native_bind_field(z8_user_entries_name ~ ".f_"w ~ name.to!wstring, &z8_user_entries_address!name);
+}

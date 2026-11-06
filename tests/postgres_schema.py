@@ -135,6 +135,8 @@ import org.zenframework.z8.base.table.system.RoleTableAccess;
 import org.zenframework.z8.base.table.system.RoleFieldAccess;
 import org.zenframework.z8.base.table.system.RoleRequestAccess;
 import org.zenframework.z8.base.table.system.UserRoles;
+import org.zenframework.z8.base.table.system.Entries;
+import org.zenframework.z8.base.table.system.UserEntries;
 import org.zenframework.z8.base.table.value.Field;
 public class Probe {
     public static Sample make() { Sample value; return value; }
@@ -153,6 +155,9 @@ public class Probe {
     public static RoleFieldAccess roleFieldAccess() { RoleFieldAccess value; return value; }
     public static RoleRequestAccess roleRequestAccess() { RoleRequestAccess value; return value; }
     public static UserRoles userRoles() { UserRoles value; return value; }
+    public static Entries entries() { Entries value; return value; }
+    public static UserEntries userEntries() { UserEntries value; return value; }
+    public static void deleteEntry(Entries value, guid id) { value.destroy(id); }
     public static void deleteUserRole(UserRoles value, guid id) { value.destroy(id); }
     public static string accessRoleName(RoleTableAccess value) { Field[] fields = {value.roles.name}; value.read(fields); if (value.next()) return value.roles.name.get(); return "missing"; }
     public static void setFieldRead(RoleFieldAccess value, guid id, bool flag) { value.read = flag; value.update(id); }
@@ -546,7 +551,7 @@ void main(string[] args) {
     assert(rolesUnavailable);
     auto bootstrapRegistry = new Z8RuntimeRegistry(); auto bootstrapSample = P.m_make();
     bootstrapRegistry.registerTable(bootstrapSample); bootstrapRegistry.registerRequest(bootstrapSample);
-    Z8Object[] bootstrapTables = [P.m_userRoles(), P.m_roles(), P.m_users(), P.m_sequences(), P.m_systemTables(), P.m_systemFields(),
+    Z8Object[] bootstrapTables = [P.m_userRoles(), P.m_userEntries(), P.m_entries(), P.m_roles(), P.m_users(), P.m_sequences(), P.m_systemTables(), P.m_systemFields(),
         P.m_systemRequests(), P.m_roleTableAccess(), P.m_roleFieldAccess(), P.m_roleRequestAccess(), P.m_target()];
     db.execute(`CREATE SCHEMA "z8_bootstrap"`);
     auto bootstrapUser = new Z8UserData(); bootstrapUser.id = z8_guid_create(777); bootstrapUser.administrator = true;
@@ -560,6 +565,11 @@ void main(string[] args) {
     assert(initialUsers.rows[0][0].text == "2");
     assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemRoles" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`).rows[0][0].text == "3");
     assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemUserRoles" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`).rows[0][0].text == "2");
+    auto entry = db.execute(`SELECT "Class" FROM "z8_bootstrap"."SystemEntries" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`);
+    assert(entry.rows.length == 1 && entry.rows[0][0].text == "org.zenframework.z8.server.base.table.system.SystemTools");
+    auto userEntries = db.execute(`SELECT "UserId"::text, "EntryId"::text, "Lock" FROM "z8_bootstrap"."SystemUserEntries" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000' ORDER BY "UserId"`);
+    assert(userEntries.rows.length == 2 && userEntries.rows[0][0].text == "00000000-0000-0000-0000-000000000001" && userEntries.rows[1][0].text == "00000000-0000-0000-0000-000000000002");
+    assert(z8_guid_literal(userEntries.rows[0][1].text) == z8_guid_create_name("org.zenframework.z8.server.base.table.system.SystemTools"w) && userEntries.rows[0][2].text == "3");
     assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemRoleTableAccess" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`).rows[0][0].text == "3");
     assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemRoleRequestAccess" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`).rows[0][0].text == "3");
     assert(db.execute(`SELECT "Read"::text || "Write"::text || "Create"::text || "Copy"::text || "Destroy"::text FROM "z8_bootstrap"."SystemRoleTableAccess" WHERE "Role" = 'DC08CA72-C668-412F-91B7-022F1C82AC09'`).rows[0][0].text == "11111");
@@ -1079,15 +1089,24 @@ void main(string[] args) {
     auto securityRequest = z8_application_set_request(disabledEvents);
     bool builtinAssignmentProtected;
     try { P.m_deleteUserRole(userRoles, z8_guid_literal("8D05DB1E-1A17-4E19-949C-F2894920261E")); } catch (Exception) { builtinAssignmentProtected = true; }
-    assert(builtinAssignmentProtected); z8_application_set_request(securityRequest); z8_connection_set_current(savedSecurityBackend);
+    assert(builtinAssignmentProtected);
+    bool systemEntryProtected;
+    try { P.m_deleteEntry(P.m_entries(), z8_guid_create_name("org.zenframework.z8.server.base.table.system.SystemTools"w)); } catch (Exception) { systemEntryProtected = true; }
+    assert(systemEntryProtected); z8_application_set_request(securityRequest); z8_connection_set_current(savedSecurityBackend);
     auto principal = new Z8UserData(); auto session = new Z8ApplicationSession("test"w, principal, principal);
     auto accessRequest = new Z8ApplicationRequest(); accessRequest.session = session;
     securityRequest = z8_application_set_request(accessRequest);
     auto readonlyRoles = P.m_userRoles();
     auto readonly = z8_native_field!(Z8Optional!bool)("org.zenframework.z8.server.base.query.Query.f_readOnly"w, readonlyRoles);
     assert(z8_optional_require(readonly));
+    auto readonlyEntries = P.m_userEntries();
+    readonly = z8_native_field!(Z8Optional!bool)("org.zenframework.z8.server.base.query.Query.f_readOnly"w, readonlyEntries);
+    assert(z8_optional_require(readonly));
     principal.administrator = true; auto writableRoles = P.m_userRoles();
     readonly = z8_native_field!(Z8Optional!bool)("org.zenframework.z8.server.base.query.Query.f_readOnly"w, writableRoles);
+    assert(!z8_optional_require(readonly));
+    auto writableEntries = P.m_userEntries();
+    readonly = z8_native_field!(Z8Optional!bool)("org.zenframework.z8.server.base.query.Query.f_readOnly"w, writableEntries);
     assert(!z8_optional_require(readonly)); z8_application_set_request(securityRequest);
     auto systemTables = P.m_systemTables(); auto systemRequests = P.m_systemRequests();
     auto tablesDDL = z8_postgres_create_table_sql("z8_security"w, systemTables);
