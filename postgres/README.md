@@ -235,6 +235,19 @@ This is the additive part of `AccessRightsGenerator`: it does not remove stale
 metadata, emit cross-server notifications or populate audit fields through BL
 table events.
 
+`Z8PostgresScheduler` in `z8.database.scheduler` provides a synchronous
+`runDue()` step for a host-owned timer. It loads active schedules, claims each
+with a PostgreSQL advisory lock, checks its CRON against the last start, and
+runs the registered executable as the configured user with request permission
+checks. It records start, next start and finish times; a log row is written on
+errors or when `Log errors only` is disabled. Results and captured messages are
+returned to the caller. The scheduler needs an open connection with no active
+transaction and the Jobs, ScheduledJobs, ScheduledJobLogs and security tables.
+The host supplies periodic calls and connection lifetime; this module does not
+start threads or persist the monitor's text and files. Start time is committed
+before execution, so a process crash after claiming a run does not retry that
+occurrence automatically.
+
 `Z8PostgresQueryExecutor` connects BL `Query` reads to PostgreSQL tables.
 Construct it with a connection, schema and root table name, then attach it to
 the generated query with `z8_query_set_executor`. It supports explicit selected

@@ -146,3 +146,14 @@ private void z8_application_dispatch_scheduled_job(Z8Object executable) {
     scope(exit) request.monitor = previous;
     z8_executable_run(executable);
 }
+// Scheduler entry point: require both a registered job and request permission,
+// then apply the same named-executable specialization as HTTP dispatch.
+void z8_application_dispatch_registered_job(Z8RuntimeRegistry registry, wstring classId) {
+    auto request = z8_application_require_request();
+    if (!z8_application_may_execute(request.session, classId, null)) throw new Exception("request access denied");
+    auto target = z8_nonnull(registry).newJobByClass(classId);
+    if (target is null) throw new Exception("scheduled job class is not registered");
+    auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, target);
+    auto specialized = registry.newExecutableByName(name);
+    z8_application_dispatch_scheduled_job(specialized is null ? target : specialized);
+}

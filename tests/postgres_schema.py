@@ -23,7 +23,15 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     shutil.copytree(root / "platform/bl", source, dirs_exist_ok=True)
     (source / "DailyJob.bl").write_text('''
 import org.zenframework.z8.base.Executable;
-[job "*/5 * * * *"] [displayName "Daily task"] public class DailyJob extends Executable {}
+[job "*/5 * * * *"] [displayName "Daily task"] public class DailyJob extends Executable {
+    virtual protected void execute() { info("daily ran"); }
+}
+''', encoding="utf-8")
+    (source / "FailingJob.bl").write_text('''
+import org.zenframework.z8.base.Executable;
+[job "* * * * *"] public class FailingJob extends Executable {
+    virtual protected void execute() { error("scheduled failure"); }
+}
 ''', encoding="utf-8")
     (source / "DisabledJob.bl").write_text('''
 import org.zenframework.z8.base.Executable;
@@ -159,6 +167,7 @@ public class Probe {
     public static DailyJob dailyJob() { DailyJob value; return value; }
     public static DisabledJob disabledJob() { DisabledJob value; return value; }
     public static ManualJob manualJob() { ManualJob value; return value; }
+    public static FailingJob failingJob() { FailingJob value; return value; }
     public static bool lookupSystemUser() {
         User user = User.get(guid.create(1));
         return user != null && user.login == "System" && user.isBuiltinSystem()
@@ -245,6 +254,7 @@ import z8.database.migration;
 import z8.database.metadata;
 import z8.database.bootstrap;
 import z8.database.privileges;
+import z8.database.scheduler;
 import z8gen.p_Probe;
 import std.algorithm.searching : canFind;
 import std.conv : to;
@@ -641,6 +651,44 @@ void main(string[] args) {
     assert(scheduleRows.rows[0][0].text == "" && scheduleRows.rows[0][1].text == "0");
     P.m_setScheduleCron(P.m_scheduledJobs(), scheduleId, "*/10 * * * *"w);
     z8_connection_set_current(savedScheduleConnection);
+    bootstrapRegistry.registerJob(P.m_failingJob());
+    z8_postgres_sync_registry(db, "z8_bootstrap"w, bootstrapRegistry);
+    db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "Active" = 0 WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`);
+    db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "Active" = 1, "Cron" = '* * * * *', "LastStart" = 1699999700000, "Log errors only" = 0 WHERE "Job" = $1::uuid AND "RecordId" <> $2::uuid`,
+        [Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("DailyJob"w)).to!string), Z8PostgresParameter.value(z8_guid_to_string(scheduleId).to!string)]);
+    db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "Active" = 1, "Cron" = '* * * * *', "LastStart" = 1699999700000 WHERE "Job" = $1::uuid`,
+        [Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("FailingJob"w)).to!string)]);
+    auto dailyScheduleRow = db.execute(`SELECT "RecordId"::text FROM "z8_bootstrap"."SystemScheduledJobs" WHERE "Job" = $1::uuid AND "Active" = 1`,
+        [Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("DailyJob"w)).to!string)]);
+    auto sibling = db.openSibling();
+    auto lock = Z8PostgresParameter.value("z8.schedule.z8_bootstrap." ~ dailyScheduleRow.rows[0][0].text);
+    sibling.execute("SELECT pg_catalog.pg_advisory_lock(pg_catalog.hashtextextended($1::text, 0))", [lock]);
+    auto scheduler = new Z8PostgresScheduler(db, "z8_bootstrap"w, bootstrapRegistry);
+    auto runs = scheduler.runDue(z8_date_from_ticks(1700000000000));
+    assert(runs.length == 1 && runs[0].classId == "FailingJob"w && !runs[0].success && runs[0].messages.length == 1);
+    sibling.execute("SELECT pg_catalog.pg_advisory_unlock(pg_catalog.hashtextextended($1::text, 0))", [lock]); sibling.close();
+    runs = scheduler.runDue(z8_date_from_ticks(1700000000000));
+    assert(runs.length == 1 && runs[0].classId == "DailyJob"w && runs[0].success && runs[0].messages.length == 1 && runs[0].messages[0].text == "daily ran"w);
+    db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "Active" = 1, "Cron" = 'invalid' WHERE "Job" = $1::uuid`,
+        [Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("DisabledJob"w)).to!string)]);
+    runs = scheduler.runDue(z8_date_from_ticks(1700000000000));
+    assert(runs.length == 1 && !runs[0].success && runs[0].started is null && runs[0].messages.length == 1);
+    db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "Active" = 0 WHERE "Job" = $1::uuid`,
+        [Z8PostgresParameter.value(z8_guid_to_string(z8_guid_create_name("DisabledJob"w)).to!string)]);
+    assert(scheduler.runDue(z8_date_from_ticks(1700000000000)).length == 0);
+    auto completedLogs = db.execute(`SELECT "Errors", count(*) FROM "z8_bootstrap"."SystemScheduledJobLogs" WHERE "RecordId" NOT IN ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000998') GROUP BY "Errors" ORDER BY "Errors"`);
+    assert(completedLogs.rows.length == 2 && completedLogs.rows[0][0].text == "0" && completedLogs.rows[0][1].text == "1" && completedLogs.rows[1][0].text == "1" && completedLogs.rows[1][1].text == "1");
+    db.execute(`INSERT INTO "z8_bootstrap"."SystemUsers" ("RecordId", "Name") VALUES ('00000000-0000-0000-0000-000000000054', 'No rights')`);
+    db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "User" = '00000000-0000-0000-0000-000000000054', "LastStart" = 1699999700000 WHERE "RecordId" = $1::uuid`,
+        [Z8PostgresParameter.value(dailyScheduleRow.rows[0][0].text)]);
+    runs = scheduler.runDue(z8_date_from_ticks(1700000000000));
+    assert(runs.length == 1 && !runs[0].success && runs[0].messages.length == 1 && runs[0].messages[0].text == "request access denied"w);
+    db.beginTransaction(); bool schedulerTransactionRejected;
+    try { scheduler.runDue(); } catch (Z8PostgresException) { schedulerTransactionRejected = true; }
+    assert(schedulerTransactionRejected && db.inTransaction()); db.rollback();
+    db.execute(`UPDATE "z8_bootstrap"."SystemScheduledJobs" SET "Cron" = '*/30 * * * *', "Active" = 0, "User" = '00000000-0000-0000-0000-000000000001' WHERE "RecordId" = $1::uuid`,
+        [Z8PostgresParameter.value(dailyScheduleRow.rows[0][0].text)]);
+    db.execute(`DELETE FROM "z8_bootstrap"."SystemUsers" WHERE "RecordId" = '00000000-0000-0000-0000-000000000054'`);
     db.execute(`INSERT INTO "z8_bootstrap"."SystemJobs" ("RecordId", "Name", "Class") VALUES ('00000000-0000-0000-0000-000000000099', 'Old', 'OldJob')`);
     bootstrapJob.z8_set_attribute("displayName"w, "Renamed job"w); bootstrapRegistry.registerJob(bootstrapJob);
     assert(z8_application_request() is bootstrapRequest && bootstrapRequest.eventsLevel() == Z8EventsLevel.user);
