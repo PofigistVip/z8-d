@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from urllib.parse import urlencode
 
 from postgres_support import postgres_bin, temporary_postgres
@@ -85,11 +86,12 @@ import org.zenframework.z8.base.Executable;
 import org.zenframework.z8.base.form.action.Parameter;
 import org.zenframework.z8.base.sql.Connection;
 public class UpdateJob extends Executable {
-    Parameter amount = Parameter.create("amount", 1); Parameter fail = Parameter.create("fail", false);
-    parameters = {amount, fail};
+    Parameter amount = Parameter.create("amount", 1); Parameter fail = Parameter.create("fail", false); Parameter wait = Parameter.create("wait", false);
+    parameters = {amount, fail, wait};
     virtual protected void execute(Parameter[] args) {
         Connection.get().execute("UPDATE \\"Sample\\" SET \\"CreatedAt\\" = COALESCE(\\"CreatedAt\\", 0) + " + ((int)amount).toString() + " WHERE \\"RecordId\\" = '00000000-0000-0000-0000-000000000002'");
-        progress(50); if ((bool)fail) throw "job failed"; info("job complete");
+        progress(50); if ((bool)wait) Connection.get().execute("SELECT pg_sleep(0.4)");
+        if ((bool)fail) throw "job failed"; info("job complete");
     }
 }
 ''', encoding="utf-8")
@@ -127,7 +129,7 @@ __gshared string databaseInfo;
 class Authority : IZ8HttpAuthority {
     Z8ApplicationSession authorize(Z8HttpRequest request, wstring id, wstring server) {
         if (server != "test"w || (id != "full"w && id != "limited"w && id != "denied"w)) return null;
-        auto user = new Z8UserData(); user.id = z8_guid_create(1);
+        auto user = new Z8UserData(); user.id = z8_guid_create(id == "limited"w ? 3 : 1);
         user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
         if (id == "limited"w) {
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.Title"w), Z8Access.init);
@@ -157,7 +159,7 @@ void main(string[] args) {
     auto row = verify.execute(`SELECT encode("Blob", 'hex') FROM "Sample" WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
     assert(row.rows.length == 1 && row.rows[0][0].text == "00ff4100");
     row = verify.execute(`SELECT "CreatedAt" FROM "Sample" WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
-    assert(row.rows.length == 1 && row.rows[0][0].text == "7"); verify.close();
+    assert(row.rows.length == 1 && row.rows[0][0].text == "10"); verify.close();
 }
 ''', encoding="utf-8")
     exe = temp / ("postgres-http.exe" if os.name == "nt" else "postgres-http")
@@ -269,8 +271,36 @@ void main(string[] args) {
             assert result["success"] and "job failed" in result["info"]["messages"][-1]["text"], result
             result = request(request="UpdateJob", action=None, scheduled="true", parameters='{"missing":1}')
             assert not result["success"], result
-            result = request(request="UpdateJob", action=None)
-            assert not result["success"] and "asynchronous jobs" in result["info"]["messages"][-1]["text"], result
+            result = request(request="UpdateJob", action=None, parameters='{"amount":3,"wait":true}')
+            assert result["success"] and result["id"], result
+            job = result["id"]
+            result = request(session="limited", request="UpdateJob", action=None, job=job)
+            assert not result["success"] and "job access denied" in result["info"]["messages"][-1]["text"], result
+            messages = []
+            for _ in range(100):
+                result = request(request="UpdateJob", action=None, job=job)
+                assert result["success"] and result["isJob"] and result["id"] == job, result
+                messages.extend(entry["text"] for entry in result["info"]["messages"])
+                if result["done"]:
+                    break
+                time.sleep(0.02)
+            else:
+                raise AssertionError("background job did not finish")
+            assert result["worked"] == 50 and "job complete" in messages, result
+            result = request(request="UpdateJob", action=None, job=job)
+            assert result["done"] and result["worked"] == 100, result
+            result = request(request="UpdateJob", action=None, parameters='{"amount":8,"fail":true}')
+            assert result["success"] and result["id"], result
+            job = result["id"]; messages = []
+            for _ in range(100):
+                result = request(request="UpdateJob", action=None, job=job)
+                messages.extend(entry["text"] for entry in result["info"]["messages"])
+                if result["done"]:
+                    break
+                time.sleep(0.02)
+            else:
+                raise AssertionError("failing background job did not finish")
+            assert any("job failed" in text for text in messages), result
             result = request(sort='[{"property":"amount"}]')
             assert [row["amount"] for row in result["data"]] == [11, 11], result
             new_record = '[{"recordId":"00000000-0000-0000-0000-000000000003","title":"Third","amount":25}]'

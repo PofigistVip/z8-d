@@ -1,4 +1,111 @@
-// Synchronous scheduled jobs use the request thread and its database backend.
+// Scheduled jobs use the request thread; ordinary jobs own a background context.
+private struct Z8JobSnapshot {
+    bool done;
+    long worked;
+    Z8Date start;
+    Z8MonitorEntry[] messages;
+    Z8File[] files;
+}
+private class Z8AsyncJobMonitor : IZ8ApplicationMonitor, IZ8JobProgress {
+    private Object lock = new Object();
+    private Z8MonitorEntry[] entries;
+    private Z8File[] files;
+    private bool done;
+    private long worked;
+    private Z8Date start;
+    wstring id, source;
+    Z8Guid owner;
+    this(wstring id, Z8Guid owner, wstring source) { this.id = id; this.owner = owner; this.source = source; start = z8_date_now(); }
+    void message(Z8MonitorLevel level, wstring text) {
+        synchronized (lock) entries ~= Z8MonitorEntry(level, text, source, z8_date_now());
+    }
+    void log(Z8MonitorLevel level, wstring text) {}
+    void print(Z8File value) { synchronized (lock) files ~= z8_nonnull(value); }
+    void setWorked(long percent) { synchronized (lock) worked = percent; }
+    void finish() { synchronized (lock) done = true; }
+    Z8JobSnapshot snapshot() {
+        synchronized (lock) {
+            auto result = Z8JobSnapshot(done, worked, start, entries.dup, done ? files.dup : null);
+            entries = null;
+            return result;
+        }
+    }
+}
+private __gshared Object z8_job_lock;
+private __gshared Z8AsyncJobMonitor[wstring] z8_job_monitors;
+shared static this() { z8_job_lock = new Object(); }
+private void z8_job_close_background(IZ8DatabaseConnection background, Z8AsyncJobMonitor monitor) {
+    if (background is null) return;
+    try { (cast(IZ8BackgroundDatabaseConnection)background).closeBackgroundConnection(); }
+    catch (Throwable error) { monitor.message(Z8MonitorLevel.error, error.msg.to!wstring); }
+}
+
+private void z8_application_poll_job() {
+    auto request = z8_application_require_request();
+    auto session = z8_nonnull(request.session);
+    auto user = z8_nonnull(session.user);
+    auto id = z8_string_required(request.parameters.z8_get("job"w));
+    if (request.writer.scopes.length != 2) throw new Exception("response object is not open");
+    Z8JobSnapshot snapshot;
+    synchronized (z8_job_lock) {
+        auto found = id in z8_job_monitors;
+        if (found is null) snapshot = Z8JobSnapshot(true, 100, z8_date_now(), null, null);
+        else {
+            auto monitor = *found;
+            if (user.id is null || monitor.owner is null || user.id != monitor.owner) throw new Exception("job access denied");
+            snapshot = monitor.snapshot();
+            if (snapshot.done) z8_job_monitors.remove(id);
+        }
+    }
+    auto writer = request.writer;
+    z8_monitor_property(writer, "isJob"w, true); z8_monitor_property(writer, "id"w, id);
+    z8_monitor_property(writer, "done"w, snapshot.done); z8_monitor_property(writer, "total"w, 100L);
+    z8_monitor_property(writer, "worked"w, snapshot.worked); z8_monitor_property(writer, "start"w, snapshot.start);
+    z8_monitor_property(writer, "duration"w, new Z8Datespan(z8_date_ticks(z8_date_now()) - z8_date_ticks(snapshot.start)));
+    request.hasInfoOverride = true; request.overrideMessages = snapshot.messages; request.overrideFiles = snapshot.files;
+}
+
+private void z8_application_start_job(Z8Object executable) {
+    import core.thread : Thread;
+    auto request = z8_application_require_request();
+    auto session = z8_nonnull(request.session);
+    auto user = z8_nonnull(session.user);
+    if (user.id is null) throw new Exception("job user has no id");
+    IZ8DatabaseConnection background;
+    auto current = z8_connection_current_backend();
+    if (current !is null) {
+        auto factory = cast(IZ8BackgroundDatabaseConnection)current;
+        if (factory is null) throw new Exception("database does not support background jobs");
+        background = factory.openBackgroundConnection();
+        if (background is null || cast(IZ8BackgroundDatabaseConnection)background is null)
+            throw new Exception("invalid background database connection");
+    } else if (z8_optional_require(z8_action_state(executable).useTransaction))
+        throw new Exception("no current database connection");
+    bool started;
+    scope(failure) if (!started && background !is null) (cast(IZ8BackgroundDatabaseConnection)background).closeBackgroundConnection();
+    auto id = z8_guid_to_string(z8_guid_create_random());
+    auto monitor = new Z8AsyncJobMonitor(id, user.id, executable.z8_get_attribute("displayName"w));
+    auto worker = new Z8ApplicationRequest();
+    auto names = request.parameters.z8_keys();
+    for (long i; i < names.z8_size(); ++i) worker.parameters.z8_add(names.z8_get(i), request.parameters.z8_get(names.z8_get(i)));
+    worker.files.z8_addAll(request.files);
+    worker.session = new Z8ApplicationSession(session.id, user, session.system);
+    worker.monitor = monitor; worker.setEventsLevel(request.eventsLevel());
+    synchronized (z8_job_lock) z8_job_monitors[id] = monitor;
+    scope(failure) if (!started) synchronized (z8_job_lock) z8_job_monitors.remove(id);
+    auto thread = new Thread({
+        z8_application_set_request(worker); z8_connection_set_current(background);
+        try { z8_executable_run(executable); }
+        catch (Throwable error) { monitor.message(Z8MonitorLevel.error, error.msg.to!wstring); }
+        finally {
+            z8_job_close_background(background, monitor);
+            z8_connection_set_current(null); z8_application_set_request(null); monitor.finish();
+        }
+    });
+    thread.start(); started = true;
+    z8_monitor_property(request.writer, "id"w, id);
+    z8_monitor_property(request.writer, "text"w, executable.z8_get_attribute("displayName"w));
+}
 private class Z8ScheduledJobMonitor : IZ8ApplicationMonitor, IZ8JobProgress {
     IZ8ApplicationMonitor target;
     this(IZ8ApplicationMonitor target) { this.target = z8_nonnull(target); }
@@ -14,7 +121,6 @@ private class Z8ScheduledJobMonitor : IZ8ApplicationMonitor, IZ8JobProgress {
 private void z8_application_dispatch_scheduled_job(Z8Object executable) {
     auto request = z8_application_require_request();
     auto params = z8_nonnull(request.parameters);
-    if (params.z8_get("scheduled"w) is null) throw new Exception("asynchronous jobs are not implemented");
     auto keys = params.z8_keys();
     for (long i; i < keys.z8_size(); ++i) {
         auto key = keys.z8_get(i);
@@ -31,6 +137,7 @@ private void z8_application_dispatch_scheduled_job(Z8Object executable) {
             z8_parameter_parse(z8_action_parameter_by_id(state, id.to!wstring), z8_json_value_text(value));
         }
     }
+    if (params.z8_get("scheduled"w) is null) { z8_application_start_job(executable); return; }
     auto previous = request.monitor;
     request.monitor = new Z8ScheduledJobMonitor(previous);
     scope(exit) request.monitor = previous;

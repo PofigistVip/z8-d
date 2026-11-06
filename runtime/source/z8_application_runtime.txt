@@ -150,6 +150,9 @@ class Z8ApplicationRequest {
     private Z8JsonWriterState writer;
     private Z8Binary binaryResponse;
     private bool hasBinaryResponse;
+    private bool hasInfoOverride;
+    private Z8MonitorEntry[] overrideMessages;
+    private Z8File[] overrideFiles;
     this() {
         parameters = new Z8StringMap();
         files = new Z8Array!Z8File();
@@ -183,7 +186,10 @@ private void z8_application_response_info(Z8JsonWriterState writer, Z8RequestMon
 void z8_application_finish_response(Z8ApplicationRequest request, Z8RequestMonitor monitor, wstring server = null) {
     auto writer = z8_nonnull(request).writer;
     if (writer.scopes.length != 2) throw new Exception("unbalanced response writer");
-    z8_application_response_info(writer, monitor, server);
+    if (request.hasInfoOverride) {
+        z8_monitor_property(writer, "server"w, server);
+        writer.property("info"w); writer.raw(z8_monitor_info_json(request.overrideMessages, request.overrideFiles, server));
+    } else z8_application_response_info(writer, monitor, server);
     writer.finish('}');
 }
 wstring z8_application_error_response(wstring requestId, Z8RequestMonitor monitor, wstring server = null) {
@@ -241,6 +247,7 @@ void z8_application_dispatch_authorized_object(wstring className) {
 // class twice. The host still owns the active database connection.
 void z8_application_dispatch_request() {
     auto request = z8_application_require_request();
+    if (request.parameters.z8_get("job"w) !is null) { z8_application_poll_job(); return; }
     auto className = z8_string_required(request.parameters.z8_get("request"w));
     auto action = request.parameters.z8_get("action"w);
     if (request.writer.scopes.length != 2) throw new Exception("response object is not open");
