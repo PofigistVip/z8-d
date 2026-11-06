@@ -165,8 +165,8 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
     // First stage of SelectFactory's aggregateBy: group root fields by Link.
     // Outer linked projections and a second grouping are rejected until the
     // corresponding subselect planner is available.
-    private Z8PostgresRootAggregation rootAggregation(Z8Object query, Z8QueryReadRequest request, bool counting, bool preserveAverage = false) {
-        if (request.groupFields.length || z8_query_array(query, "groupBy"w).length || request.aggregateAll ||
+    private Z8PostgresRootAggregation rootAggregation(Z8Object query, Z8QueryReadRequest request, bool counting, bool preserveAverage = false, bool outerGrouping = false) {
+        if (request.groupFields.length || (!outerGrouping && z8_query_array(query, "groupBy"w).length) || request.aggregateAll ||
             request.byRecordId || request.byRecordIds || request.readLock != Z8QueryReadLock.none ||
             !trivialTrue(request.having) || !trivialTrue(request.queryHaving))
             throw new Z8PostgresException("unsupported PostgreSQL aggregateBy query option");
@@ -257,7 +257,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
     }
     private bool hasLinkedAggregateFields(Z8Object query, Z8QueryReadRequest request, bool counting) {
         // A group filter runs against the grouped root in the outer SELECT.
-        if (!trivialTrue(request.having) || !trivialTrue(request.queryHaving)) return true;
+        if (!trivialTrue(request.having) || !trivialTrue(request.queryHaving) || request.groupFields.length || z8_query_array(query, "groupBy"w).length) return true;
         auto declared = z8_query_declared_fields(query);
         auto fields = aggregateRequestedFields(query, request);
         if (!counting) fields ~= request.sortFields;
@@ -265,10 +265,10 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         return false;
     }
     // SelectFactory's outer select joins grouped Link values to their targets.
-    // Another GROUP BY is rejected until a second aggregation stage is supported.
     private Z8PostgresRootAggregation linkedRootAggregation(Z8Object query, Z8QueryReadRequest request, bool counting, bool preserveAverage = false) {
         auto declared = z8_query_declared_fields(query);
         auto groups = uniqueFields(z8_query_array(query, "aggregateBy"w));
+        auto outerGroups = uniqueFields(request.groupFields.length ? request.groupFields : z8_query_array(query, "groupBy"w));
         auto requested = aggregateRequestedFields(query, request);
         Z8Object[] filterFields;
         foreach (condition; [request.having, request.queryHaving])
@@ -280,7 +280,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             if (containsField(declared, field)) return; // Computed root fields are evaluated in the inner SELECT.
             foreach (dependency; z8_field_query_dependencies(field)) if (dependency !is field) includeCandidate(dependency);
         }
-        foreach (field; requested ~ (counting ? null : request.sortFields) ~ filterFields) {
+        foreach (field; requested ~ outerGroups ~ (counting ? null : request.sortFields) ~ filterFields) {
             if (field is null) throw new Z8PostgresException("null aggregateBy field");
             includeCandidate(field);
         }
@@ -307,10 +307,11 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         // grouping keys explicitly if all requested fields belong to targets.
         if (!innerRequest.fields.length) innerRequest.fields = groups.dup;
         innerRequest.sortFields = null; innerRequest.start = 0; innerRequest.limit = -1;
+        innerRequest.groupFields = null;
         innerRequest.having = null; innerRequest.queryHaving = null;
         // Keep AVG's fractional value for outer filters, ordering and totals;
         // convert integer fields only when projecting the final result.
-        auto inner = rootAggregation(query, innerRequest, false, true);
+        auto inner = rootAggregation(query, innerRequest, false, true, true);
         auto plan = new Z8PostgresQueryPlan(query, schema, table);
         foreach (field; linked) plan.includeField(field);
         foreach (condition; [request.having, request.queryHaving]) if (!trivialTrue(condition)) plan.includeExpression(condition);
@@ -332,20 +333,26 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             foreach (field; z8_sql_collect_fields(condition)) checkDependency(field);
         foreach (index, field; inner.fields) z8_field_bind_sql(field, "t"w, ("z8_" ~ index.to!string).to!wstring);
         Z8PostgresRootAggregation result;
-        result.fields = uniqueFields(inner.fields ~ (counting ? null : requested));
+        result.fields = uniqueFields(inner.fields ~ (counting ? null : requested) ~ outerGroups);
         // Unaggregated root fields are intentionally omitted, as in SelectFactory.
         Z8Object[] projected;
-        foreach (field; result.fields) if (!containsField(declared, field) || containsField(inner.fields, field)) projected ~= field;
+        foreach (field; result.fields) {
+            if (containsField(declared, field) && !containsField(inner.fields, field)) continue;
+            if (outerGroups.length && !containsField(outerGroups, field) && z8_field_aggregation(field) == Z8FieldAggregation.none &&
+                !z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field)) continue;
+            projected ~= field;
+        }
         result.fields = projected;
         auto previous = z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
         scope(exit) z8_sql_set_field_options(previous);
         string sql = "SELECT ";
+        z8_sql_set_field_options(Z8SqlFieldFormatOptions(outerGroups.length != 0, false));
         foreach (index, field; result.fields) {
             if (index) sql ~= ", ";
             auto kind = z8_field_type_id(field); result.kinds ~= kind;
             if (kind == "none"w) throw new Z8PostgresException("unsupported PostgreSQL aggregateBy field type");
             auto expression = z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string;
-            if (containsField(declared, field) && kind == "int"w && z8_field_aggregation(field) == Z8FieldAggregation.average && !preserveAverage)
+            if ((containsField(declared, field) || outerGroups.length) && kind == "int"w && z8_field_aggregation(field) == Z8FieldAggregation.average && !preserveAverage)
                 expression = "trunc(" ~ expression ~ ")::bigint";
             if (kind == "binary"w) expression = "encode(" ~ expression ~ ", 'hex')";
             else if (kind == "geometry"w) expression = "encode(ST_AsEWKB(" ~ expression ~ ", 'NDR'), 'hex')";
@@ -353,12 +360,27 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
                 expression = "convert_from(" ~ expression ~ ", 'UTF8')";
             sql ~= expression ~ " AS " ~ quoteIdentifier(("z8_" ~ index.to!string).to!wstring);
         }
+        z8_sql_set_field_options(Z8SqlFieldFormatOptions.init);
         sql ~= " FROM " ~ plan.fromClause(inner.sql);
         string[] filters;
-        foreach (condition; plan.where ~ [request.having, request.queryHaving])
+        foreach (condition; plan.where ~ (outerGroups.length ? null : [request.having, request.queryHaving]))
             if (!trivialTrue(condition)) filters ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
         if (filters.length) { sql ~= " WHERE "; foreach (index, filter; filters) { if (index) sql ~= " AND "; sql ~= filter; } }
+        if (outerGroups.length) {
+            sql ~= " GROUP BY ";
+            foreach (index, field; outerGroups) {
+                if (containsField(declared, field) && !containsField(inner.fields, field)) throw new Z8PostgresException("aggregateBy group field is not projected");
+                if (index) sql ~= ", ";
+                sql ~= z8_field_sql_format(field, Z8SqlVendor.Postgres).to!string;
+            }
+            z8_sql_set_field_options(Z8SqlFieldFormatOptions(true, false));
+            string[] having;
+            foreach (condition; [request.having, request.queryHaving]) if (!trivialTrue(condition))
+                having ~= "(" ~ z8_sql_bool_format(condition, true, Z8SqlVendor.Postgres).to!string ~ ")";
+            if (having.length) { sql ~= " HAVING "; foreach (index, filter; having) { if (index) sql ~= " AND "; sql ~= filter; } }
+        }
         if (!counting && request.sortFields.length) {
+            z8_sql_set_field_options(Z8SqlFieldFormatOptions(outerGroups.length != 0, true));
             sql ~= " ORDER BY ";
             foreach (index, field; request.sortFields) {
                 if (containsField(declared, field) && !containsField(inner.fields, field))
@@ -548,7 +570,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
             if (request.aggregateAll) return aggregateRootTotals(query, request);
             auto linked = hasLinkedAggregateFields(query, request, false);
             auto plan = linked ? linkedRootAggregation(query, request, false) : rootAggregation(query, request, false);
-            return new Z8PostgresRows(plan.fields, plan.kinds, connection.execute(plan.sql), !linked);
+            return new Z8PostgresRows(plan.fields, plan.kinds, connection.execute(plan.sql), !linked || request.groupFields.length != 0 || z8_query_array(query, "groupBy"w).length != 0);
         }
         auto groups = request.disableGrouping ? null : request.groupFields.length ? request.groupFields : z8_query_array(query, "groupBy"w);
         bool grouped = groups.length != 0 || request.aggregateAll;

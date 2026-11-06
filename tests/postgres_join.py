@@ -115,6 +115,23 @@ import org.zenframework.z8.base.table.value.DecimalField;
     aggregateBy = {customerId};
 }
 ''',
+        "GroupCustomer": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.StringField;
+[name "GroupCustomers"] public class GroupCustomer extends Table { [name "Label"] public StringField label; }
+''',
+        "GroupedOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.IntField;
+import org.zenframework.z8.base.table.value.Aggregation;
+[name "GroupedOrders"] public class GroupedOrder extends Table {
+    public GroupCustomer customer; [name "CustomerId"] public Link customerId = customer;
+    [name "Amount"] public IntField amount;
+    customer.label.aggregation = Aggregation.None;
+    aggregateBy = {customerId}; groupBy = {customer.label};
+}
+''',
         "FilteredCustomer": '''
 public class FilteredCustomer extends Customer {
     virtual protected sql_bool scope() { return label != "Bob"; }
@@ -240,6 +257,13 @@ public class Probe {
     public static AggregateLeftOrder aggregateLeftOrder() { AggregateLeftOrder value; return value; }
     public static AggregateFilteredOrder aggregateFilteredOrder() { AggregateFilteredOrder value; return value; }
     public static AggregateJoinOrder aggregateJoinOrder() { AggregateJoinOrder value; return value; }
+    public static GroupedOrder groupedOrder() { GroupedOrder value; return value; }
+    public static void readGroupedOrder(GroupedOrder order) { Field[] fields = {order.customer.label, order.amount}; order.read(fields); }
+    public static void readExplicitGroupedOrder(GroupedOrder order) { Field[] groups = {order.customerId}; Field[] fields = {order.customerId, order.amount}; order.group(groups, fields); }
+    public static int countGroupedOrder(GroupedOrder order) { return order.count(); }
+    public static bool nextGroupedOrder(GroupedOrder order) { return order.next(); }
+    public static string groupedOrderLabel(GroupedOrder order) { return order.customer.label.get(); }
+    public static int groupedOrderAmount(GroupedOrder order) { return order.amount.get(); }
     public static void configureAggregateJoin(AggregateJoinOrder order) { order.customer.cityJoin = order.otherId.sql_guid() == order.customer.city.recordId.sql_guid(); }
     public static void readAggregateJoin(AggregateJoinOrder order) { Field[] fields = {order.customer.city.label}; order.read(fields); }
     public static void readAggregate(AggregateOrder order) { Field[] fields = {order.customerId, order.amount}; order.read(fields); }
@@ -348,6 +372,10 @@ void main(string[] args) {
     db.execute(`INSERT INTO "AverageOrders" VALUES ('00000000-0000-0000-0000-000000000321','00000000-0000-0000-0000-000000000201',1), ('00000000-0000-0000-0000-000000000322','00000000-0000-0000-0000-000000000201',2), ('00000000-0000-0000-0000-000000000323','00000000-0000-0000-0000-000000000202',2), ('00000000-0000-0000-0000-000000000324','00000000-0000-0000-0000-000000000202',3)`);
     db.execute(`CREATE TEMP TABLE "DecimalOrders" ("RecordId" uuid PRIMARY KEY, "CustomerId" uuid, "Amount" numeric)`);
     db.execute(`INSERT INTO "DecimalOrders" VALUES ('00000000-0000-0000-0000-000000000331','00000000-0000-0000-0000-000000000201',1.25), ('00000000-0000-0000-0000-000000000332','00000000-0000-0000-0000-000000000201',2.5), ('00000000-0000-0000-0000-000000000333','00000000-0000-0000-0000-000000000202',3.125)`);
+    db.execute(`CREATE TEMP TABLE "GroupCustomers" ("RecordId" uuid PRIMARY KEY, "Label" text)`);
+    db.execute(`INSERT INTO "GroupCustomers" VALUES ('00000000-0000-0000-0000-000000000501','Alice'), ('00000000-0000-0000-0000-000000000502','Alice'), ('00000000-0000-0000-0000-000000000503','Bob')`);
+    db.execute(`CREATE TEMP TABLE "GroupedOrders" ("RecordId" uuid PRIMARY KEY, "CustomerId" uuid, "Amount" bigint)`);
+    db.execute(`INSERT INTO "GroupedOrders" VALUES ('00000000-0000-0000-0000-000000000511','00000000-0000-0000-0000-000000000501',4), ('00000000-0000-0000-0000-000000000512','00000000-0000-0000-0000-000000000501',6), ('00000000-0000-0000-0000-000000000513','00000000-0000-0000-0000-000000000502',3), ('00000000-0000-0000-0000-000000000514','00000000-0000-0000-0000-000000000503',7)`);
     db.execute(`CREATE TEMP TABLE "Nodes" ("RecordId" uuid PRIMARY KEY, "ParentId" uuid)`);
     db.execute(`INSERT INTO "Nodes" VALUES ('00000000-0000-0000-0000-000000000401','00000000-0000-0000-0000-000000000402'), ('00000000-0000-0000-0000-000000000402',NULL), ('00000000-0000-0000-0000-000000000403','00000000-0000-0000-0000-000000000401')`);
     db.execute(`INSERT INTO "Cities" VALUES ('00000000-0000-0000-0000-000000000101','Moscow')`);
@@ -367,6 +395,19 @@ void main(string[] args) {
         sum += amount; ++aggregateRows;
     }
     assert(aggregateRows == 2 && sum == 17);
+    auto groupedOrder = P.m_groupedOrder();
+    z8_query_set_executor(groupedOrder, new Z8PostgresQueryExecutor(db, "pg_temp"w, "GroupedOrders"w));
+    assert(z8_optional_require(P.m_countGroupedOrder(groupedOrder)) == 2);
+    P.m_readGroupedOrder(groupedOrder); int groupedRows;
+    while (z8_optional_require(P.m_nextGroupedOrder(groupedOrder))) {
+        auto label = P.m_groupedOrderLabel(groupedOrder); auto amount = z8_optional_require(P.m_groupedOrderAmount(groupedOrder));
+        if (label == "Alice"w) assert(amount == 13); else assert(label == "Bob"w && amount == 7);
+        ++groupedRows;
+    }
+    assert(groupedRows == 2);
+    P.m_readExplicitGroupedOrder(groupedOrder); groupedRows = 0; long explicitSum;
+    while (z8_optional_require(P.m_nextGroupedOrder(groupedOrder))) { explicitSum += z8_optional_require(P.m_groupedOrderAmount(groupedOrder)); ++groupedRows; }
+    assert(groupedRows == 3 && explicitSum == 20);
     P.m_readAggregateSorted(aggregate);
     assert(z8_optional_require(P.m_nextAggregate(aggregate)) && z8_optional_require(P.m_aggregateAmount(aggregate)) == 10);
     assert(z8_optional_require(P.m_nextAggregate(aggregate)) && z8_optional_require(P.m_aggregateAmount(aggregate)) == 7);
@@ -484,7 +525,7 @@ void main(string[] args) {
     user.privileges = new Z8Privileges(Z8Access(true, true, true, true, true, true));
     auto session = new Z8ApplicationSession("join"w, user, user);
     auto priorBackend = z8_connection_set_current(new Z8PostgresDatabase(db, "pg_temp"w));
-    wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null, wstring className = "HttpOrder"w, wstring action = "read"w, wstring groupSession = null, wstring having = null, wstring values = null, wstring totals = null) {
+    wstring requestFields(wstring fields, wstring filter = null, wstring sort = null, wstring lookup = null, wstring lookupFields = null, wstring className = "HttpOrder"w, wstring action = "read"w, wstring groupSession = null, wstring having = null, wstring values = null, wstring totals = null, wstring count = null) {
         auto request = new Z8ApplicationRequest(); request.session = session; request.monitor = new Z8RequestMonitor();
         request.parameters.z8_add("request"w, className); request.parameters.z8_add("action"w, action); request.parameters.z8_add("fields"w, fields);
         if (filter !is null) request.parameters.z8_add("filter"w, filter);
@@ -495,6 +536,7 @@ void main(string[] args) {
         if (having !is null) request.parameters.z8_add("having"w, having);
         if (values !is null) request.parameters.z8_add("values"w, values);
         if (totals !is null) request.parameters.z8_add("totals"w, totals);
+        if (count !is null) request.parameters.z8_add("count"w, count);
         auto priorRequest = z8_application_set_request(request); scope(exit) z8_application_set_request(priorRequest);
         z8_application_start_response(request, "HttpOrder"w); z8_application_dispatch_request();
         z8_application_finish_response(request, cast(Z8RequestMonitor)request.monitor); return z8_application_response_text(request);
@@ -537,6 +579,20 @@ void main(string[] args) {
     totalResponse = parseJSON(requestFields(`["amount"]`w, null, null, null, null, "AggregateOrder"w, "read"w, null,
         `{"property":"amount","operator":"gt","value":"1000"}`w, null, "true"w).to!string);
     assert(totalResponse["data"]["amount"].integer == 0);
+    auto twiceGrouped = parseJSON(requestFields(`["customer.label","amount"]`w, null,
+        `[{"property":"customer.label"}]`w, null, null, "GroupedOrder"w).to!string);
+    assert(twiceGrouped["data"].array.length == 2 && twiceGrouped["data"][0]["customer.label"].str == "Alice" && twiceGrouped["data"][0]["amount"].integer == 13);
+    assert(twiceGrouped["data"][1]["customer.label"].str == "Bob" && twiceGrouped["data"][1]["amount"].integer == 7);
+    twiceGrouped = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "GroupedOrder"w, "read"w, null,
+        `{"property":"amount","operator":"gt","value":"10"}`w).to!string);
+    assert(twiceGrouped["data"].array.length == 1 && twiceGrouped["data"][0]["amount"].integer == 13);
+    twiceGrouped = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "GroupedOrder"w, "read"w, null, null, null, null, "true"w).to!string);
+    assert(twiceGrouped["total"].integer == 2);
+    totalResponse = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "GroupedOrder"w, "read"w, null, null, null, "true"w).to!string);
+    assert(totalResponse["data"]["amount"].integer == 20);
+    totalResponse = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "GroupedOrder"w, "read"w, null,
+        `{"property":"amount","operator":"gt","value":"10"}`w, null, "true"w).to!string);
+    assert(totalResponse["data"]["amount"].integer == 13);
     auto aggregateMeta = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "AggregateOrder"w, "meta"w).to!string);
     assert(aggregateMeta["isQuery"].boolean && aggregateMeta["readOnly"].boolean && "primaryKey" !in aggregateMeta.object);
     aggregateResponse = parseJSON(requestFields(`["customer.label","amount"]`w, null, null, null, null, "AggregateOrder"w, null).to!string);

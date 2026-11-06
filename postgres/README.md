@@ -301,9 +301,10 @@ and extra fields; nested form controls are not yet supported.
 The executor supports `aggregateBy` grouping over root Link fields with numeric
 sum, average, minimum and maximum. Filters can reference linked tables, and a
 subselect joins target fields, including chained links and computed fields, after
-grouping. Expressions and joins requiring unprojected root fields are rejected, as are
-a second grouping and row locks on these queries. Numeric sum and average totals
-retain linked fields' joins and apply after grouping. `HAVING` filters over
+grouping. An optional second grouping and its `HAVING` run in the outer select.
+Expressions and joins requiring unprojected root fields, and row locks on these
+queries, are rejected. Numeric sum and average totals retain linked fields' joins
+and apply after grouping. `HAVING` filters over
 projected root aggregates and linked fields run after the initial grouping;
 HAVING defined by a linked query itself is not yet supported.
 Nontrivial HAVING without grouping is also rejected. Filter-based updates and deletes select
