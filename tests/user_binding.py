@@ -27,6 +27,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     public bool isAdministrator(); public bool isBuiltinAdministrator(); public bool isBuiltinSystem();
     public string getParameter(string key, string value); public int getParameter(string key, int value);
     public bool getParameter(string key, bool value); public guid getParameter(string key, guid value);
+    virtual protected void onBeforeLoad(string login); virtual protected bool authenticate(string password); virtual protected void onLoad();
 }
 ''', encoding="utf-8")
     (source / "Application.bl").write_text('''
@@ -70,11 +71,19 @@ public class Probe {
         shutil.copytree(language, source, dirs_exist_ok=True)
         probe = source / "Probe.bl"
         probe.write_text("import org.zenframework.z8.base.security.User;\nimport org.zenframework.z8.base.application.Application;\nimport org.zenframework.z8.lang.Object;\n" + probe.read_text(encoding="utf-8"), encoding="utf-8")
+    (source / "CustomUser.bl").write_text(('import org.zenframework.z8.base.security.User;\n' if len(sys.argv) == 2 else '') + '''
+[name "User"] public class CustomUser extends User {
+    virtual protected void onBeforeLoad(string input) { login = input; }
+    virtual protected bool authenticate(string password) { return password == "override"; }
+    virtual protected void onLoad() { email = "loaded@example.org"; }
+}
+''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "main.d"
     harness.write_text('''
 import z8.runtime;
 import z8gen.p_Probe;
+import z8gen.project_registry;
 class Resolver : IZ8JobUserResolver {
     Z8UserData user;
     this(Z8UserData user) { this.user = user; }
@@ -90,6 +99,16 @@ void main() {
     data.parameters.z8_add("flag"w, z8_primary_box(true));
     data.parameters.z8_add("id"w, z8_primary_box(z8_guid_create(9)));
     auto user = P.m_create(); z8_user_attach(user, data);
+    auto registry = new Z8RuntimeRegistry(); z8_register_project(registry);
+    auto custom = z8_user_wrap_with_registry(data, registry);
+    assert(custom.z8_class_id() == "CustomUser"w);
+    z8_user_before_load(custom, "before"w);
+    assert(z8_native_field!wstring("org.zenframework.z8.server.base.security.User.f_login"w, custom) == "before"w);
+    assert(z8_user_authenticate(custom, "override"w) && !z8_user_authenticate(custom, "wrong"w));
+    z8_user_on_load(custom);
+    assert(z8_native_field!wstring("org.zenframework.z8.server.base.security.User.f_email"w, custom) == "loaded@example.org"w);
+    auto defaultUser = z8_user_wrap_with_registry(data, null);
+    assert(!z8_user_authenticate(defaultUser, "override"w));
     assert(z8_optional_require(P.m_check(user)));
     assert(data.login == "alice"w && z8_primary_cast!wstring(data.parameters.z8_get("new"w)) == "shared"w);
     auto noRoles = new Z8UserData(); noRoles.id = z8_guid_create(1); noRoles.hasRoles = false;

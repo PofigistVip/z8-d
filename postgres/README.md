@@ -260,9 +260,10 @@ for denied credentials. It supports the original client-hashed and server-MD5
 password modes, case-insensitive login lookup, permanent and timed bans, and
 optional failed-attempt limits. Concurrent attempts lock the user row; failed
 attempts and timed bans commit even when access is denied. It requires a
-connection without an active transaction. Custom BL authentication hooks,
-trusted login and cross-server session notifications are not yet implemented
-by this password-checking API. The optional `z8.integration.postgres_authority`
+connection without an active transaction. The runtime can dispatch custom BL
+User authentication hooks, but this password-checking API does not yet invoke
+them. Trusted login and cross-server session notifications are also pending.
+The optional `z8.integration.postgres_authority`
 module connects it to CivetWeb.
 
 `Z8PostgresQueryExecutor` connects BL `Query` reads to PostgreSQL tables.

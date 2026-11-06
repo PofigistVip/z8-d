@@ -1021,6 +1021,16 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                     result ~= "override void z8_executable_virtual_execute_parameters() { this.m_execute(this.f_parameters); }\n";
             }
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.security.User"w) {
+            foreach (method; program.methods) if (!method.isStatic) {
+                if (method.name.text == "onBeforeLoad" && method.returnType == ValueType.voidType && method.parameters.length == 1 && method.parameters[0].type == ValueType.stringType)
+                    result ~= "override void z8_user_virtual_on_before_load(wstring login) { this.m_onBeforeLoad(login); }\n";
+                else if (method.name.text == "authenticate" && method.returnType == ValueType.boolType && method.parameters.length == 1 && method.parameters[0].type == ValueType.stringType)
+                    result ~= "override Z8Optional!bool z8_user_virtual_authenticate(wstring password) { return this.m_authenticate(password); }\n";
+                else if (method.name.text == "onLoad" && method.returnType == ValueType.voidType && !method.parameters.length)
+                    result ~= "override void z8_user_virtual_on_load() { this.m_onLoad(); }\n";
+            }
+        }
         if (extendsBuiltinPrimary(program)) {
             if (program.isNative) {
                 auto stringBinding = emitRawWStringLiteral(program.nativeName ~ ".m_toString"w);

@@ -133,6 +133,9 @@ class Z8Object {
     Z8File z8_report_virtual_execute(Z8Guid record) { throw new Exception("report engine is not implemented"); }
     void z8_executable_virtual_execute() {}
     void z8_executable_virtual_execute_parameters() {}
+    void z8_user_virtual_on_before_load(wstring login) {}
+    Z8Optional!bool z8_user_virtual_authenticate(wstring password) { return z8_optional_wrap(false); }
+    void z8_user_virtual_on_load() {}
     void z8_query_virtual_onCopy(Z8Guid id) {}
     void z8_query_virtual_beforeRead() {}
     void z8_query_virtual_afterRead() {}
