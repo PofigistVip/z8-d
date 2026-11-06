@@ -47,6 +47,21 @@ import org.zenframework.z8.base.table.value.IntField;
     aggregateBy = {customerId};
 }
 ''',
+        "NestedAggregateOrder": '''
+import org.zenframework.z8.base.table.Table;
+import org.zenframework.z8.base.table.value.Link;
+import org.zenframework.z8.base.table.value.IntField;
+import org.zenframework.z8.base.form.Section;
+import org.zenframework.z8.base.form.TabControl;
+import org.zenframework.z8.base.form.Tab;
+[name "NestedAggregateOrders"] public class NestedAggregateOrder extends Table {
+    public Customer customer; [name "CustomerId"] public Link customerId = customer;
+    [name "Amount"] public IntField amount;
+    Section section; TabControl tabs; Tab tab;
+    section.controls = {customer.label}; tab.controls = {amount}; tabs.tabs = {tab}; controls = {section, tabs};
+    aggregateBy = {customerId};
+}
+''',
         "AggregateLeftOrder": '''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.IntField;
@@ -340,6 +355,15 @@ import org.zenframework.z8.base.table.value.Field;
 import org.zenframework.z8.base.table.value.Aggregation;
 import org.zenframework.z8.base.table.SortDirection;
 public class Probe {
+    public static NestedAggregateOrder nestedAggregate() { NestedAggregateOrder value; return value; }
+    public static void readNestedAggregate(NestedAggregateOrder order) { Field[] fields; order.read(fields); }
+    public static bool nextNestedAggregate(NestedAggregateOrder order) { return order.next(); }
+    public static int nestedAmount(NestedAggregateOrder order) { return order.amount.get(); }
+    public static string nestedCustomer(NestedAggregateOrder order) { return order.customer.label.get(); }
+    public static HttpOrder httpOrder() { HttpOrder value; return value; }
+    public static void readHttpDefault(HttpOrder order) { Field[] fields; order.read(fields); }
+    public static bool nextHttpDefault(HttpOrder order) { return order.next(); }
+    public static string httpDefaultName(HttpOrder order) { return order.customer.label.get(); }
     public static HttpJoinOrder httpJoinOrder() { HttpJoinOrder value; return value; }
     public static AggregateOrder aggregateOrder() { AggregateOrder value; return value; }
     public static AggregateLeftOrder aggregateLeftOrder() { AggregateLeftOrder value; return value; }
@@ -456,6 +480,7 @@ void main(string[] args) {
     db.execute(`CREATE TEMP TABLE "Orders" ("RecordId" uuid PRIMARY KEY, "Title" text, "CustomerId" uuid, "CityId" uuid, "Lock" bigint DEFAULT 0)`);
     db.execute(`CREATE TEMP TABLE "AggregateOrders" ("RecordId" uuid PRIMARY KEY, "CustomerId" uuid, "Amount" bigint)`);
     db.execute(`INSERT INTO "AggregateOrders" VALUES ('00000000-0000-0000-0000-000000000311','00000000-0000-0000-0000-000000000201',4), ('00000000-0000-0000-0000-000000000312','00000000-0000-0000-0000-000000000201',6), ('00000000-0000-0000-0000-000000000313','00000000-0000-0000-0000-000000000202',7)`);
+    db.execute(`CREATE TEMP TABLE "NestedAggregateOrders" AS SELECT * FROM "AggregateOrders"`);
     db.execute(`CREATE TEMP TABLE "CountOrders" AS SELECT * FROM "AggregateOrders"`);
     db.execute(`CREATE TEMP TABLE "AverageOrders" ("RecordId" uuid PRIMARY KEY, "CustomerId" uuid, "Amount" bigint)`);
     db.execute(`INSERT INTO "AverageOrders" VALUES ('00000000-0000-0000-0000-000000000321','00000000-0000-0000-0000-000000000201',1), ('00000000-0000-0000-0000-000000000322','00000000-0000-0000-0000-000000000201',2), ('00000000-0000-0000-0000-000000000323','00000000-0000-0000-0000-000000000202',2), ('00000000-0000-0000-0000-000000000324','00000000-0000-0000-0000-000000000202',3)`);
@@ -480,6 +505,19 @@ void main(string[] args) {
     db.execute(`INSERT INTO "Orders" ("RecordId","Title","CustomerId","CityId") VALUES ('00000000-0000-0000-0000-000000000301','First','00000000-0000-0000-0000-000000000201','00000000-0000-0000-0000-000000000101'), ('00000000-0000-0000-0000-000000000302','Second','00000000-0000-0000-0000-000000000202',NULL), ('00000000-0000-0000-0000-000000000303','No customer',NULL,NULL), ('00000000-0000-0000-0000-000000000304','Missing customer','00000000-0000-0000-0000-000000000299',NULL)`);
     auto inner = P.m_inner(); auto left = P.m_left(); auto right = P.m_right(); auto full = P.m_full(); auto filtered = P.m_filtered(); auto recursive = P.m_recursive(); auto conditional = P.m_conditional(); auto cyclic = P.m_cyclic();
     auto aggregate = P.m_aggregateOrder();
+    auto nestedAggregate = P.m_nestedAggregate();
+    z8_query_set_executor(nestedAggregate, new Z8PostgresQueryExecutor(db, "pg_temp"w, "NestedAggregateOrders"w));
+    P.m_readNestedAggregate(nestedAggregate);
+    long nestedSum; int nestedRows;
+    while (z8_optional_require(P.m_nextNestedAggregate(nestedAggregate))) {
+        assert(P.m_nestedCustomer(nestedAggregate).length); nestedSum += z8_optional_require(P.m_nestedAmount(nestedAggregate)); ++nestedRows;
+    }
+    assert(nestedRows == 2 && nestedSum == 17);
+    auto defaultOrder = P.m_httpOrder();
+    z8_query_set_executor(defaultOrder, new Z8PostgresQueryExecutor(db, "pg_temp"w, "Orders"w));
+    P.m_readHttpDefault(defaultOrder); int defaultRows;
+    while (z8_optional_require(P.m_nextHttpDefault(defaultOrder))) { assert(P.m_httpDefaultName(defaultOrder).length); ++defaultRows; }
+    assert(defaultRows == 2);
     auto aggregateExecutor = new Z8PostgresQueryExecutor(db, "pg_temp"w, "AggregateOrders"w);
     z8_query_set_executor(aggregate, aggregateExecutor);
     assert(z8_optional_require(P.m_aggregateCount(aggregate)) == 2);

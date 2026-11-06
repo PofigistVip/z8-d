@@ -109,6 +109,7 @@ import org.zenframework.z8.base.form.action.Parameter;
 public class ControlProbe {
     public static CustomField makeCustom() { CustomField value; return value; }
     public static CustomTable makeTable() { CustomTable value; return value; }
+    public static CyclicTable cyclicTable() { CyclicTable value; return value; }
     public static SingleAction single() { SingleAction value; return value; }
     public static ManyAction many() { ManyAction value; return value; }
     public static CustomReport customReport() { CustomReport value; return value; }
@@ -152,6 +153,11 @@ void main() {
     request = new Z8ApplicationRequest(); monitor = new Z8RequestMonitor(); request.monitor = monitor;
     z8_application_set_request(request); z8_application_start_response(request, "meta"w);
     auto table = z8_nonnull(P.m_makeTable()); auto privileges = new Z8Privileges(Z8Access(true, false, false, false, false, true));
+    auto formFields = z8_query_form_fields(table);
+    assert(formFields.length == 1 && formFields[0] is table.f_label);
+    bool cyclicFields;
+    try { z8_query_form_fields(P.m_cyclicTable()); } catch (Exception error) { cyclicFields = error.msg == "cyclic section controls"; }
+    assert(cyclicFields);
     z8_control_write_field_meta(table.f_label, table, table, privileges);
     z8_application_finish_response(request, monitor);
     auto meta = parseJSON(z8_application_response_text(request).to!string);

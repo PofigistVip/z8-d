@@ -138,7 +138,7 @@ Direct Link paths may be selected, filtered, searched and sorted when every
 intermediate link and target table is readable; selected linked fields include
 their link fields in the response. Context `values` may also reference readable
 linked and computed fields; supplied values are detached while serializing rows.
-Custom Join paths, other read options and custom request parameters are rejected. The host must open the
+Other unsupported read options and custom request parameters are rejected. The host must open the
 application response before calling it.
 Ordinary computed fields can be selected, filtered and sorted only when all
 their declared and SQL expression dependencies are readable.
@@ -149,7 +149,8 @@ The initial `meta` action describes table fields, authorized Link paths, query
 access and nested sections, fieldsets, field groups, tab controls, independent
 forms and forms with a readable Link. Action parameters, their query-backed
 sources, and report definitions are included. `aggregateBy` metadata marks the
-query read-only. Other controls and custom Join metadata are rejected. Actions can execute with `action=action`,
+query read-only. Fields reached through a custom Join have read-only text metadata;
+other unsupported controls are rejected. Actions can execute with `action=action`,
 `name`, `records`, `selection` and a JSON `parameters` array; `query` or `link`
 selects the query passed to the action, and `useTransaction` controls the transaction.
 Custom BL reports can run through `action=report`, while the BIRT and POI engines
@@ -366,8 +367,8 @@ As in Z8, ungrouped reads exclude the all-zero primary-key sentinel.
 the same single-table field types. As in Z8, `update(null)` updates every row;
 the SQL transaction is controlled by the connection's caller.
 
-An empty field list selects the query's direct field controls, names, columns
-and extra fields; nested form controls are not yet supported.
+An empty field list selects fields in sections, forms and tabs, together with
+the query's names, columns and extra fields. Cyclic control trees are rejected.
 
 The executor supports `aggregateBy` grouping over root Link fields with numeric
 sum, average, count, minimum and maximum, and scalar minimum/maximum for strings, text,

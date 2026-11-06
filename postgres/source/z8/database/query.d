@@ -261,8 +261,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
     }
     private Z8Object[] aggregateRequestedFields(Z8Object query, Z8QueryReadRequest request) {
         auto fields = request.fields.dup;
-        if (!fields.length && !request.aggregateAll) foreach (name; ["controls"w, "names"w, "columns"w, "extraFields"w])
-            foreach (field; z8_query_array(query, name)) fields ~= field;
+        if (!fields.length && !request.aggregateAll) fields = z8_query_form_fields(query);
         return uniqueFields(fields);
     }
     private bool hasLinkedAggregateFields(Z8Object query, Z8QueryReadRequest request, bool counting) {
@@ -597,14 +596,7 @@ class Z8PostgresQueryExecutor : IZ8QueryExecutor, IZ8QueryCounter, IZ8QueryWrite
         if (request.start < 0) throw new Z8PostgresException("negative PostgreSQL query offset");
         auto plan = new Z8PostgresQueryPlan(query, schema, table);
         auto requested = request.fields;
-        if (!requested.length && !request.aggregateAll) {
-            foreach (name; ["controls"w, "names"w, "columns"w, "extraFields"w])
-                foreach (field; z8_query_array(query, name)) {
-                    if (field is null || !z8_native_is_instance("org.zenframework.z8.server.base.table.value.Field"w, field))
-                        throw new Z8PostgresException("nested PostgreSQL form controls are not implemented");
-                    requested ~= field;
-                }
-        }
+        if (!requested.length && !request.aggregateAll) requested = z8_query_form_fields(query);
         Z8Object[] selected;
         foreach (field; requested) foreach (dependency; z8_field_fields(field)) {
             plan.includeField(dependency);

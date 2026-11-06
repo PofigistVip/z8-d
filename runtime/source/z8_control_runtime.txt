@@ -89,6 +89,45 @@ private Z8SourceState z8_source_state(Z8Object self) {
     return state;
 }
 private auto z8_source_address(string member)(Z8Object self) { return &__traits(getMember, z8_source_state(self), member); }
+// Query.fields() expands sections and tabs into the fields needed by a read.
+Z8Object[] z8_control_fields(Z8Object control) {
+    Z8Object[] result, path;
+    void add(Z8Object field) {
+        foreach (existing; result) if (existing is field) return;
+        result ~= field;
+    }
+    void visit(Z8Object item) {
+        item = z8_nonnull(item);
+        if (z8_native_is_instance(z8_field_name, item)) { add(item); return; }
+        if (z8_native_is_instance(z8_action_name, item)) return;
+        foreach (parent; path) if (parent is item) throw new Exception("cyclic section controls");
+        path ~= item;
+        scope(exit) path.length = path.length - 1;
+        IZ8FieldOrderCell cell;
+        if (z8_native_is_instance(z8_tab_control_name, item)) cell = z8_tab_control_state(item).tabs;
+        else if (z8_native_is_instance(z8_section_name, item)) cell = z8_section_state(item).controls;
+        else throw new Exception("unsupported control fields");
+        if (cell !is null && cell.view() !is null) {
+            auto items = cell.view().z8_erased_data();
+            for (long i; i < items.z8_size(); ++i) visit(cast(Z8Object)items.z8_get(i));
+        }
+        if (z8_native_is_instance("org.zenframework.z8.server.base.form.Form"w, item)) {
+            auto dependency = z8_control_state(item).dependency;
+            if (dependency !is null) add(z8_nonnull(z8_query_primary_key(z8_nonnull(dependency.z8_get_owner()))));
+        }
+    }
+    visit(control);
+    return result;
+}
+Z8Object[] z8_query_form_fields(Z8Object query) {
+    Z8Object[] result;
+    void add(Z8Object field) { foreach (existing; result) if (existing is field) return; result ~= field; }
+    foreach (control; z8_query_array(query, "controls"w))
+        foreach (field; z8_control_fields(control)) add(field);
+    foreach (name; ["names"w, "columns"w, "extraFields"w])
+        foreach (field; z8_query_array(query, name)) add(z8_nonnull(field));
+    return result;
+}
 private void z8_source_assign(Z8Object self, Z8Object query) {
     if (query !is null && !z8_native_is_instance("org.zenframework.z8.server.base.query.Query"w, query))
         throw new Exception("Source target is not a Query");
