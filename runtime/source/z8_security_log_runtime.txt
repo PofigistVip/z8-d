@@ -1,0 +1,55 @@
+// Security events are accumulated per request and delivered at its end.
+interface IZ8SecurityLogSink { void write(Z8Object event, Z8StringMap parameters); }
+private Z8StringMap z8_security_log_parameters(Z8ApplicationRequest request) {
+    auto result = new Z8StringMap();
+    foreach (key; ["session"w, "action"w, "ip"w, "user"w, "schema"w])
+        if (request.parameters.z8_containsKey(key)) result.z8_add(key, request.parameters.z8_get(key));
+    return result;
+}
+void z8_security_log_default_write(Z8Object event) {
+    auto request = z8_application_request();
+    if (request !is null && request.securityLogSink !is null)
+        request.securityLogSink.write(event, z8_security_log_parameters(request));
+}
+private Z8Optional!bool z8_security_log_accept(Z8Object self, Z8Object event) {
+    z8_nonnull(self); z8_nonnull(event); return z8_optional_wrap(true);
+}
+private void z8_security_log_write(Z8Object self, Z8Object event) {
+    z8_nonnull(self); z8_nonnull(event); z8_security_log_default_write(event);
+}
+private void z8_security_log_object_event(Z8Object object, wstring action) {
+    auto request = z8_application_require_request();
+    request.securityEvents ~= z8_security_event_new(z8_nonnull(object), action);
+}
+private void z8_security_log_named_event(wstring type, Z8Guid id, wstring name, wstring action) {
+    z8_security_log_object_event(z8_security_object_new(type, id, name), action);
+}
+void z8_security_events_set_result(Z8ApplicationRequest request, bool success, wstring message) {
+    request = z8_nonnull(request);
+    if (request.securityEvents.length) z8_security_event_set_result(request.securityEvents[$ - 1], success, message);
+}
+void z8_security_events_commit(Z8ApplicationRequest request) {
+    request = z8_nonnull(request);
+    auto previous = z8_application_set_request(request);
+    scope(exit) z8_application_set_request(previous);
+    auto events = request.securityEvents; request.securityEvents = null;
+    foreach (event; events) {
+        try {
+            if (request.securityLog !is null) {
+                auto log = z8_nonnull(request.securityLog);
+                if (z8_optional_require(log.z8_security_log_virtual_accept(event)))
+                    log.z8_security_log_virtual_write(event);
+            } else if (request.securityLogSink !is null)
+                request.securityLogSink.write(event, z8_security_log_parameters(request));
+        } catch (Throwable error) {
+            try { if (request.monitor !is null) request.monitor.log(Z8MonitorLevel.error, "Can't write security log"w); }
+            catch (Throwable) {}
+        }
+    }
+}
+void z8_bind_builtin_security_log() {
+    enum prefix = "org.zenframework.z8.server.base.security.SecurityLog.m_"w;
+    z8_native_bind(prefix ~ "acceptEvent"w, &z8_security_log_accept);
+    z8_native_bind(prefix ~ "writeEvent"w, &z8_security_log_write);
+}
+shared static this() { z8_bind_builtin_security_log(); }

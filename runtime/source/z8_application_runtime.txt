@@ -151,6 +151,9 @@ class Z8ApplicationRequest {
     IZ8JobUserResolver jobUserResolver;
     IZ8UserChangeNotifier userChangeNotifier;
     IZ8RoleChangeNotifier roleChangeNotifier;
+    Z8Object securityLog;
+    IZ8SecurityLogSink securityLogSink;
+    private Z8Object[] securityEvents;
     Z8ApplicationSession session;
     private Z8EventsLevel[] eventLevels;
     void setEventsLevel(Z8EventsLevel level) { eventLevels ~= level; }
@@ -262,6 +265,20 @@ void z8_application_dispatch_authorized_object(wstring className) {
 // Dispatch a request using the session's snapshot without constructing the BL
 // class twice. The host still owns the active database connection.
 void z8_application_dispatch_request() {
+    auto request = z8_application_require_request();
+    auto className = request.parameters.z8_get("request"w);
+    auto enabled = request.securityLog !is null || request.securityLogSink !is null;
+    if (enabled && className !is null && className != "login"w && className != "settings"w && request.parameters.z8_get("job"w) is null)
+        z8_security_log_named_event("request"w, z8_guid_create_name(className), className, request.parameters.z8_get("action"w));
+    try {
+        z8_application_dispatch_request_impl();
+        z8_security_events_set_result(request, true, ""w);
+    } catch (Throwable error) {
+        z8_security_events_set_result(request, false, z8_message(error));
+        throw error;
+    } finally z8_security_events_commit(request);
+}
+private void z8_application_dispatch_request_impl() {
     auto request = z8_application_require_request();
     if (request.parameters.z8_get("job"w) !is null) { z8_application_poll_job(); return; }
     auto className = z8_string_required(request.parameters.z8_get("request"w));
@@ -384,6 +401,8 @@ void z8_bind_builtin_application_request() {
     z8_native_bind(prefix ~ "m_logInfo"w, &z8_application_log!(Z8MonitorLevel.info));
     z8_native_bind(prefix ~ "m_logWarning"w, &z8_application_log!(Z8MonitorLevel.warning));
     z8_native_bind(prefix ~ "m_logError"w, &z8_application_log!(Z8MonitorLevel.error));
+    z8_native_bind(prefix ~ "m_logSecurityEvent"w, &z8_security_log_object_event);
+    z8_native_bind(prefix ~ "m_logSecurityEvent"w, &z8_security_log_named_event);
     z8_native_bind(prefix ~ "m_print"w, &z8_application_print);
     z8_native_bind(prefix ~ "m_redirect"w, &z8_application_redirect);
 }
