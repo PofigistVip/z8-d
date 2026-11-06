@@ -136,7 +136,7 @@ private wstring z8_json_object_get_string(Z8Object self, wstring name) {
     auto state = z8_json_object_state(self);
     auto key = z8_string_required(name).to!string;
     auto child = key in state.children;
-    if (child !is null) return z8_string_new(z8_json_render_state(*child));
+    if (child !is null) return z8_string_new(z8_json_child_text(*child));
     auto decimalValue = key in state.decimals;
     if (decimalValue !is null) return z8_string_new(z8_json_bigdecimal_text(*decimalValue).to!wstring);
     return z8_string_new(z8_json_value_text(z8_json_object_get(self, name)));
@@ -242,6 +242,7 @@ private struct Z8JsonPrimaryValue {
     JSONValue value;
     bool hasDecimal;
     Z8Decimal decimalValue;
+    Object child;
 }
 private Z8JsonPrimaryValue z8_json_from_primary(Z8Primary value) {
     Z8JsonPrimaryValue result;
@@ -264,7 +265,12 @@ private Z8JsonPrimaryValue z8_json_from_primary(Z8Primary value) {
             // JsonUtils.unwrap snapshots file metadata as a nested JsonObject.
             result.value = z8_json_parse(z8_file_to_string(value.fileValue).to!string);
             break;
-        case Z8PrimaryKind.geometry: case Z8PrimaryKind.user:
+        case Z8PrimaryKind.geometry:
+            // JsonUtils.unwrap keeps geometry itself, so later mutations remain visible.
+            result.value = JSONValue("");
+            result.child = value.geometryValue;
+            break;
+        case Z8PrimaryKind.user:
             throw new Exception("JSON value type is not supported yet");
     }
     return result;
@@ -276,6 +282,7 @@ private Z8Object z8_json_object_set_primary(Z8Object self, wstring name, Z8Prima
     state.decimals.remove(key);
     state.children.remove(key);
     if (converted.hasDecimal) state.decimals[key] = converted.decimalValue;
+    if (converted.child !is null) state.children[key] = converted.child;
     state.value.object[key] = converted.value;
     return self;
 }

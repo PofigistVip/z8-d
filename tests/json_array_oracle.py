@@ -159,6 +159,22 @@ class JsonArrayOracle {
         scalars.z8_add(new org.zenframework.z8.server.types.datespan(12345));
         scalars.z8_add(new date(0)); scalars.z8_add(new date(date.MinTicks)); scalars.z8_add(decimal.NaN);
         System.out.println("scalars:" + scalars.string().get());
+        geometry shape = new geometry(1, 2, 3857);
+        JsonArray.CLASS<JsonArray> shapesClass = JsonArray.z8_parse(new string("[]"));
+        JsonArray shapes = shapesClass.get(); shapes.z8_add(shape); shapes.z8_insert(new integer(0), new integer(7));
+        org.zenframework.z8.server.runtime.RCollection<primary> shapeValues = new org.zenframework.z8.server.runtime.RCollection<>();
+        shapeValues.add(shape);
+        JsonArray fromShapes = JsonArray.z8_fromArray(shapeValues).get();
+        System.out.println("geometry:" + shapes.string().get() + ":" + shapes.z8_getString(new integer(1)).get());
+        try { org.zenframework.z8.server.base.json.parser.JsonPath.z8_path(new string("[1]")).get().z8_getString(shapesClass); System.out.println("bad"); }
+        catch (RuntimeException expected) { System.out.println("geometry:path:error"); }
+        org.zenframework.z8.server.base.json.parser.JsonObject geometryParent = org.zenframework.z8.server.base.json.parser.JsonObject.z8_parse(new string("{}")).get();
+        geometryParent.z8_set(new string("shapes"), shapesClass);
+        shape.set(new geometry(3, 4, 4326)); shapes.z8_remove(new integer(0));
+        System.out.println("geometry:changed:" + shapes.string().get());
+        System.out.println("geometry:nested:" + geometryParent.string().get());
+        System.out.println("geometry:from:" + fromShapes.string().get());
+        shape.set(new geometry()); System.out.println("geometry:empty:" + shapes.string().get());
         file attachment = new file(); attachment.name = new string("report.txt"); attachment.size = new integer(42);
         attachment.time = new date(0L); attachment.details.put(new string("key"), new string("value"));
         JsonArray attachments = parse("[]"); attachments.z8_add(attachment);
@@ -356,6 +372,17 @@ void main() {
     P.m_add(scalars, z8_primary_box(new Z8Datespan(12345)));
     P.m_add(scalars, z8_primary_box(z8_date_from_ticks(0))); P.m_add(scalars, z8_primary_box(z8_date_min)); P.m_add(scalars, z8_primary_box(z8_decimal_nan()));
     writeln("scalars:", P.m_render(scalars).to!string);
+    auto shape = z8_geometry_point(z8_decimal_from_int(1), z8_decimal_from_int(2), 3857);
+    auto shapes = P.m_parse("[]"w); P.m_add(shapes, z8_primary_box(shape)); P.m_insert(shapes, 0, z8_primary_box(7L));
+    auto fromShapes = P.m_from(new Z8Array!Z8Primary([z8_primary_box(shape)]));
+    writeln("geometry:", P.m_render(shapes).to!string, ":", P.m_text(shapes, 1).to!string);
+    try { P.m_pathStringArray(P.m_path("[1]"w), shapes); writeln("bad"); } catch (Exception) { writeln("geometry:path:error"); }
+    auto geometryParent = P.m_parseObject("{}"w); P.m_setArray(geometryParent, "shapes"w, shapes);
+    shape.x = 3; shape.y = 4; shape.srs = 4326; shape.rawHex = null; P.m_remove(shapes, 0);
+    writeln("geometry:changed:", P.m_render(shapes).to!string);
+    writeln("geometry:nested:", P.m_objectRender(geometryParent).to!string);
+    writeln("geometry:from:", P.m_render(fromShapes).to!string);
+    shape.shape = -1; shape.rawHex = null; writeln("geometry:empty:", P.m_render(shapes).to!string);
     auto attachment = new Z8File(); attachment.name = "report.txt"w; attachment.size = z8_optional_wrap(42L);
     attachment.time = z8_date_from_ticks(0); attachment.details.z8_add("key"w, "value"w);
     auto attachments = P.m_parse("[]"w); P.m_add(attachments, z8_primary_box(attachment));

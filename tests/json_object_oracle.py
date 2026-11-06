@@ -110,6 +110,16 @@ class JsonObjectOracle {
         System.out.println("file:detail:" + stored.z8_getJsonObject(new string("details")).get().z8_getString(new string("language")).get());
         stored.z8_set(new string("name"), new string("nested change"));
         System.out.println("file:mutated:" + value.z8_getJsonObject(new string("attachment")).get().z8_getString(new string("name")).get());
+        org.zenframework.z8.server.types.geometry shape = new org.zenframework.z8.server.types.geometry(1, 2, 3857);
+        JsonObject geometryObject = JsonObject.z8_parse(new string("{}")).get();
+        geometryObject.z8_set(new string("shape"), shape);
+        System.out.println("geometry:" + geometryObject.z8_getString(new string("shape")).get() + ":" + geometryObject.string().get());
+        shape.set(new org.zenframework.z8.server.types.geometry(3, 4, 4326));
+        System.out.println("geometry:changed:" + geometryObject.string().get());
+        shape.set(new org.zenframework.z8.server.types.geometry());
+        System.out.println("geometry:empty:" + geometryObject.z8_getString(new string("shape")).get() + ":" + geometryObject.string().get());
+        geometryObject.z8_set(new string("shape"), new string("replacement"));
+        System.out.println("geometry:replaced:" + geometryObject.string().get());
         for (String input : new String[] {"12345678901234567890.2500", "1E+3", "1E-7", "-18446744073709551617.99"}) {
             value.z8_set(new string("decimal"), new org.zenframework.z8.server.types.decimal(input));
             System.out.println(value.z8_getString(new string("decimal")).get() + ":" + value.z8_getInt(new string("decimal")).get());
@@ -228,6 +238,16 @@ void main() {
     writeln("file:detail:", P.m_text(P.m_nested(stored, "details"w), "language"w).to!string);
     P.m_put(stored, "name"w, z8_primary_box("nested change"w));
     writeln("file:mutated:", P.m_text(P.m_nested(value, "attachment"w), "name"w).to!string);
+    auto shape = z8_geometry_point(z8_decimal_from_int(1), z8_decimal_from_int(2), 3857);
+    auto geometryObject = P.m_parse("{}"w);
+    P.m_put(geometryObject, "shape"w, z8_primary_box(shape));
+    writeln("geometry:", P.m_text(geometryObject, "shape"w).to!string, ":", P.m_render(geometryObject).to!string);
+    shape.x = 3; shape.y = 4; shape.srs = 4326; shape.rawHex = null;
+    writeln("geometry:changed:", P.m_render(geometryObject).to!string);
+    shape.shape = -1; shape.rawHex = null;
+    writeln("geometry:empty:", P.m_text(geometryObject, "shape"w).to!string, ":", P.m_render(geometryObject).to!string);
+    P.m_put(geometryObject, "shape"w, z8_primary_box("replacement"w));
+    writeln("geometry:replaced:", P.m_render(geometryObject).to!string);
     foreach (input; ["12345678901234567890.2500"w, "1E+3"w, "1E-7"w, "-18446744073709551617.99"w]) {
         P.m_put(value, "decimal"w, z8_primary_box(z8_decimal_parse(input)));
         writeln(P.m_text(value, "decimal"w).to!string, ":", z8_optional_require(P.m_integer(value, "decimal"w)));

@@ -50,7 +50,7 @@ private JSONValue z8_json_array_get(Z8Object self, Z8Optional!long index) {
 }
 private wstring z8_json_array_text_at(Z8JsonArrayState state, size_t position) {
     auto child = position in state.children;
-    if (child !is null) return z8_json_render_state(*child);
+    if (child !is null) return z8_json_child_text(*child);
     auto decimalValue = position in state.decimals;
     return decimalValue is null ? z8_json_value_text(state.value.array[position]) : z8_json_bigdecimal_text(*decimalValue).to!wstring;
 }
@@ -169,6 +169,7 @@ private void z8_json_array_insert_value(Z8JsonArrayState state, size_t position,
     state.decimals = shifted;
     Object[size_t] children;
     foreach (index, child; state.children) children[index >= position ? index + 1 : index] = child;
+    if (value.child !is null) children[position] = value.child;
     state.children = children;
 }
 private Z8Object z8_json_array_add_primary(Z8Object self, Z8Primary value) {
@@ -203,6 +204,7 @@ private Z8JsonArrayState z8_json_array_from_values(Z8Array!Z8Primary values) {
         auto converted = z8_json_from_primary(values.z8_get(index));
         state.value.array ~= converted.value;
         if (converted.hasDecimal) state.decimals[cast(size_t)index] = converted.decimalValue;
+        if (converted.child !is null) state.children[cast(size_t)index] = converted.child;
     }
     return state;
 }
@@ -248,7 +250,15 @@ private JSONValue z8_json_state_value(Object state) {
 private wstring z8_json_render_state(Object state) {
     if (auto array = cast(Z8JsonArrayState)state) return z8_json_array_render_state(array);
     if (auto object = cast(Z8JsonObjectState)state) return z8_json_object_render_state(object);
+    if (auto geometry = cast(Z8Geometry)state) {
+        auto text = z8_geometry_to_string(geometry);
+        return text.length ? z8_json_quote(text) : "null"w;
+    }
     throw new Exception("invalid JSON state");
+}
+private wstring z8_json_child_text(Object state) {
+    if (auto geometry = cast(Z8Geometry)state) return z8_geometry_to_string(geometry);
+    return z8_json_render_state(state);
 }
 private Object z8_json_state_from_object(Z8Object value) {
     value = z8_nonnull(value);
