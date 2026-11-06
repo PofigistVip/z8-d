@@ -1,5 +1,6 @@
 // Native form Action state and metadata.
 private enum z8_action_name = "org.zenframework.z8.server.base.form.action.Action"w;
+private enum z8_action_report_name = "org.zenframework.z8.server.base.form.action.ActionReport"w;
 private interface IZ8ActionTypeCell { wstring text(); }
 private class Z8ActionTypeCell(T) : IZ8ActionTypeCell {
     T value;
@@ -16,12 +17,19 @@ private class Z8ActionState {
     IZ8FieldOrderCell parameters;
     IZ8ActionTypeCell type;
     Z8Optional!bool useTransaction = z8_optional_wrap(true);
+    Z8Object report, defaultFormatParameter;
 }
 private Z8ActionState z8_action_state(Z8Object self) {
     self = z8_nonnull(self);
     if (!z8_native_is_instance(z8_action_name, self)) throw new Exception("invalid Action object");
     auto state = cast(Z8ActionState)self.z8_get_native_state(z8_action_name);
-    if (state is null) { state = new Z8ActionState(); self.z8_set_native_state(z8_action_name, state); }
+    if (state is null) {
+        state = new Z8ActionState(); self.z8_set_native_state(z8_action_name, state);
+        if (z8_native_is_instance(z8_action_report_name, self)) {
+            state.useTransaction = z8_optional_wrap(false);
+            state.defaultFormatParameter = z8_parameter_create("format"w, z8_primary_box("pdf"w), z8_optional_wrap(true));
+        }
+    }
     return state;
 }
 ref Z8ObjectArray!T z8_action_parameters_ref(T)(Z8Object self) if (is(T : Z8Object)) {
@@ -30,6 +38,11 @@ ref Z8ObjectArray!T z8_action_parameters_ref(T)(Z8Object self) if (is(T : Z8Obje
     if (cell is null) {
         if (state.parameters !is null) throw new Exception("incompatible action parameters array");
         cell = new Z8FieldOrderCell!T(); state.parameters = cell;
+        if (state.defaultFormatParameter !is null) {
+            auto parameter = cast(T)state.defaultFormatParameter;
+            if (parameter is null) throw new Exception("invalid report format parameter");
+            cell.value.z8_add(parameter); state.defaultFormatParameter = null;
+        }
     }
     return cell.value;
 }
@@ -43,7 +56,16 @@ ref T z8_action_type_ref(T)(Z8Object self) {
     return cell.value;
 }
 private Z8Optional!bool* z8_action_use_transaction(Z8Object self) { return &z8_action_state(self).useTransaction; }
-private void z8_action_default_execute_one(Z8Object self, Z8Guid record, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) { z8_nonnull(self); }
+private Z8Object* z8_action_report_field(Z8Object self) { return &z8_action_state(self).report; }
+private void z8_action_default_execute_one(Z8Object self, Z8Guid record, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_action_report_name, self)) return;
+    auto state = z8_action_state(self);
+    auto report = z8_nonnull(state.report);
+    auto parameter = z8_action_lookup_parameter(state, "format"w);
+    z8_report_state(report).format = parameter is null ? z8_report_pdf : z8_parameter_cast!wstring(parameter);
+    z8_application_print(z8_report_run(report, record));
+}
 private void z8_action_default_execute_many(Z8Object self, Z8Array!Z8Guid records, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) {
     z8_nonnull(self); z8_nonnull(records);
     auto expectedVersion = records.z8_version;
@@ -77,10 +99,13 @@ private void z8_action_write_meta(Z8Object item, Z8Object query, Z8Object contex
         auto parameters = state.parameters.view().z8_erased_data();
         for (long i; i < parameters.z8_size(); ++i) z8_parameter_write_meta(cast(Z8Object)parameters.z8_get(i), writer);
     }
+    else if (state.defaultFormatParameter !is null) z8_parameter_write_meta(state.defaultFormatParameter, writer);
     writer.finish(']');
+    if (z8_native_is_instance(z8_action_report_name, item)) z8_monitor_property(writer, "isReport"w, true);
 }
 void z8_bind_builtin_action() {
     z8_native_bind_field(z8_action_name ~ ".f_useTransaction"w, &z8_action_use_transaction);
+    z8_native_bind_field(z8_action_report_name ~ ".f_report"w, &z8_action_report_field);
     z8_native_bind(z8_action_name ~ ".m_execute"w, &z8_action_default_execute_one);
     z8_native_bind(z8_action_name ~ ".m_execute"w, &z8_action_default_execute_many);
     z8_native_bind("org.zenframework.z8.server.base.table.system.view.RestartSchedulerAction.m_execute"w, &z8_action_restart_scheduler);

@@ -116,6 +116,7 @@ python tests/project_registry.py path/to/original-z8
 python tests/compound_assignment.py
 python tests/entity_parser.py path/to/original-z8
 python tests/json_object_expression.py path/to/original-z8
+python tests/action_report.py path/to/original-z8
 python tests/map_initializers.py
 python tests/integer_maps.py
 python tests/guid_maps.py

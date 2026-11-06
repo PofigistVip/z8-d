@@ -91,7 +91,7 @@ private void z8_parameter_parse(Z8Object item, wstring text) {
         default: throw new Exception("unsupported parameter type: " ~ type.to!string);
     }
 }
-private Z8Object z8_action_parameter_by_id(Z8ActionState state, wstring id) {
+private Z8Object z8_action_lookup_parameter(Z8ActionState state, wstring id) {
     if (state.parameters !is null && state.parameters.view() !is null) {
         auto candidates = state.parameters.view().z8_erased_data();
         for (long i; i < candidates.z8_size(); ++i) {
@@ -99,6 +99,13 @@ private Z8Object z8_action_parameter_by_id(Z8ActionState state, wstring id) {
             if (z8_parameter_state(candidate).text == id) return candidate;
         }
     }
+    if (state.defaultFormatParameter !is null && z8_parameter_state(state.defaultFormatParameter).text == id)
+        return state.defaultFormatParameter;
+    return null;
+}
+private Z8Object z8_action_parameter_by_id(Z8ActionState state, wstring id) {
+    auto found = z8_action_lookup_parameter(state, id);
+    if (found !is null) return found;
     throw new Exception("unknown action parameter: " ~ z8_string_required(id).to!string);
 }
 private void z8_parameter_write_meta(Z8Object item, Z8JsonWriterState writer) {

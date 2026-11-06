@@ -68,6 +68,8 @@ unimplemented. Fields reached through a custom Join are exposed as read-only
 text controls after checking the relation and target permissions. Grouping with
 `aggregateBy` is supported by the PostgreSQL executor for its documented subset.
 Other control types and unsupported grouping combinations are rejected.
+`ActionReport` exposes the report format parameter and executes a custom report
+once for each selected record, adding the resulting files to the request monitor.
 Without an explicit `fields` parameter, configured form controls, names, columns
 and extra fields determine the selected fields; if none are configured, z8-d
 uses the table's declared fields as a convenience fallback. Field dependencies
