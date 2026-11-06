@@ -8,10 +8,11 @@ import z8.database.privileges : z8_postgres_read_user;
 import z8.database.plan : quoteIdentifier;
 
 // Adapter for the request-local BL Connection and Query.setConnection APIs.
-class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8RawSqlConnection, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection, IZ8JobUserResolver, IZ8UserPasswordVerifier, IZ8UserProfileReader, IZ8DatabaseSchema {
+class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8RawSqlConnection, IZ8SystemInstallation, IZ8SequenceConnection, IZ8BackgroundDatabaseConnection, IZ8JobUserResolver, IZ8UserPasswordVerifier, IZ8UserProfileReader, IZ8DatabaseSchema {
     private Z8PostgresConnection connection;
     private wstring schema;
     private Z8RuntimeRegistry registry;
+    private bool systemInstalled;
     this(Z8PostgresConnection connection, wstring schema, Z8RuntimeRegistry registry = null) {
         if (connection is null || connection.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
         if (schema is null || !schema.length) throw new Z8PostgresException("empty PostgreSQL schema");
@@ -19,6 +20,15 @@ class Z8PostgresDatabase : IZ8DatabaseConnection, IZ8RawSqlConnection, IZ8Sequen
     }
     void beginTransaction() { connection.beginTransaction(); }
     wstring databaseSchema() { return schema; }
+    bool isSystemInstalled() {
+        synchronized (connection) {
+            if (systemInstalled) return true;
+            auto result = connection.execute(`SELECT 1 FROM information_schema.tables WHERE table_schema =
+                CASE WHEN $1::text = 'pg_temp' THEN pg_my_temp_schema()::regnamespace::text ELSE $1::text END
+                AND table_name = 'SystemUsers' LIMIT 1`, [Z8PostgresParameter.value(schema.to!string)]);
+            return systemInstalled = result.rows.length != 0;
+        }
+    }
     void commit() { connection.commit(); }
     void rollback() { connection.rollback(); }
     void execute(wstring sql) { connection.execute(sql.to!string); }

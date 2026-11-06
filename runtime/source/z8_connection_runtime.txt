@@ -32,6 +32,7 @@ interface IZ8UserPasswordVerifier { bool lockMatchingPassword(Z8Guid id, wstring
 struct Z8UserProfile { wstring email, settings; bool changePassword; }
 interface IZ8UserProfileReader { bool readUserProfile(Z8Guid id, out Z8UserProfile profile); }
 interface IZ8DatabaseSchema { wstring databaseSchema(); }
+interface IZ8SystemInstallation { bool isSystemInstalled(); }
 private class Z8ConnectionState {
     IZ8DatabaseConnection backend;
     this(IZ8DatabaseConnection backend) { this.backend = backend; }

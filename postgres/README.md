@@ -395,6 +395,8 @@ predicates for its field; inactive and unbounded periods produce `sql_bool.True`
 the three original built-in setting records. Include the table in bootstrap or
 migration when the application uses it. Bulk reads currently issue separate reads
 for each requested key.
+`Application.isSystemInstalled()` checks for `SystemUsers` in the active schema;
+as in the original, a positive result is cached for that database adapter.
 `TreeTable` exposes its parent and path fields, schema indexes and path lookup
 methods. Reads include the parent key and are not limited by the page size.
 Creating a tree record calculates its path and ancestor columns. Changing a

@@ -330,6 +330,12 @@ private Z8ApplicationRequest z8_application_require_request() {
     return value;
 }
 private Z8Optional!bool z8_application_is_request() { return z8_optional_wrap(z8_application_current_request !is null); }
+private Z8Optional!bool z8_application_system_installed() {
+    z8_application_session();
+    auto backend = cast(IZ8SystemInstallation)z8_connection_current_backend();
+    if (backend is null) throw new Exception("system installation status is not available");
+    return z8_optional_wrap(backend.isSystemInstalled());
+}
 private Z8ApplicationSession z8_application_session() { return z8_nonnull(z8_application_require_request().session); }
 private Z8Object z8_application_user() { return z8_user_wrap(z8_application_session().user); }
 private Z8Object z8_application_system() { return z8_user_wrap(z8_application_session().system); }
@@ -382,6 +388,7 @@ private void z8_application_redirect(wstring location) { throw new Z8Redirect(z8
 void z8_bind_builtin_application_request() {
     enum prefix = "org.zenframework.z8.server.base.application.Application."w;
     z8_native_bind(prefix ~ "m_isRequest"w, &z8_application_is_request);
+    z8_native_bind(prefix ~ "m_isSystemInstalled"w, &z8_application_system_installed);
     z8_native_bind(prefix ~ "m_user"w, &z8_application_user);
     z8_native_bind(prefix ~ "m_system"w, &z8_application_system);
     z8_native_bind(prefix ~ "m_userId"w, &z8_application_user_id);

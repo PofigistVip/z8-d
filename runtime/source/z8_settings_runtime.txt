@@ -35,6 +35,8 @@ void z8_settings_initialize_static_records(Z8Object self) {
 private wstring z8_settings_read(Z8Guid id) {
     if (id is null) return null;
     try {
+        auto installation = cast(IZ8SystemInstallation)z8_connection_current_backend();
+        if (installation !is null && !installation.isSystemInstalled()) return null;
         auto table = z8_native_new(z8_settings_name); table.z8_ensure();
         auto field = z8_settings_state(table).fields[2];
         auto fields = new Z8ObjectArray!Z8Object(); fields.z8_add(field);

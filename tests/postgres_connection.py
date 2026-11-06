@@ -32,6 +32,7 @@ import org.zenframework.z8.base.sql.Database;
 import org.zenframework.z8.base.sql.Cursor;
 import org.zenframework.z8.base.json.JsonObject;
 import org.zenframework.z8.base.table.system.Settings;
+import org.zenframework.z8.base.application.Application;
 public class Probe {
     public static Connection current() { return Connection.get(); }
     public static Report make() { Report value; return value; }
@@ -54,6 +55,7 @@ public class Probe {
     public static Connection databaseConnection(Database database) { return database.connection(); }
     public static Cursor cursor(Database database, string sql) { return Cursor.open(database, sql); }
     public static Settings settingsTable() { Settings value; return value; }
+    public static bool installed() { return Application.isSystemInstalled(); }
     public static void settingRegister(guid id, string name, primary value) { Settings.register(id, name, "description", value); }
     public static void settingRegisterChild(guid id, guid parent, primary value) { Settings.register(id, parent, "child", "description", value, 3); }
     public static void settingSet(guid id, primary value) { Settings.set(id, value); }
@@ -112,6 +114,11 @@ void main(string[] args) {
     auto settingsUser = new Z8UserData(); settingsUser.id = z8_guid_create(42);
     auto settingsRequest = new Z8ApplicationRequest(); settingsRequest.session = new Z8ApplicationSession("settings"w, settingsUser, settingsUser);
     auto previousRequest = z8_application_set_request(settingsRequest);
+    assert(!z8_optional_require(P.m_installed()));
+    first.execute(`CREATE TEMP TABLE "SystemUsers" ("RecordId" uuid)`);
+    assert(z8_optional_require(P.m_installed()));
+    first.execute(`DROP TABLE "SystemUsers"`);
+    assert(z8_optional_require(P.m_installed()));
     z8_initialize_static_records(settings); assert(settings.z8_static_records().length == 3);
     z8_postgres_apply_static_records(first, "pg_temp"w, settings);
     z8_postgres_apply_static_records(first, "pg_temp"w, settings);
