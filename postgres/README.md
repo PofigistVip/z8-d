@@ -391,6 +391,10 @@ Listbox-dependent forms bind to the list query and add their fields to its extra
 fields; chained forms and separate requests for nested tables preserve this binding.
 The BL `Period` helper parses active JSON date bounds and builds inclusive SQL
 predicates for its field; inactive and unbounded periods produce `sql_bool.True`.
+`SystemSettings` provides typed BL reads, writes, registration, parent links and
+the three original built-in setting records. Include the table in bootstrap or
+migration when the application uses it. Bulk reads currently issue separate reads
+for each requested key.
 `TreeTable` exposes its parent and path fields, schema indexes and path lookup
 methods. Reads include the parent key and are not limited by the page size.
 Creating a tree record calculates its path and ancestor columns. Changing a

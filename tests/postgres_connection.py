@@ -31,6 +31,7 @@ import org.zenframework.z8.base.sql.Transaction;
 import org.zenframework.z8.base.sql.Database;
 import org.zenframework.z8.base.sql.Cursor;
 import org.zenframework.z8.base.json.JsonObject;
+import org.zenframework.z8.base.table.system.Settings;
 public class Probe {
     public static Connection current() { return Connection.get(); }
     public static Report make() { Report value; return value; }
@@ -52,6 +53,17 @@ public class Probe {
     public static string databaseSchema(Database database) { return database.schema(); }
     public static Connection databaseConnection(Database database) { return database.connection(); }
     public static Cursor cursor(Database database, string sql) { return Cursor.open(database, sql); }
+    public static Settings settingsTable() { Settings value; return value; }
+    public static void settingRegister(guid id, string name, primary value) { Settings.register(id, name, "description", value); }
+    public static void settingRegisterChild(guid id, guid parent, primary value) { Settings.register(id, parent, "child", "description", value, 3); }
+    public static void settingSet(guid id, primary value) { Settings.set(id, value); }
+    public static string settingString(guid id, string fallback) { return Settings.get(id, fallback); }
+    public static int settingInt(guid id, int fallback) { return Settings.get(id, fallback); }
+    public static bool settingBool(guid id, bool fallback) { return Settings.get(id, fallback); }
+    public static decimal settingDecimal(guid id, decimal fallback) { return Settings.get(id, fallback); }
+    public static guid settingGuid(guid id, guid fallback) { return Settings.get(id, fallback); }
+    public static date settingDate(guid id, date fallback) { return Settings.get(id, fallback); }
+    public static primary[guid] settingsMany(guid[] ids, primary[] defaults) { return Settings.get(ids, defaults); }
     public static void insert(Report report, guid id, int amount) { report.amount = amount; report.create(id); }
     public static int count(Report report) { return report.count(); }
 }
@@ -62,6 +74,7 @@ public class Probe {
 import z8.runtime;
 import z8.database.postgres;
 import z8.database.connection;
+import z8.database.schema : z8_postgres_create_table_sql, z8_postgres_apply_static_records;
 import z8gen.p_Probe;
 import core.thread : Thread;
 import std.conv : to;
@@ -77,6 +90,7 @@ class Catalog : IZ8DatabaseCatalog {
 void main(string[] args) {
     alias P = Z8p_50726F6265;
     bool missing; try { P.m_current(); } catch (Exception) { missing = true; } assert(missing);
+    assert(P.m_settingString(z8_guid_create(100), "fallback"w) == "fallback"w);
     missing = false; try { P.m_transactionBegin(); } catch (Exception) { missing = true; } assert(missing);
     auto first = new Z8PostgresConnection(args[1]); auto second = new Z8PostgresConnection(args[1]);
     immutable createSql = `CREATE TEMP TABLE "Reports" ("RecordId" uuid PRIMARY KEY, "CreatedAt" bigint, "ModifiedAt" bigint, "CreatedBy" uuid, "ModifiedBy" uuid, "Lock" bigint, "Amount" bigint)`;
@@ -93,6 +107,35 @@ void main(string[] args) {
     backgroundDb.execute(`INSERT INTO public.z8_background_probe VALUES (5)`w); background.closeBackgroundConnection();
     assert(first.execute(`SELECT value FROM public.z8_background_probe`).rows[0][0].text == "5");
     auto previous = z8_connection_set_current(db1);
+    auto settings = P.m_settingsTable();
+    first.execute(z8_postgres_create_table_sql("pg_temp"w, settings));
+    auto settingsUser = new Z8UserData(); settingsUser.id = z8_guid_create(42);
+    auto settingsRequest = new Z8ApplicationRequest(); settingsRequest.session = new Z8ApplicationSession("settings"w, settingsUser, settingsUser);
+    auto previousRequest = z8_application_set_request(settingsRequest);
+    z8_initialize_static_records(settings); assert(settings.z8_static_records().length == 3);
+    z8_postgres_apply_static_records(first, "pg_temp"w, settings);
+    z8_postgres_apply_static_records(first, "pg_temp"w, settings);
+    assert(first.execute(`SELECT count(*) FROM "SystemSettings"`).rows[0][0].text == "3");
+    auto setting = z8_guid_create(101); auto childSetting = z8_guid_create(102);
+    assert(P.m_settingString(setting, "fallback"w) == "fallback"w);
+    P.m_settingRegister(setting, "number"w, z8_primary_box(12L));
+    assert(z8_optional_require(P.m_settingInt(setting, z8_optional_wrap(0L))) == 12);
+    P.m_settingSet(setting, z8_primary_box(25L)); P.m_settingRegister(setting, "renamed"w, z8_primary_box(99L));
+    assert(z8_optional_require(P.m_settingInt(setting, z8_optional_wrap(0L))) == 25);
+    P.m_settingRegisterChild(childSetting, setting, z8_primary_box(true));
+    assert(z8_optional_require(P.m_settingBool(childSetting, z8_optional_wrap(false))));
+    auto decimalSetting = z8_guid_create(104); P.m_settingSet(decimalSetting, z8_primary_box(z8_decimal_parse("12.50"w)));
+    assert(z8_optional_require(P.m_settingDecimal(decimalSetting, z8_optional_wrap(z8_decimal_from_int(0)))).z8_string() == "12.50"w);
+    auto guidSetting = z8_guid_create(105); P.m_settingSet(guidSetting, z8_primary_box(setting));
+    assert(z8_guid_to_string(P.m_settingGuid(guidSetting, z8_guid_zero())) == z8_guid_to_string(setting));
+    auto dateSetting = z8_guid_create(106); P.m_settingSet(dateSetting, z8_primary_box(z8_date_from_ticks(1234000)));
+    assert(z8_date_ticks(P.m_settingDate(dateSetting, z8_date_min)) == 1234000);
+    auto many = P.m_settingsMany(new Z8Array!Z8Guid([setting, childSetting, z8_guid_create(103)]),
+        new Z8Array!Z8Primary([z8_primary_box(1L), z8_primary_box(false), z8_primary_box("default"w)]));
+    assert(z8_optional_require(z8_primary_cast!long(many.z8_get(setting))) == 25);
+    assert(z8_optional_require(z8_primary_cast!bool(many.z8_get(childSetting))));
+    assert(z8_primary_cast!wstring(many.z8_get(z8_guid_create(103))) == "default"w);
+    z8_application_set_request(previousRequest);
     auto defaultDatabase = P.m_database();
     assert(P.m_databaseSchema(defaultDatabase) == "pg_temp"w);
     auto cursor = P.m_cursor(defaultDatabase, `SELECT 'hello'::text, 42::bigint, 12.50::numeric, '00000000-0000-0000-0000-000000000007'::uuid,

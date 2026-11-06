@@ -1103,7 +1103,8 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
         foreach (record; program.fields) if (record.isRecord) hasRecords = true;
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.UserRoles"w) hasRecords = true;
         if (program.isNative && ["org.zenframework.z8.server.base.table.system.Entries"w,
-            "org.zenframework.z8.server.base.table.system.UserEntries"w].canFind(program.nativeName)) hasRecords = true;
+            "org.zenframework.z8.server.base.table.system.UserEntries"w,
+            "org.zenframework.z8.server.base.table.system.Settings"w].canFind(program.nativeName)) hasRecords = true;
         if (hasRecords) {
             result ~= "override void z8_init_static_records() {\nsuper.z8_init_static_records();\n";
             if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Users"w)
@@ -1116,6 +1117,8 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 result ~= "z8_system_entries_initialize_static_records(this);\n";
             else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.UserEntries"w)
                 result ~= "z8_user_entries_initialize_static_records(this);\n";
+            else if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Settings"w)
+                result ~= "z8_settings_initialize_static_records(this);\n";
             else foreach (record; program.fields) if (record.isRecord && record.recordAttributes.length) {
                     string[] values;
                     foreach (attribute; record.recordAttributes)
@@ -1296,6 +1299,12 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Files"w) {
             result ~= "override void z8_init_members() {\nsuper.z8_init_members();\n";
             foreach (name; ["name", "data", "path", "size", "time", "lastModified", "location"])
+                result ~= "this.f_objects().z8_add(this.f_" ~ name ~ "());\n";
+            result ~= "}\n";
+        }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.table.system.Settings"w) {
+            result ~= "override void z8_init_members() {\nsuper.z8_init_members();\n";
+            foreach (name; ["name", "description", "value"])
                 result ~= "this.f_objects().z8_add(this.f_" ~ name ~ "());\n";
             result ~= "}\n";
         }
