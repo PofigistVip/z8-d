@@ -11,6 +11,7 @@ import z8.database.bootstrap;
 import z8.database.connection;
 import z8.database.postgres;
 import z8.database.scheduler : Z8ScheduledRun;
+import z8.database.scheduler_logs : Z8FileSchedulerLogStore;
 import z8.database.scheduler_service;
 import z8.integration.postgres_authority;
 import z8.webserver.civetweb;
@@ -68,7 +69,8 @@ void main(string[] args) {
     auto securityLog = z8_security_log_file_from_config();
     auto sessions = new Z8SessionManager(cast(long)applicationConfig.sessionTimeoutMinutes * 60_000, applicationConfig.oneSessionPerUser);
     auto authority = new Z8PostgresHttpAuthority(db, schema, registry, config, sessions, "example"w);
-    auto scheduler = new Z8PostgresSchedulerService(db, schema, registry, 1000, new SchedulerObserver(), authority, authority);
+    auto logStore = new Z8FileSchedulerLogStore(z8_file_resolve_path(z8_file_from_path("logs/scheduler"w)));
+    auto scheduler = new Z8PostgresSchedulerService(db, schema, registry, 1000, new SchedulerObserver(), authority, authority, logStore);
     scheduler.start(); scope(exit) scheduler.stop();
     auto server = new Z8CivetServer("127.0.0.1:0", (Z8HttpRequest request) {
         auto connection = db.openSibling(); scope(exit) connection.close();

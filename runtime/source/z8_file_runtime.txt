@@ -242,6 +242,8 @@ private string z8_file_system_path(Z8File value) {
     }
     return path.length ? buildPath(z8_file_working_root, path) : z8_file_working_root;
 }
+// Resolve a BL file against the host's configured working/storage roots.
+string z8_file_resolve_path(Z8File value) { return z8_file_system_path(value); }
 bool z8_file_exists(Z8File value) {
     import std.file : exists;
     return exists(z8_file_system_path(value));

@@ -130,6 +130,9 @@ with tempfile.TemporaryDirectory() as directory:
                 if time.monotonic() >= deadline:
                     raise AssertionError("Scheduled job did not finish successfully")
                 time.sleep(0.2)
+            logs = subprocess.check_output([str(psql), "-tAc", 'SELECT convert_from("Files", \'UTF8\') FROM "SystemScheduledJobLogs" WHERE "Errors"=0 AND "ScheduledJob" <> \'00000000-0000-0000-0000-000000000000\' LIMIT 1', connection], env=environment, text=True).strip()
+            log_path = Path(json.loads(logs)[0]["path"])
+            assert log_path.is_relative_to(temp / "work/logs/scheduler") and "Tasks scheduled job ran" in log_path.read_text(encoding="utf-8")
             client = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
             try:
                 client.request("GET", "/index.html")
