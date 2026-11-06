@@ -6,11 +6,10 @@ import z8.runtime;
 import z8.database.catalog;
 import z8.database.compare;
 import z8.database.plan : quoteIdentifier;
-import z8.database.postgres : Z8PostgresException;
+import z8.database.postgres : Z8PostgresConnection, Z8PostgresException;
 import z8.database.schema : fieldType, fieldDefault, foreignKeyTarget;
 
-// Plan additive changes only; never execute them or change existing columns.
-// The caller must separately handle indexes, foreign keys and other differences.
+// Plan missing columns without executing them or changing existing columns.
 string[] z8_postgres_plan_add_columns(wstring schema, Z8Object table, Z8PostgresTableDescription actual) {
     if (schema is null || !schema.length) throw new Z8PostgresException("empty PostgreSQL schema");
     if (actual is null) throw new Z8PostgresException("cannot add columns to a missing PostgreSQL table");
@@ -110,4 +109,53 @@ string[] z8_postgres_plan_add_indexes(wstring schema, Z8Object table, Z8Postgres
             " ON " ~ quoteIdentifier(schema) ~ "." ~ quoteIdentifier(tableName) ~ " USING " ~ expected.method ~ " (" ~ expression ~ ")";
     }
     return result;
+}
+
+// Apply only additive changes to existing tables, in dependency order. Every
+// statement is executed in one transaction and returned after a successful commit.
+string[] z8_postgres_apply_additive_migration(Z8PostgresConnection db, wstring schema, Z8Object[] tables) {
+    if (db is null || db.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
+    if (db.inTransaction()) throw new Z8PostgresException("additive migration requires its own transaction");
+    quoteIdentifier(schema);
+    wstring[] names;
+    foreach (table; tables) {
+        if (!z8_native_is_instance("org.zenframework.z8.server.base.table.Table"w, z8_nonnull(table)))
+            throw new Z8PostgresException("PostgreSQL schema requires a Table");
+        auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, table);
+        quoteIdentifier(name);
+        foreach (existing; names) if (existing == name) throw new Z8PostgresException("duplicate PostgreSQL table name");
+        names ~= name;
+    }
+    db.beginTransaction();
+    try {
+        // Reject changes that cannot be handled additively before executing DDL.
+        foreach (index, table; tables) {
+            auto actual = z8_postgres_describe_table(db, schema, names[index]);
+            if (actual is null) throw new Z8PostgresException("additive migration requires existing tables");
+            foreach (difference; z8_postgres_compare_table(table, actual)) {
+                if (difference.kind == Z8SchemaDifferenceKind.columnType || difference.kind == Z8SchemaDifferenceKind.nullability ||
+                    difference.kind == Z8SchemaDifferenceKind.primaryKey)
+                    throw new Z8PostgresException("additive migration found an incompatible existing table");
+            }
+        }
+        string[] applied;
+        // Re-read catalog state between stages, including index names used by
+        // other tables in this same migration.
+        foreach (index, table; tables) {
+            auto actual = z8_postgres_describe_table(db, schema, names[index]);
+            foreach (sql; z8_postgres_plan_add_columns(schema, table, actual)) { db.execute(sql); applied ~= sql; }
+        }
+        foreach (index, table; tables) {
+            auto actual = z8_postgres_describe_table(db, schema, names[index]);
+            foreach (sql; z8_postgres_plan_add_indexes(schema, table, actual)) { db.execute(sql); applied ~= sql; }
+        }
+        foreach (index, table; tables) {
+            auto actual = z8_postgres_describe_table(db, schema, names[index]);
+            foreach (sql; z8_postgres_plan_add_foreign_keys(schema, table, actual)) { db.execute(sql); applied ~= sql; }
+        }
+        db.commit(); return applied;
+    } catch (Throwable failure) {
+        try { if (db.inTransaction()) db.rollback(); } catch (Throwable ignored) { }
+        throw failure;
+    }
 }

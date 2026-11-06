@@ -644,6 +644,50 @@ void main(string[] args) {
     try { z8_postgres_plan_add_columns("z8_test"w, expectedStatic, noKey); }
     catch (Z8PostgresException) { missingKeyRejected = true; }
     assert(missingKeyRejected);
+    db.execute(`CREATE SCHEMA "z8_migrate"`);
+    auto migrateSource = P.m_references(), migrateTarget = P.m_target(), migrateIndexes = P.m_simpleIndexes();
+    Z8Object[] migrateTables = [migrateSource, migrateTarget, migrateIndexes];
+    z8_postgres_create_tables(db, "z8_migrate"w, migrateTables);
+    db.execute(`ALTER TABLE "z8_migrate"."Source" DROP CONSTRAINT "FK0_Source"`);
+    db.execute(`UPDATE "z8_migrate"."Source" SET "TargetId" = '00000000-0000-0000-0000-000000000099'`);
+    db.execute(`ALTER TABLE "z8_migrate"."SimpleIndexSample" DROP COLUMN "Amount", ADD COLUMN "UserExtra" text`);
+    bool migrationRolledBack;
+    try { z8_postgres_apply_additive_migration(db, "z8_migrate"w, migrateTables); } catch (Z8PostgresException) { migrationRolledBack = true; }
+    assert(migrationRolledBack && !db.inTransaction());
+    auto migrateInfo = z8_postgres_describe_table(db, "z8_migrate"w, "SimpleIndexSample"w);
+    bool amountPresent, extraPresent;
+    foreach (column; migrateInfo.columns) { if (column.name == "Amount") amountPresent = true; if (column.name == "UserExtra") extraPresent = true; }
+    assert(!amountPresent && extraPresent);
+    assert(z8_postgres_compare_indexes(migrateIndexes, migrateInfo).length == 1);
+    db.execute(`UPDATE "z8_migrate"."Source" SET "TargetId" = '00000000-0000-0000-0000-000000000000'`);
+    auto appliedMigration = z8_postgres_apply_additive_migration(db, "z8_migrate"w, migrateTables);
+    assert(appliedMigration.length == 3);
+    migrateInfo = z8_postgres_describe_table(db, "z8_migrate"w, "SimpleIndexSample"w);
+    assert(z8_postgres_compare_indexes(migrateIndexes, migrateInfo).length == 0);
+    extraPresent = false; foreach (column; migrateInfo.columns) if (column.name == "UserExtra") extraPresent = true;
+    assert(extraPresent);
+    assert(db.execute(`SELECT "Amount" = 0 FROM "z8_migrate"."SimpleIndexSample"`).rows[0][0].text == "t");
+    assert(z8_postgres_compare_table(migrateSource, z8_postgres_describe_table(db, "z8_migrate"w, "Source"w)).length == 0);
+    bool migratedForeignKeyWorks;
+    try { db.execute(`INSERT INTO "z8_migrate"."Source" ("RecordId", "TargetId") VALUES ('00000000-0000-0000-0000-000000000077', '00000000-0000-0000-0000-000000000099')`); }
+    catch (Z8PostgresException) { migratedForeignKeyWorks = true; }
+    assert(migratedForeignKeyWorks);
+    assert(z8_postgres_apply_additive_migration(db, "z8_migrate"w, migrateTables).length == 0);
+    bool missingMigrationTableRejected;
+    try { z8_postgres_apply_additive_migration(db, "z8_migrate"w, [P.m_statics()]); } catch (Z8PostgresException) { missingMigrationTableRejected = true; }
+    assert(missingMigrationTableRejected && !db.inTransaction());
+    bool duplicateMigrationRejected;
+    try { z8_postgres_apply_additive_migration(db, "z8_migrate"w, [migrateSource, migrateSource]); } catch (Z8PostgresException) { duplicateMigrationRejected = true; }
+    assert(duplicateMigrationRejected);
+    db.beginTransaction(); bool nestedMigrationRejected;
+    try { z8_postgres_apply_additive_migration(db, "z8_migrate"w, migrateTables); } catch (Z8PostgresException) { nestedMigrationRejected = true; }
+    assert(nestedMigrationRejected && db.inTransaction()); db.rollback();
+    db.execute(`ALTER TABLE "z8_migrate"."SimpleIndexSample" ALTER COLUMN "Amount" DROP DEFAULT, ALTER COLUMN "Amount" TYPE text USING "Amount"::text`);
+    db.execute(`ALTER TABLE "z8_migrate"."Source" DROP COLUMN "ParentId"`);
+    bool incompatibleMigrationRejected;
+    try { z8_postgres_apply_additive_migration(db, "z8_migrate"w, migrateTables); } catch (Z8PostgresException) { incompatibleMigrationRejected = true; }
+    assert(incompatibleMigrationRejected);
+    foreach (column; z8_postgres_describe_table(db, "z8_migrate"w, "Source"w).columns) assert(column.name != "ParentId");
     auto roleTable = P.m_roles();
     auto roleDDL = z8_postgres_create_table_sql("z8_test"w, roleTable);
     assert(roleDDL.canFind(`"Name" character varying`) && roleDDL.canFind(`"Description" bytea`) && roleDDL.canFind(`"Read" smallint`));

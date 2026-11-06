@@ -236,6 +236,12 @@ generated `lower` calls explicitly use `pg_catalog`.
 Creating a unique index may fail if existing data
 contains duplicates; trigram indexes require `pg_trgm`. The caller reviews and
 executes these statements; other differences require separate handling.
+For an explicitly supplied set of existing tables,
+`z8_postgres_apply_additive_migration` applies missing columns, indexes and
+foreign keys in that order in one transaction and returns the executed SQL.
+It rejects incompatible existing columns and primary keys, and rolls back all
+changes if an index or foreign key cannot be created. Extra columns and indexes
+are preserved. Referenced rows and required extensions must already exist.
 
 `z8_postgres_sync_registry` in `z8.database.metadata` inserts or updates the
 registered table, field and request metadata and creates initial access rows
