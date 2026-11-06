@@ -1116,6 +1116,21 @@ void main(string[] args) {
     db.execute(`ALTER TABLE "z8_reconcile"."Sample;--" ALTER COLUMN "Moment" DROP DEFAULT, ALTER COLUMN "Moment" TYPE timestamptz USING timestamptz '2020-01-01 00:00:00+00'`);
     assert(z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables).length == 1);
     assert(db.execute(`SELECT "Moment"::text FROM "z8_reconcile"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-000000000084'`).rows[0][0].text == "1577836800000");
+    db.execute(`ALTER TABLE "z8_reconcile"."Sample;--" ALTER COLUMN "Reference" DROP NOT NULL, ALTER COLUMN "Title" SET NOT NULL`);
+    db.execute(`UPDATE "z8_reconcile"."Sample;--" SET "Reference" = NULL WHERE "RecordId" = '00000000-0000-0000-0000-000000000084'`);
+    db.execute(`ALTER TABLE "z8_reconcile"."Sample;--" ADD CONSTRAINT "reject_zero_guid" CHECK ("Reference" IS DISTINCT FROM '00000000-0000-0000-0000-000000000000'::uuid) NOT VALID`);
+    bool nullRepairRejected;
+    try { z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables); } catch (Z8PostgresException) { nullRepairRejected = true; }
+    assert(nullRepairRejected && !db.inTransaction());
+    auto beforeNullRepair = z8_postgres_describe_table(db, "z8_reconcile"w, "Sample;--"w);
+    foreach (column; beforeNullRepair.columns) {
+        if (column.name == "Reference") assert(column.nullable);
+        if (column.name == "Title") assert(!column.nullable);
+    }
+    db.execute(`ALTER TABLE "z8_reconcile"."Sample;--" DROP CONSTRAINT "reject_zero_guid"`);
+    assert(z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables).length == 3);
+    assert(z8_postgres_compare_table(P.m_make(), z8_postgres_describe_table(db, "z8_reconcile"w, "Sample;--"w)).length == 0);
+    assert(db.execute(`SELECT "Reference"::text FROM "z8_reconcile"."Sample;--" WHERE "RecordId" = '00000000-0000-0000-0000-000000000084'`).rows[0][0].text == "00000000-0000-0000-0000-000000000000");
     auto reconcilePriorRequest = z8_application_set_request(null);
     assert(z8_postgres_reconcile_registered(db, "z8_reconcile"w, reconcileRegistry, reconcileTables).length == 0 && z8_application_request() is null);
     z8_application_set_request(reconcilePriorRequest);

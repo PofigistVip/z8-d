@@ -152,6 +152,24 @@ private string fieldConversion(wstring schema, wstring tableName, Z8Object table
     }
     return null;
 }
+private string[] nullabilityConversion(wstring schema, wstring tableName, Z8Object table, Z8SchemaDifference difference) {
+    if (difference.kind != Z8SchemaDifferenceKind.nullability) return null;
+    foreach (field; z8_query_declared_fields(table, true)) {
+        auto name = z8_native_call!wstring("org.zenframework.z8.server.runtime.OBJECT.m_name"w, field);
+        if (name.to!string != difference.column) continue;
+        auto target = quoteIdentifier(schema) ~ "." ~ quoteIdentifier(tableName);
+        auto column = quoteIdentifier(name);
+        if (difference.expected == "nullable" && difference.actual == "not null")
+            return ["ALTER TABLE " ~ target ~ " ALTER COLUMN " ~ column ~ " DROP NOT NULL"];
+        if (difference.expected == "not null" && difference.actual == "nullable" && z8_field_type_id(field) == "guid"w) {
+            return ["UPDATE " ~ target ~ " SET " ~ column ~ " = '00000000-0000-0000-0000-000000000000'::uuid WHERE " ~ column ~ " IS NULL",
+                    "ALTER TABLE " ~ target ~ " ALTER COLUMN " ~ column ~ " SET DEFAULT " ~ fieldDefault(field) ~
+                    ", ALTER COLUMN " ~ column ~ " SET NOT NULL"];
+        }
+        return null;
+    }
+    return null;
+}
 private string[] applyAdditiveSchema(Z8PostgresConnection db, wstring schema, Z8Object[] tables,
                                       bool createMissing, Z8RuntimeRegistry registry, bool syncRegistry) {
     if (db is null || db.isClosed()) throw new Z8PostgresException("PostgreSQL connection is closed");
@@ -191,6 +209,8 @@ private string[] applyAdditiveSchema(Z8PostgresConnection db, wstring schema, Z8
                 if (syncRegistry) {
                     auto conversion = fieldConversion(schema, names[index], table, difference);
                     if (conversion !is null) { widenings ~= conversion; continue; }
+                    auto nullability = nullabilityConversion(schema, names[index], table, difference);
+                    if (nullability.length) { widenings ~= nullability; continue; }
                 }
                 if (difference.kind == Z8SchemaDifferenceKind.columnType || difference.kind == Z8SchemaDifferenceKind.nullability ||
                     difference.kind == Z8SchemaDifferenceKind.primaryKey)

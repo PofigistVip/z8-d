@@ -312,8 +312,11 @@ It also widens `smallint` or `integer` to `bigint`, and bounded `varchar` or
 string field and a byte-backed text field use UTF-8; invalid byte sequences
 abort and roll back the reconciliation. Legacy `timestamp` columns migrate to
 Z8 date/datetime milliseconds, with dates before 1900 mapped to Z8's minimum as
-in the original. Other incompatible type changes are rejected. The returned list contains DDL, not static-record
-or registry changes.
+in the original. Nullability is reconciled as well; null GUIDs are replaced by
+the zero GUID before the column becomes `NOT NULL`. Constraints that reject the
+conversion cause the whole transaction to roll back. Other incompatible type
+changes are rejected. The returned list contains schema statements, including
+any GUID normalization, but not static-record or registry changes.
 Table creation, additive migration and registry synchronization take a
 transaction-scoped PostgreSQL advisory lock per schema, so cooperating hosts
 do not race while creating or updating the same schema. The lock is released
