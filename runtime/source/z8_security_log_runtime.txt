@@ -19,6 +19,36 @@ private Z8Optional!bool z8_security_log_accept(Z8Object self, Z8Object event) {
 private void z8_security_log_write(Z8Object self, Z8Object event) {
     z8_nonnull(self); z8_nonnull(event); z8_security_log_default_write(event);
 }
+private wstring z8_security_log_format(Z8Object self, Z8Object value) {
+    z8_nonnull(self); value = z8_nonnull(value);
+    if (z8_native_is_instance(z8_user_name, value)) {
+        auto user = z8_user_state(value);
+        wstring result;
+        foreach (part; [user.firstName, user.middleName, user.lastName])
+            if (part !is null && part.length) result ~= part ~ " "w;
+        if (result.length) result ~= "("w ~ z8_string_or_empty(user.login) ~ ")"w;
+        else result = z8_string_or_empty(user.login);
+        return z8_string_new(result);
+    }
+    if (!z8_native_is_instance(z8_security_object_name, value)) throw new Exception("invalid security log object");
+    auto type = z8_string_required(value.z8_security_object_virtual_type());
+    auto name = z8_string_required(value.z8_security_object_virtual_name());
+    auto id = value.z8_security_object_virtual_id();
+    wstring result;
+    if (type.length) result ~= type ~ ":"w;
+    // This condition follows the original SecurityLog implementation.
+    if (id !is null && id == z8_guid_zero()) result ~= z8_guid_to_string(id) ~ ":"w;
+    if (name.length) result ~= name ~ ":"w;
+    if (result.length) result = result[0 .. $ - 1];
+    return z8_string_new(result);
+}
+private Z8StringMap z8_security_log_filter(Z8Object self, Z8StringMap parameters) {
+    z8_nonnull(self); z8_nonnull(parameters);
+    auto result = new Z8StringMap();
+    foreach (key; ["session"w, "action"w, "ip"w, "user"w, "schema"w])
+        if (parameters.z8_containsKey(key)) result.z8_add(key, parameters.z8_get(key));
+    return result;
+}
 private void z8_security_log_object_event(Z8Object object, wstring action) {
     auto request = z8_application_require_request();
     request.securityEvents ~= z8_security_event_new(z8_nonnull(object), action);
@@ -56,5 +86,7 @@ void z8_bind_builtin_security_log() {
     enum prefix = "org.zenframework.z8.server.base.security.SecurityLog.m_"w;
     z8_native_bind(prefix ~ "acceptEvent"w, &z8_security_log_accept);
     z8_native_bind(prefix ~ "writeEvent"w, &z8_security_log_write);
+    z8_native_bind(prefix ~ "format"w, &z8_security_log_format);
+    z8_native_bind(prefix ~ "filterParameters"w, &z8_security_log_filter);
 }
 shared static this() { z8_bind_builtin_security_log(); }

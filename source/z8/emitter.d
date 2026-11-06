@@ -986,6 +986,16 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                     result ~= "override void z8_query_virtual_" ~ method.name.text ~ "(Z8Guid id) { this.m_" ~ method.name.text ~ "(id); }\n";
             }
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.security.SecurityObject"w) {
+            foreach (method; program.methods) if (!method.parameters.length) {
+                if (method.name.text == "getType" && method.returnType == ValueType.stringType)
+                    result ~= "override wstring z8_security_object_virtual_type() { return this.m_getType(); }\n";
+                if (method.name.text == "getName" && method.returnType == ValueType.stringType)
+                    result ~= "override wstring z8_security_object_virtual_name() { return this.m_getName(); }\n";
+                if (method.name.text == "getId" && method.returnType == ValueType.guidType)
+                    result ~= "override Z8Guid z8_security_object_virtual_id() { return this.m_getId(); }\n";
+            }
+        }
         if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.security.SecurityLog"w) {
             foreach (method; program.methods) if (method.parameters.length == 1 && method.parameters[0].objectClass !is null) {
                 auto eventType = method.parameters[0].objectClass.emittedName;

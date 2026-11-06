@@ -20,21 +20,29 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
 import org.zenframework.z8.base.security.SecurityObject;
 public class CustomSecurityObject extends SecurityObject {
     virtual public string getType() { return "custom"; }
+    virtual public string getName() { return "Special"; }
+    virtual public guid getId() { return guid.Null; }
 }
 ''', encoding="utf-8")
     (source / "CustomSecurityLog.bl").write_text('''
 import org.zenframework.z8.base.security.SecurityLog;
 import org.zenframework.z8.base.security.SecurityEvent;
+import org.zenframework.z8.base.security.SecurityObject;
+import org.zenframework.z8.base.security.User;
 public class CustomSecurityLog extends SecurityLog {
     public int count = 0; public string last = "";
     virtual protected bool acceptEvent(SecurityEvent event) { return event.getAction() != "skip"; }
     virtual protected void writeEvent(SecurityEvent event) { count = count + 1; last = event.getAction() + ":" + event.getMessage(); }
+    public string formatObject(SecurityObject object) { return super.format(object); }
+    public string formatUser(User user) { return super.format(user); }
+    public string[string] filtered(string[string] params) { return super.filterParameters(params); }
 }
 ''', encoding="utf-8")
     (source / "SecurityEndpoint.bl").write_text('''
 import org.zenframework.z8.lang.Object;
 import org.zenframework.z8.base.json.JsonArray;
 import org.zenframework.z8.base.application.Application;
+import org.zenframework.z8.base.security.User;
 public class SecurityEndpoint extends Object {
     virtual protected JsonArray getData(string[string] parameters) {
         Application.logSecurityEvent("table", guid.Null, "Orders", "change"); return null;
@@ -44,6 +52,7 @@ public class SecurityEndpoint extends Object {
     (source / "SecurityProbe.bl").write_text('''
 import org.zenframework.z8.base.security.SecurityObject;
 import org.zenframework.z8.base.security.SecurityEvent;
+import org.zenframework.z8.base.security.User;
 import org.zenframework.z8.base.application.Application;
 public class SecurityProbe {
     public static SecurityObject make(guid id) { return SecurityObject.object("table", id, "Orders"); }
@@ -55,6 +64,7 @@ public class SecurityProbe {
     }
     public static bool customType(SecurityObject object) { return object.getType() == "custom"; }
     public static CustomSecurityLog log() { CustomSecurityLog value; return value; }
+    public static User userType() { User value; return value; }
     public static void add(guid id) {
         Application.logSecurityEvent("table", id, "Orders", "skip");
         Application.logSecurityEvent(SecurityObject.object("table", id, "Orders"), "update");
@@ -84,6 +94,14 @@ void main() {
     z8_security_event_set_result(event, false, "denied"w);
     assert(z8_optional_require(P.m_check(cast(typeof(P.m_eventType()))event, id)));
     assert(z8_optional_require(P.m_customType(P.m_custom())));
+    auto formatLog = P.m_log();
+    assert(formatLog.m_formatObject(P.m_make(id)) == "table:Orders"w);
+    assert(formatLog.m_formatObject(P.m_custom()) == "custom:00000000-0000-0000-0000-000000000000:Special"w);
+    auto person = new Z8UserData(); person.id = id; person.login = "alice"w; person.firstName = "Alice"w; person.lastName = "Smith"w;
+    assert(formatLog.m_formatUser(cast(typeof(P.m_userType()))z8_user_wrap(person)) == "Alice Smith (alice)"w);
+    auto parameters = new Z8StringMap(); parameters.z8_add("password"w, "secret"w); parameters.z8_add("ip"w, "127.0.0.1"w);
+    auto filtered = formatLog.m_filtered(parameters);
+    assert(filtered.z8_size() == 1 && filtered.z8_get("ip"w) == "127.0.0.1"w && !filtered.z8_containsKey("password"w));
     auto request = new Z8ApplicationRequest(); request.securityLog = P.m_log();
     auto previous = z8_application_set_request(request);
     P.m_add(id); z8_security_events_set_result(request, false, "denied"w);

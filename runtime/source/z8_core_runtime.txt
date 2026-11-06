@@ -130,6 +130,9 @@ class Z8Object {
     Z8Optional!long z8_sorter_virtual_compare(Z8Object left, Z8Object right) { return z8_optional_wrap(0L); }
     Z8Optional!bool z8_security_log_virtual_accept(Z8Object event) { return z8_optional_wrap(true); }
     void z8_security_log_virtual_write(Z8Object event) { z8_security_log_default_write(event); }
+    wstring z8_security_object_virtual_type() { return null; }
+    wstring z8_security_object_virtual_name() { return null; }
+    Z8Guid z8_security_object_virtual_id() { return null; }
     void z8_action_virtual_execute_many(Z8Array!Z8Guid records, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) {}
     void z8_action_virtual_execute_one(Z8Guid record, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) {}
     void z8_report_virtual_prepare(Z8Guid record) {}
