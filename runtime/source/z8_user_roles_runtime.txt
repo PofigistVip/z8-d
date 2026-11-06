@@ -12,7 +12,10 @@ private void z8_user_roles_new(Z8Object self) {
     self.z8_set_native_state(z8_user_roles_name, state);
 }
 private Z8UserRolesState z8_user_roles_state(Z8Object self) {
-    auto state = cast(Z8UserRolesState)z8_nonnull(self, -1).z8_get_native_state(z8_user_roles_name);
+    // A BL subclass may specialize the native roles field while allocating it.
+    // Its state has already been installed by UserRoles.m_new at that point.
+    if (self is null) throw new Exception("null reference");
+    auto state = cast(Z8UserRolesState)self.z8_get_native_state(z8_user_roles_name);
     if (state is null) throw new Exception("UserRoles members are not initialized");
     return state;
 }

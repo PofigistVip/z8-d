@@ -4,8 +4,12 @@ import org.zenframework.z8.base.form.Form;
 import org.zenframework.z8.base.form.Listbox;
 import org.zenframework.z8.base.form.Section;
 import org.zenframework.z8.base.form.action.ActionType;
+import org.zenframework.z8.base.table.Sql;
 import org.zenframework.z8.base.table.system.UserEntries;
+import org.zenframework.z8.base.table.system.UserRoles;
 import org.zenframework.z8.base.table.system.Users;
+import org.zenframework.z8.base.table.value.Aggregation;
+import org.zenframework.z8.base.table.value.Field;
 import org.zenframework.z8.server.base.table.system.view.ResetPasswordAction;
 import org.zenframework.z8.server.base.table.system.view.RoleTableAccessView;
 import org.zenframework.z8.server.base.table.system.view.UniqueUserRoles;
@@ -30,6 +34,16 @@ public class UserForm extends Form {
     entriesListbox.flex = 1;
     entriesListbox.colSpan = 6;
     userRoles.columns = {userRoles.roles.name};
+    userRoles.roles = class {
+        virtual protected void beforeRead() {
+            super.beforeRead();
+            UserRoles assigned;
+            assigned.role.aggregation = Aggregation.Array;
+            Field[] fields = {assigned.role};
+            if (assigned.aggregate(fields, assigned.user.sql_guid() == container.container.users.recordId.get().sql_guid()))
+                addWhere(!Sql.inVector(recordId.sql_guid(), assigned.role.array()));
+        }
+    };
     rolesListbox.query = userRoles;
     rolesListbox.link = userRoles.user;
     rolesListbox.source = rolesSource;

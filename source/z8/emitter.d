@@ -1257,8 +1257,11 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                 field.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(field.type, field.objectClass, true, field.keyObjectClasses);
             result ~= "this.f_" ~ field.name.text ~ " = " ~ initial ~ ";\n";
         }
-        foreach (specialization; program.memberSpecializations) if (!program.isNative)
+        foreach (specialization; program.memberSpecializations) if (!program.isNative) {
             result ~= "this.f_" ~ specialization.specializedName.text ~ " = z8_new!(" ~ specialization.emittedName ~ ")(this);\n";
+            result ~= "this.f_" ~ specialization.specializedName.text ~ ".z8_set_index(" ~
+                emitRawWStringLiteral(specialization.specializedName.text.to!wstring) ~ ");\n";
+        }
         result ~= "}\noverride void z8_init_references() {\n";
         foreach (reference; orderedReferences(program)) {
             if (reference.member !is null) result ~= emitSimple(reference.member) ~ ";\n";
