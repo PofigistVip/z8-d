@@ -1,0 +1,79 @@
+// java.util.Properties.load(InputStream): ISO-8859-1 bytes and Unicode escapes.
+wstring[wstring] z8_properties_parse(const(ubyte)[] bytes) {
+    wstring[wstring] result;
+    size_t position;
+    bool whitespace(wchar c) { return c == ' ' || c == '\t' || c == '\f'; }
+    wstring decode(wstring raw) {
+        wchar[] value;
+        int hex(wchar c) {
+            if (c >= '0' && c <= '9') return c - '0';
+            if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+            if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+            throw new Exception("invalid properties Unicode escape");
+        }
+        for (size_t i; i < raw.length; ++i) {
+            wchar c = raw[i];
+            if (c == '\\') {
+                if (++i >= raw.length) break;
+                c = raw[i];
+                switch (c) {
+                    case 't': c = '\t'; break;
+                    case 'n': c = '\n'; break;
+                    case 'r': c = '\r'; break;
+                    case 'f': c = '\f'; break;
+                    case 'u':
+                        if (i + 4 >= raw.length) throw new Exception("invalid properties Unicode escape");
+                        uint code;
+                        foreach (unused; 0 .. 4) code = (code << 4) | cast(uint)hex(raw[++i]);
+                        c = cast(wchar)code; break;
+                    default: break;
+                }
+            }
+            value ~= c;
+        }
+        if (value.length) return value.idup;
+        return " "w[0 .. 0];
+    }
+    while (position < bytes.length) {
+        wchar[] logical;
+        bool continuing, property;
+        do {
+            wchar[] line;
+            while (position < bytes.length && bytes[position] != '\r' && bytes[position] != '\n')
+                line ~= cast(wchar)bytes[position++];
+            if (position < bytes.length && bytes[position++] == '\r' && position < bytes.length && bytes[position] == '\n') ++position;
+            size_t begin;
+            while (begin < line.length && whitespace(line[begin])) ++begin;
+            if (!continuing && (begin == line.length || line[begin] == '#' || line[begin] == '!')) break;
+            property = true;
+            logical ~= line[begin .. $];
+            size_t slashes;
+            while (slashes < logical.length && logical[$ - 1 - slashes] == '\\') ++slashes;
+            continuing = (slashes & 1) != 0;
+            if (continuing) logical.length--;
+        } while (continuing && position < bytes.length);
+        if (!property) continue;
+        size_t end;
+        bool escaped;
+        while (end < logical.length) {
+            auto c = logical[end];
+            if (!escaped && (c == '=' || c == ':' || whitespace(c))) break;
+            if (c == '\\') escaped = !escaped; else escaped = false;
+            ++end;
+        }
+        auto key = decode(logical[0 .. end].idup);
+        auto start = end;
+        while (start < logical.length && whitespace(logical[start])) ++start;
+        if (start < logical.length && (logical[start] == '=' || logical[start] == ':')) ++start;
+        while (start < logical.length && whitespace(logical[start])) ++start;
+        result[key] = decode(logical[start .. $].idup);
+    }
+    return result;
+}
+// Overrides correspond to explicit host-supplied values, e.g. Java system properties.
+void z8_server_config_load_file(string path, wstring[wstring] overrides = null) {
+    import std.file : read;
+    auto properties = z8_properties_parse(cast(const(ubyte)[])read(path));
+    foreach (key, value; overrides) properties[z8_string_required(key)] = z8_string_required(value);
+    z8_server_config_replace(properties);
+}
