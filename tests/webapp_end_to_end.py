@@ -26,7 +26,7 @@ with tempfile.TemporaryDirectory() as directory:
                     str(executable), "--postgres-bin", str(bin_dir)], check=True)
     public = temp / "public"
     config = temp / "custom.properties"
-    config.write_text("application.working.path=work\nstorage.path=storage-data\nsecurity.log.file=logs/security.log\nweb.client.hashPassword=false\nfiles.saveOnDisk=true\n", encoding="ascii")
+    config.write_text("application.working.path=work\nstorage.path=storage-data\nsecurity.log.file=logs/security.log\nweb.client.hashPassword=false\nfiles.saveOnDisk=true\nauth.fails.limit=2\nauth.fails.banSeconds=60\nauthority.center.session.onePerUser=true\nauthority.center.session.timeout=10\n", encoding="ascii")
     default_config = temp / "server.properties"
     default_config.write_text("web.client.hashPassword=true\n", encoding="ascii")
     subprocess.run([sys.executable, str(root / "webserver/prepare_client.py"), str(Path(sys.argv[1]).resolve()), str(public)], check=True)
@@ -132,10 +132,20 @@ with tempfile.TemporaryDirectory() as directory:
             finally:
                 client.close()
             password = "example-secret"
+            assert browser_login(port, "Admin", "wrong")[0] == 401
+            assert browser_login(port, "Admin", "wrong")[0] == 401
+            assert browser_login(port, "Admin", password)[0] == 401
+            subprocess.run([str(psql), "-v", "ON_ERROR_STOP=1", "-c",
+                            '''UPDATE "SystemUsers" SET "Banned Until"=0, "Failed Auth Count"=0 WHERE "RecordId"='00000000-0000-0000-0000-000000000002' ''', connection],
+                           env=environment, capture_output=True, check=True)
             status, login = browser_login(port, "Admin", password)
             assert status == 200 and login["success"], login
             assert sum(entry["request"] == "Tasks" for entry in login["user"]["entries"]) == 1, login
             session = login["session"]
+            status, replacement = browser_login(port, "Admin", password)
+            assert status == 200 and replacement["success"] and replacement["session"] != session
+            assert request(port, request="login", session=session)[0] == 401
+            session = replacement["session"]
             status, metadata = request(port, request="Tasks", session=session, action="meta")
             assert status == 200 and metadata["success"], metadata
             assert [control["name"] for control in metadata["controls"]] == ["title", "done", "documents"], metadata

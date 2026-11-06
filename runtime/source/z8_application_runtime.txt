@@ -5,7 +5,9 @@ class Z8ApplicationConfig {
     bool multitenant;
     bool clientHashesPasswords = true;
     bool filesSaveOnDisk;
+    bool oneSessionPerUser;
     int uploadMaxMiB = 5, downloadMaxMiB = 1;
+    int authFailsLimit, authFailsBanSeconds, sessionTimeoutMinutes = 24 * 60;
     wstring[] textExtensions = ["txt"w, "xml"w];
     wstring[] imageExtensions = ["tif"w, "tiff"w, "jpg"w, "jpeg"w, "gif"w, "png"w, "bmp"w];
     wstring[] emailExtensions = ["eml"w, "mime"w];
@@ -15,6 +17,8 @@ class Z8ApplicationConfig {
         auto result = new Z8ApplicationConfig();
         result.multitenant = multitenant; result.clientHashesPasswords = clientHashesPasswords; result.uploadMaxMiB = uploadMaxMiB; result.downloadMaxMiB = downloadMaxMiB;
         result.filesSaveOnDisk = filesSaveOnDisk;
+        result.oneSessionPerUser = oneSessionPerUser; result.authFailsLimit = authFailsLimit;
+        result.authFailsBanSeconds = authFailsBanSeconds; result.sessionTimeoutMinutes = sessionTimeoutMinutes;
         result.textExtensions = textExtensions.dup; result.imageExtensions = imageExtensions.dup;
         result.emailExtensions = emailExtensions.dup; result.officeExtensions = officeExtensions.dup;
         return result;
@@ -43,6 +47,10 @@ void z8_application_configure_from_server() {
     config.multitenant = z8_optional_require(z8_server_config_parse_bool(property("application.multitenancy"w), z8_optional_wrap(false)));
     config.clientHashesPasswords = z8_optional_require(z8_server_config_parse_bool(property("web.client.hashPassword"w), z8_optional_wrap(true)));
     config.filesSaveOnDisk = z8_optional_require(z8_server_config_parse_bool(property("files.saveOnDisk"w), z8_optional_wrap(false)));
+    config.oneSessionPerUser = z8_optional_require(z8_server_config_parse_bool(property("authority.center.session.onePerUser"w), z8_optional_wrap(false)));
+    config.authFailsLimit = cast(int)z8_optional_require(z8_server_config_parse_int(property("auth.fails.limit"w), z8_optional_wrap(0L)));
+    config.authFailsBanSeconds = cast(int)z8_optional_require(z8_server_config_parse_int(property("auth.fails.banSeconds"w), z8_optional_wrap(0L)));
+    config.sessionTimeoutMinutes = cast(int)z8_optional_require(z8_server_config_parse_int(property("authority.center.session.timeout"w), z8_optional_wrap(24L * 60)));
     config.uploadMaxMiB = cast(int)z8_optional_require(z8_server_config_parse_int(property("web.server.upload.max"w), z8_optional_wrap(5L)));
     config.downloadMaxMiB = cast(int)z8_optional_require(z8_server_config_parse_int(property("web.client.download.max"w), z8_optional_wrap(1L)));
     wstring[] extensions(wstring key, wstring[] defaults) {

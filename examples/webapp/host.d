@@ -52,11 +52,14 @@ void main(string[] args) {
     Z8PostgresAuthenticationConfig config;
     auto applicationConfig = z8_application_configuration();
     config.clientHashesPasswords = applicationConfig.clientHashesPasswords;
+    config.maxFailedAttempts = applicationConfig.authFailsLimit;
+    config.banMilliseconds = cast(long)applicationConfig.authFailsBanSeconds * 1000;
     if (applicationConfig.uploadMaxMiB <= 0 || cast(ulong)applicationConfig.uploadMaxMiB * 1_048_576UL > size_t.max)
         throw new Exception("invalid upload limit");
     auto bodyLimit = cast(size_t)applicationConfig.uploadMaxMiB * 1_048_576;
     auto securityLog = z8_security_log_file_from_config();
-    auto authority = new Z8PostgresHttpAuthority(db, schema, registry, config, null, "example"w);
+    auto sessions = new Z8SessionManager(cast(long)applicationConfig.sessionTimeoutMinutes * 60_000, applicationConfig.oneSessionPerUser);
+    auto authority = new Z8PostgresHttpAuthority(db, schema, registry, config, sessions, "example"w);
     auto server = new Z8CivetServer("127.0.0.1:0", (Z8HttpRequest request) {
         auto connection = db.openSibling(); scope(exit) connection.close();
         auto previous = z8_connection_set_current(new Z8PostgresDatabase(connection, schema, registry));

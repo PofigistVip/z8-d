@@ -3,7 +3,7 @@
 This example compiles `Tasks.bl` against the original Z8 BL library and runs
 the generated project in a single D process with PostgreSQL and CivetWeb. It
 demonstrates registry generation, additive schema initialization, local
-authentication, table actions and database-backed attachments. The host is a
+authentication, table actions and database- or disk-backed attachments. The host is a
 small local example: it listens on a dynamically assigned loopback port and
 exits when a line is entered on stdin. It can optionally serve the original
 JavaScript client from a separately prepared public directory.
@@ -41,14 +41,16 @@ not already assigned. The host prints the assigned port; open
 `http://127.0.0.1:<port>/index.html` for the prepared client. Its application
 endpoint is `/request.json`, and authenticated file downloads use
 `/storage/...`. Restarting the host reconciles additive schema changes and
-preserves existing records. The automated test checks delivery of the original
+refreshes declared static records while preserving ordinary data. The automated test checks delivery of the original
 client files and the client's login request, not the entire browser UI.
 
 Optionally add `--config C:/path/to/server.properties` to initialization and
 server commands. The example applies the configured working and storage paths,
-upload limit, password hashing mode and supported file extensions. Setting
+upload limit, password hashing mode, login-failure limits, session timeout and
+single-session policy, disk storage mode, language and supported file extensions. Setting
 `security.log.file` also enables a rotating request and login security log.
-The properties file's directory is used as the application root.
+The properties file's directory is used as the application root. Without
+`--config`, the host uses `server.properties` in its working directory if present.
 
 Run the full automated example, including a temporary PostgreSQL instance and
 two server runs, with:

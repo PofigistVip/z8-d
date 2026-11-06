@@ -49,6 +49,14 @@ void main() {
     assert(z8_optional_require(P.m_getInt("space"w, 8)) == 8);
     z8_server_config_replace(["plain"w:"updated"w]);
     assert(P.m_get("plain"w) == "updated"w && P.m_get("true"w) is null);
+    z8_application_configure_from_server();
+    auto defaults = z8_application_configuration();
+    assert(defaults.authFailsLimit == 0 && defaults.authFailsBanSeconds == 0 && defaults.sessionTimeoutMinutes == 1440 && !defaults.oneSessionPerUser);
+    z8_server_config_replace(["auth.fails.limit"w:"3"w, "auth.fails.banSeconds"w:"90"w,
+        "authority.center.session.timeout"w:"15"w, "authority.center.session.onePerUser"w:"true"w]);
+    z8_application_configure_from_server(); auto config = z8_application_configuration();
+    assert(config.authFailsLimit == 3 && config.authFailsBanSeconds == 90 && config.sessionTimeoutMinutes == 15 && config.oneSessionPerUser);
+    config.sessionTimeoutMinutes = 0; assert(z8_application_configuration().sessionTimeoutMinutes == 15);
 }
 ''', encoding="utf-8")
     executable = temp / ("config.exe" if os.name == "nt" else "config")
