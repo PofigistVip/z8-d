@@ -85,6 +85,9 @@ request's event level is restored afterward. Existing tables are not migrated.
 `z8_postgres_bootstrap_registered` obtains fresh table instances from the registry
 and accepts additional framework tables separately; the host must still supply
 any required system tables that were not registered by the generated project.
+Registered entry points are inserted or refreshed in `SystemEntries` when that
+table is present; existing user assignments are retained and obsolete entries
+are not deleted by the additive synchronizer.
 `UserRoles` provides links to users and roles, built-in administrator
 assignments, a read-only flag based on the current user and protection against
 removing the built-in assignments. The flag is metadata; general access

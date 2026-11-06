@@ -74,6 +74,14 @@ void z8_postgres_sync_registry(Z8PostgresConnection db, wstring schema, Z8Runtim
                 db.execute("UPDATE " ~ ns ~ `."SystemRequests" SET "Name" = $2::text, "Class" = $3::text, "Lock" = 1 WHERE "RecordId" = $1::uuid`, params);
             }
         }
+        // EntriesGenerator preserves user-to-entry assignments while refreshing
+        // metadata; obsolete entries are deliberately not removed here.
+        foreach (entry; registry.entries()) {
+            auto params = [guidParameter(entry.key), textParameter(entry.displayName), textParameter(entry.classId)];
+            db.execute("INSERT INTO " ~ ns ~ `."SystemEntries" ("RecordId", "Name", "Class", "Lock") ` ~
+                `VALUES ($1::uuid, $2::text, $3::text, 3) ON CONFLICT ("RecordId") DO UPDATE ` ~
+                `SET "Name" = EXCLUDED."Name", "Class" = EXCLUDED."Class", "Lock" = 3`, params);
+        }
         if (ownsTransaction) db.commit();
     } catch (Throwable failure) {
         if (ownsTransaction) { try { db.rollback(); } catch (Throwable ignored) { } }

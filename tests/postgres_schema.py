@@ -550,7 +550,7 @@ void main(string[] args) {
     try { z8_postgres_apply_static_records(db, "z8_security"w, P.m_roles()); } catch (Z8PostgresException) { rolesUnavailable = true; }
     assert(rolesUnavailable);
     auto bootstrapRegistry = new Z8RuntimeRegistry(); auto bootstrapSample = P.m_make();
-    bootstrapRegistry.registerTable(bootstrapSample); bootstrapRegistry.registerRequest(bootstrapSample);
+    bootstrapRegistry.registerTable(bootstrapSample); bootstrapRegistry.registerRequest(bootstrapSample); bootstrapRegistry.registerEntry(bootstrapSample);
     Z8Object[] bootstrapTables = [P.m_userRoles(), P.m_userEntries(), P.m_entries(), P.m_roles(), P.m_users(), P.m_sequences(), P.m_systemTables(), P.m_systemFields(),
         P.m_systemRequests(), P.m_roleTableAccess(), P.m_roleFieldAccess(), P.m_roleRequestAccess(), P.m_target()];
     db.execute(`CREATE SCHEMA "z8_bootstrap"`);
@@ -565,11 +565,16 @@ void main(string[] args) {
     assert(initialUsers.rows[0][0].text == "2");
     assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemRoles" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`).rows[0][0].text == "3");
     assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemUserRoles" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`).rows[0][0].text == "2");
-    auto entry = db.execute(`SELECT "Class" FROM "z8_bootstrap"."SystemEntries" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`);
+    auto entry = db.execute(`SELECT "Class" FROM "z8_bootstrap"."SystemEntries" WHERE "Class" = 'org.zenframework.z8.server.base.table.system.SystemTools'`);
     assert(entry.rows.length == 1 && entry.rows[0][0].text == "org.zenframework.z8.server.base.table.system.SystemTools");
+    assert(db.execute(`SELECT "Lock" FROM "z8_bootstrap"."SystemEntries" WHERE "Class" = 'Sample'`).rows[0][0].text == "3");
     auto userEntries = db.execute(`SELECT "UserId"::text, "EntryId"::text, "Lock" FROM "z8_bootstrap"."SystemUserEntries" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000' ORDER BY "UserId"`);
     assert(userEntries.rows.length == 2 && userEntries.rows[0][0].text == "00000000-0000-0000-0000-000000000001" && userEntries.rows[1][0].text == "00000000-0000-0000-0000-000000000002");
     assert(z8_guid_literal(userEntries.rows[0][1].text) == z8_guid_create_name("org.zenframework.z8.server.base.table.system.SystemTools"w) && userEntries.rows[0][2].text == "3");
+    bootstrapSample.z8_set_attribute("displayName"w, "Renamed entry"w); bootstrapRegistry.registerEntry(bootstrapSample);
+    z8_postgres_sync_registry(db, "z8_bootstrap"w, bootstrapRegistry);
+    assert(db.execute(`SELECT "Name" FROM "z8_bootstrap"."SystemEntries" WHERE "Class" = 'Sample'`).rows[0][0].text == "Renamed entry");
+    assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemUserEntries" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`).rows[0][0].text == "2");
     assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemRoleTableAccess" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`).rows[0][0].text == "3");
     assert(db.execute(`SELECT count(*) FROM "z8_bootstrap"."SystemRoleRequestAccess" WHERE "RecordId" <> '00000000-0000-0000-0000-000000000000'`).rows[0][0].text == "3");
     assert(db.execute(`SELECT "Read"::text || "Write"::text || "Create"::text || "Copy"::text || "Destroy"::text FROM "z8_bootstrap"."SystemRoleTableAccess" WHERE "Role" = 'DC08CA72-C668-412F-91B7-022F1C82AC09'`).rows[0][0].text == "11111");
