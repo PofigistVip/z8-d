@@ -191,8 +191,13 @@ private Z8EvalValue z8_eval_binary(wstring op, Z8EvalValue left, Z8EvalValue rig
     // not recognize those spellings and the evaluator fails on them.
     if (op == "&&"w || op == "||"w || op == "%"w) throw new Exception("unsupported Eval operator");
     auto a = z8_nonnull(left.primary), b = right.primary;
+    bool rightNull = b is null && right.json is null && right.context == Z8EvalContext.none;
     Z8Primary result;
-    if (a.kind == Z8PrimaryKind.integer && b !is null && b.kind == Z8PrimaryKind.integer) {
+    if (rightNull && (op == "=="w || op == "!="w) && a.kind != Z8PrimaryKind.text) {
+        if (a.kind == Z8PrimaryKind.boolean) result = z8_primary_box(false);
+        else if (a.kind == Z8PrimaryKind.integer && op == "=="w) result = z8_primary_box(false);
+        else if (a.kind == Z8PrimaryKind.decimal) result = z8_primary_box(op == "!="w);
+    } else if (a.kind == Z8PrimaryKind.integer && b !is null && b.kind == Z8PrimaryKind.integer) {
         auto x = a.integerValue, y = b.integerValue;
         if (op == "+"w) result = z8_primary_box(x + y);
         else if (op == "-"w) result = z8_primary_box(x - y);
@@ -221,9 +226,9 @@ private Z8EvalValue z8_eval_binary(wstring op, Z8EvalValue left, Z8EvalValue rig
         else if (op == "!="w) result = z8_primary_box(a.booleanValue != b.booleanValue);
     } else if (a.kind == Z8PrimaryKind.text) {
         auto x = z8_string_required(a.textValue);
-        if (op == "+"w) result = z8_primary_box(z8_string_new(x ~ (b is null ? ""w : z8_primary_to_string(b))));
-        else if (b !is null && b.kind == Z8PrimaryKind.text) {
-            auto compare = z8_str_compare(x, b.textValue);
+        if (op == "+"w) result = z8_primary_box(z8_string_new(x ~ z8_string_new(rightNull ? ""w : z8_eval_value_text(right))));
+        else if (rightNull || (b !is null && b.kind == Z8PrimaryKind.text)) {
+            auto compare = z8_str_compare(x, rightNull ? ""w : b.textValue);
             if (op == "=="w) result = z8_primary_box(compare == 0);
             else if (op == "!="w) result = z8_primary_box(compare != 0);
             else if (op == "<"w) result = z8_primary_box(compare < 0);

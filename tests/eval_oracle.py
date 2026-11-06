@@ -108,6 +108,10 @@ public class EvalOracle {
         }
         for (String pattern : new String[]{"${span.setTotalHours(50)}", "${span.days()}", "${span.hours()}", "${span.truncDay()}", "${span.totalHours()}", "${day.setDate(2023, 12, 31)}", "${day.year()}", "${day.month()}"})
             System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get());
+        for (String pattern : new String[]{"${'' == nil}", "${'a' > nil}", "${'x' + nil}", "${true == nil}", "${true != nil}", "${1 == nil}", "${1 != nil}", "${1.0 == nil}", "${1.0 != nil}", "${nil == nil}", "${'x' + arr}"}) {
+            try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
+            catch (Exception error) { System.out.println("error"); }
+        }
         jsonEval.z8_setVariable(new string("int"), new integer(10));
         System.out.println(jsonEval.z8_evaluateText(new string("${int}")).get());
         try { System.out.println(jsonEval.z8_evaluateText(new string("${int.parse('42')}")).get()); }
@@ -220,6 +224,10 @@ void main() {
     foreach (pattern; ["${span.setTotalHours(50)}"w, "${span.days()}"w, "${span.hours()}"w, "${span.truncDay()}"w,
                        "${span.totalHours()}"w, "${day.setDate(2023, 12, 31)}"w, "${day.year()}"w, "${day.month()}"w])
         writeln(jsonEval.m_evaluateText(pattern).to!string);
+    foreach (pattern; ["${'' == nil}"w, "${'a' > nil}"w, "${'x' + nil}"w, "${true == nil}"w, "${true != nil}"w,
+                       "${1 == nil}"w, "${1 != nil}"w, "${1.0 == nil}"w, "${1.0 != nil}"w,
+                       "${nil == nil}"w, "${'x' + arr}"w])
+        try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
     Z8p_4576616C50726F6265.m_shadow(jsonEval);
     writeln(jsonEval.m_evaluateText("${int}"w).to!string);
     try { writeln(jsonEval.m_evaluateText("${int.parse('42')}"w).to!string); } catch (Exception) { writeln("error"); }
