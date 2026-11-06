@@ -85,6 +85,20 @@ public class CustomReport extends Report {
     virtual protected file execute(guid id) { trace = trace + ":execute"; return null; }
 }
 ''', encoding="utf-8")
+    (source / "ParameterJob.bl").write_text('''
+import org.zenframework.z8.base.Executable;
+import org.zenframework.z8.base.form.action.Parameter;
+public class ParameterJob extends Executable {
+    Parameter count = Parameter.create("Count", 7); parameters = {count};
+    virtual protected void execute(Parameter[] args) { progress(42); info("parameters:" + ((int)args[0]).toString()); }
+}
+''', encoding="utf-8")
+    (source / "SimpleJob.bl").write_text('''
+import org.zenframework.z8.base.Executable;
+public class SimpleJob extends Executable {
+    virtual protected void execute() { warning("simple"); }
+}
+''', encoding="utf-8")
     (source / "ControlProbe.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.GuidField;
@@ -98,6 +112,8 @@ public class ControlProbe {
     public static SingleAction single() { SingleAction value; return value; }
     public static ManyAction many() { ManyAction value; return value; }
     public static CustomReport customReport() { CustomReport value; return value; }
+    public static ParameterJob parameterJob() { ParameterJob value; return value; }
+    public static SimpleJob simpleJob() { SimpleJob value; return value; }
     public static bool verify() {
         StringField field; GuidField key; Table target; Section section; Action action;
         Parameter amount = Parameter.create("Amount", 9);
@@ -191,6 +207,9 @@ void main() {
     z8_nonnull(P.m_single()).z8_action_virtual_execute_many(records, table, selectedRecords, table);
     z8_nonnull(P.m_many()).z8_action_virtual_execute_many(records, table, selectedRecords, table);
     assert(monitor.messages().length == 3 && monitor.messages()[0].text == "one"w && monitor.messages()[1].text == "one"w && monitor.messages()[2].text == "many"w);
+    z8_executable_execute(P.m_parameterJob()); z8_executable_execute(P.m_simpleJob());
+    assert(monitor.worked == 42 && monitor.messages().length == 5 && monitor.messages()[3].text == "parameters:7"w);
+    assert(monitor.messages()[4].text == "simple"w && monitor.messages()[4].level == Z8MonitorLevel.warning);
     user.privileges.setFieldAccess(z8_guid_create_name("CustomTable.Label"w), Z8Access.init);
     request = new Z8ApplicationRequest(); monitor = new Z8RequestMonitor(); request.monitor = monitor;
     request.session = new Z8ApplicationSession("test"w, user, user); request.parameters.z8_add("request"w, "CustomTable"w);

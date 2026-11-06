@@ -1,0 +1,31 @@
+// Core Executable callbacks, shared by job hosts and generated BL classes.
+private enum z8_executable_name = "org.zenframework.z8.server.base.Executable"w;
+private void z8_executable_default_execute(Z8Object self) {
+    z8_nonnull(self).z8_executable_virtual_execute_parameters();
+}
+private void z8_executable_default_parameters(Z8Object self, Z8ObjectArray!Z8Object parameters) { z8_nonnull(self); }
+private void z8_executable_progress(Z8Object self, Z8Optional!long percent) {
+    z8_nonnull(self);
+    auto monitor = cast(IZ8JobProgress)z8_application_require_request().monitor;
+    if (monitor is null) throw new Exception("job monitor does not support progress");
+    monitor.setWorked(cast(int)z8_optional_require(percent));
+}
+private void z8_executable_message(Z8MonitorLevel level)(Z8Object self, wstring text) {
+    z8_nonnull(self);
+    auto monitor = z8_nonnull(z8_application_require_request().monitor);
+    monitor.message(level, z8_string_required(text));
+}
+// Run a BL callback without choosing a scheduler or transaction policy.
+void z8_executable_execute(Z8Object self) {
+    if (!z8_native_is_instance(z8_executable_name, z8_nonnull(self))) throw new Exception("invalid Executable object");
+    self.z8_executable_virtual_execute();
+}
+void z8_bind_builtin_executable() {
+    z8_native_bind(z8_executable_name ~ ".m_execute"w, &z8_executable_default_execute);
+    z8_native_bind(z8_executable_name ~ ".m_execute"w, &z8_executable_default_parameters);
+    z8_native_bind(z8_executable_name ~ ".m_progress"w, &z8_executable_progress);
+    z8_native_bind(z8_executable_name ~ ".m_info"w, &z8_executable_message!(Z8MonitorLevel.info));
+    z8_native_bind(z8_executable_name ~ ".m_warning"w, &z8_executable_message!(Z8MonitorLevel.warning));
+    z8_native_bind(z8_executable_name ~ ".m_error"w, &z8_executable_message!(Z8MonitorLevel.error));
+}
+shared static this() { z8_bind_builtin_executable(); }

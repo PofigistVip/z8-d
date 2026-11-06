@@ -1013,6 +1013,14 @@ package string emitPrograms(Program[] programs, bool centralNativeRegistry = fal
                     result ~= "override Z8File z8_report_virtual_execute(Z8Guid record) { return this.m_execute(record); }\n";
             }
         }
+        if (program.isNative && program.nativeName == "org.zenframework.z8.server.base.Executable"w) {
+            foreach (method; program.methods) if (method.name.text == "execute" && !method.isStatic && method.returnType == ValueType.voidType) {
+                if (!method.parameters.length)
+                    result ~= "override void z8_executable_virtual_execute() { this.m_execute(); }\n";
+                else if (method.parameters.length == 1 && method.parameters[0].type == ValueType.selfArray)
+                    result ~= "override void z8_executable_virtual_execute_parameters() { this.m_execute(this.f_parameters); }\n";
+            }
+        }
         if (extendsBuiltinPrimary(program)) {
             if (program.isNative) {
                 auto stringBinding = emitRawWStringLiteral(program.nativeName ~ ".m_toString"w);
