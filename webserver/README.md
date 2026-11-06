@@ -82,6 +82,8 @@ text controls after checking the relation and target permissions. Grouping with
 Other control types and unsupported grouping combinations are rejected.
 Grouping used by a read is captured after `beforeRead` and before `getData`,
 as in the original `ReadAction`, even if `getData` changes query collections.
+Totals fields and their aggregations are selected only if `getData` returns null,
+so a BL handler can change them before the database query is constructed.
 `ActionReport` exposes the report format parameter and executes a custom report
 once for each selected record, adding the resulting files to the request monitor.
 Without an explicit `fields` parameter, configured form controls, names, columns

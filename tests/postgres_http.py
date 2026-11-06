@@ -221,10 +221,19 @@ public class Sample extends Table {
     (source / "DynamicGroups.bl").write_text('''
 import org.zenframework.z8.base.table.value.Aggregation;
 import org.zenframework.z8.base.json.JsonArray;
+import org.zenframework.z8.base.application.Application;
 public class DynamicGroups extends MemoryTable {
-    virtual protected void beforeRead() { groupBy = {title}; amount.aggregation = Aggregation.Sum; }
+    virtual protected void beforeRead() {
+        groupBy = {title}; amount.aggregation = Aggregation.Sum;
+        if (Application.requestParameters().containsKey("lookup") && Application.requestParameters()["lookup"] == "inspectcount") amount.aggregation = Aggregation.Count;
+    }
     virtual protected JsonArray getData(string[string] parameters) {
         if (parameters.containsKey("lookup") && parameters["lookup"] == "cleargroups") groupBy = {};
+        if (parameters.containsKey("lookup") && parameters["lookup"] == "average") amount.aggregation = Aggregation.Average;
+        if (parameters.containsKey("lookup") && parameters["lookup"] == "inspectcount") {
+            if (amount.aggregation == Aggregation.Count) return JsonArray.parse("[{aggregation:'count'}]");
+            return JsonArray.parse("[{aggregation:'changed'}]");
+        }
         return null;
     }
 }
@@ -471,6 +480,10 @@ void main(string[] args) {
             assert result["success"] and [row["title"] for row in result["data"]] == ["Second"], result
             result = request(request="DynamicGroups", totals="true")
             assert result["success"] and result["data"]["amount"] == 15, result
+            result = request(request="DynamicGroups", totals="true", lookup="average")
+            assert result["success"] and result["data"]["amount"] == 7, result
+            result = request(request="DynamicGroups", totals="true", lookup="inspectcount")
+            assert result["success"] and result["data"] == [{"aggregation": "count"}], result
             result = request(request="DynamicGroups", session="limited")
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(session="limited", action="meta")

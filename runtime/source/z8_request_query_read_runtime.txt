@@ -526,22 +526,6 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     auto totals = params.z8_get("totals"w);
     bool isTotals = totals !is null && z8_bool_parse(totals);
     Z8Object[] totalsFields;
-    Z8FieldAggregation[] aggregations;
-    if (isTotals) {
-        foreach (field; selected) {
-            auto fieldState = z8_field_state(field);
-            auto aggregation = z8_field_aggregation(field);
-            if ((fieldState.totals.present && !fieldState.totals.value) || aggregation == Z8FieldAggregation.none ||
-                aggregation == Z8FieldAggregation.min || aggregation == Z8FieldAggregation.max) continue;
-            if (aggregation == Z8FieldAggregation.count) { aggregation = Z8FieldAggregation.sum; z8_field_set_aggregation(field, aggregation); }
-            if (aggregation != Z8FieldAggregation.sum && aggregation != Z8FieldAggregation.average)
-                throw new Exception("unsupported query totals aggregation");
-            totalsFields ~= field; aggregations ~= aggregation;
-        }
-        read.aggregateSourceFields = selected.dup;
-        read.fields = totalsFields; read.sortFields = null; read.start = 0; read.limit = -1;
-        read.aggregateAll = true;
-    }
     z8_query_capture_read(query, read);
     Z8Object customData;
     try {
@@ -563,10 +547,23 @@ private void z8_application_dispatch_query_read_target(wstring className, Z8Obje
     }
     if (isTotals) {
         try {
+            // ReadAction selects and adjusts totals only after getData returns
+            // null, so BL hooks can inspect or change field aggregations first.
+            foreach (field; selected) {
+                auto fieldState = z8_field_state(field);
+                auto aggregation = z8_field_aggregation(field);
+                if ((fieldState.totals.present && !fieldState.totals.value) || aggregation == Z8FieldAggregation.none ||
+                    aggregation == Z8FieldAggregation.min || aggregation == Z8FieldAggregation.max) continue;
+                if (aggregation == Z8FieldAggregation.count) { aggregation = Z8FieldAggregation.sum; z8_field_set_aggregation(field, aggregation); }
+                if (aggregation != Z8FieldAggregation.sum && aggregation != Z8FieldAggregation.average)
+                    throw new Exception("unsupported query totals aggregation");
+                totalsFields ~= field;
+            }
+            read.aggregateSourceFields = selected.dup;
+            read.fields = totalsFields; read.sortFields = null; read.start = 0; read.limit = -1;
+            read.aggregateAll = true;
             if (!groups.length && !aggregates.length && read.queryHaving !is null && (read.queryHaving.kind != Z8SqlBoolKind.constant || !read.queryHaving.constant))
                 throw new Exception("query having is not supported for totals");
-            foreach (i, field; totalsFields) if (z8_field_aggregation(field) != aggregations[i])
-                throw new Exception("changing query aggregations after beforeRead is not supported");
             writeDefaultMetadata();
         } catch (Throwable error) {
             if (z8_query_user_events_enabled()) query.z8_query_virtual_afterRead();
