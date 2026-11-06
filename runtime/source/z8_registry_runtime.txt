@@ -7,6 +7,9 @@ struct Z8RuntimeFieldRegistration {
 }
 struct Z8RuntimeRegistration {
     wstring classId, name, displayName, description;
+    // A bare [job] is an explicitly disabled schedule; no attribute is absent.
+    wstring cron;
+    bool hasSchedule;
     Z8Guid key;
     Z8RuntimeFieldRegistration[] fields;
     private TypeInfo_Class runtimeType;
@@ -65,7 +68,11 @@ class Z8RuntimeRegistry {
     void registerRequest(Z8Object request) { add(requestEntries, descriptor(request, false), false); }
     void registerJob(Z8Object job) {
         if (!z8_native_is_instance(z8_executable_name, job)) throw new Exception("runtime job registration requires an Executable");
-        add(jobEntries, descriptor(job, false), false);
+        auto entry = descriptor(job, false);
+        auto cron = job.z8_get_attribute("job"w);
+        entry.hasSchedule = cron !is null;
+        if (entry.hasSchedule) entry.cron = z8_string_new(cron);
+        add(jobEntries, entry, false);
     }
     void registerEntry(Z8Object entry) { add(entryEntries, descriptor(entry, false), false); }
     void registerExecutable(Z8Object executable) {

@@ -41,6 +41,10 @@ import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.Executable;
 [job] [request] public class DailyJob extends Executable {}
 ''',
+        "ScheduledJob": '''
+import org.zenframework.z8.base.Executable;
+[job "*/5 * * * *"] public class ScheduledJob extends Executable {}
+''',
         "MenuEntry": '[entry] public class MenuEntry {}',
         "BaseJob": '''
 import org.zenframework.z8.base.Executable;
@@ -85,7 +89,21 @@ import core.thread : Thread;
 void main() {
     auto registry = new Z8RuntimeRegistry(); z8_register_project(registry);
     auto tables = registry.tables(), requests = registry.requests();
-    assert(tables.length == 2 && requests.length == 6 && registry.jobs().length == 1 && registry.entries().length == 1);
+    assert(tables.length == 2 && requests.length == 6 && registry.jobs().length == 2 && registry.entries().length == 1);
+    bool disabledSchedule, activeSchedule;
+    foreach (job; registry.jobs()) {
+        if (job.classId == "DailyJob"w) disabledSchedule = job.hasSchedule && job.cron !is null && job.cron.length == 0;
+        if (job.classId == "ScheduledJob"w) activeSchedule = job.hasSchedule && job.cron == "*/5 * * * *"w;
+    }
+    assert(disabledSchedule && activeSchedule);
+    bool dailyKey, scheduledKey;
+    foreach (key; registry.jobKeys()) {
+        dailyKey |= key == z8_guid_create_name("DailyJob"w);
+        scheduledKey |= key == z8_guid_create_name("ScheduledJob"w);
+    }
+    assert(dailyKey && scheduledKey);
+    auto manual = new Z8RuntimeRegistry(); manual.registerJob(z8_object_new_instance("DerivedJob"w));
+    assert(manual.jobs().length == 1 && !manual.jobs()[0].hasSchedule && manual.jobs()[0].cron is null);
     bool orders, inherited, api, child, orderRequest;
     foreach (table; tables) {
         if (table.name == "Orders"w) orders = table.classId == "Orders"w && table.fields.length == 7;
@@ -100,11 +118,11 @@ void main() {
     assert(orders && inherited && api && child && orderRequest);
     registry.registerTable(z8_object_new_instance("BaseTable"w));
     assert(registry.newTableByName("Inherited"w).z8_class_id() == "DerivedTable"w);
-    z8_register_project(registry); assert(registry.tables().length == 2 && registry.requests().length == 6 && registry.jobs().length == 1 && registry.entries().length == 1);
+    z8_register_project(registry); assert(registry.tables().length == 2 && registry.requests().length == 6 && registry.jobs().length == 2 && registry.entries().length == 1);
     assert(registry.newExecutableByName("Nightly"w).z8_class_id() == "DerivedJob"w);
     registry.registerExecutable(z8_object_new_instance("BaseJob"w));
     assert(registry.newExecutableByName("Nightly"w).z8_class_id() == "DerivedJob"w);
-    assert(registry.newJobByClass("DailyJob"w).z8_class_id() == "DailyJob"w && registry.jobKeys()[0] == z8_guid_create_name("DailyJob"w));
+    assert(registry.newJobByClass("DailyJob"w).z8_class_id() == "DailyJob"w);
     assert(registry.newEntryByClass("MenuEntry"w).z8_class_id() == "MenuEntry"w && registry.entryKeys()[0] == z8_guid_create_name("MenuEntry"w));
     auto first = registry.newTableByName("Orders"w), second = registry.newTableByClass("Orders"w);
     assert(first !is null && second !is null && first !is second && first.z8_class_id() == "Orders"w);
