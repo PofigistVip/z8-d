@@ -1,0 +1,44 @@
+import org.zenframework.z8.base.application.Application;
+import org.zenframework.z8.base.form.Control;
+import org.zenframework.z8.base.form.Listbox;
+import org.zenframework.z8.base.table.SortDirection;
+import org.zenframework.z8.base.table.system.ScheduledJobLogs;
+import org.zenframework.z8.base.table.system.ScheduledJobs;
+
+// The original restart action is deferred until the host exposes that operation.
+[request] [displayName "$ScheduledJobs.title$"]
+public class JobsView extends ScheduledJobs {
+    ScheduledJobLogs logs;
+    Listbox logsListbox;
+    colCount = 12;
+    readOnly = Application.isRequest() ? !Application.user().isAdministrator() : true;
+    logsListbox.query = logs;
+    logsListbox.link = logs.scheduledJob;
+    logsListbox.colSpan = 12;
+    logsListbox.flex = 1;
+    logs.description.width = 200;
+    logs.file.width = 70;
+    logsListbox.columns = {logs.start, logs.finish, logs.errors, logs.file, logs.fileSize, logs.description};
+    logsListbox.sortFields = {logs.start};
+    logs.start.sortDirection = SortDirection.Desc;
+    lastFinish.readOnly = true;
+    nextStart.readOnly = true;
+    jobs.name.colSpan = 4;
+    users.name.colSpan = 2;
+    cron.colSpan = 2;
+    active.colSpan = 2;
+    logErrorsOnly.colSpan = 2;
+    lastStart.colSpan = 3;
+    lastFinish.colSpan = 3;
+    nextStart.colSpan = 3;
+    controls = viewControls();
+    names = {jobs.name, users.name};
+    sortFields = {jobs.name};
+    private Control[] viewControls() {
+        cron.setAttribute("ui", "Z8.form.field.Cron");
+        jobs.name.setDisplayName("$JobsView.job$");
+        users.name.setDisplayName("$JobsView.user$");
+        Control[] result = {jobs.name, users.name, cron, active, logErrorsOnly, lastStart, lastFinish, nextStart, logsListbox};
+        return result;
+    }
+}

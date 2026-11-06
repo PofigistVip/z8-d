@@ -11,12 +11,12 @@ import org.zenframework.z8.base.table.value.IntField;
 [name "SystemScheduledJobLogs"]
 [native "org.zenframework.z8.server.base.table.system.ScheduledJobLogs"]
 public class ScheduledJobLogs extends Table {
-    ScheduledJobs scheduledJobs;
-    [name "Description"] TextField description;
-    [name "ScheduledJob"] Link scheduledJob;
-    [name "Start"] DatetimeField start;
-    [name "Finish"] DatetimeField finish;
-    [name "Errors"] BoolField errors;
-    [name "Files"] FileField file;
-    [name "File size"] IntField fileSize;
+    public ScheduledJobs scheduledJobs;
+    [name "Description"] public TextField description;
+    [name "ScheduledJob"] public Link scheduledJob;
+    [name "Start"] public DatetimeField start;
+    [name "Finish"] public DatetimeField finish;
+    [name "Errors"] public BoolField errors;
+    [name "Files"] public FileField file;
+    [name "File size"] public IntField fileSize;
 }

@@ -11,15 +11,15 @@ import org.zenframework.z8.base.table.value.BoolField;
 [name "SystemScheduledJobs"]
 [native "org.zenframework.z8.server.base.table.system.ScheduledJobs"]
 public class ScheduledJobs extends Table {
-    Jobs jobs;
-    Users users;
-    [name "Description"] TextField description;
-    [name "Job"] Link job;
-    [name "User"] Link user;
-    [name "Cron"] StringField cron;
-    [name "LastStart"] DatetimeField lastStart;
-    [name "LastFinish"] DatetimeField lastFinish;
-    [name "NextStart"] DatetimeField nextStart;
-    [name "Active"] BoolField active;
-    [name "Log errors only"] BoolField logErrorsOnly;
+    public Jobs jobs;
+    public Users users;
+    [name "Description"] public TextField description;
+    [name "Job"] public Link job;
+    [name "User"] public Link user;
+    [name "Cron"] public StringField cron;
+    [name "LastStart"] public DatetimeField lastStart;
+    [name "LastFinish"] public DatetimeField lastFinish;
+    [name "NextStart"] public DatetimeField nextStart;
+    [name "Active"] public BoolField active;
+    [name "Log errors only"] public BoolField logErrorsOnly;
 }

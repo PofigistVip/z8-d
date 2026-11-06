@@ -32,8 +32,12 @@ void main() {
     assert(controls.length == 3 && controls[0].z8_index() == "key"w && controls[1].z8_index() == "value"w && controls[2].z8_index() == "description"w);
     assert(sort.length == 1 && sort[0] is controls[2]);
     assert(z8_optional_require(z8_native_field!(Z8Optional!long)("org.zenframework.z8.server.base.form.Control.f_colSpan"w, controls[2])) == 4);
+    auto jobs = z8_object_new_instance("org.zenframework.z8.server.base.table.system.view.JobsView"w);
+    assert(z8_optional_require(z8_native_field!(Z8Optional!bool)("org.zenframework.z8.server.base.query.Query.f_readOnly"w, jobs)));
     user.administrator = true; view = z8_object_new_instance(name);
     assert(!z8_optional_require(z8_native_field!(Z8Optional!bool)("org.zenframework.z8.server.base.query.Query.f_readOnly"w, view)));
+    jobs = z8_object_new_instance("org.zenframework.z8.server.base.table.system.view.JobsView"w);
+    assert(!z8_optional_require(z8_native_field!(Z8Optional!bool)("org.zenframework.z8.server.base.query.Query.f_readOnly"w, jobs)));
 }
 ''', encoding="utf-8")
     executable = temp / ("system-tools.exe" if os.name == "nt" else "system-tools")

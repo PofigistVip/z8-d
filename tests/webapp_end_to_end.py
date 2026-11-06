@@ -161,10 +161,12 @@ with tempfile.TemporaryDirectory() as directory:
             files_view = "org.zenframework.z8.server.base.table.system.view.FilesView"
             sequences_view = "org.zenframework.z8.server.base.table.system.view.SequencesView"
             tables_view = "org.zenframework.z8.server.base.table.system.view.TablesView"
+            jobs_view = "org.zenframework.z8.server.base.table.system.view.JobsView"
             assert any(entry["request"] == tools_class for entry in login["user"]["entries"]), login
             assert any(item.get("request") == files_view for group in login["user"]["data"] for item in group.get("items", [])), login
             assert any(item.get("request") == sequences_view for group in login["user"]["data"] for item in group.get("items", [])), login
             assert any(item.get("request") == tables_view for group in login["user"]["data"] for item in group.get("items", [])), login
+            assert any(item.get("request") == jobs_view for group in login["user"]["data"] for item in group.get("items", [])), login
             session = login["session"]
             status, replacement = browser_login(port, "Admin", password)
             assert status == 200 and replacement["success"] and replacement["session"] != session
@@ -179,6 +181,11 @@ with tempfile.TemporaryDirectory() as directory:
             fields_list = tables_metadata["controls"][-1]["query"]
             assert fields_list["name"] == "fields" and fields_list["link"]["name"] == "fields.table", fields_list
             assert [item["name"] for item in fields_list["columns"]] == ["fields.name", "fields.type", "fields.displayName", "fields.description"], fields_list
+            status, jobs_metadata = request(port, request=jobs_view, session=session, action="meta")
+            assert status == 200 and jobs_metadata["success"] and [item["name"] for item in jobs_metadata["controls"]] == ["jobs.name", "users.name", "cron", "active", "logErrorsOnly", "lastStart", "lastFinish", "nextStart", "logsListbox"], jobs_metadata
+            logs_list = jobs_metadata["controls"][-1]["query"]
+            assert logs_list["name"] == "logs" and logs_list["link"]["name"] == "logs.scheduledJob", logs_list
+            assert [item["name"] for item in logs_list["columns"]] == ["logs.start", "logs.finish", "logs.errors", "logs.file", "logs.fileSize", "logs.description"], logs_list
             status, metadata = request(port, request="Tasks", session=session, action="meta")
             assert status == 200 and metadata["success"], metadata
             assert [control["name"] for control in metadata["controls"]] == ["title", "done", "documents"], metadata

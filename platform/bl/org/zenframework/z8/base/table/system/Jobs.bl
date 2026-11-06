@@ -5,6 +5,6 @@ import org.zenframework.z8.base.table.value.StringField;
 [name "SystemJobs"]
 [native "org.zenframework.z8.server.base.table.system.Jobs"]
 public class Jobs extends Table {
-    [name "Name"] StringField name;
-    [name "Class"] StringField classId;
+    [name "Name"] public StringField name;
+    [name "Class"] public StringField classId;
 }
