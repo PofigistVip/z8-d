@@ -10,8 +10,6 @@ private class Z8JavaMapOrder(K) {
         uint value;
         static if (is(K == wstring)) {
             if (key !is null) foreach (wchar c; key) value = value * 31 + c;
-        } else static if (is(K == Z8Guid)) {
-            if (key !is null) value = cast(uint)z8_guid_hash(key);
         } else static if (is(K == ulong)) {
             value = cast(uint)(key ^ (key >> 32));
         } else {
@@ -21,7 +19,6 @@ private class Z8JavaMapOrder(K) {
     }
     private static bool same(K left, K right) {
         static if (is(K == wstring)) return left is null ? right is null : (right !is null && left == right);
-        else static if (is(K == Z8Guid)) return left is null ? right is null : (right !is null && left.majorBits == right.majorBits && left.minorBits == right.minorBits);
         else static if (is(K == ulong)) return left == right;
         else {
             if (left.present != right.present) return false;

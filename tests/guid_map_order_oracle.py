@@ -50,8 +50,14 @@ void main() {
     auto mutableKey = z8_guid_create(5); auto mutableMap = new Z8GuidMap!wstring();
     mutableMap.z8_add(mutableKey, "saved"w); mutableKey.minorBits = 99;
     assert(mutableMap.z8_keys().z8_get(0) is mutableKey && mutableMap.z8_values().z8_get(0) == "saved"w);
+    assert(mutableMap.z8_get(z8_guid_create(5)) is null && mutableMap.z8_get(z8_guid_create(99)) is null);
     auto copied = new Z8GuidMap!wstring(); copied.z8_add(mutableMap);
     assert(copied.z8_get(z8_guid_create(99)) == "saved"w);
+    mutableMap.z8_add(mutableKey, "second"w);
+    assert(mutableMap.z8_size() == 2 && mutableMap.z8_get(z8_guid_create(99)) == "second"w);
+    assert(mutableMap.z8_remove(z8_guid_create(99)) == "second"w && mutableMap.z8_size() == 1);
+    mutableKey.minorBits = 5;
+    assert(mutableMap.z8_get(z8_guid_create(5)) == "saved"w);
 }
 '''
 
