@@ -58,9 +58,9 @@ The initial `meta` adapter writes query attributes, access rights, keys and
 metadata for direct and linked fields, including basic presentation, dependencies,
 permitted source information and BL `writeMeta` overrides. Nested sections,
 fieldsets, field groups, tab controls, action groups, independent forms and forms with a readable Link are also supported.
-`Listbox` supports a table query, columns, sorting, actions and a readable Link;
-tree link and selector metadata are not implemented yet. Table and link access
-are checked.
+`Listbox` supports a table query, columns, sorting, actions, a readable Link and
+Selector metadata. Tree link metadata is not implemented yet. Table and link
+access are checked.
 Actions and their parameters are described in metadata and can execute with a
 direct or nested query, respecting their `useTransaction` setting. Report metadata
 and custom BL report hooks are supported; built-in BIRT and POI engines remain

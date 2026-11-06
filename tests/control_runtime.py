@@ -74,9 +74,11 @@ public class ListboxDetail extends Table { public Table parent; [name "Parent"] 
     (source / "ListboxTable.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.form.Listbox;
+import org.zenframework.z8.base.table.value.Link;
 public class ListboxTable extends Table {
-    ListboxDetail detail; Listbox list;
+    ListboxDetail detail; Listbox list; Table source; [name "Source"] Link sourceId = source;
     list.query = detail; list.link = detail.parentId; list.columns = {detail.parentId}; controls = {list};
+    list.selector.link = sourceId; list.selector.columns = {sourceId}; list.selector.copy = true;
 }
 ''', encoding="utf-8")
     (source / "SingleAction.bl").write_text('''
@@ -121,11 +123,19 @@ public class SimpleJob extends Executable {
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.GuidField;
 import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.table.value.Field;
 import org.zenframework.z8.base.form.Section;
 import org.zenframework.z8.base.form.ActionGroup;
+import org.zenframework.z8.base.form.Listbox;
 import org.zenframework.z8.base.form.action.Action;
 import org.zenframework.z8.base.form.action.Parameter;
 public class ControlProbe {
+    public static bool selectorVerify() {
+        Listbox box; GuidField key; Field[] values = {key};
+        if (box.selector.copy || !box.selector.multiselect) return false;
+        box.selector.inFields.add(key, values); box.selector.outFields.add(key, values);
+        return box.selector.inFields.get(key).first() == key && box.selector.outFields.get(key).size() == 1;
+    }
     public static bool groupVerify() {
         ActionGroup group; Action first; Action second;
         group.actions.add(first); group.actions.add(second);
@@ -171,6 +181,7 @@ void main() {
     alias P = Z8p_436F6E74726F6C50726F6265;
     assert(z8_optional_require(P.m_verify()));
     assert(z8_optional_require(P.m_groupVerify()));
+    assert(z8_optional_require(P.m_selectorVerify()));
     auto request = new Z8ApplicationRequest(); auto monitor = new Z8RequestMonitor(); request.monitor = monitor;
     z8_application_set_request(request); z8_application_start_response(request, "meta"w);
     z8_control_write_custom_meta(P.m_makeCustom(), null, null);
@@ -226,6 +237,16 @@ void main() {
     z8_application_dispatch_request(); z8_application_finish_response(linkedRequest, new Z8RequestMonitor());
     auto linkedList = parseJSON(z8_application_response_text(linkedRequest).to!string)["controls"][0]["query"];
     assert(linkedList["name"].str == "detail" && linkedList["link"]["name"].str == "detail.parentId");
+    auto selector = parseJSON(z8_application_response_text(linkedRequest).to!string)["controls"][0]["selector"];
+    assert(selector["isSelector"].boolean && selector["copy"].boolean && selector["multiselect"].boolean);
+    assert(selector["link"]["name"].str == "sourceId" && selector["columns"][0]["name"].str == "sourceId");
+    user.privileges.setFieldAccess(z8_guid_create_name("ListboxTable.Source"w), Z8Access.init);
+    linkedRequest = new Z8ApplicationRequest(); linkedRequest.session = request.session;
+    linkedRequest.parameters.z8_add("request"w, "ListboxTable"w); linkedRequest.parameters.z8_add("action"w, "meta"w);
+    z8_application_set_request(linkedRequest); z8_application_start_response(linkedRequest, "ListboxTable"w);
+    bool selectorDenied; try { z8_application_dispatch_request(); } catch (Exception error) { selectorDenied = error.msg == "Listbox selector link access denied"; }
+    assert(selectorDenied);
+    user.privileges = new Z8Privileges(Z8Access(true, false, false, false, false, true));
     user.privileges.setFieldAccess(z8_guid_create_name("ListboxDetail.Parent"w), Z8Access.init);
     linkedRequest = new Z8ApplicationRequest(); linkedRequest.session = request.session;
     linkedRequest.parameters.z8_add("request"w, "ListboxTable"w); linkedRequest.parameters.z8_add("action"w, "meta"w);
