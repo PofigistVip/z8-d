@@ -48,6 +48,8 @@ public class EvalOracle {
         for (String pattern : patterns) System.out.println(eval.z8_evaluateText(new string(pattern)).get());
         for (String pattern : new String[]{"${«Привет»}", "prefix ${„мир“}!"})
             System.out.println(eval.z8_evaluateText(new string(pattern)).get());
+        for (String pattern : new String[]{"${.5}", "${1.}", "${1e3}", "${2.5e-2}", "${1E+3}", "${9L}", "${0l}", "${1_000}", "${1.0f}", "${1e3D}"})
+            try { System.out.println(eval.z8_evaluateText(new string(pattern)).get()); } catch (Exception error) { System.out.println("error"); }
         for (String pattern : new String[]{"a{b}c", "cost $5", "{foo=bar}", "x}y", "x${1+2}y", "${1+2} } tail", "money $$ value", "x$${1+2}y", "x$$${1+2}y", "$a${1+2}", "$a${1.25}", "${1.25}$a", "single $"})
             System.out.println(eval.z8_evaluateText(new string(pattern)).get());
         Eval unfinished = new Eval(null);
@@ -207,6 +209,8 @@ void main() {
         writeln(eval.m_evaluateText(pattern).to!string);
     foreach (pattern; ["${«Привет»}"w, "prefix ${„мир“}!"w])
         writeln(eval.m_evaluateText(pattern).to!string);
+    foreach (pattern; ["${.5}"w, "${1.}"w, "${1e3}"w, "${2.5e-2}"w, "${1E+3}"w, "${9L}"w, "${0l}"w, "${1_000}"w, "${1.0f}"w, "${1e3D}"w])
+        try { writeln(eval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
     foreach (pattern; ["a{b}c"w, "cost $5"w, "{foo=bar}"w, "x}y"w, "x${1+2}y"w,
                        "${1+2} } tail"w, "money $$ value"w, "x$${1+2}y"w, "x$$${1+2}y"w,
                        "$a${1+2}"w, "$a${1.25}"w, "${1.25}$a"w, "single $"w])

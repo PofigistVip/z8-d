@@ -37,12 +37,22 @@ private class Z8EvalParser {
             }
             if (position == text.length) throw new Exception("unclosed Eval string");
             ++position;
-        } else if (c >= '0' && c <= '9') {
-            while (position < text.length && text[position] >= '0' && text[position] <= '9') ++position;
-            if (position < text.length && text[position] == '.') {
-                ++position;
-                while (position < text.length && text[position] >= '0' && text[position] <= '9') ++position;
+        } else if ((c >= '0' && c <= '9') ||
+                   (c == '.' && position + 1 < text.length && text[position + 1] >= '0' && text[position + 1] <= '9')) {
+            bool floating;
+            if (c == '.') { floating = true; ++position; }
+            while (position < text.length && ((text[position] >= '0' && text[position] <= '9') || text[position] == '_')) ++position;
+            if (!floating && position < text.length && text[position] == '.') {
+                floating = true; ++position;
+                while (position < text.length && ((text[position] >= '0' && text[position] <= '9') || text[position] == '_')) ++position;
             }
+            if (position < text.length && (text[position] == 'e' || text[position] == 'E')) {
+                floating = true; ++position;
+                if (position < text.length && (text[position] == '+' || text[position] == '-')) ++position;
+                while (position < text.length && ((text[position] >= '0' && text[position] <= '9') || text[position] == '_')) ++position;
+            }
+            if (position < text.length && (text[position] == 'f' || text[position] == 'F' || text[position] == 'd' || text[position] == 'D' ||
+                (!floating && (text[position] == 'l' || text[position] == 'L')))) ++position;
         } else if (isAlpha(c) || c == '_') {
             ++position;
             while (position < text.length && (isAlpha(text[position]) || isNumber(text[position]) || text[position] == '_')) ++position;

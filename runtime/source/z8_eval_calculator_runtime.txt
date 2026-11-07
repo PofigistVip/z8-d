@@ -8,12 +8,9 @@ private Z8EvalValue z8_eval_atom(Z8EvalState state, wstring source) {
     if (text.length >= 2 && ((text[0] == '\'' || text[0] == '"') && text[$ - 1] == text[0] ||
         text[0] == '«' && text[$ - 1] == '»' || text[0] == '„' && text[$ - 1] == '“'))
         return Z8EvalValue(true, z8_primary_box(z8_string_new(text[1 .. $ - 1])), null, null);
-    bool digits = true, decimal;
-    foreach (c; text) {
-        if (c == '.' && !decimal) decimal = true;
-        else if (c < '0' || c > '9') { digits = false; break; }
-    }
-    if (digits) {
+    if ((text[0] >= '0' && text[0] <= '9') || (text[0] == '.' && text.length > 1 && text[1] >= '0' && text[1] <= '9')) {
+        bool decimal;
+        foreach (c; text) if (c == '.' || c == 'e' || c == 'E' || c == 'f' || c == 'F' || c == 'd' || c == 'D') decimal = true;
         if (decimal) return Z8EvalValue(true, z8_primary_box(z8_decimal_parse(text)), null, null);
         return Z8EvalValue(true, z8_primary_box(z8_int_parse(text)), null, null);
     }
