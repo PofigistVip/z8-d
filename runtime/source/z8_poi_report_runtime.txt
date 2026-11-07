@@ -804,9 +804,27 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
     z8_poi_report_apply_root(report, workbook, sheet, root, copies, removals, edits);
 }
 
+private struct Z8PoiNameEdit { size_t start, end; wstring text; }
+
+private wstring z8_poi_report_named_address(wstring address) {
+    import std.algorithm.searching : countUntil;
+    auto colon = address.countUntil(':');
+    if (colon < 0) return address;
+    auto first = address[0 .. colon], last = address[colon + 1 .. $];
+    bool absoluteRow(wstring part) {
+        if (part.length < 2 || part[0] != '$') return false;
+        foreach (c; part[1 .. $]) if (c < '0' || c > '9') return false;
+        return true;
+    }
+    if (absoluteRow(first) && absoluteRow(last)) return "$A"w ~ first ~ ":$XFD"w ~ last;
+    bool hasDigit(wstring part) { foreach (c; part) if (c >= '0' && c <= '9') return true; return false; }
+    if (!hasDigit(first) || !hasDigit(last)) return null;
+    return address;
+}
+
 // POI only considers workbook-scoped names and names scoped to the renamed
-// sheet. Accept simple references to other sheets, which require no rewrite.
-private bool z8_poi_report_names_unaffected(Z8PoiXmlNode definedNames, int index, wstring oldName) {
+// sheet. Rewrite simple references; reject formula forms we cannot parse.
+private bool z8_poi_report_rename_names(Z8PoiXmlNode definedNames, int index, wstring oldName, wstring newName, ref Z8PoiNameEdit[] edits) {
     import std.algorithm.searching : countUntil;
     if (definedNames is null) return true;
     foreach (item; definedNames.children) {
@@ -833,9 +851,27 @@ private bool z8_poi_report_names_unaffected(Z8PoiXmlNode definedNames, int index
         } else foreach (c; sheet) {
             if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.')) return false;
         }
-        if (z8_str_compareNoCase(sheet, oldName) == 0) return false;
         foreach (c; formula[separator + 1 .. $])
             if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '$' || c == ':')) return false;
+        if (z8_str_compareNoCase(sheet, oldName) == 0) {
+            // Match POI's sheet-name formatting for alphabetic names and
+            // names containing spaces or apostrophes. Other cases stay gated.
+            bool quote;
+            foreach (c; newName) {
+                if (c == ' ' || c == '\'') quote = true;
+                else if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' || c == '.')) return false;
+            }
+            if (z8_str_compareNoCase(newName, "true"w) == 0 || z8_str_compareNoCase(newName, "false"w) == 0) quote = true;
+            wstring qualified;
+            if (quote) {
+                qualified = "'"w;
+                foreach (c; newName) { if (c == '\'') qualified ~= '\''; qualified ~= c; }
+                qualified ~= '\'';
+            } else qualified = newName;
+            auto address = z8_poi_report_named_address(formula[separator + 1 .. $]);
+            if (address is null) return false;
+            edits ~= Z8PoiNameEdit(item.startEnd, item.endStart, z8_poi_xml_attribute_escape(qualified ~ "!"w ~ address));
+        }
     }
     return true;
 }
@@ -868,7 +904,8 @@ private ubyte[] z8_poi_report_rename_sheet(const(ubyte)[] input, Z8PoiWorkbook w
     auto xml = z8_poi_xml_decode(original);
     auto root = (new Z8PoiXmlReader(xml)).parseDocument();
     auto definedNames = root.child("definedNames"w);
-    if (!z8_poi_report_names_unaffected(definedNames, index, workbook.sheets[index].name))
+    Z8PoiNameEdit[] nameEdits;
+    if (!z8_poi_report_rename_names(definedNames, index, workbook.sheets[index].name, name, nameEdits))
         throw new Exception("renaming a POI report sheet with defined names is not implemented");
     auto sheets = root.child("sheets"w);
     if (sheets is null) throw new Exception("missing XLSX sheets");
@@ -880,7 +917,7 @@ private ubyte[] z8_poi_report_rename_sheet(const(ubyte)[] input, Z8PoiWorkbook w
     IZ8PoiProvider provider;
     synchronized (z8_poi_monitor) provider = z8_poi_provider;
     auto writer = cast(IZ8PoiReportWriter)provider;
-    if (writer !is null && !selected.name.canFind(':') && z8_poi_report_openxlsx_safe(archive, workbook.sheets.length, true)) {
+    if (!nameEdits.length && writer !is null && !selected.name.canFind(':') && z8_poi_report_openxlsx_safe(archive, workbook.sheets.length, true)) {
         try return writer.renameReportSheet(input, cast(uint)index, name);
         catch (Z8PoiUnsupportedWorkbook) { /* retain compatibility with uncommon workbook layouts */ }
     }
@@ -890,10 +927,23 @@ private ubyte[] z8_poi_report_rename_sheet(const(ubyte)[] input, Z8PoiWorkbook w
         opening ~= " "w ~ key ~ "=\""w ~ z8_poi_xml_attribute_escape(value) ~ "\""w;
     }
     opening ~= selected.empty ? "/>"w : ">"w;
-    xml = xml[0 .. selected.start] ~ opening ~ xml[selected.startEnd .. $];
+    nameEdits ~= Z8PoiNameEdit(selected.start, selected.startEnd, opening);
+    for (size_t i = 1; i < nameEdits.length; ++i) {
+        auto edit = nameEdits[i]; size_t j = i;
+        while (j && nameEdits[j - 1].start < edit.start) { nameEdits[j] = nameEdits[j - 1]; --j; }
+        nameEdits[j] = edit;
+    }
+    foreach (edit; nameEdits) xml = xml[0 .. edit.start] ~ edit.text ~ xml[edit.end .. $];
     (*member).expandedData = z8_poi_report_encode_xml(xml, original);
     auto output = new ZipArchive(); output.comment = archive.comment;
-    foreach (entry; archive.directory.byValue) output.addMember(entry);
+    foreach (entry; archive.directory.byValue) {
+        // expand() reads the local header's CRC, which can be zero when a
+        // data descriptor is present. Recompress and regenerate CRCs rather
+        // than copying that stale value into the rebuilt archive.
+        if (entry !is *member) entry.expandedData = archive.expand(entry);
+        entry.flags &= cast(ushort)~8;
+        output.addMember(entry);
+    }
     return cast(ubyte[])output.build();
 }
 
