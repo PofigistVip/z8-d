@@ -24,6 +24,24 @@ public class Probe {
     public static int size(primary[] values) { return values.size(); }
     public static int choose(primary[] values) { return 1; }
     public static int choose(Value[] values) { return 2; }
+    public static primary[][] matrixChoice(bool b, primary[][] left, Value[][] right) { return b ? left : right; }
+    public static int matrixSize(primary[][] values) { return values.size(); }
+    public static int matrixRun() {
+        Value first; first.number = 1; Value second; second.number = 2;
+        Value[][] typed = {{first, null}}; primary[][] values = typed;
+        values.get(0).set(1, second); if (typed.get(0).get(1).number != 2) return 1;
+        primary[] replacement = {second, first}; values.set(0, replacement);
+        if (typed.get(0).get(0).number != 2) return 2;
+        typed.get(0).set(1, second); if (((Value)replacement.get(1)).number != 2) return 3;
+        replacement.add("wrong");
+        try { int bad = typed.get(0).get(2).number; return 4; } catch (exception expected) {}
+        replacement.removeAt(2);
+        int count = 0; for (primary[] row : typed) count += row.size();
+        if (count != 2 || matrixSize(typed) != 1 || matrixChoice(false, values, typed).size() != 1) return 5;
+        values.add(null); Value[] row = {first}; typed.set(1, row);
+        if (((Value)values.get(1).get(0)).number != 1) return 6;
+        return 0;
+    }
     public static int run() {
         Value first; first.number = 1;
         Value second; second.number = 2;
@@ -70,6 +88,21 @@ void main() {
     assert(values.z8_version == prior + 1 && typed.z8_size() == 4);
     assert(values.opEquals(typed) && typed.opEquals(values));
     assert(z8_primary_array_view(cast(Z8ObjectArray!Derived)null) is null);
+    auto row = new Z8ObjectArray!Derived([one, null]);
+    auto typedMatrix = new Z8NestedObjectArray!(Z8ObjectArray!Derived)([row]);
+    auto primaryMatrix = z8_primary_array_view(typedMatrix);
+    primaryMatrix.z8_get(0).z8_set(1, z8_primary_box(two));
+    assert(typedMatrix.z8_get(0).z8_get(1) is two);
+    auto replacement = new Z8Array!Z8Primary([z8_primary_box(one)]);
+    primaryMatrix.z8_set(0, replacement);
+    assert(typedMatrix.z8_get(0).z8_get(0) is one);
+    typedMatrix.z8_get(0).z8_set(0, two);
+    assert(z8_primary_cast!Derived(replacement.z8_get(0)) is two);
+    replacement.z8_add(z8_primary_box(12L)); invalid = false;
+    try { typedMatrix.z8_get(0).z8_get(1); } catch (Exception) { invalid = true; }
+    assert(invalid); replacement.z8_removeAt(1);
+    assert(primaryMatrix.opEquals(typedMatrix) && typedMatrix.opEquals(primaryMatrix));
+    assert(z8_optional_require(Z8p_50726F6265.m_matrixRun()) == 0);
     assert(z8_optional_require(Z8p_50726F6265.m_run()) == 0);
 }
 ''', encoding="utf-8")

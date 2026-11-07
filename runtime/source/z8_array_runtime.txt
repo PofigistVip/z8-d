@@ -95,6 +95,8 @@ class Z8Array(T) {
             auto primaryMatrix = cast(Z8Array!(Z8Array!Z8Primary))other;
             if (primaryMatrix !is null) return z8_nested_erased_data(this).opEquals(z8_nested_erased_data(primaryMatrix));
             static if (is(T == Z8Array!Z8Primary)) {
+                auto objectMatrix = cast(IZ8ObjectArrayView)other;
+                if (objectMatrix !is null) return z8_nested_erased_data(this).opEquals(objectMatrix.z8_erased_data());
                 import std.meta : AliasSeq;
                 static foreach (V; AliasSeq!(long, bool, Z8Decimal, wstring, Z8Guid, Z8Binary, Z8Datespan, Z8Date, Z8Geometry, Z8File)) {{
                     auto matrix = cast(Z8Array!(Z8Array!V))other;
@@ -472,6 +474,10 @@ private T z8_nested_primary_cast(T)(Object value) if (is(T == Z8Array!U, U)) {
     auto exact = cast(T)value;
     if (exact !is null) return exact;
     auto primary = cast(Z8Array!Z8Primary)value;
+    if (primary is null) {
+        auto objects = cast(IZ8ObjectArrayView)value;
+        if (objects !is null) primary = z8_primary_array_view(objects.z8_erased_data());
+    }
     if (primary is null) {
         import std.meta : AliasSeq;
         static foreach (V; AliasSeq!(long, bool, Z8Decimal, wstring, Z8Guid, Z8Binary, Z8Datespan, Z8Date, Z8Geometry, Z8File)) {{

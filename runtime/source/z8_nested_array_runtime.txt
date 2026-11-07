@@ -15,6 +15,8 @@ class Z8NestedObjectArray(T) : IZ8ObjectArrayView if (is(T : IZ8CollectionView))
     @property size_t z8_version() { return data.z8_version; }
     override bool opEquals(Object other) {
         if (this is other) return true;
+        auto primary = cast(Z8Array!(Z8Array!Z8Primary))other;
+        if (primary !is null) return data.opEquals(z8_nested_erased_data(primary));
         auto right = cast(IZ8ObjectArrayView)other;
         return right !is null && data.opEquals(right.z8_erased_data());
     }
@@ -53,4 +55,12 @@ Z8NestedObjectArray!T z8_array_union(T)(Z8NestedObjectArray!T left, Z8NestedObje
 void z8_array_add_assign(T)(ref Z8NestedObjectArray!T left, lazy Z8NestedObjectArray!T previous, lazy Z8NestedObjectArray!T right) {
     auto oldValue = previous; auto newValue = right;
     left = z8_array_union(oldValue, newValue);
+}
+
+// A user-primary matrix and its primary[][] view share outer and row storage.
+Z8Array!(Z8Array!Z8Primary) z8_primary_array_view(T)(Z8NestedObjectArray!(Z8ObjectArray!T) values) if (is(T : Z8Object)) {
+    if (values is null) return null;
+    auto result = new Z8Array!(Z8Array!Z8Primary)();
+    result.nestedData = values.z8_erased_data();
+    return result;
 }

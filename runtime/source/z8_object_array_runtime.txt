@@ -18,6 +18,10 @@ T z8_object_collection_view(T)(Object value) if (is(T : IZ8CollectionView)) {
     if (value is null) return null;
     auto exact = cast(T)value;
     if (exact !is null) return exact;
+    static if (__traits(compiles, T.z8_from_primary(cast(Z8Array!Z8Primary)null))) {
+        auto primary = cast(Z8Array!Z8Primary)value;
+        if (primary !is null) return T.z8_from_primary(primary);
+    }
     auto view = cast(IZ8CollectionView)value;
     if (view is null) throw new Exception("invalid collection cast");
     return T.z8_from_storage(view.z8_erased_storage());
@@ -33,6 +37,11 @@ class Z8ObjectArray(T) : IZ8ObjectArrayView if (is(T : Z8Object)) {
     this(T[] values) { this(); foreach (value; values) data.z8_add(value); }
     private this(Z8Array!Object sharedData) { data = sharedData; }
     static Z8ObjectArray!T z8_from_data(Z8Array!Object data) { return new Z8ObjectArray!T(data); }
+    static Z8ObjectArray!T z8_from_primary(Z8Array!Z8Primary primary) {
+        if (primary is null) return null;
+        auto data = new Z8Array!Object(); data.primaryData = primary;
+        return z8_from_data(data);
+    }
     static Z8ObjectArray!T z8_from_storage(Object storage) {
         auto data = cast(Z8Array!Object)storage;
         if (data is null) throw new Exception("invalid array storage");

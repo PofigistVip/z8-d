@@ -254,6 +254,8 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     for declaration in (
         "NameA[] source; primary[] value = source; for (primary item : source) {}",
         "NameA[] source; primary[] values; values.removeAll(source);",
+        "NameA[][] source; primary[][] values = source; for (primary[] row : source) {}",
+        "NameA[][] source; primary[][] values; values.removeAll(source);",
         "NameA[] source; primary[] values; primary[] result = true ? values : source;",
     ):
         name_cases.append((True, {"NameA": 'public class NameA extends primary { public void operator = (NameA value) {} static void f() { ' + declaration + ' } }'}))
