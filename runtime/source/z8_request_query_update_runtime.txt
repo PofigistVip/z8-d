@@ -53,6 +53,69 @@ private void z8_application_query_write_affected(Z8Object query, Z8Object[] sele
     z8_application_query_write_rows(query, writer, selected);
 }
 
+// UpdateAction may create a missing linked record using the owner's ID, then
+// attach it to the owner in the same transaction. Values from the surrounding
+// form are resolved against the context query, as in the original server.
+private void z8_application_query_update_linked(Z8Object context, Z8Object query, Z8Object link,
+        JSONValue records, Z8Privileges privileges, Z8StringMap params) {
+    auto owner = z8_nonnull(link.z8_get_owner());
+    if (!z8_native_is_instance(z8_table_name, owner) || !z8_native_is_instance(z8_link_name, link))
+        throw new Exception("query update requires a writable table link");
+    auto ownerKey = z8_nonnull(z8_query_primary_key(owner));
+    auto targetKey = z8_nonnull(z8_query_primary_key(query));
+    auto ownerTableKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, owner);
+    auto targetTableKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
+    auto linkKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, link);
+    auto selected = z8_application_query_fields(owner, privileges, params);
+    auto connection = z8_connection_current_backend();
+    if (connection is null) throw new Exception("no current database connection");
+    Z8Guid[] ids;
+    connection.beginTransaction();
+    scope(failure) connection.rollback();
+    foreach (record; records.array) {
+        if (record.type != JSONType.object) throw new Exception("invalid query update record");
+        Z8Guid readKey(Z8Object field) {
+            auto member = field.z8_id().to!string in record.object;
+            if (member is null || member.type == JSONType.null_ || (member.type == JSONType.string && !member.str.length)) return z8_guid_zero();
+            if (member.type != JSONType.string) throw new Exception("invalid query update record id");
+            return z8_guid_parse(member.str.to!wstring);
+        }
+        auto ownerId = readKey(ownerKey), targetId = readKey(targetKey);
+        if (ownerId is null || ownerId == z8_guid_zero()) throw new Exception("query update requires an owner record id");
+        auto create = targetId is null || targetId == z8_guid_zero();
+        if (create && (!privileges.getTableAccess(ownerTableKey).write || !privileges.getTableAccess(targetTableKey).create ||
+                !privileges.getFieldAccess(ownerTableKey, linkKey).write))
+            throw new Exception("query update link access denied");
+        foreach (name, value; record.object) {
+            auto field = z8_query_try_find_field_id(context, name.to!wstring);
+            if (field is null || field is ownerKey || field is targetKey) continue;
+            auto fieldOwner = field.z8_get_owner();
+            if (fieldOwner is query || (create && fieldOwner is owner)) {
+                auto tableKey = fieldOwner is query ? targetTableKey : ownerTableKey;
+                auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
+                if (!privileges.getFieldAccess(tableKey, fieldKey).write) throw new Exception("query update field access denied");
+            } else if (!z8_application_query_field_readable(context, field, privileges))
+                throw new Exception("query update field access denied");
+            z8_application_query_set_value(field, value, true);
+        }
+        if (create) {
+            targetId = ownerId;
+            z8_field_set(targetKey, z8_primary_box(targetId));
+            z8_query_on_new(query);
+            if (z8_query_user_events_enabled()) query.z8_query_virtual_onCreateAction(targetId);
+            z8_query_insert_id(query, targetId);
+            z8_field_set(link, z8_primary_box(targetId));
+            z8_query_update_id(owner, ownerId);
+        } else {
+            if (z8_query_user_events_enabled()) query.z8_query_virtual_onUpdateAction(targetId);
+            z8_query_update_id(query, targetId);
+        }
+        ids ~= ownerId;
+    }
+    connection.commit();
+    z8_application_query_write_affected(owner, selected, ids, z8_application_require_request().writer, privileges, params, context);
+}
+
 void z8_application_dispatch_query_update(wstring className) {
     z8_application_dispatch_query_update_target(className, null);
 }
@@ -85,6 +148,17 @@ private void z8_application_dispatch_query_update_target(wstring className, Z8Ob
     if (json is null || !json.length) throw new Exception("query update requires records");
     auto records = z8_json_parse(json.to!string);
     if (records.type != JSONType.array || !records.array.length) throw new Exception("query update requires records");
+    auto linkId = params.z8_get("link"w);
+    if (linkId !is null && linkId.length) {
+        auto link = z8_application_context_field(context, privileges, linkId);
+        auto ownerKey = z8_query_primary_key(z8_nonnull(link.z8_get_owner()));
+        if (ownerKey !is null) {
+            bool hasOwner;
+            foreach (record; records.array)
+                if (record.type == JSONType.object && (ownerKey.z8_id().to!string in record.object) !is null) hasOwner = true;
+            if (hasOwner) { z8_application_query_update_linked(context, query, link, records, privileges, params); return; }
+        }
+    }
     auto connection = z8_connection_current_backend();
     if (connection is null) throw new Exception("no current database connection");
     Z8Guid[] ids;

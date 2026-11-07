@@ -221,6 +221,11 @@ as text metadata; binary fields accept an index into the request's uploaded
 files. Readable linked fields and computed fields are supplied to the BL action
 hooks but are not written as columns. Updates check write access to computed
 fields; additional write options are rejected.
+For an update through a `Link`, a form containing the owner's ID and no target
+ID creates the linked row with the owner's ID and updates the owner's link in
+one transaction. This requires create access to the target and write access to
+the owner and its link. If both IDs are provided, the target row is updated and
+the owner's row is returned.
 As in Java, create, update and copy ignore record properties that do not name a
 field; access checks still apply to fields that are found.
 The native `SystemFiles` table's fields and creation timestamps are available

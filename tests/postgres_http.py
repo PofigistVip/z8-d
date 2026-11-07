@@ -241,6 +241,9 @@ public class Sample extends Table {
     virtual protected void onUpdateAction(guid id) {
         if (Application.requestParameters().containsKey("verifyComputed") && titleLength.get() != 17) throw "missing update expression value";
     }
+    virtual protected void beforeUpdate(guid id) {
+        if (Application.requestParameters().containsKey("failOwnerUpdate")) throw "owner update failed";
+    }
     virtual protected binary processContentRequest(string[string] params, file[] files) {
         Connection.get().execute("INSERT INTO \\"ContentLog\\" VALUES (1)");
         if (params.containsKey("fail")) throw "content failed";
@@ -285,7 +288,7 @@ __gshared string databaseInfo;
 
 class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
     Z8ApplicationSession authorize(Z8HttpRequest request, wstring id, wstring server) {
-        if (server != "test"w || (id != "full"w && id != "full2"w && id != "limited"w && id != "denied"w && id != "field-denied"w && id != "expression-denied"w && id != "relation-denied"w && id != "target-denied"w && id != "query-denied"w && id != "leaf-denied"w && id != "leaf-link-denied"w)) return null;
+        if (server != "test"w || (id != "full"w && id != "full2"w && id != "limited"w && id != "denied"w && id != "field-denied"w && id != "expression-denied"w && id != "nested-create-denied"w && id != "relation-denied"w && id != "target-denied"w && id != "query-denied"w && id != "leaf-denied"w && id != "leaf-link-denied"w)) return null;
         auto user = new Z8UserData(); user.id = z8_guid_create(id == "full"w || id == "full2"w ? 2 : 3);
         user.builtinAdministrator = id == "full"w || id == "full2"w;
         user.login = "Alice"w; user.firstName = "Alice"w; user.email = "old@example.org"w; user.settings = "{}"w; user.changePassword = true;
@@ -308,6 +311,7 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
             user.privileges.setFieldAccess(z8_guid_create_name("NestedAttachment.Documents"w), Z8Access.init);
         }
         if (id == "expression-denied"w) user.privileges.setFieldAccess(z8_guid_create_name("Sample.TitleLength"w), Z8Access(true, false, false, false, false, false));
+        if (id == "nested-create-denied"w) user.privileges.setTableAccess(z8_guid_create_name("NestedAttachment"w), Z8Access(true, true, false, true, true, true));
         if (id == "relation-denied"w) {
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.NestedLink"w), Z8Access.init);
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.OtherJoin"w), Z8Access.init);
@@ -794,6 +798,28 @@ void main(string[] args) {
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(action="update", data=change, verifyComputed="true")
             assert result["success"] and result["data"][0]["title"] == "Updated" and result["data"][0]["amount"] == 12, result
+            owner_id = "00000000-0000-0000-0000-000000000005"
+            result = request(action="create", data=json.dumps([{"recordId": owner_id, "title": "Owner"}]))
+            assert result["success"], result
+            linked_fields = json.dumps(["title", "nested.title", "nestedLink"])
+            linked_data = [{"recordId": owner_id, "title": "Owner linked", "nested.recordId": None, "nested.title": "Created through link"}]
+            result = request(session="limited", action="update", link="nestedLink", fields=linked_fields, data=json.dumps(linked_data))
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = request(session="nested-create-denied", action="update", link="nestedLink", fields=linked_fields, data=json.dumps(linked_data))
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = request(action="update", link="nestedLink", fields=linked_fields, data=json.dumps(linked_data), failOwnerUpdate="true")
+            assert not result["success"] and "owner update failed" in result["info"]["messages"][-1]["text"], result
+            result = request(action="update", link="nestedLink", fields=linked_fields, data=json.dumps(linked_data))
+            assert result["success"] and result["data"][0]["recordId"] == owner_id, result
+            assert result["data"][0]["title"] == "Owner linked" and result["data"][0]["nested.title"] == "Created through link", result
+            assert result["data"][0]["nestedLink"] == owner_id, result
+            linked_data = [{"recordId": owner_id, "nested.recordId": owner_id, "nested.title": "Updated through link"}]
+            result = request(action="update", link="nestedLink", fields=linked_fields, data=json.dumps(linked_data))
+            assert result["success"] and result["data"][0]["nested.title"] == "Updated through link", result
+            result = request(action="destroy", query="nested", data=json.dumps([owner_id]))
+            assert result["success"], result
+            result = request(action="destroy", data=json.dumps([owner_id]))
+            assert result["success"], result
             nested_id = "00000000-0000-0000-0000-000000000092"
             nested_copy = "00000000-0000-0000-0000-000000000093"
             nested_record = [{"nested.recordId": nested_id, "nested.title": "Nested"}]
