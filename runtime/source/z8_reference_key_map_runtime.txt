@@ -6,6 +6,8 @@ class Z8ReferenceKeyMap(K, V) {
     this() { entries = new Z8PrimaryKeyMap!V(); }
     override bool opEquals(Object other) {
         auto right = cast(Z8ReferenceKeyMap!(K, V))other;
+        auto primaryKeys = cast(Z8PrimaryKeyMap!V)other;
+        if (primaryKeys !is null) return entries.opEquals(primaryKeys);
         static if (Z8PrimaryKeyMap!V.sharePrimary) {
             auto primary = cast(Z8ReferenceKeyMap!(K, Z8Primary))other;
             if (primary !is null) return z8_primary_map_view(this).opEquals(primary);
@@ -36,10 +38,9 @@ class Z8ReferenceKeyMap(K, V) {
     void z8_add(Z8ReferenceKeyMap!(K, V) other) { entries.z8_add(z8_nonnull(other).entries); }
     Element z8_remove(K key) { return entries.z8_remove(z8_primary_box(key)); }
     Z8ValueArray!K z8_keys() {
-        auto result = new Z8ValueArray!K();
         auto keys = entries.z8_keys();
-        for (long i; i < keys.z8_size(); ++i) result.z8_add(z8_primary_cast!K(keys.z8_get(i)));
-        return result;
+        static if (is(K : Z8Object)) return Z8ObjectArray!K.z8_from_primary(keys);
+        else { auto result = new Z8Array!K(); result.primaryData = keys; return result; }
     }
     Z8ValueArray!V z8_values() { return entries.z8_values(); }
 }
@@ -57,4 +58,8 @@ Z8ReferenceKeyMap!(K, Z8Primary) z8_primary_map_view(K, V)(Z8ReferenceKeyMap!(K,
 if (Z8PrimaryKeyMap!V.sharePrimary) {
     if (values is null) return null;
     auto result = new Z8ReferenceKeyMap!(K, Z8Primary)(); result.entries = z8_primary_map_view(values.entries); return result;
+}
+
+Z8PrimaryKeyMap!V z8_primary_key_map_view(K, V)(Z8ReferenceKeyMap!(K, V) values) {
+    return values is null ? null : values.entries;
 }

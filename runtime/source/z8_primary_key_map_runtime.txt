@@ -39,6 +39,18 @@ class Z8PrimaryKeyMap(V) {
     }
     override bool opEquals(Object other) {
         auto right = cast(Z8PrimaryKeyMap!V)other;
+        auto guids = cast(Z8GuidMap!V)other;
+        if (guids !is null) return this.opEquals(guids.entries);
+        auto keyCollection = cast(IZ8CollectionView)other;
+        if (keyCollection !is null) {
+            auto objectKeys = cast(Z8ReferenceKeyMap!(Z8Object, V))keyCollection.z8_erased_storage();
+            if (objectKeys !is null) return this.opEquals(objectKeys.entries);
+        }
+        import std.meta : AliasSeq;
+        static foreach (K; AliasSeq!(Z8Date, Z8Datespan, Z8Binary, Z8Geometry, Z8File, Z8Object)) {{
+            auto references = cast(Z8ReferenceKeyMap!(K, V))other;
+            if (references !is null) return this.opEquals(references.entries);
+        }}
         static if (sharePrimary) {
             if (right !is null && (primaryData !is null || right.primaryData !is null))
                 return z8_primary_map_view(this).opEquals(z8_primary_map_view(right));
@@ -51,7 +63,6 @@ class Z8PrimaryKeyMap(V) {
                 auto objects = cast(Z8PrimaryKeyMap!Object)collection.z8_erased_storage();
                 if (objects !is null) return this.opEquals(z8_primary_map_view(objects));
             }
-            import std.meta : AliasSeq;
             static foreach (U; AliasSeq!(long, bool, Z8Decimal, wstring, Z8Guid, Z8Binary, Z8Datespan, Z8Date, Z8Geometry, Z8File)) {{
                 auto typed = cast(Z8PrimaryKeyMap!U)other;
                 if (typed !is null) return this.opEquals(z8_primary_map_view(typed));

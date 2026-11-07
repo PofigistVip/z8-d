@@ -27,7 +27,7 @@ class Expression {
     bool isField, isCapture, instanceCall, staticInstanceCall, staticInstanceField, fieldInitialization, earlyFieldInitialization, newHasContainer;
     bool binaryNameField;
     string nativeField;
-    bool makeFile, makeException, convertExceptionObject, convertScalarPrimaryArray, convertPrimaryMapValue, convertToDate, convertToSqlBool, convertToSqlInt, convertToSqlDecimal, convertSqlIntToDecimal, convertToSqlString, convertToSqlGuid;
+    bool makeFile, makeException, convertExceptionObject, convertScalarPrimaryArray, convertPrimaryMapValue, convertPrimaryMapKey, convertToDate, convertToSqlBool, convertToSqlInt, convertToSqlDecimal, convertSqlIntToDecimal, convertToSqlString, convertToSqlGuid;
     bool sqlBoolOperator, sqlBoolPriority, sqlIntOperator, sqlIntComparison, sqlIntPriority, sqlDecimalOperator, sqlDecimalComparison, sqlDecimalPriority, sqlStringOperator, sqlStringComparison, sqlStringPriority;
     bool sqlGuidOperator, sqlGuidPriority;
     bool convertToSqlDate, sqlDatePriority, sqlDateOperator;
