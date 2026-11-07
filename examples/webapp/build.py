@@ -29,6 +29,8 @@ if os.name == "nt" and not (pg_bin.parent / "lib/libpq.lib").is_file():
     raise SystemExit("PostgreSQL libpq.lib was not found")
 sys.path.insert(0, str(root / "webserver"))
 from build_civetweb import build
+sys.path.insert(0, str(root / "ldap"))
+from dub_package import source as ldap_package_source
 
 with tempfile.TemporaryDirectory() as directory:
     temp = Path(directory)
@@ -53,7 +55,9 @@ with tempfile.TemporaryDirectory() as directory:
             str(root / "examples/webapp/host.d"), str(civet), str(runtime), "-of=" + str(output)]
     args += [str(pg_bin.parent / "lib/libpq.lib")] if os.name == "nt" else ["-L-lpq", "-L-lpthread", "-L-ldl"]
     if os.name == "nt":
-        args += ["-I" + str(root / "ldap/source"), str(root / "ldap/source/z8/ldap/windows.d")]
+        package = ldap_package_source(root)
+        args += ["-I" + str(root / "ldap/source"), "-I" + str(package.parent),
+                 str(root / "ldap/source/z8/ldap/windows.d"), str(package)]
     response = temp / "dmd.rsp"
     response.write_text("\n".join('"' + arg.replace('"', r'\"') + '"' for arg in args) + "\n", encoding="utf-8")
     subprocess.run(["dmd", "@" + str(response)], cwd=temp, check=True)

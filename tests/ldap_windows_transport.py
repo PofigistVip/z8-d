@@ -5,6 +5,7 @@ import shutil
 import socket
 import ssl
 import subprocess
+import sys
 import tempfile
 import threading
 
@@ -12,6 +13,8 @@ from runtime_support import import_args, runtime_library, ROOT
 
 if os.name != "nt":
     raise SystemExit("This test requires Windows WinLDAP")
+sys.path.insert(0, str(ROOT / "ldap"))
+from dub_package import source as ldap_package_source
 
 
 def tlv(tag, value):
@@ -171,6 +174,10 @@ void main(string[] args) {
         bool rejected; try { configured.open(url, "cn=admin"w, "secret"w, "{}"w); } catch (Exception) { rejected = true; }
         assert(rejected); return;
     }
+    if (args.length > 2 && args[2] == "unicode") {
+        auto session = configured.open(url, "cn=Пользователь"w, "пароль😀"w, "{}"w);
+        session.close(); return;
+    }
     if (args.length > 2) {
         auto session = configured.open(url, "cn=admin"w, "secret"w,
             `{users:{loginField:"uid",groupField:"memberOf"}}`w);
@@ -195,8 +202,17 @@ void main(string[] args) {
 }
 ''', encoding="utf-8")
     exe = temp / "transport.exe"
-    subprocess.run(["dmd", *import_args(), "-I" + str(ROOT / "ldap/source"), str(source),
-                    str(ROOT / "ldap/source/z8/ldap/windows.d"), str(runtime), "-of=" + str(exe)], cwd=temp, check=True)
+    package = ldap_package_source(ROOT)
+    subprocess.run(["dmd", *import_args(), "-I" + str(ROOT / "ldap/source"), "-I" + str(package.parent), str(source),
+                    str(ROOT / "ldap/source/z8/ldap/windows.d"), str(package), str(runtime), "-of=" + str(exe)], cwd=temp, check=True)
+    fixture = Fixture()
+    try:
+        subprocess.run([str(exe), str(fixture.port), "unicode"], cwd=temp, timeout=20, check=True)
+    finally:
+        fixture.thread.join(20)
+    if fixture.failure:
+        raise fixture.failure
+    assert fixture.events == [("bind", "cn=Пользователь".encode(), "пароль😀".encode()), ("unbind",)]
     fixture = Fixture()
     try:
         subprocess.run([str(exe), str(fixture.port)], cwd=temp, timeout=20, check=True)

@@ -1,0 +1,7 @@
+{
+	"fileVersion": 1,
+	"versions": {
+		"ldap": "0.4.0",
+		"z8-runtime": {"path":"../runtime"}
+	}
+}

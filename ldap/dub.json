@@ -6,5 +6,8 @@
   "targetName": "z8-ldap",
   "targetPath": "lib",
   "sourcePaths": ["source"],
-  "dependencies": { "z8-runtime": { "path": "../runtime" } }
+  "dependencies": {
+    "z8-runtime": { "path": "../runtime" },
+    "ldap": "==0.4.0"
+  }
 }

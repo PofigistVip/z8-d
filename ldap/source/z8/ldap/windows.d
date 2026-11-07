@@ -6,6 +6,8 @@ import z8.runtime : IZ8LdapDirectory, IZ8LdapTransport, IZ8LdapProvider, Z8LdapD
     Z8LdapConfiguredProvider, z8_ldap_server_options, z8_ldap_set_provider;
 import core.sys.windows.winldap;
 import core.sys.windows.winber : BerElement, BerValue, ber_free, ber_bvfree;
+import core.stdc.stdlib : malloc, free;
+import ldap : LDAPConnection;
 import std.algorithm.searching : canFind;
 import std.conv : to;
 import std.string : fromStringz, indexOf;
@@ -106,17 +108,24 @@ class Z8WindowsLdapTransport : IZ8LdapTransport {
         auto handle = address.secure ? ldap_sslinitW(host.ptr, address.port, 1) : ldap_initW(host.ptr, address.port);
         if (handle is null) throw new Exception("LDAP initialization failed");
         scope(failure) ldap_unbind_s(handle);
+        // The package constructor connects immediately and cannot configure
+        // LDAPS or a timeout first. Borrow the configured handle for its API;
+        // the directory remains its sole owner and performs the final unbind.
+        auto connection = cast(LDAPConnection*)malloc(LDAPConnection.sizeof);
+        if (connection is null) throw new Exception("LDAP connection allocation failed");
+        scope(exit) free(connection);
+        connection._handle = handle;
         uint protocolVersion = LDAP_VERSION3;
-        check(ldap_set_optionW(handle, LDAP_OPT_PROTOCOL_VERSION, &protocolVersion), "set protocol version");
+        connection.setOption(LDAP_OPT_PROTOCOL_VERSION, &protocolVersion);
         if (address.secure && sslTrusted)
-            check(ldap_set_optionW(handle, LDAP_OPT_SERVER_CERTIFICATE, cast(void*)&acceptServerCertificate), "set TLS certificate policy");
+            connection.setOption(LDAP_OPT_SERVER_CERTIFICATE, cast(void*)&acceptServerCertificate);
         LDAP_TIMEVAL timeout;
         timeout.tv_sec = cast(int)(timeoutMilliseconds / 1000);
         timeout.tv_usec = cast(int)((timeoutMilliseconds % 1000) * 1000);
         check(ldap_connect(handle, timeoutMilliseconds ? &timeout : null), "connect");
         auto user = terminated(principal), password = terminated(credentials);
         scope(exit) password[] = '\0';
-        check(ldap_simple_bind_sW(handle, user.ptr, password.ptr), "bind");
+        connection.bind(user[0 .. $ - 1].to!string, password[0 .. $ - 1].to!string);
         return new WindowsLdapDirectory(handle, address.base);
     }
 }
