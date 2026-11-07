@@ -74,6 +74,9 @@ public class StaticReportProbe {
     public static file emptyExplicitHorizontalFooter() { EmptyExplicitHorizontalFooterReport report; return report.run(guid.Null); }
     public static file emptyCollapsedSide() { EmptyCollapsedSideReport report; return report.run(guid.Null); }
     public static file emptyCollapsedHorizontalSide() { EmptyCollapsedHorizontalSideReport report; return report.run(guid.Null); }
+    public static file emptyExistingFooter() { EmptyExistingFooterReport report; return report.run(guid.Null); }
+    public static file emptyExistingHorizontalFooter() { EmptyExistingHorizontalFooterReport report; return report.run(guid.Null); }
+    public static file emptyExistingInner() { EmptyExistingInnerReport report; return report.run(guid.Null); }
     public static file invalidRange() { InvalidRangeReport report; return report.run(guid.Null); }
     public static file expressionRange() { ExpressionRangeReport report; return report.run(guid.Null); }
     public static file constantRange() { ConstantRangeReport report; return report.run(guid.Null); }
@@ -888,6 +891,15 @@ public class %s extends Report {
     (source / "EmptyCollapsedHorizontalSideReport.bl").write_text(
         (source / "EmptyHorizontalSideFooterReport.bl").read_text(encoding="utf-8")
         .replace("EmptyHorizontalSideFooterReport", "EmptyCollapsedHorizontalSideReport").replace('Range region;', '[merge "B3:C3"] Range region;'), encoding="utf-8")
+    (source / "EmptyExistingFooterReport.bl").write_text(
+        (source / "EmptyFooterReport.bl").read_text(encoding="utf-8")
+        .replace("EmptyFooterReport", "EmptyExistingFooterReport").replace('template = "expanded-footer"', 'template = "moved-template-footer"'), encoding="utf-8")
+    (source / "EmptyExistingHorizontalFooterReport.bl").write_text(
+        (source / "EmptyHorizontalFooterReport.bl").read_text(encoding="utf-8")
+        .replace("EmptyHorizontalFooterReport", "EmptyExistingHorizontalFooterReport").replace('template = "expanded-horizontal-footer"', 'template = "moved-template-horizontal-footer"'), encoding="utf-8")
+    (source / "EmptyExistingInnerReport.bl").write_text(
+        (source / "EmptyFooterReport.bl").read_text(encoding="utf-8")
+        .replace("EmptyFooterReport", "EmptyExistingInnerReport").replace('template = "expanded-footer"', 'template = "empty-inner-template"'), encoding="utf-8")
     (source / "UnsupportedContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.lang.Object;
@@ -1370,6 +1382,11 @@ public class %s extends Report {
         '</worksheet>', '<mergeCells count="1"><mergeCell ref="A2:D2"/></mergeCells></worksheet>')
     with zipfile.ZipFile(application / "reports/moved-template-footer.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in moved_footer.items(): archive.writestr(name, content)
+    empty_inner_template = dict(footer)
+    empty_inner_template["xl/worksheets/sheet1.xml"] = empty_inner_template["xl/worksheets/sheet1.xml"].replace(
+        '</worksheet>', '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')
+    with zipfile.ZipFile(application / "reports/empty-inner-template.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in empty_inner_template.items(): archive.writestr(name, content)
     for filename in ("expanded-footer", "expanded-sparse-footer", "expanded-sparse-formula", "expanded-sparse-shared-formula", "expanded-sparse-chain-formula", "expanded-footer-conflict", "expanded-sparse-block"):
         book = dict(footer)
         if filename in ("expanded-sparse-footer", "expanded-sparse-formula", "expanded-sparse-shared-formula", "expanded-sparse-chain-formula"):
@@ -2039,6 +2056,7 @@ void main(string[] args) {
         contents = contents.replace('assert(renameConflict);', 'assert(renameConflict); auto outerExisting = P.m_existingOuter(); copy(z8_file_resolve_path(outerExisting), buildPath(args[2], "existing-outer.xlsx")); auto outerExplicit = P.m_existingOuterExplicit(); copy(z8_file_resolve_path(outerExplicit), buildPath(args[2], "existing-outer-explicit.xlsx")); bool outerConflict; try { P.m_existingOuterConflict(); } catch (Exception e) { outerConflict = e.msg == "overlapping POI report merged regions"; } assert(outerConflict);')
         contents = contents.replace('assert(renameConflict);', 'assert(renameConflict); auto expandedOuter = P.m_expandedOuterTemplate(); copy(z8_file_resolve_path(expandedOuter), buildPath(args[2], "expanded-outer-template.xlsx")); auto expandedOuterExplicit = P.m_expandedOuterTemplateExplicit(); copy(z8_file_resolve_path(expandedOuterExplicit), buildPath(args[2], "expanded-outer-template-explicit.xlsx")); bool expandedOuterConflict; try { P.m_expandedOuterTemplateConflict(); } catch (Exception e) { expandedOuterConflict = e.msg == "overlapping POI report merged regions"; } assert(expandedOuterConflict);')
         contents = contents.replace('assert(renameConflict);', 'assert(renameConflict); auto movedFooter = P.m_movedTemplateFooter(); copy(z8_file_resolve_path(movedFooter), buildPath(args[2], "moved-template-footer.xlsx")); auto movedHorizontalFooter = P.m_movedTemplateHorizontalFooter(); copy(z8_file_resolve_path(movedHorizontalFooter), buildPath(args[2], "moved-template-horizontal-footer.xlsx"));')
+        contents = contents.replace('assert(renameConflict);', 'assert(renameConflict); auto emptyExistingFooter = P.m_emptyExistingFooter(); copy(z8_file_resolve_path(emptyExistingFooter), buildPath(args[2], "empty-existing-footer.xlsx")); auto emptyExistingHorizontalFooter = P.m_emptyExistingHorizontalFooter(); copy(z8_file_resolve_path(emptyExistingHorizontalFooter), buildPath(args[2], "empty-existing-horizontal-footer.xlsx")); auto emptyExistingInner = P.m_emptyExistingInner(); copy(z8_file_resolve_path(emptyExistingInner), buildPath(args[2], "empty-existing-inner.xlsx"));')
         harness.write_text(contents, encoding="utf-8")
         args.extend(["-I" + str(bridge), str(bridge / "z8/xlsx/openxlsx.d"), str(bridge / "z8/xlsx/poi.d")])
         if os.name == "nt":
@@ -2565,8 +2583,8 @@ class PoiRangeOracle {
       boolean emptyHorizontalMultiFooterCase = args.length > 3 && "empty-horizontal-multi-footer".equals(args[3]);
       boolean emptySideFooterCase = args.length > 3 && ("empty-side-footer".equals(args[3]) || "empty-collapsed-side".equals(args[3]));
       boolean emptyHorizontalSideFooterCase = args.length > 3 && ("empty-horizontal-side-footer".equals(args[3]) || "empty-collapsed-horizontal-side".equals(args[3]));
-      boolean emptyVerticalFooterCase = emptySideFooterCase || emptyMultiFooterCase || (args.length > 3 && ("empty-footer".equals(args[3]) || "empty-sparse-footer".equals(args[3]) || "empty-explicit-footer".equals(args[3])));
-      boolean emptyHorizontalFooterCase = emptyHorizontalSideFooterCase || emptyHorizontalMultiFooterCase || (args.length > 3 && ("empty-horizontal-footer".equals(args[3]) || "empty-explicit-horizontal-footer".equals(args[3])));
+      boolean emptyVerticalFooterCase = emptySideFooterCase || emptyMultiFooterCase || (args.length > 3 && ("empty-footer".equals(args[3]) || "empty-sparse-footer".equals(args[3]) || "empty-explicit-footer".equals(args[3]) || "empty-existing-footer".equals(args[3]) || "empty-existing-inner".equals(args[3])));
+      boolean emptyHorizontalFooterCase = emptyHorizontalSideFooterCase || emptyHorizontalMultiFooterCase || (args.length > 3 && ("empty-horizontal-footer".equals(args[3]) || "empty-explicit-horizontal-footer".equals(args[3]) || "empty-existing-horizontal-footer".equals(args[3])));
       boolean emptyFooterCase = emptyVerticalFooterCase || emptyHorizontalFooterCase;
       boolean footerCase = headerFooterCase || multiFooterCase || (args.length > 3 && ("expanded-footer".equals(args[3]) || "moved-template-footer".equals(args[3])));
       boolean horizontalFooterCase = horizontalHeaderCase || horizontalMultiFooterCase || (args.length > 3 && ("expanded-horizontal-footer".equals(args[3]) || "moved-template-horizontal-footer".equals(args[3])));
@@ -2821,6 +2839,13 @@ class PoiRangeOracle {
       if (args.length > 3 && ("empty-collapsed-side".equals(args[3]) || "empty-collapsed-horizontal-side".equals(args[3])) &&
           (original.getSheetAt(0).getNumMergedRegions() != 0 || actual.getSheetAt(0).getNumMergedRegions() != 0))
         throw new AssertionError("collapsed merged region differs");
+      if (args.length > 3 && ("empty-existing-footer".equals(args[3]) || "empty-existing-horizontal-footer".equals(args[3])) &&
+          (original.getSheetAt(0).getNumMergedRegions() != 1 || actual.getSheetAt(0).getNumMergedRegions() != 1 ||
+           !original.getSheetAt(0).getMergedRegion(0).formatAsString().equals(actual.getSheetAt(0).getMergedRegion(0).formatAsString())))
+        throw new AssertionError("empty existing footer merge differs");
+      if (args.length > 3 && "empty-existing-inner".equals(args[3]) &&
+          (original.getSheetAt(0).getNumMergedRegions() != 0 || actual.getSheetAt(0).getNumMergedRegions() != 0))
+        throw new AssertionError("empty existing inner merge differs");
       if (expandedMultipleSheetCase) {
         double expected = original.getSheetAt(1).getRow(0).getCell(0).getNumericCellValue();
         double result = actual.getSheetAt(1).getRow(0).getCell(0).getNumericCellValue();
@@ -3028,6 +3053,10 @@ class PoiRangeOracle {
                                          str(application / ("reports/" + template + ".xlsx")), str(working / (case + ".xlsx")), str(config), case], cwd=temp, capture_output=True, text=True)
                 assert result.returncode == 0, result.stderr
             for case, template in (("empty-collapsed-side", "expanded-side-conflict"), ("empty-collapsed-horizontal-side", "expanded-horizontal-side-conflict")):
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / ("reports/" + template + ".xlsx")), str(working / (case + ".xlsx")), str(config), case], cwd=temp, capture_output=True, text=True)
+                assert result.returncode == 0, result.stderr
+            for case, template in (("empty-existing-footer", "moved-template-footer"), ("empty-existing-horizontal-footer", "moved-template-horizontal-footer"), ("empty-existing-inner", "empty-inner-template")):
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / ("reports/" + template + ".xlsx")), str(working / (case + ".xlsx")), str(config), case], cwd=temp, capture_output=True, text=True)
                 assert result.returncode == 0, result.stderr

@@ -505,7 +505,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     if (!z8_report_source_next(source)) {
         // Java moves the footer over the empty block and clears the vacated
         // tail. Restrict the footer to dense, safely copyable cells.
-        if (!allowExpansion || boundariesText is null || templateMerges.length || outerTemplateMerges.length)
+        if (!allowExpansion || boundariesText is null)
             throw new Exception("empty POI report data source layout is not implemented");
         auto boundaries = z8_poi_report_block(boundariesText);
         auto offset = horizontal ? block.lastColumn - block.firstColumn + 1 : block.lastRow - block.firstRow + 1;
@@ -555,6 +555,9 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
             if (!cell.safeCopy) throw new Exception("empty POI report target cell is not implemented");
             removals ~= Z8PoiCellRemoval(cast(uint)sheet, cast(uint)rowNumber, cast(uint)columnNumber);
         }
+        foreach (merge; templateMerges ~ outerTemplateMerges) removedMerges ~= Z8PoiMergedRegion(cast(uint)sheet, cast(uint)merge.firstRow,
+            cast(uint)merge.firstColumn, cast(uint)merge.lastRow, cast(uint)merge.lastColumn);
+        if (outerTemplateMerges.length) z8_poi_report_explicit_merges(outerTemplateMerges, block, boundaries, sheet, horizontal, -offset, addedMerges);
         if (explicitMerges.length) z8_poi_report_explicit_merges(explicitMerges, block, boundaries, sheet, horizontal, -offset, addedMerges);
         return;
     }
