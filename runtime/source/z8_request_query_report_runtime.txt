@@ -27,5 +27,5 @@ private void z8_application_dispatch_query_report_target(wstring className, Z8Ob
     if (name !is null) state.name = name;
     auto id = params.z8_get("recordId"w);
     auto result = z8_report_run(report, id is null ? null : z8_guid_parse(id));
-    z8_nonnull(request.monitor).print(z8_report_publish(result));
+    z8_nonnull(request.monitor).print(z8_generated_file_publish(result));
 }

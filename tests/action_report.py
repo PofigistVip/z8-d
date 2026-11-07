@@ -37,6 +37,17 @@ import org.zenframework.z8.base.form.action.ActionReport;
     public int parameterCount() { return exportAction.parameters.size(); }
 }
 ''', encoding="utf-8")
+    (source / "PrintProbe.bl").write_text('''
+import org.zenframework.z8.base.application.Application;
+public class PrintProbe {
+    public static void emit() {
+        file output = "result.txt";
+        output.write("report content");
+        Application.print(output);
+    }
+    public static void printFile(file value) { Application.print(value); }
+}
+''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "main.d"
     harness.write_text('''
@@ -45,6 +56,7 @@ import std.json : parseJSON;
 import std.conv : to;
 import std.string : startsWith;
 import z8gen.ReportActionTable;
+import z8gen.PrintProbe;
 class Database : IZ8DatabaseConnection, IZ8DatabaseSchema {
     void beginTransaction() {} void commit() {} void rollback() {} void execute(wstring sql) {}
     void call(wstring name, Z8Array!Z8Primary args) {} void flush() {}
@@ -100,6 +112,20 @@ void main(string[] args) {
     z8_application_dispatch_request(); z8_application_finish_response(request, monitor);
     assert(monitor.files().length == 1);
     checkFile(monitor.files()[0], "pdf-00000000-0000-0000-0000-000000000011-second"w, session);
+    request = new Z8ApplicationRequest(); request.session = session; monitor = new Z8RequestMonitor(); request.monitor = monitor;
+    z8_application_set_request(request);
+    Z8p_5072696E7450726F6265.m_emit();
+    assert(monitor.files().length == 1);
+    checkFile(monitor.files()[0], "result.txt"w, session);
+    auto upload = z8_file_from_upload("uploaded.txt"w, cast(const(ubyte)[])"report content");
+    Z8p_5072696E7450726F6265.m_printFile(upload);
+    checkFile(monitor.files()[1], "uploaded.txt"w, session);
+    auto stored = z8_file_from_path("storage/retained.txt"w); stored.id = z8_guid_create(10);
+    Z8p_5072696E7450726F6265.m_printFile(stored);
+    assert(monitor.files()[2] is stored);
+    auto published = monitor.files()[0];
+    Z8p_5072696E7450726F6265.m_printFile(published);
+    assert(monitor.files()[3] is published);
 }
 ''', encoding="utf-8")
     executable = temp / ("action-report.exe" if os.name == "nt" else "action-report")

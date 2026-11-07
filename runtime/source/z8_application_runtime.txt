@@ -442,7 +442,26 @@ private void z8_application_log(Z8MonitorLevel level)(wstring text) {
     z8_nonnull(monitor).log(level, z8_string_required(text));
 }
 private void z8_application_print(Z8File value) {
-    auto monitor = z8_application_require_request().monitor;
+    import std.file : exists, isFile;
+    import std.string : startsWith;
+    auto request = z8_application_require_request();
+    auto monitor = request.monitor;
+    // Stored files already have a download identity, and generated downloads
+    // have already been published. Local files and uploads need a session-bound
+    // download path before they can be returned to the web client.
+    if (value !is null && (value.id is null || value.id == z8_guid_zero()) &&
+        request.session !is null && request.session.user !is null && request.session.user.id !is null &&
+        request.session.id !is null && request.session.id.length &&
+        cast(IZ8DatabaseSchema)z8_connection_current_backend() !is null &&
+        !z8_string_or_empty(value.path).startsWith("storage/z8-generated/"w) &&
+        !z8_string_or_empty(value.path).startsWith("storage/z8-archive/"w)) {
+        bool available = z8_file_has_upload(value);
+        if (!available && value.path !is null && value.path.length) {
+            auto path = z8_file_system_path(value);
+            available = exists(path) && isFile(path);
+        }
+        if (available) value = z8_generated_file_publish(value);
+    }
     z8_nonnull(monitor).print(value);
 }
 private void z8_application_redirect(wstring location) { throw new Z8Redirect(z8_string_required(location)); }

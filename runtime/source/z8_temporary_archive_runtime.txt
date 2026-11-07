@@ -71,3 +71,19 @@ private Z8Binary z8_temporary_archive_get(wstring path, out wstring name) {
     }
     return null;
 }
+// Publish a local, uploaded or already published file for this session.
+private Z8File z8_generated_file_publish(Z8File result) {
+    result = z8_nonnull(result);
+    wstring existingName;
+    auto input = z8_temporary_archive_get(z8_string_or_empty(result.path), existingName);
+    if (input is null) input = z8_file_to_binary(result);
+    scope(exit) z8_binary_close(input);
+    auto bytes = z8_binary_snapshot(input, z8_temporary_archives_bytes_limit);
+    auto published = new Z8File();
+    published.id = null;
+    published.name = existingName is null ? z8_file_name(z8_string_required(result.name)) : existingName;
+    published.path = z8_temporary_archive_store(bytes, published.name);
+    published.size = z8_optional_wrap(cast(long)bytes.length);
+    published.time = result.time;
+    return published;
+}
