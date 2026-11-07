@@ -115,6 +115,9 @@ public class StaticReportProbe {
     public static file expandedSparseFooter() { ExpandedSparseFooterReport report; return report.run(guid.Null); }
     public static file expandedFooterConflict() { ExpandedFooterConflictReport report; return report.run(guid.Null); }
     public static file expandedHorizontalFooter() { ExpandedHorizontalFooterReport report; return report.run(guid.Null); }
+    public static file expandedMultiFooter() { ExpandedMultiFooterReport report; return report.run(guid.Null); }
+    public static file expandedHorizontalMultiFooter() { ExpandedHorizontalMultiFooterReport report; return report.run(guid.Null); }
+    public static file expandedSparseBlock() { ExpandedSparseBlockReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -341,11 +344,16 @@ public class ExpandedTwoRowsReport extends Report {
         .replace("ExpandedMergedReport", "ExpandedMergedFormulaReport").replace('template = "expanded-merged"', 'template = "expanded-merged-formula"'),
         encoding="utf-8")
     for name, template in (("ExpandedFooterReport", "expanded-footer"), ("ExpandedSparseFooterReport", "expanded-sparse-footer"),
-                           ("ExpandedFooterConflictReport", "expanded-footer-conflict")):
+                           ("ExpandedFooterConflictReport", "expanded-footer-conflict"), ("ExpandedSparseBlockReport", "expanded-sparse-block")):
         (source / (name + ".bl")).write_text(
             (source / "ExpandedReport.bl").read_text(encoding="utf-8")
             .replace("ExpandedReport", name).replace('template = "expanded"', 'template = "' + template + '"')
             .replace('[boundaries "A1:D1"]', '[boundaries "A1:D2"]'), encoding="utf-8")
+    (source / "ExpandedMultiFooterReport.bl").write_text(
+        (source / "ExpandedFooterReport.bl").read_text(encoding="utf-8")
+        .replace("ExpandedFooterReport", "ExpandedMultiFooterReport")
+        .replace('template = "expanded-footer"', 'template = "expanded-multi-footer"')
+        .replace('[boundaries "A1:D2"]', '[boundaries "A1:D4"]'), encoding="utf-8")
     (source / "ExpandedHorizontalReport.bl").write_text(
         (source / "ExpandedTwoRowsReport.bl").read_text(encoding="utf-8")
         .replace("ExpandedTwoRowsReport", "ExpandedHorizontalReport")
@@ -360,6 +368,11 @@ public class ExpandedTwoRowsReport extends Report {
         .replace("ExpandedHorizontalReport", "ExpandedHorizontalFooterReport")
         .replace('template = "expanded-horizontal"', 'template = "expanded-horizontal-footer"')
         .replace('[boundaries "A1:B2"]', '[boundaries "A1:C2"]'), encoding="utf-8")
+    (source / "ExpandedHorizontalMultiFooterReport.bl").write_text(
+        (source / "ExpandedHorizontalFooterReport.bl").read_text(encoding="utf-8")
+        .replace("ExpandedHorizontalFooterReport", "ExpandedHorizontalMultiFooterReport")
+        .replace('template = "expanded-horizontal-footer"', 'template = "expanded-horizontal-multi-footer"')
+        .replace('[boundaries "A1:C2"]', '[boundaries "A1:G2"]'), encoding="utf-8")
     (source / "UnsupportedContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.lang.Object;
@@ -645,16 +658,25 @@ public class %s extends Report {
     footer["xl/worksheets/sheet1.xml"] = footer["xl/worksheets/sheet1.xml"].replace(
         '</sheetData>', '<row r="2"><c r="A2" t="s"><v>3</v></c><c r="B2" t="s"><v>4</v></c>'
         '<c r="C2"><v>123</v></c><c r="D2"><v>456</v></c></row></sheetData>')
-    for filename in ("expanded-footer", "expanded-sparse-footer", "expanded-footer-conflict"):
+    for filename in ("expanded-footer", "expanded-sparse-footer", "expanded-footer-conflict", "expanded-sparse-block"):
         book = dict(footer)
         if filename == "expanded-sparse-footer":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C2"><v>123</v></c>', '')
+        if filename == "expanded-sparse-block":
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="B1" t="s"><v>1</v></c>', '')
         if filename == "expanded-footer-conflict":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace(
                 '</sheetData>', '<row r="4"><c r="A4" t="inlineStr"><is><t>occupied</t></is></c></row></sheetData>')
         with zipfile.ZipFile(application / ("reports/" + filename + ".xlsx"), "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for entry_name, content in book.items():
                 archive.writestr(entry_name, content)
+    multi_footer = dict(footer)
+    multi_footer["xl/worksheets/sheet1.xml"] = multi_footer["xl/worksheets/sheet1.xml"].replace(
+        '</sheetData>', '<row r="3"><c r="A3" t="s"><v>3</v></c><c r="B3"><v>301</v></c><c r="C3"><v>302</v></c><c r="D3"><v>303</v></c></row>'
+        '<row r="4"><c r="A4" t="s"><v>3</v></c><c r="B4"><v>401</v></c><c r="C4"><v>402</v></c><c r="D4"><v>403</v></c></row></sheetData>')
+    with zipfile.ZipFile(application / "reports/expanded-multi-footer.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in multi_footer.items():
+            archive.writestr(entry_name, content)
     custom_expanded = dict(expanded)
     custom_expanded["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="3" uniqueCount="3"><si><t>${rows.index}</t></si><si><t>${rows.index + 10}</t></si><si><t>Static</t></si></sst>'''
     with zipfile.ZipFile(application / "reports/expanded-custom.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -696,6 +718,15 @@ public class %s extends Report {
         '<c r="B2" t="s"><v>3</v></c></row>', '<c r="B2" t="s"><v>3</v></c><c r="C2" t="s"><v>5</v></c></row>')
     with zipfile.ZipFile(application / "reports/expanded-horizontal-footer.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in horizontal_footer.items():
+            archive.writestr(entry_name, content)
+    horizontal_multi = dict(horizontal_footer)
+    horizontal_multi["xl/worksheets/sheet1.xml"] = horizontal_multi["xl/worksheets/sheet1.xml"].replace(
+        '<c r="C1" t="s"><v>4</v></c></row>', '<c r="C1" t="s"><v>4</v></c>' +
+        ''.join('<c r="%s1"><v>%d</v></c>' % (chr(68 + i), 41 + i) for i in range(4)) + '</row>').replace(
+        '<c r="C2" t="s"><v>5</v></c></row>', '<c r="C2" t="s"><v>5</v></c>' +
+        ''.join('<c r="%s2"><v>%d</v></c>' % (chr(68 + i), 51 + i) for i in range(4)) + '</row>')
+    with zipfile.ZipFile(application / "reports/expanded-horizontal-multi-footer.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in horizontal_multi.items():
             archive.writestr(entry_name, content)
     merged = dict(entries)
     merged["xl/worksheets/sheet1.xml"] = original_sheet.replace("</worksheet>", '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')
@@ -929,7 +960,10 @@ void main(string[] args) {
     bool sparseFooter; try { P.m_expandedSparseFooter(); } catch (Exception) { sparseFooter = true; } assert(sparseFooter);
     bool footerConflict; try { P.m_expandedFooterConflict(); } catch (Exception) { footerConflict = true; } assert(footerConflict);
     bool horizontalFooter; try { P.m_expandedHorizontalFooter(); } catch (Exception) { horizontalFooter = true; } assert(horizontalFooter);
-    assert(database.begins == 92 && database.rollbacks == 92);
+    bool multiFooter; try { P.m_expandedMultiFooter(); } catch (Exception) { multiFooter = true; } assert(multiFooter);
+    bool horizontalMultiFooter; try { P.m_expandedHorizontalMultiFooter(); } catch (Exception) { horizontalMultiFooter = true; } assert(horizontalMultiFooter);
+    bool sparseBlock; try { P.m_expandedSparseBlock(); } catch (Exception) { sparseBlock = true; } assert(sparseBlock);
+    assert(database.begins == 95 && database.rollbacks == 95);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -963,7 +997,7 @@ void main(string[] args) {
         ++writes; return result;
     }
     ubyte[] writeExpandedReport(const(ubyte)[] input, const(Z8PoiCellCopy)[] copies, const(Z8PoiCellEdit)[] cells) {
-        assert(copies.length == 8 || copies.length == 4 || copies.length == 10 || copies.length == 12); auto result = expander.writeExpandedReport(input, copies, cells);
+        assert(copies.length == 8 || copies.length == 4 || copies.length == 10 || copies.length == 12 || copies.length == 18 || copies.length == 20); auto result = expander.writeExpandedReport(input, copies, cells);
         ++expansions; return result;
     }
     ubyte[] addReportMerges(const(ubyte)[] input, const(Z8PoiMergedRegion)[] regions) {
@@ -1074,6 +1108,12 @@ void main(string[] args) {
         contents = contents.replace(
             'bool horizontalFooter; try { P.m_expandedHorizontalFooter(); } catch (Exception) { horizontalFooter = true; } assert(horizontalFooter);',
             'auto horizontalFooter = P.m_expandedHorizontalFooter(); copy(z8_file_resolve_path(horizontalFooter), buildPath(args[2], "expanded-horizontal-footer.xlsx")); assert(counter.expansions == 20);')
+        contents = contents.replace(
+            'bool multiFooter; try { P.m_expandedMultiFooter(); } catch (Exception) { multiFooter = true; } assert(multiFooter);',
+            'auto multiFooter = P.m_expandedMultiFooter(); copy(z8_file_resolve_path(multiFooter), buildPath(args[2], "expanded-multi-footer.xlsx")); assert(counter.expansions == 21);')
+        contents = contents.replace(
+            'bool horizontalMultiFooter; try { P.m_expandedHorizontalMultiFooter(); } catch (Exception) { horizontalMultiFooter = true; } assert(horizontalMultiFooter);',
+            'auto horizontalMultiFooter = P.m_expandedHorizontalMultiFooter(); copy(z8_file_resolve_path(horizontalMultiFooter), buildPath(args[2], "expanded-horizontal-multi-footer.xlsx")); assert(counter.expansions == 22);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1279,8 +1319,10 @@ class PoiRangeOracle {
       boolean fieldCase = args.length > 3 && "fields".equals(args[3]);
       boolean customCase = args.length > 3 && "custom".equals(args[3]);
       boolean expandedCustomCase = args.length > 3 && "expanded-custom".equals(args[3]);
-      boolean footerCase = args.length > 3 && "expanded-footer".equals(args[3]);
-      boolean horizontalFooterCase = args.length > 3 && "expanded-horizontal-footer".equals(args[3]);
+      boolean multiFooterCase = args.length > 3 && "expanded-multi-footer".equals(args[3]);
+      boolean horizontalMultiFooterCase = args.length > 3 && "expanded-horizontal-multi-footer".equals(args[3]);
+      boolean footerCase = multiFooterCase || (args.length > 3 && "expanded-footer".equals(args[3]));
+      boolean horizontalFooterCase = horizontalMultiFooterCase || (args.length > 3 && "expanded-horizontal-footer".equals(args[3]));
       boolean expandedMergedCase = args.length > 3 && ("expanded-merged".equals(args[3]) || "expanded-horizontal-merged".equals(args[3]) || "expanded-merged-formula".equals(args[3]));
       boolean horizontalCase = horizontalFooterCase || (args.length > 3 && ("expanded-horizontal".equals(args[3]) || "expanded-horizontal-merged".equals(args[3])));
       boolean expandedEmptyCase = args.length > 3 && "expanded-empty".equals(args[3]);
@@ -1400,7 +1442,7 @@ class PoiRangeOracle {
       boolean dates = args.length > 3 && "dates".equals(args[3]);
       Range child = new Range().setSource(customCase || jsonCase || queryCase || expandedCustomCase ? customSource : SimpleSource.newDefault())
           .setBlock(mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
+          .setBoundaries(multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       if (horizontalCase) child.setAxis(1);
       if (multipleCase) {
         report.addRange(0, new Range().setSource(orderedSources[1]).setBlock("C1").setBoundaries("C1"));
@@ -1410,8 +1452,8 @@ class PoiRangeOracle {
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier); modifier.close();
       if (expandedCase) {
-        for (int row = 0; row < (horizontalCase ? 2 : expandedTwoCase ? 6 : footerCase ? 4 : 3); ++row)
-          for (int col = 0; col < (horizontalFooterCase ? 7 : horizontalCase ? 6 : expandedTwoCase ? 2 : 4); ++col) {
+        for (int row = 0; row < (horizontalCase ? 2 : expandedTwoCase || multiFooterCase ? 6 : footerCase ? 4 : 3); ++row)
+          for (int col = 0; col < (horizontalMultiFooterCase ? 11 : horizontalFooterCase ? 7 : horizontalCase ? 6 : expandedTwoCase ? 2 : 4); ++col) {
           if (original.getSheetAt(0).getRow(row) == null) {
             if (actual.getSheetAt(0).getRow(row) != null) throw new AssertionError("unexpected physical row " + row);
             continue;
@@ -1567,7 +1609,7 @@ class PoiRangeOracle {
                                              str(application / ("reports/" + name + ".xlsx")), str(working / (name + ".xlsx")), str(config), name],
                                             cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                     assert result.returncode == 0, result.stderr
-                for name in ("expanded-footer", "expanded-horizontal-footer"):
+                for name in ("expanded-footer", "expanded-horizontal-footer", "expanded-multi-footer", "expanded-horizontal-multi-footer"):
                     result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                              str(application / ("reports/" + name + ".xlsx")), str(working / (name + ".xlsx")), str(config), name],
                                             cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")

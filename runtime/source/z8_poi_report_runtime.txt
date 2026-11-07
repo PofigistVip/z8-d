@@ -353,8 +353,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                 throw new Exception("POI report range expansion layout is not implemented");
             auto boundaries = z8_poi_report_block(boundariesText);
             if (boundaries.firstRow != block.firstRow || boundaries.firstColumn != block.firstColumn ||
-                (horizontal ? (boundaries.lastRow != block.lastRow || boundaries.lastColumn > block.lastColumn + 1) :
-                              (boundaries.lastColumn != block.lastColumn || boundaries.lastRow > block.lastRow + 1)))
+                (horizontal ? boundaries.lastRow != block.lastRow : boundaries.lastColumn != block.lastColumn))
                 throw new Exception("POI report range expansion layout is not implemented");
             hasFooter = horizontal ? boundaries.lastColumn > block.lastColumn : boundaries.lastRow > block.lastRow;
             foreach (sourceRow; block.firstRow .. block.lastRow + 1) {
@@ -423,11 +422,14 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
         auto offset = (iteration - 1) * (horizontal ? width : height);
         Z8PoiCellCopy[] footerCopies;
         Z8PoiCellEdit[] footerEdits;
+        auto boundaries = z8_poi_report_block(boundariesText);
         auto firstRow = horizontal ? block.firstRow : block.lastRow + 1;
-        auto lastRow = horizontal ? block.lastRow : firstRow;
+        auto lastRow = horizontal ? block.lastRow : boundaries.lastRow;
         auto firstColumn = horizontal ? block.lastColumn + 1 : block.firstColumn;
-        auto lastColumn = horizontal ? firstColumn : block.lastColumn;
-        foreach (rowNumber; firstRow .. lastRow + 1) {
+        auto lastColumn = horizontal ? boundaries.lastColumn : block.lastColumn;
+        // The footer may overlap its destination. Copy backwards along the
+        // expansion axis, preserving source values until they are copied.
+        foreach_reverse (rowNumber; firstRow .. lastRow + 1) {
             auto targetRow = rowNumber + (horizontal ? 0 : offset);
             if (targetRow >= 1048576 || lastColumn + (horizontal ? offset : 0) >= 16384)
                 throw new Exception("POI report footer exceeds worksheet bounds");
@@ -436,7 +438,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
             auto target = targetRow in workbook.sheets[sheet].rows;
             if (target !is null && !(*target).safeExpansionTarget)
                 throw new Exception("POI report footer target row is not implemented");
-            foreach (column; firstColumn .. lastColumn + 1) {
+            foreach_reverse (column; firstColumn .. lastColumn + 1) {
                 auto original = column in (*sourceRow).cells;
                 if (original is null || !z8_poi_report_copyable_cell(*original))
                     throw new Exception("POI report sparse footer is not implemented");
