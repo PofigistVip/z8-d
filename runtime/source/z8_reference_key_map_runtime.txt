@@ -6,7 +6,23 @@ class Z8ReferenceKeyMap(K, V) {
     this() { entries = new Z8PrimaryKeyMap!V(); }
     override bool opEquals(Object other) {
         auto right = cast(Z8ReferenceKeyMap!(K, V))other;
-        return right !is null && z8_map_content_equals(this, right);
+        static if (Z8PrimaryKeyMap!V.sharePrimary) {
+            auto primary = cast(Z8ReferenceKeyMap!(K, Z8Primary))other;
+            if (primary !is null) return z8_primary_map_view(this).opEquals(primary);
+        }
+        static if (is(V == Z8Primary)) {
+            auto view = cast(IZ8CollectionView)other;
+            if (view !is null) {
+                auto objects = cast(Z8ReferenceKeyMap!(K, Object))view.z8_erased_storage();
+                if (objects !is null) return this.opEquals(z8_primary_map_view(objects));
+            }
+            import std.meta : AliasSeq;
+            static foreach (U; AliasSeq!(long, bool, Z8Decimal, wstring, Z8Guid, Z8Binary, Z8Datespan, Z8Date, Z8Geometry, Z8File)) {{
+                auto typed = cast(Z8ReferenceKeyMap!(K, U))other;
+                if (typed !is null) return this.opEquals(z8_primary_map_view(typed));
+            }}
+        }
+        return right !is null && entries.opEquals(right.entries);
     }
     long z8_size() { return entries.z8_size(); }
     bool z8_isEmpty() { return entries.z8_isEmpty(); }
@@ -15,6 +31,8 @@ class Z8ReferenceKeyMap(K, V) {
     bool z8_containsValue(Element value) { return entries.z8_containsValue(value); }
     Element z8_get(K key) { return entries.z8_get(z8_primary_box(key)); }
     Element z8_add(K key, Element value) { return entries.z8_add(z8_primary_box(key), value); }
+    void z8_add_discard(K key, Element value) { entries.z8_add_discard(z8_primary_box(key), value); }
+    void z8_remove_discard(K key) { entries.z8_remove_discard(z8_primary_box(key)); }
     void z8_add(Z8ReferenceKeyMap!(K, V) other) { entries.z8_add(z8_nonnull(other).entries); }
     Element z8_remove(K key) { return entries.z8_remove(z8_primary_box(key)); }
     Z8ValueArray!K z8_keys() {
@@ -33,4 +51,10 @@ Z8ReferenceKeyMap!(K, V) z8_map_union(K, V)(Z8ReferenceKeyMap!(K, V) left, Z8Ref
 void z8_map_add_assign(K, V)(ref Z8ReferenceKeyMap!(K, V) left, lazy Z8ReferenceKeyMap!(K, V) previous, lazy Z8ReferenceKeyMap!(K, V) right) {
     auto oldValue = previous; auto newValue = right;
     left = z8_map_union(oldValue, newValue);
+}
+
+Z8ReferenceKeyMap!(K, Z8Primary) z8_primary_map_view(K, V)(Z8ReferenceKeyMap!(K, V) values)
+if (Z8PrimaryKeyMap!V.sharePrimary) {
+    if (values is null) return null;
+    auto result = new Z8ReferenceKeyMap!(K, Z8Primary)(); result.entries = z8_primary_map_view(values.entries); return result;
 }

@@ -5,7 +5,23 @@ class Z8GuidMap(V) {
     this() { entries = new Z8PrimaryKeyMap!V(); }
     override bool opEquals(Object other) {
         auto right = cast(Z8GuidMap!V)other;
-        return right !is null && z8_map_content_equals(this, right);
+        static if (Z8PrimaryKeyMap!V.sharePrimary) {
+            auto primary = cast(Z8GuidMap!Z8Primary)other;
+            if (primary !is null) return z8_primary_map_view(this).opEquals(primary);
+        }
+        static if (is(V == Z8Primary)) {
+            auto view = cast(IZ8CollectionView)other;
+            if (view !is null) {
+                auto objects = cast(Z8GuidMap!Object)view.z8_erased_storage();
+                if (objects !is null) return this.opEquals(z8_primary_map_view(objects));
+            }
+            import std.meta : AliasSeq;
+            static foreach (U; AliasSeq!(long, bool, Z8Decimal, wstring, Z8Guid, Z8Binary, Z8Datespan, Z8Date, Z8Geometry, Z8File)) {{
+                auto typed = cast(Z8GuidMap!U)other;
+                if (typed !is null) return this.opEquals(z8_primary_map_view(typed));
+            }}
+        }
+        return right !is null && entries.opEquals(right.entries);
     }
     long z8_size() { return entries.z8_size(); }
     bool z8_isEmpty() { return entries.z8_isEmpty(); }
@@ -13,6 +29,8 @@ class Z8GuidMap(V) {
     bool z8_containsKey(Z8Guid key) { return entries.z8_containsKey(z8_primary_box(key)); }
     bool z8_containsValue(Element value) { return entries.z8_containsValue(value); }
     Element z8_add(Z8Guid key, Element value) { return entries.z8_add(z8_primary_box(key), value); }
+    void z8_add_discard(Z8Guid key, Element value) { entries.z8_add_discard(z8_primary_box(key), value); }
+    void z8_remove_discard(Z8Guid key) { entries.z8_remove_discard(z8_primary_box(key)); }
     void z8_add(Z8GuidMap!V other) { entries.z8_add(z8_nonnull(other).entries); }
     Element z8_get(Z8Guid key) { return entries.z8_get(z8_primary_box(key)); }
     Element z8_remove(Z8Guid key) { return entries.z8_remove(z8_primary_box(key)); }
@@ -29,4 +47,9 @@ Z8GuidMap!V z8_map_union(V)(Z8GuidMap!V left, Z8GuidMap!V right) {
 void z8_map_add_assign(V)(ref Z8GuidMap!V left, lazy Z8GuidMap!V previous, lazy Z8GuidMap!V right) {
     auto oldValue = previous; auto newValue = right;
     left = z8_map_union(oldValue, newValue);
+}
+
+Z8GuidMap!Z8Primary z8_primary_map_view(V)(Z8GuidMap!V values) if (Z8PrimaryKeyMap!V.sharePrimary) {
+    if (values is null) return null;
+    auto result = new Z8GuidMap!Z8Primary(); result.entries = z8_primary_map_view(values.entries); return result;
 }
