@@ -334,7 +334,23 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     auto fields = sourceKind == Z8ReportSourceKind.query ?
         z8_poi_report_query_fields(report, z8_report_source_object(source), workbook.sheets[sheet], block) : null;
     z8_report_source_open(source, sheet, fields);
-    if (!z8_report_source_next(source)) throw new Exception("empty POI report data sources are not implemented");
+    if (!z8_report_source_next(source)) {
+        // With no footer or side bands Java shrinks the range to zero and
+        // removes every physical cell in the block, retaining its rows.
+        if (!allowExpansion || workbook.sheets.length != 1 || boundariesText is null || templateMerges.length)
+            throw new Exception("empty POI report data source layout is not implemented");
+        auto boundaries = z8_poi_report_block(boundariesText);
+        if (boundaries.firstRow != block.firstRow || boundaries.lastRow != block.lastRow ||
+            boundaries.firstColumn != block.firstColumn || boundaries.lastColumn != block.lastColumn)
+            throw new Exception("empty POI report data source layout is not implemented");
+        foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells) {
+            if (rowNumber < block.firstRow || rowNumber > block.lastRow ||
+                columnNumber < block.firstColumn || columnNumber > block.lastColumn) continue;
+            if (!cell.safeCopy || cell.hasFormula) throw new Exception("empty POI report target cell is not implemented");
+            removals ~= Z8PoiCellRemoval(cast(uint)sheet, cast(uint)rowNumber, cast(uint)columnNumber);
+        }
+        return;
+    }
     auto evalState = new Z8EvalState();
     evalState.reportContext = report;
     evalState.reportSource = source;

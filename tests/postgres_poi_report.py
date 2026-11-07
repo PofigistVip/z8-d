@@ -84,6 +84,9 @@ void main(string[] args) {
     db.execute(`INSERT INTO "report_test"."ReportRows" ("RecordId", "Amount") VALUES ('00000000-0000-0000-0000-000000000012', 70)`);
     auto expanded = report.m_generate(); copy(z8_file_resolve_path(expanded), args[5]);
     assert(z8_optional_require(table.m_value()) == 42);
+    db.execute(`DELETE FROM "report_test"."ReportRows"`);
+    auto empty = report.m_generate(); copy(z8_file_resolve_path(empty), args[6]);
+    assert(z8_optional_require(table.m_value()) == 42);
 }''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
     args = ["-I" + str(generated), "-I" + str(root / "postgres/source"), "-I" + str(root / "xlsx/source"),
@@ -100,11 +103,12 @@ void main(string[] args) {
     subprocess.run(["dmd", "@" + str(response)], cwd=temp, check=True)
     output = temp / "result.xlsx"
     expanded_output = temp / "expanded.xlsx"
+    empty_output = temp / "empty.xlsx"
     with temporary_postgres(bin_dir) as (connection, environment):
         if os.name != "nt":
             environment["LD_LIBRARY_PATH"] = str(bridge) + os.pathsep + environment.get("LD_LIBRARY_PATH", "")
-        subprocess.run([str(executable), connection, str(app), str(work), str(output), str(expanded_output)], env=environment, cwd=temp, check=True)
-    for path, expected in ((output, [42, 43]), (expanded_output, [42, 43, 70, 71])):
+        subprocess.run([str(executable), connection, str(app), str(work), str(output), str(expanded_output), str(empty_output)], env=environment, cwd=temp, check=True)
+    for path, expected in ((output, [42, 43]), (expanded_output, [42, 43, 70, 71]), (empty_output, [])):
         with zipfile.ZipFile(path) as archive:
             sheet = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
             ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}

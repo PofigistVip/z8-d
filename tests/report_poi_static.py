@@ -1064,8 +1064,8 @@ void main(string[] args) {
         ++merges; return result;
     }
     ubyte[] removeReportCells(const(ubyte)[] input, const(Z8PoiCellRemoval)[] cells) {
-        assert(cells.length == 1 && ((cells[0].row == 1 && cells[0].column == 2) ||
-                                     (cells[0].row == 3 && cells[0].column == 0)));
+        assert((cells.length == 1 && ((cells[0].row == 1 && cells[0].column == 2) ||
+                                      (cells[0].row == 3 && cells[0].column == 0))) || cells.length == 5);
         return remover.removeReportCells(input, cells);
     }
 }
@@ -1097,6 +1097,9 @@ void main(string[] args) {
         contents = contents.replace(
             'bool json; try { P.m_jsonRange(); } catch (Exception) { json = true; } assert(json);',
             'auto json = P.m_jsonRange(); copy(z8_file_resolve_path(json), buildPath(args[2], "json.xlsx")); assert(counter.writes == 8);')
+        contents = contents.replace(
+            'bool empty; try { P.m_runJsonReport(jsonEmpty); } catch (Exception) { empty = true; } assert(empty);',
+            'auto empty = P.m_runJsonReport(jsonEmpty); copy(z8_file_resolve_path(empty), buildPath(args[2], "json-empty.xlsx"));')
         contents = contents.replace(
             'bool queryResult; try { P.m_runQueryReport(queryReport); } catch (Exception) { queryResult = true; } assert(queryResult);',
             'auto queryResult = P.m_runQueryReport(queryReport); copy(z8_file_resolve_path(queryResult), buildPath(args[2], "query.xlsx")); assert(counter.writes == 9);')
@@ -1401,12 +1404,13 @@ class PoiRangeOracle {
       boolean expandedMergedCase = args.length > 3 && ("expanded-merged".equals(args[3]) || "expanded-horizontal-merged".equals(args[3]) || "expanded-merged-formula".equals(args[3]));
       boolean horizontalCase = horizontalFooterCase || (args.length > 3 && ("expanded-horizontal".equals(args[3]) || "expanded-horizontal-merged".equals(args[3])));
       boolean expandedEmptyCase = args.length > 3 && "expanded-empty".equals(args[3]);
+      boolean jsonEmptyCase = args.length > 3 && "json-empty".equals(args[3]);
       boolean expandedTwoCase = horizontalCase || expandedEmptyCase || (args.length > 3 && "expanded-two".equals(args[3]));
       boolean expandedCase = footerCase || expandedCustomCase || expandedTwoCase || expandedMergedCase || (args.length > 3 && "expanded".equals(args[3]));
       boolean jsonInlineCase = args.length > 3 && "json-inline".equals(args[3]);
       boolean repeatCase = args.length > 3 && "repeat".equals(args[3]);
       boolean mergedCase = args.length > 3 && "merged".equals(args[3]);
-      boolean jsonCase = jsonInlineCase || (expandedCase && !expandedCustomCase) || (args.length > 3 && "json".equals(args[3]));
+      boolean jsonCase = jsonEmptyCase || jsonInlineCase || (expandedCase && !expandedCustomCase) || (args.length > 3 && "json".equals(args[3]));
       boolean queryCase = args.length > 3 && "query".equals(args[3]);
       boolean outsideCase = args.length > 3 && "outside".equals(args[3]);
       boolean multipleCase = outsideCase || (args.length > 3 && "multiple".equals(args[3]));
@@ -1478,7 +1482,7 @@ class PoiRangeOracle {
             next.get().z8_set(new org.zenframework.z8.server.types.string("amount"), new org.zenframework.z8.server.types.integer(i == 1 ? 20 : 30));
             rows.get().z8_add(next);
           }
-        } else rows.get().z8_add(item);
+        } else if (!jsonEmptyCase) rows.get().z8_add(item);
         customSource = new JsonSource(rows.get());
       }
       if (queryCase) {
@@ -1564,6 +1568,11 @@ class PoiRangeOracle {
                expected.getNumericCellValue() != result.getNumericCellValue()))
             throw new AssertionError("side header differs");
         }
+      } else if (jsonEmptyCase) {
+        org.apache.poi.ss.usermodel.Row expected = original.getSheetAt(0).getRow(0), result = actual.getSheetAt(0).getRow(0);
+        if (expected == null || result == null || expected.getPhysicalNumberOfCells() != 0 || result.getPhysicalNumberOfCells() != 0 ||
+            original.getSheetAt(0).getRow(1).getCell(0).getNumericCellValue() != actual.getSheetAt(0).getRow(1).getCell(0).getNumericCellValue())
+          throw new AssertionError("empty source physical cells differ");
       } else if (constants || parameters || contextCase || dates || fieldCase || customCase || jsonCase || queryCase || multipleCase || repeatCase || mergedCase) {
         for (int i = 0; i < (repeatCase || mergedCase ? 1 : outsideCase ? 4 : multipleCase ? 3 : customCase ? 4 : dates ? 10 : constants ? 7 : 5); ++i) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
@@ -1636,6 +1645,10 @@ class PoiRangeOracle {
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/json.xlsx"), str(working / "json.xlsx"), str(config), "json"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/json.xlsx"), str(working / "json-empty.xlsx"), str(config), "json-empty"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
