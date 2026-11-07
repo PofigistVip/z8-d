@@ -76,12 +76,15 @@ public class ContextAction extends Action {
 ''', encoding="utf-8")
     (source / "CustomReport.bl").write_text('''
 import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.application.Application;
 public class CustomReport extends Report {
     virtual protected void prepare(guid id) {
         if (id != '00000000-0000-0000-0000-000000000001') throw "invalid report record";
     }
     virtual protected file execute(guid id) {
-        file result = name + "." + format; result.write("custom report"); return result;
+        string content = "custom report";
+        if (Application.requestParameters().containsKey("clientContext")) content += ":" + Application.requestParameters()["clientContext"];
+        file result = name + "." + format; result.write(content); return result;
     }
 }
 ''', encoding="utf-8")
@@ -725,10 +728,10 @@ int main(string[] args) {
                     assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(action="action", name="inspect", records=one, query="missing")
             assert not result["success"], result
-            result = request(action="report", id="exported", recordId="00000000-0000-0000-0000-000000000001", name="invoice", format="pdf")
+            result = request(action="report", id="exported", recordId="00000000-0000-0000-0000-000000000001", name="invoice", format="pdf", clientContext="custom")
             assert result["success"] and result["info"]["files"][0]["name"] == "invoice.pdf", result
             report_path = "/" + quote(result["info"]["files"][0]["path"], safe="/")
-            assert download(report_path, "full", None)[::2] == (200, b"custom report")
+            assert download(report_path, "full", None)[::2] == (200, b"custom report:custom")
             assert download(report_path, "full2", None)[0] == 404
             result = request(action="report", link="otherJoin", query="missing", id="exported", recordId="00000000-0000-0000-0000-000000000001", name="invoice", format="pdf")
             assert result["success"] and result["info"]["files"][0]["name"] == "invoice.pdf", result
@@ -1128,7 +1131,7 @@ int main(string[] args) {
             assert not result["success"] and "duplicate archive filename" in result["info"]["messages"][-1]["text"], result
             result = request(action="archive", archive=json.dumps(file_list + [{"id": "00000000-0000-0000-0000-000000000099"}]))
             assert not result["success"], result
-            result = request(action="archive", archive=json.dumps(file_list))
+            result = request(action="archive", archive=json.dumps(file_list), clientContext="custom")
             assert result["success"] and result["source"].startswith("storage/z8-archive/") and result["server"] == "test", result
             archive_path = "/" + quote(result["source"], safe="/")
             assert download(archive_path, "limited", None)[0] == 404

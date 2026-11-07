@@ -8,8 +8,7 @@ private void z8_application_dispatch_query_archive_target(wstring className, Z8O
     auto params = request.parameters; auto keys = params.z8_keys();
     for (long i; i < keys.z8_size(); ++i) {
         auto key = keys.z8_get(i);
-        if (key == "request"w || key == "session"w || key == "server"w || key == "ip"w || key == "action"w || key == "archive"w) continue;
-        if (key is null || params.z8_get(key).length) throw new Exception("unsupported archive parameter");
+        if (key is null) throw new Exception("invalid archive parameter");
     }
     auto input = params.z8_get("archive"w);
     if (input is null || !input.length) throw new Exception("archive file list is required");
