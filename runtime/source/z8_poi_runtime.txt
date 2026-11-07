@@ -439,7 +439,10 @@ private Z8PoiWorkbook z8_poi_parse(Z8Binary input) {
                 cell.safeCopy = true;
                 foreach (attribute, ignored; cellNode.attributes)
                     if (attribute != "r"w && attribute != "s"w && attribute != "t"w) cell.safeCopy = false;
-                foreach (child; cellNode.children) if (z8_poi_xml_local(child.name) != "v"w) cell.safeCopy = false;
+                foreach (child; cellNode.children) {
+                    auto name = z8_poi_xml_local(child.name);
+                    if (name != "v"w && !(cell.rawKind == "inlineStr"w && name == "is"w)) cell.safeCopy = false;
+                }
                 auto formula = cellNode.child("f"w); cell.hasFormula = formula !is null;
                 if (formula !is null) {
                     cell.formula = formula.allText();

@@ -86,6 +86,7 @@ public class StaticReportProbe {
     public static file expandedStatic() { ExpandedStaticReport report; return report.run(guid.Null); }
     public static file expandedFormula() { ExpandedFormulaReport report; return report.run(guid.Null); }
     public static file expandedMetadata() { ExpandedMetadataReport report; return report.run(guid.Null); }
+    public static file expandedRich() { ExpandedRichReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -236,7 +237,8 @@ public class MissingBoundariesReport extends Report {
 }''', encoding="utf-8")
     for name, template in (("ExpandedReport", "expanded"), ("ExpandedInlineReport", "expanded-inline"),
                            ("ExpandedOccupiedReport", "expanded-occupied"), ("ExpandedStaticReport", "expanded-static"),
-                           ("ExpandedFormulaReport", "expanded-formula"), ("ExpandedMetadataReport", "expanded-metadata")):
+                           ("ExpandedFormulaReport", "expanded-formula"), ("ExpandedMetadataReport", "expanded-metadata"),
+                           ("ExpandedRichReport", "expanded-rich")):
         (source / (name + ".bl")).write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.base.json.JsonObject;
@@ -460,11 +462,14 @@ public class %s extends Report {
         '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
         '<c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c>'
         '<c r="C1" s="0"><v>99</v></c><c r="D1" t="s"><v>2</v></c>')
-    for filename in ("expanded", "expanded-inline", "expanded-occupied", "expanded-static", "expanded-formula", "expanded-metadata"):
+    for filename in ("expanded", "expanded-inline", "expanded-occupied", "expanded-static", "expanded-formula", "expanded-metadata", "expanded-rich"):
         book = dict(expanded)
         if filename == "expanded-inline":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace(
                 '<c r="B1" t="s"><v>1</v></c>', '<c r="B1" t="inlineStr"><is><t>${rows.item.title}</t></is></c>')
+        if filename == "expanded-rich":
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace(
+                '<c r="B1" t="s"><v>1</v></c>', '<c r="B1" t="inlineStr"><is><r><t>Rich </t></r><r><t>_x0041_</t></r></is></c>')
         if filename == "expanded-occupied":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="2"><c r="A2"><v>77</v></c></row></sheetData>')
         if filename == "expanded-static":
@@ -665,7 +670,8 @@ void main(string[] args) {
     bool expandedStatic; try { P.m_expandedStatic(); } catch (Exception) { expandedStatic = true; } assert(expandedStatic);
     bool expandedFormula; try { P.m_expandedFormula(); } catch (Exception) { expandedFormula = true; } assert(expandedFormula);
     bool expandedMetadata; try { P.m_expandedMetadata(); } catch (Exception) { expandedMetadata = true; } assert(expandedMetadata);
-    assert(database.begins == 63 && database.rollbacks == 63);
+    bool expandedRich; try { P.m_expandedRich(); } catch (Exception) { expandedRich = true; } assert(expandedRich);
+    assert(database.begins == 64 && database.rollbacks == 64);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -742,6 +748,12 @@ void main(string[] args) {
         contents = contents.replace(
             'bool expanded; try { P.m_expanded(); } catch (Exception) { expanded = true; } assert(expanded);',
             'auto expanded = P.m_expanded(); copy(z8_file_resolve_path(expanded), buildPath(args[2], "expanded.xlsx")); assert(counter.expansions == 1);')
+        contents = contents.replace(
+            'bool expandedStatic; try { P.m_expandedStatic(); } catch (Exception) { expandedStatic = true; } assert(expandedStatic);',
+            'auto expandedStatic = P.m_expandedStatic(); copy(z8_file_resolve_path(expandedStatic), buildPath(args[2], "expanded-static.xlsx")); assert(counter.expansions == 2);')
+        contents = contents.replace(
+            'bool expandedRich; try { P.m_expandedRich(); } catch (Exception) { expandedRich = true; } assert(expandedRich);',
+            'auto expandedRich = P.m_expandedRich(); copy(z8_file_resolve_path(expandedRich), buildPath(args[2], "expanded-rich.xlsx")); assert(counter.expansions == 3);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1138,4 +1150,14 @@ class PoiRangeOracle {
                                          str(application / "reports/expanded.xlsx"), str(working / "expanded.xlsx"), str(config), "expanded"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
+                for name in ("expanded-static", "expanded-rich"):
+                    result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                             str(application / ("reports/" + name + ".xlsx")), str(working / (name + ".xlsx")), str(config), "expanded"],
+                                            cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                    assert result.returncode == 0, result.stderr
+                inline = application / "reports/expanded-inline.xlsx"
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(inline), str(inline), str(config), "expanded"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode != 0 and "NullPointerException" in result.stderr, result.stderr
 print("POI static report template, naming and transaction verified")

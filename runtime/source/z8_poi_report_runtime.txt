@@ -253,12 +253,19 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
             foreach (column, cell; (*templateRow).cells) {
                 if (column < block.firstColumn || column > block.lastColumn) continue;
                 hasTemplateCell = true;
-                if (!cell.safeCopy || cell.hasFormula ||
-                    (cell.rawKind == "s"w ? cell.value.indexOf("${"w) < 0 :
-                     cell.rawKind !is null && cell.rawKind != "n"w && cell.rawKind != "b"w))
+                if (!cell.safeCopy || cell.hasFormula || (cell.rawKind !is null && cell.rawKind != "s"w &&
+                    cell.rawKind != "inlineStr"w && cell.rawKind != "n"w && cell.rawKind != "b"w) ||
+                    (cell.rawKind == "inlineStr"w && cell.value.indexOf("${"w) >= 0))
                     throw new Exception("POI report range expansion cell is not implemented");
                 copies ~= Z8PoiCellCopy(cast(uint)sheet, cast(uint)block.firstRow, cast(uint)column,
                                         cast(uint)targetRow, cast(uint)column);
+                // POI copies a string's plain value into a new shared-string
+                // cell, even when the template used inline or rich text.
+                if ((cell.rawKind == "s"w || cell.rawKind == "inlineStr"w) && cell.value.indexOf("${"w) < 0) {
+                    Z8PoiCellEdit edit;
+                    edit.sheet = cast(uint)sheet; edit.row = cast(uint)targetRow; edit.column = cast(uint)column;
+                    edit.kind = Z8PoiCellEditKind.text; edit.text = cell.value; edits ~= edit;
+                }
             }
             if (!hasTemplateCell) throw new Exception("POI report range expansion layout is not implemented");
         }
