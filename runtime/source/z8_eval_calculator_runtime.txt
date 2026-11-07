@@ -52,7 +52,7 @@ private Z8EvalValue z8_eval_report_member(Z8Object member) {
 }
 private wstring z8_eval_expression_repr(Z8EvalValue value) {
     if (!value.evaluated) return value.expression;
-    if (value.json !is null || value.context != Z8EvalContext.none) {
+    if (value.json !is null || value.collection !is null || value.requestParameters !is null || value.context != Z8EvalContext.none) {
         import std.string : replace;
         return "\""w ~ z8_eval_value_text(value).replace("\""w, "\\\""w) ~ "\""w;
     }
@@ -136,6 +136,7 @@ private Z8EvalValue z8_eval_property(Z8EvalState state, Z8EvalValue object, wstr
             if (name == "user"w) return Z8EvalValue(true, z8_primary_box(file.user), null, null);
             if (name == "size"w) return Z8EvalValue(true, z8_primary_box(file.size), null, null);
             if (name == "time"w) return Z8EvalValue(true, z8_primary_box(file.time), null, null);
+            if (name == "details"w) return Z8EvalValue(true, null, null, null, Z8EvalContext.none, file.details);
         }
     }
     if (object.json is null || !z8_native_is_instance(z8_json_object_name, object.json))
@@ -168,8 +169,9 @@ private Z8EvalValue z8_eval_json_aggregate(wstring name, Z8EvalValue[] arguments
     if (arguments.length != 2) throw new Exception("invalid Eval JSON aggregate arguments");
     auto array = arguments[0];
     auto key = arguments[1].primary;
-    if (arguments[1].json !is null || arguments[1].collection !is null || (key !is null && key.kind != Z8PrimaryKind.text))
+    if (arguments[1].json !is null || arguments[1].collection !is null || arguments[1].requestParameters !is null || (key !is null && key.kind != Z8PrimaryKind.text))
         throw new Exception("Eval JSON aggregate key must be a string");
+    if (array.requestParameters !is null) throw new Exception("Eval JSON aggregate requires a collection");
     if (array.collection !is null) {
         bool minimum = name == "min"w;
         auto result = array.collection.z8_isEmpty() ? (minimum ? long.max : long.min) : (minimum ? long.min : long.max);
@@ -270,13 +272,14 @@ private Z8EvalValue z8_eval_binary(wstring op, Z8EvalValue left, Z8EvalValue rig
             (op == "&&"w || op == "||"w || op == "%"w ? "null"w : op) ~ " "w ~ z8_eval_expression_repr(right));
     if (left.reportObject !is null || right.reportObject !is null)
         throw new Exception("POI report object context member is not implemented");
-    if (left.requestParameters !is null || right.requestParameters !is null)
+    if (left.requestParameters !is null || (right.requestParameters !is null &&
+        (left.primary is null || left.primary.kind != Z8PrimaryKind.text || op != "+"w)))
         throw new Exception("unsupported request parameter map operation");
     // The current Java lexer accepts &&, || and %, but Operator.parse does
     // not recognize those spellings and the evaluator fails on them.
     if (op == "&&"w || op == "||"w || op == "%"w) throw new Exception("unsupported Eval operator");
     auto a = z8_nonnull(left.primary), b = right.primary;
-    bool rightNull = b is null && right.json is null && right.collection is null && right.context == Z8EvalContext.none;
+    bool rightNull = b is null && right.json is null && right.collection is null && right.requestParameters is null && right.context == Z8EvalContext.none;
     Z8Primary result;
     if (rightNull && (op == "=="w || op == "!="w) && a.kind != Z8PrimaryKind.text) {
         if (a.kind == Z8PrimaryKind.boolean) result = z8_primary_box(false);

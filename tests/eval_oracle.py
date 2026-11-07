@@ -115,6 +115,12 @@ public class EvalOracle {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
         }
+        file metadata = new file("folder/Report.XLSX"); metadata.details.z8_add(new string("key"), new string("value"));
+        jsonEval.z8_setVariable(new string("metadata"), metadata);
+        for (String pattern : new String[]{"${metadata.details['key']}", "${metadata.details.key}", "${metadata.details.size()}", "${metadata.details}", "${'prefix ' + metadata.details}", "${missing + metadata.details}", "${missing + 'a,b'.split(',')}", "${metadata.details.hashCode()}", "${metadata.details ?: 'none'}", "${metadata.details.get('key')}", "${format(metadata.details, 'x')}", "${json.min(metadata.details, 'key')}", "${metadata.details.clear()}", "${metadata.details.isEmpty()}"}) {
+            try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
+            catch (Exception error) { System.out.println("error"); }
+        }
         for (String pattern : new String[]{"${'eval-file.txt'.file().write('abc').append('д').read()}", "${'eval-file.txt'.file().delete()}", "${'eval-file.txt'.file().exists()}", "${'eval-file.txt'.file().write('Привет'.binary()).read()}", "${'eval-file.txt'.file().delete(false)}"}) {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
@@ -270,6 +276,14 @@ void main() {
                        "${'abc'.binary().setName('folder/Report.TXT').getExtension()}"w,
                        "${'abc'.binary().setName('name').toString()}"w, "${'folder/Report.XLSX'.file().name}"w,
                        "${slashPath.file().path}"w, "${'file'.file().size}"w, "${'file'.file().id}"w])
+        try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
+    auto metadata = z8_file_from_path("folder/Report.XLSX"w); metadata.details.z8_add("key"w, "value"w);
+    jsonEval.m_setVariable("metadata"w, z8_primary_box(metadata));
+    foreach (pattern; ["${metadata.details['key']}"w, "${metadata.details.key}"w, "${metadata.details.size()}"w,
+                       "${metadata.details}"w, "${'prefix ' + metadata.details}"w, "${missing + metadata.details}"w,
+                       "${missing + 'a,b'.split(',')}"w, "${metadata.details.hashCode()}"w,
+                       "${metadata.details ?: 'none'}"w, "${metadata.details.get('key')}"w, "${format(metadata.details, 'x')}"w,
+                       "${json.min(metadata.details, 'key')}"w, "${metadata.details.clear()}"w, "${metadata.details.isEmpty()}"w])
         try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
     foreach (pattern; ["${'eval-file.txt'.file().write('abc').append('д').read()}"w,
                        "${'eval-file.txt'.file().delete()}"w, "${'eval-file.txt'.file().exists()}"w,

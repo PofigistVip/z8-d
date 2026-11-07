@@ -226,6 +226,22 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
         return z8_eval_json_aggregate(name, arguments);
     if (object.context != Z8EvalContext.none && object.context != Z8EvalContext.json)
         return Z8EvalValue(true, z8_eval_type_method(object.context, name, arguments), null, null);
+    if (object.requestParameters !is null && !arguments.length) {
+        auto map = object.requestParameters;
+        if (name == "size"w) return Z8EvalValue(true, z8_primary_box(map.z8_size()), null, null);
+        if (name == "isEmpty"w) return Z8EvalValue(true, z8_primary_box(map.z8_isEmpty()), null, null);
+        if (name == "toString"w) return Z8EvalValue(true, z8_primary_box(z8_eval_value_text(object)), null, null);
+        if (name == "clear"w) { map.z8_clear(); return Z8EvalValue(true); }
+        if (name == "hashCode"w) {
+            uint hash; auto keys = map.z8_keys();
+            for (long i; i < keys.z8_size(); ++i) {
+                auto key = keys.z8_get(i), value = map.z8_get(key);
+                hash += (key is null ? 0u : cast(uint)z8_primary_hash(z8_primary_box(key))) ^
+                    (value is null ? 0u : cast(uint)z8_primary_hash(z8_primary_box(value)));
+            }
+            return Z8EvalValue(true, z8_primary_box(cast(long)cast(int)hash), null, null);
+        }
+    }
     if (object.collection !is null) {
         auto array = object.collection;
         if (!arguments.length) {
@@ -462,8 +478,8 @@ private Z8EvalValue z8_eval_function(wstring name, Z8EvalValue[] arguments) {
         foreach (i, argument; arguments) { if (i) call ~= ", "w; call ~= z8_eval_value_text(argument); }
         return Z8EvalValue(false, null, null, call ~ ")"w);
     }
-    if (name != "format"w || arguments.length != 2 || arguments[0].json !is null || arguments[0].collection !is null || arguments[0].context != Z8EvalContext.none ||
-        arguments[1].json !is null || arguments[1].collection !is null || arguments[1].context != Z8EvalContext.none ||
+    if (name != "format"w || arguments.length != 2 || arguments[0].json !is null || arguments[0].collection !is null || arguments[0].requestParameters !is null || arguments[0].context != Z8EvalContext.none ||
+        arguments[1].json !is null || arguments[1].collection !is null || arguments[1].requestParameters !is null || arguments[1].context != Z8EvalContext.none ||
         (arguments[1].primary !is null && arguments[1].primary.kind != Z8PrimaryKind.text))
         throw new Exception("unsupported Eval function or arguments");
     auto value = arguments[0].primary;

@@ -55,6 +55,17 @@ private wstring z8_eval_value_text(Z8EvalValue value) {
         }
         return result ~ "]"w;
     }
+    if (value.requestParameters !is null) {
+        auto map = value.requestParameters;
+        auto keys = map.z8_keys();
+        wstring result = "{"w;
+        for (long i; i < keys.z8_size(); ++i) {
+            if (i) result ~= ", "w;
+            auto key = keys.z8_get(i), item = map.z8_get(key);
+            result ~= (key is null ? "null"w : key) ~ "="w ~ (item is null ? "null"w : item);
+        }
+        return result ~ "}"w;
+    }
     if (value.context != Z8EvalContext.none && value.context != Z8EvalContext.json) {
         wstring typeName;
         final switch (value.context) {
@@ -74,7 +85,7 @@ private wstring z8_eval_value_text(Z8EvalValue value) {
     return value.primary is null ? "null"w : z8_primary_to_string(value.primary);
 }
 private wstring z8_eval_formatted_text(Z8EvalValue value) {
-    if (value.primary is null && value.json is null && value.collection is null) return "<null>"w;
+    if (value.primary is null && value.json is null && value.collection is null && value.requestParameters is null) return "<null>"w;
     if (value.primary !is null && value.primary.kind == Z8PrimaryKind.date)
         return z8_date_toString(value.primary.dateValue, "dd.MM.yyy"w);
     if (value.primary !is null && value.primary.kind == Z8PrimaryKind.decimal) {
