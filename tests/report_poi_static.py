@@ -18,6 +18,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     (source / "StaticReportProbe.bl").write_text('''
 import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
+import org.zenframework.z8.base.table.value.IntField;
 public class StaticReportProbe {
     public static file run(string templateName, string outputName) {
         Report report; report.engine = Report.POI; report.template = templateName; report.name = outputName;
@@ -58,6 +59,9 @@ public class StaticReportProbe {
     public static file unsupportedContextRange() { UnsupportedContextRangeReport report; return report.run(guid.Null); }
     public static file dateRange() { DateRangeReport report; return report.run(guid.Null); }
     public static file date1904Range() { Date1904RangeReport report; return report.run(guid.Null); }
+    public static FieldRangeReport createFieldReport() { FieldRangeReport report; return report; }
+    public static IntField field(FieldRangeReport report) { return report.amount; }
+    public static file runFieldReport(FieldRangeReport report) { return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -114,6 +118,15 @@ public class ContextRangeReport extends Report {
 import org.zenframework.z8.base.json.JsonObject;
 public class ContextGroup extends Object {
     public JsonObject data; objects = {data};
+}''', encoding="utf-8")
+    (source / "FieldRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+import org.zenframework.z8.base.table.value.IntField;
+public class FieldRangeReport extends Report {
+    engine = Report.POI; template = "fields";
+    public IntField amount; objects = {amount};
+    [address "A1:C1"] [boundaries "A1:C1"] Range region;
+    ranges = {region};
 }''', encoding="utf-8")
     (source / "UnsupportedContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
@@ -275,6 +288,14 @@ public class %s extends Report {
         with zipfile.ZipFile(application / ("reports/" + name + ".xlsx"), "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for entry_name, content in book.items():
                 archive.writestr(entry_name, content)
+    fields = dict(parameters)
+    fields["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="3" uniqueCount="3"><si><t>${amount}</t></si><si><t>${amount + 1}</t></si><si><t>Value: ${amount}</t></si></sst>'''
+    fields["xl/worksheets/sheet1.xml"] = original_sheet.replace(
+        '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
+        ''.join('<c r="%s1" t="s"><v>%d</v></c>' % (chr(65 + i), i) for i in range(3)))
+    with zipfile.ZipFile(application / "reports/fields.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in fields.items():
+            archive.writestr(entry_name, content)
     merged = dict(entries)
     merged["xl/worksheets/sheet1.xml"] = original_sheet.replace("</worksheet>", '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')
     with zipfile.ZipFile(application / "reports/merged.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -301,6 +322,14 @@ class Database : IZ8DatabaseConnection {
     void call(wstring name, Z8Array!Z8Primary values) { assert(false); }
     void flush() { assert(false); }
     IZ8QueryExecutor queryExecutor(Z8Object query) { return null; }
+}
+class FieldCursor : IZ8FieldCursor {
+    bool closed;
+    bool isClosed() { return closed; }
+    bool isGrouped() { return false; }
+    Z8Primary read(Z8Object field, bool asArray, out bool wasNull) {
+        assert(!asArray); wasNull = false; return z8_primary_box(42L);
+    }
 }
 void main(string[] args) {
     z8_resources_set_application_root(args[1]); z8_file_set_roots(args[2]);
@@ -385,6 +414,12 @@ void main(string[] args) {
     bool dates; try { P.m_dateRange(); } catch (Exception) { dates = true; } assert(dates);
     bool dates1904; try { P.m_date1904Range(); } catch (Exception) { dates1904 = true; } assert(dates1904);
     assert(database.begins == 42 && database.rollbacks == 42);
+    auto fieldReport = P.m_createFieldReport();
+    auto fieldCursor = new FieldCursor(); z8_field_set_cursor(P.m_field(fieldReport), fieldCursor);
+    bool fieldResult; try { P.m_runFieldReport(fieldReport); } catch (Exception) { fieldResult = true; } assert(fieldResult);
+    fieldCursor.closed = true;
+    bool fieldClosed; try { P.m_runFieldReport(fieldReport); } catch (Exception) { fieldClosed = true; } assert(fieldClosed);
+    assert(database.begins == 44 && database.rollbacks == 44);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -435,6 +470,9 @@ void main(string[] args) {
         contents = contents.replace(
             'bool dates1904; try { P.m_date1904Range(); } catch (Exception) { dates1904 = true; } assert(dates1904);',
             'auto dates1904 = P.m_date1904Range(); copy(z8_file_resolve_path(dates1904), buildPath(args[2], "dates1904.xlsx")); assert(counter.writes == 5);')
+        contents = contents.replace(
+            'bool fieldResult; try { P.m_runFieldReport(fieldReport); } catch (Exception) { fieldResult = true; } assert(fieldResult);',
+            'auto fieldResult = P.m_runFieldReport(fieldReport); copy(z8_file_resolve_path(fieldResult), buildPath(args[2], "fields.xlsx")); assert(counter.writes == 6);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -595,6 +633,7 @@ class PoiRangeOracle {
          XSSFWorkbook actual = new XSSFWorkbook(new FileInputStream(args[1]))) {
       OBJECT context = new OBJECT.CLASS<OBJECT>(null).get();
       boolean contextCase = args.length > 3 && "context".equals(args[3]);
+      boolean fieldCase = args.length > 3 && "fields".equals(args[3]);
       if (contextCase) {
         org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> info =
             new org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<>(context);
@@ -612,19 +651,30 @@ class PoiRangeOracle {
         data.setIndex("data"); group.get().members().add(data);
         data.get().z8_set(new org.zenframework.z8.server.types.string("amount"), new org.zenframework.z8.server.types.integer(42));
       }
+      if (fieldCase) {
+        org.zenframework.z8.server.base.table.value.IntegerField.CLASS<org.zenframework.z8.server.base.table.value.IntegerField> amount =
+            new org.zenframework.z8.server.base.table.value.IntegerField.CLASS<>(context);
+        amount.setIndex("amount"); context.members().add(amount);
+        amount.get().setCursor(new org.zenframework.z8.server.db.Select() {
+          @Override public boolean isClosed() { return false; }
+          @Override public org.zenframework.z8.server.types.primary get(org.zenframework.z8.server.base.table.value.Field field) {
+            return new org.zenframework.z8.server.types.integer(42);
+          }
+        });
+      }
       PoiReport report = new PoiReport(new ReportOptions()).setContext(context);
       boolean constants = args.length > 3 && "constants".equals(args[3]);
       boolean parameters = args.length > 3 && "parameters".equals(args[3]);
       boolean dates = args.length > 3 && "dates".equals(args[3]);
       Range child = new Range().setSource(SimpleSource.newDefault())
-          .setBlock(dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
+          .setBlock(fieldCase ? "A1:C1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
+          .setBoundaries(fieldCase ? "A1:C1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       report.addRange(0, child);
       if (args.length > 3 && "rename".equals(args[3])) original.setSheetName(0, "Отчёт \\uD83D\\uDE00");
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier); modifier.close();
-      if (constants || parameters || contextCase || dates) {
-        for (int i = 0; i < (dates ? 10 : constants ? 7 : 5); ++i) {
+      if (constants || parameters || contextCase || dates || fieldCase) {
+        for (int i = 0; i < (fieldCase ? 3 : dates ? 10 : constants ? 7 : 5); ++i) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(0).getCell(i);
           if (expected.getCellType() != result.getCellType()) throw new AssertionError("cell type differs at " + i);
@@ -676,4 +726,8 @@ class PoiRangeOracle {
                                              str(application / ("reports/" + name + ".xlsx")), str(working / (name + ".xlsx")), str(config), "dates"],
                                             cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                     assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/fields.xlsx"), str(working / "fields.xlsx"), str(config), "fields"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
 print("POI static report template, naming and transaction verified")
