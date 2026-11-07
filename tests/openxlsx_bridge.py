@@ -43,7 +43,8 @@ with tempfile.TemporaryDirectory() as directory:
     if os.name != "nt":
         environment["LD_LIBRARY_PATH"] = str(library_dir) + os.pathsep + environment.get("LD_LIBRARY_PATH", "")
     saved = temp / "saved.xlsx"
-    subprocess.run([str(executable), str(workbook), str(saved)], check=True, env=environment)
+    saved_again = temp / "saved-again.xlsx"
+    subprocess.run([str(executable), str(workbook), str(saved), str(saved_again)], check=True, env=environment)
     with zipfile.ZipFile(saved) as archive:
         assert archive.testzip() is None
         assert archive.read("custom/preserved.txt") == b"An unrelated package entry"
@@ -59,16 +60,22 @@ class SavedWorkbookOracle {
   public static void main(String[] args) throws Exception {
     try (Workbook book = new XSSFWorkbook(new FileInputStream(args[0]))) {
       Row row = book.getSheetAt(0).getRow(0);
-      if (book.getNumberOfSheets() != 3 || book.getSheetAt(0).getPhysicalNumberOfRows() != 2 ||
+      if (book.getNumberOfSheets() != 3 || !book.getSheetName(1).equals("Второй лист") ||
+          !book.getSheetAt(0).isColumnHidden(1) || !book.getSheetAt(0).isColumnHidden(3) ||
+          book.getSheetAt(0).isColumnHidden(0) || book.getSheetAt(0).getPhysicalNumberOfRows() != 2 ||
           row.getPhysicalNumberOfCells() != 9 || !row.getCell(0).getStringCellValue().equals("Привет 😀 & text") ||
           !row.getCell(6).getCellFormula().equals("B1*2") || row.getCell(6).getNumericCellValue() != 84)
         throw new AssertionError("OpenXLSX output differs from the original POI API");
+    }
+    try (Workbook book = new XSSFWorkbook(new FileInputStream(args[1]))) {
+      if (!book.getSheetAt(0).isColumnHidden(1) || book.getSheetAt(0).isColumnHidden(3))
+        throw new AssertionError("Repeated save did not retain column changes");
     }
   }
 }''', encoding="utf-8")
         classpath = os.pathsep.join(map(str, jars))
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8", "-cp", classpath, str(oracle)], cwd=temp, check=True)
-        subprocess.run(["java", "-cp", str(temp) + os.pathsep + classpath, "SavedWorkbookOracle", str(saved)], cwd=temp, check=True)
+        subprocess.run(["java", "-cp", str(temp) + os.pathsep + classpath, "SavedWorkbookOracle", str(saved), str(saved_again)], cwd=temp, check=True)
     else:
         print("POI output verification skipped: original POI jars or Java unavailable")
 print("OpenXLSX bridge: OK")

@@ -62,11 +62,23 @@ void main(string[] args) {
     bytes[] = 0; // The bridge retains its own archive data.
     assert(memoryBook.sheetCount() == 3);
     assert(memoryBook.cellString(0, 0, 0) == "Привет 😀 & text");
+    memoryBook.renameSheet(1, "Второй лист");
+    memoryBook.setColumnHidden(0, 1, true);
+    memoryBook.setColumnHidden(0, 3, true);
+    assertThrown!Exception(memoryBook.setColumnHidden(0, 16384, true));
+    assertThrown!Exception(memoryBook.renameSheet(0, "invalid\0name"));
     auto saved = memoryBook.save();
     auto reopened = new Workbook(saved);
     assert(reopened.sheetCount() == 3 && reopened.cellNumber(0, 0, 6) == 84);
+    assert(reopened.sheetName(1) == "Второй лист");
     assert(reopened.cellXml(0, 0, 9).canFind("_x0041_"));
     reopened.close();
+    memoryBook.setColumnHidden(0, 3, false);
+    auto savedAgain = memoryBook.save();
+    auto reopenedAgain = new Workbook(savedAgain);
+    assert(reopenedAgain.sheetName(1) == "Второй лист");
+    reopenedAgain.close();
+    write(args[3], savedAgain);
     write(args[2], saved);
     memoryBook.close();
     assertThrown!Exception(new Workbook(cast(ubyte[])[]));

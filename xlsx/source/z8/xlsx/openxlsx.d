@@ -18,6 +18,8 @@ private extern(C) {
     int z8_xlsx_row_count(void*, uint, uint*);
     int z8_xlsx_row_exists(void*, uint, uint, int*);
     int z8_xlsx_row_cell_count(void*, uint, uint, uint*);
+    int z8_xlsx_rename_sheet(void*, uint, const(char)*);
+    int z8_xlsx_set_column_hidden(void*, uint, uint, int);
     int z8_xlsx_cell_string(void*, uint, uint, uint, char*, size_t, size_t*);
     int z8_xlsx_cell_type(void*, uint, uint, uint, int*);
     int z8_xlsx_cell_number(void*, uint, uint, uint, double*);
@@ -113,6 +115,15 @@ class Workbook {
         uint result;
         check(z8_xlsx_row_cell_count(handle, sheet, row, &result));
         return result;
+    }
+
+    void renameSheet(uint sheet, string name) {
+        if (name.canFind('\0')) throw new Exception("sheet name contains NUL");
+        check(z8_xlsx_rename_sheet(handle, sheet, name.toStringz));
+    }
+
+    void setColumnHidden(uint sheet, uint column, bool hidden) {
+        check(z8_xlsx_set_column_hidden(handle, sheet, column, hidden ? 1 : 0));
     }
 
     /// Raw OpenXLSX conversion; rich inline text and OOXML escapes may need

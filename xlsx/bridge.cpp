@@ -279,6 +279,22 @@ Z8_EXPORT int z8_xlsx_row_cell_count(void* handle, unsigned sheet, unsigned row,
     });
 }
 
+Z8_EXPORT int z8_xlsx_rename_sheet(void* handle, unsigned sheet, const char* name) noexcept {
+    return protect([&] {
+        if (!name) throw std::invalid_argument("missing sheet name");
+        auto& doc = document(handle);
+        doc.workbook().worksheet(sheetName(doc, sheet)).setName(name);
+    });
+}
+
+Z8_EXPORT int z8_xlsx_set_column_hidden(void* handle, unsigned sheet, unsigned column, int hidden) noexcept {
+    return protect([&] {
+        if (column >= 16384) throw std::out_of_range("column index out of bounds");
+        auto page = worksheet(handle, sheet);
+        page.column(static_cast<uint16_t>(column + 1)).setHidden(hidden != 0);
+    });
+}
+
 Z8_EXPORT int z8_xlsx_cell_string(void* handle, unsigned sheet, unsigned row, unsigned column,
                                    char* buffer, size_t capacity, size_t* length) noexcept {
     return protect([&] {
