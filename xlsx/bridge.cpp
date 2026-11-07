@@ -90,6 +90,18 @@ std::string sheetName(OpenXLSX::XLDocument& doc, unsigned index) {
     return names[index];
 }
 
+OpenXLSX::XLCell findCell(void* handle, unsigned sheet, unsigned row, unsigned column) {
+    if (row >= 1048576 || column >= 16384) throw std::out_of_range("cell index out of bounds");
+    auto& doc = document(handle);
+    return doc.workbook().worksheet(sheetName(doc, sheet)).findCell(row + 1, static_cast<uint16_t>(column + 1));
+}
+
+OpenXLSX::XLCell requireCell(void* handle, unsigned sheet, unsigned row, unsigned column) {
+    auto cell = findCell(handle, sheet, row, column);
+    if (cell.empty()) throw std::out_of_range("cell does not exist");
+    return cell;
+}
+
 void copyString(const std::string& value, char* buffer, size_t capacity, size_t* length) {
     if (!length) throw std::invalid_argument("missing output length");
     *length = value.size();
@@ -142,9 +154,43 @@ Z8_EXPORT int z8_xlsx_sheet_name(void* handle, unsigned index, char* buffer,
 Z8_EXPORT int z8_xlsx_cell_string(void* handle, unsigned sheet, unsigned row, unsigned column,
                                    char* buffer, size_t capacity, size_t* length) noexcept {
     return protect([&] {
-        if (row >= 1048576 || column >= 16384) throw std::out_of_range("cell index out of bounds");
-        auto& doc = document(handle);
-        auto cell = doc.workbook().worksheet(sheetName(doc, sheet)).cell(row + 1, static_cast<uint16_t>(column + 1));
+        auto cell = requireCell(handle, sheet, row, column);
         copyString(cell.value().getString(), buffer, capacity, length);
+    });
+}
+
+Z8_EXPORT int z8_xlsx_cell_type(void* handle, unsigned sheet, unsigned row, unsigned column, int* result) noexcept {
+    return protect([&] {
+        if (!result) throw std::invalid_argument("missing output");
+        auto cell = findCell(handle, sheet, row, column);
+        if (cell.empty()) { *result = -1; return; }
+        switch (cell.value().type()) {
+            case OpenXLSX::XLValueType::Empty:   *result = 0; break;
+            case OpenXLSX::XLValueType::Boolean: *result = 1; break;
+            case OpenXLSX::XLValueType::Integer: *result = 2; break;
+            case OpenXLSX::XLValueType::Float:   *result = 3; break;
+            case OpenXLSX::XLValueType::Error:   *result = 4; break;
+            case OpenXLSX::XLValueType::String:  *result = 5; break;
+            default: throw std::runtime_error("unknown XLSX cell type");
+        }
+    });
+}
+
+Z8_EXPORT int z8_xlsx_cell_number(void* handle, unsigned sheet, unsigned row, unsigned column, double* result) noexcept {
+    return protect([&] {
+        if (!result) throw std::invalid_argument("missing output");
+        auto cell = requireCell(handle, sheet, row, column);
+        auto type = cell.value().type();
+        if (type != OpenXLSX::XLValueType::Integer && type != OpenXLSX::XLValueType::Float)
+            throw std::runtime_error("XLSX cell is not numeric");
+        *result = cell.value().get<double>();
+    });
+}
+
+Z8_EXPORT int z8_xlsx_cell_formula(void* handle, unsigned sheet, unsigned row, unsigned column,
+                                    char* buffer, size_t capacity, size_t* length) noexcept {
+    return protect([&] {
+        auto cell = requireCell(handle, sheet, row, column);
+        copyString(cell.formula().get(), buffer, capacity, length);
     });
 }
