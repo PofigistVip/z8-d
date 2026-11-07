@@ -247,15 +247,17 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                 targetRow >= 1048576)
                 throw new Exception("POI report range expansion layout is not implemented");
             auto existingRow = targetRow in workbook.sheets[sheet].rows;
-            if (existingRow !is null) {
-                if (!(*existingRow).safeExpansionTarget) throw new Exception("POI report range expansion row is not implemented");
-                foreach (column, cell; (*existingRow).cells)
-                    if (column >= block.firstColumn && column <= block.lastColumn)
-                        throw new Exception("POI report range expansion would overwrite a cell");
-            }
             auto templateRow = block.firstRow in workbook.sheets[sheet].rows;
             if (templateRow is null || !(*templateRow).cells.length)
                 throw new Exception("POI report range expansion layout is not implemented");
+            if (existingRow !is null) {
+                if (!(*existingRow).safeExpansionTarget) throw new Exception("POI report range expansion row is not implemented");
+                foreach (column, cell; (*existingRow).cells) {
+                    if (column < block.firstColumn || column > block.lastColumn) continue;
+                    if ((column in (*templateRow).cells) is null || !cell.safeCopy || cell.hasFormula || cell.rawKind == "inlineStr"w)
+                        throw new Exception("POI report range expansion target cell is not implemented");
+                }
+            }
             bool hasTemplateCell;
             foreach (column, cell; (*templateRow).cells) {
                 if (column < block.firstColumn || column > block.lastColumn) continue;
@@ -309,12 +311,14 @@ private void z8_poi_report_apply_root(Z8Object report, Z8PoiWorkbook workbook, i
         if (inside(rowNumber, columnNumber) && !cell.hasFormula && (cell.kind == "str"w || cell.kind == "inlineStr"w))
             values[key(rowNumber, columnNumber)] = cell;
     foreach (copy; copies) {
+        auto position = key(copy.targetRow, copy.targetColumn);
+        values.remove(position);
         auto sourceRow = cast(long)copy.sourceRow in workbook.sheets[sheet].rows;
         if (sourceRow is null) continue;
         auto sourceCell = cast(long)copy.sourceColumn in (*sourceRow).cells;
         if (sourceCell is null || ((*sourceCell).kind != "str"w && (*sourceCell).kind != "inlineStr"w)) continue;
         auto cell = new Z8PoiCell(); cell.kind = "str"w; cell.value = (*sourceCell).value;
-        values[key(copy.targetRow, copy.targetColumn)] = cell;
+        values[position] = cell;
     }
     foreach (edit; edits) {
         auto position = key(edit.row, edit.column);

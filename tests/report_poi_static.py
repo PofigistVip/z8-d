@@ -94,6 +94,8 @@ public class StaticReportProbe {
     public static file expandedInlineConstant() { ExpandedInlineConstantReport report; return report.run(guid.Null); }
     public static file expandedOtherColumns() { ExpandedOtherColumnsReport report; return report.run(guid.Null); }
     public static file expandedRowHeight() { ExpandedRowHeightReport report; return report.run(guid.Null); }
+    public static file expandedInlineTarget() { ExpandedInlineTargetReport report; return report.run(guid.Null); }
+    public static file expandedMissingSource() { ExpandedMissingSourceReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -259,7 +261,8 @@ public class MissingBoundariesReport extends Report {
                            ("ExpandedFormulaReport", "expanded-formula"), ("ExpandedMetadataReport", "expanded-metadata"),
                            ("ExpandedRichReport", "expanded-rich"), ("ExpandedInlineNumberReport", "expanded-inline-number"),
                            ("ExpandedInlineConstantReport", "expanded-inline-constant"),
-                           ("ExpandedOtherColumnsReport", "expanded-other-columns"), ("ExpandedRowHeightReport", "expanded-row-height")):
+                           ("ExpandedOtherColumnsReport", "expanded-other-columns"), ("ExpandedRowHeightReport", "expanded-row-height"),
+                           ("ExpandedInlineTargetReport", "expanded-inline-target"), ("ExpandedMissingSourceReport", "expanded-missing-source")):
         (source / (name + ".bl")).write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.base.json.JsonObject;
@@ -471,19 +474,19 @@ public class %s extends Report {
         '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
         '<c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c>'
         '<c r="C1" t="s"><v>2</v></c><c r="D1" t="s"><v>3</v></c>')
-    custom["xl/worksheets/sheet1.xml"] = custom["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="2"><c r="A2"><v>77</v></c></row></sheetData>')
+    custom["xl/worksheets/sheet1.xml"] = custom["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="2" ht="30" customHeight="1"><c r="A2"><v>77</v></c></row></sheetData>')
     with zipfile.ZipFile(application / "reports/custom.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in custom.items():
             archive.writestr(entry_name, content)
     json_source = dict(parameters)
     json_source["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="5" uniqueCount="5"><si><t>${rows.item.title}</t></si><si><t>${rows.item.amount}</t></si><si><t>${rows.index}</t></si><si><t>${rows.sheet}</t></si><si><t>Title: ${rows.item.title}</t></si></sst>'''
-    json_source["xl/worksheets/sheet1.xml"] = json_source["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="2"><c r="A2"><v>77</v></c></row></sheetData>')
+    json_source["xl/worksheets/sheet1.xml"] = json_source["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="2" ht="30" customHeight="1"><c r="A2"><v>77</v></c></row></sheetData>')
     with zipfile.ZipFile(application / "reports/json.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in json_source.items():
             archive.writestr(entry_name, content)
     query = dict(parameters)
     query["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="5" uniqueCount="5"><si><t>${q.amount}</t></si><si><t>${q . amount + 1}</t></si><si><t>Value: ${q.amount}</t></si><si><t>${q.index}</t></si><si><t>${'q.ignored'}</t></si></sst>'''
-    query["xl/worksheets/sheet1.xml"] = query["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="2"><c r="A2"><v>77</v></c></row></sheetData>')
+    query["xl/worksheets/sheet1.xml"] = query["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="2" ht="30" customHeight="1"><c r="A2"><v>77</v></c></row></sheetData>')
     with zipfile.ZipFile(application / "reports/query.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in query.items():
             archive.writestr(entry_name, content)
@@ -505,7 +508,7 @@ public class %s extends Report {
         '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
         '<c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c>'
         '<c r="C1" s="0"><v>99</v></c><c r="D1" t="s"><v>2</v></c>')
-    for filename in ("expanded", "expanded-inline", "expanded-occupied", "expanded-static", "expanded-formula", "expanded-metadata", "expanded-rich", "expanded-inline-number", "expanded-inline-constant", "expanded-other-columns", "expanded-row-height"):
+    for filename in ("expanded", "expanded-inline", "expanded-occupied", "expanded-static", "expanded-formula", "expanded-metadata", "expanded-rich", "expanded-inline-number", "expanded-inline-constant", "expanded-other-columns", "expanded-row-height", "expanded-inline-target", "expanded-missing-source"):
         book = dict(expanded)
         if filename == "expanded-inline":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace(
@@ -520,7 +523,13 @@ public class %s extends Report {
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace(
                 '<c r="B1" t="s"><v>1</v></c>', '<c r="B1" t="inlineStr"><is><t>${\'fixed\'}</t></is></c>')
         if filename == "expanded-occupied":
-            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="2"><c r="A2"><v>77</v></c></row></sheetData>')
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace(
+                '</sheetData>', '<row r="2"><c r="A2"><v>77</v></c><c r="B2" t="s"><v>2</v></c><c r="C2" t="s"><v>2</v></c></row></sheetData>')
+        if filename == "expanded-inline-target":
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="2"><c r="A2" t="inlineStr"><is><t>old</t></is></c></row></sheetData>')
+        if filename == "expanded-missing-source":
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0"><v>99</v></c>', '')
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="2"><c r="C2"><v>77</v></c></row></sheetData>')
         if filename == "expanded-static":
             book["xl/sharedStrings.xml"] = book["xl/sharedStrings.xml"].replace('${rows.item.title}', 'Static')
         if filename == "expanded-formula":
@@ -738,7 +747,9 @@ void main(string[] args) {
     bool inlineConstant; try { P.m_expandedInlineConstant(); } catch (Exception) { inlineConstant = true; } assert(inlineConstant);
     bool otherColumns; try { P.m_expandedOtherColumns(); } catch (Exception) { otherColumns = true; } assert(otherColumns);
     bool rowHeight; try { P.m_expandedRowHeight(); } catch (Exception) { rowHeight = true; } assert(rowHeight);
-    assert(database.begins == 71 && database.rollbacks == 71);
+    bool inlineTarget; try { P.m_expandedInlineTarget(); } catch (Exception) { inlineTarget = true; } assert(inlineTarget);
+    bool missingSource; try { P.m_expandedMissingSource(); } catch (Exception) { missingSource = true; } assert(missingSource);
+    assert(database.begins == 73 && database.rollbacks == 73);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -816,26 +827,29 @@ void main(string[] args) {
             'bool expanded; try { P.m_expanded(); } catch (Exception) { expanded = true; } assert(expanded);',
             'auto expanded = P.m_expanded(); copy(z8_file_resolve_path(expanded), buildPath(args[2], "expanded.xlsx")); assert(counter.expansions == 1);')
         contents = contents.replace(
+            'bool expandedOccupied; try { P.m_expandedOccupied(); } catch (Exception) { expandedOccupied = true; } assert(expandedOccupied);',
+            'auto expandedOccupied = P.m_expandedOccupied(); copy(z8_file_resolve_path(expandedOccupied), buildPath(args[2], "expanded-occupied.xlsx")); assert(counter.expansions == 2);')
+        contents = contents.replace(
             'bool expandedStatic; try { P.m_expandedStatic(); } catch (Exception) { expandedStatic = true; } assert(expandedStatic);',
-            'auto expandedStatic = P.m_expandedStatic(); copy(z8_file_resolve_path(expandedStatic), buildPath(args[2], "expanded-static.xlsx")); assert(counter.expansions == 2);')
+            'auto expandedStatic = P.m_expandedStatic(); copy(z8_file_resolve_path(expandedStatic), buildPath(args[2], "expanded-static.xlsx")); assert(counter.expansions == 3);')
         contents = contents.replace(
             'bool expandedRich; try { P.m_expandedRich(); } catch (Exception) { expandedRich = true; } assert(expandedRich);',
-            'auto expandedRich = P.m_expandedRich(); copy(z8_file_resolve_path(expandedRich), buildPath(args[2], "expanded-rich.xlsx")); assert(counter.expansions == 3);')
+            'auto expandedRich = P.m_expandedRich(); copy(z8_file_resolve_path(expandedRich), buildPath(args[2], "expanded-rich.xlsx")); assert(counter.expansions == 4);')
         contents = contents.replace(
             'bool expandedCustom; try { P.m_expandedCustom(); } catch (Exception) { expandedCustom = true; } assert(expandedCustom);',
-            'auto expandedCustom = P.m_expandedCustom(); copy(z8_file_resolve_path(expandedCustom), buildPath(args[2], "expanded-custom.xlsx")); assert(counter.expansions == 4);')
+            'auto expandedCustom = P.m_expandedCustom(); copy(z8_file_resolve_path(expandedCustom), buildPath(args[2], "expanded-custom.xlsx")); assert(counter.expansions == 5);')
         contents = contents.replace(
             'bool repeat; try { P.m_repeatRange(); } catch (Exception) { repeat = true; } assert(repeat);',
             'auto repeat = P.m_repeatRange(); copy(z8_file_resolve_path(repeat), buildPath(args[2], "repeat.xlsx")); assert(counter.writes == 12);')
         contents = contents.replace(
             'bool inlineNumber; try { P.m_expandedInlineNumber(); } catch (Exception) { inlineNumber = true; } assert(inlineNumber);',
-            'auto inlineNumber = P.m_expandedInlineNumber(); copy(z8_file_resolve_path(inlineNumber), buildPath(args[2], "expanded-inline-number.xlsx")); assert(counter.expansions == 5);')
+            'auto inlineNumber = P.m_expandedInlineNumber(); copy(z8_file_resolve_path(inlineNumber), buildPath(args[2], "expanded-inline-number.xlsx")); assert(counter.expansions == 6);')
         contents = contents.replace(
             'bool inlineConstant; try { P.m_expandedInlineConstant(); } catch (Exception) { inlineConstant = true; } assert(inlineConstant);',
-            'auto inlineConstant = P.m_expandedInlineConstant(); copy(z8_file_resolve_path(inlineConstant), buildPath(args[2], "expanded-inline-constant.xlsx")); assert(counter.expansions == 6);')
+            'auto inlineConstant = P.m_expandedInlineConstant(); copy(z8_file_resolve_path(inlineConstant), buildPath(args[2], "expanded-inline-constant.xlsx")); assert(counter.expansions == 7);')
         contents = contents.replace(
             'bool otherColumns; try { P.m_expandedOtherColumns(); } catch (Exception) { otherColumns = true; } assert(otherColumns);',
-            'auto otherColumns = P.m_expandedOtherColumns(); copy(z8_file_resolve_path(otherColumns), buildPath(args[2], "expanded-other-columns.xlsx")); assert(counter.expansions == 7);')
+            'auto otherColumns = P.m_expandedOtherColumns(); copy(z8_file_resolve_path(otherColumns), buildPath(args[2], "expanded-other-columns.xlsx")); assert(counter.expansions == 8);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1253,7 +1267,7 @@ class PoiRangeOracle {
                                          str(application / "reports/expanded.xlsx"), str(working / "expanded.xlsx"), str(config), "expanded"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
-                for name in ("expanded-static", "expanded-rich", "expanded-inline-number", "expanded-inline-constant", "expanded-other-columns"):
+                for name in ("expanded-static", "expanded-rich", "expanded-inline-number", "expanded-inline-constant", "expanded-other-columns", "expanded-occupied"):
                     result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                              str(application / ("reports/" + name + ".xlsx")), str(working / (name + ".xlsx")), str(config), "expanded"],
                                             cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
