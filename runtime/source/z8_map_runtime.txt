@@ -127,6 +127,7 @@ private bool z8_map_content_equals(M)(M left, M right) {
 }
 class Z8StringMap {
     private Z8PrimaryMap primaryData;
+    private Z8PrimaryKeyMap!wstring primaryKeyData;
     private wstring[wstring] entries;
     private Z8JavaMapOrder!wstring order;
     // Retain insertion order so serializers can reproduce Java HashMap bucket ties.
@@ -135,24 +136,30 @@ class Z8StringMap {
     private wstring nullKeyValue;
     override bool opEquals(Object other) {
         auto right = cast(Z8StringMap)other;
+        if (right !is null && (primaryKeyData !is null || right.primaryKeyData !is null))
+            return z8_primary_key_map_view(this).opEquals(z8_primary_key_map_view(right));
+        auto primaryKeys = cast(Z8PrimaryKeyMap!wstring)other;
+        if (primaryKeys !is null) return z8_primary_key_map_view(this).opEquals(primaryKeys);
         if (right !is null && (primaryData !is null || right.primaryData !is null))
             return z8_primary_map_view(this).opEquals(z8_primary_map_view(right));
         auto primary = cast(Z8PrimaryMap)other;
         if (primary !is null) return z8_primary_map_view(this).opEquals(primary);
         return right !is null && z8_map_content_equals(this, right);
     }
-    long z8_size() { if (primaryData !is null) return primaryData.z8_size(); return cast(long)entries.length + (hasNullKey ? 1 : 0); }
-    bool z8_isEmpty() { if (primaryData !is null) return primaryData.z8_isEmpty(); return entries.length == 0 && !hasNullKey; }
+    long z8_size() { if (primaryKeyData !is null) return primaryKeyData.z8_size(); if (primaryData !is null) return primaryData.z8_size(); return cast(long)entries.length + (hasNullKey ? 1 : 0); }
+    bool z8_isEmpty() { if (primaryKeyData !is null) return primaryKeyData.z8_isEmpty(); if (primaryData !is null) return primaryData.z8_isEmpty(); return entries.length == 0 && !hasNullKey; }
     private Z8JavaMapOrder!wstring ordering() { if (order is null) order = new Z8JavaMapOrder!wstring(); return order; }
-    void z8_clear() { if (primaryData !is null) { primaryData.z8_clear(); return; } entries.clear(); insertionKeys = null; hasNullKey = false; nullKeyValue = null; if (order !is null) order.clear(); }
-    bool z8_containsKey(wstring key) { if (primaryData !is null) return primaryData.z8_containsKey(key); return key is null ? hasNullKey : (key in entries) !is null; }
+    void z8_clear() { if (primaryKeyData !is null) { primaryKeyData.z8_clear(); return; } if (primaryData !is null) { primaryData.z8_clear(); return; } entries.clear(); insertionKeys = null; hasNullKey = false; nullKeyValue = null; if (order !is null) order.clear(); }
+    bool z8_containsKey(wstring key) { if (primaryKeyData !is null) return primaryKeyData.z8_containsKey(z8_primary_box(key)); if (primaryData !is null) return primaryData.z8_containsKey(key); return key is null ? hasNullKey : (key in entries) !is null; }
     bool z8_containsValue(wstring value) {
+        if (primaryKeyData !is null) return primaryKeyData.z8_containsValue(value);
         if (primaryData !is null) return primaryData.z8_containsValue(z8_primary_box(value));
         if (hasNullKey && z8_string_equals(nullKeyValue, value)) return true;
         foreach (item; entries) if (z8_string_equals(item, value)) return true;
         return false;
     }
     wstring z8_add(wstring key, wstring value) {
+        if (primaryKeyData !is null) return primaryKeyData.z8_add(z8_primary_box(key), value);
         if (primaryData !is null) return z8_primary_cast!wstring(primaryData.z8_add(key, z8_primary_box(value)));
         if (key is null) {
             auto previous = hasNullKey ? nullKeyValue : null;
@@ -166,15 +173,20 @@ class Z8StringMap {
         return previous;
     }
     void z8_add_discard(wstring key, wstring value) {
+        if (primaryKeyData !is null) { primaryKeyData.z8_add_discard(z8_primary_box(key), value); return; }
         if (primaryData !is null) { primaryData.z8_add(key, z8_primary_box(value)); return; }
         z8_add(key, value);
     }
     void z8_remove_discard(wstring key) {
+        if (primaryKeyData !is null) { primaryKeyData.z8_remove_discard(z8_primary_box(key)); return; }
         if (primaryData !is null) { primaryData.z8_remove(key); return; }
         z8_remove(key);
     }
     void z8_add(Z8StringMap other) {
         z8_nonnull(other);
+        if (primaryKeyData !is null || other.primaryKeyData !is null) {
+            z8_primary_key_map_view(this).z8_add(z8_primary_key_map_view(other)); return;
+        }
         if (primaryData !is null || other.primaryData !is null) {
             z8_primary_map_view(this).z8_add(z8_primary_map_view(other)); return;
         }
@@ -184,6 +196,7 @@ class Z8StringMap {
         for (long i; i < keys.z8_size(); ++i) { auto key = keys.z8_get(i); z8_add(key, other.z8_get(key)); }
     }
     Z8Array!wstring z8_keys() {
+        if (primaryKeyData !is null) { auto result = new Z8Array!wstring(); result.primaryData = primaryKeyData.z8_keys(); return result; }
         if (primaryData !is null) return primaryData.z8_keys();
         auto result = new Z8Array!wstring();
         if (order !is null) foreach (key; order.ordered()) result.z8_add(key);
@@ -191,6 +204,7 @@ class Z8StringMap {
     }
     // Stable order is needed when copying file details with equal hash buckets.
     Z8Array!wstring z8_insertion_keys() {
+        if (primaryKeyData !is null) { auto result = new Z8Array!wstring(); result.primaryData = primaryKeyData.z8_insertion_keys(); return result; }
         if (primaryData !is null) return primaryData.z8_insertion_keys();
         auto result = new Z8Array!wstring();
         foreach (key; insertionKeys) result.z8_add(key);
@@ -198,6 +212,7 @@ class Z8StringMap {
         return result;
     }
     Z8Array!wstring z8_values() {
+        if (primaryKeyData !is null) return primaryKeyData.z8_values();
         if (primaryData !is null) {
             auto result = new Z8Array!wstring(); result.primaryData = primaryData.z8_values(); return result;
         }
@@ -206,6 +221,7 @@ class Z8StringMap {
         return result;
     }
     wstring z8_get(wstring key) {
+        if (primaryKeyData !is null) return primaryKeyData.z8_get(z8_primary_box(key));
         if (primaryData !is null) return z8_primary_cast!wstring(primaryData.z8_get(key));
         if (key is null) return hasNullKey ? nullKeyValue : null;
         auto found = key in entries;
@@ -213,6 +229,7 @@ class Z8StringMap {
         return *found;
     }
     wstring z8_remove(wstring key) {
+        if (primaryKeyData !is null) return primaryKeyData.z8_remove(z8_primary_box(key));
         if (primaryData !is null) return z8_primary_cast!wstring(primaryData.z8_remove(key));
         if (key is null) {
             auto previous = hasNullKey ? nullKeyValue : null;
@@ -247,6 +264,10 @@ void z8_map_add_assign(ref Z8StringMap left, lazy Z8StringMap previous, lazy Z8S
 Z8PrimaryMap z8_primary_map_view(Z8StringMap values) {
     if (values is null) return null;
     if (values.primaryData is null) {
+        if (values.primaryKeyData !is null) {
+            auto typed = new Z8PrimaryMap(); typed.primaryKeyData = z8_primary_map_view(values.primaryKeyData);
+            values.primaryData = typed; return typed;
+        }
         auto result = new Z8PrimaryMap();
         foreach (key, value; values.entries) result.entries[key] = z8_primary_box(value);
         result.order = values.order; result.insertionKeys = values.insertionKeys;
@@ -255,4 +276,26 @@ Z8PrimaryMap z8_primary_map_view(Z8StringMap values) {
         values.primaryData = result;
     }
     return values.primaryData;
+}
+
+Z8PrimaryKeyMap!wstring z8_primary_key_map_view(Z8StringMap values) {
+    if (values is null) return null;
+    if (values.primaryKeyData is null) {
+        if (values.primaryData !is null) {
+            auto primaryValues = z8_primary_key_map_view(values.primaryData);
+            auto typed = new Z8PrimaryKeyMap!wstring(); typed.primaryData = primaryValues;
+            values.primaryKeyData = typed; return typed;
+        }
+        auto result = new Z8PrimaryKeyMap!wstring();
+        if (values.order !is null) {
+            result.order = new Z8JavaMapOrder!ulong(); result.order.capacity = values.order.capacity;
+            foreach (entry; values.order.keys) {
+                auto key = entry.key;
+                auto value = key is null ? values.nullKeyValue : values.entries[key];
+                result.z8_add(z8_primary_box(key), value);
+            }
+        }
+        values.entries = null; values.order = null; values.insertionKeys = null; values.primaryKeyData = result;
+    }
+    return values.primaryKeyData;
 }

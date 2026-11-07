@@ -306,7 +306,7 @@ class Checker {
         auto key = mapKeyType(actual);
         if (key == ValueType.selfType) {
             if (!e.keyObjectClasses.length || !extendsBuiltinPrimary(outerMapKeyClass(actual, e.keyObjectClasses))) return false;
-        } else if (![ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.guidType, ValueType.dateType,
+        } else if (![ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.guidType, ValueType.dateType,
                      ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(key)) return false;
         return (!hasObjectClass(actual) || e.objectClass is expectedClass) &&
             innerMapKeyClasses(actual, e.keyObjectClasses) == expectedKeys;
