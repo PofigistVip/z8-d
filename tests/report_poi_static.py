@@ -702,6 +702,7 @@ public class %s extends Report {
         book = dict(footer)
         if filename == "expanded-sparse-footer":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C2"><v>123</v></c>', '')
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="4"><c r="C4"><v>55</v></c></row></sheetData>')
         if filename == "expanded-sparse-block":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="B1" t="s"><v>1</v></c>', '')
         if filename == "expanded-footer-conflict":
@@ -1078,7 +1079,7 @@ void main(string[] args) {
         ++writes; return result;
     }
     ubyte[] writeExpandedReport(const(ubyte)[] input, const(Z8PoiCellCopy)[] copies, const(Z8PoiCellEdit)[] cells) {
-        assert(copies.length == 2 || copies.length == 8 || copies.length == 4 || copies.length == 6 || copies.length == 10 || copies.length == 12 || copies.length == 18 || copies.length == 20); auto result = expander.writeExpandedReport(input, copies, cells);
+        assert(copies.length == 2 || copies.length == 8 || copies.length == 4 || copies.length == 6 || copies.length == 10 || copies.length == 11 || copies.length == 12 || copies.length == 18 || copies.length == 20); auto result = expander.writeExpandedReport(input, copies, cells);
         ++expansions; return result;
     }
     ubyte[] addReportMerges(const(ubyte)[] input, const(Z8PoiMergedRegion)[] regions) {
@@ -1087,7 +1088,7 @@ void main(string[] args) {
     }
     ubyte[] removeReportCells(const(ubyte)[] input, const(Z8PoiCellRemoval)[] cells) {
         assert((cells.length == 1 && ((cells[0].row == 1 && cells[0].column == 2) ||
-                                      (cells[0].row == 3 && cells[0].column == 0))) ||
+                                      (cells[0].row == 3 && (cells[0].column == 0 || cells[0].column == 2)))) ||
                cells.length == 5 || cells.length == 4 || cells.length == 2);
         return remover.removeReportCells(input, cells);
     }
@@ -1211,6 +1212,7 @@ void main(string[] args) {
             'bool horizontalHeader; try { P.m_expandedHorizontalHeader(); } catch (Exception) { horizontalHeader = true; } assert(horizontalHeader);',
             'auto horizontalHeader = P.m_expandedHorizontalHeader(); copy(z8_file_resolve_path(horizontalHeader), buildPath(args[2], "expanded-horizontal-header.xlsx")); assert(counter.expansions == 24);')
         contents = contents.replace('bool missingSource; try { P.m_expandedMissingSource(); } catch (Exception) { missingSource = true; } assert(missingSource);', '')
+        contents = contents.replace('bool sparseFooter; try { P.m_expandedSparseFooter(); } catch (Exception) { sparseFooter = true; } assert(sparseFooter);', '')
         contents = contents.replace(
             'bool emptyFooter; try { P.m_emptyFooter(); } catch (Exception) { emptyFooter = true; } assert(emptyFooter);',
             'auto emptyFooter = P.m_emptyFooter(); copy(z8_file_resolve_path(emptyFooter), buildPath(args[2], "empty-footer.xlsx"));')
@@ -1224,7 +1226,7 @@ void main(string[] args) {
             'bool emptyHorizontalMultiFooter; try { P.m_emptyHorizontalMultiFooter(); } catch (Exception) { emptyHorizontalMultiFooter = true; } assert(emptyHorizontalMultiFooter);',
             'auto emptyHorizontalMultiFooter = P.m_emptyHorizontalMultiFooter(); copy(z8_file_resolve_path(emptyHorizontalMultiFooter), buildPath(args[2], "empty-horizontal-multi-footer.xlsx"));')
         contents = contents.replace('assert(database.begins == 103 && database.rollbacks == 103);',
-            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 29); assert(database.begins == 103 && database.rollbacks == 103);')
+            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 29); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 30); assert(database.begins == 103 && database.rollbacks == 103);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1774,4 +1776,8 @@ class PoiRangeOracle {
                                              str(application / ("reports/" + name + ".xlsx")), str(working / (name + ".xlsx")), str(config), name],
                                             cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                     assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/expanded-sparse-footer.xlsx"), str(working / "expanded-sparse-footer.xlsx"), str(config), "expanded-footer"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
 print("POI static report template, naming and transaction verified")
