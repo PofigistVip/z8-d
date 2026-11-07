@@ -1,7 +1,7 @@
 /// Optional OpenXLSX document provider for the Z8 native POI facade.
 module z8.xlsx.poi;
 
-import z8.runtime : IZ8PoiDocument, IZ8PoiProvider, IZ8PoiReportWriter, IZ8PoiReportExpander, IZ8PoiReportMergeWriter, IZ8PoiReportCellRemover, Z8PoiHiddenColumn, Z8PoiCellEdit, Z8PoiCellEditKind, Z8PoiCellCopy, Z8PoiMergedRegion, Z8PoiCellRemoval,
+import z8.runtime : IZ8PoiDocument, IZ8PoiProvider, IZ8PoiReportWriter, IZ8PoiReportExpander, IZ8PoiReportMergeWriter, IZ8PoiReportCellRemover, IZ8PoiReportSheetCloner, Z8PoiHiddenColumn, Z8PoiCellEdit, Z8PoiCellEditKind, Z8PoiCellCopy, Z8PoiMergedRegion, Z8PoiCellRemoval,
     Z8PoiUnsupportedWorkbook, z8_poi_set_provider;
 import z8.xlsx.openxlsx : Workbook;
 import std.conv : to;
@@ -31,7 +31,7 @@ private class OpenXlsxDocument : IZ8PoiDocument {
     void close() { book.close(); }
 }
 
-private class OpenXlsxProvider : IZ8PoiProvider, IZ8PoiReportWriter, IZ8PoiReportExpander, IZ8PoiReportMergeWriter, IZ8PoiReportCellRemover {
+private class OpenXlsxProvider : IZ8PoiProvider, IZ8PoiReportWriter, IZ8PoiReportExpander, IZ8PoiReportMergeWriter, IZ8PoiReportCellRemover, IZ8PoiReportSheetCloner {
     IZ8PoiDocument open(const(ubyte)[] bytes) { return new OpenXlsxDocument(bytes); }
     ubyte[] renameReportSheet(const(ubyte)[] input, uint index, wstring name) {
         try {
@@ -80,6 +80,17 @@ private class OpenXlsxProvider : IZ8PoiProvider, IZ8PoiReportWriter, IZ8PoiRepor
             foreach (cell; cells) book.removeCell(cell.sheet, cell.row, cell.column);
             return book.save();
         } catch (Exception error) throw new Z8PoiUnsupportedWorkbook(error.msg);
+    }
+    ubyte[] cloneReportSheets(const(ubyte)[] input, uint prototype, const(wstring)[] names) {
+        string stage = "open";
+        try {
+            auto book = new Workbook(input);
+            scope(exit) book.close();
+            stage = "clone";
+            foreach (name; names) book.cloneSheet(prototype, name.to!string);
+            stage = "save";
+            return book.save();
+        } catch (Exception error) throw new Z8PoiUnsupportedWorkbook("sheet cloning " ~ stage ~ ": " ~ error.msg);
     }
 }
 

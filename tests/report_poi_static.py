@@ -126,6 +126,11 @@ public class StaticReportProbe {
     public static file multipleSheetsRename() { MultipleSheetRenameReport report; return report.run(guid.Null); }
     public static file multipleSheetsBothRename() { MultipleSheetBothRenameReport report; return report.run(guid.Null); }
     public static file multipleSheetsDuplicate() { MultipleSheetDuplicateReport report; return report.run(guid.Null); }
+    public static file cloneSheets() { CloneSheetsReport report; return report.run(guid.Null); }
+    public static file cloneUnsupported() { CloneUnsupportedReport report; return report.run(guid.Null); }
+    public static file cloneSuffix() { CloneSuffixReport report; return report.run(guid.Null); }
+    public static file cloneLong() { CloneLongReport report; return report.run(guid.Null); }
+    public static file cloneExisting() { CloneExistingReport report; return report.run(guid.Null); }
     public static int orderedCount() { return OrderedRows.sequence; }
     public static file expandedMultipleSheets() { ExpandedMultipleSheetReport report; return report.run(guid.Null); }
     public static file emptyFooter() { EmptyFooterReport report; return report.run(guid.Null); }
@@ -313,6 +318,21 @@ public class MultipleSheetReport extends Report {
     (source / "MultipleSheetDuplicateReport.bl").write_text(
         (source / "MultipleSheetReport.bl").read_text(encoding="utf-8")
         .replace("MultipleSheetReport", "MultipleSheetDuplicateReport").replace('[sheet "1"]', '[sheet "1"] [sheetName "Sheet1"]'), encoding="utf-8")
+    (source / "CloneSheetsReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+public class CloneSheetsReport extends Report {
+    engine = Report.POI; template = "constant";
+    [sheet "0"] [address "A1"] [boundaries "A1"] Range first;
+    [sheet "2"] [address "A1"] [boundaries "A1"] [sheetName "Final"] Range second;
+    ranges = {second, first};
+}''', encoding="utf-8")
+    (source / "CloneUnsupportedReport.bl").write_text(
+        (source / "CloneSheetsReport.bl").read_text(encoding="utf-8")
+        .replace("CloneSheetsReport", "CloneUnsupportedReport").replace('template = "constant"', 'template = "clone-views"'), encoding="utf-8")
+    for name, template in (("CloneSuffixReport", "clone-suffix"), ("CloneLongReport", "clone-long"), ("CloneExistingReport", "clone-existing")):
+        content = (source / "CloneSheetsReport.bl").read_text(encoding="utf-8").replace("CloneSheetsReport", name).replace('template = "constant"', 'template = "' + template + '"')
+        if name == "CloneExistingReport": content = content.replace('[sheet "2"]', '[sheet "3"]')
+        (source / (name + ".bl")).write_text(content, encoding="utf-8")
     (source / "MissingBoundariesReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 public class MissingBoundariesReport extends Report {
@@ -601,6 +621,27 @@ public class %s extends Report {
         '<c r="G1" t="inlineStr"><is><t>${4294967297}</t></is></c>')
     with zipfile.ZipFile(application / "reports/constant.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in constants.items():
+            archive.writestr(name, content)
+    for filename, sheet_name in (("clone-suffix", "X (7)"), ("clone-long", "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345")):
+        book = dict(constants)
+        book["xl/workbook.xml"] = book["xl/workbook.xml"].replace('name="Sheet1"', 'name="' + sheet_name + '"')
+        with zipfile.ZipFile(application / ("reports/" + filename + ".xlsx"), "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for name, content in book.items(): archive.writestr(name, content)
+    clone_existing = dict(constants)
+    clone_existing["xl/workbook.xml"] = clone_existing["xl/workbook.xml"].replace(
+        'name="Sheet1"', 'name="Second (3)"').replace('</sheets>', '<sheet name="Second (2)" sheetId="2" r:id="rId3"/></sheets>')
+    clone_existing["xl/_rels/workbook.xml.rels"] = clone_existing["xl/_rels/workbook.xml.rels"].replace(
+        '</Relationships>', '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/></Relationships>')
+    clone_existing["[Content_Types].xml"] = clone_existing["[Content_Types].xml"].replace(
+        '</Types>', '<Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>')
+    clone_existing["xl/worksheets/sheet2.xml"] = clone_existing["xl/worksheets/sheet1.xml"]
+    with zipfile.ZipFile(application / "reports/clone-existing.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in clone_existing.items(): archive.writestr(name, content)
+    clone_views = dict(constants)
+    clone_views["xl/worksheets/sheet1.xml"] = clone_views["xl/worksheets/sheet1.xml"].replace(
+        "<sheetData>", '<sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetData>')
+    with zipfile.ZipFile(application / "reports/clone-views.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in clone_views.items():
             archive.writestr(name, content)
     constant_comment = application / "reports/constant-comment.xlsx"
     shutil.copy2(application / "reports/constant.xlsx", constant_comment)
@@ -1155,7 +1196,14 @@ void main(string[] args) {
         multipleSheetsDuplicate = e.msg == "duplicate POI report sheet name";
     } assert(multipleSheetsDuplicate && z8_optional_require(P.m_orderedCount()) == 0);
     bool expandedMultipleSheets; try { P.m_expandedMultipleSheets(); } catch (Exception) { expandedMultipleSheets = true; } assert(expandedMultipleSheets);
-    assert(database.begins == 113 && database.rollbacks == 113);
+    bool cloneSheets; try { P.m_cloneSheets(); } catch (Exception) { cloneSheets = true; } assert(cloneSheets);
+    bool cloneUnsupported; try { P.m_cloneUnsupported(); } catch (Exception e) {
+        cloneUnsupported = e.msg == "POI report sheet cloning is unsupported for this workbook layout";
+    } assert(cloneUnsupported);
+    bool cloneSuffix; try { P.m_cloneSuffix(); } catch (Exception) { cloneSuffix = true; } assert(cloneSuffix);
+    bool cloneLong; try { P.m_cloneLong(); } catch (Exception) { cloneLong = true; } assert(cloneLong);
+    bool cloneExisting; try { P.m_cloneExisting(); } catch (Exception) { cloneExisting = true; } assert(cloneExisting);
+    assert(database.begins == 118 && database.rollbacks == 118);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -1168,14 +1216,15 @@ void main(string[] args) {
         bridge = ROOT / "xlsx/source"
         contents = harness.read_text(encoding="utf-8")
         contents = contents.replace("import z8.runtime;", "import z8.runtime;\nimport z8.xlsx.poi : z8_openxlsx_configure;")
-        contents = contents.replace("void main(string[] args) {", '''class CountingProvider : IZ8PoiProvider, IZ8PoiReportWriter, IZ8PoiReportExpander, IZ8PoiReportMergeWriter, IZ8PoiReportCellRemover {
+        contents = contents.replace("void main(string[] args) {", '''class CountingProvider : IZ8PoiProvider, IZ8PoiReportWriter, IZ8PoiReportExpander, IZ8PoiReportMergeWriter, IZ8PoiReportCellRemover, IZ8PoiReportSheetCloner {
     IZ8PoiProvider reader;
     IZ8PoiReportWriter writer;
     IZ8PoiReportExpander expander;
     IZ8PoiReportMergeWriter mergeWriter;
     IZ8PoiReportCellRemover remover;
+    IZ8PoiReportSheetCloner cloner;
     uint renames, hides, writes, expansions, merges;
-    this(IZ8PoiProvider provider) { reader = provider; writer = cast(IZ8PoiReportWriter)provider; expander = cast(IZ8PoiReportExpander)provider; mergeWriter = cast(IZ8PoiReportMergeWriter)provider; remover = cast(IZ8PoiReportCellRemover)provider; assert(writer !is null && expander !is null && mergeWriter !is null && remover !is null); }
+    this(IZ8PoiProvider provider) { reader = provider; writer = cast(IZ8PoiReportWriter)provider; expander = cast(IZ8PoiReportExpander)provider; mergeWriter = cast(IZ8PoiReportMergeWriter)provider; remover = cast(IZ8PoiReportCellRemover)provider; cloner = cast(IZ8PoiReportSheetCloner)provider; assert(writer !is null && expander !is null && mergeWriter !is null && remover !is null && cloner !is null); }
     IZ8PoiDocument open(const(ubyte)[] input) { return reader.open(input); }
     ubyte[] renameReportSheet(const(ubyte)[] input, uint index, wstring name) {
         auto result = writer.renameReportSheet(input, index, name);
@@ -1203,6 +1252,10 @@ void main(string[] args) {
                                       (cells[0].row == 3 && (cells[0].column == 0 || cells[0].column == 2)))) ||
                cells.length == 5 || cells.length == 4 || cells.length == 3 || cells.length == 2);
         return remover.removeReportCells(input, cells);
+    }
+    ubyte[] cloneReportSheets(const(ubyte)[] input, uint prototype, const(wstring)[] names) {
+        assert(prototype <= 1 && names.length == 2 && names[0] != names[1]);
+        return cloner.cloneReportSheets(input, prototype, names);
     }
 }
 void main(string[] args) {
@@ -1371,8 +1424,15 @@ void main(string[] args) {
         contents = contents.replace(
             'bool expandedMultipleSheets; try { P.m_expandedMultipleSheets(); } catch (Exception) { expandedMultipleSheets = true; } assert(expandedMultipleSheets);',
             'auto expandedMultipleSheets = P.m_expandedMultipleSheets(); copy(z8_file_resolve_path(expandedMultipleSheets), buildPath(args[2], "expanded-multi-sheet.xlsx"));')
-        contents = contents.replace('assert(database.begins == 113 && database.rollbacks == 113);',
-            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 37); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 38); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 39); assert(database.begins == 113 && database.rollbacks == 113);')
+        contents = contents.replace(
+            'bool cloneSheets; try { P.m_cloneSheets(); } catch (Exception) { cloneSheets = true; } assert(cloneSheets);',
+            'auto cloneSheets = P.m_cloneSheets(); copy(z8_file_resolve_path(cloneSheets), buildPath(args[2], "cloned-sheets.xlsx"));')
+        for variable, method, output in (("cloneSuffix", "cloneSuffix", "cloned-suffix"), ("cloneLong", "cloneLong", "cloned-long"), ("cloneExisting", "cloneExisting", "cloned-existing")):
+            contents = contents.replace(
+                'bool %s; try { P.m_%s(); } catch (Exception) { %s = true; } assert(%s);' % (variable, method, variable, variable),
+                'auto %s = P.m_%s(); copy(z8_file_resolve_path(%s), buildPath(args[2], "%s.xlsx"));' % (variable, method, variable, output))
+        contents = contents.replace('assert(database.begins == 118 && database.rollbacks == 118);',
+            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 37); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 38); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 39); assert(database.begins == 118 && database.rollbacks == 118);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1597,6 +1657,8 @@ class PoiRangeOracle {
       boolean horizontalFooterCase = horizontalHeaderCase || horizontalMultiFooterCase || (args.length > 3 && "expanded-horizontal-footer".equals(args[3]));
       boolean expandedMergedCase = args.length > 3 && ("expanded-merged".equals(args[3]) || "expanded-horizontal-merged".equals(args[3]) || "expanded-merged-formula".equals(args[3]));
       boolean expandedMultipleSheetCase = args.length > 3 && "expanded-multi-sheet".equals(args[3]);
+      boolean clonedExistingCase = args.length > 3 && "cloned-existing".equals(args[3]);
+      boolean clonedSheetsCase = clonedExistingCase || (args.length > 3 && ("cloned-sheets".equals(args[3]) || "cloned-suffix".equals(args[3]) || "cloned-long".equals(args[3])));
       boolean horizontalCase = emptyHorizontalFooterCase || horizontalFooterCase || (args.length > 3 && ("expanded-horizontal".equals(args[3]) || "expanded-horizontal-merged".equals(args[3])));
       boolean expandedEmptyCase = args.length > 3 && "expanded-empty".equals(args[3]);
       boolean jsonEmptyCase = args.length > 3 && "json-empty".equals(args[3]);
@@ -1721,7 +1783,12 @@ class PoiRangeOracle {
           .setBlock(emptySideFooterCase ? "A2:D2" : emptyHorizontalSideFooterCase ? "B1:C2" : emptyVerticalFooterCase ? "A1:D1" : headerFooterCase ? "A2:D2" : horizontalHeaderCase ? "B1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
           .setBoundaries(emptySideFooterCase ? "A1:E3" : emptyHorizontalSideFooterCase ? "A1:D3" : multiSideCase ? "A1:E4" : horizontalMultiSideCase ? "A1:G3" : emptyMultiFooterCase ? "A1:D4" : emptyHorizontalMultiFooterCase ? "A1:G2" : emptyVerticalFooterCase ? "A1:D2" : emptyHorizontalFooterCase ? "A1:C2" : headerFooterCase ? "A1:E3" : horizontalHeaderCase ? "A1:D3" : multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       if (horizontalCase) child.setAxis(1);
-      if (expandedMultipleSheetCase) {
+      if (clonedSheetsCase) {
+        int prototype = clonedExistingCase ? 1 : 0;
+        original.cloneSheet(prototype); original.cloneSheet(prototype); original.setSheetName(prototype + 2, "Final");
+        report.addRange(prototype + 2, new Range().setSource(SimpleSource.newDefault()).setBlock("A1").setBoundaries("A1"));
+        report.addRange(0, new Range().setSource(SimpleSource.newDefault()).setBlock("A1").setBoundaries("A1"));
+      } else if (expandedMultipleSheetCase) {
         report.addRange(1, new Range().setSource(orderedSources[1]).setBlock("A1").setBoundaries("A1"));
         report.addRange(0, child);
       } else if (multipleSheetCase) {
@@ -1737,13 +1804,24 @@ class PoiRangeOracle {
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier);
       if (multipleSheetCase) report.getRange(1).apply(modifier.setSheet(1));
+      if (clonedSheetsCase) { int lastSheet = clonedExistingCase ? 3 : 2; report.getRange(lastSheet).apply(modifier.setSheet(lastSheet)); }
       modifier.close();
       if (expandedMultipleSheetCase) {
         double expected = original.getSheetAt(1).getRow(0).getCell(0).getNumericCellValue();
         double result = actual.getSheetAt(1).getRow(0).getCell(0).getNumericCellValue();
         if (expected != 1 || expected != result) throw new AssertionError("second sheet value differs");
       }
-      if (multipleSheetCase && !expandedMultipleSheetCase) {
+      if (clonedSheetsCase) {
+        int count = clonedExistingCase ? 4 : 3;
+        if (original.getNumberOfSheets() != count || actual.getNumberOfSheets() != count) throw new AssertionError("cloned sheet count differs");
+        for (int sheet = 0; sheet < count; ++sheet) {
+          if (!original.getSheetName(sheet).equals(actual.getSheetName(sheet))) throw new AssertionError("cloned sheet name differs");
+          org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(sheet).getRow(0).getCell(0), result = actual.getSheetAt(sheet).getRow(0).getCell(0);
+          if (expected.getCellType() != result.getCellType() || (sheet > 0 && sheet < count - 1 ?
+              !expected.getStringCellValue().equals(result.getStringCellValue()) : expected.getNumericCellValue() != result.getNumericCellValue()))
+            throw new AssertionError("cloned sheet cell differs");
+        }
+      } else if (multipleSheetCase && !expandedMultipleSheetCase) {
         for (int sheet = 0; sheet < 2; ++sheet) {
           double expected = original.getSheetAt(sheet).getRow(0).getCell(0).getNumericCellValue();
           double result = actual.getSheetAt(sheet).getRow(0).getCell(0).getNumericCellValue();
@@ -1932,6 +2010,15 @@ class PoiRangeOracle {
                                          str(application / "reports/expanded-multi-sheet.xlsx"), str(working / "expanded-multi-sheet.xlsx"), str(config), "expanded-multi-sheet"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/constant.xlsx"), str(working / "cloned-sheets.xlsx"), str(config), "cloned-sheets"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                for source_name, name in (("clone-suffix", "cloned-suffix"), ("clone-long", "cloned-long"), ("clone-existing", "cloned-existing")):
+                    result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                             str(application / ("reports/" + source_name + ".xlsx")), str(working / (name + ".xlsx")), str(config), name],
+                                            cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                    assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/outside-range.xlsx"), str(working / "outside-range.xlsx"), str(config), "outside"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")

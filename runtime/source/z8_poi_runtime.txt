@@ -46,6 +46,10 @@ interface IZ8PoiReportMergeWriter {
 interface IZ8PoiReportCellRemover {
     ubyte[] removeReportCells(const(ubyte)[] input, const(Z8PoiCellRemoval)[] cells);
 }
+/// Optional worksheet cloning for simple report templates.
+interface IZ8PoiReportSheetCloner {
+    ubyte[] cloneReportSheets(const(ubyte)[] input, uint prototype, const(wstring)[] names);
+}
 /// The provider cannot read this workbook; try the built-in compatible reader.
 class Z8PoiUnsupportedWorkbook : Exception {
     this(string message) { super(message); }

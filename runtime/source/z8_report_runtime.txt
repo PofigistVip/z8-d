@@ -84,11 +84,34 @@ private Z8File z8_report_poi_run(Z8Object report, Z8ReportState state) {
     scope(exit) z8_binary_close(input);
     auto workbook = z8_poi_parse(input); // Fail on invalid templates before returning a file.
     int renameSheet; wstring renameName; Z8PoiCellEdit[] edits; Z8PoiCellCopy[] copies; Z8PoiMergedRegion[] addedMerges; Z8PoiCellRemoval[] removals;
-    ubyte[] renamedBytes; bool hasRenames;
+    ubyte[] preparedBytes; bool hasRenames, hasClones;
     if (state.ranges !is null) {
         auto ranges = state.ranges.view().z8_erased_data();
         Z8Object[] selected;
         for (long i; i < ranges.z8_size(); ++i) selected ~= z8_nonnull(cast(Z8Object)ranges.z8_get(i));
+        int lastSheet = -1;
+        foreach (range; selected) {
+            auto number = range.z8_get_attribute("sheet"w);
+            auto index = number is null ? 0 : number.to!int;
+            if (index < 0) throw new Exception("invalid POI report sheet");
+            if (index > lastSheet) lastSheet = index;
+        }
+        if (lastSheet >= workbook.sheets.length) {
+            if (!workbook.sheets.length || lastSheet >= 16) throw new Exception("POI report sheet expansion is not implemented");
+            import std.zip : ZipArchive;
+            preparedBytes = cast(ubyte[])read(z8_file_system_path(source));
+            if (!z8_poi_report_clone_safe(new ZipArchive(preparedBytes.dup), workbook))
+                throw new Exception("POI report sheet cloning is unsupported for this workbook layout");
+            IZ8PoiProvider provider;
+            synchronized (z8_poi_monitor) provider = z8_poi_provider;
+            auto cloner = cast(IZ8PoiReportSheetCloner)provider;
+            if (cloner is null) throw new Exception("POI report sheet cloning requires OpenXLSX support");
+            auto prototype = workbook.sheets.length - 1;
+            auto names = z8_poi_report_clone_names(workbook, cast(size_t)(lastSheet + 1) - workbook.sheets.length);
+            preparedBytes = cloner.cloneReportSheets(preparedBytes, cast(uint)prototype, names);
+            workbook = z8_poi_parse(new Z8Binary(preparedBytes.dup));
+            hasClones = true;
+        }
         // PoiReport.multiplySheets applies the first requested name for each
         // sheet before opening any range source.
         wstring[] sheetNames = new wstring[workbook.sheets.length];
@@ -105,9 +128,9 @@ private Z8File z8_report_poi_run(Z8Object report, Z8ReportState state) {
         if (usedCount > 1) foreach (index, selectedSheet; used)
             if (selectedSheet && index >= 16) throw new Exception("POI report sheet ordering is not implemented");
         if (hasRenames) {
-            renamedBytes = cast(ubyte[])read(z8_file_system_path(source));
+            if (!hasClones) preparedBytes = cast(ubyte[])read(z8_file_system_path(source));
             foreach (index, requested; sheetNames) if (named[index]) {
-                renamedBytes = z8_poi_report_rename_sheet(renamedBytes, workbook, cast(int)index, requested);
+                preparedBytes = z8_poi_report_rename_sheet(preparedBytes, workbook, cast(int)index, requested);
                 workbook.sheets[index].name = requested.length > 31 ? requested[0 .. 31] : requested;
             }
         }
@@ -120,9 +143,9 @@ private Z8File z8_report_poi_run(Z8Object report, Z8ReportState state) {
     auto day = z8_date_toString(z8_date_now(), "yyyy.MM.dd"w).to!string;
     auto target = buildPath(z8_file_working_root, "reports", day, z8_guid_to_string(z8_guid_create_random()).to!string, name ~ ".xlsx");
     mkdirRecurse(dirName(target));
-    if (!hasRenames && !edits.length && !copies.length && !addedMerges.length && !removals.length && (state.hiddenColumns is null || !state.hiddenColumns.z8_size())) copy(z8_file_system_path(source), target);
+    if (!hasRenames && !hasClones && !edits.length && !copies.length && !addedMerges.length && !removals.length && (state.hiddenColumns is null || !state.hiddenColumns.z8_size())) copy(z8_file_system_path(source), target);
     else {
-        auto bytes = hasRenames ? renamedBytes : cast(ubyte[])read(z8_file_system_path(source));
+        auto bytes = hasRenames || hasClones ? preparedBytes : cast(ubyte[])read(z8_file_system_path(source));
         if (edits.length || copies.length || addedMerges.length || removals.length) {
             IZ8PoiProvider provider;
             synchronized (z8_poi_monitor) provider = z8_poi_provider;

@@ -23,6 +23,74 @@ private bool z8_poi_report_openxlsx_safe(ZipArchive archive, size_t sheets, bool
     }
     return true;
 }
+
+// OpenXLSX clones worksheet XML but not related parts. Restrict report
+// cloning to simple workbooks whose sheet metadata is safe to duplicate.
+private bool z8_poi_report_clone_safe(ZipArchive archive, Z8PoiWorkbook workbook) {
+    import std.algorithm.searching : canFind, endsWith, startsWith;
+    if (!z8_poi_report_openxlsx_safe(archive, workbook.sheets.length, true)) return false;
+    foreach (sheet; workbook.sheets) foreach (row; sheet.rows) foreach (cell; row.cells) if (cell.hasFormula) return false;
+    try {
+        auto root = z8_poi_read_xml(archive, "xl/workbook.xml");
+        auto defined = root.child("definedNames"w);
+        if (defined !is null && defined.children.length) return false;
+        auto relationships = z8_poi_read_xml(archive, "xl/_rels/workbook.xml.rels");
+        foreach (relationship; relationships.children) if (z8_poi_xml_local(relationship.name) == "Relationship"w &&
+            relationship.attr("Type"w).endsWith("/worksheet"w)) {
+            auto target = z8_poi_resolve_path("xl/", relationship.attr("Target"w));
+            if (!target.startsWith("xl/worksheets/") || !target.endsWith(".xml")) return false;
+        }
+        foreach (name, member; archive.directory) {
+            if (name.endsWith(".rels") && name != "_rels/.rels" && name != "xl/_rels/workbook.xml.rels") return false;
+            if (!name.startsWith("xl/worksheets/") || !name.endsWith(".xml")) continue;
+            auto worksheet = z8_poi_read_xml(archive, name);
+            foreach (child; worksheet.children)
+                if (!["dimension"w, "sheetFormatPr"w, "cols"w, "sheetData"w, "mergeCells"w].canFind(z8_poi_xml_local(child.name))) return false;
+        }
+    } catch (Exception) return false;
+    return true;
+}
+
+// Match POI's generated names, including suffixes and the 31 UTF-16-unit limit.
+private wstring[] z8_poi_report_clone_names(Z8PoiWorkbook workbook, size_t count) {
+    import std.conv : ConvException;
+    import std.string : lastIndexOf;
+    wstring trimJava(wstring value) {
+        size_t first, last = value.length;
+        while (first < last && value[first] <= 0x20) ++first;
+        while (last > first && value[last - 1] <= 0x20) --last;
+        return value[first .. last];
+    }
+    auto base = workbook.sheets[$ - 1].name;
+    int next = 2;
+    auto opening = base.lastIndexOf('(');
+    if (opening > 0 && base.length && base[$ - 1] == ')') {
+        try {
+            auto number = trimJava(base[opening + 1 .. $ - 1]).to!int;
+            if (number == int.max) throw new Exception("POI report sheet suffix overflow");
+            next = number + 1; base = trimJava(base[0 .. opening]);
+        } catch (ConvException) { /* keep the original name */ }
+    }
+    wstring[] result;
+    while (result.length < count) {
+        if (next == int.max) throw new Exception("POI report sheet suffix overflow");
+        auto digits = (next++).to!wstring;
+        wstring candidate;
+        if (base.length + digits.length + 2 < 31) candidate = base ~ " ("w ~ digits ~ ")"w;
+        else {
+            if (digits.length + 2 > 31) throw new Exception("POI report sheet name is too long");
+            auto length = 31 - digits.length - 2;
+            if (length > base.length || (length && base[length - 1] >= 0xD800 && base[length - 1] <= 0xDBFF))
+                throw new Exception("POI report sheet name cannot be represented");
+            candidate = base[0 .. length] ~ "("w ~ digits ~ ")"w;
+        }
+        bool exists;
+        foreach (sheet; workbook.sheets) if (z8_str_compareNoCase(sheet.name, candidate) == 0) { exists = true; break; }
+        if (!exists) foreach (name; result) if (z8_str_compareNoCase(name, candidate) == 0) { exists = true; break; }
+        if (!exists) result ~= candidate;
+    }
+    return result;
+}
 private Z8PoiReportBlock z8_poi_report_block(wstring address) {
     import std.string : split;
     auto parts = z8_string_required(address).split(":"w);
@@ -778,7 +846,7 @@ private ubyte[] z8_poi_report_rename_sheet(const(ubyte)[] input, Z8PoiWorkbook w
     IZ8PoiProvider provider;
     synchronized (z8_poi_monitor) provider = z8_poi_provider;
     auto writer = cast(IZ8PoiReportWriter)provider;
-    if (writer !is null && !selected.name.canFind(':') && z8_poi_report_openxlsx_safe(archive, workbook.sheets.length)) {
+    if (writer !is null && !selected.name.canFind(':') && z8_poi_report_openxlsx_safe(archive, workbook.sheets.length, true)) {
         try return writer.renameReportSheet(input, cast(uint)index, name);
         catch (Z8PoiUnsupportedWorkbook) { /* retain compatibility with uncommon workbook layouts */ }
     }
