@@ -27,6 +27,14 @@ with tempfile.TemporaryDirectory() as directory:
     executable = temp / ("webapp.exe" if os.name == "nt" else "webapp")
     subprocess.run([sys.executable, str(root / "examples/webapp/build.py"), str(Path(sys.argv[1]).resolve()),
                     str(executable), "--postgres-bin", str(bin_dir)], check=True)
+    if os.name == "nt":
+        invalid_ldap = temp / "invalid-ldap.properties"
+        invalid_ldap.write_text("ldap.read.pageSize=-1\n", encoding="ascii")
+        env = dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ.get("PATH", ""))
+        failed = subprocess.run([str(executable), "unused", "public", "--config", str(invalid_ldap)],
+                                capture_output=True, text=True, env=env)
+        output = failed.stdout + failed.stderr
+        assert failed.returncode and "LDAP timeout and page size must be nonnegative" in output, (failed.returncode, output)
     public = temp / "public"
     config = temp / "custom.properties"
     config.write_text("web.server.http.port=19081\napplication.working.path=work\nstorage.path=storage-data\nstorage.path.format=yyyy/MM\nsecurity.log.file=logs/security.log\nweb.client.hashPassword=false\nfiles.saveOnDisk=true\nauth.fails.limit=2\nauth.fails.banSeconds=60\nauthority.center.session.onePerUser=true\nauthority.center.session.timeout=10\n", encoding="ascii")

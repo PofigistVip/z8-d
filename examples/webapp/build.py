@@ -52,6 +52,8 @@ with tempfile.TemporaryDirectory() as directory:
             str(root / "integrations/postgres_webserver/source/z8/integration/postgres_authority.d"),
             str(root / "examples/webapp/host.d"), str(civet), str(runtime), "-of=" + str(output)]
     args += [str(pg_bin.parent / "lib/libpq.lib")] if os.name == "nt" else ["-L-lpq", "-L-lpthread", "-L-ldl"]
+    if os.name == "nt":
+        args += ["-I" + str(root / "ldap/source"), str(root / "ldap/source/z8/ldap/windows.d")]
     response = temp / "dmd.rsp"
     response.write_text("\n".join('"' + arg.replace('"', r'\"') + '"' for arg in args) + "\n", encoding="utf-8")
     subprocess.run(["dmd", "@" + str(response)], cwd=temp, check=True)

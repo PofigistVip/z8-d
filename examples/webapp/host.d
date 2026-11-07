@@ -16,6 +16,7 @@ import z8.database.scheduler_service;
 import z8.integration.postgres_authority;
 import z8.webserver.civetweb;
 import z8gen.project_registry;
+version (Windows) import z8.ldap.windows : z8_windows_ldap_configure;
 
 class SchedulerObserver : IZ8SchedulerObserver {
     void onRuns(Z8ScheduledRun[] runs) { }
@@ -38,6 +39,7 @@ void main(string[] args) {
     }
     if (!configPath.length && exists("server.properties")) configPath = "server.properties";
     if (configPath.length) z8_server_configure_from_file(configPath);
+    version (Windows) z8_windows_ldap_configure();
     auto db = new Z8PostgresConnection(args[1]); scope(exit) db.close();
     auto schema = args[2].to!wstring;
     auto registry = new Z8RuntimeRegistry(); z8_register_project(registry);
