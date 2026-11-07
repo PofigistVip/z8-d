@@ -140,7 +140,7 @@ private Z8Object[] z8_poi_report_query_fields(Z8Object report, Z8Object query, Z
 }
 
 private void z8_poi_report_evaluate_cell(Z8EvalState state, Z8PoiWorkbook workbook, Z8PoiCell cell,
-                                         long sheet, long row, long column, ref Z8PoiCellEdit[] edits) {
+                                         long sheet, long row, long column, ref Z8PoiCellEdit[] edits, bool copied = false) {
     import std.algorithm.searching : canFind;
     import std.string : indexOf;
     auto firstEnd = cell.value.indexOf('}');
@@ -150,7 +150,7 @@ private void z8_poi_report_evaluate_cell(Z8EvalState state, Z8PoiWorkbook workbo
     edit.sheet = cast(uint)sheet; edit.row = cast(uint)row; edit.column = cast(uint)column;
     if (!single) {
         auto text = z8_eval_text_from_state(state, cell.value, true, true);
-        if (cell.kind == "inlineStr"w) return;
+        if (cell.kind == "inlineStr"w && !copied) return;
         edit.kind = Z8PoiCellEditKind.text; edit.text = text; edits ~= edit;
         return;
     }
@@ -165,7 +165,7 @@ private void z8_poi_report_evaluate_cell(Z8EvalState state, Z8PoiWorkbook workbo
     auto value = evaluated.primary;
     // POI 3.16 leaves an inline-string cell unchanged when assigning a
     // string result; numeric and boolean results replace its type.
-    if (cell.kind == "inlineStr"w && (value is null || value.kind == Z8PrimaryKind.text ||
+    if (cell.kind == "inlineStr"w && !copied && (value is null || value.kind == Z8PrimaryKind.text ||
         value.kind == Z8PrimaryKind.guid || value.kind == Z8PrimaryKind.datespan)) return;
     if (value is null) { edit.kind = Z8PoiCellEditKind.text; edit.text = ""w; }
     else switch (value.kind) {
@@ -254,8 +254,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                 if (column < block.firstColumn || column > block.lastColumn) continue;
                 hasTemplateCell = true;
                 if (!cell.safeCopy || cell.hasFormula || (cell.rawKind !is null && cell.rawKind != "s"w &&
-                    cell.rawKind != "inlineStr"w && cell.rawKind != "n"w && cell.rawKind != "b"w) ||
-                    (cell.rawKind == "inlineStr"w && cell.value.indexOf("${"w) >= 0))
+                    cell.rawKind != "inlineStr"w && cell.rawKind != "n"w && cell.rawKind != "b"w))
                     throw new Exception("POI report range expansion cell is not implemented");
                 copies ~= Z8PoiCellCopy(cast(uint)sheet, cast(uint)block.firstRow, cast(uint)column,
                                         cast(uint)targetRow, cast(uint)column);
@@ -274,7 +273,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                 cell.value.indexOf("${"w) < 0) continue;
             if (rowNumber < block.firstRow || rowNumber > block.lastRow ||
                 columnNumber < block.firstColumn || columnNumber > block.lastColumn) continue;
-            z8_poi_report_evaluate_cell(evalState, workbook, cell, sheet, rowNumber + iteration, columnNumber, edits);
+            z8_poi_report_evaluate_cell(evalState, workbook, cell, sheet, rowNumber + iteration, columnNumber, edits, iteration != 0);
         }
         ++iteration;
     } while (z8_report_source_next(source));

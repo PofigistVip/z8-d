@@ -90,6 +90,8 @@ public class StaticReportProbe {
     public static file expandedCustom() { ExpandedCustomReport report; return report.run(guid.Null); }
     public static file repeatRange() { RepeatRangeReport report; return report.run(guid.Null); }
     public static file jsonInlineRange() { JsonInlineRangeReport report; return report.run(guid.Null); }
+    public static file expandedInlineNumber() { ExpandedInlineNumberReport report; return report.run(guid.Null); }
+    public static file expandedInlineConstant() { ExpandedInlineConstantReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -253,7 +255,8 @@ public class MissingBoundariesReport extends Report {
     for name, template in (("ExpandedReport", "expanded"), ("ExpandedInlineReport", "expanded-inline"),
                            ("ExpandedOccupiedReport", "expanded-occupied"), ("ExpandedStaticReport", "expanded-static"),
                            ("ExpandedFormulaReport", "expanded-formula"), ("ExpandedMetadataReport", "expanded-metadata"),
-                           ("ExpandedRichReport", "expanded-rich")):
+                           ("ExpandedRichReport", "expanded-rich"), ("ExpandedInlineNumberReport", "expanded-inline-number"),
+                           ("ExpandedInlineConstantReport", "expanded-inline-constant")):
         (source / (name + ".bl")).write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.base.json.JsonObject;
@@ -499,7 +502,7 @@ public class %s extends Report {
         '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
         '<c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c>'
         '<c r="C1" s="0"><v>99</v></c><c r="D1" t="s"><v>2</v></c>')
-    for filename in ("expanded", "expanded-inline", "expanded-occupied", "expanded-static", "expanded-formula", "expanded-metadata", "expanded-rich"):
+    for filename in ("expanded", "expanded-inline", "expanded-occupied", "expanded-static", "expanded-formula", "expanded-metadata", "expanded-rich", "expanded-inline-number", "expanded-inline-constant"):
         book = dict(expanded)
         if filename == "expanded-inline":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace(
@@ -507,6 +510,12 @@ public class %s extends Report {
         if filename == "expanded-rich":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace(
                 '<c r="B1" t="s"><v>1</v></c>', '<c r="B1" t="inlineStr"><is><r><t>Rich </t></r><r><t>_x0041_</t></r></is></c>')
+        if filename == "expanded-inline-number":
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace(
+                '<c r="A1" t="s"><v>0</v></c>', '<c r="A1" t="inlineStr"><is><t>${rows.item.amount}</t></is></c>')
+        if filename == "expanded-inline-constant":
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace(
+                '<c r="B1" t="s"><v>1</v></c>', '<c r="B1" t="inlineStr"><is><t>${\'fixed\'}</t></is></c>')
         if filename == "expanded-occupied":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="2"><c r="A2"><v>77</v></c></row></sheetData>')
         if filename == "expanded-static":
@@ -718,7 +727,9 @@ void main(string[] args) {
     assert(database.begins == 65 && database.rollbacks == 65);
     bool repeat; try { P.m_repeatRange(); } catch (Exception) { repeat = true; } assert(repeat);
     bool jsonInline; try { P.m_jsonInlineRange(); } catch (Exception) { jsonInline = true; } assert(jsonInline);
-    assert(database.begins == 67 && database.rollbacks == 67);
+    bool inlineNumber; try { P.m_expandedInlineNumber(); } catch (Exception) { inlineNumber = true; } assert(inlineNumber);
+    bool inlineConstant; try { P.m_expandedInlineConstant(); } catch (Exception) { inlineConstant = true; } assert(inlineConstant);
+    assert(database.begins == 69 && database.rollbacks == 69);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -807,6 +818,12 @@ void main(string[] args) {
         contents = contents.replace(
             'bool repeat; try { P.m_repeatRange(); } catch (Exception) { repeat = true; } assert(repeat);',
             'auto repeat = P.m_repeatRange(); copy(z8_file_resolve_path(repeat), buildPath(args[2], "repeat.xlsx")); assert(counter.writes == 12);')
+        contents = contents.replace(
+            'bool inlineNumber; try { P.m_expandedInlineNumber(); } catch (Exception) { inlineNumber = true; } assert(inlineNumber);',
+            'auto inlineNumber = P.m_expandedInlineNumber(); copy(z8_file_resolve_path(inlineNumber), buildPath(args[2], "expanded-inline-number.xlsx")); assert(counter.expansions == 5);')
+        contents = contents.replace(
+            'bool inlineConstant; try { P.m_expandedInlineConstant(); } catch (Exception) { inlineConstant = true; } assert(inlineConstant);',
+            'auto inlineConstant = P.m_expandedInlineConstant(); copy(z8_file_resolve_path(inlineConstant), buildPath(args[2], "expanded-inline-constant.xlsx")); assert(counter.expansions == 6);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1219,7 +1236,7 @@ class PoiRangeOracle {
                                          str(application / "reports/expanded.xlsx"), str(working / "expanded.xlsx"), str(config), "expanded"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
-                for name in ("expanded-static", "expanded-rich"):
+                for name in ("expanded-static", "expanded-rich", "expanded-inline-number", "expanded-inline-constant"):
                     result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                              str(application / ("reports/" + name + ".xlsx")), str(working / (name + ".xlsx")), str(config), "expanded"],
                                             cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
