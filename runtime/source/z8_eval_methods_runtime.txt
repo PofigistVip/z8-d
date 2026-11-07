@@ -218,6 +218,10 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
     if (object.primary !is null && !arguments.length) {
         if (name == "hashCode"w) return Z8EvalValue(true, z8_primary_box(z8_primary_hash(object.primary)), null, null);
         if (name == "toString"w) return Z8EvalValue(true, z8_primary_box(z8_string_new(z8_primary_to_string(object.primary))), null, null);
+        if (name == "toNumber"w && object.primary.kind == Z8PrimaryKind.boolean)
+            return Z8EvalValue(true, z8_primary_box(z8_string_new(object.primary.booleanValue ? "1"w : "0"w)), null, null);
+        if (object.primary.kind == Z8PrimaryKind.guid && (name == "major"w || name == "minor"w))
+            return Z8EvalValue(true, z8_primary_box(name == "major"w ? z8_guid_major(object.primary.guidValue) : z8_guid_minor(object.primary.guidValue)), null, null);
         if (name == "get"w) {
             auto value = object.primary;
             if (value.kind == Z8PrimaryKind.boolean || value.kind == Z8PrimaryKind.guid) return Z8EvalValue(true, value, null, null);

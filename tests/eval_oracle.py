@@ -94,7 +94,7 @@ public class EvalOracle {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
         }
-        for (String pattern : new String[]{"${true.get()}", "${guid.create(42).get().toString()}", "${span.get()}", "${day.get().setDate(2023, 12, 31)}", "${day.year()}"}) {
+        for (String pattern : new String[]{"${true.get()}", "${true.toNumber()}", "${false.toNumber()}", "${guid.create(42).get().toString()}", "${guid.create(42).major()}", "${guid.create(42).minor()}", "${span.get()}", "${day.get().setDate(2023, 12, 31)}", "${day.year()}"}) {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
         }
@@ -207,7 +207,8 @@ void main() {
                        "${guid.parse('00000000-0000-0000-0000-000000000001').toString()}"w, "${'abc'.substring(missing)}"w,
                        "${missing.length()}"w, "${'abc'.substring(99)}"w, "${'abc'.substring('1')}"w])
         try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
-    foreach (pattern; ["${true.get()}"w, "${guid.create(42).get().toString()}"w, "${span.get()}"w,
+    foreach (pattern; ["${true.get()}"w, "${true.toNumber()}"w, "${false.toNumber()}"w, "${guid.create(42).get().toString()}"w,
+                       "${guid.create(42).major()}"w, "${guid.create(42).minor()}"w, "${span.get()}"w,
                        "${day.get().setDate(2023, 12, 31)}"w, "${day.year()}"w])
         try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
     foreach (pattern; ["${1.25.abs()}"w, "${(-7).abs()}"w, "${(-7).signum()}"w, "${(5).not()}"w, "${(5).and(3)}"w,
