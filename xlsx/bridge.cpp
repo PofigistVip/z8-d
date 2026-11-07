@@ -184,7 +184,7 @@ void copyString(const std::string& value, char* buffer, size_t capacity, size_t*
 }
 
 Z8_EXPORT const char* z8_xlsx_error() noexcept { return error.c_str(); }
-Z8_EXPORT unsigned z8_xlsx_abi_version() noexcept { return 1; }
+Z8_EXPORT unsigned z8_xlsx_abi_version() noexcept { return 2; }
 
 Z8_EXPORT int z8_xlsx_open(const char* path, void** result) noexcept {
     return protect([&] {
@@ -376,6 +376,17 @@ Z8_EXPORT int z8_xlsx_set_cell_boolean(void* handle, unsigned sheet, unsigned ro
         auto cell = page.cell(row + 1, static_cast<uint16_t>(column + 1));
         cell.formula().clear();
         cell.value().set(value != 0);
+    });
+}
+
+Z8_EXPORT int z8_xlsx_copy_cell(void* handle, unsigned sheet, unsigned sourceRow, unsigned sourceColumn,
+                                unsigned targetRow, unsigned targetColumn) noexcept {
+    return protect([&] {
+        if (targetRow >= 1048576 || targetColumn >= 16384) throw std::out_of_range("cell index out of bounds");
+        auto source = requireCell(handle, sheet, sourceRow, sourceColumn);
+        auto page = worksheet(handle, sheet);
+        auto target = page.cell(targetRow + 1, static_cast<uint16_t>(targetColumn + 1));
+        target.copyFrom(source);
     });
 }
 
