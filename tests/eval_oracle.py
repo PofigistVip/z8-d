@@ -172,6 +172,10 @@ public class EvalOracle {
         for (String expression : new String[]{"string.concat('a,b'.split(','), '-') == 'a-b'", "string.concat('a,b'.split(','), '') == 'ab'", "string.concat(''.split(','), '-') == ''", "'x'.concat('a,b'.split(','), '-') == 'a-b'", "string.fromBinary('hello'.binary()) == 'hello'", "string.fromBinary('Привет'.binary()) == 'Привет'", "string.concat('a', '-') == 'a'", "string.fromBinary('a') == 'a'"})
             try { System.out.println(jsonEval.z8_evaluateBoolean(new string(expression)).get()); }
             catch (Exception error) { System.out.println("error"); }
+        jsonEval.z8_setVariable(new string("subject"), new string("ab a"));
+        for (String pattern : new String[]{"${subject.next()}", "${subject.setupMatcher('(a)(b)?')}", "${subject.next()}", "${subject.getGroup(0)}", "${subject.getGroup(1)}", "${subject.getGroup(2)}", "${subject.next()}", "${subject.getGroup(0)}", "${subject.getGroup(2)}", "${subject.next()}", "${subject.getGroup(0)}", "${subject.setupMatcher(nil)}", "${subject.next()}"})
+            try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
+            catch (Exception error) { System.out.println("error"); }
     }
 }
 ''', encoding="utf-8")
@@ -366,6 +370,10 @@ void main() {
     writeln(jsonEval.m_evaluateText("value=${pattern.format('a,b'.split(','))}"w).to!string);
     foreach (expression; ["string.concat('a,b'.split(','), '-') == 'a-b'"w, "string.concat('a,b'.split(','), '') == 'ab'"w, "string.concat(''.split(','), '-') == ''"w, "'x'.concat('a,b'.split(','), '-') == 'a-b'"w, "string.fromBinary('hello'.binary()) == 'hello'"w, "string.fromBinary('Привет'.binary()) == 'Привет'"w, "string.concat('a', '-') == 'a'"w, "string.fromBinary('a') == 'a'"w])
         try { writeln(z8_optional_require(jsonEval.m_evaluateBoolean(expression))); }
+        catch (Exception) { writeln("error"); }
+    jsonEval.m_setVariable("subject"w, z8_primary_box("ab a"w));
+    foreach (pattern; ["${subject.next()}"w, "${subject.setupMatcher('(a)(b)?')}"w, "${subject.next()}"w, "${subject.getGroup(0)}"w, "${subject.getGroup(1)}"w, "${subject.getGroup(2)}"w, "${subject.next()}"w, "${subject.getGroup(0)}"w, "${subject.getGroup(2)}"w, "${subject.next()}"w, "${subject.getGroup(0)}"w, "${subject.setupMatcher(nil)}"w, "${subject.next()}"w])
+        try { writeln(jsonEval.m_evaluateText(pattern).to!string); }
         catch (Exception) { writeln("error"); }
 }
 ''', encoding="utf-8")
