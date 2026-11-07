@@ -340,13 +340,17 @@ class Z8Array(T) {
                 // For a homogeneous, non-null array these comparators are
                 // stable and side-effect free. Mixed arrays and datespans need
                 // Java's full TimSort comparison sequence instead.
-                auto first = z8_nonnull(values[0]);
+                bool leadingNull = values[0] is null;
+                auto first = z8_nonnull(values[leadingNull ? 1 : 0]);
+                if (leadingNull && first.kind != Z8PrimaryKind.binary && first.kind != Z8PrimaryKind.file)
+                    throw new Exception("large mixed primary array sort is not implemented");
                 if (first.kind == Z8PrimaryKind.datespan || first.kind == Z8PrimaryKind.user)
                     throw new Exception("large primary array sort is not implemented for this type");
                 long minimum, maximum;
                 if (first.kind == Z8PrimaryKind.integer) minimum = maximum = first.integerValue;
                 if (first.kind == Z8PrimaryKind.date) minimum = maximum = z8_date_ticks(first.dateValue);
-                foreach (value; values) {
+                foreach (index, value; values) {
+                    if (leadingNull && index == 0) continue;
                     if (value is null || value.kind != first.kind) throw new Exception("large mixed primary array sort is not implemented");
                     if (value.kind == Z8PrimaryKind.geometry && value.geometryValue.rawHex is null && value.geometryValue.shape == -1)
                         throw new Exception("empty geometry array element");
@@ -360,7 +364,8 @@ class Z8Array(T) {
                     cast(ulong)maximum - cast(ulong)minimum > cast(ulong)long.max)
                     throw new Exception("large primary array sort with overflowing comparison is not implemented");
                 scope(failure) items = values;
-                sort!((a, b) => z8_primary_sort_compare(a, b) < 0, SwapStrategy.stable)(values);
+                if (first.kind != Z8PrimaryKind.binary && first.kind != Z8PrimaryKind.file)
+                    sort!((a, b) => z8_primary_sort_compare(a, b) < 0, SwapStrategy.stable)(values);
             }
             items = values; ++z8_version;
             return this;
@@ -417,8 +422,11 @@ class Z8Array(T) {
                 scope(failure) storeValues();
                 z8_java_short_sort!(T, compare)(values);
             } else {
-                foreach (value; values) {
-                    if (value is null) throw new Exception("null array element");
+                foreach (index, value; values) {
+                    if (value is null) {
+                        static if (is(T == Z8Binary) || is(T == Z8File)) { if (index == 0) continue; }
+                        throw new Exception("null array element");
+                    }
                     static if (is(T == Z8Geometry)) if (value.rawHex is null && value.shape == -1)
                         throw new Exception("empty geometry array element");
                 }

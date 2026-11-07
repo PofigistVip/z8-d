@@ -25,6 +25,12 @@ void check(T)(T first, T second) {
     assert(z8_primary_cast!T(view.z8_get(0)) is second);
     auto leading = new Z8Array!T([null, first]); assert(leading.z8_sort() is leading && leading.z8_get(0) is null);
     auto invalid = new Z8Array!T([first, null]); assertThrown!Exception(invalid.z8_sort());
+    auto large = new Z8Array!T(); large.z8_add(null);
+    foreach (i; 0 .. 64) large.z8_add(i % 2 ? first : second);
+    assert(large.z8_sort() is large && large.z8_get(0) is null);
+    auto largeView = z8_primary_array_view(large); largeView.z8_sort();
+    foreach (i; 1 .. 65) assert(large.z8_get(i) is ((i - 1) % 2 ? first : second));
+    large.z8_add(null); assertThrown!Exception(large.z8_sort()); assertThrown!Exception(largeView.z8_sort());
 }
 void main() {
     check(z8_binary_literal("1"), z8_binary_literal("2"));
@@ -53,6 +59,11 @@ class BinaryFileSortOracle {
     leading.z8_sort(); if (leading.get(0) != null || leading.get(1) != first) throw new AssertionError("leading null");
     RCollection<T> invalid = new RCollection<>(); invalid.add(first); invalid.add(null);
     try { invalid.z8_sort(); throw new AssertionError("null accepted"); } catch (NullPointerException expected) {}
+    RCollection<T> large = new RCollection<>(); large.add(null);
+    for (int i = 0; i < 64; ++i) large.add(i % 2 == 0 ? second : first);
+    large.z8_sort(); if (large.get(0) != null) throw new AssertionError("large leading null");
+    for (int i = 1; i < 65; ++i) if (large.get(i) != ((i - 1) % 2 == 0 ? second : first)) throw new AssertionError("large order");
+    large.add(null); try { large.z8_sort(); throw new AssertionError("large null accepted"); } catch (NullPointerException expected) {}
   }
   public static void main(String[] args) throws Exception {
     org.zenframework.z8.server.config.ServerConfig.load(args[0]);
