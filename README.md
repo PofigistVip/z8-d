@@ -140,6 +140,7 @@ python tests/primary_both_map_widening.py
 python tests/primary_nested_map_views.py
 python tests/primary_nested_string_map_views.py
 python tests/primary_nested_scalar_map_views.py
+python tests/primary_nested_reference_map_views.py
 python tests/primary_reference_key_map_views.py
 python tests/primary_reference_key_widening.py
 python tests/primary_key_covariant_values.py

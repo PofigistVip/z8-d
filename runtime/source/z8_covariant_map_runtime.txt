@@ -280,3 +280,15 @@ if ((is(K == long) || is(K == bool) || is(K == Z8Decimal)) && is(V : Z8Object)) 
     if (values is null) return null;
     auto result = new Z8ScalarKeyMap!(K, Z8Array!Z8Primary)(); result.nestedData = values.data; return result;
 }
+
+Z8GuidMap!(Z8Array!Z8Primary) z8_primary_nested_map_view(V)(
+    Z8CovariantMap!(Z8Guid, Z8ObjectArray!V, Z8GuidMap!Object, false, true) values) if (is(V : Z8Object)) {
+    if (values is null) return null;
+    auto result = new Z8GuidMap!(Z8Array!Z8Primary)(); result.entries.nestedData = values.data.entries; return result;
+}
+Z8ReferenceKeyMap!(K, Z8Array!Z8Primary) z8_primary_nested_map_view(K, V)(
+    Z8CovariantMap!(K, Z8ObjectArray!V, Z8ReferenceKeyMap!(K, Object), false, true) values)
+if ((is(K == Z8Date) || is(K == Z8Datespan) || is(K == Z8Binary) || is(K == Z8Geometry) || is(K == Z8File)) && is(V : Z8Object)) {
+    if (values is null) return null;
+    auto result = new Z8ReferenceKeyMap!(K, Z8Array!Z8Primary)(); result.entries.nestedData = values.data.entries; return result;
+}

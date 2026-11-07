@@ -6,6 +6,17 @@ class Z8ReferenceKeyMap(K, V) {
     this() { entries = new Z8PrimaryKeyMap!V(); }
     override bool opEquals(Object other) {
         auto right = cast(Z8ReferenceKeyMap!(K, V))other;
+        static if (Z8PrimaryKeyMap!V.shareNestedPrimary) {
+            auto nestedPrimary = cast(Z8ReferenceKeyMap!(K, Z8Array!Z8Primary))other;
+            if (nestedPrimary !is null) return entries.opEquals(nestedPrimary.entries);
+            static if (is(V == Z8Array!Z8Primary)) {
+                import std.meta : AliasSeq;
+                static foreach (NestedValue; AliasSeq!(long, bool, Z8Decimal, wstring, Z8Guid, Z8Binary, Z8Datespan, Z8Date, Z8Geometry, Z8File)) {{
+                    auto typed = cast(Z8ReferenceKeyMap!(K, Z8Array!NestedValue))other;
+                    if (typed !is null) return entries.opEquals(typed.entries);
+                }}
+            }
+        }
         auto primaryKeys = cast(Z8PrimaryKeyMap!V)other;
         if (primaryKeys !is null) return entries.opEquals(primaryKeys);
         static if (Z8PrimaryKeyMap!V.sharePrimary) {
@@ -62,4 +73,10 @@ if (Z8PrimaryKeyMap!V.sharePrimary) {
 
 Z8PrimaryKeyMap!V z8_primary_key_map_view(K, V)(Z8ReferenceKeyMap!(K, V) values) {
     return values is null ? null : values.entries;
+}
+
+Z8ReferenceKeyMap!(K, Z8Array!Z8Primary) z8_primary_nested_map_view(K, T)(Z8ReferenceKeyMap!(K, Z8Array!T) values)
+if (Z8PrimaryKeyMap!(Z8Array!T).shareNestedPrimary) {
+    if (values is null) return null;
+    auto result = new Z8ReferenceKeyMap!(K, Z8Array!Z8Primary)(); result.entries = z8_primary_nested_map_view(values.entries); return result;
 }
