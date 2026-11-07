@@ -124,6 +124,8 @@ public class StaticReportProbe {
     public static file expandedHorizontalSideConflict() { ExpandedHorizontalSideConflictReport report; return report.run(guid.Null); }
     public static file multipleSheets() { MultipleSheetReport report; return report.run(guid.Null); }
     public static file multipleSheetsRename() { MultipleSheetRenameReport report; return report.run(guid.Null); }
+    public static file multipleSheetsBothRename() { MultipleSheetBothRenameReport report; return report.run(guid.Null); }
+    public static file multipleSheetsDuplicate() { MultipleSheetDuplicateReport report; return report.run(guid.Null); }
     public static int orderedCount() { return OrderedRows.sequence; }
     public static file expandedMultipleSheets() { ExpandedMultipleSheetReport report; return report.run(guid.Null); }
     public static file emptyFooter() { EmptyFooterReport report; return report.run(guid.Null); }
@@ -304,6 +306,13 @@ public class MultipleSheetReport extends Report {
     (source / "MultipleSheetRenameReport.bl").write_text(
         (source / "MultipleSheetReport.bl").read_text(encoding="utf-8")
         .replace("MultipleSheetReport", "MultipleSheetRenameReport").replace('[sheet "1"]', '[sheet "1"] [sheetName "Renamed"]'), encoding="utf-8")
+    (source / "MultipleSheetBothRenameReport.bl").write_text(
+        (source / "MultipleSheetReport.bl").read_text(encoding="utf-8")
+        .replace("MultipleSheetReport", "MultipleSheetBothRenameReport").replace('[sheet "0"]', '[sheet "0"] [sheetName "First renamed"]')
+        .replace('[sheet "1"]', '[sheet "1"] [sheetName "Second renamed"]'), encoding="utf-8")
+    (source / "MultipleSheetDuplicateReport.bl").write_text(
+        (source / "MultipleSheetReport.bl").read_text(encoding="utf-8")
+        .replace("MultipleSheetReport", "MultipleSheetDuplicateReport").replace('[sheet "1"]', '[sheet "1"] [sheetName "Sheet1"]'), encoding="utf-8")
     (source / "MissingBoundariesReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 public class MissingBoundariesReport extends Report {
@@ -1140,11 +1149,13 @@ void main(string[] args) {
     bool emptySideFooter; try { P.m_emptySideFooter(); } catch (Exception) { emptySideFooter = true; } assert(emptySideFooter);
     bool emptyHorizontalSideFooter; try { P.m_emptyHorizontalSideFooter(); } catch (Exception) { emptyHorizontalSideFooter = true; } assert(emptyHorizontalSideFooter);
     bool multipleSheets; try { P.m_multipleSheets(); } catch (Exception) { multipleSheets = true; } assert(multipleSheets);
-    bool multipleSheetsRename; try { P.m_multipleSheetsRename(); } catch (Exception e) {
-        multipleSheetsRename = e.msg == "multiple-sheet POI report renaming is not implemented";
-    } assert(multipleSheetsRename && z8_optional_require(P.m_orderedCount()) == 0);
+    bool multipleSheetsRename; try { P.m_multipleSheetsRename(); } catch (Exception) { multipleSheetsRename = true; } assert(multipleSheetsRename);
+    bool multipleSheetsBothRename; try { P.m_multipleSheetsBothRename(); } catch (Exception) { multipleSheetsBothRename = true; } assert(multipleSheetsBothRename);
+    bool multipleSheetsDuplicate; try { P.m_multipleSheetsDuplicate(); } catch (Exception e) {
+        multipleSheetsDuplicate = e.msg == "duplicate POI report sheet name";
+    } assert(multipleSheetsDuplicate && z8_optional_require(P.m_orderedCount()) == 0);
     bool expandedMultipleSheets; try { P.m_expandedMultipleSheets(); } catch (Exception) { expandedMultipleSheets = true; } assert(expandedMultipleSheets);
-    assert(database.begins == 111 && database.rollbacks == 111);
+    assert(database.begins == 113 && database.rollbacks == 113);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -1352,10 +1363,16 @@ void main(string[] args) {
             'bool multipleSheets; try { P.m_multipleSheets(); } catch (Exception) { multipleSheets = true; } assert(multipleSheets);',
             'auto multipleSheets = P.m_multipleSheets(); copy(z8_file_resolve_path(multipleSheets), buildPath(args[2], "multi-sheet.xlsx"));')
         contents = contents.replace(
+            'bool multipleSheetsRename; try { P.m_multipleSheetsRename(); } catch (Exception) { multipleSheetsRename = true; } assert(multipleSheetsRename);',
+            'auto multipleSheetsRename = P.m_multipleSheetsRename(); copy(z8_file_resolve_path(multipleSheetsRename), buildPath(args[2], "multi-sheet-rename.xlsx"));')
+        contents = contents.replace(
+            'bool multipleSheetsBothRename; try { P.m_multipleSheetsBothRename(); } catch (Exception) { multipleSheetsBothRename = true; } assert(multipleSheetsBothRename);',
+            'auto multipleSheetsBothRename = P.m_multipleSheetsBothRename(); copy(z8_file_resolve_path(multipleSheetsBothRename), buildPath(args[2], "multi-sheet-both-rename.xlsx"));')
+        contents = contents.replace(
             'bool expandedMultipleSheets; try { P.m_expandedMultipleSheets(); } catch (Exception) { expandedMultipleSheets = true; } assert(expandedMultipleSheets);',
             'auto expandedMultipleSheets = P.m_expandedMultipleSheets(); copy(z8_file_resolve_path(expandedMultipleSheets), buildPath(args[2], "expanded-multi-sheet.xlsx"));')
-        contents = contents.replace('assert(database.begins == 111 && database.rollbacks == 111);',
-            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 37); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 38); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 39); assert(database.begins == 111 && database.rollbacks == 111);')
+        contents = contents.replace('assert(database.begins == 113 && database.rollbacks == 113);',
+            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 37); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 38); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 39); assert(database.begins == 113 && database.rollbacks == 113);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1591,7 +1608,9 @@ class PoiRangeOracle {
       boolean jsonCase = emptyFooterCase || jsonEmptyCase || jsonInlineCase || (expandedCase && !expandedCustomCase) || (args.length > 3 && "json".equals(args[3]));
       boolean queryCase = args.length > 3 && "query".equals(args[3]);
       boolean outsideCase = args.length > 3 && "outside".equals(args[3]);
-      boolean multipleSheetCase = expandedMultipleSheetCase || (args.length > 3 && "multi-sheet".equals(args[3]));
+      boolean multiSheetRenameCase = args.length > 3 && "multi-sheet-rename".equals(args[3]);
+      boolean multiSheetBothRenameCase = args.length > 3 && "multi-sheet-both-rename".equals(args[3]);
+      boolean multipleSheetCase = expandedMultipleSheetCase || multiSheetRenameCase || multiSheetBothRenameCase || (args.length > 3 && "multi-sheet".equals(args[3]));
       boolean multipleCase = multipleSheetCase || outsideCase || (args.length > 3 && "multiple".equals(args[3]));
       DataSource customSource = null;
       DataSource[] orderedSources = new DataSource[2];
@@ -1713,6 +1732,8 @@ class PoiRangeOracle {
         report.addRange(0, new Range().setSource(orderedSources[0]).setBlock("A1").setBoundaries("A1"));
       } else report.addRange(0, child);
       if (args.length > 3 && "rename".equals(args[3])) original.setSheetName(0, "Отчёт \\uD83D\\uDE00");
+      if (multiSheetRenameCase) original.setSheetName(1, "Renamed");
+      if (multiSheetBothRenameCase) { original.setSheetName(0, "First renamed"); original.setSheetName(1, "Second renamed"); }
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier);
       if (multipleSheetCase) report.getRange(1).apply(modifier.setSheet(1));
@@ -1835,6 +1856,7 @@ class PoiRangeOracle {
         if (expected.size() != 3 || !expected.equals(result)) throw new AssertionError("expanded merged regions: " + expected + " != " + result);
       }
       if (!original.getSheetName(0).equals(actual.getSheetName(0))) throw new AssertionError("sheet name differs");
+      if (multipleSheetCase && !original.getSheetName(1).equals(actual.getSheetName(1))) throw new AssertionError("second sheet name differs");
     } finally { ApplicationServer.setRequest(null); }
   }
 }''', encoding="utf-8")
@@ -1901,6 +1923,11 @@ class PoiRangeOracle {
                                          str(application / "reports/multi-sheet.xlsx"), str(working / "multi-sheet.xlsx"), str(config), "multi-sheet"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
+                for name in ("multi-sheet-rename", "multi-sheet-both-rename"):
+                    result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                             str(application / "reports/multi-sheet.xlsx"), str(working / (name + ".xlsx")), str(config), name],
+                                            cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                    assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/expanded-multi-sheet.xlsx"), str(working / "expanded-multi-sheet.xlsx"), str(config), "expanded-multi-sheet"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")

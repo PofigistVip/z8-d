@@ -684,8 +684,6 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
             // Java iterates integer sheet keys using a HashMap. Restrict the
             // supported indices to the range whose order is always ascending.
             if (index >= 16) throw new Exception("POI report sheet ordering is not implemented");
-            foreach (range; group) if (range.z8_get_attribute("sheetName"w) !is null)
-                throw new Exception("multiple-sheet POI report renaming is not implemented");
         }
         foreach (index, group; bySheet) {
             if (!group.length) continue;
