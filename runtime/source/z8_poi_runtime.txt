@@ -26,11 +26,16 @@ struct Z8PoiCellEdit {
     double number;
     bool booleanValue;
 }
+struct Z8PoiCellCopy { uint sheet, sourceRow, sourceColumn, targetRow, targetColumn; }
 /// Optional report mutations supported by the registered workbook provider.
 interface IZ8PoiReportWriter {
     ubyte[] renameReportSheet(const(ubyte)[] input, uint index, wstring name);
     ubyte[] hideReportColumns(const(ubyte)[] input, const(Z8PoiHiddenColumn)[] columns);
     ubyte[] writeReportCells(const(ubyte)[] input, const(Z8PoiCellEdit)[] cells);
+}
+/// Optional capability for copying template cells before writing report values.
+interface IZ8PoiReportExpander {
+    ubyte[] writeExpandedReport(const(ubyte)[] input, const(Z8PoiCellCopy)[] copies, const(Z8PoiCellEdit)[] cells);
 }
 /// The provider cannot read this workbook; try the built-in compatible reader.
 class Z8PoiUnsupportedWorkbook : Exception {
@@ -125,7 +130,7 @@ private wstring z8_poi_rich_text(Z8PoiXmlNode value) {
     if (!hasRuns) { auto text = value.child("t"w); if (text !is null) result = text.allText(); }
     return z8_poi_decode_text(result);
 }
-private class Z8PoiCell { wstring kind, value, formula, sharedId; bool hasFormula, unresolvedSharedFormula; long row, column; }
+private class Z8PoiCell { wstring kind, rawKind, value, formula, sharedId; bool hasFormula, unresolvedSharedFormula, safeCopy; long row, column; }
 private class Z8PoiRow { Z8PoiCell[long] cells; }
 private class Z8PoiSheet { Z8PoiRow[long] rows; wstring name; bool hasMergedRegions; }
 private class Z8PoiWorkbook { Z8PoiSheet[] sheets; bool date1904; }
@@ -430,7 +435,11 @@ private Z8PoiWorkbook z8_poi_parse(Z8Binary input) {
             foreach (cellNode; rowNode.children) if (z8_poi_xml_local(cellNode.name) == "c"w) {
                 auto column = z8_poi_cell_column(cellNode.attr("r"w), nextColumn); nextColumn = column + 1;
                 if (column in row.cells) throw new Exception("duplicate XLSX cell");
-                auto cell = new Z8PoiCell(); cell.kind = cellNode.attr("t"w);
+                auto cell = new Z8PoiCell(); cell.kind = cell.rawKind = cellNode.attr("t"w);
+                cell.safeCopy = true;
+                foreach (attribute, ignored; cellNode.attributes)
+                    if (attribute != "r"w && attribute != "s"w && attribute != "t"w) cell.safeCopy = false;
+                foreach (child; cellNode.children) if (z8_poi_xml_local(child.name) != "v"w) cell.safeCopy = false;
                 auto formula = cellNode.child("f"w); cell.hasFormula = formula !is null;
                 if (formula !is null) {
                     cell.formula = formula.allText();

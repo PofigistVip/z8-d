@@ -1,4 +1,4 @@
-"""Run a one-row query-backed POI report against PostgreSQL and OpenXLSX."""
+"""Run query-backed POI reports against PostgreSQL and OpenXLSX."""
 from pathlib import Path
 import os
 import shutil
@@ -28,6 +28,7 @@ import org.zenframework.z8.base.table.value.Field;
 import org.zenframework.z8.base.table.value.IntField;
 public class ReportRows extends Table {
     [name "Amount"] public IntField amount;
+    sortFields = {amount};
     public void start() { Field[] fields = {amount}; read(fields); }
     public bool advance() { return next(); }
     public int value() { return amount.get(); }
@@ -45,11 +46,12 @@ public class QueryReport extends Report {
     (app / "reports").mkdir(parents=True)
     work.mkdir()
     entries = {
-        "[Content_Types].xml": '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>',
+        "[Content_Types].xml": '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/></Types>',
         "_rels/.rels": '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
         "xl/workbook.xml": '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>',
-        "xl/_rels/workbook.xml.rels": '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
-        "xl/worksheets/sheet1.xml": '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>${rows.amount}</t></is></c><c r="B1" t="inlineStr"><is><t>${rows.amount + 1}</t></is></c></row></sheetData></worksheet>',
+        "xl/_rels/workbook.xml.rels": '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>',
+        "xl/sharedStrings.xml": '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="2" uniqueCount="2"><si><t>${rows.amount}</t></si><si><t>${rows.amount + 1}</t></si></sst>',
+        "xl/worksheets/sheet1.xml": '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row></sheetData></worksheet>',
     }
     with zipfile.ZipFile(app / "reports/query.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in entries.items():
@@ -80,7 +82,7 @@ void main(string[] args) {
     auto result = report.m_generate(); copy(z8_file_resolve_path(result), args[4]);
     assert(z8_optional_require(table.m_value()) == 42);
     db.execute(`INSERT INTO "report_test"."ReportRows" ("RecordId", "Amount") VALUES ('00000000-0000-0000-0000-000000000012', 70)`);
-    bool multiple; try { report.m_generate(); } catch (Exception) { multiple = true; } assert(multiple);
+    auto expanded = report.m_generate(); copy(z8_file_resolve_path(expanded), args[5]);
     assert(z8_optional_require(table.m_value()) == 42);
 }''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -97,12 +99,14 @@ void main(string[] args) {
     response.write_text("\n".join('"' + arg.replace('\\', '/') + '"' for arg in args), encoding="utf-8")
     subprocess.run(["dmd", "@" + str(response)], cwd=temp, check=True)
     output = temp / "result.xlsx"
+    expanded_output = temp / "expanded.xlsx"
     with temporary_postgres(bin_dir) as (connection, environment):
         if os.name != "nt":
             environment["LD_LIBRARY_PATH"] = str(bridge) + os.pathsep + environment.get("LD_LIBRARY_PATH", "")
-        subprocess.run([str(executable), connection, str(app), str(work), str(output)], env=environment, cwd=temp, check=True)
-    with zipfile.ZipFile(output) as archive:
-        sheet = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
-        ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
-        assert [float(c.find("x:v", ns).text) for c in sheet.findall("x:sheetData/x:row/x:c", ns)] == [42, 43]
+        subprocess.run([str(executable), connection, str(app), str(work), str(output), str(expanded_output)], env=environment, cwd=temp, check=True)
+    for path, expected in ((output, [42, 43]), (expanded_output, [42, 43, 70, 71])):
+        with zipfile.ZipFile(path) as archive:
+            sheet = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+            ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+            assert [float(c.find("x:v", ns).text) for c in sheet.findall("x:sheetData/x:row/x:c", ns)] == expected
 print("PostgreSQL query report values and cursor restoration verified")

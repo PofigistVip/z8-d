@@ -184,7 +184,8 @@ private void z8_poi_report_evaluate_cell(Z8EvalState state, Z8PoiWorkbook workbo
 
 // Apply a single, non-expanding source to the selected report block.
 private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z8PoiWorkbook workbook,
-                                              out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits) {
+                                              out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits,
+                                              out Z8PoiCellCopy[] copies, bool allowExpansion = false) {
     import std.string : indexOf;
     range = z8_nonnull(range); range.z8_ensure();
     auto rangeState = z8_report_range_state(range);
@@ -233,14 +234,43 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     auto request = z8_application_request();
     if (request !is null && request.parameters !is null)
         evalState.variables["parameters"w] = Z8EvalVariable(null, null, request.parameters);
-    foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells) {
-        if (cell.hasFormula || (cell.kind != "str"w && cell.kind != "inlineStr"w) ||
-            cell.value.indexOf("${"w) < 0) continue;
-        if (rowNumber < block.firstRow || rowNumber > block.lastRow ||
-            columnNumber < block.firstColumn || columnNumber > block.lastColumn) continue;
-        z8_poi_report_evaluate_cell(evalState, workbook, cell, sheet, rowNumber, columnNumber, edits);
-    }
-    if (z8_report_source_next(source)) throw new Exception("expanding POI report data sources are not implemented");
+    long iteration;
+    do {
+        auto targetRow = block.firstRow + iteration;
+        if (iteration) {
+            if (!allowExpansion || workbook.sheets.length != 1 || block.firstRow != block.lastRow ||
+                (axisText !is null && axisText.to!int != 0) || boundariesText is null)
+                throw new Exception("POI report range expansion layout is not implemented");
+            auto boundaries = z8_poi_report_block(boundariesText);
+            if (boundaries.firstRow != block.firstRow || boundaries.lastRow != block.lastRow ||
+                boundaries.firstColumn != block.firstColumn || boundaries.lastColumn != block.lastColumn ||
+                targetRow >= 1048576 || (targetRow in workbook.sheets[sheet].rows) !is null)
+                throw new Exception("POI report range expansion layout is not implemented");
+            auto templateRow = block.firstRow in workbook.sheets[sheet].rows;
+            if (templateRow is null || !(*templateRow).cells.length)
+                throw new Exception("POI report range expansion layout is not implemented");
+            bool hasTemplateCell;
+            foreach (column, cell; (*templateRow).cells) {
+                if (column < block.firstColumn || column > block.lastColumn) continue;
+                hasTemplateCell = true;
+                if (!cell.safeCopy || cell.hasFormula ||
+                    (cell.rawKind == "s"w ? cell.value.indexOf("${"w) < 0 :
+                     cell.rawKind !is null && cell.rawKind != "n"w && cell.rawKind != "b"w))
+                    throw new Exception("POI report range expansion cell is not implemented");
+                copies ~= Z8PoiCellCopy(cast(uint)sheet, cast(uint)block.firstRow, cast(uint)column,
+                                        cast(uint)targetRow, cast(uint)column);
+            }
+            if (!hasTemplateCell) throw new Exception("POI report range expansion layout is not implemented");
+        }
+        foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells) {
+            if (cell.hasFormula || (cell.kind != "str"w && cell.kind != "inlineStr"w) ||
+                cell.value.indexOf("${"w) < 0) continue;
+            if (rowNumber < block.firstRow || rowNumber > block.lastRow ||
+                columnNumber < block.firstColumn || columnNumber > block.lastColumn) continue;
+            z8_poi_report_evaluate_cell(evalState, workbook, cell, sheet, rowNumber + iteration, columnNumber, edits);
+        }
+        ++iteration;
+    } while (z8_report_source_next(source));
 }
 
 private struct Z8PoiReportEntry { Z8Object range; Z8PoiReportBlock block, boundaries; }
@@ -252,11 +282,12 @@ private int z8_poi_report_compare_blocks(Z8PoiReportBlock a, Z8PoiReportBlock b)
     return compare(a.firstColumn, b.firstColumn) + compare(a.firstRow, b.firstRow);
 }
 private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8PoiWorkbook workbook,
-                                        out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits) {
+                                        out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits,
+                                        out Z8PoiCellCopy[] copies) {
     import std.string : indexOf;
     if (!ranges.length) return;
     if (ranges.length == 1) {
-        z8_poi_report_apply_simple_range(report, ranges[0], workbook, renameSheet, renameName, edits);
+        z8_poi_report_apply_simple_range(report, ranges[0], workbook, renameSheet, renameName, edits, copies, true);
         return;
     }
     Z8PoiReportEntry[] entries;
@@ -295,8 +326,8 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
         entries[position] = entry;
     }
     foreach (entry; entries) {
-        int ignoredSheet; wstring ignoredName; Z8PoiCellEdit[] changes;
-        z8_poi_report_apply_simple_range(report, entry.range, workbook, ignoredSheet, ignoredName, changes);
+        int ignoredSheet; wstring ignoredName; Z8PoiCellEdit[] changes; Z8PoiCellCopy[] ignoredCopies;
+        z8_poi_report_apply_simple_range(report, entry.range, workbook, ignoredSheet, ignoredName, changes, ignoredCopies);
         edits ~= changes;
     }
     // The synthetic sheet range visits cells between child boundaries after

@@ -80,6 +80,12 @@ public class StaticReportProbe {
     public static file overlappingRanges() { OverlappingRangeReport report; return report.run(guid.Null); }
     public static file outsideRanges() { OutsideRangesReport report; return report.run(guid.Null); }
     public static file missingBoundaries() { MissingBoundariesReport report; return report.run(guid.Null); }
+    public static file expanded() { ExpandedReport report; return report.run(guid.Null); }
+    public static file expandedInline() { ExpandedInlineReport report; return report.run(guid.Null); }
+    public static file expandedOccupied() { ExpandedOccupiedReport report; return report.run(guid.Null); }
+    public static file expandedStatic() { ExpandedStaticReport report; return report.run(guid.Null); }
+    public static file expandedFormula() { ExpandedFormulaReport report; return report.run(guid.Null); }
+    public static file expandedMetadata() { ExpandedMetadataReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -228,6 +234,24 @@ public class MissingBoundariesReport extends Report {
     [address "A1"] Range first; [address "C1"] Range second;
     ranges = {first, second};
 }''', encoding="utf-8")
+    for name, template in (("ExpandedReport", "expanded"), ("ExpandedInlineReport", "expanded-inline"),
+                           ("ExpandedOccupiedReport", "expanded-occupied"), ("ExpandedStaticReport", "expanded-static"),
+                           ("ExpandedFormulaReport", "expanded-formula"), ("ExpandedMetadataReport", "expanded-metadata")):
+        (source / (name + ".bl")).write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+import org.zenframework.z8.base.json.JsonObject;
+import org.zenframework.z8.base.json.JsonArray;
+public class %s extends Report {
+    engine = Report.POI; template = "%s";
+    JsonArray rows; objects = {rows};
+    [address "A1:D1"] [boundaries "A1:D1"] Range region;
+    region.source = rows; ranges = {region};
+    virtual protected void prepare(guid recordId) {
+        JsonObject one; one.set("amount", 10); one.set("title", "First"); rows.add(one);
+        JsonObject two; two.set("amount", 20); two.set("title", "Второй 😀"); rows.add(two);
+        JsonObject three; three.set("amount", 30); three.set("title", "Third"); rows.add(three);
+    }
+}''' % (name, template), encoding="utf-8")
     (source / "UnsupportedContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.lang.Object;
@@ -402,16 +426,19 @@ public class %s extends Report {
         '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
         '<c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c>'
         '<c r="C1" t="s"><v>2</v></c><c r="D1" t="s"><v>3</v></c>')
+    custom["xl/worksheets/sheet1.xml"] = custom["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="2"><c r="A2"><v>77</v></c></row></sheetData>')
     with zipfile.ZipFile(application / "reports/custom.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in custom.items():
             archive.writestr(entry_name, content)
     json_source = dict(parameters)
     json_source["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="5" uniqueCount="5"><si><t>${rows.item.title}</t></si><si><t>${rows.item.amount}</t></si><si><t>${rows.index}</t></si><si><t>${rows.sheet}</t></si><si><t>Title: ${rows.item.title}</t></si></sst>'''
+    json_source["xl/worksheets/sheet1.xml"] = json_source["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="2"><c r="A2"><v>77</v></c></row></sheetData>')
     with zipfile.ZipFile(application / "reports/json.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in json_source.items():
             archive.writestr(entry_name, content)
     query = dict(parameters)
     query["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="5" uniqueCount="5"><si><t>${q.amount}</t></si><si><t>${q . amount + 1}</t></si><si><t>Value: ${q.amount}</t></si><si><t>${q.index}</t></si><si><t>${'q.ignored'}</t></si></sst>'''
+    query["xl/worksheets/sheet1.xml"] = query["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="2"><c r="A2"><v>77</v></c></row></sheetData>')
     with zipfile.ZipFile(application / "reports/query.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in query.items():
             archive.writestr(entry_name, content)
@@ -424,6 +451,28 @@ public class %s extends Report {
         book = dict(multi)
         if filename == "outside-range":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('</row>', '<c r="D1" t="inlineStr"><is><t>${1}</t></is></c></row>')
+        with zipfile.ZipFile(application / ("reports/" + filename + ".xlsx"), "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for entry_name, content in book.items():
+                archive.writestr(entry_name, content)
+    expanded = dict(parameters)
+    expanded["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="3" uniqueCount="3"><si><t>${rows.item.amount}</t></si><si><t>${rows.item.title}</t></si><si><t>${rows.index}</t></si></sst>'''
+    expanded["xl/worksheets/sheet1.xml"] = original_sheet.replace(
+        '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
+        '<c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c>'
+        '<c r="C1" s="0"><v>99</v></c><c r="D1" t="s"><v>2</v></c>')
+    for filename in ("expanded", "expanded-inline", "expanded-occupied", "expanded-static", "expanded-formula", "expanded-metadata"):
+        book = dict(expanded)
+        if filename == "expanded-inline":
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace(
+                '<c r="B1" t="s"><v>1</v></c>', '<c r="B1" t="inlineStr"><is><t>${rows.item.title}</t></is></c>')
+        if filename == "expanded-occupied":
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="2"><c r="A2"><v>77</v></c></row></sheetData>')
+        if filename == "expanded-static":
+            book["xl/sharedStrings.xml"] = book["xl/sharedStrings.xml"].replace('${rows.item.title}', 'Static')
+        if filename == "expanded-formula":
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0"><v>99</v></c>', '<c r="C1" s="0"><f>1+1</f><v>2</v></c>')
+        if filename == "expanded-metadata":
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0">', '<c r="C1" s="0" cm="1">')
         with zipfile.ZipFile(application / ("reports/" + filename + ".xlsx"), "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for entry_name, content in book.items():
                 archive.writestr(entry_name, content)
@@ -610,6 +659,13 @@ void main(string[] args) {
     bool outsideRanges; try { P.m_outsideRanges(); } catch (Exception) { outsideRanges = true; } assert(outsideRanges);
     bool missingBoundaries; try { P.m_missingBoundaries(); } catch (Exception) { missingBoundaries = true; } assert(missingBoundaries);
     assert(database.begins == 57 && database.rollbacks == 57);
+    bool expanded; try { P.m_expanded(); } catch (Exception) { expanded = true; } assert(expanded);
+    bool expandedInline; try { P.m_expandedInline(); } catch (Exception) { expandedInline = true; } assert(expandedInline);
+    bool expandedOccupied; try { P.m_expandedOccupied(); } catch (Exception) { expandedOccupied = true; } assert(expandedOccupied);
+    bool expandedStatic; try { P.m_expandedStatic(); } catch (Exception) { expandedStatic = true; } assert(expandedStatic);
+    bool expandedFormula; try { P.m_expandedFormula(); } catch (Exception) { expandedFormula = true; } assert(expandedFormula);
+    bool expandedMetadata; try { P.m_expandedMetadata(); } catch (Exception) { expandedMetadata = true; } assert(expandedMetadata);
+    assert(database.begins == 63 && database.rollbacks == 63);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -622,11 +678,12 @@ void main(string[] args) {
         bridge = ROOT / "xlsx/source"
         contents = harness.read_text(encoding="utf-8")
         contents = contents.replace("import z8.runtime;", "import z8.runtime;\nimport z8.xlsx.poi : z8_openxlsx_configure;")
-        contents = contents.replace("void main(string[] args) {", '''class CountingProvider : IZ8PoiProvider, IZ8PoiReportWriter {
+        contents = contents.replace("void main(string[] args) {", '''class CountingProvider : IZ8PoiProvider, IZ8PoiReportWriter, IZ8PoiReportExpander {
     IZ8PoiProvider reader;
     IZ8PoiReportWriter writer;
-    uint renames, hides, writes;
-    this(IZ8PoiProvider provider) { reader = provider; writer = cast(IZ8PoiReportWriter)provider; assert(writer !is null); }
+    IZ8PoiReportExpander expander;
+    uint renames, hides, writes, expansions;
+    this(IZ8PoiProvider provider) { reader = provider; writer = cast(IZ8PoiReportWriter)provider; expander = cast(IZ8PoiReportExpander)provider; assert(writer !is null && expander !is null); }
     IZ8PoiDocument open(const(ubyte)[] input) { return reader.open(input); }
     ubyte[] renameReportSheet(const(ubyte)[] input, uint index, wstring name) {
         auto result = writer.renameReportSheet(input, index, name);
@@ -639,6 +696,10 @@ void main(string[] args) {
     ubyte[] writeReportCells(const(ubyte)[] input, const(Z8PoiCellEdit)[] cells) {
         auto result = writer.writeReportCells(input, cells);
         ++writes; return result;
+    }
+    ubyte[] writeExpandedReport(const(ubyte)[] input, const(Z8PoiCellCopy)[] copies, const(Z8PoiCellEdit)[] cells) {
+        assert(copies.length == 8); auto result = expander.writeExpandedReport(input, copies, cells);
+        ++expansions; return result;
     }
 }
 void main(string[] args) {
@@ -678,6 +739,9 @@ void main(string[] args) {
         contents = contents.replace(
             'bool outsideRanges; try { P.m_outsideRanges(); } catch (Exception) { outsideRanges = true; } assert(outsideRanges);',
             'auto outsideRanges = P.m_outsideRanges(); copy(z8_file_resolve_path(outsideRanges), buildPath(args[2], "outside-range.xlsx")); assert(counter.writes == 11);')
+        contents = contents.replace(
+            'bool expanded; try { P.m_expanded(); } catch (Exception) { expanded = true; } assert(expanded);',
+            'auto expanded = P.m_expanded(); copy(z8_file_resolve_path(expanded), buildPath(args[2], "expanded.xlsx")); assert(counter.expansions == 1);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -866,7 +930,8 @@ class PoiRangeOracle {
       boolean contextCase = args.length > 3 && "context".equals(args[3]);
       boolean fieldCase = args.length > 3 && "fields".equals(args[3]);
       boolean customCase = args.length > 3 && "custom".equals(args[3]);
-      boolean jsonCase = args.length > 3 && "json".equals(args[3]);
+      boolean expandedCase = args.length > 3 && "expanded".equals(args[3]);
+      boolean jsonCase = expandedCase || (args.length > 3 && "json".equals(args[3]));
       boolean queryCase = args.length > 3 && "query".equals(args[3]);
       boolean outsideCase = args.length > 3 && "outside".equals(args[3]);
       boolean multipleCase = outsideCase || (args.length > 3 && "multiple".equals(args[3]));
@@ -927,7 +992,19 @@ class PoiRangeOracle {
             new org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<>(null);
         item.get().z8_set(new org.zenframework.z8.server.types.string("title"), new org.zenframework.z8.server.types.string("Ada 😀"));
         item.get().z8_set(new org.zenframework.z8.server.types.string("amount"), new org.zenframework.z8.server.types.integer(42));
-        rows.get().z8_add(item); customSource = new JsonSource(rows.get());
+        if (expandedCase) {
+          item.get().z8_set(new org.zenframework.z8.server.types.string("title"), new org.zenframework.z8.server.types.string("First"));
+          item.get().z8_set(new org.zenframework.z8.server.types.string("amount"), new org.zenframework.z8.server.types.integer(10));
+          rows.get().z8_add(item);
+          for (int i = 1; i < 3; ++i) {
+            org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> next =
+                new org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<>(null);
+            next.get().z8_set(new org.zenframework.z8.server.types.string("title"), new org.zenframework.z8.server.types.string(i == 1 ? "Второй 😀" : "Third"));
+            next.get().z8_set(new org.zenframework.z8.server.types.string("amount"), new org.zenframework.z8.server.types.integer(i == 1 ? 20 : 30));
+            rows.get().z8_add(next);
+          }
+        } else rows.get().z8_add(item);
+        customSource = new JsonSource(rows.get());
       }
       if (queryCase) {
         FakeQueryClass q = new FakeQueryClass(context); q.setIndex("q"); context.members().add(q);
@@ -960,8 +1037,8 @@ class PoiRangeOracle {
       boolean parameters = args.length > 3 && "parameters".equals(args[3]);
       boolean dates = args.length > 3 && "dates".equals(args[3]);
       Range child = new Range().setSource(customCase || jsonCase || queryCase ? customSource : SimpleSource.newDefault())
-          .setBlock(customCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(customCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
+          .setBlock(customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
+          .setBoundaries(customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       if (multipleCase) {
         report.addRange(0, new Range().setSource(orderedSources[1]).setBlock("C1").setBoundaries("C1"));
         report.addRange(0, new Range().setSource(orderedSources[0]).setBlock("A1").setBoundaries("A1"));
@@ -969,7 +1046,18 @@ class PoiRangeOracle {
       if (args.length > 3 && "rename".equals(args[3])) original.setSheetName(0, "Отчёт \\uD83D\\uDE00");
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier); modifier.close();
-      if (constants || parameters || contextCase || dates || fieldCase || customCase || jsonCase || queryCase || multipleCase) {
+      if (expandedCase) {
+        for (int row = 0; row < 3; ++row) for (int col = 0; col < 4; ++col) {
+          org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(row).getCell(col);
+          org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(row).getCell(col);
+          if (expected.getCellType() != result.getCellType() || expected.getCellStyle().getIndex() != result.getCellStyle().getIndex())
+            throw new AssertionError("expanded cell type/style differs at " + row + "," + col);
+          if (expected.getCellType() == org.apache.poi.ss.usermodel.Cell.CELL_TYPE_STRING) {
+            if (!expected.getStringCellValue().equals(result.getStringCellValue())) throw new AssertionError("expanded text differs at " + row + "," + col);
+          } else if (expected.getNumericCellValue() != result.getNumericCellValue())
+            throw new AssertionError("expanded number differs at " + row + "," + col);
+        }
+      } else if (constants || parameters || contextCase || dates || fieldCase || customCase || jsonCase || queryCase || multipleCase) {
         for (int i = 0; i < (outsideCase ? 4 : multipleCase ? 3 : customCase ? 4 : dates ? 10 : constants ? 7 : 5); ++i) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(0).getCell(i);
@@ -1044,6 +1132,10 @@ class PoiRangeOracle {
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/outside-range.xlsx"), str(working / "outside-range.xlsx"), str(config), "outside"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/expanded.xlsx"), str(working / "expanded.xlsx"), str(config), "expanded"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
 print("POI static report template, naming and transaction verified")
