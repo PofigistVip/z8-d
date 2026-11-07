@@ -132,7 +132,7 @@ private wstring z8_poi_rich_text(Z8PoiXmlNode value) {
 }
 private class Z8PoiCell { wstring kind, rawKind, value, formula, sharedId; bool hasFormula, unresolvedSharedFormula, safeCopy; long row, column; }
 private class Z8PoiRow { Z8PoiCell[long] cells; bool safeExpansionTarget; }
-private class Z8PoiSheet { Z8PoiRow[long] rows; wstring name; bool hasMergedRegions; }
+private class Z8PoiSheet { Z8PoiRow[long] rows; wstring name; bool hasMergedRegions; wstring[] mergedReferences; }
 private class Z8PoiWorkbook { Z8PoiSheet[] sheets; bool date1904; }
 private class Z8PoiSheetRef { Z8PoiSheet value; }
 private class Z8PoiRowRef { Z8PoiRow value; }
@@ -425,6 +425,8 @@ private Z8PoiWorkbook z8_poi_parse(Z8Binary input) {
         sheet.name = item.attr("name"w);
         auto merges = worksheet.child("mergeCells"w);
         sheet.hasMergedRegions = merges !is null && merges.children.length != 0;
+        if (merges !is null) foreach (merge; merges.children)
+            if (z8_poi_xml_local(merge.name) == "mergeCell"w) sheet.mergedReferences ~= merge.attr("ref"w);
         Z8PoiSharedFormula[wstring] sharedFormulas;
         long nextRow;
         if (data !is null) foreach (rowNode; data.children) if (z8_poi_xml_local(rowNode.name) == "row"w) {

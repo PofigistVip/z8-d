@@ -105,6 +105,10 @@ public class StaticReportProbe {
     public static file expandedParenthesized() { ExpandedParenthesizedReport report; return report.run(guid.Null); }
     public static file expandedUnknownFunction() { ExpandedUnknownFunctionReport report; return report.run(guid.Null); }
     public static file expandedFunctions() { ExpandedFunctionsReport report; return report.run(guid.Null); }
+    public static file mergedInside() { MergedInsideReport report; return report.run(guid.Null); }
+    public static file mergedInsideStatic() { MergedInsideStaticReport report; return report.run(guid.Null); }
+    public static file expandedMerged() { ExpandedMergedReport report; return report.run(guid.Null); }
+    public static file mergedOverlap() { MergedOverlapReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -131,6 +135,9 @@ public class StaticReportProbe {
             ("DateRangeReport", "dates", "A1:J1", "A1:J1"),
             ("Date1904RangeReport", "dates1904", "A1:J1", "A1:J1"),
             ("RepeatRangeReport", "repeat", "A1", "A1"),
+            ("MergedInsideReport", "merged-inside", "A1:B1", "A1:B1"),
+            ("MergedInsideStaticReport", "merged", "A1:B1", "A1:B1"),
+            ("MergedOverlapReport", "merged-overlap", "A1:C1", "A1:C1"),
             ("MapOperationRangeReport", "map-operation", "A1", "A1"),
             ("MixedRangeReport", "mixed", "A1", "A1"),
             ("UnknownMixedRangeReport", "unknown-mixed", "A1", "A1"),
@@ -318,6 +325,10 @@ public class ExpandedTwoRowsReport extends Report {
     (source / "ExpandedEmptyRowReport.bl").write_text(
         (source / "ExpandedTwoRowsReport.bl").read_text(encoding="utf-8")
         .replace("ExpandedTwoRowsReport", "ExpandedEmptyRowReport").replace('template = "expanded-two"', 'template = "expanded-empty-row"'),
+        encoding="utf-8")
+    (source / "ExpandedMergedReport.bl").write_text(
+        (source / "ExpandedReport.bl").read_text(encoding="utf-8")
+        .replace("ExpandedReport", "ExpandedMergedReport").replace('template = "expanded"', 'template = "expanded-merged"'),
         encoding="utf-8")
     (source / "ExpandedHorizontalReport.bl").write_text(
         (source / "ExpandedTwoRowsReport.bl").read_text(encoding="utf-8")
@@ -591,6 +602,12 @@ public class %s extends Report {
         with zipfile.ZipFile(application / ("reports/" + filename + ".xlsx"), "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for entry_name, content in book.items():
                 archive.writestr(entry_name, content)
+    expanded_merged = dict(expanded)
+    expanded_merged["xl/worksheets/sheet1.xml"] = expanded_merged["xl/worksheets/sheet1.xml"].replace(
+        '</worksheet>', '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')
+    with zipfile.ZipFile(application / "reports/expanded-merged.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in expanded_merged.items():
+            archive.writestr(entry_name, content)
     custom_expanded = dict(expanded)
     custom_expanded["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="3" uniqueCount="3"><si><t>${rows.index}</t></si><si><t>${rows.index + 10}</t></si><si><t>Static</t></si></sst>'''
     with zipfile.ZipFile(application / "reports/expanded-custom.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -623,6 +640,18 @@ public class %s extends Report {
     with zipfile.ZipFile(application / "reports/merged.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in merged.items():
             archive.writestr(name, content)
+    merged_inside = dict(merged)
+    merged_inside["xl/worksheets/sheet1.xml"] = merged_inside["xl/worksheets/sheet1.xml"].replace("Example", "${1+2}")
+    with zipfile.ZipFile(application / "reports/merged-inside.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in merged_inside.items():
+            archive.writestr(entry_name, content)
+    merged_overlap = dict(merged)
+    merged_overlap["xl/worksheets/sheet1.xml"] = merged_overlap["xl/worksheets/sheet1.xml"].replace(
+        '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>',
+        '<mergeCells count="2"><mergeCell ref="A1:B1"/><mergeCell ref="B1:C1"/></mergeCells>')
+    with zipfile.ZipFile(application / "reports/merged-overlap.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in merged_overlap.items():
+            archive.writestr(entry_name, content)
     formula = dict(entries)
     formula["xl/worksheets/sheet1.xml"] = original_sheet.replace('</row>', '<c r="B1"><f>1+1</f><v>2</v></c></row>')
     with zipfile.ZipFile(application / "reports/formula.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -828,7 +857,11 @@ void main(string[] args) {
     bool parenthesized; try { P.m_expandedParenthesized(); } catch (Exception) { parenthesized = true; } assert(parenthesized);
     bool unknownFunction; try { P.m_expandedUnknownFunction(); } catch (Exception) { unknownFunction = true; } assert(unknownFunction);
     bool functions; try { P.m_expandedFunctions(); } catch (Exception) { functions = true; } assert(functions);
-    assert(database.begins == 82 && database.rollbacks == 82);
+    bool mergedInside; try { P.m_mergedInside(); } catch (Exception) { mergedInside = true; } assert(mergedInside);
+    assert(z8_file_exists(P.m_mergedInsideStatic()));
+    bool expandedMerged; try { P.m_expandedMerged(); } catch (Exception) { expandedMerged = true; } assert(expandedMerged);
+    bool mergedOverlap; try { P.m_mergedOverlap(); } catch (Exception) { mergedOverlap = true; } assert(mergedOverlap);
+    assert(database.begins == 86 && database.rollbacks == 86);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -950,6 +983,9 @@ void main(string[] args) {
         contents = contents.replace(
             'bool functions; try { P.m_expandedFunctions(); } catch (Exception) { functions = true; } assert(functions);',
             'auto functions = P.m_expandedFunctions(); copy(z8_file_resolve_path(functions), buildPath(args[2], "expanded-functions.xlsx")); assert(counter.expansions == 15);')
+        contents = contents.replace(
+            'bool mergedInside; try { P.m_mergedInside(); } catch (Exception) { mergedInside = true; } assert(mergedInside);',
+            'auto mergedInside = P.m_mergedInside(); copy(z8_file_resolve_path(mergedInside), buildPath(args[2], "merged-inside.xlsx")); assert(counter.writes == 13);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1161,6 +1197,7 @@ class PoiRangeOracle {
       boolean expandedCase = expandedCustomCase || expandedTwoCase || (args.length > 3 && "expanded".equals(args[3]));
       boolean jsonInlineCase = args.length > 3 && "json-inline".equals(args[3]);
       boolean repeatCase = args.length > 3 && "repeat".equals(args[3]);
+      boolean mergedCase = args.length > 3 && "merged".equals(args[3]);
       boolean jsonCase = jsonInlineCase || (expandedCase && !expandedCustomCase) || (args.length > 3 && "json".equals(args[3]));
       boolean queryCase = args.length > 3 && "query".equals(args[3]);
       boolean outsideCase = args.length > 3 && "outside".equals(args[3]);
@@ -1271,8 +1308,8 @@ class PoiRangeOracle {
       boolean parameters = args.length > 3 && "parameters".equals(args[3]);
       boolean dates = args.length > 3 && "dates".equals(args[3]);
       Range child = new Range().setSource(customCase || jsonCase || queryCase || expandedCustomCase ? customSource : SimpleSource.newDefault())
-          .setBlock(expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
+          .setBlock(mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
+          .setBoundaries(mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       if (horizontalCase) child.setAxis(1);
       if (multipleCase) {
         report.addRange(0, new Range().setSource(orderedSources[1]).setBlock("C1").setBoundaries("C1"));
@@ -1305,8 +1342,8 @@ class PoiRangeOracle {
           double result = actual.getSheetAt(0).getRow(row).getCell(4).getNumericCellValue();
           if (expected != result) throw new AssertionError("unrelated cell differs at row " + row);
         }
-      } else if (constants || parameters || contextCase || dates || fieldCase || customCase || jsonCase || queryCase || multipleCase || repeatCase) {
-        for (int i = 0; i < (repeatCase ? 1 : outsideCase ? 4 : multipleCase ? 3 : customCase ? 4 : dates ? 10 : constants ? 7 : 5); ++i) {
+      } else if (constants || parameters || contextCase || dates || fieldCase || customCase || jsonCase || queryCase || multipleCase || repeatCase || mergedCase) {
+        for (int i = 0; i < (repeatCase || mergedCase ? 1 : outsideCase ? 4 : multipleCase ? 3 : customCase ? 4 : dates ? 10 : constants ? 7 : 5); ++i) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(0).getCell(i);
           if (expected.getCellType() != result.getCellType()) throw new AssertionError("cell type differs at " + i);
@@ -1326,6 +1363,9 @@ class PoiRangeOracle {
         String result = actual.getSheetAt(0).getRow(0).getCell(0).getStringCellValue();
         if (!expected.equals(result)) throw new AssertionError(expected + " != " + result);
       }
+      if (mergedCase && (original.getSheetAt(0).getNumMergedRegions() != 1 || actual.getSheetAt(0).getNumMergedRegions() != 1 ||
+          !original.getSheetAt(0).getMergedRegion(0).formatAsString().equals(actual.getSheetAt(0).getMergedRegion(0).formatAsString())))
+        throw new AssertionError("merged region differs");
       if (!original.getSheetName(0).equals(actual.getSheetName(0))) throw new AssertionError("sheet name differs");
     } finally { ApplicationServer.setRequest(null); }
   }
@@ -1421,4 +1461,8 @@ class PoiRangeOracle {
                                          str(inline), str(inline), str(config), "json-inline"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode != 0 and "NullPointerException" in result.stderr, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/merged-inside.xlsx"), str(working / "merged-inside.xlsx"), str(config), "merged"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
 print("POI static report template, naming and transaction verified")
