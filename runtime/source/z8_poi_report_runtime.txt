@@ -338,7 +338,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     if (!z8_report_source_next(source)) {
         // Java moves the footer over the empty block and clears the vacated
         // tail. Restrict the footer to dense, safely copyable cells.
-        if (!allowExpansion || workbook.sheets.length != 1 || boundariesText is null || templateMerges.length)
+        if (!allowExpansion || boundariesText is null || templateMerges.length)
             throw new Exception("empty POI report data source layout is not implemented");
         auto boundaries = z8_poi_report_block(boundariesText);
         auto offset = horizontal ? block.lastColumn - block.firstColumn + 1 : block.lastRow - block.firstRow + 1;
@@ -403,7 +403,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
             throw new Exception("POI report range expansion exceeds worksheet bounds");
         auto offset = iteration * (horizontal ? width : height);
         if (iteration) {
-            if (!allowExpansion || workbook.sheets.length != 1 || boundariesText is null)
+            if (!allowExpansion || boundariesText is null)
                 throw new Exception("POI report range expansion layout is not implemented");
             auto boundaries = z8_poi_report_block(boundariesText);
             hasFooter = horizontal ? boundaries.lastColumn > block.lastColumn : boundaries.lastRow > block.lastRow;

@@ -125,6 +125,7 @@ public class StaticReportProbe {
     public static file multipleSheets() { MultipleSheetReport report; return report.run(guid.Null); }
     public static file multipleSheetsRename() { MultipleSheetRenameReport report; return report.run(guid.Null); }
     public static int orderedCount() { return OrderedRows.sequence; }
+    public static file expandedMultipleSheets() { ExpandedMultipleSheetReport report; return report.run(guid.Null); }
     public static file emptyFooter() { EmptyFooterReport report; return report.run(guid.Null); }
     public static file emptyHorizontalFooter() { EmptyHorizontalFooterReport report; return report.run(guid.Null); }
     public static file emptyMultiFooter() { EmptyMultiFooterReport report; return report.run(guid.Null); }
@@ -335,6 +336,23 @@ public class %s extends Report {
         JsonObject three; three.set("amount", 30); three.set("title", "Third"); rows.add(three);
     }
 }''' % (name, template), encoding="utf-8")
+    (source / "ExpandedMultipleSheetReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+import org.zenframework.z8.base.json.JsonObject;
+import org.zenframework.z8.base.json.JsonArray;
+public class ExpandedMultipleSheetReport extends Report {
+    engine = Report.POI; template = "expanded-multi-sheet";
+    JsonArray rows; OrderedRows right; objects = {rows, right};
+    [sheet "0"] [address "A1:D1"] [boundaries "A1:D1"] Range first;
+    [sheet "1"] [address "A1"] [boundaries "A1"] Range second;
+    first.source = rows; second.source = right; ranges = {second, first};
+    virtual protected void prepare(guid recordId) {
+        OrderedRows.sequence = 0;
+        JsonObject one; one.set("amount", 10); one.set("title", "First"); rows.add(one);
+        JsonObject two; two.set("amount", 20); two.set("title", "Второй 😀"); rows.add(two);
+        JsonObject three; three.set("amount", 30); three.set("title", "Third"); rows.add(three);
+    }
+}''', encoding="utf-8")
     (source / "ThreeRows.bl").write_text('''import org.zenframework.z8.base.form.report.CustomData;
 public class ThreeRows extends CustomData { virtual public int count() { return 3; } }''', encoding="utf-8")
     (source / "ExpandedCustomReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
@@ -680,6 +698,15 @@ public class %s extends Report {
         '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
         '<c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c>'
         '<c r="C1" s="0"><v>99</v></c><c r="D1" t="s"><v>2</v></c>')
+    expanded_multi_sheet = dict(multi_sheet)
+    expanded_multi_sheet["xl/worksheets/sheet1.xml"] = expanded["xl/worksheets/sheet1.xml"]
+    expanded_multi_sheet["xl/worksheets/sheet2.xml"] = original_sheet.replace(
+        '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>', '<c r="A1" t="s"><v>3</v></c>')
+    expanded_multi_sheet["xl/sharedStrings.xml"] = expanded["xl/sharedStrings.xml"].replace(
+        'count="3" uniqueCount="3"', 'count="4" uniqueCount="4"').replace('</sst>', '<si><t>${right.data.value}</t></si></sst>')
+    with zipfile.ZipFile(application / "reports/expanded-multi-sheet.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in expanded_multi_sheet.items():
+            archive.writestr(entry_name, content)
     for filename in ("expanded", "expanded-inline", "expanded-occupied", "expanded-static", "expanded-formula", "expanded-metadata", "expanded-rich", "expanded-inline-number", "expanded-inline-constant", "expanded-other-columns", "expanded-row-height", "expanded-inline-target", "expanded-missing-source", "expanded-shared-formula", "expanded-complex-formula", "expanded-invalid-formula", "expanded-parenthesized", "expanded-unknown-function", "expanded-functions"):
         book = dict(expanded)
         if filename == "expanded-inline":
@@ -1116,7 +1143,8 @@ void main(string[] args) {
     bool multipleSheetsRename; try { P.m_multipleSheetsRename(); } catch (Exception e) {
         multipleSheetsRename = e.msg == "multiple-sheet POI report renaming is not implemented";
     } assert(multipleSheetsRename && z8_optional_require(P.m_orderedCount()) == 0);
-    assert(database.begins == 110 && database.rollbacks == 110);
+    bool expandedMultipleSheets; try { P.m_expandedMultipleSheets(); } catch (Exception) { expandedMultipleSheets = true; } assert(expandedMultipleSheets);
+    assert(database.begins == 111 && database.rollbacks == 111);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -1323,8 +1351,11 @@ void main(string[] args) {
         contents = contents.replace(
             'bool multipleSheets; try { P.m_multipleSheets(); } catch (Exception) { multipleSheets = true; } assert(multipleSheets);',
             'auto multipleSheets = P.m_multipleSheets(); copy(z8_file_resolve_path(multipleSheets), buildPath(args[2], "multi-sheet.xlsx"));')
-        contents = contents.replace('assert(database.begins == 110 && database.rollbacks == 110);',
-            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 36); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 37); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 38); assert(database.begins == 110 && database.rollbacks == 110);')
+        contents = contents.replace(
+            'bool expandedMultipleSheets; try { P.m_expandedMultipleSheets(); } catch (Exception) { expandedMultipleSheets = true; } assert(expandedMultipleSheets);',
+            'auto expandedMultipleSheets = P.m_expandedMultipleSheets(); copy(z8_file_resolve_path(expandedMultipleSheets), buildPath(args[2], "expanded-multi-sheet.xlsx"));')
+        contents = contents.replace('assert(database.begins == 111 && database.rollbacks == 111);',
+            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 37); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 38); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 39); assert(database.begins == 111 && database.rollbacks == 111);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1548,18 +1579,19 @@ class PoiRangeOracle {
       boolean footerCase = headerFooterCase || multiFooterCase || (args.length > 3 && "expanded-footer".equals(args[3]));
       boolean horizontalFooterCase = horizontalHeaderCase || horizontalMultiFooterCase || (args.length > 3 && "expanded-horizontal-footer".equals(args[3]));
       boolean expandedMergedCase = args.length > 3 && ("expanded-merged".equals(args[3]) || "expanded-horizontal-merged".equals(args[3]) || "expanded-merged-formula".equals(args[3]));
+      boolean expandedMultipleSheetCase = args.length > 3 && "expanded-multi-sheet".equals(args[3]);
       boolean horizontalCase = emptyHorizontalFooterCase || horizontalFooterCase || (args.length > 3 && ("expanded-horizontal".equals(args[3]) || "expanded-horizontal-merged".equals(args[3])));
       boolean expandedEmptyCase = args.length > 3 && "expanded-empty".equals(args[3]);
       boolean jsonEmptyCase = args.length > 3 && "json-empty".equals(args[3]);
       boolean expandedTwoCase = horizontalCase || expandedEmptyCase || (args.length > 3 && "expanded-two".equals(args[3]));
-      boolean expandedCase = footerCase || expandedCustomCase || expandedTwoCase || expandedMergedCase || (args.length > 3 && "expanded".equals(args[3]));
+      boolean expandedCase = expandedMultipleSheetCase || footerCase || expandedCustomCase || expandedTwoCase || expandedMergedCase || (args.length > 3 && "expanded".equals(args[3]));
       boolean jsonInlineCase = args.length > 3 && "json-inline".equals(args[3]);
       boolean repeatCase = args.length > 3 && "repeat".equals(args[3]);
       boolean mergedCase = args.length > 3 && "merged".equals(args[3]);
       boolean jsonCase = emptyFooterCase || jsonEmptyCase || jsonInlineCase || (expandedCase && !expandedCustomCase) || (args.length > 3 && "json".equals(args[3]));
       boolean queryCase = args.length > 3 && "query".equals(args[3]);
       boolean outsideCase = args.length > 3 && "outside".equals(args[3]);
-      boolean multipleSheetCase = args.length > 3 && "multi-sheet".equals(args[3]);
+      boolean multipleSheetCase = expandedMultipleSheetCase || (args.length > 3 && "multi-sheet".equals(args[3]));
       boolean multipleCase = multipleSheetCase || outsideCase || (args.length > 3 && "multiple".equals(args[3]));
       DataSource customSource = null;
       DataSource[] orderedSources = new DataSource[2];
@@ -1670,7 +1702,10 @@ class PoiRangeOracle {
           .setBlock(emptySideFooterCase ? "A2:D2" : emptyHorizontalSideFooterCase ? "B1:C2" : emptyVerticalFooterCase ? "A1:D1" : headerFooterCase ? "A2:D2" : horizontalHeaderCase ? "B1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
           .setBoundaries(emptySideFooterCase ? "A1:E3" : emptyHorizontalSideFooterCase ? "A1:D3" : multiSideCase ? "A1:E4" : horizontalMultiSideCase ? "A1:G3" : emptyMultiFooterCase ? "A1:D4" : emptyHorizontalMultiFooterCase ? "A1:G2" : emptyVerticalFooterCase ? "A1:D2" : emptyHorizontalFooterCase ? "A1:C2" : headerFooterCase ? "A1:E3" : horizontalHeaderCase ? "A1:D3" : multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       if (horizontalCase) child.setAxis(1);
-      if (multipleSheetCase) {
+      if (expandedMultipleSheetCase) {
+        report.addRange(1, new Range().setSource(orderedSources[1]).setBlock("A1").setBoundaries("A1"));
+        report.addRange(0, child);
+      } else if (multipleSheetCase) {
         report.addRange(1, new Range().setSource(orderedSources[1]).setBlock("A1").setBoundaries("A1"));
         report.addRange(0, new Range().setSource(orderedSources[0]).setBlock("A1").setBoundaries("A1"));
       } else if (multipleCase) {
@@ -1682,7 +1717,12 @@ class PoiRangeOracle {
       report.getRange(0).apply(modifier);
       if (multipleSheetCase) report.getRange(1).apply(modifier.setSheet(1));
       modifier.close();
-      if (multipleSheetCase) {
+      if (expandedMultipleSheetCase) {
+        double expected = original.getSheetAt(1).getRow(0).getCell(0).getNumericCellValue();
+        double result = actual.getSheetAt(1).getRow(0).getCell(0).getNumericCellValue();
+        if (expected != 1 || expected != result) throw new AssertionError("second sheet value differs");
+      }
+      if (multipleSheetCase && !expandedMultipleSheetCase) {
         for (int sheet = 0; sheet < 2; ++sheet) {
           double expected = original.getSheetAt(sheet).getRow(0).getCell(0).getNumericCellValue();
           double result = actual.getSheetAt(sheet).getRow(0).getCell(0).getNumericCellValue();
@@ -1859,6 +1899,10 @@ class PoiRangeOracle {
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/multi-sheet.xlsx"), str(working / "multi-sheet.xlsx"), str(config), "multi-sheet"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/expanded-multi-sheet.xlsx"), str(working / "expanded-multi-sheet.xlsx"), str(config), "expanded-multi-sheet"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
