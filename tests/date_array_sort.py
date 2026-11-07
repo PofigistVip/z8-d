@@ -29,6 +29,10 @@ void main() {
     assertThrown!Exception(values.z8_sort());
     auto empty = new Z8Array!Z8Date(); assert(empty.z8_sort() is empty);
     auto single = new Z8Array!Z8Date([null]); assert(single.z8_sort() is single);
+    auto nullFirst = new Z8Array!Z8Date([null, earlier]);
+    auto nullView = z8_primary_array_view(nullFirst);
+    nullFirst.z8_sort();
+    assert(nullFirst.z8_get(0) is earlier && nullFirst.z8_get(1) is null && nullView.z8_get(1) is null);
 }
 ''', encoding="utf-8")
     executable = temp / ("date-views.exe" if os.name == "nt" else "date-views")
@@ -52,6 +56,9 @@ class DateSortOracle {
             throw new AssertionError("sort order or stability differs");
         RCollection<date> single = new RCollection<>(new date[]{null});
         if (single.z8_sort() != single) throw new AssertionError("single null failed");
+        RCollection<date> nullFirst = new RCollection<>(new date[]{null, earlier});
+        nullFirst.z8_sort();
+        if (nullFirst.get(0) != earlier || nullFirst.get(1) != null) throw new AssertionError("leading null differs");
         values.add(null);
         try { values.z8_sort(); throw new AssertionError("null was accepted"); }
         catch (NullPointerException expected) {}

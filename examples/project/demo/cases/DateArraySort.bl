@@ -17,6 +17,9 @@ public class DateArraySort {
         date[] invalid = {first};
         invalid.add(null);
         try { invalid.sort(); return 6; } catch (exception expected) {}
+        date[] nullFirst = {};
+        nullFirst.add(null); nullFirst.add(first); nullFirst.sort();
+        if (nullFirst[0].year() != 2001 || nullFirst[1] != null) return 7;
         return 0;
     }
 }

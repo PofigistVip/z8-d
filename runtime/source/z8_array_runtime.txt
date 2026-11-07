@@ -317,10 +317,18 @@ class Z8Array(T) {
         } else static if (is(T == Z8Date)) {
             if (z8_size() <= 1) { ++z8_version; return this; }
             Z8Date[] values;
-            foreach (i; 0 .. z8_size()) values ~= z8_nonnull(z8_get(i));
+            foreach (i; 0 .. z8_size()) values ~= z8_get(i);
+            bool hasNull;
+            foreach (value; values) if (value is null) hasNull = true;
             // Java date.compareTo subtracts signed ticks, including overflow.
-            sort!((a, b) => cast(long)(cast(ulong)z8_date_ticks(a) - cast(ulong)z8_date_ticks(b)) < 0,
-                  SwapStrategy.stable)(values);
+            if (hasNull) {
+                // For two elements TimSort calls the second value's compareTo.
+                // A date compares less than null; calling compareTo on null fails.
+                if (values.length != 2 || values[0] !is null || values[1] is null)
+                    throw new Exception("null array element");
+                values[0] = values[1]; values[1] = null;
+            } else sort!((a, b) => cast(long)(cast(ulong)z8_date_ticks(a) - cast(ulong)z8_date_ticks(b)) < 0,
+                         SwapStrategy.stable)(values);
             if (primaryData !is null) foreach (i, value; values) primaryData.z8_set(cast(long)i, z8_array_primary_box(value));
             else items = values;
             ++z8_version;
