@@ -322,8 +322,8 @@ class Checker {
             (mapValueType(actual) == ValueType.selfType && extendsBuiltinPrimary(e.objectClass));
     }
     private bool isPrimaryNestedMapConversion(ValueType actual, ValueType expected, Expression e) {
-        return isMap(actual) && isMap(expected) && mapKeyType(actual) == ValueType.primaryType &&
-            mapKeyType(expected) == ValueType.primaryType && mapValueType(expected) == ValueType.primaryArray &&
+        return isMap(actual) && isMap(expected) && [ValueType.primaryType, ValueType.stringType].canFind(mapKeyType(actual)) &&
+            mapKeyType(expected) == mapKeyType(actual) && mapValueType(expected) == ValueType.primaryArray &&
             isPrimaryArrayConversion(mapValueType(actual), e);
     }
     private bool matches(Expression e, ValueType expected, Program expectedClass = null, Program[] expectedKeyClasses = null) {
