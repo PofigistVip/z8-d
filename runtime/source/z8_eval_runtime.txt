@@ -14,6 +14,7 @@ private struct Z8EvalValue {
     bool evaluated; Z8Primary primary; Z8Object json; wstring expression; Z8EvalContext context;
     Z8StringMap requestParameters;
     Z8Object reportObject;
+    Z8Array!Z8Primary collection;
 }
 private Z8EvalState z8_eval_state(Z8Object self) {
     self = z8_nonnull(self);
@@ -45,6 +46,15 @@ private Z8Array!wstring z8_eval_errors(Z8Object self) { return new Z8Array!wstri
 private wstring z8_eval_value_text(Z8EvalValue value) {
     if (!value.evaluated) return value.expression;
     if (value.reportObject !is null) throw new Exception("POI report object context member is not implemented");
+    if (value.collection !is null) {
+        wstring result = "["w;
+        for (long i; i < value.collection.z8_size(); ++i) {
+            if (i) result ~= ", "w;
+            auto item = value.collection.z8_get(i);
+            result ~= item is null ? "null"w : z8_primary_to_string(item);
+        }
+        return result ~ "]"w;
+    }
     if (value.context != Z8EvalContext.none && value.context != Z8EvalContext.json) {
         wstring typeName;
         final switch (value.context) {
@@ -64,7 +74,7 @@ private wstring z8_eval_value_text(Z8EvalValue value) {
     return value.primary is null ? "null"w : z8_primary_to_string(value.primary);
 }
 private wstring z8_eval_formatted_text(Z8EvalValue value) {
-    if (value.primary is null && value.json is null) return "<null>"w;
+    if (value.primary is null && value.json is null && value.collection is null) return "<null>"w;
     if (value.primary !is null && value.primary.kind == Z8PrimaryKind.date)
         return z8_date_toString(value.primary.dateValue, "dd.MM.yyy"w);
     if (value.primary !is null && value.primary.kind == Z8PrimaryKind.decimal) {

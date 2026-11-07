@@ -153,8 +153,13 @@ private Z8EvalValue z8_eval_json_aggregate(wstring name, Z8EvalValue[] arguments
     if (arguments.length != 2) throw new Exception("invalid Eval JSON aggregate arguments");
     auto array = arguments[0];
     auto key = arguments[1].primary;
-    if (arguments[1].json !is null || (key !is null && key.kind != Z8PrimaryKind.text))
+    if (arguments[1].json !is null || arguments[1].collection !is null || (key !is null && key.kind != Z8PrimaryKind.text))
         throw new Exception("Eval JSON aggregate key must be a string");
+    if (array.collection !is null) {
+        bool minimum = name == "min"w;
+        auto result = array.collection.z8_isEmpty() ? (minimum ? long.max : long.min) : (minimum ? long.min : long.max);
+        return Z8EvalValue(true, z8_primary_box(result), null, null);
+    }
     if (array.json is null && array.primary is null && array.context == Z8EvalContext.none)
         return Z8EvalValue(true, null, null, null);
     if (array.json is null) throw new Exception("Eval JSON aggregate requires a collection");
@@ -186,8 +191,8 @@ private Z8EvalValue z8_eval_item(Z8EvalState state, Z8EvalValue object, Z8EvalVa
             throw new Exception("unsupported request parameter index");
         return Z8EvalValue(true, z8_primary_box(object.requestParameters.z8_get(index.primary.textValue)), null, null);
     }
-    if ((object.primary is null && object.json is null && object.context == Z8EvalContext.none) ||
-        (index.primary is null && index.json is null && index.context == Z8EvalContext.none)) return object;
+    if ((object.primary is null && object.json is null && object.collection is null && object.context == Z8EvalContext.none) ||
+        (index.primary is null && index.json is null && index.collection is null && index.context == Z8EvalContext.none)) return object;
     auto key = index.primary;
     if (key !is null && key.kind == Z8PrimaryKind.text && object.json !is null &&
         z8_native_is_instance(z8_json_object_name, object.json))
@@ -201,6 +206,8 @@ private Z8EvalValue z8_eval_item(Z8EvalState state, Z8EvalValue object, Z8EvalVa
             number = isNaN(realNumber) ? 0 : realNumber >= long.max ? long.max :
                 realNumber <= long.min ? long.min : cast(long)floor(realNumber + 0.5);
         }
+        if (object.collection !is null)
+            return Z8EvalValue(true, object.collection.z8_get(cast(int)number), null, null);
         if (object.json !is null && z8_native_is_instance(z8_json_array_name, object.json)) {
             auto array = z8_json_array_state(object.json);
             auto itemIndex = z8_optional_wrap(number);
@@ -254,7 +261,7 @@ private Z8EvalValue z8_eval_binary(wstring op, Z8EvalValue left, Z8EvalValue rig
     // not recognize those spellings and the evaluator fails on them.
     if (op == "&&"w || op == "||"w || op == "%"w) throw new Exception("unsupported Eval operator");
     auto a = z8_nonnull(left.primary), b = right.primary;
-    bool rightNull = b is null && right.json is null && right.context == Z8EvalContext.none;
+    bool rightNull = b is null && right.json is null && right.collection is null && right.context == Z8EvalContext.none;
     Z8Primary result;
     if (rightNull && (op == "=="w || op == "!="w) && a.kind != Z8PrimaryKind.text) {
         if (a.kind == Z8PrimaryKind.boolean) result = z8_primary_box(false);

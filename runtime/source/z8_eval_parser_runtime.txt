@@ -109,7 +109,7 @@ private class Z8EvalParser {
         scope(exit) evaluating = parent;
         if (take("?:"w)) {
             if (condition.reportObject !is null) throw new Exception("POI report object context member is not implemented");
-            bool keep = parent && condition.evaluated && (condition.primary !is null || condition.json !is null ||
+            bool keep = parent && condition.evaluated && (condition.primary !is null || condition.json !is null || condition.collection !is null ||
                 condition.context != Z8EvalContext.none || condition.requestParameters !is null);
             evaluating = parent && !keep;
             auto alternative = conditional();
@@ -124,7 +124,7 @@ private class Z8EvalParser {
         bool yes;
         if (known) {
             auto value = condition.primary;
-            yes = condition.json !is null || condition.context != Z8EvalContext.none || condition.requestParameters !is null || (value !is null &&
+            yes = condition.json !is null || condition.collection !is null || condition.context != Z8EvalContext.none || condition.requestParameters !is null || (value !is null &&
                 (value.kind == Z8PrimaryKind.integer ? value.integerValue != 0 : value.kind == Z8PrimaryKind.boolean ? value.booleanValue : true));
         }
         evaluating = parent && (!known || yes);

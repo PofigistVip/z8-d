@@ -223,6 +223,55 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
         return z8_eval_json_aggregate(name, arguments);
     if (object.context != Z8EvalContext.none && object.context != Z8EvalContext.json)
         return Z8EvalValue(true, z8_eval_type_method(object.context, name, arguments), null, null);
+    if (object.collection !is null) {
+        auto array = object.collection;
+        if (!arguments.length) {
+            if (name == "size"w) return Z8EvalValue(true, z8_primary_box(array.z8_size()), null, null);
+            if (name == "isEmpty"w) return Z8EvalValue(true, z8_primary_box(array.z8_isEmpty()), null, null);
+            if (name == "first"w || name == "last"w)
+                return Z8EvalValue(true, array.z8_size() ? array.z8_get(name == "first"w ? 0 : array.z8_size() - 1) : null, null, null);
+            if (name == "toString"w) return Z8EvalValue(true, z8_primary_box(z8_eval_value_text(object)), null, null);
+            if (name == "hashCode"w) {
+                uint hash = 1;
+                for (long i; i < array.z8_size(); ++i) {
+                    auto item = array.z8_get(i);
+                    hash = 31u * hash + (item is null ? 0u : cast(uint)z8_primary_hash(item));
+                }
+                return Z8EvalValue(true, z8_primary_box(cast(long)cast(int)hash), null, null);
+            }
+        }
+        if (name == "get"w && arguments.length == 1 && arguments[0].primary !is null && arguments[0].primary.kind == Z8PrimaryKind.integer)
+            return Z8EvalValue(true, array.z8_get(cast(int)arguments[0].primary.integerValue), null, null);
+        if (name == "join"w && arguments.length <= 1) {
+            wstring separator = ""w, joined;
+            if (arguments.length) {
+                if (arguments[0].primary is null || arguments[0].primary.kind != Z8PrimaryKind.text) throw new Exception("invalid Eval join separator");
+                separator = arguments[0].primary.textValue;
+            }
+            for (long i; i < array.z8_size(); ++i) {
+                if (i) joined ~= separator;
+                joined ~= z8_primary_to_string(z8_nonnull(array.z8_get(i)));
+            }
+            return Z8EvalValue(true, z8_primary_box(z8_string_new(joined)), null, null);
+        }
+        throw new Exception("unsupported Eval collection method");
+    }
+    if (object.primary !is null && object.primary.kind == Z8PrimaryKind.guid && name == "components"w && !arguments.length) {
+        auto result = Z8EvalValue(true);
+        result.collection = new Z8Array!Z8Primary([z8_primary_box(z8_guid_major(object.primary.guidValue)), z8_primary_box(z8_guid_minor(object.primary.guidValue))]);
+        return result;
+    }
+    if (object.primary !is null && object.primary.kind == Z8PrimaryKind.text && name == "split"w && (arguments.length == 1 || arguments.length == 2)) {
+        if (arguments[0].primary is null || arguments[0].primary.kind != Z8PrimaryKind.text ||
+            (arguments.length == 2 && (arguments[1].primary is null || arguments[1].primary.kind != Z8PrimaryKind.integer)))
+            throw new Exception("invalid Eval split arguments");
+        auto strings = z8_regex_split(object.primary.textValue, arguments[0].primary.textValue,
+            arguments.length == 2 ? arguments[1].primary.integerValue : 0);
+        auto result = Z8EvalValue(true);
+        result.collection = new Z8Array!Z8Primary();
+        for (long i; i < strings.z8_size(); ++i) result.collection.z8_add(z8_primary_box(strings.z8_get(i)));
+        return result;
+    }
     if (object.primary !is null && !arguments.length) {
         if (name == "hashCode"w) return Z8EvalValue(true, z8_primary_box(z8_primary_hash(object.primary)), null, null);
         if (name == "toString"w) return Z8EvalValue(true, z8_primary_box(z8_string_new(z8_primary_to_string(object.primary))), null, null);
@@ -344,8 +393,8 @@ private Z8EvalValue z8_eval_function(wstring name, Z8EvalValue[] arguments) {
         foreach (i, argument; arguments) { if (i) call ~= ", "w; call ~= z8_eval_value_text(argument); }
         return Z8EvalValue(false, null, null, call ~ ")"w);
     }
-    if (name != "format"w || arguments.length != 2 || arguments[0].json !is null || arguments[0].context != Z8EvalContext.none ||
-        arguments[1].json !is null || arguments[1].context != Z8EvalContext.none ||
+    if (name != "format"w || arguments.length != 2 || arguments[0].json !is null || arguments[0].collection !is null || arguments[0].context != Z8EvalContext.none ||
+        arguments[1].json !is null || arguments[1].collection !is null || arguments[1].context != Z8EvalContext.none ||
         (arguments[1].primary !is null && arguments[1].primary.kind != Z8PrimaryKind.text))
         throw new Exception("unsupported Eval function or arguments");
     auto value = arguments[0].primary;
