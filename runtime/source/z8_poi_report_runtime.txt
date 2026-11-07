@@ -288,6 +288,47 @@ private int z8_poi_report_compare_blocks(Z8PoiReportBlock a, Z8PoiReportBlock b)
     if (a.firstColumn <= b.lastColumn && b.firstColumn <= a.lastColumn) return compare(a.firstRow, b.firstRow);
     return compare(a.firstColumn, b.firstColumn) + compare(a.firstRow, b.firstRow);
 }
+// Java's synthetic sheet range visits the resulting cells once more after all
+// child sources close. A text result can itself contain another expression.
+private void z8_poi_report_apply_root(Z8Object report, Z8PoiWorkbook workbook, int sheet, Z8PoiReportBlock root,
+                                      const(Z8PoiCellCopy)[] copies, ref Z8PoiCellEdit[] edits) {
+    import std.algorithm.sorting : sort;
+    import std.string : indexOf;
+    Z8PoiCell[ulong] values;
+    ulong key(long row, long column) { return (cast(ulong)row << 14) | cast(ulong)column; }
+    bool inside(long row, long column) {
+        return row >= root.firstRow && row <= root.lastRow && column >= root.firstColumn && column <= root.lastColumn;
+    }
+    foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells)
+        if (inside(rowNumber, columnNumber) && !cell.hasFormula && (cell.kind == "str"w || cell.kind == "inlineStr"w))
+            values[key(rowNumber, columnNumber)] = cell;
+    foreach (copy; copies) {
+        auto sourceRow = cast(long)copy.sourceRow in workbook.sheets[sheet].rows;
+        if (sourceRow is null) continue;
+        auto sourceCell = cast(long)copy.sourceColumn in (*sourceRow).cells;
+        if (sourceCell is null || ((*sourceCell).kind != "str"w && (*sourceCell).kind != "inlineStr"w)) continue;
+        auto cell = new Z8PoiCell(); cell.kind = "str"w; cell.value = (*sourceCell).value;
+        values[key(copy.targetRow, copy.targetColumn)] = cell;
+    }
+    foreach (edit; edits) {
+        auto position = key(edit.row, edit.column);
+        if (edit.kind == Z8PoiCellEditKind.text) {
+            auto cell = new Z8PoiCell(); cell.kind = "str"w; cell.value = z8_poi_decode_text(edit.text);
+            values[position] = cell;
+        } else values.remove(position);
+    }
+    auto state = new Z8EvalState(); state.reportContext = report;
+    auto request = z8_application_request();
+    if (request !is null && request.parameters !is null)
+        state.variables["parameters"w] = Z8EvalVariable(null, null, request.parameters);
+    auto positions = values.keys; sort(positions);
+    foreach (position; positions) {
+        auto cell = values[position];
+        if (cell.value.indexOf("${"w) < 0) continue;
+        z8_poi_report_evaluate_cell(state, workbook, cell, sheet, cast(long)(position >> 14),
+                                    cast(long)(position & 16383), edits);
+    }
+}
 private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8PoiWorkbook workbook,
                                         out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits,
                                         out Z8PoiCellCopy[] copies) {
@@ -295,6 +336,19 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
     if (!ranges.length) return;
     if (ranges.length == 1) {
         z8_poi_report_apply_simple_range(report, ranges[0], workbook, renameSheet, renameName, edits, copies, true);
+        auto boundaries = ranges[0].z8_get_attribute("boundaries"w);
+        Z8PoiReportBlock root;
+        if (boundaries !is null) root = z8_poi_report_block(boundaries);
+        else {
+            foreach (rowNumber, row; workbook.sheets[renameSheet].rows) {
+                if (rowNumber > root.lastRow) root.lastRow = rowNumber;
+                foreach (columnNumber, cell; row.cells) if (columnNumber > root.lastColumn) root.lastColumn = columnNumber;
+            }
+            if (root.lastRow >= 1000) root.lastRow = 999;
+            if (root.lastColumn >= 1000) root.lastColumn = 999;
+        }
+        foreach (copy; copies) if (copy.targetRow > root.lastRow) root.lastRow = copy.targetRow;
+        z8_poi_report_apply_root(report, workbook, renameSheet, root, copies, edits);
         return;
     }
     Z8PoiReportEntry[] entries;
@@ -337,21 +391,7 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
         z8_poi_report_apply_simple_range(report, entry.range, workbook, ignoredSheet, ignoredName, changes, ignoredCopies);
         edits ~= changes;
     }
-    // The synthetic sheet range visits cells between child boundaries after
-    // all child ranges. Cells beyond the synthetic range remain untouched.
-    auto state = new Z8EvalState(); state.reportContext = report;
-    auto request = z8_application_request();
-    if (request !is null && request.parameters !is null)
-        state.variables["parameters"w] = Z8EvalVariable(null, null, request.parameters);
-    foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells) {
-        if (rowNumber < root.firstRow || rowNumber > root.lastRow || columnNumber < root.firstColumn ||
-            columnNumber > root.lastColumn || cell.hasFormula || (cell.kind != "str"w && cell.kind != "inlineStr"w) ||
-            cell.value.indexOf("${"w) < 0) continue;
-        bool child;
-        foreach (entry; entries) if (rowNumber >= entry.boundaries.firstRow && rowNumber <= entry.boundaries.lastRow &&
-            columnNumber >= entry.boundaries.firstColumn && columnNumber <= entry.boundaries.lastColumn) { child = true; break; }
-        if (!child) z8_poi_report_evaluate_cell(state, workbook, cell, sheet, rowNumber, columnNumber, edits);
-    }
+    z8_poi_report_apply_root(report, workbook, sheet, root, copies, edits);
 }
 
 private ubyte[] z8_poi_report_rename_sheet(const(ubyte)[] input, Z8PoiWorkbook workbook, int index, wstring name) {

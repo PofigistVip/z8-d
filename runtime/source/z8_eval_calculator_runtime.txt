@@ -90,10 +90,15 @@ private Z8EvalValue z8_eval_property(Z8EvalState state, Z8EvalValue object, wstr
     // Java request parameters are a Map<z8.string, z8.string>; property
     // lookup uses a Java String key and therefore does not match those keys.
     if (object.requestParameters !is null) return Z8EvalValue(true, null, null, null);
-    if (state.reportSource !is null) {
-        auto source = z8_report_source_state(state.reportSource);
+    if (state.reportContext !is null) {
         auto target = object.reportObject !is null ? object.reportObject : object.json;
-        if (target is source.source && !z8_native_is_instance(z8_json_object_name, target) &&
+        Z8Object sourceObject;
+        if (state.reportSource !is null && z8_report_source_state(state.reportSource).source is target)
+            sourceObject = state.reportSource;
+        if (sourceObject is null && target !is null) foreach (candidate; z8_report_state(state.reportContext).sources.byValue)
+            if (z8_report_source_state(candidate).source is target) { sourceObject = candidate; break; }
+        auto source = sourceObject is null ? null : z8_report_source_state(sourceObject);
+        if (source !is null && !z8_native_is_instance(z8_json_object_name, target) &&
             (name == "index"w || name == "sheet"w || (name == "item"w && source.kind == Z8ReportSourceKind.json))) {
             // Java installs wrappers under these names; an existing arbitrary
             // member cannot safely be treated as the wrapper it expects.
@@ -102,6 +107,8 @@ private Z8EvalValue z8_eval_property(Z8EvalState state, Z8EvalValue object, wstr
             if (name == "index"w) return Z8EvalValue(true, z8_primary_box(source.index), null, null);
             if (name == "sheet"w) return Z8EvalValue(true, z8_primary_box(source.sheet), null, null);
             auto array = z8_json_array_state(target);
+            if (source.index < 0 || cast(size_t)source.index >= array.value.array.length)
+                return Z8EvalValue(true, null, null, null);
             auto position = z8_json_array_position(array, z8_optional_wrap(source.index));
             auto value = array.value.array[position];
             if (value.type == JSONType.object || value.type == JSONType.array)

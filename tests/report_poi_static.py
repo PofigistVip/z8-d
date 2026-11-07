@@ -88,6 +88,8 @@ public class StaticReportProbe {
     public static file expandedMetadata() { ExpandedMetadataReport report; return report.run(guid.Null); }
     public static file expandedRich() { ExpandedRichReport report; return report.run(guid.Null); }
     public static file expandedCustom() { ExpandedCustomReport report; return report.run(guid.Null); }
+    public static file repeatRange() { RepeatRangeReport report; return report.run(guid.Null); }
+    public static file jsonInlineRange() { JsonInlineRangeReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -113,6 +115,7 @@ public class StaticReportProbe {
             ("ParametersRangeReport", "parameters", "A1:E1", "A1:E1"),
             ("DateRangeReport", "dates", "A1:J1", "A1:J1"),
             ("Date1904RangeReport", "dates1904", "A1:J1", "A1:J1"),
+            ("RepeatRangeReport", "repeat", "A1", "A1"),
             ("MapOperationRangeReport", "map-operation", "A1", "A1"),
             ("MixedRangeReport", "mixed", "A1", "A1"),
             ("UnknownMixedRangeReport", "unknown-mixed", "A1", "A1"),
@@ -189,6 +192,17 @@ public class JsonRangeReport extends Report {
         JsonObject item; item.set("title", "Ada 😀"); item.set("amount", 42);
         if (copies > 0) rows.add(item); if (copies > 1) rows.add(item);
     }
+}''', encoding="utf-8")
+    (source / "JsonInlineRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+import org.zenframework.z8.base.json.JsonObject;
+import org.zenframework.z8.base.json.JsonArray;
+public class JsonInlineRangeReport extends Report {
+    engine = Report.POI; template = "json-inline";
+    JsonArray rows; objects = {rows};
+    [address "A1"] [boundaries "A1"] Range region;
+    region.source = rows; ranges = {region};
+    virtual protected void prepare(guid recordId) { JsonObject item; item.set("title", "Ada"); rows.add(item); }
 }''', encoding="utf-8")
     (source / "QueryRows.bl").write_text('''import org.zenframework.z8.base.query.Query;
 import org.zenframework.z8.base.table.value.Field;
@@ -407,6 +421,18 @@ public class %s extends Report {
     with zipfile.ZipFile(application / "reports/parameters.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in parameters.items():
             archive.writestr(name, content)
+    repeat = dict(parameters)
+    repeat["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="1" uniqueCount="1"><si><t>${parameters['nested']}</t></si></sst>'''
+    repeat["xl/worksheets/sheet1.xml"] = original_sheet.replace(
+        '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>', '<c r="A1" t="s"><v>0</v></c>')
+    with zipfile.ZipFile(application / "reports/repeat.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in repeat.items():
+            archive.writestr(entry_name, content)
+    json_inline = dict(entries)
+    json_inline["xl/worksheets/sheet1.xml"] = original_sheet.replace("Example", "${rows.item.title}")
+    with zipfile.ZipFile(application / "reports/json-inline.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in json_inline.items():
+            archive.writestr(entry_name, content)
     context = dict(parameters)
     context["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="5" uniqueCount="5"><si><t>${info['title']}</t></si><si><t>${group.data.amount}</t></si><si><t>${parameters.foo}</t></si><si><t>Title: ${info.title}!</t></si><si><t>${info.missing}</t></si></sst>'''
     with zipfile.ZipFile(application / "reports/context.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -559,6 +585,7 @@ void main(string[] args) {
     z8_resources_set_application_root(args[1]); z8_file_set_roots(args[2]);
     auto request = new Z8ApplicationRequest();
     request.parameters.z8_add("foo"w, "данные 😀 _x0041_"w);
+    request.parameters.z8_add("nested"w, "${1+2}"w);
     auto previousRequest = z8_application_set_request(request);
     scope(exit) z8_application_set_request(previousRequest);
     auto database = new Database(); z8_connection_set_current(database);
@@ -689,6 +716,9 @@ void main(string[] args) {
     bool expandedRich; try { P.m_expandedRich(); } catch (Exception) { expandedRich = true; } assert(expandedRich);
     bool expandedCustom; try { P.m_expandedCustom(); } catch (Exception) { expandedCustom = true; } assert(expandedCustom);
     assert(database.begins == 65 && database.rollbacks == 65);
+    bool repeat; try { P.m_repeatRange(); } catch (Exception) { repeat = true; } assert(repeat);
+    bool jsonInline; try { P.m_jsonInlineRange(); } catch (Exception) { jsonInline = true; } assert(jsonInline);
+    assert(database.begins == 67 && database.rollbacks == 67);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -774,6 +804,9 @@ void main(string[] args) {
         contents = contents.replace(
             'bool expandedCustom; try { P.m_expandedCustom(); } catch (Exception) { expandedCustom = true; } assert(expandedCustom);',
             'auto expandedCustom = P.m_expandedCustom(); copy(z8_file_resolve_path(expandedCustom), buildPath(args[2], "expanded-custom.xlsx")); assert(counter.expansions == 4);')
+        contents = contents.replace(
+            'bool repeat; try { P.m_repeatRange(); } catch (Exception) { repeat = true; } assert(repeat);',
+            'auto repeat = P.m_repeatRange(); copy(z8_file_resolve_path(repeat), buildPath(args[2], "repeat.xlsx")); assert(counter.writes == 12);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -963,6 +996,7 @@ class PoiRangeOracle {
     ServerConfig.load(args[2]);
     Request request = new Request(new Session("test"));
     request.getParameters().put(new org.zenframework.z8.server.types.string("foo"), new org.zenframework.z8.server.types.string("данные 😀 _x0041_"));
+    request.getParameters().put(new org.zenframework.z8.server.types.string("nested"), new org.zenframework.z8.server.types.string("${1+2}"));
     ApplicationServer.setRequest(request);
     try (XSSFWorkbook original = new XSSFWorkbook(new FileInputStream(args[0]));
          XSSFWorkbook actual = new XSSFWorkbook(new FileInputStream(args[1]))) {
@@ -972,7 +1006,9 @@ class PoiRangeOracle {
       boolean customCase = args.length > 3 && "custom".equals(args[3]);
       boolean expandedCustomCase = args.length > 3 && "expanded-custom".equals(args[3]);
       boolean expandedCase = expandedCustomCase || (args.length > 3 && "expanded".equals(args[3]));
-      boolean jsonCase = (expandedCase && !expandedCustomCase) || (args.length > 3 && "json".equals(args[3]));
+      boolean jsonInlineCase = args.length > 3 && "json-inline".equals(args[3]);
+      boolean repeatCase = args.length > 3 && "repeat".equals(args[3]);
+      boolean jsonCase = jsonInlineCase || (expandedCase && !expandedCustomCase) || (args.length > 3 && "json".equals(args[3]));
       boolean queryCase = args.length > 3 && "query".equals(args[3]);
       boolean outsideCase = args.length > 3 && "outside".equals(args[3]);
       boolean multipleCase = outsideCase || (args.length > 3 && "multiple".equals(args[3]));
@@ -1082,8 +1118,8 @@ class PoiRangeOracle {
       boolean parameters = args.length > 3 && "parameters".equals(args[3]);
       boolean dates = args.length > 3 && "dates".equals(args[3]);
       Range child = new Range().setSource(customCase || jsonCase || queryCase || expandedCustomCase ? customSource : SimpleSource.newDefault())
-          .setBlock(customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
+          .setBlock(repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
+          .setBoundaries(repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       if (multipleCase) {
         report.addRange(0, new Range().setSource(orderedSources[1]).setBlock("C1").setBoundaries("C1"));
         report.addRange(0, new Range().setSource(orderedSources[0]).setBlock("A1").setBoundaries("A1"));
@@ -1102,8 +1138,8 @@ class PoiRangeOracle {
           } else if (expected.getNumericCellValue() != result.getNumericCellValue())
             throw new AssertionError("expanded number differs at " + row + "," + col);
         }
-      } else if (constants || parameters || contextCase || dates || fieldCase || customCase || jsonCase || queryCase || multipleCase) {
-        for (int i = 0; i < (outsideCase ? 4 : multipleCase ? 3 : customCase ? 4 : dates ? 10 : constants ? 7 : 5); ++i) {
+      } else if (constants || parameters || contextCase || dates || fieldCase || customCase || jsonCase || queryCase || multipleCase || repeatCase) {
+        for (int i = 0; i < (repeatCase ? 1 : outsideCase ? 4 : multipleCase ? 3 : customCase ? 4 : dates ? 10 : constants ? 7 : 5); ++i) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(0).getCell(i);
           if (expected.getCellType() != result.getCellType()) throw new AssertionError("cell type differs at " + i);
@@ -1197,4 +1233,13 @@ class PoiRangeOracle {
                                          str(application / "reports/expanded-custom.xlsx"), str(working / "expanded-custom.xlsx"), str(config), "expanded-custom"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/repeat.xlsx"), str(working / "repeat.xlsx"), str(config), "repeat"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                inline = application / "reports/json-inline.xlsx"
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(inline), str(inline), str(config), "json-inline"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode != 0 and "NullPointerException" in result.stderr, result.stderr
 print("POI static report template, naming and transaction verified")
