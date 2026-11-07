@@ -793,7 +793,7 @@ private string emitSimple(Statement s) {
     if (s.kind == StmtKind.expressionStmt) {
         auto e = s.expression;
         if (e.kind == ExprKind.memberCall && isMap(e.inferredType) &&
-            mapKeyType(e.inferredType) == ValueType.stringType &&
+            [ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(mapKeyType(e.inferredType)) &&
             (isScalarPrimaryArray(arrayOf(mapValueType(e.inferredType))) ||
              (mapValueType(e.inferredType) == ValueType.selfType && extendsBuiltinPrimary(e.objectClass)))) {
             if (e.token.text == "add" && e.arguments.length == 2)
@@ -811,7 +811,7 @@ private string emitSimple(Statement s) {
     if (s.filePathAssignment) return "z8_file_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.dateTickAssignment) return "z8_date_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.target.kind == ExprKind.index && isMap(s.target.inferredType) && s.assignmentOperator == "=" &&
-        mapKeyType(s.target.inferredType) == ValueType.stringType &&
+        [ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(mapKeyType(s.target.inferredType)) &&
         (isScalarPrimaryArray(arrayOf(mapValueType(s.target.inferredType))) ||
          (mapValueType(s.target.inferredType) == ValueType.selfType && extendsBuiltinPrimary(s.target.objectClass))))
         return "z8_map_add_discard(" ~ emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
