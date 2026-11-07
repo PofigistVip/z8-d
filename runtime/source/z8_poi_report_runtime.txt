@@ -300,9 +300,12 @@ private void z8_poi_report_evaluate_cell(Z8EvalState state, Z8PoiWorkbook workbo
                                          long sheet, long row, long column, ref Z8PoiCellEdit[] edits, bool copied = false) {
     import std.algorithm.searching : canFind;
     import std.string : indexOf;
-    auto firstEnd = cell.value.indexOf('}');
-    auto single = cell.value.length >= 3 && cell.value[0 .. 2] == "${"w &&
-        firstEnd >= 0 && cast(size_t)firstEnd + 1 == cell.value.length;
+    auto first = z8_eval_text_expression_start(cell.value);
+    ptrdiff_t firstEnd = first < 0 ? -1 : cell.value[cast(size_t)first + 2 .. $].indexOf('}');
+    if (firstEnd >= 0) firstEnd += first + 2;
+    auto suffix = firstEnd < 0 ? null : cell.value[cast(size_t)firstEnd + 1 .. $];
+    auto single = first >= 0 && firstEnd >= 0 && z8_eval_text_literal(cell.value[0 .. cast(size_t)first]).length == 0 &&
+        z8_eval_text_expression_start(suffix) < 0 && z8_eval_text_literal(suffix).length == 0;
     Z8PoiCellEdit edit;
     edit.sheet = cast(uint)sheet; edit.row = cast(uint)row; edit.column = cast(uint)column;
     if (!single) {
@@ -311,16 +314,15 @@ private void z8_poi_report_evaluate_cell(Z8EvalState state, Z8PoiWorkbook workbo
         edit.kind = Z8PoiCellEditKind.text; edit.text = text; edits ~= edit;
         return;
     }
-    auto expression = cell.value[2 .. $ - 1];
+    auto expression = cell.value[cast(size_t)first + 2 .. cast(size_t)firstEnd];
     // The original report grammar accepts single-quoted strings. The Eval
     // parser also accepts double quotes, which are not equivalent here.
     if (expression.canFind('"')) throw new Exception("POI report expression syntax is not implemented");
     auto evaluated = z8_eval_expression(state, expression);
-    if (!evaluated.evaluated || evaluated.context != Z8EvalContext.none || evaluated.json !is null ||
-        evaluated.requestParameters !is null || evaluated.reportObject !is null || evaluated.stringifiedMap)
+    if (!evaluated.evaluated || evaluated.context != Z8EvalContext.none || evaluated.json !is null || evaluated.reportObject !is null)
         throw new Exception("POI report expression context is not implemented");
-    if (evaluated.collection !is null) {
-        // A single expression returns the collection itself in Java, and
+    if (evaluated.collection !is null || evaluated.requestParameters !is null) {
+        // A single expression returns the collection or map itself in Java, and
         // Range.evaluateAndSet writes its textual representation to POI.
         if (cell.kind == "inlineStr"w && !copied) return;
         edit.kind = Z8PoiCellEditKind.text; edit.text = z8_eval_value_text(evaluated); edits ~= edit;
@@ -548,7 +550,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
             // Even a literal string is assigned again by Java's range visitor.
             // That assignment matters when POI's next read decodes an escape.
             if (cell.value.indexOf("${"w) < 0 &&
-                (cell.kind == "inlineStr"w || z8_poi_decode_text(cell.value) == cell.value)) continue;
+                (cell.kind == "inlineStr"w || (!z8_eval_text_has_special(cell.value) && z8_poi_decode_text(cell.value) == cell.value))) continue;
             z8_poi_report_evaluate_cell(evalState, workbook, cell, sheet, rowNumber + (horizontal ? 0 : offset),
                                         columnNumber + (horizontal ? offset : 0), edits, iteration != 0);
         }
@@ -709,7 +711,7 @@ private void z8_poi_report_apply_root(Z8Object report, Z8PoiWorkbook workbook, i
     foreach (position; positions) {
         auto cell = values[position];
         if (cell.value.indexOf("${"w) < 0 &&
-            (cell.kind == "inlineStr"w || z8_poi_decode_text(cell.value) == cell.value)) continue;
+            (cell.kind == "inlineStr"w || (!z8_eval_text_has_special(cell.value) && z8_poi_decode_text(cell.value) == cell.value))) continue;
         z8_poi_report_evaluate_cell(state, workbook, cell, sheet, cast(long)(position >> 14),
                                     cast(long)(position & 16383), edits);
     }

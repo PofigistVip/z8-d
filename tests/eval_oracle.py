@@ -46,6 +46,8 @@ public class EvalOracle {
         eval.z8_setVariable(new string("nil"), (primary)null);
         String[] patterns = {"plain text", "${name}", "Hello ${name}!", "${count}", "Count ${count}", "${true}", "${missing}", "before ${missing} after", "${'literal'}", "${count + 2}", "twice ${count * 2}", "${'Hi ' + name}", "${missing + 2}", "${(missing)}", "result ${true && false}!", "${1.5 + 2}", "${2 * 1.25}", "${7.0 / 2}", "decimal=${1.25}", "large=${1234.5}", "negative=${0.0 - 0.001}", "${flag ? name : missing}", "${false ? missing : 'fallback'}", "${nil ?: name}", "${name ?: missing}", "${unknown ?: 'default'}", "${unknown ? 'yes' : 'no'}", "${count ? name : missing}"};
         for (String pattern : patterns) System.out.println(eval.z8_evaluateText(new string(pattern)).get());
+        for (String pattern : new String[]{"a{b}c", "cost $5", "{foo=bar}", "x}y", "x${1+2}y", "${1+2} } tail", "money $$ value", "x$${1+2}y", "x$$${1+2}y", "$a${1+2}", "$a${1.25}", "${1.25}$a", "single $"})
+            System.out.println(eval.z8_evaluateText(new string(pattern)).get());
         for (String expression : new String[]{"flag", "true", "false", "count > 5", "count + 2 == 9", "count + 2 == 9 && flag", "!(count < 3)", "'abc' + name == 'abcAda'", "-count + 10 == 3", "true || false && false", "1.5 + 2 == 3.5", "1 < 1.0", "1 <= 1.0", "1.0 == 1", "2 * 1.25 == 2.50", "nil ? false : true", "true ? true : missing"}) {
             try { System.out.println(eval.z8_evaluateBoolean(new string(expression)).get()); }
             catch (Exception error) { System.out.println("error"); }
@@ -195,6 +197,10 @@ void main() {
                        "decimal=${1.25}"w, "large=${1234.5}"w, "negative=${0.0 - 0.001}"w,
                        "${flag ? name : missing}"w, "${false ? missing : 'fallback'}"w, "${nil ?: name}"w,
                        "${name ?: missing}"w, "${unknown ?: 'default'}"w, "${unknown ? 'yes' : 'no'}"w, "${count ? name : missing}"w])
+        writeln(eval.m_evaluateText(pattern).to!string);
+    foreach (pattern; ["a{b}c"w, "cost $5"w, "{foo=bar}"w, "x}y"w, "x${1+2}y"w,
+                       "${1+2} } tail"w, "money $$ value"w, "x$${1+2}y"w, "x$$${1+2}y"w,
+                       "$a${1+2}"w, "$a${1.25}"w, "${1.25}$a"w, "single $"w])
         writeln(eval.m_evaluateText(pattern).to!string);
     foreach (expression; ["flag"w, "true"w, "false"w, "count > 5"w, "count + 2 == 9"w, "count + 2 == 9 && flag"w,
                           "!(count < 3)"w, "'abc' + name == 'abcAda'"w, "-count + 10 == 3"w, "true || false && false"w,

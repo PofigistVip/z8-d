@@ -178,7 +178,7 @@ public class StaticReportProbe {
             ("InvalidRangeReport", "sample", "A1:B2", "A1"),
             ("ExpressionRangeReport", "expression", "A1", "A1"),
             ("ConstantRangeReport", "constant", "A1:G1", "A1:G1"),
-            ("CollectionRangeReport", "collection", "A1:D1", "A1:D1"),
+            ("CollectionRangeReport", "collection", "A1:G1", "A1:G1"),
             ("MapValueRangeReport", "map-value", "A1:D1", "A1:D1"),
             ("MapDerivedRangeReport", "map-derived", "A1", "A1"),
             ("ConstantCommentRangeReport", "constant-comment", "A1:G1", "A1:G1"),
@@ -713,16 +713,20 @@ public class %s extends Report {
         for name, content in parameters.items():
             archive.writestr(name, content)
     collection = dict(constants)
-    collection["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="3" uniqueCount="3"><si><t>${'a,b'.split(',')}</t></si><si><t>items: ${'a,b'.split(',')}</t></si><si><t>${'a,b'.split(',').size()}</t></si></sst>'''
+    collection["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="6" uniqueCount="6"><si><t>${'a,b'.split(',')}</t></si><si><t>items: ${'a,b'.split(',')}</t></si><si><t>${'a,b'.split(',').size()}</t></si><si><t>$a${1.25}</t></si><si><t>x$${1+2}y</t></si><si><t>cost $5 {literal}</t></si></sst>'''
     collection["xl/worksheets/sheet1.xml"] = original_sheet.replace(
         '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
         '<c r="A1" t="s"><v>0</v></c><c r="B1" t="inlineStr"><is><t>${\'a,b\'.split(\',\')}</t></is></c>'
-        '<c r="C1" t="s"><v>1</v></c><c r="D1" t="s"><v>2</v></c>')
+        '<c r="C1" t="s"><v>1</v></c><c r="D1" t="s"><v>2</v></c>'
+        '<c r="E1" t="s"><v>3</v></c><c r="F1" t="s"><v>4</v></c><c r="G1" t="s"><v>5</v></c>')
     with zipfile.ZipFile(application / "reports/collection.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in collection.items(): archive.writestr(name, content)
     map_value = dict(collection)
     map_value["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="3" uniqueCount="3"><si><t>${parameters}</t></si><si><t>values: ${parameters}</t></si><si><t>${parameters.size()}</t></si></sst>'''
-    map_value["xl/worksheets/sheet1.xml"] = collection["xl/worksheets/sheet1.xml"].replace("${'a,b'.split(',')}", "${parameters}")
+    map_value["xl/worksheets/sheet1.xml"] = original_sheet.replace(
+        '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
+        '<c r="A1" t="s"><v>0</v></c><c r="B1" t="inlineStr"><is><t>${parameters}</t></is></c>'
+        '<c r="C1" t="s"><v>1</v></c><c r="D1" t="s"><v>2</v></c>')
     with zipfile.ZipFile(application / "reports/map-value.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in map_value.items(): archive.writestr(name, content)
     map_derived = dict(collection)
@@ -1523,6 +1527,10 @@ void main(string[] args) {
                 'auto %s = P.m_%s(); copy(z8_file_resolve_path(%s), buildPath(args[2], "%s.xlsx"));' % (variable, method, variable, output))
         contents = contents.replace('bool collectionRange; try { P.m_collectionRange(); } catch (Exception) { collectionRange = true; } assert(collectionRange);',
             'auto collectionRange = P.m_collectionRange(); copy(z8_file_resolve_path(collectionRange), buildPath(args[2], "collection.xlsx"));')
+        contents = contents.replace('bool mapValueRange; try { P.m_mapValueRange(); } catch (Exception) { mapValueRange = true; } assert(mapValueRange);',
+            'auto mapValueRange = P.m_mapValueRange(); copy(z8_file_resolve_path(mapValueRange), buildPath(args[2], "map-value.xlsx"));')
+        contents = contents.replace('bool mapDerivedRange; try { P.m_mapDerivedRange(); } catch (Exception) { mapDerivedRange = true; } assert(mapDerivedRange);',
+            'auto mapDerivedRange = P.m_mapDerivedRange(); copy(z8_file_resolve_path(mapDerivedRange), buildPath(args[2], "map-derived.xlsx"));')
         contents = contents.replace('assert(database.begins == 133 && database.rollbacks == 133);',
             'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 37); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 38); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 39); assert(database.begins == 133 && database.rollbacks == 133);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
@@ -1871,11 +1879,12 @@ class PoiRangeOracle {
       PoiReport report = new PoiReport(new ReportOptions()).setContext(context);
       boolean constants = args.length > 3 && "constants".equals(args[3]);
       boolean collectionCase = args.length > 3 && "collection".equals(args[3]);
+      boolean mapValueCase = args.length > 3 && "map-value".equals(args[3]);
       boolean parameters = args.length > 3 && "parameters".equals(args[3]);
       boolean dates = args.length > 3 && "dates".equals(args[3]);
       Range child = new Range().setSource(customCase || jsonCase || queryCase || expandedCustomCase ? customSource : SimpleSource.newDefault())
-          .setBlock(emptySideFooterCase ? "A2:D2" : emptyHorizontalSideFooterCase ? "B1:C2" : emptyVerticalFooterCase ? "A1:D1" : headerFooterCase ? "A2:D2" : horizontalHeaderCase ? "B1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase || collectionCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(emptySideFooterCase ? "A1:E3" : emptyHorizontalSideFooterCase ? "A1:D3" : multiSideCase ? "A1:E4" : horizontalMultiSideCase ? "A1:G3" : emptyMultiFooterCase ? "A1:D4" : emptyHorizontalMultiFooterCase ? "A1:G2" : emptyVerticalFooterCase ? "A1:D2" : emptyHorizontalFooterCase ? "A1:C2" : headerFooterCase ? "A1:E3" : horizontalHeaderCase ? "A1:D3" : multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase || collectionCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
+          .setBlock(emptySideFooterCase ? "A2:D2" : emptyHorizontalSideFooterCase ? "B1:C2" : emptyVerticalFooterCase ? "A1:D1" : headerFooterCase ? "A2:D2" : horizontalHeaderCase ? "B1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase || mapValueCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants || collectionCase ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
+          .setBoundaries(emptySideFooterCase ? "A1:E3" : emptyHorizontalSideFooterCase ? "A1:D3" : multiSideCase ? "A1:E4" : horizontalMultiSideCase ? "A1:G3" : emptyMultiFooterCase ? "A1:D4" : emptyHorizontalMultiFooterCase ? "A1:G2" : emptyVerticalFooterCase ? "A1:D2" : emptyHorizontalFooterCase ? "A1:C2" : headerFooterCase ? "A1:E3" : horizontalHeaderCase ? "A1:D3" : multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase || mapValueCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants || collectionCase ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       if (horizontalCase) child.setAxis(1);
       if (clonedSheetsCase) {
         int prototype = clonedExistingCase ? 1 : 0;
@@ -2035,8 +2044,8 @@ class PoiRangeOracle {
         if (expected == null || result == null || expected.getPhysicalNumberOfCells() != 0 || result.getPhysicalNumberOfCells() != 0 ||
             original.getSheetAt(0).getRow(1).getCell(0).getNumericCellValue() != actual.getSheetAt(0).getRow(1).getCell(0).getNumericCellValue())
           throw new AssertionError("empty source physical cells differ");
-      } else if (constants || collectionCase || parameters || contextCase || dates || fieldCase || customCase || jsonCase || queryCase || multipleCase || repeatCase || mergedCase) {
-        for (int i = 0; i < (repeatCase || mergedCase ? 1 : outsideCase || collectionCase ? 4 : multipleCase ? 3 : customCase ? 4 : dates ? 10 : constants ? 7 : 5); ++i) {
+      } else if (constants || collectionCase || mapValueCase || parameters || contextCase || dates || fieldCase || customCase || jsonCase || queryCase || multipleCase || repeatCase || mergedCase) {
+        for (int i = 0; i < (repeatCase || mergedCase ? 1 : outsideCase || mapValueCase ? 4 : multipleCase ? 3 : customCase ? 4 : dates ? 10 : constants || collectionCase ? 7 : 5); ++i) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(0).getCell(i);
           if (expected.getCellType() != result.getCellType()) throw new AssertionError("cell type differs at " + i);
@@ -2087,6 +2096,14 @@ class PoiRangeOracle {
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/collection.xlsx"), str(working / "collection.xlsx"), str(config), "collection"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/map-value.xlsx"), str(working / "map-value.xlsx"), str(config), "map-value"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/map-derived.xlsx"), str(working / "map-derived.xlsx"), str(config)],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",

@@ -15,7 +15,6 @@ private struct Z8EvalValue {
     Z8StringMap requestParameters;
     Z8Object reportObject;
     Z8Array!Z8Primary collection;
-    bool stringifiedMap;
 }
 private Z8EvalState z8_eval_state(Z8Object self) {
     self = z8_nonnull(self);
@@ -109,6 +108,38 @@ private wstring z8_eval_context_info(Z8Object self) {
     return result ~ "}, functions: {}"w;
 }
 private Z8EvalValue z8_eval_expression(Z8EvalState state, wstring text) { return (new Z8EvalParser(state, text)).parse(); }
+// Text.g excludes unescaped '$', '{' and '}' outside expressions. ANTLR's
+// lexer consumes the character following an invalid '$' while recovering.
+private wstring z8_eval_text_literal(wstring text) {
+    wchar[] result;
+    for (size_t i; i < text.length; ++i) {
+        auto c = text[i];
+        if (c == '{' || c == '}') continue;
+        if (c == '$') {
+            if (i + 1 < text.length) {
+                ++i;
+                if (text[i] >= 0xD800 && text[i] <= 0xDBFF && i + 1 < text.length && text[i + 1] >= 0xDC00 && text[i + 1] <= 0xDFFF) ++i;
+            }
+            continue;
+        }
+        result ~= c;
+    }
+    return result.length ? result.idup : ""w;
+}
+private bool z8_eval_text_has_special(wstring text) {
+    foreach (c; text) if (c == '$' || c == '{' || c == '}') return true;
+    return false;
+}
+private ptrdiff_t z8_eval_text_expression_start(wstring text) {
+    for (size_t i; i < text.length; ++i) if (text[i] == '$') {
+        if (i + 1 < text.length && text[i + 1] == '{') return cast(ptrdiff_t)i;
+        if (i + 1 < text.length) {
+            ++i;
+            if (text[i] >= 0xD800 && text[i] <= 0xDBFF && i + 1 < text.length && text[i + 1] >= 0xDC00 && text[i + 1] <= 0xDFFF) ++i;
+        }
+    }
+    return -1;
+}
 private Z8Optional!bool z8_eval_boolean(Z8Object self, wstring expression) {
     auto value = z8_eval_expression(z8_eval_state(self), expression);
     if (!value.evaluated) throw new Exception("Eval expression is not evaluated");
@@ -119,12 +150,14 @@ private wstring z8_eval_text_from_state(Z8EvalState state, wstring source, bool 
     import std.algorithm.searching : canFind;
     import std.string : indexOf;
     if (source is null) return "null"w;
-    auto first = source.indexOf("${"w);
-    if (first < 0) return z8_string_new(source);
+    auto first = z8_eval_text_expression_start(source);
+    if (first < 0) return z8_string_new(z8_eval_text_literal(source));
     auto end = source[cast(size_t)first + 2 .. $].indexOf('}');
     if (end < 0) throw new Exception("unterminated Eval text expression");
     auto start = cast(size_t)first, last = start + 2 + cast(size_t)end;
-    auto single = first == 0 && last + 1 == source.length;
+    auto suffix = source[last + 1 .. $];
+    auto single = z8_eval_text_literal(source[0 .. cast(size_t)first]).length == 0 &&
+        z8_eval_text_expression_start(suffix) < 0 && z8_eval_text_literal(suffix).length == 0;
     Z8EvalValue value; bool failed;
     void evaluatePart() {
         failed = false;
@@ -133,7 +166,7 @@ private wstring z8_eval_text_from_state(Z8EvalState state, wstring source, bool 
             if (reportSyntax && expression.canFind('"')) throw new Exception("POI report expression syntax is not implemented");
             value = z8_eval_expression(state, expression);
             if (requireResolved && (!value.evaluated || value.context != Z8EvalContext.none ||
-                value.json !is null || value.requestParameters !is null || value.reportObject !is null || value.stringifiedMap))
+                value.json !is null || value.reportObject !is null))
                 throw new Exception("POI report expression context is not implemented");
         }
         catch (Exception error) {
@@ -143,14 +176,14 @@ private wstring z8_eval_text_from_state(Z8EvalState state, wstring source, bool 
     }
     evaluatePart();
     if (single) return z8_string_new(z8_eval_value_text(value));
-    wstring result = source[0 .. cast(size_t)first];
+    wstring result = z8_eval_text_literal(source[0 .. cast(size_t)first]);
     for (;;) {
         result ~= failed ? source[start .. last + 1] : value.evaluated ?
             z8_eval_formatted_text(value) : "${"w ~ value.expression ~ "}"w;
         auto remaining = source[last + 1 .. $];
-        auto next = remaining.indexOf("${"w);
-        if (next < 0) return z8_string_new(result ~ remaining);
-        result ~= remaining[0 .. cast(size_t)next];
+        auto next = z8_eval_text_expression_start(remaining);
+        if (next < 0) return z8_string_new(result ~ z8_eval_text_literal(remaining));
+        result ~= z8_eval_text_literal(remaining[0 .. cast(size_t)next]);
         start = last + 1 + cast(size_t)next;
         end = source[start + 2 .. $].indexOf('}');
         if (end < 0) throw new Exception("unterminated Eval text expression");
