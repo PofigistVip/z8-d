@@ -248,6 +248,10 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
             return Z8EvalValue(true, array.z8_get(cast(int)arguments[0].primary.integerValue), null, null);
         if (name == "removeAt"w && arguments.length == 1 && arguments[0].primary !is null && arguments[0].primary.kind == Z8PrimaryKind.integer)
             return Z8EvalValue(true, array.z8_removeAt(arguments[0].primary.integerValue), null, null);
+        if ((name == "remove"w || name == "removeAll"w) && arguments.length == 1 && arguments[0].collection !is null) {
+            array.z8_removeAll(arguments[0].collection);
+            return name == "remove"w ? Z8EvalValue(true) : object;
+        }
         if (name == "join"w && arguments.length <= 1) {
             wstring separator = ""w, joined;
             if (arguments.length) {

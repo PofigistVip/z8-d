@@ -102,7 +102,7 @@ public class EvalOracle {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
         }
-        for (String pattern : new String[]{"${'b,a,b'.split(',').reverse().join('-')}", "${'b,a,b'.split(',').sort().join('-')}", "${'b,a,b'.split(',').unique().join('-')}", "${'a,b'.split(',').removeAt(0)}", "${'a,b'.split(',').clear()}", "${guid.create(42).components().reverse()[0]}"}) {
+        for (String pattern : new String[]{"${'b,a,b'.split(',').reverse().join('-')}", "${'b,a,b'.split(',').sort().join('-')}", "${'b,a,b'.split(',').unique().join('-')}", "${'a,b'.split(',').removeAt(0)}", "${'b,a,b'.split(',').removeAll('b'.split(',')).join('-')}", "${'b,a,b'.split(',').remove('b'.split(','))}", "${'a,b'.split(',').clear()}", "${guid.create(42).components().reverse()[0]}"}) {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
         }
@@ -233,6 +233,7 @@ void main() {
         try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
     foreach (pattern; ["${'b,a,b'.split(',').reverse().join('-')}"w, "${'b,a,b'.split(',').sort().join('-')}"w,
                        "${'b,a,b'.split(',').unique().join('-')}"w, "${'a,b'.split(',').removeAt(0)}"w,
+                       "${'b,a,b'.split(',').removeAll('b'.split(',')).join('-')}"w, "${'b,a,b'.split(',').remove('b'.split(','))}"w,
                        "${'a,b'.split(',').clear()}"w, "${guid.create(42).components().reverse()[0]}"w])
         try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
     foreach (pattern; ["${1.25.abs()}"w, "${(-7).abs()}"w, "${(-7).signum()}"w, "${(5).not()}"w, "${(5).and(3)}"w,
