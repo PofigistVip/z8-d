@@ -94,7 +94,7 @@ public class EvalOracle {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
         }
-        for (String pattern : new String[]{"${true.get()}", "${true.toNumber()}", "${false.toNumber()}", "${guid.create(42).get().toString()}", "${guid.create(42).major()}", "${guid.create(42).minor()}", "${(4294967297).getInt()}", "${(42).decimal().scale()}", "${(0).date().ticks()}", "${decimal.parse('1.2300').scale()}", "${decimal.parse('1.2300').precision()}", "${(1.25).isNaN()}", "${span.get()}", "${day.get().setDate(2023, 12, 31)}", "${day.year()}"}) {
+        for (String pattern : new String[]{"${true.get()}", "${true.toNumber()}", "${false.toNumber()}", "${guid.create(42).get().toString()}", "${guid.create(42).major()}", "${guid.create(42).minor()}", "${(4294967297).getInt()}", "${(42).decimal().scale()}", "${(0).date().ticks()}", "${decimal.parse('1.2300').scale()}", "${decimal.parse('1.2300').precision()}", "${(1.25).isNaN()}", "${(2.5).power(3)}", "${(2.5).power(-2)}", "${(2).power(3)}", "${span.get()}", "${day.get().setDate(2023, 12, 31)}", "${day.year()}"}) {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
         }
@@ -210,7 +210,8 @@ void main() {
     foreach (pattern; ["${true.get()}"w, "${true.toNumber()}"w, "${false.toNumber()}"w, "${guid.create(42).get().toString()}"w,
                        "${guid.create(42).major()}"w, "${guid.create(42).minor()}"w, "${(4294967297).getInt()}"w,
                        "${(42).decimal().scale()}"w, "${(0).date().ticks()}"w, "${decimal.parse('1.2300').scale()}"w,
-                       "${decimal.parse('1.2300').precision()}"w, "${(1.25).isNaN()}"w, "${span.get()}"w,
+                       "${decimal.parse('1.2300').precision()}"w, "${(1.25).isNaN()}"w, "${(2.5).power(3)}"w,
+                       "${(2.5).power(-2)}"w, "${(2).power(3)}"w, "${span.get()}"w,
                        "${day.get().setDate(2023, 12, 31)}"w, "${day.year()}"w])
         try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
     foreach (pattern; ["${1.25.abs()}"w, "${(-7).abs()}"w, "${(-7).signum()}"w, "${(5).not()}"w, "${(5).and(3)}"w,

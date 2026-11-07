@@ -94,8 +94,10 @@ private Z8Primary z8_eval_number_method(Z8Primary value, wstring name, Z8EvalVal
         } else if (name == "round"w) return z8_primary_box(number.z8_round(intArg(0)));
         if (name == "power"w) {
             auto exponent = arguments[0].primary;
-            if (exponent is null || exponent.kind != Z8PrimaryKind.decimal) throw new Exception("invalid Eval power argument");
-            return z8_primary_box(integral ? z8_int_power(value.integerValue, exponent.decimalValue) : z8_decimal_math!"power"(number, exponent.decimalValue));
+            if (exponent is null || (exponent.kind != Z8PrimaryKind.decimal && (integral || exponent.kind != Z8PrimaryKind.integer)))
+                throw new Exception("invalid Eval power argument");
+            auto power = exponent.kind == Z8PrimaryKind.integer ? z8_decimal_from_int(exponent.integerValue) : exponent.decimalValue;
+            return z8_primary_box(integral ? z8_int_power(value.integerValue, power) : z8_decimal_math!"power"(number, power));
         }
     } else if (!integral && arguments.length == 2 && name == "round"w)
         return z8_primary_box(number.z8_round(intArg(0), intArg(1)));
