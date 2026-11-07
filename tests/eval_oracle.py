@@ -169,6 +169,9 @@ public class EvalOracle {
             catch (Exception error) { System.out.println("error"); }
         jsonEval.z8_setVariable(new string("pattern"), new string("{0}-{1}"));
         System.out.println(jsonEval.z8_evaluateText(new string("value=${pattern.format('a,b'.split(','))}")).get());
+        for (String expression : new String[]{"string.concat('a,b'.split(','), '-') == 'a-b'", "string.concat('a,b'.split(','), '') == 'ab'", "string.concat(''.split(','), '-') == ''", "'x'.concat('a,b'.split(','), '-') == 'a-b'", "string.fromBinary('hello'.binary()) == 'hello'", "string.fromBinary('Привет'.binary()) == 'Привет'", "string.concat('a', '-') == 'a'", "string.fromBinary('a') == 'a'"})
+            try { System.out.println(jsonEval.z8_evaluateBoolean(new string(expression)).get()); }
+            catch (Exception error) { System.out.println("error"); }
     }
 }
 ''', encoding="utf-8")
@@ -361,6 +364,9 @@ void main() {
         catch (Exception) { writeln("error"); }
     jsonEval.m_setVariable("pattern"w, z8_primary_box("{0}-{1}"w));
     writeln(jsonEval.m_evaluateText("value=${pattern.format('a,b'.split(','))}"w).to!string);
+    foreach (expression; ["string.concat('a,b'.split(','), '-') == 'a-b'"w, "string.concat('a,b'.split(','), '') == 'ab'"w, "string.concat(''.split(','), '-') == ''"w, "'x'.concat('a,b'.split(','), '-') == 'a-b'"w, "string.fromBinary('hello'.binary()) == 'hello'"w, "string.fromBinary('Привет'.binary()) == 'Привет'"w, "string.concat('a', '-') == 'a'"w, "string.fromBinary('a') == 'a'"w])
+        try { writeln(z8_optional_require(jsonEval.m_evaluateBoolean(expression))); }
+        catch (Exception) { writeln("error"); }
 }
 ''', encoding="utf-8")
     executable = temp / ("eval-oracle.exe" if os.name == "nt" else "eval-oracle")

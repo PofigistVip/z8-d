@@ -181,6 +181,8 @@ private Z8Primary z8_eval_type_method(Z8EvalContext context, wstring name, Z8Eva
             if (name == "tomorrow"w) return z8_primary_box(z8_date_tomorrow());
         }
     } else if (arguments.length == 1) {
+        if (context == Z8EvalContext.stringType && name == "fromBinary"w)
+            return z8_primary_box(z8_string_new(z8_string_fromBinary(arg(0, Z8PrimaryKind.binary).binaryValue)));
         if (name == "parse"w) {
             auto text = arg(0, Z8PrimaryKind.text).textValue;
             if (context == Z8EvalContext.booleanType) return z8_primary_box(z8_bool_parse(text));
@@ -208,6 +210,16 @@ private Z8Primary z8_eval_type_method(Z8EvalContext context, wstring name, Z8Eva
             return z8_primary_box(z8_guid_create(arg(0, Z8PrimaryKind.integer).integerValue, arg(1, Z8PrimaryKind.integer).integerValue));
         if (context == Z8EvalContext.stringType && name == "replicate"w)
             return z8_primary_box(z8_string_new(z8_string_replicate(arg(0, Z8PrimaryKind.text).textValue, arg(1, Z8PrimaryKind.integer).integerValue)));
+        if (context == Z8EvalContext.stringType && name == "concat"w && arguments[0].collection !is null) {
+            auto values = new Z8Array!wstring();
+            auto source = arguments[0].collection;
+            for (long i; i < source.z8_size(); ++i) {
+                auto value = source.z8_get(i);
+                if (value is null || value.kind != Z8PrimaryKind.text) throw new Exception("invalid Eval concat value");
+                values.z8_add(value.textValue);
+            }
+            return z8_primary_box(z8_string_new(z8_string_concat(values, arg(1, Z8PrimaryKind.text).textValue)));
+        }
     }
     throw new Exception("unsupported Eval type method");
 }
@@ -339,7 +351,7 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
         if ((name == "parse"w && type != Z8EvalContext.stringType && type != Z8EvalContext.none) ||
             (name == "parseIsoString"w && type == Z8EvalContext.dateType) ||
             (name == "create"w && type == Z8EvalContext.guidType) ||
-            (name == "replicate"w && type == Z8EvalContext.stringType) ||
+            (["replicate"w, "concat"w, "fromBinary"w].canFind(name) && type == Z8EvalContext.stringType) ||
             (["now"w, "today"w, "yesterday"w, "tomorrow"w, "isEqualDate"w].canFind(name) && type == Z8EvalContext.dateType))
             return Z8EvalValue(true, z8_eval_type_method(type, name, arguments), null, null);
     }
