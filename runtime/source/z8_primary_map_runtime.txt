@@ -1,10 +1,13 @@
 class Z8PrimaryMap {
     private Z8Primary[wstring] entries;
     private Z8JavaMapOrder!wstring order;
+    private wstring[] insertionKeys;
     private bool hasNullKey;
     private Z8Primary nullKeyValue;
     override bool opEquals(Object other) {
         auto right = cast(Z8PrimaryMap)other;
+        auto strings = cast(Z8StringMap)other;
+        if (strings !is null) return this.opEquals(z8_primary_map_view(strings));
         import std.meta : AliasSeq;
         static foreach (V; AliasSeq!(long, bool, Z8Decimal, Z8Guid, Z8Binary, Z8Datespan, Z8Date, Z8Geometry, Z8File)) {{
             auto typed = cast(Z8StringValueMap!V)other;
@@ -15,7 +18,7 @@ class Z8PrimaryMap {
     long z8_size() { return cast(long)entries.length + (hasNullKey ? 1 : 0); }
     bool z8_isEmpty() { return entries.length == 0 && !hasNullKey; }
     private Z8JavaMapOrder!wstring ordering() { if (order is null) order = new Z8JavaMapOrder!wstring(); return order; }
-    void z8_clear() { entries.clear(); hasNullKey = false; nullKeyValue = null; if (order !is null) order.clear(); }
+    void z8_clear() { entries.clear(); insertionKeys = null; hasNullKey = false; nullKeyValue = null; if (order !is null) order.clear(); }
     bool z8_containsKey(wstring key) { return key is null ? hasNullKey : (key in entries) !is null; }
     bool z8_containsValue(Z8Primary value) {
         if (hasNullKey && z8_primary_collection_equals(value, nullKeyValue)) return true;
@@ -30,7 +33,7 @@ class Z8PrimaryMap {
         }
         auto found = key in entries;
         auto previous = found is null ? null : *found;
-        if (found is null) ordering().add(key);
+        if (found is null) { insertionKeys ~= key; ordering().add(key); }
         entries[key] = value;
         return previous;
     }
@@ -44,6 +47,12 @@ class Z8PrimaryMap {
     Z8Array!wstring z8_keys() {
         auto result = new Z8Array!wstring();
         if (order !is null) foreach (key; order.ordered()) result.z8_add(key);
+        return result;
+    }
+    Z8Array!wstring z8_insertion_keys() {
+        auto result = new Z8Array!wstring();
+        foreach (key; insertionKeys) result.z8_add(key);
+        if (hasNullKey) result.z8_add(null);
         return result;
     }
     Z8Array!Z8Primary z8_values() {
@@ -67,6 +76,9 @@ class Z8PrimaryMap {
         auto previous = *found;
         entries.remove(key);
         ordering().remove(key);
+        foreach (i, existing; insertionKeys) if (existing == key) {
+            insertionKeys = insertionKeys[0 .. i] ~ insertionKeys[i + 1 .. $]; break;
+        }
         return previous;
     }
 }

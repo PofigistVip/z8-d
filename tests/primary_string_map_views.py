@@ -35,6 +35,16 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
         date[string] dates = {}; primary[string] dateValues = dates;
         date d = '01/01/2024'; dateValues.add("date", d);
         if (dates.get("date") != d) return 6;
+        string[string] strings = {("first", "one"), ("second", "two")};
+        primary[string] mixed = strings;
+        mixed.add("first", "updated"); strings.add("second", "changed");
+        if (strings.get("first") != "updated" || (string)mixed.get("second") != "changed") return 12;
+        mixed.add("wrong", 7); try { string bad = strings.get("wrong"); return 13; } catch (exception expected) {}
+        strings.add("wrong", "fixed"); if ((string)mixed.get("wrong") != "fixed") return 14;
+        mixed.add("wrong", 7);
+        try { string previousText = strings.add("wrong", "after"); return 16; } catch (exception expected) {}
+        if (strings.get("wrong") != "after") return 17;
+        mixed.add("wrong", 7); strings.remove("wrong"); if (mixed.containsKey("wrong")) return 15;
         return 0;
     }
 }''', encoding="utf-8")
@@ -63,13 +73,29 @@ void main() {
     assert(primary.opEquals(typed) && typed.opEquals(primary));
     primary.z8_clear(); assert(typed.z8_isEmpty());
     assert(z8_primary_map_view(cast(Z8StringValueMap!long)null) is null);
+    auto strings = new Z8StringMap();
+    strings.z8_add("Aa"w, "one"w); strings.z8_add("BB"w, "two"w); strings.z8_add(null, null);
+    auto insertion = strings.z8_insertion_keys(); auto primaryStrings = z8_primary_map_view(strings);
+    assert(primaryStrings.z8_insertion_keys().opEquals(insertion));
+    primaryStrings.z8_add("third"w, z8_primary_box("three"w));
+    assert(strings.z8_insertion_keys().z8_size() == 4 && strings.z8_insertion_keys().z8_get(2) == "third"w);
+    primaryStrings.z8_remove("Aa"w);
+    assert(strings.z8_insertion_keys().z8_get(0) == "BB"w);
+    strings.z8_add("BB"w, "changed"w);
+    assert(z8_primary_cast!wstring(primaryStrings.z8_get("BB"w)) == "changed"w);
+    primaryStrings.z8_add("wrong"w, z8_primary_box(42L)); invalid = false;
+    try { strings.z8_get("wrong"w); } catch (Exception) { invalid = true; } assert(invalid);
+    z8_map_add_discard(strings, "wrong"w, "fixed"w);
+    assert(z8_primary_cast!wstring(primaryStrings.z8_get("wrong"w)) == "fixed"w);
+    assert(strings.opEquals(primaryStrings) && primaryStrings.opEquals(strings));
+    assert(z8_primary_map_view(cast(Z8StringMap)null) is null);
     assert(z8_optional_require(Z8p_50726F6265.m_run()) == 0);
 }''', encoding="utf-8")
     executable = temp / ("primary-maps.exe" if os.name == "nt" else "primary-maps")
     subprocess.run(["dmd", "-I" + str(generated), *import_args(), *map(str, generated.rglob("*.d")),
                     str(harness), str(runtime), "-of=" + str(executable)], cwd=temp, check=True)
     subprocess.run([str(executable)], cwd=temp, check=True)
-    for typed, primary in (("int[]", "primary[]"), ("int[][]", "primary[][]"), ("int[string]", "primary[string]")):
+    for typed, primary in (("int[]", "primary[]"), ("int[][]", "primary[][]"), ("int[string]", "primary[string]"), ("string[string]", "primary[string]")):
         (source / "Bad.bl").write_text('public class Bad { static void choose(' + typed + ' x) {} static void choose(' + primary + ' x) {} static void run() { ' + typed + ' x; choose(x); } }', encoding="utf-8")
         result = subprocess.run([str(compiler), "project", str(source), str(generated)], capture_output=True, text=True)
         if result.returncode == 0 or "ambiguous" not in result.stderr:

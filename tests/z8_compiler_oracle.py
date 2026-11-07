@@ -248,9 +248,9 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     for kind in ("binary", "date", "datespan", "geometry"):
         declaration = kind + '[] source; primary[] values = source; for (primary item : source) {}'
         name_cases.append((True, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
-    for typed, primary in (("int[]", "primary[]"), ("int[][]", "primary[][]"), ("int[string]", "primary[string]")):
+    for typed, primary in (("int[]", "primary[]"), ("int[][]", "primary[][]"), ("int[string]", "primary[string]"), ("string[string]", "primary[string]")):
         name_cases.append((False, {"NameA": 'public class NameA { static void choose(' + typed + ' x) {} static void choose(' + primary + ' x) {} static void f() { ' + typed + ' x; choose(x); } }'}))
-    for kind in ("int", "bool", "decimal", "guid", "binary", "date", "datespan", "geometry", "file"):
+    for kind in ("int", "bool", "decimal", "string", "guid", "binary", "date", "datespan", "geometry", "file"):
         declaration = kind + '[string] source; primary[string] values = source; values.add(source);'
         name_cases.append((True, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
     for kind in ("int", "bool", "decimal", "string", "guid", "binary", "date", "datespan", "geometry", "file"):

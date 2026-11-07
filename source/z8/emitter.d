@@ -794,7 +794,6 @@ private string emitSimple(Statement s) {
         auto e = s.expression;
         if (e.kind == ExprKind.memberCall && isMap(e.inferredType) &&
             mapKeyType(e.inferredType) == ValueType.stringType &&
-            mapValueType(e.inferredType) != ValueType.stringType &&
             isScalarPrimaryArray(arrayOf(mapValueType(e.inferredType)))) {
             if (e.token.text == "add" && e.arguments.length == 2)
                 return "z8_map_add_discard(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.arguments[0]) ~ ", " ~ emitExpr(e.arguments[1]) ~ ")";
@@ -811,7 +810,7 @@ private string emitSimple(Statement s) {
     if (s.filePathAssignment) return "z8_file_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.dateTickAssignment) return "z8_date_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.target.kind == ExprKind.index && isMap(s.target.inferredType) && s.assignmentOperator == "=" &&
-        mapKeyType(s.target.inferredType) == ValueType.stringType && mapValueType(s.target.inferredType) != ValueType.stringType &&
+        mapKeyType(s.target.inferredType) == ValueType.stringType &&
         isScalarPrimaryArray(arrayOf(mapValueType(s.target.inferredType))))
         return "z8_map_add_discard(" ~ emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.target.kind == ExprKind.index && isMap(s.target.inferredType))

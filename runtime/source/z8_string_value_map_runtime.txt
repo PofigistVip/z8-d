@@ -124,6 +124,8 @@ Z8PrimaryMap z8_primary_map_view(V)(Z8StringValueMap!V values) if (Z8StringValue
         auto result = new Z8PrimaryMap();
         foreach (key, value; values.entries) result.entries[key] = z8_primary_box(value);
         result.order = values.order;
+        if (values.order !is null) foreach (entry; values.order.keys)
+            if (entry.key !is null) result.insertionKeys ~= entry.key;
         result.hasNullKey = values.hasNullKey;
         result.nullKeyValue = z8_primary_box(values.nullKeyValue);
         values.entries = null; values.order = null;

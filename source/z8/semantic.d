@@ -291,7 +291,7 @@ class Checker {
     private bool isPrimaryStringMapConversion(ValueType actual, ValueType expected) {
         return isMap(actual) && isMap(expected) && mapKeyType(actual) == ValueType.stringType &&
             mapKeyType(expected) == ValueType.stringType && mapValueType(expected) == ValueType.primaryType &&
-            mapValueType(actual) != ValueType.stringType && isScalarPrimaryArray(arrayOf(mapValueType(actual)));
+            isScalarPrimaryArray(arrayOf(mapValueType(actual)));
     }
     private bool matches(Expression e, ValueType expected, Program expectedClass = null, Program[] expectedKeyClasses = null) {
         if (e.kind == ExprKind.arrayLiteral && hasObjectClass(expected)) e.objectClass = expectedClass;
