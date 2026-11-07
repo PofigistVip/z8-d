@@ -697,10 +697,9 @@ private void z8_poi_report_apply_nested_simple(Z8Object report, Z8Object range, 
     if (outerText is null && inheritedSheet < 0 && !inferredBounds) throw new Exception("nested POI report ranges require explicit boundaries");
     // A nested parent's effective bounds were validated by its own parent.
     auto outerBounds = outerText is null ? outer : z8_poi_report_block(outerText);
-    bool equal(Z8PoiReportBlock a, Z8PoiReportBlock b) {
-        return a.firstRow == b.firstRow && a.lastRow == b.lastRow && a.firstColumn == b.firstColumn && a.lastColumn == b.lastColumn;
-    }
-    if (!equal(outer, outerBounds)) throw new Exception("nested POI report range layout is not implemented");
+    if (outer.firstRow < outerBounds.firstRow || outer.firstColumn < outerBounds.firstColumn ||
+        outer.lastRow > outerBounds.lastRow || outer.lastColumn > outerBounds.lastColumn)
+        throw new Exception("nested POI report range layout is not implemented");
     auto parentSource = *z8_report_range_source(range);
     auto parentKind = z8_report_source_state(parentSource).kind;
     Z8PoiReportEntry[] entries;
@@ -713,9 +712,7 @@ private void z8_poi_report_apply_nested_simple(Z8Object report, Z8Object range, 
         // Java inherits the parent's block for an only child; siblings default
         // to their own blocks. Only layouts without resizing are handled here.
         auto innerBounds = innerText !is null ? z8_poi_report_block(innerText) : children.z8_size() == 1 ? outer : inner;
-        auto grandchildren = z8_report_range_state(child).ranges;
-        bool leaf = grandchildren is null || !grandchildren.view().z8_erased_data().z8_size();
-        if ((!leaf && !equal(inner, innerBounds)) || inner.firstRow < innerBounds.firstRow || inner.firstColumn < innerBounds.firstColumn ||
+        if (inner.firstRow < innerBounds.firstRow || inner.firstColumn < innerBounds.firstColumn ||
             inner.lastRow > innerBounds.lastRow || inner.lastColumn > innerBounds.lastColumn ||
             innerBounds.firstRow < outer.firstRow || innerBounds.firstColumn < outer.firstColumn ||
             innerBounds.lastRow > outer.lastRow || innerBounds.lastColumn > outer.lastColumn)
