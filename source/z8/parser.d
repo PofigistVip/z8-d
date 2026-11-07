@@ -579,7 +579,7 @@ class Parser {
             default: return 0;
         }
     }
-    private Expression expression(int minPrecedence = 1) {
+    private Expression expression(int minPrecedence = 1, bool allowInstanceOf = true) {
         auto left = unary();
         while (precedence(current.text) >= minPrecedence) {
             auto op = take(); auto p = precedence(op.text);
@@ -592,13 +592,13 @@ class Parser {
         }
         if (minPrecedence == 1 && current.text == "?") {
             auto node = new Expression(ExprKind.conditional, take());
-            node.left = left; node.right = expression(); expect(":"); node.third = expression(); left = node;
+            node.left = left; node.right = expression(); expect(":"); node.third = expression(1, false); left = node;
         }
         else if (minPrecedence == 1 && current.text == "?:") {
             auto node = new Expression(ExprKind.elvis, take());
             node.left = left; node.right = initializer(); left = node;
         }
-        if (minPrecedence == 1 && accept("instanceof")) {
+        if (minPrecedence == 1 && allowInstanceOf && accept("instanceof")) {
             auto node = new Expression(ExprKind.instanceOf, qualifiedIdentifier());
             node.left = left; left = node;
         }

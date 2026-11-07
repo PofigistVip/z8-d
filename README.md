@@ -219,6 +219,7 @@ python tests/decimal_oracle.py
 python tests/decimal_literal_precision.py
 python tests/bl_standard_probes.py path/to/bl-standard
 python tests/comparison_grammar_oracle.py path/to/original-z8
+python tests/conditional_instanceof.py
 python tests/bl_standard_runtime_probes.py path/to/bl-standard
 python tests/string_oracle.py
 python tests/lexer_oracle.py path/to/original-z8 --corpus
@@ -279,6 +280,8 @@ UTF-16, `line` и `column` отсчитываются с нуля. Пробел�
 
 Сравнения одного уровня не образуют цепочку: для повторного `==`, `!=`, `<`,
 `>`, `<=` или `>=` требуются скобки, как в грамматике оригинала.
+`instanceof` после тернарного выражения применяется ко всему выражению;
+скобки позволяют проверить тип только одной ветки.
 
 Поддерживаются ключевые и зарезервированные слова исходного компилятора,
 операторы, вложенные блочные и однострочные комментарии, строки с escape-последовательностями,

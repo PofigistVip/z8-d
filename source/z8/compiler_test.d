@@ -31,6 +31,9 @@ unittest {
     compile(q{class A { bool f() { return (true == false) == true; } }});
     compile(q{class A { bool f() { return true == (false == true); } }});
     compile(q{class A { bool f() { return (1 < 2) == (3 < 4); } }});
+    compile(q{class A { bool f() { return true ? new A : new A instanceof A; } }});
+    compile(q{class A { bool f() { return true ? true : (new A instanceof A); } }});
+    rejects(q{class A { bool f() { return true ? true : new A instanceof A; } }});
     rejects(q{[flag] [flag] class A {}});
     rejects(q{final public class A {}});
     rejects(q{[request "true"] class A {}});

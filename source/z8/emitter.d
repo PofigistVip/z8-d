@@ -427,6 +427,18 @@ private string emitReceiver(Expression e) {
     if (e.kind == ExprKind.superRef) return "(" ~ emitExpr(e) ~ ")";
     return "z8_nonnull(" ~ emitExpr(e) ~ (e.earlyFieldInitialization ? ", -1" : e.fieldInitialization ? ", 0" : "") ~ ")";
 }
+// DMD can incorrectly fold a class cast applied directly to a conditional.
+// Bind that expression before the dynamic cast and evaluate it only once.
+private string emitInstanceOfCast(Expression value, string target, bool viaObject = false) {
+    auto source = emitExpr(value);
+    if (value.kind == ExprKind.conditional) {
+        auto operand = viaObject ? "cast(Object)z8_instanceof_value" : "z8_instanceof_value";
+        return "(() { auto z8_instanceof_value = " ~ source ~ "; return cast(" ~ target ~ ")(" ~ operand ~ ") !is null; })()";
+    }
+    if (viaObject) source = "cast(Object)(" ~ source ~ ")";
+    return "(cast(" ~ target ~ ")(" ~ source ~ ") !is null)";
+}
+
 private string emitExprRaw(Expression e) {
     final switch (e.kind) {
         case ExprKind.integer:
@@ -614,8 +626,8 @@ private string emitExprRaw(Expression e) {
             return e.castType == ValueType.selfType ? "z8_cast!(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")" : emitExpr(e.left);
         case ExprKind.instanceOf:
             if (e.exceptionObjectInstanceOf) return "z8_exception_is_object!(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")";
-            if (e.sqlPrimaryInstanceOf) return "(cast(" ~ dType(e.castType) ~ ")(" ~ emitExpr(e.left) ~ ") !is null)";
-            if (e.exceptionInstanceOf) return "(cast(Z8Exception)(" ~ emitExpr(e.left) ~ ") !is null)";
+            if (e.sqlPrimaryInstanceOf) return emitInstanceOfCast(e.left, dType(e.castType));
+            if (e.exceptionInstanceOf) return emitInstanceOfCast(e.left, "Z8Exception");
             if (e.falseInstanceOf) {
                 if (e.inferredType == ValueType.nullType) return "false";
                 return "(() { auto z8_value = " ~ emitExpr(e.left) ~ "; return false; })()";
@@ -627,8 +639,8 @@ private string emitExprRaw(Expression e) {
                 return "(" ~ emitExpr(e.left) ~ " !is null)";
             }
             if (e.primaryInstanceOf) return "z8_primary_is!(" ~ dType(e.castType, e.objectClass) ~ ")(" ~ emitExpr(e.left) ~ ")";
-            if (e.objectInstanceOf) return "(cast(" ~ e.objectClass.emittedName ~ ")(cast(Object)(" ~ emitExpr(e.left) ~ ")) !is null)";
-            return "(cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ") !is null)";
+            if (e.objectInstanceOf) return emitInstanceOfCast(e.left, e.objectClass.emittedName, true);
+            return emitInstanceOfCast(e.left, e.objectClass.emittedName);
         case ExprKind.unary:
             if (e.sqlBoolOperator) return "z8_sql_bool_not(" ~ emitExpr(e.left) ~ ")";
             if (e.sqlIntOperator) return (e.token.text == "+" ? "z8_nonnull(" : e.token.text == "~" ? "z8_sql_int_bit_not(" : "z8_sql_int_negate(") ~ emitExpr(e.left) ~ ")";

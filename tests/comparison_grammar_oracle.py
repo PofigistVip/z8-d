@@ -1,4 +1,4 @@
-"""Compare BL comparison grouping against the original Z8 compiler.
+"""Compare BL comparison and conditional grouping against the original Z8 compiler.
 
 Usage: python tests/comparison_grammar_oracle.py <original-z8-root>
 """
@@ -30,6 +30,15 @@ cases = (
     ("(1 < 2) == (3 < 4)", True),
     ("1 < 2 == 3 < 4", True),
     ("1 < 2 && 3 < 4", True),
+    ("true ? new SpecProbe : new SpecProbe instanceof SpecProbe", True),
+    ("true ? true : new SpecProbe instanceof SpecProbe", False),
+    ("true ? true : (new SpecProbe instanceof SpecProbe)", True),
+    ("(true ? new SpecProbe : new SpecProbe) instanceof SpecProbe", True),
+    ("true ? (new SpecProbe instanceof SpecProbe) : false", True),
+    ("true ? new SpecProbe : false ? new SpecProbe : new SpecProbe instanceof SpecProbe", True),
+    ("true ? true : false ? true : new SpecProbe instanceof SpecProbe", False),
+    ("new SpecProbe ?: new SpecProbe instanceof SpecProbe", False),
+    ("(new SpecProbe ?: new SpecProbe) instanceof SpecProbe", True),
 )
 with tempfile.TemporaryDirectory() as directory:
     temp = Path(directory)
@@ -55,4 +64,4 @@ with tempfile.TemporaryDirectory() as directory:
         d_accepts = d.returncode == 0
         if java_accepts != expected or d_accepts != expected:
             raise AssertionError((expression, expected, java_accepts, d_accepts, java.stdout, java.stderr, d.stderr))
-print(f"{len(cases)} comparison grammar probes matched original Z8")
+print(f"{len(cases)} expression grammar probes matched original Z8")
