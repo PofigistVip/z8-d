@@ -67,7 +67,7 @@ private class Z8EvalParser {
                 if (take("("w)) {
                     auto values = arguments();
                     if (evaluating) value = z8_eval_method(value, name, values);
-                } else if (evaluating) value = z8_eval_property(value, name);
+                } else if (evaluating) value = z8_eval_property(state, value, name);
             } else if (take("["w)) {
                 auto index = conditional();
                 if (!take("]"w)) throw new Exception("unclosed Eval index");

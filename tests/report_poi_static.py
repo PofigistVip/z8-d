@@ -69,6 +69,10 @@ public class StaticReportProbe {
     public static int closed(CustomRangeReport report) { return report.rows.closed; }
     public static void customCount(CustomRangeReport report, int count) { report.rows.n = count; }
     public static void customFail(CustomRangeReport report) { report.rows.fail = true; }
+    public static file jsonRange() { JsonRangeReport report; return report.run(guid.Null); }
+    public static JsonRangeReport createJsonReport() { JsonRangeReport report; return report; }
+    public static void jsonCount(JsonRangeReport report, int count) { report.copies = count; }
+    public static file runJsonReport(JsonRangeReport report) { return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -154,8 +158,22 @@ import org.zenframework.z8.base.form.report.Range;
 public class CustomRangeReport extends Report {
     engine = Report.POI; template = "custom";
     public ReportRows rows; objects = {rows};
-    [address "A1:B1"] [boundaries "A1:B1"] Range region;
+    [address "A1:D1"] [boundaries "A1:D1"] Range region;
     region.source = rows; ranges = {region};
+}''', encoding="utf-8")
+    (source / "JsonRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+import org.zenframework.z8.base.json.JsonObject;
+import org.zenframework.z8.base.json.JsonArray;
+public class JsonRangeReport extends Report {
+    engine = Report.POI; template = "json";
+    JsonArray rows; public int copies = 1; objects = {rows};
+    [address "A1:E1"] [boundaries "A1:E1"] Range region;
+    region.source = rows; ranges = {region};
+    virtual protected void prepare(guid recordId) {
+        JsonObject item; item.set("title", "Ada 😀"); item.set("amount", 42);
+        if (copies > 0) rows.add(item); if (copies > 1) rows.add(item);
+    }
 }''', encoding="utf-8")
     (source / "UnsupportedContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
@@ -326,12 +344,18 @@ public class %s extends Report {
         for entry_name, content in fields.items():
             archive.writestr(entry_name, content)
     custom = dict(parameters)
-    custom["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="2" uniqueCount="2"><si><t>${rows.data.value}</t></si><si><t>Value: ${rows.data.value}</t></si></sst>'''
+    custom["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="4" uniqueCount="4"><si><t>${rows.data.value}</t></si><si><t>Value: ${rows.data.value}</t></si><si><t>${rows.index}</t></si><si><t>${rows.sheet}</t></si></sst>'''
     custom["xl/worksheets/sheet1.xml"] = original_sheet.replace(
         '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
-        '<c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c>')
+        '<c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c>'
+        '<c r="C1" t="s"><v>2</v></c><c r="D1" t="s"><v>3</v></c>')
     with zipfile.ZipFile(application / "reports/custom.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in custom.items():
+            archive.writestr(entry_name, content)
+    json_source = dict(parameters)
+    json_source["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="5" uniqueCount="5"><si><t>${rows.item.title}</t></si><si><t>${rows.item.amount}</t></si><si><t>${rows.index}</t></si><si><t>${rows.sheet}</t></si><si><t>Title: ${rows.item.title}</t></si></sst>'''
+    with zipfile.ZipFile(application / "reports/json.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in json_source.items():
             archive.writestr(entry_name, content)
     merged = dict(entries)
     merged["xl/worksheets/sheet1.xml"] = original_sheet.replace("</worksheet>", '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')
@@ -467,6 +491,13 @@ void main(string[] args) {
     bool customFailedOpen; try { P.m_runCustomReport(customReport); } catch (Exception) { customFailedOpen = true; } assert(customFailedOpen);
     assert(z8_optional_require(P.m_opened(customReport)) == 3 && z8_optional_require(P.m_closed(customReport)) == 3);
     assert(database.begins == 47 && database.rollbacks == 47);
+    bool json; try { P.m_jsonRange(); } catch (Exception) { json = true; } assert(json);
+    assert(database.begins == 48 && database.rollbacks == 48);
+    auto jsonEmpty = P.m_createJsonReport(); P.m_jsonCount(jsonEmpty, z8_optional_wrap(0L));
+    bool empty; try { P.m_runJsonReport(jsonEmpty); } catch (Exception) { empty = true; } assert(empty);
+    auto jsonMany = P.m_createJsonReport(); P.m_jsonCount(jsonMany, z8_optional_wrap(2L));
+    bool many; try { P.m_runJsonReport(jsonMany); } catch (Exception) { many = true; } assert(many);
+    assert(database.begins == 50 && database.rollbacks == 50);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -523,6 +554,9 @@ void main(string[] args) {
         contents = contents.replace(
             'bool customResult; try { P.m_runCustomReport(customReport); } catch (Exception) { customResult = true; } assert(customResult);',
             'auto customResult = P.m_runCustomReport(customReport); copy(z8_file_resolve_path(customResult), buildPath(args[2], "custom.xlsx")); assert(counter.writes == 7);')
+        contents = contents.replace(
+            'bool json; try { P.m_jsonRange(); } catch (Exception) { json = true; } assert(json);',
+            'auto json = P.m_jsonRange(); copy(z8_file_resolve_path(json), buildPath(args[2], "json.xlsx")); assert(counter.writes == 8);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -685,6 +719,7 @@ class PoiRangeOracle {
       boolean contextCase = args.length > 3 && "context".equals(args[3]);
       boolean fieldCase = args.length > 3 && "fields".equals(args[3]);
       boolean customCase = args.length > 3 && "custom".equals(args[3]);
+      boolean jsonCase = args.length > 3 && "json".equals(args[3]);
       DataSource customSource = null;
       if (contextCase) {
         org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> info =
@@ -733,19 +768,29 @@ class PoiRangeOracle {
           }
         };
       }
+      if (jsonCase) {
+        org.zenframework.z8.server.base.json.parser.JsonArray.CLASS<org.zenframework.z8.server.base.json.parser.JsonArray> rows =
+            new org.zenframework.z8.server.base.json.parser.JsonArray.CLASS<>(context);
+        rows.setIndex("rows"); context.members().add(rows);
+        org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> item =
+            new org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<>(null);
+        item.get().z8_set(new org.zenframework.z8.server.types.string("title"), new org.zenframework.z8.server.types.string("Ada 😀"));
+        item.get().z8_set(new org.zenframework.z8.server.types.string("amount"), new org.zenframework.z8.server.types.integer(42));
+        rows.get().z8_add(item); customSource = new JsonSource(rows.get());
+      }
       PoiReport report = new PoiReport(new ReportOptions()).setContext(context);
       boolean constants = args.length > 3 && "constants".equals(args[3]);
       boolean parameters = args.length > 3 && "parameters".equals(args[3]);
       boolean dates = args.length > 3 && "dates".equals(args[3]);
-      Range child = new Range().setSource(customCase ? customSource : SimpleSource.newDefault())
-          .setBlock(customCase ? "A1:B1" : fieldCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(customCase ? "A1:B1" : fieldCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
+      Range child = new Range().setSource(customCase || jsonCase ? customSource : SimpleSource.newDefault())
+          .setBlock(customCase ? "A1:D1" : fieldCase || jsonCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
+          .setBoundaries(customCase ? "A1:D1" : fieldCase || jsonCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       report.addRange(0, child);
       if (args.length > 3 && "rename".equals(args[3])) original.setSheetName(0, "Отчёт \\uD83D\\uDE00");
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier); modifier.close();
-      if (constants || parameters || contextCase || dates || fieldCase || customCase) {
-        for (int i = 0; i < (customCase ? 2 : dates ? 10 : constants ? 7 : 5); ++i) {
+      if (constants || parameters || contextCase || dates || fieldCase || customCase || jsonCase) {
+        for (int i = 0; i < (customCase ? 4 : dates ? 10 : constants ? 7 : 5); ++i) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(0).getCell(i);
           if (expected.getCellType() != result.getCellType()) throw new AssertionError("cell type differs at " + i);
@@ -803,6 +848,10 @@ class PoiRangeOracle {
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/custom.xlsx"), str(working / "custom.xlsx"), str(config), "custom"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/json.xlsx"), str(working / "json.xlsx"), str(config), "json"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
 print("POI static report template, naming and transaction verified")

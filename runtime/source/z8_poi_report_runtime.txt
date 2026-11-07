@@ -108,7 +108,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     }
     auto source = *z8_report_range_source(range);
     auto sourceKind = z8_report_source_state(source).kind;
-    if (sourceKind != Z8ReportSourceKind.simple && sourceKind != Z8ReportSourceKind.custom)
+    if (sourceKind != Z8ReportSourceKind.simple && sourceKind != Z8ReportSourceKind.custom && sourceKind != Z8ReportSourceKind.json)
         throw new Exception("expanding POI report data sources are not implemented");
     z8_report_register_data_source(report, source);
     // Java opens and advances the source before evaluating cells. In
@@ -118,6 +118,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     if (!z8_report_source_next(source)) throw new Exception("empty POI report data sources are not implemented");
     auto evalState = new Z8EvalState();
     evalState.reportContext = report;
+    evalState.reportSource = source;
     auto request = z8_application_request();
     if (request !is null && request.parameters !is null)
         evalState.variables["parameters"w] = Z8EvalVariable(null, null, request.parameters);

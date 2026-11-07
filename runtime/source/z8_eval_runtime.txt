@@ -4,6 +4,7 @@ private struct Z8EvalVariable { Z8Primary primary; Z8Object json; Z8StringMap re
 private class Z8EvalState {
     Z8EvalVariable[wstring] variables;
     Z8Object reportContext;
+    Z8Object reportSource;
     Z8JavaMapOrder!wstring order;
     wstring[] errors;
     this() { order = new Z8JavaMapOrder!wstring(); }

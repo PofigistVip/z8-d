@@ -84,12 +84,33 @@ private Z8EvalValue z8_eval_json_property(Z8Object object, wstring name) {
             z8_json_object_get_object(object, name) : z8_json_object_get_array(object, name), null);
     return z8_eval_json_scalar(value, name.to!string in state.decimals);
 }
-private Z8EvalValue z8_eval_property(Z8EvalValue object, wstring name) {
+private Z8EvalValue z8_eval_property(Z8EvalState state, Z8EvalValue object, wstring name) {
     if (!object.evaluated)
         return Z8EvalValue(false, null, null, z8_eval_expression_repr(object) ~ "."w ~ name);
     // Java request parameters are a Map<z8.string, z8.string>; property
     // lookup uses a Java String key and therefore does not match those keys.
     if (object.requestParameters !is null) return Z8EvalValue(true, null, null, null);
+    if (state.reportSource !is null) {
+        auto source = z8_report_source_state(state.reportSource);
+        auto target = object.reportObject !is null ? object.reportObject : object.json;
+        if (target is source.source && !z8_native_is_instance(z8_json_object_name, target) &&
+            (name == "index"w || name == "sheet"w || (name == "item"w && source.kind == Z8ReportSourceKind.json))) {
+            // Java installs wrappers under these names; an existing arbitrary
+            // member cannot safely be treated as the wrapper it expects.
+            foreach (member; z8_object_members(target)) if (member.z8_index() == name)
+                throw new Exception("conflicting POI report source member");
+            if (name == "index"w) return Z8EvalValue(true, z8_primary_box(source.index), null, null);
+            if (name == "sheet"w) return Z8EvalValue(true, z8_primary_box(source.sheet), null, null);
+            auto array = z8_json_array_state(target);
+            auto position = z8_json_array_position(array, z8_optional_wrap(source.index));
+            auto value = array.value.array[position];
+            if (value.type == JSONType.object || value.type == JSONType.array)
+                return Z8EvalValue(true, null, value.type == JSONType.object ?
+                    z8_json_array_get_object(target, z8_optional_wrap(source.index)) :
+                    z8_json_array_get_array(target, z8_optional_wrap(source.index)), null);
+            return z8_eval_json_scalar(value, position in array.decimals);
+        }
+    }
     if (object.reportObject !is null) {
         foreach (member; z8_object_members(object.reportObject))
             if (member.z8_index() == name) return z8_eval_report_member(member);
