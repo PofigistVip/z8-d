@@ -808,8 +808,27 @@ private struct Z8PoiNameEdit { size_t start, end; wstring text; }
 
 private wstring z8_poi_report_named_address(wstring address) {
     import std.algorithm.searching : countUntil;
+    import std.string : toUpper;
+    address = address.toUpper();
+    bool cell(wstring part) {
+        size_t i; uint column, row;
+        if (i < part.length && part[i] == '$') ++i;
+        size_t start = i;
+        while (i < part.length && part[i] >= 'A' && part[i] <= 'Z') {
+            if (column <= 16384) column = column * 26 + cast(uint)(part[i] - 'A' + 1);
+            ++i;
+        }
+        if (i == start || !column || column > 16384) return false;
+        if (i < part.length && part[i] == '$') ++i;
+        start = i;
+        while (i < part.length && part[i] >= '0' && part[i] <= '9') {
+            if (row <= 1048576) row = row * 10 + cast(uint)(part[i] - '0');
+            ++i;
+        }
+        return i == part.length && i > start && part[start] != '0' && row && row <= 1048576;
+    }
     auto colon = address.countUntil(':');
-    if (colon < 0) return address;
+    if (colon < 0) return cell(address) ? address : null;
     auto first = address[0 .. colon], last = address[colon + 1 .. $];
     bool absoluteRow(wstring part) {
         if (part.length < 2 || part[0] != '$') return false;
@@ -817,9 +836,40 @@ private wstring z8_poi_report_named_address(wstring address) {
         return true;
     }
     if (absoluteRow(first) && absoluteRow(last)) return "$A"w ~ first ~ ":$XFD"w ~ last;
-    bool hasDigit(wstring part) { foreach (c; part) if (c >= '0' && c <= '9') return true; return false; }
-    if (!hasDigit(first) || !hasDigit(last)) return null;
-    return address;
+    bool absoluteColumn(wstring part) {
+        if (part.length < 2 || part[0] != '$') return false;
+        foreach (c; part[1 .. $]) if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))) return false;
+        return true;
+    }
+    if (absoluteColumn(first) && absoluteColumn(last)) return first ~ "$1:"w ~ last ~ "$1048576"w;
+    return cell(first) && cell(last) ? address : null;
+}
+
+private wstring z8_poi_report_formula_sheet(wstring name) {
+    if (!name.length) return null;
+    bool quote = name[0] >= '0' && name[0] <= '9';
+    foreach (c; name) {
+        if (c > 127) return null; // Java's Unicode character rules need a separate compatibility check.
+        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.')) quote = true;
+    }
+    if (z8_str_compareNoCase(name, "true"w) == 0 || z8_str_compareNoCase(name, "false"w) == 0) quote = true;
+    size_t i; uint column;
+    while (i < name.length && ((name[i] >= 'A' && name[i] <= 'Z') || (name[i] >= 'a' && name[i] <= 'z'))) {
+        if (column <= 256) column = column * 26 + cast(uint)((name[i] | 0x20) - 'a' + 1);
+        ++i;
+    }
+    if (i && i < name.length && column <= 256) {
+        uint row; size_t firstDigit = i;
+        while (i < name.length && name[i] >= '0' && name[i] <= '9') {
+            if (row <= 65536) row = row * 10 + cast(uint)(name[i] - '0');
+            ++i;
+        }
+        if (i == name.length && i > firstDigit && row && row <= 65536) quote = true;
+    }
+    if (!quote) return name;
+    wstring result = "'"w;
+    foreach (c; name) { if (c == '\'') result ~= '\''; result ~= c; }
+    return result ~ "'"w;
 }
 
 // POI only considers workbook-scoped names and names scoped to the renamed
@@ -853,25 +903,14 @@ private bool z8_poi_report_rename_names(Z8PoiXmlNode definedNames, int index, ws
         }
         foreach (c; formula[separator + 1 .. $])
             if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '$' || c == ':')) return false;
-        if (z8_str_compareNoCase(sheet, oldName) == 0) {
-            // Match POI's sheet-name formatting for alphabetic names and
-            // names containing spaces or apostrophes. Other cases stay gated.
-            bool quote;
-            foreach (c; newName) {
-                if (c == ' ' || c == '\'') quote = true;
-                else if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' || c == '.')) return false;
-            }
-            if (z8_str_compareNoCase(newName, "true"w) == 0 || z8_str_compareNoCase(newName, "false"w) == 0) quote = true;
-            wstring qualified;
-            if (quote) {
-                qualified = "'"w;
-                foreach (c; newName) { if (c == '\'') qualified ~= '\''; qualified ~= c; }
-                qualified ~= '\'';
-            } else qualified = newName;
-            auto address = z8_poi_report_named_address(formula[separator + 1 .. $]);
-            if (address is null) return false;
-            edits ~= Z8PoiNameEdit(item.startEnd, item.endStart, z8_poi_xml_attribute_escape(qualified ~ "!"w ~ address));
-        }
+        // POI re-renders every applicable name, even one referring to a
+        // different sheet; whole-row and whole-column ranges are normalized.
+        auto qualified = z8_poi_report_formula_sheet(sheet == oldName ? newName : sheet);
+        if (qualified is null) return false;
+        auto address = z8_poi_report_named_address(formula[separator + 1 .. $]);
+        if (address is null) return false;
+        auto rewritten = qualified ~ "!"w ~ address;
+        if (rewritten != formula) edits ~= Z8PoiNameEdit(item.startEnd, item.endStart, z8_poi_xml_attribute_escape(rewritten));
     }
     return true;
 }
