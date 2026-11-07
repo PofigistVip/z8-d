@@ -19,6 +19,10 @@ cases = [[("i", 3), ("i", 1), ("i", 2)], [("i", 1), ("d", "NaN")],
          [("span", 1000), ("span", 2000)], [None, ("i", 1)], [("i", 1), None]]
 cases += [[rng.choice(values) for _ in range(rng.randrange(2, 32))] for _ in range(200)]
 cases += [[rng.choice(values[1:]) for _ in range(rng.randrange(2, 32))] for _ in range(100)]
+for kind in ("i", "d", "b", "s", "g", "date", "binary", "file", "geometry"):
+    candidates = [item for item in values if item is not None and item[0] == kind and item != ("geometry", "")]
+    for length in (32, 33, 64, 100):
+        cases.append([rng.choice(candidates) for _ in range(length)])
 
 def make(value):
     if value is None:
@@ -72,7 +76,12 @@ void main() {
     auto spans = new Z8Array!Z8Datespan([one, two]); z8_primary_array_view(spans).z8_sort();
     assert(two.ticks == -1000 && spans.z8_get(0) is two);
     auto large = new Z8Array!Z8Primary(); foreach (_; 0 .. 32) large.z8_add(z8_primary_box(1L));
+    assert(large.z8_sort() is large);
+    large.z8_add(z8_primary_box("mixed"w));
     bool failed; try large.z8_sort(); catch (Exception) failed = true; assert(failed);
+    auto overflow = new Z8Array!Z8Primary(); foreach (_; 0 .. 30) overflow.z8_add(z8_primary_box(0L));
+    overflow.z8_add(z8_primary_box(long.min)); overflow.z8_add(z8_primary_box(long.max));
+    failed = false; try overflow.z8_sort(); catch (Exception) failed = true; assert(failed);
 }''', encoding="utf-8")
     executable = temp / ("oracle.exe" if os.name == "nt" else "oracle")
     subprocess.run(["dmd", str(source), *import_args(), str(runtime), "-of=" + str(executable)], cwd=temp, check=True)
@@ -85,7 +94,7 @@ void main() {
         if not jars:
             raise SystemExit("Original Z8 server jars are unavailable")
         java = temp / "MixedPrimarySortOracle.java"
-        groups = [j_cases[index:index + 50] for index in range(0, len(j_cases), 50)]
+        groups = [j_cases[index:index + 10] for index in range(0, len(j_cases), 10)]
         methods = "\n".join("  static void group%d() {\n%s\n  }" % (index, "\n".join(group)) for index, group in enumerate(groups))
         calls = "\n".join("    group%d();" % index for index in range(len(groups)))
         java.write_text('''import org.zenframework.z8.server.runtime.RCollection;

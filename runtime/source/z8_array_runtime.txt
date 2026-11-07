@@ -332,10 +332,36 @@ class Z8Array(T) {
             return this;
         } else static if (is(T == Z8Primary)) {
             if (z8_size() <= 1) { ++z8_version; return this; }
-            if (z8_size() >= 32) throw new Exception("primary array sorting of 32 or more elements is not implemented");
             auto values = items.dup;
-            scope(failure) items = values;
-            z8_java_short_sort!(Z8Primary, z8_primary_sort_compare)(values);
+            if (values.length < 32) {
+                scope(failure) items = values;
+                z8_java_short_sort!(Z8Primary, z8_primary_sort_compare)(values);
+            } else {
+                // For a homogeneous, non-null array these comparators are
+                // stable and side-effect free. Mixed arrays and datespans need
+                // Java's full TimSort comparison sequence instead.
+                auto first = z8_nonnull(values[0]);
+                if (first.kind == Z8PrimaryKind.datespan || first.kind == Z8PrimaryKind.user)
+                    throw new Exception("large primary array sort is not implemented for this type");
+                long minimum, maximum;
+                if (first.kind == Z8PrimaryKind.integer) minimum = maximum = first.integerValue;
+                if (first.kind == Z8PrimaryKind.date) minimum = maximum = z8_date_ticks(first.dateValue);
+                foreach (value; values) {
+                    if (value is null || value.kind != first.kind) throw new Exception("large mixed primary array sort is not implemented");
+                    if (value.kind == Z8PrimaryKind.geometry && value.geometryValue.rawHex is null && value.geometryValue.shape == -1)
+                        throw new Exception("empty geometry array element");
+                    if (value.kind == Z8PrimaryKind.integer || value.kind == Z8PrimaryKind.date) {
+                        auto ticks = value.kind == Z8PrimaryKind.integer ? value.integerValue : z8_date_ticks(value.dateValue);
+                        if (ticks < minimum) minimum = ticks;
+                        if (ticks > maximum) maximum = ticks;
+                    }
+                }
+                if ((first.kind == Z8PrimaryKind.integer || first.kind == Z8PrimaryKind.date) &&
+                    cast(ulong)maximum - cast(ulong)minimum > cast(ulong)long.max)
+                    throw new Exception("large primary array sort with overflowing comparison is not implemented");
+                scope(failure) items = values;
+                sort!((a, b) => z8_primary_sort_compare(a, b) < 0, SwapStrategy.stable)(values);
+            }
             items = values; ++z8_version;
             return this;
         } else static if (is(T == Z8Datespan)) {
