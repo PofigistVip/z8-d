@@ -668,7 +668,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     }
 }
 
-// Handle one non-expanding child occupying the parent's bottom-right corner.
+// Handle non-expanding, disjoint children whose combined bounds fill the parent.
 // This geometry has zero resize, so both visitors can run without moving cells.
 private void z8_poi_report_apply_nested_simple(Z8Object report, Z8Object range, Z8PoiWorkbook workbook,
                                                out int sheet, out wstring name, out Z8PoiCellEdit[] edits,
@@ -676,13 +676,7 @@ private void z8_poi_report_apply_nested_simple(Z8Object report, Z8Object range, 
                                                out Z8PoiCellRemoval[] removals, int inheritedSheet) {
     import std.string : indexOf;
     auto children = z8_report_range_state(range).ranges.view().z8_erased_data();
-    if (children.z8_size() != 1) throw new Exception("nested POI report ranges are not implemented");
-    auto child = z8_nonnull(cast(Z8Object)children.z8_get(0));
-    if (child is range) throw new Exception("cyclic POI report ranges");
-    child.z8_ensure();
-    auto childRanges = z8_report_range_state(child).ranges;
-    if (childRanges !is null && childRanges.view().z8_erased_data().z8_size())
-        throw new Exception("nested POI report ranges are not implemented");
+    if (children.z8_size() > 2) throw new Exception("nested POI report ranges are not implemented");
     foreach (attribute; ["totals"w, "subtotal"w, "subtotalsBy"w, "subtotalsMerge"w, "merge"w])
         if (range.z8_get_attribute(attribute) !is null) throw new Exception("POI report range option is not implemented");
     auto axis = range.z8_get_attribute("axis"w);
@@ -693,30 +687,67 @@ private void z8_poi_report_apply_nested_simple(Z8Object report, Z8Object range, 
     if (workbook.sheets[sheet].hasMergedRegions) throw new Exception("nested POI report merged cells are not implemented");
     name = range.z8_get_attribute("sheetName"w);
     auto outer = z8_poi_report_block(range.z8_get_attribute("address"w));
-    auto inner = z8_poi_report_block(child.z8_get_attribute("address"w));
-    auto outerText = range.z8_get_attribute("boundaries"w), innerText = child.z8_get_attribute("boundaries"w);
-    if (outerText is null || innerText is null) throw new Exception("nested POI report ranges require explicit boundaries");
-    auto outerBounds = z8_poi_report_block(outerText), innerBounds = z8_poi_report_block(innerText);
+    auto outerText = range.z8_get_attribute("boundaries"w);
+    if (outerText is null) throw new Exception("nested POI report ranges require explicit boundaries");
+    auto outerBounds = z8_poi_report_block(outerText);
     bool equal(Z8PoiReportBlock a, Z8PoiReportBlock b) {
         return a.firstRow == b.firstRow && a.lastRow == b.lastRow && a.firstColumn == b.firstColumn && a.lastColumn == b.lastColumn;
     }
-    if (!equal(outer, outerBounds) || !equal(inner, innerBounds) || inner.firstRow < outer.firstRow ||
-        inner.firstColumn < outer.firstColumn || inner.lastRow != outer.lastRow || inner.lastColumn != outer.lastColumn)
-        throw new Exception("nested POI report range layout is not implemented");
-    auto parentSource = *z8_report_range_source(range), childSource = *z8_report_range_source(child);
-    if (z8_report_source_state(parentSource).kind != Z8ReportSourceKind.simple || parentSource is childSource ||
-        z8_report_source_object(parentSource) is z8_report_source_object(childSource))
+    if (!equal(outer, outerBounds)) throw new Exception("nested POI report range layout is not implemented");
+    auto parentSource = *z8_report_range_source(range);
+    if (z8_report_source_state(parentSource).kind != Z8ReportSourceKind.simple)
         throw new Exception("nested POI report source is not implemented");
+    Z8PoiReportEntry[] entries;
+    long lastRow = outer.firstRow, lastColumn = outer.firstColumn;
+    foreach (index; 0 .. children.z8_size()) {
+        auto child = z8_nonnull(cast(Z8Object)children.z8_get(index));
+        if (child is range) throw new Exception("cyclic POI report ranges");
+        child.z8_ensure();
+        auto childRanges = z8_report_range_state(child).ranges;
+        if (childRanges !is null && childRanges.view().z8_erased_data().z8_size())
+            throw new Exception("nested POI report ranges are not implemented");
+        auto inner = z8_poi_report_block(child.z8_get_attribute("address"w));
+        auto innerText = child.z8_get_attribute("boundaries"w);
+        if (innerText is null) throw new Exception("nested POI report ranges require explicit boundaries");
+        auto innerBounds = z8_poi_report_block(innerText);
+        if (!equal(inner, innerBounds) || inner.firstRow < outer.firstRow || inner.firstColumn < outer.firstColumn ||
+            inner.lastRow > outer.lastRow || inner.lastColumn > outer.lastColumn)
+            throw new Exception("nested POI report range layout is not implemented");
+        foreach (entry; entries)
+            if (inner.firstRow <= entry.block.lastRow && entry.block.firstRow <= inner.lastRow &&
+                inner.firstColumn <= entry.block.lastColumn && entry.block.firstColumn <= inner.lastColumn)
+                throw new Exception("nested POI report range layout is not implemented");
+        auto childSource = *z8_report_range_source(child);
+        if (parentSource is childSource || z8_report_source_object(parentSource) is z8_report_source_object(childSource))
+            throw new Exception("nested POI report source is not implemented");
+        entries ~= Z8PoiReportEntry(child, inner, innerBounds);
+        if (inner.lastRow > lastRow) lastRow = inner.lastRow;
+        if (inner.lastColumn > lastColumn) lastColumn = inner.lastColumn;
+    }
+    if (lastRow != outer.lastRow || lastColumn != outer.lastColumn)
+        throw new Exception("nested POI report range layout is not implemented");
+    for (size_t i = 1; i < entries.length; ++i) {
+        auto entry = entries[i]; auto position = i;
+        while (position && z8_poi_report_compare_blocks(entry.boundaries, entries[position - 1].boundaries) < 0) {
+            entries[position] = entries[position - 1]; --position;
+        }
+        entries[position] = entry;
+    }
     z8_report_register_data_source(report, parentSource);
     z8_report_source_open(parentSource, sheet);
     scope(exit) z8_report_source_close(parentSource);
     if (!z8_report_source_next(parentSource)) throw new Exception("nested POI report source is empty");
-    int childSheet; wstring childName;
-    z8_poi_report_apply_simple_range(report, child, workbook, childSheet, childName, edits, copies, merges, removals, false, false, sheet);
-    if (copies.length || merges.length || removals.length) throw new Exception("nested POI report expansion is not implemented");
-    foreach (edit; edits) if (edit.kind == Z8PoiCellEditKind.text &&
-        (z8_eval_text_has_special(edit.text) || z8_poi_decode_text(edit.text) != edit.text))
-        throw new Exception("nested POI report text reevaluation is not implemented");
+    foreach (entry; entries) {
+        int childSheet; wstring childName; Z8PoiCellEdit[] changes; Z8PoiCellCopy[] childCopies;
+        Z8PoiMergedRegion[] childMerges; Z8PoiCellRemoval[] childRemovals;
+        z8_poi_report_apply_simple_range(report, entry.range, workbook, childSheet, childName, changes, childCopies, childMerges, childRemovals, false, false, sheet);
+        if (childCopies.length || childMerges.length || childRemovals.length)
+            throw new Exception("nested POI report expansion is not implemented");
+        foreach (edit; changes) if (edit.kind == Z8PoiCellEditKind.text &&
+            (z8_eval_text_has_special(edit.text) || z8_poi_decode_text(edit.text) != edit.text))
+            throw new Exception("nested POI report text reevaluation is not implemented");
+        edits ~= changes;
+    }
     auto state = new Z8EvalState(); state.reportContext = report; state.reportSource = parentSource;
     auto request = z8_application_request();
     if (request !is null && request.parameters !is null)
@@ -724,7 +755,10 @@ private void z8_poi_report_apply_nested_simple(Z8Object report, Z8Object range, 
     foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells) {
         if (rowNumber < outer.firstRow || rowNumber > outer.lastRow || columnNumber < outer.firstColumn || columnNumber > outer.lastColumn ||
             cell.hasFormula || (cell.kind != "str"w && cell.kind != "inlineStr"w)) continue;
-        if (rowNumber >= inner.firstRow && columnNumber >= inner.firstColumn) {
+        bool inChild;
+        foreach (entry; entries) if (rowNumber >= entry.block.firstRow && rowNumber <= entry.block.lastRow &&
+            columnNumber >= entry.block.firstColumn && columnNumber <= entry.block.lastColumn) { inChild = true; break; }
+        if (inChild) {
             bool edited;
             foreach (edit; edits) if (edit.row == rowNumber && edit.column == columnNumber) { edited = true; break; }
             if (!edited && (z8_eval_text_has_special(cell.value) || z8_poi_decode_text(cell.value) != cell.value))
