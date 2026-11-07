@@ -139,11 +139,52 @@ private Z8Object[] z8_poi_report_query_fields(Z8Object report, Z8Object query, Z
     return result;
 }
 
-// Apply a single, non-expanding simple source to the selected report block.
-private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z8PoiWorkbook workbook,
-                                              out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits,
-                                              bool multiple = false) {
+private void z8_poi_report_evaluate_cell(Z8EvalState state, Z8PoiWorkbook workbook, Z8PoiCell cell,
+                                         long sheet, long row, long column, ref Z8PoiCellEdit[] edits) {
     import std.algorithm.searching : canFind;
+    import std.string : indexOf;
+    auto firstEnd = cell.value.indexOf('}');
+    auto single = cell.value.length >= 3 && cell.value[0 .. 2] == "${"w &&
+        firstEnd >= 0 && cast(size_t)firstEnd + 1 == cell.value.length;
+    Z8PoiCellEdit edit;
+    edit.sheet = cast(uint)sheet; edit.row = cast(uint)row; edit.column = cast(uint)column;
+    if (!single) {
+        auto text = z8_eval_text_from_state(state, cell.value, true, true);
+        if (cell.kind == "inlineStr"w) return;
+        edit.kind = Z8PoiCellEditKind.text; edit.text = text; edits ~= edit;
+        return;
+    }
+    auto expression = cell.value[2 .. $ - 1];
+    // The original report grammar accepts single-quoted strings. The Eval
+    // parser also accepts double quotes, which are not equivalent here.
+    if (expression.canFind('"')) throw new Exception("POI report expression syntax is not implemented");
+    auto evaluated = z8_eval_expression(state, expression);
+    if (!evaluated.evaluated || evaluated.context != Z8EvalContext.none || evaluated.json !is null ||
+        evaluated.requestParameters !is null || evaluated.reportObject !is null)
+        throw new Exception("POI report expression context is not implemented");
+    auto value = evaluated.primary;
+    // POI 3.16 leaves an inline-string cell unchanged when assigning a
+    // string result; numeric and boolean results replace its type.
+    if (cell.kind == "inlineStr"w && (value is null || value.kind == Z8PrimaryKind.text ||
+        value.kind == Z8PrimaryKind.guid || value.kind == Z8PrimaryKind.datespan)) return;
+    if (value is null) { edit.kind = Z8PoiCellEditKind.text; edit.text = ""w; }
+    else switch (value.kind) {
+        case Z8PrimaryKind.boolean: edit.kind = Z8PoiCellEditKind.boolean; edit.booleanValue = value.booleanValue; break;
+        // Range.evaluateAndSet uses integer.getInt(), including narrowing.
+        case Z8PrimaryKind.integer: edit.kind = Z8PoiCellEditKind.number; edit.number = cast(double)cast(int)value.integerValue; break;
+        case Z8PrimaryKind.decimal: edit.kind = Z8PoiCellEditKind.number; edit.number = value.decimalValue.z8_as_double(); break;
+        case Z8PrimaryKind.date: edit.kind = Z8PoiCellEditKind.number; edit.number = z8_poi_report_excel_date(value.dateValue, workbook.date1904); break;
+        case Z8PrimaryKind.text: edit.kind = Z8PoiCellEditKind.text; edit.text = value.textValue; break;
+        case Z8PrimaryKind.guid: case Z8PrimaryKind.datespan:
+            edit.kind = Z8PoiCellEditKind.text; edit.text = z8_primary_to_string(value); break;
+        default: throw new Exception("POI report expression result type is not implemented");
+    }
+    edits ~= edit;
+}
+
+// Apply a single, non-expanding source to the selected report block.
+private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z8PoiWorkbook workbook,
+                                              out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits) {
     import std.string : indexOf;
     range = z8_nonnull(range); range.z8_ensure();
     auto rangeState = z8_report_range_state(range);
@@ -196,50 +237,8 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
         if (cell.hasFormula || (cell.kind != "str"w && cell.kind != "inlineStr"w) ||
             cell.value.indexOf("${"w) < 0) continue;
         if (rowNumber < block.firstRow || rowNumber > block.lastRow ||
-            columnNumber < block.firstColumn || columnNumber > block.lastColumn) {
-            if (multiple) continue;
-            throw new Exception("POI report text expressions are not implemented");
-        }
-        auto firstEnd = cell.value.indexOf('}');
-        auto single = cell.value.length >= 3 && cell.value[0 .. 2] == "${"w &&
-            firstEnd >= 0 && cast(size_t)firstEnd + 1 == cell.value.length;
-        if (!single) {
-            auto text = z8_eval_text_from_state(evalState, cell.value, true, true);
-            if (cell.kind == "inlineStr"w) continue;
-            Z8PoiCellEdit edit;
-            edit.sheet = cast(uint)sheet; edit.row = cast(uint)rowNumber; edit.column = cast(uint)columnNumber;
-            edit.kind = Z8PoiCellEditKind.text; edit.text = text; edits ~= edit;
-            continue;
-        }
-        auto expression = cell.value[2 .. $ - 1];
-        // The original report grammar accepts single-quoted strings. The Eval
-        // parser also accepts double quotes, which are not equivalent here.
-        if (expression.canFind('"')) throw new Exception("POI report expression syntax is not implemented");
-        auto evaluated = z8_eval_expression(evalState, expression);
-        if (!evaluated.evaluated || evaluated.context != Z8EvalContext.none || evaluated.json !is null ||
-            evaluated.requestParameters !is null || evaluated.reportObject !is null)
-            throw new Exception("POI report expression context is not implemented");
-        Z8PoiCellEdit edit;
-        edit.sheet = cast(uint)sheet; edit.row = cast(uint)rowNumber; edit.column = cast(uint)columnNumber;
-        auto value = evaluated.primary;
-        // POI 3.16 leaves an inline-string cell unchanged when assigning a
-        // string result; numeric and boolean results replace its type.
-        if (cell.kind == "inlineStr"w && (value is null || value.kind == Z8PrimaryKind.text ||
-            value.kind == Z8PrimaryKind.guid || value.kind == Z8PrimaryKind.datespan)) continue;
-        if (value is null) { edit.kind = Z8PoiCellEditKind.text; edit.text = ""w; }
-        else switch (value.kind) {
-            case Z8PrimaryKind.boolean: edit.kind = Z8PoiCellEditKind.boolean; edit.booleanValue = value.booleanValue; break;
-            // Range.evaluateAndSet uses integer.getInt(), including Java's
-            // 32-bit narrowing for values outside the int range.
-            case Z8PrimaryKind.integer: edit.kind = Z8PoiCellEditKind.number; edit.number = cast(double)cast(int)value.integerValue; break;
-            case Z8PrimaryKind.decimal: edit.kind = Z8PoiCellEditKind.number; edit.number = value.decimalValue.z8_as_double(); break;
-            case Z8PrimaryKind.date: edit.kind = Z8PoiCellEditKind.number; edit.number = z8_poi_report_excel_date(value.dateValue, workbook.date1904); break;
-            case Z8PrimaryKind.text: edit.kind = Z8PoiCellEditKind.text; edit.text = value.textValue; break;
-            case Z8PrimaryKind.guid: case Z8PrimaryKind.datespan:
-                edit.kind = Z8PoiCellEditKind.text; edit.text = z8_primary_to_string(value); break;
-            default: throw new Exception("POI report expression result type is not implemented");
-        }
-        edits ~= edit;
+            columnNumber < block.firstColumn || columnNumber > block.lastColumn) continue;
+        z8_poi_report_evaluate_cell(evalState, workbook, cell, sheet, rowNumber, columnNumber, edits);
     }
     if (z8_report_source_next(source)) throw new Exception("expanding POI report data sources are not implemented");
 }
@@ -271,7 +270,8 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
         sheet = index;
         auto block = z8_poi_report_block(range.z8_get_attribute("address"w));
         auto text = range.z8_get_attribute("boundaries"w);
-        auto boundaries = text is null ? block : z8_poi_report_block(text);
+        if (text is null) throw new Exception("multiple POI report ranges require explicit boundaries");
+        auto boundaries = z8_poi_report_block(text);
         foreach (previous; entries) if (boundaries.firstRow <= previous.boundaries.lastRow &&
             previous.boundaries.firstRow <= boundaries.lastRow && boundaries.firstColumn <= previous.boundaries.lastColumn &&
             previous.boundaries.firstColumn <= boundaries.lastColumn)
@@ -279,12 +279,12 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
         entries ~= Z8PoiReportEntry(range, block, boundaries);
         if (renameName is null) { renameName = range.z8_get_attribute("sheetName"w); renameSheet = index; }
     }
-    foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells) {
-        if (cell.hasFormula || (cell.kind != "str"w && cell.kind != "inlineStr"w) || cell.value.indexOf("${"w) < 0) continue;
-        bool found;
-        foreach (entry; entries) if (rowNumber >= entry.block.firstRow && rowNumber <= entry.block.lastRow &&
-            columnNumber >= entry.block.firstColumn && columnNumber <= entry.block.lastColumn) { found = true; break; }
-        if (!found) throw new Exception("POI report text expressions are not implemented");
+    auto root = entries[0].boundaries;
+    foreach (entry; entries[1 .. $]) {
+        if (entry.boundaries.firstRow < root.firstRow) root.firstRow = entry.boundaries.firstRow;
+        if (entry.boundaries.lastRow > root.lastRow) root.lastRow = entry.boundaries.lastRow;
+        if (entry.boundaries.firstColumn < root.firstColumn) root.firstColumn = entry.boundaries.firstColumn;
+        if (entry.boundaries.lastColumn > root.lastColumn) root.lastColumn = entry.boundaries.lastColumn;
     }
     // Java uses a stable list sort, and source open/close hooks can have effects.
     for (size_t i = 1; i < entries.length; ++i) {
@@ -296,8 +296,23 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
     }
     foreach (entry; entries) {
         int ignoredSheet; wstring ignoredName; Z8PoiCellEdit[] changes;
-        z8_poi_report_apply_simple_range(report, entry.range, workbook, ignoredSheet, ignoredName, changes, true);
+        z8_poi_report_apply_simple_range(report, entry.range, workbook, ignoredSheet, ignoredName, changes);
         edits ~= changes;
+    }
+    // The synthetic sheet range visits cells between child boundaries after
+    // all child ranges. Cells beyond the synthetic range remain untouched.
+    auto state = new Z8EvalState(); state.reportContext = report;
+    auto request = z8_application_request();
+    if (request !is null && request.parameters !is null)
+        state.variables["parameters"w] = Z8EvalVariable(null, null, request.parameters);
+    foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells) {
+        if (rowNumber < root.firstRow || rowNumber > root.lastRow || columnNumber < root.firstColumn ||
+            columnNumber > root.lastColumn || cell.hasFormula || (cell.kind != "str"w && cell.kind != "inlineStr"w) ||
+            cell.value.indexOf("${"w) < 0) continue;
+        bool child;
+        foreach (entry; entries) if (rowNumber >= entry.boundaries.firstRow && rowNumber <= entry.boundaries.lastRow &&
+            columnNumber >= entry.boundaries.firstColumn && columnNumber <= entry.boundaries.lastColumn) { child = true; break; }
+        if (!child) z8_poi_report_evaluate_cell(state, workbook, cell, sheet, rowNumber, columnNumber, edits);
     }
 }
 

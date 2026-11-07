@@ -79,6 +79,7 @@ public class StaticReportProbe {
     public static file multipleRanges() { MultipleRangeReport report; return report.run(guid.Null); }
     public static file overlappingRanges() { OverlappingRangeReport report; return report.run(guid.Null); }
     public static file outsideRanges() { OutsideRangesReport report; return report.run(guid.Null); }
+    public static file missingBoundaries() { MissingBoundariesReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -218,7 +219,15 @@ public class %s extends Report {
     [address "A1"] [boundaries "%s"] Range first;
     [address "C1"] [boundaries "%s"] Range second;
     first.source = left; second.source = right; ranges = {second, first};
+    virtual protected void prepare(guid recordId) { OrderedRows.sequence = 0; }
 }''' % (class_name, template, left_bound, right_bound), encoding="utf-8")
+    (source / "MissingBoundariesReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+public class MissingBoundariesReport extends Report {
+    engine = Report.POI; template = "multi-range";
+    [address "A1"] Range first; [address "C1"] Range second;
+    ranges = {first, second};
+}''', encoding="utf-8")
     (source / "UnsupportedContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.lang.Object;
@@ -410,7 +419,7 @@ public class %s extends Report {
     multi["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="2" uniqueCount="2"><si><t>${left.data.value}</t></si><si><t>${right.data.value}</t></si></sst>'''
     multi["xl/worksheets/sheet1.xml"] = original_sheet.replace(
         '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
-        '<c r="A1" t="s"><v>0</v></c><c r="B1" t="inlineStr"><is><t>Static</t></is></c><c r="C1" t="s"><v>1</v></c>')
+        '<c r="A1" t="s"><v>0</v></c><c r="B1" t="inlineStr"><is><t>${10+20}</t></is></c><c r="C1" t="s"><v>1</v></c>')
     for filename in ("multi-range", "outside-range"):
         book = dict(multi)
         if filename == "outside-range":
@@ -599,7 +608,8 @@ void main(string[] args) {
     bool multipleRanges; try { P.m_multipleRanges(); } catch (Exception) { multipleRanges = true; } assert(multipleRanges);
     bool overlapRanges; try { P.m_overlappingRanges(); } catch (Exception) { overlapRanges = true; } assert(overlapRanges);
     bool outsideRanges; try { P.m_outsideRanges(); } catch (Exception) { outsideRanges = true; } assert(outsideRanges);
-    assert(database.begins == 56 && database.rollbacks == 56);
+    bool missingBoundaries; try { P.m_missingBoundaries(); } catch (Exception) { missingBoundaries = true; } assert(missingBoundaries);
+    assert(database.begins == 57 && database.rollbacks == 57);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -665,6 +675,9 @@ void main(string[] args) {
         contents = contents.replace(
             'bool multipleRanges; try { P.m_multipleRanges(); } catch (Exception) { multipleRanges = true; } assert(multipleRanges);',
             'auto multipleRanges = P.m_multipleRanges(); copy(z8_file_resolve_path(multipleRanges), buildPath(args[2], "multi-range.xlsx")); assert(counter.writes == 10);')
+        contents = contents.replace(
+            'bool outsideRanges; try { P.m_outsideRanges(); } catch (Exception) { outsideRanges = true; } assert(outsideRanges);',
+            'auto outsideRanges = P.m_outsideRanges(); copy(z8_file_resolve_path(outsideRanges), buildPath(args[2], "outside-range.xlsx")); assert(counter.writes == 11);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -855,7 +868,8 @@ class PoiRangeOracle {
       boolean customCase = args.length > 3 && "custom".equals(args[3]);
       boolean jsonCase = args.length > 3 && "json".equals(args[3]);
       boolean queryCase = args.length > 3 && "query".equals(args[3]);
-      boolean multipleCase = args.length > 3 && "multiple".equals(args[3]);
+      boolean outsideCase = args.length > 3 && "outside".equals(args[3]);
+      boolean multipleCase = outsideCase || (args.length > 3 && "multiple".equals(args[3]));
       DataSource customSource = null;
       DataSource[] orderedSources = new DataSource[2];
       if (contextCase) {
@@ -956,7 +970,7 @@ class PoiRangeOracle {
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier); modifier.close();
       if (constants || parameters || contextCase || dates || fieldCase || customCase || jsonCase || queryCase || multipleCase) {
-        for (int i = 0; i < (multipleCase ? 3 : customCase ? 4 : dates ? 10 : constants ? 7 : 5); ++i) {
+        for (int i = 0; i < (outsideCase ? 4 : multipleCase ? 3 : customCase ? 4 : dates ? 10 : constants ? 7 : 5); ++i) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(0).getCell(i);
           if (expected.getCellType() != result.getCellType()) throw new AssertionError("cell type differs at " + i);
@@ -1026,6 +1040,10 @@ class PoiRangeOracle {
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/multi-range.xlsx"), str(working / "multi-range.xlsx"), str(config), "multiple"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/outside-range.xlsx"), str(working / "outside-range.xlsx"), str(config), "outside"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
 print("POI static report template, naming and transaction verified")
