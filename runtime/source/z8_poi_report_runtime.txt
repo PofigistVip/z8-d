@@ -735,22 +735,19 @@ private void z8_poi_report_apply_nested_simple(Z8Object report, Z8Object range, 
     }
     if (lastRow != outer.lastRow || lastColumn != outer.lastColumn)
         throw new Exception("nested POI report range layout is not implemented");
-    if (entries.length > 2) {
-        // For aligned blocks the Java block comparator is transitive, so stable
-        // insertion order produces the same result as Java's stable sort.
-        bool sameRows = true, sameColumns = true;
-        foreach (entry; entries[1 .. $]) {
-            sameRows = sameRows && entry.boundaries.firstRow == entries[0].boundaries.firstRow && entry.boundaries.lastRow == entries[0].boundaries.lastRow;
-            sameColumns = sameColumns && entry.boundaries.firstColumn == entries[0].boundaries.firstColumn && entry.boundaries.lastColumn == entries[0].boundaries.lastColumn;
-        }
-        if (!sameRows && !sameColumns) throw new Exception("nested POI report ranges are not implemented");
-    }
     for (size_t i = 1; i < entries.length; ++i) {
         auto entry = entries[i]; auto position = i;
         while (position && z8_poi_report_compare_blocks(entry.boundaries, entries[position - 1].boundaries) < 0) {
             entries[position] = entries[position - 1]; --position;
         }
         entries[position] = entry;
+    }
+    if (entries.length > 2) {
+        // The Java comparator can be non-transitive for diagonal blocks.
+        // Accept a strict total order only, where either stable sort agrees.
+        foreach (i; 0 .. entries.length) foreach (j; i + 1 .. entries.length)
+            if (z8_poi_report_compare_blocks(entries[i].boundaries, entries[j].boundaries) >= 0)
+                throw new Exception("nested POI report ranges are not implemented");
     }
     z8_report_register_data_source(report, parentSource);
     scope(exit) z8_report_source_close(parentSource);
