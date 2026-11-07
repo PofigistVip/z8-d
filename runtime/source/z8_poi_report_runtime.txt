@@ -70,6 +70,75 @@ private double z8_poi_report_excel_date(Z8Date input, bool date1904) {
     return cast(double)days + cast(double)milliseconds / 86400000.0;
 }
 
+// Collect directly named Field members before opening a query source, as
+// QuerySource.collectFields does in Java. Quoted text is never a reference.
+private Z8Object[] z8_poi_report_query_fields(Z8Object report, Z8Object query, Z8PoiSheet sheet,
+                                               Z8PoiReportBlock block) {
+    import std.algorithm.searching : startsWith;
+    import std.string : indexOf;
+    import std.uni : isAlpha, isNumber;
+    Z8Object[] result;
+    void add(Z8Object field) {
+        foreach (existing; result) if (existing is field) return;
+        result ~= field;
+    }
+    foreach (field; z8_query_array(query, "extraFields"w)) add(z8_nonnull(field));
+    foreach (rowNumber, row; sheet.rows) foreach (columnNumber, cell; row.cells) {
+        if (rowNumber < block.firstRow || rowNumber > block.lastRow || columnNumber < block.firstColumn ||
+            columnNumber > block.lastColumn || cell.hasFormula || (cell.kind != "str"w && cell.kind != "inlineStr"w)) continue;
+        auto text = cell.value;
+        size_t offset;
+        while (offset < text.length) {
+            auto start = text[offset .. $].indexOf("${"w);
+            if (start < 0) break;
+            auto begin = offset + cast(size_t)start + 2;
+            auto end = text[begin .. $].indexOf('}');
+            if (end < 0) break;
+            auto expression = text[begin .. begin + cast(size_t)end];
+            offset = begin + cast(size_t)end + 1;
+            size_t position;
+            while (position < expression.length) {
+                auto c = expression[position];
+                if (c == '\'' || c == '"') {
+                    ++position;
+                    while (position < expression.length && expression[position] != c) {
+                        if (expression[position] == '\\' && position + 1 < expression.length) ++position;
+                        ++position;
+                    }
+                    if (position < expression.length) ++position;
+                    continue;
+                }
+                if (!(isAlpha(c) || c == '_')) { ++position; continue; }
+                auto object = report;
+                for (;;) {
+                    auto nameStart = position++;
+                    while (position < expression.length && (isAlpha(expression[position]) ||
+                           isNumber(expression[position]) || expression[position] == '_')) ++position;
+                    auto name = expression[nameStart .. position];
+                    Z8Object member;
+                    if (object !is null) foreach (candidate; z8_object_members(object))
+                        if (candidate.z8_index() == name) { member = candidate; break; }
+                    if (member !is null) {
+                        member.z8_ensure();
+                        if (z8_native_is_instance(z8_field_name, member) &&
+                            z8_string_or_empty(member.z8_id()).startsWith(z8_string_or_empty(query.z8_id()))) add(member);
+                    }
+                    object = member;
+                    while (position < expression.length && (expression[position] == ' ' || expression[position] == '\t' ||
+                           expression[position] == '\r' || expression[position] == '\n')) ++position;
+                    if (position >= expression.length || expression[position] != '.') break;
+                    auto next = position + 1;
+                    while (next < expression.length && (expression[next] == ' ' || expression[next] == '\t' ||
+                           expression[next] == '\r' || expression[next] == '\n')) ++next;
+                    if (next >= expression.length || !(isAlpha(expression[next]) || expression[next] == '_')) break;
+                    position = next;
+                }
+            }
+        }
+    }
+    return result;
+}
+
 // Apply a single, non-expanding simple source to the selected report block.
 private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z8PoiWorkbook workbook,
                                               out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits) {
@@ -108,13 +177,13 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     }
     auto source = *z8_report_range_source(range);
     auto sourceKind = z8_report_source_state(source).kind;
-    if (sourceKind != Z8ReportSourceKind.simple && sourceKind != Z8ReportSourceKind.custom && sourceKind != Z8ReportSourceKind.json)
-        throw new Exception("expanding POI report data sources are not implemented");
     z8_report_register_data_source(report, source);
     // Java opens and advances the source before evaluating cells. In
     // particular, CustomData.open may populate report context members.
     scope(exit) z8_report_source_close(source);
-    z8_report_source_open(source, sheet);
+    auto fields = sourceKind == Z8ReportSourceKind.query ?
+        z8_poi_report_query_fields(report, z8_report_source_object(source), workbook.sheets[sheet], block) : null;
+    z8_report_source_open(source, sheet, fields);
     if (!z8_report_source_next(source)) throw new Exception("empty POI report data sources are not implemented");
     auto evalState = new Z8EvalState();
     evalState.reportContext = report;

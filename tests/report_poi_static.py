@@ -73,6 +73,9 @@ public class StaticReportProbe {
     public static JsonRangeReport createJsonReport() { JsonRangeReport report; return report; }
     public static void jsonCount(JsonRangeReport report, int count) { report.copies = count; }
     public static file runJsonReport(JsonRangeReport report) { return report.run(guid.Null); }
+    public static QueryRangeReport createQueryReport() { QueryRangeReport report; return report; }
+    public static QueryRows query(QueryRangeReport report) { return report.q; }
+    public static file runQueryReport(QueryRangeReport report) { return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -174,6 +177,24 @@ public class JsonRangeReport extends Report {
         JsonObject item; item.set("title", "Ada 😀"); item.set("amount", 42);
         if (copies > 0) rows.add(item); if (copies > 1) rows.add(item);
     }
+}''', encoding="utf-8")
+    (source / "QueryRows.bl").write_text('''import org.zenframework.z8.base.query.Query;
+import org.zenframework.z8.base.table.value.Field;
+import org.zenframework.z8.base.table.value.IntField;
+public class QueryRows extends Query {
+    public IntField amount; public IntField ignored; public IntField extra;
+    objects = {amount, ignored, extra}; extraFields = {extra};
+    public void start() { Field[] fields = {amount}; read(fields); }
+    public bool advance() { return next(); }
+    public int value() { return amount.get(); }
+}''', encoding="utf-8")
+    (source / "QueryRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+public class QueryRangeReport extends Report {
+    engine = Report.POI; template = "query";
+    public QueryRows q; objects = {q};
+    [address "A1:E1"] [boundaries "A1:E1"] Range region;
+    region.source = q; ranges = {region};
 }''', encoding="utf-8")
     (source / "UnsupportedContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
@@ -357,6 +378,11 @@ public class %s extends Report {
     with zipfile.ZipFile(application / "reports/json.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in json_source.items():
             archive.writestr(entry_name, content)
+    query = dict(parameters)
+    query["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="5" uniqueCount="5"><si><t>${q.amount}</t></si><si><t>${q . amount + 1}</t></si><si><t>Value: ${q.amount}</t></si><si><t>${q.index}</t></si><si><t>${'q.ignored'}</t></si></sst>'''
+    with zipfile.ZipFile(application / "reports/query.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in query.items():
+            archive.writestr(entry_name, content)
     merged = dict(entries)
     merged["xl/worksheets/sheet1.xml"] = original_sheet.replace("</worksheet>", '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')
     with zipfile.ZipFile(application / "reports/merged.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -390,6 +416,29 @@ class FieldCursor : IZ8FieldCursor {
     bool isGrouped() { return false; }
     Z8Primary read(Z8Object field, bool asArray, out bool wasNull) {
         assert(!asArray); wasNull = false; return z8_primary_box(42L);
+    }
+}
+class QueryCursor : IZ8QueryCursor {
+    Z8Object[] selected; long value; int remaining; bool closed;
+    this(Z8Object[] fields, long initial, int count) { selected = fields.dup; value = initial - 1; remaining = count; }
+    Z8Object[] fields() { return selected; }
+    bool next() { if (closed || remaining <= 0) return false; --remaining; ++value; return true; }
+    void close() { closed = true; }
+    bool isClosed() { return closed; }
+    bool isGrouped() { return false; }
+    Z8Primary read(Z8Object field, bool asArray, out bool wasNull) { wasNull = false; return z8_primary_box(value); }
+}
+class QueryExecutor : IZ8QueryExecutor {
+    bool reportMode, fail; int reportRows = 1; Z8Object amount, extra;
+    IZ8QueryCursor read(Z8Object query, Z8QueryReadRequest request) {
+        if (fail) throw new Exception("query failed");
+        if (reportMode) {
+            assert(request.fields.length == 2);
+            assert((request.fields[0] is amount && request.fields[1] is extra) ||
+                   (request.fields[1] is amount && request.fields[0] is extra));
+            return new QueryCursor(request.fields, 42, reportRows);
+        }
+        return new QueryCursor(request.fields, 7, 2);
     }
 }
 void main(string[] args) {
@@ -498,6 +547,20 @@ void main(string[] args) {
     auto jsonMany = P.m_createJsonReport(); P.m_jsonCount(jsonMany, z8_optional_wrap(2L));
     bool many; try { P.m_runJsonReport(jsonMany); } catch (Exception) { many = true; } assert(many);
     assert(database.begins == 50 && database.rollbacks == 50);
+    auto queryReport = P.m_createQueryReport(); auto query = P.m_query(queryReport);
+    auto executor = new QueryExecutor(); executor.amount = query.f_amount; executor.extra = query.f_extra;
+    z8_query_set_executor(query, executor); query.m_start();
+    assert(z8_optional_require(query.m_advance()) && z8_optional_require(query.m_value()) == 7);
+    executor.reportMode = true;
+    bool queryResult; try { P.m_runQueryReport(queryReport); } catch (Exception) { queryResult = true; } assert(queryResult);
+    assert(z8_optional_require(query.m_value()) == 7 && z8_optional_require(query.m_advance()) && z8_optional_require(query.m_value()) == 8);
+    executor.reportRows = 2;
+    bool queryMany; try { P.m_runQueryReport(queryReport); } catch (Exception) { queryMany = true; } assert(queryMany);
+    assert(z8_optional_require(query.m_value()) == 8);
+    executor.fail = true;
+    bool queryFailure; try { P.m_runQueryReport(queryReport); } catch (Exception) { queryFailure = true; } assert(queryFailure);
+    assert(z8_optional_require(query.m_value()) == 8);
+    assert(database.begins == 53 && database.rollbacks == 53);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -557,6 +620,9 @@ void main(string[] args) {
         contents = contents.replace(
             'bool json; try { P.m_jsonRange(); } catch (Exception) { json = true; } assert(json);',
             'auto json = P.m_jsonRange(); copy(z8_file_resolve_path(json), buildPath(args[2], "json.xlsx")); assert(counter.writes == 8);')
+        contents = contents.replace(
+            'bool queryResult; try { P.m_runQueryReport(queryReport); } catch (Exception) { queryResult = true; } assert(queryResult);',
+            'auto queryResult = P.m_runQueryReport(queryReport); copy(z8_file_resolve_path(queryResult), buildPath(args[2], "query.xlsx")); assert(counter.writes == 9);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -708,6 +774,32 @@ import org.zenframework.z8.server.request.Request;
 import org.zenframework.z8.server.runtime.OBJECT;
 import org.zenframework.z8.server.reports.poi.*;
 class PoiRangeOracle {
+  static class FakeQuery extends org.zenframework.z8.server.base.query.Query {
+    int position;
+    FakeQuery(org.zenframework.z8.server.runtime.IObject owner) { super(owner); }
+    @Override public void saveState() {}
+    @Override public void restoreState() {}
+    @Override public void read(java.util.Collection<org.zenframework.z8.server.base.table.value.Field> fields,
+                               java.util.Collection<org.zenframework.z8.server.base.table.value.Field> sort,
+                               org.zenframework.z8.server.db.sql.SqlToken where) {
+      java.util.Set<String> names = new java.util.HashSet<>();
+      org.zenframework.z8.server.db.Select cursor = new org.zenframework.z8.server.db.Select() {
+        @Override public boolean isClosed() { return false; }
+        @Override public org.zenframework.z8.server.types.primary get(org.zenframework.z8.server.base.table.value.Field field) {
+          return new org.zenframework.z8.server.types.integer(42);
+        }
+      };
+      for (org.zenframework.z8.server.base.table.value.Field field : fields) { names.add(field.index()); field.setCursor(cursor); }
+      if (!names.equals(new java.util.HashSet<>(java.util.Arrays.asList("amount", "extra"))))
+        throw new AssertionError("query fields: " + names);
+      position = 0;
+    }
+    @Override public boolean next() { return position++ == 0; }
+  }
+  static class FakeQueryClass extends org.zenframework.z8.server.base.query.Query.CLASS<FakeQuery> {
+    FakeQueryClass(org.zenframework.z8.server.runtime.IObject owner) { super(owner); setJavaClass(FakeQuery.class); }
+    @Override public Object newObject(org.zenframework.z8.server.runtime.IObject owner) { return new FakeQuery(owner); }
+  }
   public static void main(String[] args) throws Exception {
     ServerConfig.load(args[2]);
     Request request = new Request(new Session("test"));
@@ -720,6 +812,7 @@ class PoiRangeOracle {
       boolean fieldCase = args.length > 3 && "fields".equals(args[3]);
       boolean customCase = args.length > 3 && "custom".equals(args[3]);
       boolean jsonCase = args.length > 3 && "json".equals(args[3]);
+      boolean queryCase = args.length > 3 && "query".equals(args[3]);
       DataSource customSource = null;
       if (contextCase) {
         org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> info =
@@ -778,18 +871,28 @@ class PoiRangeOracle {
         item.get().z8_set(new org.zenframework.z8.server.types.string("amount"), new org.zenframework.z8.server.types.integer(42));
         rows.get().z8_add(item); customSource = new JsonSource(rows.get());
       }
+      if (queryCase) {
+        FakeQueryClass q = new FakeQueryClass(context); q.setIndex("q"); context.members().add(q);
+        for (String name : new String[] {"amount", "ignored", "extra"}) {
+          org.zenframework.z8.server.base.table.value.IntegerField.CLASS<org.zenframework.z8.server.base.table.value.IntegerField> field =
+              new org.zenframework.z8.server.base.table.value.IntegerField.CLASS<>(q.get());
+          field.setIndex(name); q.get().members().add(field);
+          if ("extra".equals(name)) q.get().extraFields.add(field);
+        }
+        customSource = new QuerySource(q.get());
+      }
       PoiReport report = new PoiReport(new ReportOptions()).setContext(context);
       boolean constants = args.length > 3 && "constants".equals(args[3]);
       boolean parameters = args.length > 3 && "parameters".equals(args[3]);
       boolean dates = args.length > 3 && "dates".equals(args[3]);
-      Range child = new Range().setSource(customCase || jsonCase ? customSource : SimpleSource.newDefault())
-          .setBlock(customCase ? "A1:D1" : fieldCase || jsonCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(customCase ? "A1:D1" : fieldCase || jsonCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
+      Range child = new Range().setSource(customCase || jsonCase || queryCase ? customSource : SimpleSource.newDefault())
+          .setBlock(customCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
+          .setBoundaries(customCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       report.addRange(0, child);
       if (args.length > 3 && "rename".equals(args[3])) original.setSheetName(0, "Отчёт \\uD83D\\uDE00");
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier); modifier.close();
-      if (constants || parameters || contextCase || dates || fieldCase || customCase || jsonCase) {
+      if (constants || parameters || contextCase || dates || fieldCase || customCase || jsonCase || queryCase) {
         for (int i = 0; i < (customCase ? 4 : dates ? 10 : constants ? 7 : 5); ++i) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(0).getCell(i);
@@ -852,6 +955,10 @@ class PoiRangeOracle {
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/json.xlsx"), str(working / "json.xlsx"), str(config), "json"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/query.xlsx"), str(working / "query.xlsx"), str(config), "query"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
 print("POI static report template, naming and transaction verified")
