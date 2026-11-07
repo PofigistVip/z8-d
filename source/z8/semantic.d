@@ -1267,16 +1267,32 @@ class Checker {
                     }
                     if (["min", "max"].canFind(e.token.text)) {
                         if (e.arguments.length != 2) fail("incorrect argument count", e.token);
-                        auto a = typeOf(e.arguments[0]), b = typeOf(e.arguments[1]);
-                        if (isOptionalPrimitive(a)) a = optionalBaseType(a);
-                        if (isOptionalPrimitive(b)) b = optionalBaseType(b);
-                        if (a == ValueType.dateType && b == ValueType.dateType) {
-                            checkArguments(e, [a, b]); e.builtinCall = "z8_math_" ~ e.token.text; return ValueType.dateType;
+                        int conversionCost(Expression argument, ValueType target) {
+                            auto actual = typeOf(argument);
+                            if (isOptionalPrimitive(actual)) actual = optionalBaseType(actual);
+                            if (actual == target || actual == ValueType.nullType) return 0;
+                            if (actual == ValueType.intType && [ValueType.decimalType, ValueType.dateType].canFind(target)) return 100;
+                            if (actual == ValueType.selfType && findConversion(argument.objectClass, target) !is null) return 100;
+                            return -1;
                         }
-                        if (![ValueType.intType, ValueType.decimalType].canFind(a) || ![ValueType.intType, ValueType.decimalType].canFind(b))
-                            fail("argument type mismatch", e.token);
-                        checkArguments(e, [a, b]); e.builtinCall = "z8_math_" ~ e.token.text;
-                        return a == ValueType.intType && b == ValueType.intType ? ValueType.intType : ValueType.decimalType;
+                        ValueType[][] candidates = [[ValueType.intType, ValueType.intType], [ValueType.intType, ValueType.decimalType],
+                            [ValueType.decimalType, ValueType.intType], [ValueType.decimalType, ValueType.decimalType],
+                            [ValueType.dateType, ValueType.dateType]];
+                        ValueType[] selected;
+                        int best = int.max; bool ambiguous;
+                        foreach (candidate; candidates) {
+                            auto left = conversionCost(e.arguments[0], candidate[0]);
+                            auto right = conversionCost(e.arguments[1], candidate[1]);
+                            if (left < 0 || right < 0) continue;
+                            auto weight = left + right;
+                            if (weight < best) { best = weight; selected = candidate; ambiguous = false; }
+                            else if (weight == best) ambiguous = true;
+                        }
+                        if (selected is null) fail("argument type mismatch", e.token);
+                        if (ambiguous) fail("ambiguous Math overload", e.token);
+                        checkArguments(e, selected); e.builtinCall = "z8_math_" ~ e.token.text;
+                        return selected[0] == ValueType.dateType ? ValueType.dateType :
+                            selected[0] == ValueType.intType && selected[1] == ValueType.intType ? ValueType.intType : ValueType.decimalType;
                     }
                     fail("unsupported Math method", e.token);
                 }

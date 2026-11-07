@@ -237,6 +237,14 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                                   ("binary result = binary.zip(1);", False)):
         name_cases.append((accepted, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
     name_cases.append((True, {"NameA": 'public class NameA { public operator file() { file value = "folder"; return value; } static void f() { binary result = binary.zip(new NameA); } }'}))
+    for expression, accepted in (("Math.min(null, 3)", False), ("Math.max(3, null)", False),
+                                 ("Math.min('29/02/2024', null)", True),
+                                 ("Math.max('29/02/2024', 3)", True)):
+        name_cases.append((accepted, {"NameA": 'import org.zenframework.z8.lang.Math; public class NameA { static void f() { ' + expression + '; } }'}))
+    for operators, accepted in (('public operator int() { return 4; }', True),
+                                ('public operator decimal() { return 4.5; }', True),
+                                ('public operator int() { return 4; } public operator decimal() { return 4.5; }', False)):
+        name_cases.append((accepted, {"NameA": 'import org.zenframework.z8.lang.Math; public class NameA { ' + operators + ' static void f() { Math.min(new NameA, 3); } }'}))
     for case_index, (accepted, files) in enumerate(name_cases):
         names_project = temp / ("name-attribute-project-" + str(case_index))
         names_source = names_project / "src" / "bl"
