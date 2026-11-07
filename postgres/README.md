@@ -262,7 +262,9 @@ The direct-table `copy` action accepts source GUIDs in `recordId` and one
 override object per source in `data`. It requires copy access and write access
 to every primary field, invokes the BL copy hooks, and returns the copied
 records after commit. Overrides use the same supported scalar types as create
-and update. A missing or empty source list is rejected.
+and update. For a nested target, readable fields from the surrounding form are
+also applied as context before the copy hook. A missing or empty source list is
+rejected.
 The `destroy` action accepts a nonempty `data` array of GUID
 strings or objects containing the primary-key field. It checks request execute
 and table destroy access, invokes the BL destroy hooks, and processes all records

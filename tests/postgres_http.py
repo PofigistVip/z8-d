@@ -130,13 +130,22 @@ public class HiddenJob extends Executable {}
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.AttachmentField;
 import org.zenframework.z8.base.table.value.StringField;
+import org.zenframework.z8.base.application.Application;
 public class NestedAttachment extends Table {
     [name "Documents"] public AttachmentField documents;
     [name "Title"] public StringField title;
     virtual protected void onDestroyAction(guid id) {
         if (id == '00000000-0000-0000-0000-000000000091') throw "nested delete blocked";
     }
+    virtual protected void onCopyAction(guid id) {
+        if (Application.requestParameters().containsKey("verifyCopyContext") && ContextProbe.parentTitle(this) != "form context") throw "missing copy form context";
+    }
     virtual protected binary processContentRequest(string[string] parameters, file[] files) { return '78, 69, 83, 84'; }
+}
+''', encoding="utf-8")
+    (source / "ContextProbe.bl").write_text('''
+[native "ContextProbe"] public class ContextProbe {
+    public static string parentTitle(NestedAttachment child);
 }
 ''', encoding="utf-8")
     (source / "LeafQuery.bl").write_text('''
@@ -285,6 +294,12 @@ import std.stdio : writeln, stdout, readln;
 import std.string : startsWith;
 import std.conv : to;
 __gshared string databaseInfo;
+wstring parentTitle(Z8Object child) {
+    auto parent = z8_nonnull(z8_object_container(child));
+    foreach (field; z8_query_declared_fields(parent))
+        if (field.z8_index() == "title"w) return z8_primary_cast!wstring(z8_field_default_value(field));
+    throw new Exception("parent title not found");
+}
 
 class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
     Z8ApplicationSession authorize(Z8HttpRequest request, wstring id, wstring server) {
@@ -334,6 +349,7 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
     }
 }
 void main(string[] args) {
+    z8_native_bind("ContextProbe.m_parentTitle"w, &parentTitle);
     databaseInfo = args[1];
     auto setup = new Z8PostgresConnection(databaseInfo);
     setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Blob" bytea, "Documents" bytea, "ChildLink" uuid, "NestedLink" uuid, "MemoryLink" uuid, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
@@ -833,8 +849,12 @@ void main(string[] args) {
             result = request(action="update", link="nestedLink", fields='["nested.title"]',
                              data=json.dumps([{"nested.recordId": nested_id, "nested.title": "Changed"}]))
             assert result["success"] and result["data"][0]["nested.title"] == "Changed", result
+            nested_copy_data = [{"nested.recordId": nested_copy, "title": "form context"}]
+            result = request(session="limited", action="copy", link="nestedLink", fields='["nested.title"]', recordId=nested_id,
+                             data=json.dumps(nested_copy_data))
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(action="copy", link="nestedLink", fields='["nested.title"]', recordId=nested_id,
-                             data=json.dumps([{"nested.recordId": nested_copy}]))
+                             data=json.dumps(nested_copy_data), verifyCopyContext="true")
             assert result["success"] and result["data"][0]["nested.title"] == "Changed", result
             result = request(action="export", link="nestedLink", format="xls", columns='[{"id":"nested.title"}]')
             assert result["success"] and result["info"]["files"][0]["name"].endswith(".xlsx"), result

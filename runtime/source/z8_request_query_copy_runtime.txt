@@ -48,10 +48,12 @@ private void z8_application_dispatch_query_copy_target(wstring className, Z8Obje
         auto record = records.array[index];
         if (record.type != JSONType.object) throw new Exception("invalid query copy record");
         foreach (name, value; record.object) {
-            auto field = z8_query_try_find_field_id(query, name.to!wstring);
+            // CopyAction applies values from the whole form context, including
+            // owner fields when the copied table is reached through a link.
+            auto field = z8_query_try_find_field_id(context, name.to!wstring);
             if (field is null) continue;
             if (field.z8_get_owner() !is query) {
-                if (!z8_application_query_field_readable(query, field, privileges))
+                if (!z8_application_query_field_readable(context, field, privileges))
                     throw new Exception("query copy field access denied");
                 if (z8_field_type_id(field) != "binary"w) z8_application_query_set_value(field, value);
                 continue;
