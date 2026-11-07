@@ -459,7 +459,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
             if (!duplicate) explicitMerges ~= merge;
         }
     }
-    if (explicitMerges.length && (!allowMerges || inheritedSheet >= 0 || boundariesText is null || workbook.sheets[sheet].hasMergedRegions))
+    if (explicitMerges.length && (!allowMerges || inheritedSheet >= 0 || boundariesText is null))
         throw new Exception("POI report explicit merge layout is not implemented");
     if (boundariesText !is null) {
         auto boundaries = z8_poi_report_block(boundariesText);
@@ -634,8 +634,15 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
         }
         ++iteration;
     } while (z8_report_source_next(source));
-    if (explicitMerges.length) z8_poi_report_explicit_merges(explicitMerges, block, z8_poi_report_block(boundariesText), sheet,
-                                                            horizontal, (iteration - 1) * (horizontal ? width : height), addedMerges);
+    if (explicitMerges.length) {
+        if (templateMerges.length && iteration > 1) throw new Exception("POI report explicit merge expansion is not implemented");
+        z8_poi_report_explicit_merges(explicitMerges, block, z8_poi_report_block(boundariesText), sheet,
+                                      horizontal, (iteration - 1) * (horizontal ? width : height), addedMerges);
+        foreach (merge; addedMerges) foreach (original; templateMerges)
+            if (merge.firstRow <= original.lastRow && original.firstRow <= merge.lastRow &&
+                merge.firstColumn <= original.lastColumn && original.firstColumn <= merge.lastColumn)
+                throw new Exception("overlapping POI report merged regions");
+    }
     if (hasFooter && iteration > 1) {
         auto offset = (iteration - 1) * (horizontal ? width : height);
         Z8PoiCellCopy[] footerCopies;
