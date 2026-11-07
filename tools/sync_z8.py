@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 VENDOR = ROOT / "vendor/z8"
 MANIFEST = ROOT / "vendor/z8-sync.json"
 NATIVE = ROOT / "vendor/z8-native-baseline.json"
+TABLES_REPORT = "org.zenframework.z8.server/WEB-INF/reports/system/Tables.odt"
 TREES = {
     "bl": ("org.zenframework.z8.lang/src/bl",),
     "web": ("org.zenframework.z8.js/src", "org.zenframework.z8.resources/src/web"),
@@ -48,6 +49,12 @@ def assert_safe(root, path):
 
 
 def source_files(original, group):
+    if group == "reports":
+        path = original / TABLES_REPORT
+        assert_safe(original, path)
+        if not path.is_file():
+            raise ValueError(f"Missing system report template: {path}")
+        return {TABLES_REPORT: path.read_bytes()}
     result = {}
     for name in TREES[group]:
         base = original / name
@@ -70,9 +77,15 @@ def synchronize(original, group, apply):
         raise ValueError("Unsupported sync manifest")
     previous = manifest["groups"].get(group, {})
     changes, conflicts = [], []
+    def target_for(name):
+        if group == "reports":
+            if name != TABLES_REPORT:
+                raise ValueError(f"Unexpected report template in manifest: {name}")
+            return ROOT / "runtime/source/z8_tables_report_template.odt"
+        return VENDOR / name
     for name in sorted(set(previous) | set(files)):
-        target = VENDOR / name
-        assert_safe(VENDOR, target)
+        target = target_for(name)
+        assert_safe(ROOT if group == "reports" else VENDOR, target)
         if target.exists() and not target.is_file():
             conflicts.append(name)
             continue
@@ -88,7 +101,7 @@ def synchronize(original, group, apply):
         print(("update " if value else "remove ") + name)
     if apply:
         for name, value in changes:
-            target = VENDOR / name
+            target = target_for(name)
             if value:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(files[name])
@@ -167,13 +180,13 @@ def native_report(original, accept):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("group", choices=("bl", "web", "native"))
+    parser.add_argument("group", choices=("bl", "web", "reports", "native"))
     parser.add_argument("original", type=Path, help="Original org.zenframework.z8 checkout")
-    parser.add_argument("--apply", action="store_true", help="Apply BL/web file changes")
+    parser.add_argument("--apply", action="store_true", help="Apply BL, web or report-template changes")
     parser.add_argument("--accept", action="store_true", help="Update the native Java baseline after review")
     args = parser.parse_args()
     if (args.group == "native" and args.apply) or (args.group != "native" and args.accept):
-        parser.error("--apply is for bl/web; --accept is for native")
+        parser.error("--apply is for bl/web/reports; --accept is for native")
     original = args.original.resolve()
     if not original.is_dir():
         parser.error("Original checkout not found")

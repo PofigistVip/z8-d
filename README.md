@@ -71,11 +71,14 @@ JAR старее исходников, поэтому тест воспроиз�
 Действие обновления планировщика запускает немедленную проверку локальных
 расписаний. Локальный сервис также позволяет вложенно приостанавливать запуск
 заданий, дожидаясь завершения текущей проверки, и возобновлять его.
-Для исходного шаблона `Tables.odt` доступен обработчик
-`z8_tables_report_render`: он разворачивает списки таблиц и полей и сохраняет
-остальные части ODT. Содержимое проверяется сравнением с JOODoc через
-`python tests/tables_report_odt.py path/to/original-z8`. Выдача отчёта из
-системного представления и остальные системные представления ещё не перенесены.
+Представление таблиц включает ODT-отчёт по системным таблицам и их полям.
+Исходный `Tables.odt` включён в runtime без изменений; при наличии файла
+`reports/system/Tables.odt` в рабочем каталоге используется он. Поддерживается
+структура исходного шаблона, а не произвольные выражения FreeMarker.
+Содержимое проверяется сравнением с JOODoc через
+`python tests/tables_report_odt.py path/to/original-z8`; чтение PostgreSQL и
+вызов отчёта проверяются через `tests/postgres_tables_report.py`.
+Остальные системные представления ещё не перенесены.
 При компиляции проекта их можно добавить как зависимость через
 `--dependency platform/bl` вместе с исходной BL-библиотекой.
 Если таблица `SystemJobs` включена в начальное создание схемы PostgreSQL,
@@ -1368,12 +1371,16 @@ $env:Z8_RUNTIME_LIB = (Resolve-Path runtime/lib/z8-runtime.lib).Path
 ```powershell
 python tools/sync_z8.py bl C:/path/to/org.zenframework.z8
 python tools/sync_z8.py web C:/path/to/org.zenframework.z8
+python tools/sync_z8.py reports C:/path/to/org.zenframework.z8
 python tools/sync_z8.py bl C:/path/to/org.zenframework.z8 --apply
 python tools/sync_z8.py web C:/path/to/org.zenframework.z8 --apply
+python tools/sync_z8.py reports C:/path/to/org.zenframework.z8 --apply
 python tools/sync_z8.py native C:/path/to/org.zenframework.z8
 ```
 
 Команды без `--apply` показывают изменения и возвращают код 1, если они есть.
+Группа `reports` обновляет встроенную побайтовую копию системного `Tables.odt`;
+после изменения шаблона необходимо пересобрать runtime.
 `--apply` копирует файлы без преобразования и удаляет исчезнувшие в исходном
 дереве файлы только при совпадении с последней синхронизацией. При локальных
 изменениях копирование останавливается без перезаписи; сначала разрешите

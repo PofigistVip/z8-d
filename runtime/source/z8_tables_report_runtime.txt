@@ -27,6 +27,7 @@ private wstring z8_tables_report_xml_text(wstring value) {
 
 private wstring z8_tables_report_substitute(wstring pattern, Z8TablesReportTable table,
                                             Z8TablesReportField field, size_t sequence) {
+    import std.array : appender;
     import std.string : indexOf;
     enum inputStart = `<text:text-input text:description="jooscript">`w;
     enum inputEnd = `</text:text-input>`w;
@@ -38,23 +39,25 @@ private wstring z8_tables_report_substitute(wstring pattern, Z8TablesReportTable
         inputStart ~ "${field.type}"w ~ inputEnd, inputStart ~ "${field.description}"w ~ inputEnd];
     wstring[] values = [table.name, table.classId, table.description, sequence.to!wstring,
         field.name, field.type, field.description];
-    wstring result;
+    auto result = appender!wstring();
     while (pattern.length) {
         ptrdiff_t first = -1; size_t selected;
         foreach (index, token; tokens) {
             auto found = pattern.indexOf(token);
             if (found >= 0 && (first < 0 || found < first)) { first = found; selected = index; }
         }
-        if (first < 0) return result ~ pattern;
-        result ~= pattern[0 .. cast(size_t)first] ~ z8_tables_report_xml_text(values[selected]);
+        if (first < 0) { result.put(pattern); return result.data; }
+        result.put(pattern[0 .. cast(size_t)first]);
+        result.put(z8_tables_report_xml_text(values[selected]));
         pattern = pattern[cast(size_t)first + tokens[selected].length .. $];
     }
-    return result;
+    return result.data;
 }
 
 /// Render the original Tables.odt layout, preserving the other ODT entries.
 ubyte[] z8_tables_report_render(const(ubyte)[] source, Z8TablesReportTable[] tables) {
     import std.algorithm.searching : canFind;
+    import std.array : appender;
     import std.string : indexOf, lastIndexOf, replace;
     import std.zip : ZipArchive, CompressionMethod;
     auto archive = new ZipArchive(cast(ubyte[])source.dup);
@@ -92,14 +95,14 @@ ubyte[] z8_tables_report_render(const(ubyte)[] source, Z8TablesReportTable[] tab
     if (rowStart < 0 || rowEnd < 0) throw new Exception("invalid TablesReport field row");
     auto rowLast = cast(size_t)innerAt + inner.length + cast(size_t)rowEnd + "</table:table-row>".length;
     auto row = block[cast(size_t)rowStart .. rowLast].replace(inner, ""w);
-    wstring rendered;
+    auto rendered = appender!wstring();
     foreach (table; tables) {
-        rendered ~= z8_tables_report_substitute(block[0 .. cast(size_t)rowStart], table, Z8TablesReportField.init, 0);
+        rendered.put(z8_tables_report_substitute(block[0 .. cast(size_t)rowStart], table, Z8TablesReportField.init, 0));
         foreach (index, field; table.fields)
-            rendered ~= z8_tables_report_substitute(row, table, field, index + 1);
-        rendered ~= z8_tables_report_substitute(block[rowLast .. $], table, Z8TablesReportField.init, 0);
+            rendered.put(z8_tables_report_substitute(row, table, field, index + 1));
+        rendered.put(z8_tables_report_substitute(block[rowLast .. $], table, Z8TablesReportField.init, 0));
     }
-    (*content).expandedData = cast(ubyte[])(xml[0 .. cast(size_t)first] ~ rendered ~ xml[last .. $]).to!string.dup;
+    (*content).expandedData = cast(ubyte[])(xml[0 .. cast(size_t)first] ~ rendered.data ~ xml[last .. $]).to!string.dup;
     auto output = new ZipArchive(); output.comment = archive.comment;
     foreach (entry; archive.directory.byValue) {
         if (entry !is *content) entry.expandedData = archive.expand(entry);
@@ -107,4 +110,54 @@ ubyte[] z8_tables_report_render(const(ubyte)[] source, Z8TablesReportTable[] tab
         output.addMember(entry);
     }
     return cast(ubyte[])output.build();
+}
+
+private Z8TablesReportField[] z8_tables_report_read_fields(Z8Guid tableId) {
+    auto fields = z8_native_new(z8_system_fields_name);
+    auto state = z8_system_fields_state(fields);
+    Z8QueryReadRequest request;
+    request.fields = [state.members[1], state.members[2], state.members[6], state.members[3]];
+    request.where = z8_sql_guid_compare!"=="(z8_guid_field_sql(state.members[1]), z8_sql_guid_const(tableId));
+    z8_query_open(fields, request);
+    scope(exit) z8_query_close(fields);
+    Z8TablesReportField[] result;
+    while (z8_optional_require(z8_query_next(fields)))
+        result ~= Z8TablesReportField(z8_field_string_value(state.members[2]),
+            z8_field_string_value(state.members[6]), z8_field_string_value(state.members[3]));
+    return result;
+}
+
+private Z8File z8_tables_report_execute(Z8Object self, Z8Guid recordId) {
+    import std.file : exists, read, write;
+    import std.path : buildPath;
+    z8_nonnull(self);
+    auto sourcePath = buildPath(z8_file_working_root, "reports", "system", "Tables.odt");
+    const(ubyte)[] source = exists(sourcePath) ? cast(const(ubyte)[])read(sourcePath) :
+        cast(const(ubyte)[])import("z8_tables_report_template.odt");
+    auto tables = z8_native_new(z8_system_tables_name);
+    auto state = z8_system_tables_state(tables);
+    auto id = z8_nonnull(z8_query_primary_key(tables));
+    Z8QueryReadRequest request;
+    request.fields = [id, state.fields[0], state.fields[1], state.fields[2]];
+    z8_query_open(tables, request);
+    scope(exit) z8_query_close(tables);
+    Z8TablesReportTable[] data;
+    while (z8_optional_require(z8_query_next(tables))) {
+        auto tableId = z8_primary_cast!Z8Guid(z8_field_primary(id));
+        data ~= Z8TablesReportTable(z8_field_string_value(state.fields[0]),
+            z8_field_string_value(state.fields[2]), z8_field_string_value(state.fields[1]),
+            z8_tables_report_read_fields(tableId));
+    }
+    auto bytes = z8_tables_report_render(source, data);
+    // file.createTempFile uses second-resolution names; concurrent reports
+    // must not overwrite one another before their session-bound publication.
+    auto output = z8_file_createTempFile("Tables_"w ~ z8_guid_to_string(z8_guid_create_random()) ~ "_"w, "odt"w);
+    auto path = z8_file_system_path(output);
+    write(path, bytes);
+    return z8_file_from_disk(path);
+}
+
+shared static this() {
+    z8_native_bind("org.zenframework.z8.server.base.table.system.view.TablesReport.m_execute"w,
+        &z8_tables_report_execute);
 }

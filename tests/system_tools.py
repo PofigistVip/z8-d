@@ -47,6 +47,11 @@ void main() {
     assert(!z8_optional_require(z8_native_field!(Z8Optional!bool)("org.zenframework.z8.server.base.form.Control.f_readOnly"w, form)));
     auto roles = z8_object_new_instance("org.zenframework.z8.server.base.table.system.view.RoleTableAccessView"w);
     assert(z8_query_array(roles, "controls"w).length == 4);
+    auto tables = z8_object_new_instance("org.zenframework.z8.server.base.table.system.view.TablesView"w);
+    auto reports = z8_query_array(tables, "reports"w);
+    assert(reports.length == 1 && reports[0].z8_index() == "download"w);
+    assert(z8_native_is_instance("org.zenframework.z8.server.base.table.system.view.TablesReport"w, reports[0]));
+    assert(reports[0].z8_get_attribute("displayName"w) == "LibreOffice (*.odt)"w);
     auto action = z8_object_new_instance("org.zenframework.z8.server.base.table.system.view.RestartSchedulerAction"w);
     auto records = new Z8Array!Z8Guid(); bool missing;
     try { action.z8_action_virtual_execute_many(records, jobs, records, jobs); } catch (Exception) { missing = true; }

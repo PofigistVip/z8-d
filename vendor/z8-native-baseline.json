@@ -675,6 +675,10 @@
     "platform/bl/org/zenframework/z8/server/base/table/system/view/RuntimeVersionData.bl :: org.zenframework.z8.server.base.table.system.view.RuntimeVersionData": {
       "java": null,
       "sha256": null
+    },
+    "platform/bl/org/zenframework/z8/server/base/table/system/view/TablesReport.bl :: org.zenframework.z8.server.base.table.system.view.TablesReport": {
+      "java": "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/view/TablesReport.java",
+      "sha256": "9dc4745e16a12f059b91a7feaab931efbf593c7358faac3b7dad31a5e807a379"
     }
   },
   "format": 1,
@@ -732,7 +736,6 @@
     "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/view/RestartTransportAction.java": "b7903e8eee0a1ed3568cc376abaef55b76bf9228bf4de968b59d54e463fdd5ae",
     "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/view/RuntimeView.java": "97c57d4bb1a94a974d0d51b7fea251748360d4f047200907b387e8d0cc842b94",
     "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/view/SequencesView.java": "6a08a9a542887b4b459eb6258f505ca1bdb29945eb770ab57a6509b83adcb1be",
-    "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/view/TablesReport.java": "9dc4745e16a12f059b91a7feaab931efbf593c7358faac3b7dad31a5e807a379",
     "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/view/TablesView.java": "9691baf87aaf7e7453a07579b11c5297b71b06fbd4f4fd70a8b27968a601d72a",
     "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/system/view/TransportQueueView.java": "2b9a5291357ce557a2ce2305295e4f5799f5f5f9fb1b40e8eb408ea767dbe59c",
     "org.zenframework.z8.server/src/main/java/org/zenframework/z8/server/base/table/value/FastSequencer.java": "ac403958b2bac1839051d6d61674ccb56b7c06430bee0535bba242d32db329a1",

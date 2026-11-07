@@ -1,0 +1,7 @@
+import org.zenframework.z8.base.form.report.Report;
+
+[native "org.zenframework.z8.server.base.table.system.view.TablesReport"]
+[icon "fa-file-o"] [displayName "LibreOffice (*.odt)"]
+public class TablesReport extends Report {
+    virtual protected file execute(guid recordId);
+}

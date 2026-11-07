@@ -16,6 +16,7 @@ if len(sys.argv) != 2:
     raise SystemExit("Usage: python tests/tables_report_odt.py <original-z8-root>")
 original = Path(sys.argv[1]).resolve()
 template = original / "org.zenframework.z8.server/WEB-INF/reports/system/Tables.odt"
+bundled = Path(__file__).resolve().parents[1] / "runtime/source/z8_tables_report_template.odt"
 cache = Path.home() / ".gradle/caches/modules-2/files-2.1"
 libre = cache / "org.zenframework.z8.dependencies.libreoffice"
 jars = [p for name in ("jodreports-2.4.0", "freemarker-2.3.32", "xom-1.3.8")
@@ -24,6 +25,7 @@ jars += [p for name in ("commons-io/commons-io/2.7", "org.slf4j/slf4j-api/1.7.36
          for p in (cache / name).rglob("*.jar") if not p.name.endswith("-sources.jar")]
 if not template.is_file() or len(jars) < 5:
     raise SystemExit("Original Tables.odt or cached JOODoc dependencies not found")
+assert bundled.read_bytes() == template.read_bytes(), "Bundled Tables.odt differs from the original"
 
 with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     temp = Path(directory)
@@ -45,10 +47,15 @@ class TablesOdtOracle {
   public static void main(String[] args) throws Exception {
     int mode = Integer.parseInt(args[2]); List<Object> tables = new ArrayList<>();
     if (mode == 1) tables.add(table("Таблица & <имя>", "demo.Table", "Описание ${field.name}  два", Arrays.asList(
-      field("Имя & <поле>", "String", "Первая строка\\nВторая", 1), field("${table.name}", "Integer", "a > b\\tend\\rnext", 2))));
+      field("Имя & <поле>", "String", "Первая строка\\nВторая", 1), field("${table.name}", "Integer", "a > b\\tend\\rnext\\r\\nlast", 2))));
     if (mode == 2) {
       tables.add(table("Пустая", "demo.Empty", "", Collections.emptyList()));
       tables.add(table("Вторая", "demo.Second", "Описание", Arrays.asList(field("Код", "Guid", "id", 1))));
+    }
+    if (mode == 3) for (int i = 0; i < 40; i++) {
+      List<Object> fields = new ArrayList<>();
+      for (int j = 0; j < 5; j++) fields.add(field("Field" + j, "String", "description", j + 1));
+      tables.add(table("Table" + i, "demo.Table" + i, "description", fields));
     }
     Map<String,Object> data = new HashMap<>(); data.put("tables", tables);
     DocumentTemplate document = new DocumentTemplateFactory().getTemplate(new FileInputStream(args[0]));
@@ -65,11 +72,16 @@ void main(string[] args) {
     Z8TablesReportTable[] tables;
     if (args[3] == "1") tables ~= Z8TablesReportTable("Таблица & <имя>"w, "demo.Table"w,
         "Описание ${field.name}  два"w, [Z8TablesReportField("Имя & <поле>"w, "String"w, "Первая строка\\nВторая"w),
-                                        Z8TablesReportField("${table.name}"w, "Integer"w, "a > b\\tend\\rnext"w)]);
+                                        Z8TablesReportField("${table.name}"w, "Integer"w, "a > b\\tend\\rnext\\r\\nlast"w)]);
     if (args[3] == "2") {
         tables ~= Z8TablesReportTable("Пустая"w, "demo.Empty"w, ""w, null);
         tables ~= Z8TablesReportTable("Вторая"w, "demo.Second"w, "Описание"w,
             [Z8TablesReportField("Код"w, "Guid"w, "id"w)]);
+    }
+    if (args[3] == "3") foreach (i; 0 .. 40) {
+        Z8TablesReportField[] fields;
+        foreach (j; 0 .. 5) fields ~= Z8TablesReportField("Field"w ~ j.to!wstring, "String"w, "description"w);
+        tables ~= Z8TablesReportTable("Table"w ~ i.to!wstring, "demo.Table"w ~ i.to!wstring, "description"w, fields);
     }
     write(args[2], z8_tables_report_render(cast(ubyte[])read(args[1]), tables));
 }''', encoding="utf-8")
@@ -95,7 +107,7 @@ void main(string[] args) {
                 return value
             return ([visible(item) for item in root.iter(text)], len(list(root.iter(row))))
 
-    for mode in range(3):
+    for mode in range(4):
         expected, actual = temp / f"java-{mode}.odt", temp / f"d-{mode}.odt"
         subprocess.run(["java", "-cp", classpath, "TablesOdtOracle", str(template), str(expected), str(mode)], cwd=temp, check=True)
         subprocess.run([str(executable), str(template), str(actual), str(mode)], cwd=temp, check=True)

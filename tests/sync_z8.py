@@ -24,15 +24,30 @@ with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):
     helper = java.parent / "Helper.java"
     web = original / sync.TREES["web"][0] / "js/Z8.js"
     html = original / sync.TREES["web"][1] / "index.html"
-    for path in (bl, java, web, html):
+    report = original / sync.TABLES_REPORT
+    for path in (bl, java, web, html, report):
         path.parent.mkdir(parents=True, exist_ok=True)
     bl.write_bytes(b'[native "example.Value"]\r\nclass Value {}\r\n')
     java.write_bytes(b'class Value { int n = 1; }\n')
     helper.write_bytes(b'class Helper {}\n')
     web.write_bytes(b'// bytes \xef\xbb\xbf\r\n')
     html.write_bytes(b'<html>\r\n')
+    report.write_bytes(b'original ODT\x00\xff')
     assert sync.synchronize(original, "bl", True)
     assert sync.synchronize(original, "web", True)
+    assert sync.synchronize(original, "reports", True)
+    report_target = temp / "runtime/source/z8_tables_report_template.odt"
+    assert report_target.read_bytes() == report.read_bytes()
+    report.write_bytes(b'updated ODT\x00\xfe')
+    report_target.write_bytes(b'local report')
+    try:
+        sync.synchronize(original, "reports", True)
+        raise AssertionError("Expected a local report modification conflict")
+    except ValueError as error:
+        assert "no changes applied" in str(error)
+    report_target.write_bytes(b'original ODT\x00\xff')
+    assert sync.synchronize(original, "reports", True)
+    assert report_target.read_bytes() == report.read_bytes()
     assert (sync.VENDOR / web.relative_to(original)).read_bytes() == web.read_bytes()
     assert (sync.VENDOR / bl.relative_to(original)).read_bytes() == bl.read_bytes()
     assert sync.native_report(original, True)

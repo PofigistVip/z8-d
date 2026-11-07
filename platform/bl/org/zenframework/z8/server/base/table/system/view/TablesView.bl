@@ -1,12 +1,13 @@
 import org.zenframework.z8.base.form.Listbox;
 import org.zenframework.z8.base.table.system.Fields;
 import org.zenframework.z8.base.table.system.Tables;
+import org.zenframework.z8.server.base.table.system.view.TablesReport;
 
-// The report button depends on the original report engine and is not included yet.
 [request] [displayName "$Tables.title$"]
 public class TablesView extends Tables {
     Fields fields;
     Listbox fieldsListbox;
+    TablesReport download;
 
     readOnly = true;
     colCount = 6;
@@ -27,4 +28,5 @@ public class TablesView extends Tables {
     controls = {classId, name, displayName, description, fieldsListbox};
     names = {displayName, name};
     sortFields = {name};
+    reports = {download};
 }

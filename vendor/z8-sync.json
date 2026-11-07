@@ -171,6 +171,9 @@
       "org.zenframework.z8.lang/src/bl/org/zenframework/z8/utils/Cron.bl": "cb55a278d07d383375a5f3d0e50c4f8e46771d31cd5d0a92d520e3037095a36b",
       "org.zenframework.z8.lang/src/bl/org/zenframework/z8/utils/Sorter.bl": "5910c4970b045c98fdb28c8596c4939fba630d1dd3c1daf8bc361593c9bc53d3"
     },
+    "reports": {
+      "org.zenframework.z8.server/WEB-INF/reports/system/Tables.odt": "0b890d211f10ab5b0c07c9cde9295e1b594bf85a10366c50b8e42ea6905f61be"
+    },
     "web": {
       "org.zenframework.z8.js/src/css/.base.buildorder": "8a0f377cce942a5703b16ce7d29b0f7019fedb91b4e0503052a78bdb3ed2bd67",
       "org.zenframework.z8.js/src/css/.buildorder": "cbbd6a08829cded0030ae6d642d40166c93b93bbfb66127469094b7381f687fe",
