@@ -131,6 +131,7 @@ python tests/cast_operators.py
 python tests/cast_container.py
 python tests/exception_subclasses.py
 python tests/exception_string_conversion.py path/to/original-z8
+python tests/messageformat_value_oracle.py
 python tests/primary_array_views.py
 python tests/primary_string_map_views.py
 python tests/primary_scalar_key_map_views.py
@@ -942,8 +943,10 @@ Unicode D и может отличаться от Java при специфичн
 процентами и форматом отрицательных значений по правилам русской локали, а также
 базовые варианты `choice`. Форматы `date` и `time` принимают числовое значение
 времени в миллисекундах, включая `datespan`; доступны стандартные стили русской
-локали и поддерживаемые шаблоны даты. Другие форматы MessageFormat и аргументы
-типов `date`/`binary` пока не реализованы.
+локали и поддерживаемые шаблоны даты. Пустая геометрия, `decimal.NaN` и файл
+без загруженного содержимого передаются как Java `null`; пользовательские
+наследники `primary` отклоняются при извлечении аргументов, как в оригинале.
+Другие форматы MessageFormat и аргументы типов `date`/`binary` пока не реализованы.
 Поддерживаются строковые преобразования `guid`, `datespan`, `date`, `geometry`,
 `file` и `exception`, в том числе при конкатенации.
 Строка также преобразуется в `exception` при присваивании и передаче в методы.

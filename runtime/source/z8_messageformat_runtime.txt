@@ -146,8 +146,8 @@ private wstring z8_message_value(Z8Primary value) {
         case Z8PrimaryKind.boolean: return value.booleanValue ? "true"w : "false"w;
         case Z8PrimaryKind.guid: return z8_guid_to_string(value.guidValue);
         case Z8PrimaryKind.geometry: return z8_geometry_to_string(value.geometryValue);
-        case Z8PrimaryKind.file: return "null"w;
-        case Z8PrimaryKind.user: return z8_primary_to_string(value);
+        case Z8PrimaryKind.file: throw new Exception("uploaded file MessageFormat value is unsupported");
+        case Z8PrimaryKind.user: throw new Exception("user primary MessageFormat value is unsupported");
         case Z8PrimaryKind.binary: case Z8PrimaryKind.date: throw new Exception("unsupported MessageFormat value");
     }
 }
@@ -230,7 +230,12 @@ private wstring z8_message_choice(wstring style, Z8Primary value, Z8Array!Z8Prim
 wstring z8_string_format(wstring pattern, Z8Array!Z8Primary values) {
     pattern = z8_string_required(pattern);
     z8_nonnull(values);
-    foreach (i; 0 .. values.z8_size()) z8_nonnull(values.z8_get(i));
+    // string.z8_format extracts getValue() for every argument before parsing
+    // the pattern. The original primary implementation rejects user subclasses.
+    foreach (i; 0 .. values.z8_size()) {
+        auto value = z8_nonnull(values.z8_get(i));
+        if (value.kind == Z8PrimaryKind.user) throw new Exception("user primary MessageFormat value is unsupported");
+    }
     wstring result;
     bool quoted;
     size_t i;
@@ -278,10 +283,18 @@ wstring z8_string_format(wstring pattern, Z8Array!Z8Primary values) {
             if (pattern[i] != '}') throw new Exception("unsupported MessageFormat pattern");
             ++i;
             if (number >= cast(size_t)values.z8_size()) result ~= "{"w ~ number.to!wstring ~ "}"w;
-            else result ~= numeric ? z8_message_formatted_number(values.z8_get(cast(long)number), style) :
-                choice ? z8_message_choice(style, values.z8_get(cast(long)number), values) :
-                (dateFormat || timeFormat) ? z8_message_formatted_date(values.z8_get(cast(long)number), style, timeFormat) :
-                z8_message_value(values.z8_get(cast(long)number));
+            else {
+                auto value = values.z8_get(cast(long)number);
+                // getValue() returns Java null for NaN decimals, empty geometry
+                // and files without an uploaded FileItem. MessageFormat formats
+                // null as "null" even when a numeric or date style is present.
+                bool javaNull = (value.kind == Z8PrimaryKind.decimal && value.decimalValue.nan) ||
+                    (value.kind == Z8PrimaryKind.geometry && value.geometryValue.rawHex is null && value.geometryValue.shape == -1) ||
+                    (value.kind == Z8PrimaryKind.file && !z8_file_has_upload(value.fileValue));
+                result ~= javaNull ? "null"w : numeric ? z8_message_formatted_number(value, style) :
+                    choice ? z8_message_choice(style, value, values) :
+                    (dateFormat || timeFormat) ? z8_message_formatted_date(value, style, timeFormat) : z8_message_value(value);
+            }
         } else result ~= c;
     }
     return result.length ? result : ""w;
