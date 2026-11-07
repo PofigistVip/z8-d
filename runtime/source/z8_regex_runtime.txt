@@ -6,12 +6,16 @@ private class Z8MatcherState {
     RegexMatch!wstring matches;
     Captures!wstring current;
     bool hasCurrent;
+    Object owner;
 }
 private __gshared Z8MatcherState[Z8MatcherKey] z8_matchers;
 private __gshared Object z8_matchers_lock;
 shared static this() { z8_matchers_lock = new Object(); }
-private Z8MatcherKey z8_matcher_key(wstring value) {
+private Z8MatcherKey z8_matcher_key(wstring value, Object owner = null) {
     value = z8_string_required(value);
+    // Eval boxes distinguish equal strings while preserving shared references.
+    // Reserve an impossible string length for that separate identity space.
+    if (owner !is null) return Z8MatcherKey(cast(const(wchar)*)cast(void*)owner, size_t.max);
     return Z8MatcherKey(value.ptr, value.length);
 }
 private wstring z8_regex_pattern(wstring pattern) {
@@ -100,17 +104,18 @@ private wstring z8_regex_pattern(wstring pattern) {
     }
     return result.length ? result : ""w;
 }
-void z8_regex_setupMatcher(wstring value, wstring pattern) {
+void z8_regex_setupMatcher(wstring value, wstring pattern, Object owner = null) {
     import std.regex : regex, matchAll;
-    auto key = z8_matcher_key(value);
+    auto key = z8_matcher_key(value, owner);
     if (pattern is null) { synchronized (z8_matchers_lock) z8_matchers.remove(key); return; }
     auto state = new Z8MatcherState();
+    state.owner = owner;
     state.subject = value;
     state.matches = matchAll(value, regex(z8_regex_pattern(pattern)));
     synchronized (z8_matchers_lock) z8_matchers[key] = state;
 }
-bool z8_regex_next(wstring value) {
-    auto key = z8_matcher_key(value);
+bool z8_regex_next(wstring value, Object owner = null) {
+    auto key = z8_matcher_key(value, owner);
     synchronized (z8_matchers_lock) {
         auto found = key in z8_matchers;
         if (found is null) return false;
@@ -122,8 +127,8 @@ bool z8_regex_next(wstring value) {
         return true;
     }
 }
-wstring z8_regex_getGroup(wstring value, long groupNumber) {
-    auto key = z8_matcher_key(value);
+wstring z8_regex_getGroup(wstring value, long groupNumber, Object owner = null) {
+    auto key = z8_matcher_key(value, owner);
     synchronized (z8_matchers_lock) {
         auto found = key in z8_matchers;
         if (found is null || !(*found).hasCurrent) throw new Exception("matcher has no current match");

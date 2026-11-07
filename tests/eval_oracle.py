@@ -176,6 +176,13 @@ public class EvalOracle {
         for (String pattern : new String[]{"${subject.next()}", "${subject.setupMatcher('(a)(b)?')}", "${subject.next()}", "${subject.getGroup(0)}", "${subject.getGroup(1)}", "${subject.getGroup(2)}", "${subject.next()}", "${subject.getGroup(0)}", "${subject.getGroup(2)}", "${subject.next()}", "${subject.getGroup(0)}", "${subject.setupMatcher(nil)}", "${subject.next()}"})
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
+        string firstSubject = new string("ab");
+        jsonEval.z8_setVariable(new string("firstSubject"), firstSubject);
+        jsonEval.z8_setVariable(new string("aliasSubject"), firstSubject);
+        jsonEval.z8_setVariable(new string("secondSubject"), new string("ab"));
+        for (String pattern : new String[]{"${firstSubject.setupMatcher('a')}", "${secondSubject.setupMatcher('b')}", "${firstSubject.next()}", "${aliasSubject.getGroup(0)}", "${secondSubject.next()}", "${secondSubject.getGroup(0)}", "${aliasSubject.next()}"})
+            try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
+            catch (Exception error) { System.out.println("error"); }
     }
 }
 ''', encoding="utf-8")
@@ -373,6 +380,13 @@ void main() {
         catch (Exception) { writeln("error"); }
     jsonEval.m_setVariable("subject"w, z8_primary_box("ab a"w));
     foreach (pattern; ["${subject.next()}"w, "${subject.setupMatcher('(a)(b)?')}"w, "${subject.next()}"w, "${subject.getGroup(0)}"w, "${subject.getGroup(1)}"w, "${subject.getGroup(2)}"w, "${subject.next()}"w, "${subject.getGroup(0)}"w, "${subject.getGroup(2)}"w, "${subject.next()}"w, "${subject.getGroup(0)}"w, "${subject.setupMatcher(nil)}"w, "${subject.next()}"w])
+        try { writeln(jsonEval.m_evaluateText(pattern).to!string); }
+        catch (Exception) { writeln("error"); }
+    auto firstSubject = z8_primary_box("ab"w);
+    jsonEval.m_setVariable("firstSubject"w, firstSubject);
+    jsonEval.m_setVariable("aliasSubject"w, firstSubject);
+    jsonEval.m_setVariable("secondSubject"w, z8_primary_box("ab"w));
+    foreach (pattern; ["${firstSubject.setupMatcher('a')}"w, "${secondSubject.setupMatcher('b')}"w, "${firstSubject.next()}"w, "${aliasSubject.getGroup(0)}"w, "${secondSubject.next()}"w, "${secondSubject.getGroup(0)}"w, "${aliasSubject.next()}"w])
         try { writeln(jsonEval.m_evaluateText(pattern).to!string); }
         catch (Exception) { writeln("error"); }
 }

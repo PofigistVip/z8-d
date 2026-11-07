@@ -1,5 +1,6 @@
 // Built-in expression functions and methods (Z8 Calculator / function).
-private Z8Primary z8_eval_string_method(wstring value, wstring name, Z8EvalValue[] arguments) {
+private Z8Primary z8_eval_string_method(Z8Primary object, wstring name, Z8EvalValue[] arguments) {
+    auto value = object.textValue;
     long intArg(size_t i) {
         if (i >= arguments.length || arguments[i].primary is null || arguments[i].primary.kind != Z8PrimaryKind.integer)
             throw new Exception("invalid Eval method argument");
@@ -21,7 +22,7 @@ private Z8Primary z8_eval_string_method(wstring value, wstring name, Z8EvalValue
         if (name == "toLowerCase"w) return z8_primary_box(z8_string_new(z8_str_toLowerCase(value)));
         if (name == "firstToUpperCase"w) return z8_primary_box(z8_str_firstToUpperCase(value));
         if (name == "firstToLowerCase"w) return z8_primary_box(z8_str_firstToLowerCase(value));
-        if (name == "next"w) return z8_primary_box(z8_regex_next(value));
+        if (name == "next"w) return z8_primary_box(z8_regex_next(value, object));
         if (name == "file"w) return z8_primary_box(z8_file_from_path(value));
         if (name == "binary"w) return z8_primary_box(new Z8Binary(z8_encoding_encode(value, z8_encoding_by_id(0))));
     } else if (arguments.length == 1) {
@@ -32,9 +33,9 @@ private Z8Primary z8_eval_string_method(wstring value, wstring name, Z8EvalValue
         if (name == "startsWith"w) return z8_primary_box(z8_str_startsWith(value, textArg(0)));
         if (name == "endsWith"w) return z8_primary_box(z8_str_endsWith(value, textArg(0)));
         if (name == "matches"w) return z8_primary_box(z8_regex_matches(value, textArg(0)));
-        if (name == "setupMatcher"w) { z8_regex_setupMatcher(value, textArg(0)); return null; }
+        if (name == "setupMatcher"w) { z8_regex_setupMatcher(value, textArg(0), object); return null; }
         if (name == "getGroup"w) {
-            auto group = z8_regex_getGroup(value, intArg(0));
+            auto group = z8_regex_getGroup(value, intArg(0), object);
             return group is null ? null : z8_primary_box(z8_string_new(group));
         }
         if (name == "charAt"w) return z8_primary_box(z8_string_new(z8_str_charAt(value, intArg(0))));
@@ -362,7 +363,7 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
             return Z8EvalValue(true, z8_eval_type_method(type, name, arguments), null, null);
     }
     if (object.primary !is null && object.primary.kind == Z8PrimaryKind.text)
-        return Z8EvalValue(true, z8_eval_string_method(object.primary.textValue, name, arguments), null, null);
+        return Z8EvalValue(true, z8_eval_string_method(object.primary, name, arguments), null, null);
     if (object.primary !is null && object.primary.kind == Z8PrimaryKind.binary) {
         auto binary = object.primary.binaryValue;
         if (!arguments.length) {
