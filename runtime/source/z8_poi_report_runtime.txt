@@ -341,14 +341,11 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
         if (!allowExpansion || workbook.sheets.length != 1 || boundariesText is null || templateMerges.length)
             throw new Exception("empty POI report data source layout is not implemented");
         auto boundaries = z8_poi_report_block(boundariesText);
-        if (horizontal ? (boundaries.firstRow != block.firstRow || boundaries.lastRow != block.lastRow) :
-                         (boundaries.firstColumn != block.firstColumn || boundaries.lastColumn != block.lastColumn))
-            throw new Exception("empty POI report data source layout is not implemented");
         auto offset = horizontal ? block.lastColumn - block.firstColumn + 1 : block.lastRow - block.firstRow + 1;
-        auto firstRow = horizontal ? block.firstRow : block.lastRow + 1;
-        auto lastRow = horizontal ? block.lastRow : boundaries.lastRow;
-        auto firstColumn = horizontal ? block.lastColumn + 1 : block.firstColumn;
-        auto lastColumn = horizontal ? boundaries.lastColumn : block.lastColumn;
+        auto firstRow = horizontal ? boundaries.firstRow : block.lastRow + 1;
+        auto lastRow = boundaries.lastRow;
+        auto firstColumn = horizontal ? block.lastColumn + 1 : boundaries.firstColumn;
+        auto lastColumn = boundaries.lastColumn;
         if (firstRow <= lastRow && firstColumn <= lastColumn) foreach (rowNumber; firstRow .. lastRow + 1) {
             auto sourceRow = rowNumber in workbook.sheets[sheet].rows;
             auto targetRow = rowNumber - (horizontal ? 0 : offset);

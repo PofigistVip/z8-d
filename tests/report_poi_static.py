@@ -129,6 +129,8 @@ public class StaticReportProbe {
     public static file emptySparseFooter() { EmptySparseFooterReport report; return report.run(guid.Null); }
     public static file expandedMultiSide() { ExpandedMultiSideReport report; return report.run(guid.Null); }
     public static file expandedHorizontalMultiSide() { ExpandedHorizontalMultiSideReport report; return report.run(guid.Null); }
+    public static file emptySideFooter() { EmptySideFooterReport report; return report.run(guid.Null); }
+    public static file emptyHorizontalSideFooter() { EmptyHorizontalSideFooterReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -414,6 +416,8 @@ public class ExpandedTwoRowsReport extends Report {
     for name, template, address, boundaries, axis in (
             ("EmptyFooterReport", "expanded-footer", "A1:D1", "A1:D2", "0"),
             ("EmptySparseFooterReport", "expanded-sparse-footer", "A1:D1", "A1:D2", "0"),
+            ("EmptySideFooterReport", "expanded-side-conflict", "A2:D2", "A1:E3", "0"),
+            ("EmptyHorizontalSideFooterReport", "expanded-horizontal-side-conflict", "B1:C2", "A1:D3", "1"),
             ("EmptyHorizontalFooterReport", "expanded-horizontal-footer", "A1:B2", "A1:C2", "1"),
             ("EmptyMultiFooterReport", "expanded-multi-footer", "A1:D1", "A1:D4", "0"),
             ("EmptyHorizontalMultiFooterReport", "expanded-horizontal-multi-footer", "A1:B2", "A1:G2", "1")):
@@ -1076,7 +1080,9 @@ void main(string[] args) {
     bool emptySparseFooter; try { P.m_emptySparseFooter(); } catch (Exception) { emptySparseFooter = true; } assert(emptySparseFooter);
     bool expandedMultiSide; try { P.m_expandedMultiSide(); } catch (Exception) { expandedMultiSide = true; } assert(expandedMultiSide);
     bool expandedHorizontalMultiSide; try { P.m_expandedHorizontalMultiSide(); } catch (Exception) { expandedHorizontalMultiSide = true; } assert(expandedHorizontalMultiSide);
-    assert(database.begins == 106 && database.rollbacks == 106);
+    bool emptySideFooter; try { P.m_emptySideFooter(); } catch (Exception) { emptySideFooter = true; } assert(emptySideFooter);
+    bool emptyHorizontalSideFooter; try { P.m_emptyHorizontalSideFooter(); } catch (Exception) { emptyHorizontalSideFooter = true; } assert(emptyHorizontalSideFooter);
+    assert(database.begins == 108 && database.rollbacks == 108);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -1111,7 +1117,7 @@ void main(string[] args) {
         ++writes; return result;
     }
     ubyte[] writeExpandedReport(const(ubyte)[] input, const(Z8PoiCellCopy)[] copies, const(Z8PoiCellEdit)[] cells) {
-        assert(copies.length == 2 || copies.length == 3 || copies.length == 8 || copies.length == 4 || copies.length == 6 || copies.length == 10 || copies.length == 11 || copies.length == 12 || copies.length == 13 || copies.length == 18 || copies.length == 20 || copies.length == 22 || copies.length == 23); auto result = expander.writeExpandedReport(input, copies, cells);
+        assert(copies.length == 2 || copies.length == 3 || copies.length == 5 || copies.length == 8 || copies.length == 4 || copies.length == 6 || copies.length == 10 || copies.length == 11 || copies.length == 12 || copies.length == 13 || copies.length == 18 || copies.length == 20 || copies.length == 22 || copies.length == 23); auto result = expander.writeExpandedReport(input, copies, cells);
         ++expansions; return result;
     }
     ubyte[] addReportMerges(const(ubyte)[] input, const(Z8PoiMergedRegion)[] regions) {
@@ -1274,8 +1280,14 @@ void main(string[] args) {
         contents = contents.replace(
             'bool expandedHorizontalMultiSide; try { P.m_expandedHorizontalMultiSide(); } catch (Exception) { expandedHorizontalMultiSide = true; } assert(expandedHorizontalMultiSide);',
             'auto expandedHorizontalMultiSide = P.m_expandedHorizontalMultiSide(); copy(z8_file_resolve_path(expandedHorizontalMultiSide), buildPath(args[2], "expanded-horizontal-multi-side.xlsx"));')
-        contents = contents.replace('assert(database.begins == 106 && database.rollbacks == 106);',
-            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 34); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 35); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 36); assert(database.begins == 106 && database.rollbacks == 106);')
+        contents = contents.replace(
+            'bool emptySideFooter; try { P.m_emptySideFooter(); } catch (Exception) { emptySideFooter = true; } assert(emptySideFooter);',
+            'auto emptySideFooter = P.m_emptySideFooter(); copy(z8_file_resolve_path(emptySideFooter), buildPath(args[2], "empty-side-footer.xlsx"));')
+        contents = contents.replace(
+            'bool emptyHorizontalSideFooter; try { P.m_emptyHorizontalSideFooter(); } catch (Exception) { emptyHorizontalSideFooter = true; } assert(emptyHorizontalSideFooter);',
+            'auto emptyHorizontalSideFooter = P.m_emptyHorizontalSideFooter(); copy(z8_file_resolve_path(emptyHorizontalSideFooter), buildPath(args[2], "empty-horizontal-side-footer.xlsx"));')
+        contents = contents.replace('assert(database.begins == 108 && database.rollbacks == 108);',
+            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 36); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 37); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 38); assert(database.begins == 108 && database.rollbacks == 108);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1491,8 +1503,10 @@ class PoiRangeOracle {
       boolean horizontalMultiFooterCase = horizontalMultiSideCase || (args.length > 3 && "expanded-horizontal-multi-footer".equals(args[3]));
       boolean emptyMultiFooterCase = args.length > 3 && "empty-multi-footer".equals(args[3]);
       boolean emptyHorizontalMultiFooterCase = args.length > 3 && "empty-horizontal-multi-footer".equals(args[3]);
-      boolean emptyVerticalFooterCase = emptyMultiFooterCase || (args.length > 3 && ("empty-footer".equals(args[3]) || "empty-sparse-footer".equals(args[3])));
-      boolean emptyHorizontalFooterCase = emptyHorizontalMultiFooterCase || (args.length > 3 && "empty-horizontal-footer".equals(args[3]));
+      boolean emptySideFooterCase = args.length > 3 && "empty-side-footer".equals(args[3]);
+      boolean emptyHorizontalSideFooterCase = args.length > 3 && "empty-horizontal-side-footer".equals(args[3]);
+      boolean emptyVerticalFooterCase = emptySideFooterCase || emptyMultiFooterCase || (args.length > 3 && ("empty-footer".equals(args[3]) || "empty-sparse-footer".equals(args[3])));
+      boolean emptyHorizontalFooterCase = emptyHorizontalSideFooterCase || emptyHorizontalMultiFooterCase || (args.length > 3 && "empty-horizontal-footer".equals(args[3]));
       boolean emptyFooterCase = emptyVerticalFooterCase || emptyHorizontalFooterCase;
       boolean footerCase = headerFooterCase || multiFooterCase || (args.length > 3 && "expanded-footer".equals(args[3]));
       boolean horizontalFooterCase = horizontalHeaderCase || horizontalMultiFooterCase || (args.length > 3 && "expanded-horizontal-footer".equals(args[3]));
@@ -1615,8 +1629,8 @@ class PoiRangeOracle {
       boolean parameters = args.length > 3 && "parameters".equals(args[3]);
       boolean dates = args.length > 3 && "dates".equals(args[3]);
       Range child = new Range().setSource(customCase || jsonCase || queryCase || expandedCustomCase ? customSource : SimpleSource.newDefault())
-          .setBlock(emptyVerticalFooterCase ? "A1:D1" : headerFooterCase ? "A2:D2" : horizontalHeaderCase ? "B1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(multiSideCase ? "A1:E4" : horizontalMultiSideCase ? "A1:G3" : emptyMultiFooterCase ? "A1:D4" : emptyHorizontalMultiFooterCase ? "A1:G2" : emptyVerticalFooterCase ? "A1:D2" : emptyHorizontalFooterCase ? "A1:C2" : headerFooterCase ? "A1:E3" : horizontalHeaderCase ? "A1:D3" : multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
+          .setBlock(emptySideFooterCase ? "A2:D2" : emptyHorizontalSideFooterCase ? "B1:C2" : emptyVerticalFooterCase ? "A1:D1" : headerFooterCase ? "A2:D2" : horizontalHeaderCase ? "B1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
+          .setBoundaries(emptySideFooterCase ? "A1:E3" : emptyHorizontalSideFooterCase ? "A1:D3" : multiSideCase ? "A1:E4" : horizontalMultiSideCase ? "A1:G3" : emptyMultiFooterCase ? "A1:D4" : emptyHorizontalMultiFooterCase ? "A1:G2" : emptyVerticalFooterCase ? "A1:D2" : emptyHorizontalFooterCase ? "A1:C2" : headerFooterCase ? "A1:E3" : horizontalHeaderCase ? "A1:D3" : multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       if (horizontalCase) child.setAxis(1);
       if (multipleCase) {
         report.addRange(0, new Range().setSource(orderedSources[1]).setBlock("C1").setBoundaries("C1"));
@@ -1626,7 +1640,8 @@ class PoiRangeOracle {
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier); modifier.close();
       if (emptyFooterCase) {
-        for (int row = 0; row < (emptyMultiFooterCase ? 4 : 2); ++row) for (int col = 0; col < (emptyVerticalFooterCase ? 4 : emptyHorizontalMultiFooterCase ? 7 : 3); ++col) {
+        for (int row = 0; row < (emptyMultiFooterCase ? 4 : emptySideFooterCase || emptyHorizontalSideFooterCase ? 3 : 2); ++row)
+          for (int col = 0; col < (emptySideFooterCase ? 5 : emptyHorizontalSideFooterCase ? 4 : emptyVerticalFooterCase ? 4 : emptyHorizontalMultiFooterCase ? 7 : 3); ++col) {
           org.apache.poi.ss.usermodel.Row expectedRow = original.getSheetAt(0).getRow(row), actualRow = actual.getSheetAt(0).getRow(row);
           if (expectedRow == null || actualRow == null) { if (expectedRow != actualRow) throw new AssertionError("empty footer row differs"); continue; }
           org.apache.poi.ss.usermodel.Cell expected = expectedRow.getCell(col), result = actualRow.getCell(col);
@@ -1779,6 +1794,7 @@ class PoiRangeOracle {
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
                 for source_name, name in (("expanded-footer", "empty-footer"), ("expanded-sparse-footer", "empty-sparse-footer"), ("expanded-horizontal-footer", "empty-horizontal-footer"),
+                                          ("expanded-side-conflict", "empty-side-footer"), ("expanded-horizontal-side-conflict", "empty-horizontal-side-footer"),
                                           ("expanded-multi-footer", "empty-multi-footer"), ("expanded-horizontal-multi-footer", "empty-horizontal-multi-footer")):
                     result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                              str(application / ("reports/" + source_name + ".xlsx")), str(working / (name + ".xlsx")), str(config), name],
