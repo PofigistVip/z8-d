@@ -40,19 +40,21 @@ private Z8PoiReportBlock z8_poi_report_block(wstring address) {
 
 // A single, non-expanding simple source can be applied without editing cells
 // if the sheet contains no report expressions or reserved text delimiters.
-private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z8PoiWorkbook workbook) {
+private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z8PoiWorkbook workbook,
+                                              out int renameSheet, out wstring renameName) {
     import std.algorithm.searching : canFind;
     range = z8_nonnull(range); range.z8_ensure();
     auto rangeState = z8_report_range_state(range);
     if (rangeState.ranges !is null && rangeState.ranges.view().z8_erased_data().z8_size())
         throw new Exception("nested POI report ranges are not implemented");
-    foreach (attribute; ["totals"w, "subtotal"w, "subtotalsBy"w, "subtotalsMerge"w, "merge"w, "sheetName"w])
+    foreach (attribute; ["totals"w, "subtotal"w, "subtotalsBy"w, "subtotalsMerge"w, "merge"w])
         if (range.z8_get_attribute(attribute) !is null) throw new Exception("POI report range option is not implemented");
     auto axisText = range.z8_get_attribute("axis"w);
     if (axisText !is null && axisText.to!int != 0 && axisText.to!int != 1) throw new Exception("invalid POI report range axis");
     auto sheetText = range.z8_get_attribute("sheet"w);
     auto sheet = sheetText is null ? 0 : sheetText.to!int;
     if (sheet < 0 || sheet >= workbook.sheets.length) throw new Exception("POI report sheet expansion is not implemented");
+    renameSheet = sheet; renameName = range.z8_get_attribute("sheetName"w);
     if (workbook.sheets[sheet].hasMergedRegions) throw new Exception("merged POI report range cells are not implemented");
     auto block = z8_poi_report_block(range.z8_get_attribute("address"w));
     auto boundariesText = range.z8_get_attribute("boundaries"w);
@@ -83,6 +85,56 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     z8_report_source_open(source, sheet);
     scope(exit) z8_report_source_close(source);
     if (!z8_report_source_next(source) || z8_report_source_next(source)) throw new Exception("invalid simple POI report source");
+}
+
+private ubyte[] z8_poi_report_rename_sheet(const(ubyte)[] input, Z8PoiWorkbook workbook, int index, wstring name) {
+    import std.algorithm.searching : canFind, endsWith;
+    import std.zip : ZipArchive;
+    if (name.length > 31) name = name[0 .. 31];
+    if (!name.length || name[0] == '\'' || name[$ - 1] == '\'') throw new Exception("invalid POI report sheet name");
+    foreach (wchar c; name)
+        if (c == ':' || c == '\\' || c == '/' || c == '?' || c == '*' || c == '[' || c == ']' || c < 0x20)
+            throw new Exception("invalid POI report sheet name");
+    foreach (i, sheet; workbook.sheets)
+        if (i != index && z8_str_compareNoCase(z8_string_or_empty(sheet.name), name) == 0)
+            throw new Exception("duplicate POI report sheet name");
+    if (workbook.sheets[index].name == name) return input.dup;
+    foreach (sheet; workbook.sheets) foreach (row; sheet.rows) foreach (cell; row.cells)
+        if (cell.hasFormula) throw new Exception("renaming a POI report sheet with formulas is not implemented");
+    auto archive = new ZipArchive(cast(ubyte[])input.dup);
+    auto packageRels = z8_poi_read_xml(archive, "_rels/.rels");
+    string workbookPath;
+    foreach (rel; packageRels.children) if (z8_poi_xml_local(rel.name) == "Relationship"w &&
+        rel.attr("TargetMode"w) != "External"w && rel.attr("Type"w).endsWith("/officeDocument"w))
+        workbookPath = z8_poi_resolve_path("", rel.attr("Target"w));
+    if (!workbookPath.length) throw new Exception("missing XLSX workbook relationship");
+    auto member = workbookPath in archive.directory;
+    if (member is null) throw new Exception("missing XLSX workbook");
+    archive.expand(*member);
+    auto original = (*member).expandedData.dup;
+    auto xml = z8_poi_xml_decode(original);
+    auto root = (new Z8PoiXmlReader(xml)).parseDocument();
+    auto definedNames = root.child("definedNames"w);
+    if (definedNames !is null && definedNames.children.length)
+        throw new Exception("renaming a POI report sheet with defined names is not implemented");
+    auto sheets = root.child("sheets"w);
+    if (sheets is null) throw new Exception("missing XLSX sheets");
+    Z8PoiXmlNode selected; int current;
+    foreach (item; sheets.children) if (z8_poi_xml_local(item.name) == "sheet"w) {
+        if (current++ == index) { selected = item; break; }
+    }
+    if (selected is null) throw new Exception("invalid POI report sheet index");
+    auto opening = "<"w ~ selected.name;
+    foreach (key, value; selected.attributes) {
+        if (z8_poi_xml_local(key) == "name"w) value = name;
+        opening ~= " "w ~ key ~ "=\""w ~ z8_poi_xml_attribute_escape(value) ~ "\""w;
+    }
+    opening ~= selected.empty ? "/>"w : ">"w;
+    xml = xml[0 .. selected.start] ~ opening ~ xml[selected.startEnd .. $];
+    (*member).expandedData = z8_poi_report_encode_xml(xml, original);
+    auto output = new ZipArchive(); output.comment = archive.comment;
+    foreach (entry; archive.directory.byValue) output.addMember(entry);
+    return cast(ubyte[])output.build();
 }
 
 private wstring z8_poi_xml_attribute_escape(wstring value) {

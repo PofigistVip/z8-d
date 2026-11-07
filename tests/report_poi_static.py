@@ -54,6 +54,11 @@ public class StaticReportProbe {
     public static file implicitRange() { ImplicitRangeReport report; return report.run(guid.Null); }
     public static file invalidImplicitRange() { InvalidImplicitRangeReport report; return report.run(guid.Null); }
     public static file mergedRange() { MergedRangeReport report; return report.run(guid.Null); }
+    public static file renamedRange() { RenamedRangeReport report; return report.run(guid.Null); }
+    public static file invalidRename() { InvalidRenameReport report; return report.run(guid.Null); }
+    public static file formulaRename() { FormulaRenameReport report; return report.run(guid.Null); }
+    public static file duplicateRename() { DuplicateRenameReport report; return report.run(guid.Null); }
+    public static file longRename() { LongRenameReport report; return report.run(guid.Null); }
 }
 ''', encoding="utf-8")
     for name, template, address, boundaries in (
@@ -77,6 +82,18 @@ public class %s extends Report {
     [address "%s"] Range region;
     ranges = {region};
 }''' % (name, template, address), encoding="utf-8")
+    for name, template, sheet_name in (("RenamedRangeReport", "sample", "Отчёт 😀"),
+                                       ("InvalidRenameReport", "sample", "bad:name"),
+                                       ("FormulaRenameReport", "formula", "Renamed"),
+                                       ("DuplicateRenameReport", "multiple", "second"),
+                                       ("LongRenameReport", "sample", "abcdefghijklmnopqrstuvwxyz123456789")):
+        (source / (name + ".bl")).write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+public class %s extends Report {
+    engine = Report.POI; template = "%s";
+    [address "A1"] [boundaries "A1"] [sheetName "%s"] Range region;
+    ranges = {region};
+}''' % (name, template, sheet_name), encoding="utf-8")
     application, working = temp / "application", temp / "working"
     (application / "reports").mkdir(parents=True)
     working.mkdir()
@@ -143,6 +160,11 @@ public class %s extends Report {
     with zipfile.ZipFile(application / "reports/merged.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in merged.items():
             archive.writestr(name, content)
+    formula = dict(entries)
+    formula["xl/worksheets/sheet1.xml"] = original_sheet.replace('</row>', '<c r="B1"><f>1+1</f><v>2</v></c></row>')
+    with zipfile.ZipFile(application / "reports/formula.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in formula.items():
+            archive.writestr(name, content)
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "report.d"
     harness.write_text('''import z8.runtime;
@@ -197,6 +219,13 @@ void main(string[] args) {
     bool outside; try { P.m_invalidImplicitRange(); } catch (Exception) { outside = true; } assert(outside);
     bool merged; try { P.m_mergedRange(); } catch (Exception) { merged = true; } assert(merged);
     assert(database.begins == 20 && database.rollbacks == 20);
+    auto renamed = P.m_renamedRange();
+    copy(z8_file_resolve_path(renamed), buildPath(args[2], "renamed.xlsx"));
+    bool invalidName; try { P.m_invalidRename(); } catch (Exception) { invalidName = true; } assert(invalidName);
+    bool formula; try { P.m_formulaRename(); } catch (Exception) { formula = true; } assert(formula);
+    bool duplicate; try { P.m_duplicateRename(); } catch (Exception) { duplicate = true; } assert(duplicate);
+    auto longName = P.m_longRename(); copy(z8_file_resolve_path(longName), buildPath(args[2], "long-name.xlsx"));
+    assert(database.begins == 25 && database.rollbacks == 25);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -229,6 +258,12 @@ void main(string[] args) {
         sheet = ET.fromstring(second)
         assert sheet.find("x:sheetData/x:row/x:c/x:is/x:t", namespace).text == "😀"
         assert [item.attrib for item in sheet.findall("x:cols/x:col", namespace)] == [{"min": "1", "max": "1", "hidden": "1"}]
+    with zipfile.ZipFile(working / "renamed.xlsx") as archive:
+        renamed = ET.fromstring(archive.read("xl/workbook.xml"))
+        assert renamed.find("x:sheets/x:sheet", namespace).attrib["name"] == "Отчёт 😀"
+    with zipfile.ZipFile(working / "long-name.xlsx") as archive:
+        renamed = ET.fromstring(archive.read("xl/workbook.xml"))
+        assert renamed.find("x:sheets/x:sheet", namespace).attrib["name"] == "abcdefghijklmnopqrstuvwxyz12345"
     # Apache POI is optional for ordinary D builds; when available, compare
     # visibility and widths with the version used by the original server.
     cache = Path.home() / ".gradle/caches/modules-2/files-2.1"
@@ -310,18 +345,24 @@ class PoiRangeOracle {
       PoiReport report = new PoiReport(new ReportOptions()).setContext(new OBJECT.CLASS<OBJECT>(null).get());
       Range child = new Range().setSource(SimpleSource.newDefault()).setBlock("$A$1:A1").setBoundaries("A1:B2");
       report.addRange(0, child);
+      if (args.length > 3) original.setSheetName(0, "Отчёт \\uD83D\\uDE00");
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier); modifier.close();
       String expected = original.getSheetAt(0).getRow(0).getCell(0).getStringCellValue();
       String result = actual.getSheetAt(0).getRow(0).getCell(0).getStringCellValue();
       if (!expected.equals(result)) throw new AssertionError(expected + " != " + result);
+      if (!original.getSheetName(0).equals(actual.getSheetName(0))) throw new AssertionError("sheet name differs");
     } finally { ApplicationServer.setRequest(null); }
   }
 }''', encoding="utf-8")
             config = temp / "oracle.properties"
             config.write_text("application.language=en\napplication.working.path=" + temp.as_posix() + "\n", encoding="utf-8")
-            subprocess.run(["javac", "-source", "8", "-target", "8", "-cp", range_classpath, str(range_oracle)], cwd=temp, check=True)
+            subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8", "-cp", range_classpath, str(range_oracle)], cwd=temp, check=True)
             result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                      str(workbook), str(working / "range.xlsx"), str(config)], cwd=temp, capture_output=True, text=True)
+            assert result.returncode == 0, result.stderr
+            result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                     str(workbook), str(working / "renamed.xlsx"), str(config), "rename"],
+                                    cwd=temp, capture_output=True, text=True)
             assert result.returncode == 0, result.stderr
 print("POI static report template, naming and transaction verified")

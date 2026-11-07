@@ -92,7 +92,7 @@ private wstring z8_poi_rich_text(Z8PoiXmlNode value) {
 }
 private class Z8PoiCell { wstring kind, value, formula, sharedId; bool hasFormula, unresolvedSharedFormula; long row, column; }
 private class Z8PoiRow { Z8PoiCell[long] cells; }
-private class Z8PoiSheet { Z8PoiRow[long] rows; bool hasMergedRegions; }
+private class Z8PoiSheet { Z8PoiRow[long] rows; wstring name; bool hasMergedRegions; }
 private class Z8PoiWorkbook { Z8PoiSheet[] sheets; bool date1904; }
 private class Z8PoiSheetRef { Z8PoiSheet value; }
 private class Z8PoiRowRef { Z8PoiRow value; }
@@ -349,6 +349,7 @@ private Z8PoiWorkbook z8_poi_parse(Z8Binary input) {
         if (target is null) throw new Exception("missing XLSX sheet relationship");
         auto worksheet = z8_poi_read_xml(archive, z8_poi_resolve_path(base, *target));
         auto data = worksheet.child("sheetData"w), sheet = new Z8PoiSheet();
+        sheet.name = item.attr("name"w);
         auto merges = worksheet.child("mergeCells"w);
         sheet.hasMergedRegions = merges !is null && merges.children.length != 0;
         Z8PoiSharedFormula[wstring] sharedFormulas;

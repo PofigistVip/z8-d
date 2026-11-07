@@ -83,10 +83,11 @@ private Z8File z8_report_poi_run(Z8Object report, Z8ReportState state) {
     auto input = z8_file_to_binary(source);
     scope(exit) z8_binary_close(input);
     auto workbook = z8_poi_parse(input); // Fail on invalid templates before returning a file.
+    int renameSheet; wstring renameName;
     if (state.ranges !is null) {
         auto ranges = state.ranges.view().z8_erased_data();
         if (ranges.z8_size() > 1) throw new Exception("multiple POI report ranges are not implemented");
-        if (ranges.z8_size()) z8_poi_report_apply_simple_range(report, cast(Z8Object)ranges.z8_get(0), workbook);
+        if (ranges.z8_size()) z8_poi_report_apply_simple_range(report, cast(Z8Object)ranges.z8_get(0), workbook, renameSheet, renameName);
     }
     auto name = state.name is null ? templateName : state.name.to!string;
     if (state.name is null && name.toLower().endsWith(".xlsx")) name = name[0 .. $ - 5];
@@ -95,11 +96,13 @@ private Z8File z8_report_poi_run(Z8Object report, Z8ReportState state) {
     auto day = z8_date_toString(z8_date_now(), "yyyy.MM.dd"w).to!string;
     auto target = buildPath(z8_file_working_root, "reports", day, z8_guid_to_string(z8_guid_create_random()).to!string, name ~ ".xlsx");
     mkdirRecurse(dirName(target));
-    if (state.hiddenColumns is null || !state.hiddenColumns.z8_size()) copy(z8_file_system_path(source), target);
+    if (renameName is null && (state.hiddenColumns is null || !state.hiddenColumns.z8_size())) copy(z8_file_system_path(source), target);
     else {
         import std.file : read, write;
         auto bytes = cast(ubyte[])read(z8_file_system_path(source));
-        write(target, z8_poi_report_hide_columns(bytes, state.hiddenColumns));
+        if (renameName !is null) bytes = z8_poi_report_rename_sheet(bytes, workbook, renameSheet, renameName);
+        if (state.hiddenColumns !is null && state.hiddenColumns.z8_size()) bytes = z8_poi_report_hide_columns(bytes, state.hiddenColumns);
+        write(target, bytes);
     }
     return z8_file_from_disk(target);
 }
