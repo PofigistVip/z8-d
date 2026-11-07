@@ -253,10 +253,15 @@ string z8_java_double_string(double value) {
     if (value == 0) return signbit(value) ? "-0.0" : "0.0";
     string shortest;
     auto magnitude = value < 0 ? -value : value;
-    if (magnitude >= 1e16 && magnitude < 1e17) {
-        // Java 8's integral conversion retains the exact integer in this
-        // range, even when a shorter decimal round-trips to the same double.
-        shortest = (cast(long)value).to!string;
+    if (magnitude >= 1e16 && magnitude < 9223372036854775808.0) {
+        // Java 8's integral conversion rounds away decimal digits that are
+        // insignificant at the double's binary exponent. It can retain more
+        // digits than a shortest-round-trip conversion.
+        ulong unit = magnitude >= 2305843009213693952.0 ? 100 :
+            magnitude >= 288230376151711744.0 ? 10 : 1;
+        auto integer = cast(ulong)magnitude;
+        if (unit > 1) integer = ((integer + unit / 2) / unit) * unit;
+        shortest = (value < 0 ? "-" : "") ~ integer.to!string;
     } else foreach (precision; 1 .. 18) {
         auto candidate = format("%.*g", precision, value);
         if (z8_literal_parse_double(candidate) == value) { shortest = candidate; break; }

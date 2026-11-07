@@ -343,7 +343,7 @@ package ValueType optionalForArray(ValueType type) {
     }
 }
 // Java's legacy Double.toString has different edge cases outside this range.
-// Integral doubles below 1e17 have also been checked against the original
+// Integral doubles below 2^63 have also been checked against the original
 // double-to-BigDecimal conversion.
 package bool safeDecimalLiteral(string text) {
     auto spelling = text.replace(" ", "").replace("\t", "");
@@ -360,7 +360,7 @@ package bool safeDecimalLiteral(string text) {
         if (!value.isFinite) return false;
         if (first == last) return true;
         if (value != 0 && value.abs >= 1e-300 && value.abs < 1e15) return true;
-        return value.abs >= 1e15 && value.abs < 1e17 && cast(double)cast(long)value == value;
+        return value.abs >= 1e15 && value.abs < 9223372036854775808.0 && cast(double)cast(long)value == value;
     } catch (Exception) { return false; }
 }
 package ValueType elementType(ValueType type) {

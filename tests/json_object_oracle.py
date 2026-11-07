@@ -165,7 +165,7 @@ class JsonObjectOracle {
             try { JsonObject.z8_parse(new string(input)); System.out.println("ok"); }
             catch (RuntimeException expected) { System.out.println("error"); }
         }
-        for (String input : new String[] {"{}", "{a:1.0}", "{a:-0.0}", "{a:26919713289647808.0}", "{a:-44628848587899182.0}", "{a:'</script>'}", "{a:' '}", "{a:[1.0,true,null]}"}) {
+        for (String input : new String[] {"{}", "{a:1.0}", "{a:-0.0}", "{a:26919713289647808.0}", "{a:-44628848587899182.0}", "{a:516450811850272721.0}", "{a:-2305843009213693952.0}", "{a:'</script>'}", "{a:' '}", "{a:[1.0,true,null]}"}) {
             JsonObject item = JsonObject.z8_parse(new string(input)).get();
             System.out.println(item.string().get());
             System.out.println(item.z8_toString().get());
@@ -309,7 +309,7 @@ void main() {
     foreach (input; [""w, "  "w, "{}"w, "{x:1; y=2}"w, "[]"w, "{name:'unterminated"w, "{a:1,}"w, "null"w, "42"w]) {
         try { P.m_parse(input); writeln("ok"); } catch (Exception) { writeln("error"); }
     }
-    foreach (input; ["{}"w, "{a:1.0}"w, "{a:-0.0}"w, "{a:26919713289647808.0}"w, "{a:-44628848587899182.0}"w, "{a:'</script>'}"w, "{a:' '}"w, "{a:[1.0,true,null]}"w]) {
+    foreach (input; ["{}"w, "{a:1.0}"w, "{a:-0.0}"w, "{a:26919713289647808.0}"w, "{a:-44628848587899182.0}"w, "{a:516450811850272721.0}"w, "{a:-2305843009213693952.0}"w, "{a:'</script>'}"w, "{a:' '}"w, "{a:[1.0,true,null]}"w]) {
         auto item = P.m_parse(input);
         writeln(P.m_render(item).to!string);
         writeln(P.m_display(item).to!string);

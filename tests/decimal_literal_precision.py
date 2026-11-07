@@ -37,12 +37,18 @@ for _ in range(200):
 samples += ["1000000000000000.0", "4503599627370495.0", "4503599627370496.0",
             "9007199254740991.0", "9007199254740992.0", "-9007199254740992.0",
             "9007199254740994.0", "26919713289647808.0", "63456623512116783.0",
-            "-44628848587899182.0", "99999999999999984.0", "2935601023316268.750052482272"]
+            "-44628848587899182.0", "99999999999999984.0", "2935601023316268.750052482272",
+            "288230376151711712.0", "288230376151711744.0", "516450811850272721.0",
+            "2305843009213693696.0", "2305843009213693952.0", "9223372036854774784.0",
+            "8966366107597250171.7934341923"]
 for _ in range(200):
     integer = rng.randrange(10**15, 2**53 + 1)
     samples.append(("-" if rng.randrange(2) else "") + str(integer) + ".0")
 for _ in range(300):
     integer = rng.randrange(10**16, 10**17 - 16)
+    samples.append(("-" if rng.randrange(2) else "") + str(integer) + ".0")
+for _ in range(300):
+    integer = rng.randrange(10**17, 2**63 - 1024)
     samples.append(("-" if rng.randrange(2) else "") + str(integer) + ".0")
 for _ in range(50):
     # Some fractional spellings round to an integer double at this magnitude.
@@ -56,7 +62,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     methods = "\n".join(f"public static decimal value{i}() {{ return {value}; }}" for i, value in enumerate(samples))
     (source / "Probe.bl").write_text("public class Probe {\n" + methods + "\n}", encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
-    for rejected in ("100000000000000000.0", "1000000000000000.125", "0." + "0" * 300 + "1",
+    for rejected in ("9223372036854775808.0", "1000000000000000.125", "0." + "0" * 300 + "1",
                      "4012161563682237.749685808834", "1582087371762615.874997622157",
                      "3258245237057377.250097458906"):
         probe = temp / "Rejected.bl"
@@ -93,6 +99,7 @@ void main() {
     # without generating thousands of separate BL methods.
     random_values = [str(rng.randrange(10**15, 2**53 + 1)) + ".0" for _ in range(4096)]
     random_values += [("-" if rng.randrange(2) else "") + str(rng.randrange(10**16, 10**17 - 16)) + ".0" for _ in range(8192)]
+    random_values += [("-" if rng.randrange(2) else "") + str(rng.randrange(10**17, 2**63 - 1024)) + ".0" for _ in range(8192)]
     random_values += [f"{rng.randrange(10**15, 10**16)}e{e-15}" for e in range(-30, -15) for _ in range(500)]
     random_values += [f"{rng.randrange(10**15, 10**16)}e{e-15}" for e in range(-300, -30) for _ in range(40)]
     input_text = "\n".join(random_values) + "\n"
@@ -101,15 +108,22 @@ void main() {
 class DecimalDoubleBatch {
   public static void main(String[] args) throws Exception {
     BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
-    for (String line; (line = input.readLine()) != null;)
-      System.out.println(java.math.BigDecimal.valueOf(Double.parseDouble(line)).toPlainString());
+    for (String line; (line = input.readLine()) != null;) {
+      double value = Double.parseDouble(line);
+      System.out.println(java.math.BigDecimal.valueOf(value).toPlainString() + "|" + Double.toString(value));
+    }
   }
 }''', encoding="utf-8")
     subprocess.run(["javac", "-source", "8", "-target", "8", str(java_batch)], cwd=temp, check=True)
     batch_source = temp / "batch.d"
     batch_source.write_text('''import z8.runtime;
+import core.stdc.stdlib : strtod;
+import std.string : toStringz;
 import std.stdio : stdin, writeln;
-void main() { foreach (line; stdin.byLine) writeln(z8_decimal_literal(line.idup).z8_string()); }
+void main() { foreach (line; stdin.byLine) {
+    auto text = line.idup;
+    writeln(z8_decimal_literal(text).z8_string(), "|", z8_java_double_string(strtod(text.toStringz, null)));
+} }
 ''', encoding="utf-8")
     batch_exe = temp / ("batch.exe" if os.name == "nt" else "batch")
     subprocess.run(["dmd", str(batch_source), *import_args(), str(runtime), "-of=" + str(batch_exe)], cwd=temp, check=True)
