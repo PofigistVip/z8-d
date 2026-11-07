@@ -106,6 +106,11 @@ public class EvalOracle {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
         }
+        jsonEval.z8_setVariable(new string("slashPath"), new string("folder" + (char)92 + "Report.XLSX"));
+        for (String pattern : new String[]{"${'folder/Report.XLSX'.file().fileName()}", "${'folder/Report.XLSX'.file().baseName()}", "${'folder/Report.XLSX'.file().extension()}", "${'folder/Report.XLSX'.file().folder()}", "${'folder/Report.XLSX'.file().string()}", "${'folder/Report.XLSX'.file().getPath()}", "${slashPath.file().getPath()}", "${slashPath.file().string()}", "${'folder/Report.XLSX'.file().parent().fileName()}", "${'missing-file-uuid-72e8'.file().exists()}", "${'missing-file-uuid-72e8'.file().isEmpty()}", "${'missing-file-uuid-72e8'.file().isFolder()}", "${'missing-file-uuid-72e8'.file().lastModified().ticks()}"}) {
+            try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
+            catch (Exception error) { System.out.println("error"); }
+        }
         for (String pattern : new String[]{"${1.25.abs()}", "${(-7).abs()}", "${(-7).signum()}", "${(5).not()}", "${(5).and(3)}", "${(5).xor(3)}", "${(8).rightShift(2)}", "${(255).toHexString()}", "${(255).toString(16)}", "${(9).sqrt()}", "${(2).sqrt()}", "${(1).sin()}", "${(2).power(3.0)}", "${(1.25).round(1)}", "${(1.25).round(1, 1)}", "${(1.25).round(1, 7)}", "${(1.5).round()}", "${(0.0 - 1.5).round()}", "${(1.25).abs()}", "${(0.1).abs()}", "${(1.25).ceil()}", "${(1.25).floor()}", "${(5).and('x')}", "${(1.25).round(missing)}"}) {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
@@ -237,6 +242,15 @@ void main() {
                        "${'b,a,b'.split(',').unique().join('-')}"w, "${'a,b'.split(',').removeAt(0)}"w,
                        "${'b,a,b'.split(',').removeAll('b'.split(',')).join('-')}"w, "${'b,a,b'.split(',').remove('b'.split(','))}"w,
                        "${'a,b'.split(',').clear()}"w, "${guid.create(42).components().reverse()[0]}"w])
+        try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
+    jsonEval.m_setVariable("slashPath"w, z8_primary_box("folder"w ~ cast(wchar)92 ~ "Report.XLSX"w));
+    foreach (pattern; ["${'folder/Report.XLSX'.file().fileName()}"w, "${'folder/Report.XLSX'.file().baseName()}"w,
+                       "${'folder/Report.XLSX'.file().extension()}"w, "${'folder/Report.XLSX'.file().folder()}"w,
+                       "${'folder/Report.XLSX'.file().string()}"w, "${'folder/Report.XLSX'.file().getPath()}"w,
+                       "${slashPath.file().getPath()}"w, "${slashPath.file().string()}"w,
+                       "${'folder/Report.XLSX'.file().parent().fileName()}"w, "${'missing-file-uuid-72e8'.file().exists()}"w,
+                       "${'missing-file-uuid-72e8'.file().isEmpty()}"w, "${'missing-file-uuid-72e8'.file().isFolder()}"w,
+                       "${'missing-file-uuid-72e8'.file().lastModified().ticks()}"w])
         try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
     foreach (pattern; ["${1.25.abs()}"w, "${(-7).abs()}"w, "${(-7).signum()}"w, "${(5).not()}"w, "${(5).and(3)}"w,
                        "${(5).xor(3)}"w, "${(8).rightShift(2)}"w, "${(255).toHexString()}"w, "${(255).toString(16)}"w,
