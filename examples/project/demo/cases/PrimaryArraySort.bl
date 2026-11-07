@@ -1,0 +1,15 @@
+public class PrimaryArraySort {
+    public static int run() {
+        primary[] numbers = {3, 1, 2};
+        primary[] sorted = numbers.sort();
+        if (sorted[0].toString() != "1" || sorted[1].toString() != "2" || sorted[2].toString() != "3") return 1;
+        sorted.add(4); if (numbers.size() != 4) return 2;
+        datespan first; first.set(1000);
+        datespan second; second.set(2000);
+        primary[] spans = {first, second}; spans.sort();
+        if (first.milliseconds() != 1000 || second.milliseconds() != -1000) return 3;
+        primary[] invalid = {1, null};
+        try { invalid.sort(); return 4; } catch (exception expected) {}
+        return 0;
+    }
+}

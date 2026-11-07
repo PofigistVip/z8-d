@@ -330,6 +330,14 @@ class Z8Array(T) {
             if (z8_size() > 1) throw new Exception("object array elements are not comparable");
             ++z8_version;
             return this;
+        } else static if (is(T == Z8Primary)) {
+            if (z8_size() <= 1) { ++z8_version; return this; }
+            if (z8_size() >= 32) throw new Exception("primary array sorting of 32 or more elements is not implemented");
+            auto values = items.dup;
+            scope(failure) items = values;
+            z8_java_short_sort!(Z8Primary, z8_primary_sort_compare)(values);
+            items = values; ++z8_version;
+            return this;
         } else static if (is(T == Z8Datespan)) {
             if (z8_size() <= 1) { ++z8_version; return this; }
             if (z8_size() >= 32) throw new Exception("datespan array sorting of 32 or more elements is not implemented");

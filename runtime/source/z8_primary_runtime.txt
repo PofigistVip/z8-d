@@ -34,6 +34,57 @@ class Z8Primary {
     }
 }
 
+// Natural ordering used by Java's RCollection.sort. Cross-type comparisons
+// intentionally follow the left operand's implementation and need not be symmetric.
+private int z8_primary_sort_compare(Z8Primary left, Z8Primary right) {
+    z8_nonnull(left);
+    if (left.kind == Z8PrimaryKind.binary || left.kind == Z8PrimaryKind.file) return 0;
+    if (left.kind == Z8PrimaryKind.user) throw new Exception("user primary array sort is not implemented");
+    if (right is null) return -1;
+    switch (left.kind) {
+        case Z8PrimaryKind.integer: {
+            if (right.kind != Z8PrimaryKind.integer && right.kind != Z8PrimaryKind.decimal) return -1;
+            auto rhs = right.kind == Z8PrimaryKind.integer ? right.integerValue : right.decimalValue.z8_round_int();
+            auto difference = cast(long)(cast(ulong)left.integerValue - cast(ulong)rhs);
+            return difference < 0 ? -1 : difference > 0 ? 1 : 0;
+        }
+        case Z8PrimaryKind.decimal: {
+            if (right.kind != Z8PrimaryKind.integer && right.kind != Z8PrimaryKind.decimal) return -1;
+            auto rhs = right.kind == Z8PrimaryKind.integer ? z8_decimal_from_int(right.integerValue) : right.decimalValue;
+            return left.decimalValue.opCmp(rhs);
+        }
+        case Z8PrimaryKind.boolean:
+            return right.kind != Z8PrimaryKind.boolean ? -1 : left.booleanValue == right.booleanValue ? 0 : left.booleanValue ? 1 : -1;
+        case Z8PrimaryKind.text:
+            return right.kind != Z8PrimaryKind.text ? -1 : left.textValue < right.textValue ? -1 : left.textValue > right.textValue ? 1 : 0;
+        case Z8PrimaryKind.guid: {
+            if (right.kind != Z8PrimaryKind.guid) return -1;
+            auto a = cast(long)left.guidValue.majorBits, b = cast(long)right.guidValue.majorBits;
+            if (a != b) return a < b ? -1 : 1;
+            a = cast(long)left.guidValue.minorBits; b = cast(long)right.guidValue.minorBits;
+            return a < b ? -1 : a > b ? 1 : 0;
+        }
+        case Z8PrimaryKind.date: {
+            if (right.kind != Z8PrimaryKind.date) return -1;
+            auto difference = cast(long)(cast(ulong)z8_date_ticks(left.dateValue) - cast(ulong)z8_date_ticks(right.dateValue));
+            return difference < 0 ? -1 : difference > 0 ? 1 : 0;
+        }
+        case Z8PrimaryKind.datespan:
+            if (right.kind != Z8PrimaryKind.datespan) return -1;
+            left.datespanValue.ticks = cast(long)(0UL - cast(ulong)right.datespanValue.ticks);
+            return left.datespanValue.ticks < 0 ? -1 : left.datespanValue.ticks > 0 ? 1 : 0;
+        case Z8PrimaryKind.geometry: {
+            auto a = left.geometryValue;
+            if (right.kind != Z8PrimaryKind.geometry || (a.rawHex is null && a.shape == -1)) return -1;
+            auto b = right.geometryValue;
+            if (b.rawHex is null && b.shape == -1) throw new Exception("empty geometry array element");
+            auto first = z8_geometry_to_string(a), second = z8_geometry_to_string(b);
+            return first < second ? -1 : first > second ? 1 : 0;
+        }
+        default: assert(0);
+    }
+}
+
 // Java collections first compare references, then call equals. A BL primary
 // wrapper can be recreated while retaining the same underlying object.
 bool z8_primary_collection_equals(Z8Primary left, Z8Primary right) {
