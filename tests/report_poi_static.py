@@ -731,6 +731,8 @@ public class %s extends Report {
     empty_row = dict(two_rows)
     empty_row["xl/worksheets/sheet1.xml"] = empty_row["xl/worksheets/sheet1.xml"].replace(
         '<row r="2"><c r="A2" t="s"><v>2</v></c><c r="B2" t="s"><v>3</v></c></row>', '')
+    empty_row["xl/worksheets/sheet1.xml"] = empty_row["xl/worksheets/sheet1.xml"].replace(
+        '</sheetData>', '<row r="4"><c r="A4" t="s"><v>0</v></c></row></sheetData>')
     with zipfile.ZipFile(application / "reports/expanded-empty-row.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in empty_row.items():
             archive.writestr(entry_name, content)
@@ -1032,13 +1034,14 @@ void main(string[] args) {
         bridge = ROOT / "xlsx/source"
         contents = harness.read_text(encoding="utf-8")
         contents = contents.replace("import z8.runtime;", "import z8.runtime;\nimport z8.xlsx.poi : z8_openxlsx_configure;")
-        contents = contents.replace("void main(string[] args) {", '''class CountingProvider : IZ8PoiProvider, IZ8PoiReportWriter, IZ8PoiReportExpander, IZ8PoiReportMergeWriter {
+        contents = contents.replace("void main(string[] args) {", '''class CountingProvider : IZ8PoiProvider, IZ8PoiReportWriter, IZ8PoiReportExpander, IZ8PoiReportMergeWriter, IZ8PoiReportCellRemover {
     IZ8PoiProvider reader;
     IZ8PoiReportWriter writer;
     IZ8PoiReportExpander expander;
     IZ8PoiReportMergeWriter mergeWriter;
+    IZ8PoiReportCellRemover remover;
     uint renames, hides, writes, expansions, merges;
-    this(IZ8PoiProvider provider) { reader = provider; writer = cast(IZ8PoiReportWriter)provider; expander = cast(IZ8PoiReportExpander)provider; mergeWriter = cast(IZ8PoiReportMergeWriter)provider; assert(writer !is null && expander !is null && mergeWriter !is null); }
+    this(IZ8PoiProvider provider) { reader = provider; writer = cast(IZ8PoiReportWriter)provider; expander = cast(IZ8PoiReportExpander)provider; mergeWriter = cast(IZ8PoiReportMergeWriter)provider; remover = cast(IZ8PoiReportCellRemover)provider; assert(writer !is null && expander !is null && mergeWriter !is null && remover !is null); }
     IZ8PoiDocument open(const(ubyte)[] input) { return reader.open(input); }
     ubyte[] renameReportSheet(const(ubyte)[] input, uint index, wstring name) {
         auto result = writer.renameReportSheet(input, index, name);
@@ -1053,12 +1056,17 @@ void main(string[] args) {
         ++writes; return result;
     }
     ubyte[] writeExpandedReport(const(ubyte)[] input, const(Z8PoiCellCopy)[] copies, const(Z8PoiCellEdit)[] cells) {
-        assert(copies.length == 8 || copies.length == 4 || copies.length == 10 || copies.length == 12 || copies.length == 18 || copies.length == 20); auto result = expander.writeExpandedReport(input, copies, cells);
+        assert(copies.length == 8 || copies.length == 4 || copies.length == 6 || copies.length == 10 || copies.length == 12 || copies.length == 18 || copies.length == 20); auto result = expander.writeExpandedReport(input, copies, cells);
         ++expansions; return result;
     }
     ubyte[] addReportMerges(const(ubyte)[] input, const(Z8PoiMergedRegion)[] regions) {
         assert(regions.length == 2); auto result = mergeWriter.addReportMerges(input, regions);
         ++merges; return result;
+    }
+    ubyte[] removeReportCells(const(ubyte)[] input, const(Z8PoiCellRemoval)[] cells) {
+        assert(cells.length == 1 && ((cells[0].row == 1 && cells[0].column == 2) ||
+                                     (cells[0].row == 3 && cells[0].column == 0)));
+        return remover.removeReportCells(input, cells);
     }
 }
 void main(string[] args) {
@@ -1176,6 +1184,9 @@ void main(string[] args) {
         contents = contents.replace(
             'bool horizontalHeader; try { P.m_expandedHorizontalHeader(); } catch (Exception) { horizontalHeader = true; } assert(horizontalHeader);',
             'auto horizontalHeader = P.m_expandedHorizontalHeader(); copy(z8_file_resolve_path(horizontalHeader), buildPath(args[2], "expanded-horizontal-header.xlsx")); assert(counter.expansions == 24);')
+        contents = contents.replace('bool missingSource; try { P.m_expandedMissingSource(); } catch (Exception) { missingSource = true; } assert(missingSource);', '')
+        contents = contents.replace('assert(database.begins == 99 && database.rollbacks == 99);',
+            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 25); assert(database.begins == 99 && database.rollbacks == 99);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1524,6 +1535,10 @@ class PoiRangeOracle {
           }
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(row).getCell(col);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(row).getCell(col);
+          if (expected == null || result == null) {
+            if (expected != result) throw new AssertionError("physical cell differs at " + row + "," + col);
+            continue;
+          }
           if (expected.getCellType() != result.getCellType() || expected.getCellStyle().getIndex() != result.getCellStyle().getIndex())
             throw new AssertionError("expanded cell type/style differs at " + row + "," + col);
           if (expected.getCellType() == org.apache.poi.ss.usermodel.Cell.CELL_TYPE_STRING) {
@@ -1639,7 +1654,7 @@ class PoiRangeOracle {
                                          str(application / "reports/expanded.xlsx"), str(working / "expanded.xlsx"), str(config), "expanded"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
-                for name in ("expanded-static", "expanded-rich", "expanded-inline-number", "expanded-inline-constant", "expanded-other-columns", "expanded-occupied", "expanded-formula", "expanded-complex-formula", "expanded-parenthesized", "expanded-functions"):
+                for name in ("expanded-static", "expanded-rich", "expanded-inline-number", "expanded-inline-constant", "expanded-other-columns", "expanded-occupied", "expanded-formula", "expanded-complex-formula", "expanded-parenthesized", "expanded-functions", "expanded-missing-source"):
                     result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                              str(application / ("reports/" + name + ".xlsx")), str(working / (name + ".xlsx")), str(config), "expanded"],
                                             cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")

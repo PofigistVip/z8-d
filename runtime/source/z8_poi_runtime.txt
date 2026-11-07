@@ -27,6 +27,7 @@ struct Z8PoiCellEdit {
     bool booleanValue;
 }
 struct Z8PoiCellCopy { uint sheet, sourceRow, sourceColumn, targetRow, targetColumn; bool clearFormulaCache; }
+struct Z8PoiCellRemoval { uint sheet, row, column; }
 struct Z8PoiMergedRegion { uint sheet, firstRow, firstColumn, lastRow, lastColumn; }
 /// Optional report mutations supported by the registered workbook provider.
 interface IZ8PoiReportWriter {
@@ -40,6 +41,10 @@ interface IZ8PoiReportExpander {
 }
 interface IZ8PoiReportMergeWriter {
     ubyte[] addReportMerges(const(ubyte)[] input, const(Z8PoiMergedRegion)[] merges);
+}
+/// Optional capability for physically removing cells in sparse report copies.
+interface IZ8PoiReportCellRemover {
+    ubyte[] removeReportCells(const(ubyte)[] input, const(Z8PoiCellRemoval)[] cells);
 }
 /// The provider cannot read this workbook; try the built-in compatible reader.
 class Z8PoiUnsupportedWorkbook : Exception {

@@ -276,7 +276,7 @@ private void z8_poi_report_evaluate_cell(Z8EvalState state, Z8PoiWorkbook workbo
 // Apply a single, non-expanding source to the selected report block.
 private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z8PoiWorkbook workbook,
                                               out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits,
-                                              out Z8PoiCellCopy[] copies, out Z8PoiMergedRegion[] addedMerges,
+                                              out Z8PoiCellCopy[] copies, out Z8PoiMergedRegion[] addedMerges, out Z8PoiCellRemoval[] removals,
                                               bool allowExpansion = false, bool allowMerges = false) {
     import std.string : indexOf;
     range = z8_nonnull(range); range.z8_ensure();
@@ -380,11 +380,11 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                 auto templateRow = sourceRow in workbook.sheets[sheet].rows;
                 if (templateRow is null) {
                     if (hasFooter) throw new Exception("POI report sparse block with footer is not implemented");
-                    // POI clears existing cells in this part of an absent
-                    // source row. Cell deletion is not supported yet.
                     if (existingRow !is null) foreach (column, cell; (*existingRow).cells)
-                        if (column >= firstColumn && column <= lastColumn)
-                            throw new Exception("POI report range expansion target cell is not implemented");
+                        if (column >= firstColumn && column <= lastColumn) {
+                            if (!cell.safeCopy || cell.hasFormula) throw new Exception("POI report range expansion target cell is not implemented");
+                            removals ~= Z8PoiCellRemoval(cast(uint)sheet, cast(uint)targetRow, cast(uint)column);
+                        }
                     continue;
                 }
                 if (existingRow !is null) {
@@ -392,7 +392,11 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                     foreach (column, cell; (*existingRow).cells) {
                         if (column < firstColumn || column > lastColumn) continue;
                         auto sourceColumn = column - (horizontal ? offset : 0);
-                        if ((sourceColumn in (*templateRow).cells) is null || !cell.safeCopy || cell.hasFormula || cell.rawKind == "inlineStr"w)
+                        if (!cell.safeCopy || cell.hasFormula)
+                            throw new Exception("POI report range expansion target cell is not implemented");
+                        if ((sourceColumn in (*templateRow).cells) is null)
+                            removals ~= Z8PoiCellRemoval(cast(uint)sheet, cast(uint)targetRow, cast(uint)column);
+                        else if (cell.rawKind == "inlineStr"w)
                             throw new Exception("POI report range expansion target cell is not implemented");
                     }
                 }
@@ -493,7 +497,7 @@ private int z8_poi_report_compare_blocks(Z8PoiReportBlock a, Z8PoiReportBlock b)
 // Java's synthetic sheet range visits the resulting cells once more after all
 // child sources close. A text result can itself contain another expression.
 private void z8_poi_report_apply_root(Z8Object report, Z8PoiWorkbook workbook, int sheet, Z8PoiReportBlock root,
-                                      const(Z8PoiCellCopy)[] copies, ref Z8PoiCellEdit[] edits) {
+                                      const(Z8PoiCellCopy)[] copies, const(Z8PoiCellRemoval)[] removals, ref Z8PoiCellEdit[] edits) {
     import std.algorithm.sorting : sort;
     import std.string : indexOf;
     Z8PoiCell[ulong] values;
@@ -521,6 +525,7 @@ private void z8_poi_report_apply_root(Z8Object report, Z8PoiWorkbook workbook, i
             values[position] = cell;
         } else values.remove(position);
     }
+    foreach (removal; removals) values.remove(key(removal.row, removal.column));
     auto state = new Z8EvalState(); state.reportContext = report;
     auto request = z8_application_request();
     if (request !is null && request.parameters !is null)
@@ -536,11 +541,11 @@ private void z8_poi_report_apply_root(Z8Object report, Z8PoiWorkbook workbook, i
 }
 private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8PoiWorkbook workbook,
                                         out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits,
-                                        out Z8PoiCellCopy[] copies, out Z8PoiMergedRegion[] addedMerges) {
+                                        out Z8PoiCellCopy[] copies, out Z8PoiMergedRegion[] addedMerges, out Z8PoiCellRemoval[] removals) {
     import std.string : indexOf;
     if (!ranges.length) return;
     if (ranges.length == 1) {
-        z8_poi_report_apply_simple_range(report, ranges[0], workbook, renameSheet, renameName, edits, copies, addedMerges, true, true);
+        z8_poi_report_apply_simple_range(report, ranges[0], workbook, renameSheet, renameName, edits, copies, addedMerges, removals, true, true);
         auto boundaries = ranges[0].z8_get_attribute("boundaries"w);
         Z8PoiReportBlock root;
         if (boundaries !is null) root = z8_poi_report_block(boundaries);
@@ -556,7 +561,7 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
             if (copy.targetRow > root.lastRow) root.lastRow = copy.targetRow;
             if (copy.targetColumn > root.lastColumn) root.lastColumn = copy.targetColumn;
         }
-        z8_poi_report_apply_root(report, workbook, renameSheet, root, copies, edits);
+        z8_poi_report_apply_root(report, workbook, renameSheet, root, copies, removals, edits);
         return;
     }
     Z8PoiReportEntry[] entries;
@@ -596,10 +601,11 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
     }
     foreach (entry; entries) {
         int ignoredSheet; wstring ignoredName; Z8PoiCellEdit[] changes; Z8PoiCellCopy[] ignoredCopies; Z8PoiMergedRegion[] ignoredMerges;
-        z8_poi_report_apply_simple_range(report, entry.range, workbook, ignoredSheet, ignoredName, changes, ignoredCopies, ignoredMerges);
+        Z8PoiCellRemoval[] ignoredRemovals;
+        z8_poi_report_apply_simple_range(report, entry.range, workbook, ignoredSheet, ignoredName, changes, ignoredCopies, ignoredMerges, ignoredRemovals);
         edits ~= changes;
     }
-    z8_poi_report_apply_root(report, workbook, sheet, root, copies, edits);
+    z8_poi_report_apply_root(report, workbook, sheet, root, copies, removals, edits);
 }
 
 private ubyte[] z8_poi_report_rename_sheet(const(ubyte)[] input, Z8PoiWorkbook workbook, int index, wstring name) {
