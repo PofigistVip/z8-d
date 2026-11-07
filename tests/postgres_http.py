@@ -351,6 +351,8 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
 }
 void main(string[] args) {
     z8_native_bind("ContextProbe.m_parentTitle"w, &parentTitle);
+    z8_string_set_resource("Preview.unsupportedFileFormat"w, "Cannot view file {0}: format is not supported."w);
+    if (auto font = environment.get("Z8_TEST_PDF_FONT")) z8_export_configure_pdf_font(font);
     wstring[wstring] properties;
     if (auto info = environment.get("Z8_TEST_PDFINFO")) properties["pdf.info.executable"w] = info.to!wstring;
     if (auto merger = environment.get("Z8_TEST_PDFUNITE")) properties["pdf.merge.executable"w] = merger.to!wstring;
@@ -953,10 +955,19 @@ int main(string[] args) {
                 preview_args = dict(action="preview", field="documents", recordId=preview_record)
                 result = request(**preview_args)
                 assert not result["success"] and "not found" in result["info"]["messages"][-1]["text"], result
-                result = attach_file("full", preview_record, "unknown.bin", b"not convertible")
+                result = attach_file("full", preview_record, "неизвестный.bin", b"not convertible")
                 unsupported = json.loads(result["data"][0]["documents"])[0]
                 result = request(**preview_args)
-                assert not result["success"] and "unsupported" in result["info"]["messages"][-1]["text"], result
+                if office or environment.get("Z8_TEST_PDF_FONT"):
+                    assert result["success"], result
+                    status, _, content = download("/" + quote(result["source"], safe="/"), "full", None)
+                    assert status == 200 and content.startswith(b"%PDF-"), (status, content[:100])
+                    if fixture_python:
+                        comment_path = temp / "unsupported-preview.pdf"; comment_path.write_bytes(content)
+                        text = subprocess.check_output([fixture_python, "-X", "utf8", "-c", "from pypdf import PdfReader; import sys; print(' '.join(page.extract_text() for page in PdfReader(sys.argv[1]).pages))", str(comment_path)], text=True, encoding="utf-8")
+                        assert "неизвестный.bin" in text and "not supported" in text, text
+                else:
+                    assert not result["success"], result
                 result = request(action="detach", field="documents", recordId=preview_record, data=json.dumps([unsupported["id"]]))
                 assert result["success"], result
                 objects = [b"<< /Type /Catalog /Pages 2 0 R >>",
@@ -991,6 +1002,21 @@ int main(string[] args) {
                     assert any(line.split() == ["Pages:", "2"] for line in info.splitlines()), info
                     assert any("1 size:" in line and "200 x 200" in line for line in info.splitlines()), info
                     assert any("2 size:" in line and "300 x 300" in line for line in info.splitlines()), info
+                    if office or environment.get("Z8_TEST_PDF_FONT"):
+                        result = attach_file("full", preview_record, "неизвестный.bin", b"not convertible")
+                        comment_file = json.loads(result["data"][0]["documents"])[2]
+                        result = request(**preview_args)
+                        assert result["success"], result
+                        status, _, merged = download("/" + quote(result["source"], safe="/"), "full", None)
+                        assert status == 200, result
+                        merged_path.write_bytes(merged)
+                        info = subprocess.check_output([str(pdfinfo), str(merged_path)], text=True)
+                        assert any(line.split() == ["Pages:", "3"] for line in info.splitlines()), info
+                        if fixture_python:
+                            text = subprocess.check_output([fixture_python, "-X", "utf8", "-c", "from pypdf import PdfReader; import sys; print(PdfReader(sys.argv[1]).pages[-1].extract_text())", str(merged_path)], text=True, encoding="utf-8")
+                            assert "неизвестный.bin" in text and "not supported" in text, text
+                        result = request(action="detach", field="documents", recordId=preview_record, data=json.dumps([comment_file["id"]]))
+                        assert result["success"], result
                     if office:
                         result = attach_file("full", preview_record, "converted.txt", b"Third page")
                         third_file = json.loads(result["data"][0]["documents"])[2]

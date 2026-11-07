@@ -257,8 +257,8 @@ archive accepts at most 1,000 files and 64 MiB of uncompressed content.
 session-bound PDF download path. PDF files are validated with `pdfinfo`;
 other convertible files use LibreOffice. Multiple PDFs are joined with
 `pdfunite` from Poppler, found in `PATH` or configured by
-`pdf.merge.executable`. Unsupported formats are currently rejected instead of
-being listed on the original's comment page.
+`pdf.merge.executable`. Unsupported formats are listed on a final comment
+page using the configured PDF font, or LibreOffice when the font is not set.
 The current archive and download paths authorize the session and request but do
 not infer field-level access from a file ID.
 Optional `values` are checked before a create, update or copy transaction and
