@@ -270,13 +270,54 @@ void main(string[] args) {
 import z8.xlsx.poi : z8_openxlsx_configure;
 import z8gen.Probe;
 import std.conv : to;
+import std.exception : assertThrown;
+class CountingProvider : IZ8PoiProvider {
+    IZ8PoiProvider inner;
+    uint opened, declined;
+    this(IZ8PoiProvider provider) { inner = provider; }
+    IZ8PoiDocument open(const(ubyte)[] bytes) {
+        try { auto doc = inner.open(bytes); ++opened; return doc; }
+        catch (Z8PoiUnsupportedWorkbook error) { ++declined; throw error; }
+    }
+}
+class PartialProvider : IZ8PoiProvider {
+    IZ8PoiProvider inner;
+    uint closed;
+    this(IZ8PoiProvider provider) { inner = provider; }
+    IZ8PoiDocument open(const(ubyte)[] bytes) { return new PartialDocument(this, inner.open(bytes)); }
+}
+class PartialDocument : IZ8PoiDocument {
+    PartialProvider owner;
+    IZ8PoiDocument inner;
+    this(PartialProvider provider, IZ8PoiDocument doc) { owner = provider; inner = doc; }
+    string workbookXml() { return inner.workbookXml(); }
+    string sharedStringsXml() { return inner.sharedStringsXml(); }
+    uint sheetCount() { return inner.sheetCount(); }
+    string sheetXml(uint index) { throw new Z8PoiUnsupportedWorkbook("unsupported sheet"); }
+    void close() { inner.close(); ++owner.closed; }
+}
+class FailingProvider : IZ8PoiProvider {
+    IZ8PoiDocument open(const(ubyte)[] bytes) { throw new Exception("provider failure"); }
+}
 void main(string[] args) {
     auto previous = z8_openxlsx_configure();
     assert(previous is null);
+    auto counting = new CountingProvider(z8_poi_set_provider(null));
+    z8_poi_set_provider(counting);
     assert(z8_optional_require(Z8p_50726F6265.m_verifyPoi(z8_file_from_path(args[1].to!wstring))));
     assert(z8_optional_require(Z8p_50726F6265.m_verify1904(z8_file_from_path(args[2].to!wstring))));
     assert(z8_optional_require(Z8p_50726F6265.m_verify(z8_file_from_path(args[3].to!wstring))) == 0);
     assert(z8_optional_require(Z8p_50726F6265.m_failedOpen(z8_file_from_path(args[3].to!wstring), z8_file_from_path(args[4].to!wstring))));
+    assert(z8_optional_require(Z8p_50726F6265.m_verify(z8_file_from_path(args[5].to!wstring))) == 0);
+    foreach (i; 6 .. 10) assert(z8_optional_require(Z8p_50726F6265.m_verify(z8_file_from_path(args[i].to!wstring))) == 0);
+    foreach (i; 10 .. 12) assert(z8_optional_require(Z8p_50726F6265.m_failedOpen(z8_file_from_path(args[3].to!wstring), z8_file_from_path(args[i].to!wstring))));
+    assert(counting.opened > 0 && counting.declined > 0);
+    auto partial = new PartialProvider(counting.inner);
+    z8_poi_set_provider(partial);
+    assert(z8_optional_require(Z8p_50726F6265.m_verify(z8_file_from_path(args[3].to!wstring))) == 0);
+    assert(partial.closed == 1);
+    z8_poi_set_provider(new FailingProvider());
+    assertThrown!Exception(Z8p_50726F6265.m_verify(z8_file_from_path(args[3].to!wstring)));
     assert(z8_poi_set_provider(previous) !is null);
     assert(z8_optional_require(Z8p_50726F6265.m_verify(z8_file_from_path(args[5].to!wstring))) == 0);
 }''', encoding="utf-8")
@@ -293,6 +334,8 @@ void main(string[] args) {
             command.extend(["-L-L" + str(library_dir), "-L-lz8_openxlsx"])
             environment["LD_LIBRARY_PATH"] = str(library_dir) + os.pathsep + environment.get("LD_LIBRARY_PATH", "")
         subprocess.run(command, cwd=temp, check=True)
-        subprocess.run([str(executable), str(workbookPoi), str(workbook1904), str(workbook), str(broken), str(workbookMoved)], cwd=temp, env=environment, check=True)
+        subprocess.run([str(executable), str(workbookPoi), str(workbook1904), str(workbook), str(broken), str(workbookMoved),
+                        str(workbookUtf16Le), str(workbookUtf16Be), str(workbookUtf16NoBom), str(workbookUtf16LeNoBom),
+                        str(workbookUtf16Bad), str(workbookUtf16BadPair)], cwd=temp, env=environment, check=True)
         print("BL XLSX through OpenXLSX provider verified")
 print("XLSX workbook, sparse rows, shared strings and cells verified")

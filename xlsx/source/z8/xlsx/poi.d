@@ -1,16 +1,31 @@
 /// Optional OpenXLSX document provider for the Z8 native POI facade.
 module z8.xlsx.poi;
 
-import z8.runtime : IZ8PoiDocument, IZ8PoiProvider, z8_poi_set_provider;
+import z8.runtime : IZ8PoiDocument, IZ8PoiProvider, Z8PoiUnsupportedWorkbook, z8_poi_set_provider;
 import z8.xlsx.openxlsx : Workbook;
 
 private class OpenXlsxDocument : IZ8PoiDocument {
     private Workbook book;
-    this(const(ubyte)[] bytes) { book = new Workbook(bytes); }
-    string workbookXml() { return book.workbookXml(); }
-    string sharedStringsXml() { return book.sharedStringsXml(); }
-    uint sheetCount() { return book.sheetCount(); }
-    string sheetXml(uint index) { return book.sheetXml(index); }
+    this(const(ubyte)[] bytes) {
+        try book = new Workbook(bytes);
+        catch (Exception error) throw new Z8PoiUnsupportedWorkbook(error.msg);
+    }
+    string workbookXml() {
+        try return book.workbookXml();
+        catch (Exception error) throw new Z8PoiUnsupportedWorkbook(error.msg);
+    }
+    string sharedStringsXml() {
+        try return book.sharedStringsXml();
+        catch (Exception error) throw new Z8PoiUnsupportedWorkbook(error.msg);
+    }
+    uint sheetCount() {
+        try return book.sheetCount();
+        catch (Exception error) throw new Z8PoiUnsupportedWorkbook(error.msg);
+    }
+    string sheetXml(uint index) {
+        try return book.sheetXml(index);
+        catch (Exception error) throw new Z8PoiUnsupportedWorkbook(error.msg);
+    }
     void close() { book.close(); }
 }
 

@@ -17,6 +17,10 @@ interface IZ8PoiDocument {
     void close();
 }
 interface IZ8PoiProvider { IZ8PoiDocument open(const(ubyte)[] bytes); }
+/// The provider cannot read this workbook; try the built-in compatible reader.
+class Z8PoiUnsupportedWorkbook : Exception {
+    this(string message) { super(message); }
+}
 private __gshared IZ8PoiProvider z8_poi_provider;
 private __gshared Object z8_poi_monitor;
 IZ8PoiProvider z8_poi_set_provider(IZ8PoiProvider provider) {
@@ -338,18 +342,25 @@ private Z8PoiWorkbook z8_poi_parse(Z8Binary input) {
     synchronized (z8_poi_monitor) provider = z8_poi_provider;
     Z8PoiXmlNode root, sharedStrings;
     Z8PoiXmlNode[] worksheets;
+    bool usedProvider;
     if (provider !is null) {
-        auto document = provider.open(bytes);
-        if (document is null) throw new Exception("XLSX provider returned no document");
-        scope(exit) document.close();
-        Z8PoiXmlNode read(string xml) {
-            return (new Z8PoiXmlReader(z8_poi_xml_decode(cast(const(ubyte)[])xml))).parseDocument();
+        try {
+            auto document = provider.open(bytes);
+            if (document is null) throw new Exception("XLSX provider returned no document");
+            scope(exit) document.close();
+            Z8PoiXmlNode read(string xml) {
+                return (new Z8PoiXmlReader(z8_poi_xml_decode(cast(const(ubyte)[])xml))).parseDocument();
+            }
+            root = read(document.workbookXml());
+            auto sharedXml = document.sharedStringsXml();
+            if (sharedXml.length) sharedStrings = read(sharedXml);
+            foreach (i; 0 .. document.sheetCount()) worksheets ~= read(document.sheetXml(i));
+            usedProvider = true;
+        } catch (Z8PoiUnsupportedWorkbook) {
+            root = null; sharedStrings = null; worksheets = null;
         }
-        root = read(document.workbookXml());
-        auto sharedXml = document.sharedStringsXml();
-        if (sharedXml.length) sharedStrings = read(sharedXml);
-        foreach (i; 0 .. document.sheetCount()) worksheets ~= read(document.sheetXml(i));
-    } else {
+    }
+    if (!usedProvider) {
         auto archive = new ZipArchive(bytes);
         auto packageRels = z8_poi_read_xml(archive, "_rels/.rels");
         string workbookPath;
