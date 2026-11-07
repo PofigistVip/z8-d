@@ -90,7 +90,7 @@ public class EvalOracle {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
         }
-        for (String pattern : new String[]{"${'  Ada  '.trim().toUpperCase()}", "${'abc'.length()}", "${''.isEmpty()}", "${'abc'.substring(1, 2)}", "${'abc'.startsWith('b', 1)}", "${'abc'.endsWith('bc')}", "${'abcabc'.indexOf('bc', 2)}", "${'abcabc'.lastIndexOf('bc')}", "${'Hello'.compareNoCase('hello')}", "${'abc'.replace(1, 1, 'X')}", "${'a'.padLeft(3, 'xy')}", "${'Hello'.firstToLowerCase()}", "${'abc'.charAt(1)}", "${'abc'.insert(1, 'XY')}", "${'abc'.matches('a.*')}", "${'banana'.replaceAll('a', 'X')}", "${'abc'.substring(missing)}", "${missing.length()}", "${'abc'.substring(99)}", "${'abc'.substring('1')}"}) {
+        for (String pattern : new String[]{"${'  Ada  '.trim().toUpperCase()}", "${'abc'.length()}", "${''.isEmpty()}", "${'abc'.substring(1, 2)}", "${'abc'.startsWith('b', 1)}", "${'abc'.endsWith('bc')}", "${'abcabc'.indexOf('bc', 2)}", "${'abcabc'.lastIndexOf('bc')}", "${'Hello'.compareNoCase('hello')}", "${'abc'.replace(1, 1, 'X')}", "${'a'.padLeft(3, 'xy')}", "${'Hello'.firstToLowerCase()}", "${'abc'.charAt(1)}", "${'abc'.insert(1, 'XY')}", "${'abc'.matches('a.*')}", "${'banana'.replaceAll('a', 'X')}", "${'abc'.hashCode()}", "${(123).hashCode()}", "${(1.25).hashCode()}", "${true.hashCode()}", "${true.toString()}", "${guid.parse('00000000-0000-0000-0000-000000000001').toString()}", "${'abc'.substring(missing)}", "${missing.length()}", "${'abc'.substring(99)}", "${'abc'.substring('1')}"}) {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
         }
@@ -198,7 +198,9 @@ void main() {
                        "${'abcabc'.indexOf('bc', 2)}"w, "${'abcabc'.lastIndexOf('bc')}"w, "${'Hello'.compareNoCase('hello')}"w,
                        "${'abc'.replace(1, 1, 'X')}"w, "${'a'.padLeft(3, 'xy')}"w, "${'Hello'.firstToLowerCase()}"w,
                        "${'abc'.charAt(1)}"w, "${'abc'.insert(1, 'XY')}"w, "${'abc'.matches('a.*')}"w,
-                       "${'banana'.replaceAll('a', 'X')}"w, "${'abc'.substring(missing)}"w,
+                       "${'banana'.replaceAll('a', 'X')}"w, "${'abc'.hashCode()}"w, "${(123).hashCode()}"w,
+                       "${(1.25).hashCode()}"w, "${true.hashCode()}"w, "${true.toString()}"w,
+                       "${guid.parse('00000000-0000-0000-0000-000000000001').toString()}"w, "${'abc'.substring(missing)}"w,
                        "${missing.length()}"w, "${'abc'.substring(99)}"w, "${'abc'.substring('1')}"w])
         try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
     foreach (pattern; ["${1.25.abs()}"w, "${(-7).abs()}"w, "${(-7).signum()}"w, "${(5).not()}"w, "${(5).and(3)}"w,

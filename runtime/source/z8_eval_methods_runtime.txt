@@ -215,6 +215,10 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
         return z8_eval_json_aggregate(name, arguments);
     if (object.context != Z8EvalContext.none && object.context != Z8EvalContext.json)
         return Z8EvalValue(true, z8_eval_type_method(object.context, name, arguments), null, null);
+    if (object.primary !is null && !arguments.length) {
+        if (name == "hashCode"w) return Z8EvalValue(true, z8_primary_box(z8_primary_hash(object.primary)), null, null);
+        if (name == "toString"w) return Z8EvalValue(true, z8_primary_box(z8_string_new(z8_primary_to_string(object.primary))), null, null);
+    }
     if (object.primary !is null) {
         Z8EvalContext type;
         final switch (object.primary.kind) {
