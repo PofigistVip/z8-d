@@ -77,6 +77,13 @@ class Z8CovariantMap(K, V, M, bool keyObject, bool valueObject) : IZ8CollectionV
                 if (primary !is null) return z8_primary_map_view(data).opEquals(primary);
             }
         }
+        static if (valueObject && (is(K == long) || is(K == bool) || is(K == Z8Decimal)) && is(M == Z8ScalarKeyMap!(K, Object))) {
+            auto collection = cast(IZ8CollectionView)other;
+            if (collection !is null) {
+                auto scalarPrimaryKeys = cast(Z8PrimaryKeyMap!Object)collection.z8_erased_storage();
+                if (scalarPrimaryKeys !is null) return z8_primary_key_map_view(data).opEquals(scalarPrimaryKeys);
+            }
+        }
         static if (valueObject && is(K == Z8Guid) && is(M == Z8GuidMap!Object)) {
             auto collection = cast(IZ8CollectionView)other;
             if (collection !is null) {
@@ -96,9 +103,13 @@ class Z8CovariantMap(K, V, M, bool keyObject, bool valueObject) : IZ8CollectionV
         static if (is(K == Z8Primary) && is(M == Z8PrimaryKeyMap!Object) && valueObject) {
             auto collection = cast(IZ8CollectionView)other;
             if (collection !is null) {
+                import std.meta : AliasSeq;
+                static foreach (ScalarKey; AliasSeq!(long, bool, Z8Decimal)) {{
+                    auto scalarKeys = cast(Z8ScalarKeyMap!(ScalarKey, Object))collection.z8_erased_storage();
+                    if (scalarKeys !is null) return data.opEquals(z8_primary_key_map_view(scalarKeys));
+                }}
                 auto guids = cast(Z8GuidMap!Object)collection.z8_erased_storage();
                 if (guids !is null) return data.opEquals(guids.entries);
-                import std.meta : AliasSeq;
                 static foreach (KeyType; AliasSeq!(Z8Date, Z8Datespan, Z8Binary, Z8Geometry, Z8File, Z8Object)) {{
                     auto references = cast(Z8ReferenceKeyMap!(KeyType, Object))collection.z8_erased_storage();
                     if (references !is null) return data.opEquals(references.entries);
@@ -227,4 +238,11 @@ z8_primary_key_map_view(K, V)(Z8CovariantMap!(K, V, Z8ReferenceKeyMap!(Z8Object,
 if (is(K : Z8Object)) {
     if (values is null) return null;
     return new Z8CovariantMap!(Z8Primary, V, Z8PrimaryKeyMap!Object, false, true)(values.data.entries);
+}
+
+Z8CovariantMap!(Z8Primary, V, Z8PrimaryKeyMap!Object, false, true)
+z8_primary_key_map_view(K, V)(Z8CovariantMap!(K, V, Z8ScalarKeyMap!(K, Object), false, true) values)
+if (is(K == long) || is(K == bool) || is(K == Z8Decimal)) {
+    if (values is null) return null;
+    return new Z8CovariantMap!(Z8Primary, V, Z8PrimaryKeyMap!Object, false, true)(z8_primary_key_map_view(values.data));
 }

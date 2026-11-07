@@ -134,6 +134,7 @@ python tests/exception_string_conversion.py path/to/original-z8
 python tests/primary_array_views.py
 python tests/primary_string_map_views.py
 python tests/primary_scalar_key_map_views.py
+python tests/primary_scalar_key_widening.py
 python tests/primary_reference_key_map_views.py
 python tests/primary_reference_key_widening.py
 python tests/primary_user_key_map_views.py

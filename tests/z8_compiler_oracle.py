@@ -248,13 +248,17 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     for kind in ("binary", "date", "datespan", "geometry"):
         declaration = kind + '[] source; primary[] values = source; for (primary item : source) {}'
         name_cases.append((True, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
-    for typed, primary in (("int[]", "primary[]"), ("int[][]", "primary[][]"), ("int[string]", "primary[string]"), ("string[string]", "primary[string]"), ("int[int]", "primary[int]"), ("int[primary]", "primary[primary]"), ("int[guid]", "primary[guid]"), ("string[guid]", "string[primary]")):
+    for typed, primary in (("int[]", "primary[]"), ("int[][]", "primary[][]"), ("int[string]", "primary[string]"), ("string[string]", "primary[string]"), ("int[int]", "primary[int]"), ("int[primary]", "primary[primary]"), ("int[guid]", "primary[guid]"), ("string[guid]", "string[primary]"), ("string[int]", "string[primary]")):
         name_cases.append((False, {"NameA": 'public class NameA { static void choose(' + typed + ' x) {} static void choose(' + primary + ' x) {} static void f() { ' + typed + ' x; choose(x); } }'}))
     name_cases.append((True, {"BaseKey": 'public class BaseKey {}', "ChildKey": 'public class ChildKey extends BaseKey {}',
                               "NameA": 'public class NameA { static void f() { int[ChildKey] source; primary[BaseKey] target = source; } }'}))
     name_cases.append((False, {"BaseKey": 'public class BaseKey {}', "ChildKey": 'public class ChildKey extends BaseKey {}',
                                "NameA": 'public class NameA { static void f() { int[BaseKey] source; primary[ChildKey] target = source; } }'}))
     name_cases.append((True, {"Key": 'public class Key {}', "NameA": 'public class NameA extends primary { public void operator = (NameA value) {} static void f() { NameA[Key] source; primary[Key] target = source; } }'}))
+    for key in ("int", "bool", "decimal"):
+        declaration = 'string[' + key + '] source; string[primary] values = source; values.add(source);'
+        name_cases.append((True, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
+    name_cases.append((True, {"NameA": 'public class NameA { static void f() { NameA[int] source; NameA[primary] values = source; } }'}))
     for key in ("guid", "date", "datespan", "binary", "geometry", "file"):
         declaration = 'string[' + key + '] source; string[primary] values = source; values.add(source);'
         name_cases.append((True, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
