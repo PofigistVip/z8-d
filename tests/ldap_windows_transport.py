@@ -120,14 +120,15 @@ class Fixture:
                             _, controls, _ = read_tlv(message, offset)
                             _, control, _ = read_tlv(controls)
                             _, oid, pos = read_tlv(control)
-                            assert oid == b"1.2.840.113556.1.4.319"
-                            tag, critical, pos = read_tlv(control, pos)
-                            assert tag == 1 and critical != b"\x00"
-                            _, value, _ = read_tlv(control, pos)
-                            _, page_request, _ = read_tlv(value)
-                            _, size, pos = read_tlv(page_request)
-                            _, request_cookie, _ = read_tlv(page_request, pos)
-                            assert size == b"\x01"
+                            paged = oid == b"1.2.840.113556.1.4.319"
+                            if paged:
+                                tag, critical, pos = read_tlv(control, pos)
+                                assert tag == 1 and critical != b"\x00"
+                                _, value, _ = read_tlv(control, pos)
+                                _, page_request, _ = read_tlv(value)
+                                _, size, pos = read_tlv(page_request)
+                                _, request_cookie, _ = read_tlv(page_request, pos)
+                                assert size == b"\x01"
                         self.events.append(("search", base, request_cookie))
                         if paged:
                             page += 1
@@ -165,6 +166,7 @@ void main(string[] args) {
     auto url = (tls ? "ldaps://127.0.0.1:"w : "ldap://127.0.0.1:"w) ~ args[1].to!wstring;
     if (args.length > 3 && args[2] == "failover")
         url = " \tldap://127.0.0.1:"w ~ args[3].to!wstring ~ "  "w ~ url ~ "  "w;
+    if (args.length > 2 && args[2] == "urlbase") url ~= "/dc%3Dexample"w;
     if (tls && !trusted) {
         bool rejected; try { configured.open(url, "cn=admin"w, "secret"w, "{}"w); } catch (Exception) { rejected = true; }
         assert(rejected); return;
@@ -172,13 +174,13 @@ void main(string[] args) {
     if (args.length > 2) {
         auto session = configured.open(url, "cn=admin"w, "secret"w,
             `{users:{loginField:"uid",groupField:"memberOf"}}`w);
-        auto users = session.users("dc=example"w, "(objectClass=*)"w);
+        auto users = session.users(args[2] == "urlbase" ? "ou=users"w : "dc=example"w, "(objectClass=*)"w);
         assert(users.length == 2 && users[0].login == "alice"w && users[1].login == "bob"w);
         assert(users[0].memberOf == ["cn=one"w, "cn=two"w]);
         session.close(); return;
     }
     auto transport = new Z8WindowsLdapTransport();
-    foreach (invalidUrl; ["http://host"w, "ldap://"w, "ldap://host:"w, "ldap://host:0"w, "ldap://host:65536"w, "ldap://host/path"w]) {
+    foreach (invalidUrl; ["http://host"w, "ldap://"w, "ldap://host:"w, "ldap://host:0"w, "ldap://host:65536"w, "ldap://host/?query"w]) {
         bool failed; try { transport.connect(invalidUrl, ""w, ""w); } catch (Exception) { failed = true; } assert(failed);
     }
     auto directory = transport.connect("ldap://127.0.0.1:"w ~ args[1].to!wstring, "cn=admin"w, "secret"w);
@@ -213,6 +215,15 @@ void main(string[] args) {
         raise fixture.failure
     assert fixture.events == [("bind", b"cn=admin", b"secret"), ("search", b"dc=example", b""),
                               ("search", b"dc=example", b"next"), ("unbind",)]
+    fixture = Fixture()
+    try:
+        subprocess.run([str(exe), str(fixture.port), "urlbase"], cwd=temp, timeout=20, check=True)
+    finally:
+        fixture.thread.join(20)
+    if fixture.failure:
+        raise fixture.failure
+    assert fixture.events == [("bind", b"cn=admin", b"secret"), ("search", b"ou=users,dc=example", b""),
+                              ("search", b"ou=users,dc=example", b"next"), ("unbind",)]
     unavailable = socket.socket()
     unavailable.bind(("127.0.0.1", 0))  # A reserved port without a listener.
     try:
@@ -232,16 +243,23 @@ void main(string[] args) {
             oracle.write_text('''import java.util.Hashtable;
 import javax.naming.Context;
 import javax.naming.directory.InitialDirContext;
+import javax.naming.directory.SearchControls;
 class LdapFailoverOracle {
     public static void main(String[] args) throws Exception {
         Hashtable<String, String> env = new Hashtable<>();
         env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.ldap.LdapCtxFactory");
         env.put(Context.PROVIDER_URL, "ldap://127.0.0.1:" + args[0] + " ldap://127.0.0.1:" + args[1]);
+        if (args.length > 2) env.put(Context.PROVIDER_URL, "ldap://127.0.0.1:" + args[1] + "/dc%3Dexample");
         env.put(Context.SECURITY_AUTHENTICATION, "simple");
         env.put(Context.SECURITY_PRINCIPAL, "cn=admin");
         env.put(Context.SECURITY_CREDENTIALS, "secret");
         env.put("com.sun.jndi.ldap.connect.timeout", "3000");
-        new InitialDirContext(env).close();
+        InitialDirContext context = new InitialDirContext(env);
+        if (args.length > 2) {
+            SearchControls controls = new SearchControls(); controls.setSearchScope(SearchControls.SUBTREE_SCOPE);
+            context.search("ou=users", "(objectClass=*)", controls).close();
+        }
+        context.close();
     }
 }
 ''', encoding="utf-8")
@@ -268,6 +286,16 @@ class LdapFailoverOracle {
                 raise fixture.failure
             assert denied.events[0] == ("bind", b"cn=admin", b"secret")
             assert fixture.events == [("bind", b"cn=admin", b"secret"), ("unbind",)]
+            fixture = Fixture()
+            try:
+                oracle_process = subprocess.run(["java", "-cp", str(temp), "LdapFailoverOracle", "0", str(fixture.port), "base"],
+                                                cwd=temp, timeout=20)
+            finally:
+                fixture.thread.join(20)
+            if fixture.failure:
+                raise fixture.failure
+            assert oracle_process.returncode == 0
+            assert fixture.events == [("bind", b"cn=admin", b"secret"), ("search", b"ou=users,dc=example", None), ("unbind",)]
     finally:
         unavailable.close()
     denied, fixture = Fixture(bind_code=49), Fixture()

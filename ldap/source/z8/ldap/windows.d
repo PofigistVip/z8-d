@@ -22,14 +22,21 @@ private wchar[] terminated(wstring value) {
     return value.dup ~ '\0';
 }
 
-private struct Address { wstring host; uint port; bool secure; }
+private struct Address { wstring host, base; uint port; bool secure; }
 private Address parseAddress(wstring url) {
+    import std.uri : decodeComponent;
     Address address;
     if (url.length >= 7 && url[0..7] == "ldap://"w) url = url[7..$];
     else if (url.length >= 8 && url[0..8] == "ldaps://"w) { url = url[8..$]; address.secure = true; }
     else throw new Exception("Expected an ldap:// or ldaps:// URL");
-    if (!url.length || url.canFind('/') || url.canFind('?') || url.canFind('#') || url.canFind('@') || url.canFind('\0'))
+    if (!url.length || url.canFind('?') || url.canFind('#') || url.canFind('\0'))
         throw new Exception("Invalid LDAP server URL");
+    auto slash = url.indexOf('/');
+    if (slash >= 0) {
+        address.base = decodeComponent(url[slash + 1 .. $].to!string).to!wstring;
+        url = url[0 .. slash];
+    }
+    if (!url.length || url.canFind('@')) throw new Exception("Invalid LDAP server URL");
     size_t portStart = url.length;
     if (url[0] == '[') {
         auto end = url.indexOf(']');
@@ -110,13 +117,14 @@ class Z8WindowsLdapTransport : IZ8LdapTransport {
         auto user = terminated(principal), password = terminated(credentials);
         scope(exit) password[] = '\0';
         check(ldap_simple_bind_sW(handle, user.ptr, password.ptr), "bind");
-        return new WindowsLdapDirectory(handle);
+        return new WindowsLdapDirectory(handle, address.base);
     }
 }
 
 private class WindowsLdapDirectory : IZ8LdapDirectory {
     private LDAP* handle;
-    this(LDAP* handle) { this.handle = handle; }
+    private wstring base;
+    this(LDAP* handle, wstring base) { this.handle = handle; this.base = base; }
     bool isOpen() { return handle !is null; }
     void close() {
         if (handle !is null) { auto old = handle; handle = null; check(ldap_unbind_s(old), "unbind"); }
@@ -124,7 +132,9 @@ private class WindowsLdapDirectory : IZ8LdapDirectory {
     Z8LdapDirectoryEntry[] search(wstring searchBase, wstring searchFilter, int pageSize) {
         if (handle is null) throw new Exception("LDAP connection is closed");
         if (pageSize < 0) throw new Exception("Invalid LDAP page size");
-        auto base = terminated(searchBase), filter = terminated(searchFilter);
+        auto fullBase = searchBase;
+        if (base.length) fullBase = fullBase.length ? fullBase ~ ","w ~ base : base;
+        auto searchRoot = terminated(fullBase), filter = terminated(searchFilter);
         Z8LdapDirectoryEntry[] entries;
         BerValue* cookie;
         scope(exit) if (cookie !is null) ber_bvfree(cookie);
@@ -138,7 +148,7 @@ private class WindowsLdapDirectory : IZ8LdapDirectory {
             }
             LDAPMessage* result;
             scope(exit) if (result !is null) ldap_msgfree(result);
-            check(ldap_search_ext_sW(handle, base.ptr, LDAP_SCOPE_SUBTREE, filter.ptr, null, 0,
+            check(ldap_search_ext_sW(handle, searchRoot.ptr, LDAP_SCOPE_SUBTREE, filter.ptr, null, 0,
                 pageSize ? controls.ptr : null, null, null, 0, &result), "search");
             for (auto entry = ldap_first_entry(handle, result); entry !is null; entry = ldap_next_entry(handle, entry)) {
                 auto item = new Z8LdapDirectoryEntry();
