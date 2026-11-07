@@ -252,7 +252,12 @@ string z8_java_double_string(double value) {
     if (!value.isFinite) return signbit(value) ? "-Infinity" : "Infinity";
     if (value == 0) return signbit(value) ? "-0.0" : "0.0";
     string shortest;
-    foreach (precision; 1 .. 18) {
+    auto magnitude = value < 0 ? -value : value;
+    if (magnitude >= 1e16 && magnitude < 1e17) {
+        // Java 8's integral conversion retains the exact integer in this
+        // range, even when a shorter decimal round-trips to the same double.
+        shortest = (cast(long)value).to!string;
+    } else foreach (precision; 1 .. 18) {
         auto candidate = format("%.*g", precision, value);
         if (z8_literal_parse_double(candidate) == value) { shortest = candidate; break; }
     }
