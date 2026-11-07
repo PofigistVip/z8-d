@@ -270,6 +270,15 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         declaration = 'string[' + key + '] source; string[primary] values = source; values.add(source);'
         name_cases.append((True, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
     name_cases.append((True, {"NameA": 'public class NameA { static void f() { NameA[int] source; NameA[primary] values = source; } }'}))
+    name_cases.append((True, {"Parent": 'public class Parent {}', "Child": 'public class Child extends Parent {}',
+                              "BaseKey": 'public class BaseKey {}', "ChildKey": 'public class ChildKey extends BaseKey {}',
+                              "NameA": 'public class NameA { static void f() { Child[ChildKey][guid] source; Parent[BaseKey][primary] target = source; } }'}))
+    for declaration, accepted in (("Child[guid] source; Parent[primary] target = source;", True),
+                                  ("Parent[guid] source; Child[primary] target = source;", False),
+                                  ("Child[][guid] source; Parent[][primary] target = source;", True),
+                                  ("Parent[][guid] source; Child[][primary] target = source;", False)):
+        name_cases.append((accepted, {"Parent": 'public class Parent {}', "Child": 'public class Child extends Parent {}',
+                                     "NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
     for key in ("guid", "date", "datespan", "binary", "geometry", "file"):
         declaration = 'string[' + key + '] source; string[primary] values = source; values.add(source);'
         name_cases.append((True, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))

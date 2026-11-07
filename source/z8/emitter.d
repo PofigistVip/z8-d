@@ -11,13 +11,6 @@ import z8.lexer : TokenKind, decodeStringLiteral;
 import z8.d_writer : formatDSource;
 import z8.native_enum_order : enumSortOrder, enumJoinNames;
 
-private bool hasPrimaryValueMapKey(ValueType key) {
-    return isSqlType(key) || [ValueType.enumType, ValueType.exceptionType, ValueType.encodingType, ValueType.ftsType,
-        ValueType.ftsQueryType, ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType,
-        ValueType.primaryType, ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.binaryType,
-        ValueType.geometryType, ValueType.fileType, ValueType.selfType].canFind(key);
-}
-
 private string operatorDName(string symbol) {
     switch (symbol) {
         case "!": return "z8op_not"; case "~": return "z8op_complement";
@@ -399,7 +392,11 @@ private string emitExprSingle(Expression e) {
     if (e.makeException) value = "new Z8Exception(z8_to_utf8(z8_string_required(" ~ value ~ ")))";
     if (e.convertExceptionObject) value = "z8_exception_from_object(" ~ value ~ ")";
     if (e.convertScalarPrimaryArray) value = "z8_primary_array_view(" ~ value ~ ")";
-    if (e.convertPrimaryMapKey) value = "z8_primary_key_map_view(" ~ value ~ ")";
+    if (e.convertPrimaryMapKey) {
+        value = "z8_primary_key_map_view(" ~ value ~ ")";
+        if (e.primaryMapKeyTargetType != ValueType.voidType)
+            value = "z8_object_collection_view!(" ~ dType(e.primaryMapKeyTargetType, e.primaryMapKeyTargetClass, e.primaryMapKeyTargetKeys) ~ ")(" ~ value ~ ")";
+    }
     if (e.convertPrimaryMapValue) {
         if (e.primaryMapKeyClass !is null) value = "z8_primary_object_key_map_view!(" ~ e.primaryMapKeyClass.emittedName ~ ")(" ~ value ~ ")";
         else value = "z8_primary_map_view(" ~ value ~ ")";
@@ -805,10 +802,11 @@ private string emitSimple(Statement s) {
             (s.expression !is null ? emitExpr(s.expression) : s.type == ValueType.intType ? "z8_optional_wrap(0L)" : s.type == ValueType.boolType ? "z8_optional_wrap(false)" : s.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(s.type, s.objectClass, s.hasContainer, s.keyObjectClasses));
     if (s.kind == StmtKind.expressionStmt) {
         auto e = s.expression;
-        if (e.kind == ExprKind.memberCall && isMap(e.inferredType) &&
-            hasPrimaryValueMapKey(mapKeyType(e.inferredType)) &&
-            (isScalarPrimaryArray(arrayOf(mapValueType(e.inferredType))) ||
-             (mapValueType(e.inferredType) == ValueType.selfType && extendsBuiltinPrimary(e.objectClass)))) {
+        if (e.kind == ExprKind.memberCall && isMap(e.inferredType)) {
+            // Preserve the established handling of the ambiguous null-array overload.
+            if (e.token.text == "add" && e.arguments.length == 2 &&
+                e.arguments[0].kind == ExprKind.nullLiteral && e.arguments[1].kind == ExprKind.nullLiteral)
+                return "cast(void)(" ~ emitExpr(e) ~ ")";
             if (e.token.text == "add" && e.arguments.length == 2)
                 return "z8_map_add_discard(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.arguments[0]) ~ ", " ~ emitExpr(e.arguments[1]) ~ ")";
             if (e.token.text == "remove" && e.arguments.length == 1)
@@ -823,10 +821,7 @@ private string emitSimple(Statement s) {
         return "z8_object_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.filePathAssignment) return "z8_file_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.dateTickAssignment) return "z8_date_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
-    if (s.target.kind == ExprKind.index && isMap(s.target.inferredType) && s.assignmentOperator == "=" &&
-        hasPrimaryValueMapKey(mapKeyType(s.target.inferredType)) &&
-        (isScalarPrimaryArray(arrayOf(mapValueType(s.target.inferredType))) ||
-         (mapValueType(s.target.inferredType) == ValueType.selfType && extendsBuiltinPrimary(s.target.objectClass))))
+    if (s.target.kind == ExprKind.index && isMap(s.target.inferredType) && s.assignmentOperator == "=")
         return "z8_map_add_discard(" ~ emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.target.kind == ExprKind.index && isMap(s.target.inferredType))
         return (s.assignmentOperator == "=" ? "z8_invoke!\"z8_add\"(" : "z8_map_entry_compound!\"" ~ s.assignmentOperator[0 .. $-1] ~ "\"(") ~

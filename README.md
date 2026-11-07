@@ -139,6 +139,7 @@ python tests/primary_string_key_widening.py
 python tests/primary_both_map_widening.py
 python tests/primary_reference_key_map_views.py
 python tests/primary_reference_key_widening.py
+python tests/primary_key_covariant_values.py
 python tests/primary_user_key_map_views.py
 python tests/primary_native_key_map_views.py
 python tests/primary_primary_key_map_views.py

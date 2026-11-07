@@ -308,8 +308,8 @@ class Checker {
             if (!e.keyObjectClasses.length || !extendsBuiltinPrimary(outerMapKeyClass(actual, e.keyObjectClasses))) return false;
         } else if (![ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.guidType, ValueType.dateType,
                      ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(key)) return false;
-        return (!hasObjectClass(actual) || e.objectClass is expectedClass) &&
-            innerMapKeyClasses(actual, e.keyObjectClasses) == expectedKeys;
+        return covariantCollectionMatches(mapValueType(actual), e.objectClass, innerMapKeyClasses(actual, e.keyObjectClasses),
+                                          expectedClass, expectedKeys);
     }
     private bool isPrimaryMapBothConversion(ValueType actual, ValueType expected, Expression e) {
         if (!isMap(actual) || !isMap(expected) || mapKeyType(expected) != ValueType.primaryType || mapValueType(expected) != ValueType.primaryType) return false;
@@ -326,9 +326,21 @@ class Checker {
         if (e.kind == ExprKind.arrayLiteral && hasMapKeyClass(expected)) e.keyObjectClasses = expectedKeyClasses;
         auto actual = typeOf(e, expected);
         if (isPrimaryMapBothConversion(actual, expected, e)) {
-            e.convertPrimaryMapKey = true; e.convertPrimaryMapValue = true; e.primaryMapKeyClass = null; return true;
+            e.convertPrimaryMapKey = true; e.convertPrimaryMapValue = true; e.primaryMapKeyClass = null;
+            e.primaryMapKeyTargetType = ValueType.voidType; e.primaryMapKeyTargetClass = null; e.primaryMapKeyTargetKeys = null;
+            return true;
         }
-        if (isPrimaryMapKeyConversion(actual, expected, e, expectedClass, expectedKeyClasses)) { e.convertPrimaryMapKey = true; return true; }
+        if (isPrimaryMapKeyConversion(actual, expected, e, expectedClass, expectedKeyClasses)) {
+            e.convertPrimaryMapKey = true;
+            e.primaryMapKeyTargetType = ValueType.voidType; e.primaryMapKeyTargetClass = null; e.primaryMapKeyTargetKeys = null;
+            if (hasCovariantObjects(mapValueType(expected)) &&
+                (e.objectClass !is expectedClass || innerMapKeyClasses(actual, e.keyObjectClasses) != expectedKeyClasses)) {
+                e.primaryMapKeyTargetType = expected;
+                e.primaryMapKeyTargetClass = expectedClass;
+                e.primaryMapKeyTargetKeys = expectedKeyClasses;
+            }
+            return true;
+        }
         if (isPrimaryMapValueConversion(actual, expected, e, expectedKeyClasses)) {
             e.convertPrimaryMapValue = true;
             e.primaryMapKeyClass = mapKeyType(actual) == ValueType.selfType ? outerMapKeyClass(expected, expectedKeyClasses) : null;
