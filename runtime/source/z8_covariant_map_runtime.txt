@@ -25,6 +25,10 @@ class Z8CovariantMap(K, V, M, bool keyObject, bool valueObject) : IZ8CollectionV
     }
     override bool opEquals(Object other) {
         if (this is other) return true;
+        static if (is(M == Z8StringValueMap!Object) && is(V : Z8Object)) {
+            auto primary = cast(Z8PrimaryMap)other;
+            if (primary !is null) return z8_primary_map_view(data).opEquals(primary);
+        }
         auto view = cast(IZ8CollectionView)other;
         auto right = view is null ? null : cast(M)view.z8_erased_storage();
         return right !is null && data.opEquals(right);
@@ -36,6 +40,14 @@ class Z8CovariantMap(K, V, M, bool keyObject, bool valueObject) : IZ8CollectionV
     bool z8_containsValue(Element value) { return data.z8_containsValue(value); }
     Element z8_get(Key key) { return checkedValue(data.z8_get(key)); }
     Element z8_add(Key key, Element value) { return checkedValue(data.z8_add(key, value)); }
+    void z8_add_discard(Key key, Element value) {
+        static if (__traits(compiles, data.z8_add_discard(key, value))) data.z8_add_discard(key, value);
+        else data.z8_add(key, value);
+    }
+    void z8_remove_discard(Key key) {
+        static if (__traits(compiles, data.z8_remove_discard(key))) data.z8_remove_discard(key);
+        else data.z8_remove(key);
+    }
     void z8_add(Z8CovariantMap!(K, V, M, keyObject, valueObject) other) { data.z8_add(z8_nonnull(other).data); }
     Element z8_remove(Key key) { return checkedValue(data.z8_remove(key)); }
     Z8ValueArray!K z8_keys() {
@@ -62,4 +74,9 @@ void z8_map_add_assign(K, V, M, bool keyObject, bool valueObject)(ref Z8Covarian
         lazy Z8CovariantMap!(K, V, M, keyObject, valueObject) previous, lazy Z8CovariantMap!(K, V, M, keyObject, valueObject) right) {
     auto oldValue = previous; auto newValue = right;
     left = z8_map_union(oldValue, newValue);
+}
+
+Z8PrimaryMap z8_primary_map_view(V)(Z8CovariantMap!(wstring, V, Z8StringValueMap!Object, false, true) values)
+if (is(V : Z8Object)) {
+    return values is null ? null : z8_primary_map_view(values.data);
 }

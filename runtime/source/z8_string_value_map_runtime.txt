@@ -4,7 +4,7 @@ class Z8StringValueMap(V) {
     else static if (is(V == class)) alias Element = V;
     else static assert(0, "unsupported string-key map value");
     enum sharePrimary = is(V == long) || is(V == bool) || is(V == Z8Decimal) || is(V == Z8Guid) ||
-        is(V == Z8Binary) || is(V == Z8Datespan) || is(V == Z8Date) || is(V == Z8Geometry) || is(V == Z8File);
+        is(V == Z8Binary) || is(V == Z8Datespan) || is(V == Z8Date) || is(V == Z8Geometry) || is(V == Z8File) || is(V == Object);
     static if (sharePrimary) private Z8PrimaryMap primaryData;
     private Element[wstring] entries;
     private Z8JavaMapOrder!wstring order;
@@ -32,13 +32,13 @@ class Z8StringValueMap(V) {
     void z8_clear() { static if (sharePrimary) if (primaryData !is null) { primaryData.z8_clear(); return; } entries.clear(); hasNullKey = false; nullKeyValue = Element.init; if (order !is null) order.clear(); }
     bool z8_containsKey(wstring key) { static if (sharePrimary) if (primaryData !is null) return primaryData.z8_containsKey(key); return key is null ? hasNullKey : (key in entries) !is null; }
     bool z8_containsValue(Element value) {
-        static if (sharePrimary) if (primaryData !is null) return primaryData.z8_containsValue(z8_primary_box(value));
+        static if (sharePrimary) if (primaryData !is null) return primaryData.z8_containsValue(z8_array_primary_box(value));
         if (hasNullKey && valueEquals(value, nullKeyValue)) return true;
         foreach (item; entries) if (valueEquals(value, item)) return true;
         return false;
     }
     Element z8_add(wstring key, Element value) {
-        static if (sharePrimary) if (primaryData !is null) return z8_primary_cast!V(primaryData.z8_add(key, z8_primary_box(value)));
+        static if (sharePrimary) if (primaryData !is null) return z8_array_primary_cast!V(primaryData.z8_add(key, z8_array_primary_box(value)));
         if (key is null) {
             auto previous = hasNullKey ? nullKeyValue : Element.init;
             if (!hasNullKey) ordering().add(null);
@@ -52,7 +52,7 @@ class Z8StringValueMap(V) {
     }
     // Java inserts a return-value cast only when the result is used.
     void z8_add_discard(wstring key, Element value) {
-        static if (sharePrimary) if (primaryData !is null) { primaryData.z8_add(key, z8_primary_box(value)); return; }
+        static if (sharePrimary) if (primaryData !is null) { primaryData.z8_add(key, z8_array_primary_box(value)); return; }
         z8_add(key, value);
     }
     void z8_remove_discard(wstring key) {
@@ -70,13 +70,13 @@ class Z8StringValueMap(V) {
         for (long i; i < keys.z8_size(); ++i) { auto key = keys.z8_get(i); z8_add(key, other.z8_get(key)); }
     }
     Element z8_get(wstring key) {
-        static if (sharePrimary) if (primaryData !is null) return z8_primary_cast!V(primaryData.z8_get(key));
+        static if (sharePrimary) if (primaryData !is null) return z8_array_primary_cast!V(primaryData.z8_get(key));
         if (key is null) return hasNullKey ? nullKeyValue : Element.init;
         auto found = key in entries;
         return found is null ? Element.init : *found;
     }
     Element z8_remove(wstring key) {
-        static if (sharePrimary) if (primaryData !is null) return z8_primary_cast!V(primaryData.z8_remove(key));
+        static if (sharePrimary) if (primaryData !is null) return z8_array_primary_cast!V(primaryData.z8_remove(key));
         if (key is null) {
             auto previous = hasNullKey ? nullKeyValue : Element.init;
             if (hasNullKey) ordering().remove(null);
@@ -122,12 +122,12 @@ Z8PrimaryMap z8_primary_map_view(V)(Z8StringValueMap!V values) if (Z8StringValue
     if (values is null) return null;
     if (values.primaryData is null) {
         auto result = new Z8PrimaryMap();
-        foreach (key, value; values.entries) result.entries[key] = z8_primary_box(value);
+        foreach (key, value; values.entries) result.entries[key] = z8_array_primary_box(value);
         result.order = values.order;
         if (values.order !is null) foreach (entry; values.order.keys)
             if (entry.key !is null) result.insertionKeys ~= entry.key;
         result.hasNullKey = values.hasNullKey;
-        result.nullKeyValue = z8_primary_box(values.nullKeyValue);
+        result.nullKeyValue = z8_array_primary_box(values.nullKeyValue);
         values.entries = null; values.order = null;
         values.primaryData = result;
     }

@@ -6,6 +6,11 @@ class Z8PrimaryMap {
     private Z8Primary nullKeyValue;
     override bool opEquals(Object other) {
         auto right = cast(Z8PrimaryMap)other;
+        auto collection = cast(IZ8CollectionView)other;
+        if (collection !is null) {
+            auto objects = cast(Z8StringValueMap!Object)collection.z8_erased_storage();
+            if (objects !is null) return this.opEquals(z8_primary_map_view(objects));
+        }
         auto strings = cast(Z8StringMap)other;
         if (strings !is null) return this.opEquals(z8_primary_map_view(strings));
         import std.meta : AliasSeq;

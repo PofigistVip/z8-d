@@ -25,6 +25,20 @@ public class Probe {
     public static int choose(Value[] values) { return 2; }
     public static primary[][] matrixChoice(bool b, primary[][] left, Value[][] right) { return b ? left : right; }
     public static int matrixSize(primary[][] values) { return values.size(); }
+    public static int mapSize(primary[string] values) { return values.size(); }
+    public static primary[string] mapChoice(bool b, primary[string] left, Value[string] right) { return b ? left : right; }
+    public static int mapRun() {
+        Value first; first.number = 1; Value second; second.number = 2;
+        Value[string] typed = {("a", first)}; primary[string] values = typed;
+        values.add("a", second); if (typed.get("a").number != 2) return 1;
+        typed.add("a", first); if (((Value)values.get("a")).number != 1) return 2;
+        values.add("bad", 7); try { int bad = typed.get("bad").number; return 3; } catch (exception expected) {}
+        typed.add("bad", second); if (((Value)values.get("bad")).number != 2) return 4;
+        values.add("bad", 7); typed.remove("bad"); if (typed.containsKey("bad")) return 5;
+        primary[string] copied = {}; copied.add(typed);
+        if (mapSize(typed) != 1 || mapChoice(false, values, typed).size() != 1 || copied.size() != 1) return 6;
+        return 0;
+    }
     public static int matrixRun() {
         Value first; first.number = 1; Value second; second.number = 2;
         Value[][] typed = {{first, null}}; primary[][] values = typed;
@@ -101,6 +115,17 @@ void main() {
     try { typedMatrix.z8_get(0).z8_get(1); } catch (Exception) { invalid = true; }
     assert(invalid); replacement.z8_removeAt(1);
     assert(primaryMatrix.opEquals(typedMatrix) && typedMatrix.opEquals(primaryMatrix));
+    alias UserMap = Z8CovariantMap!(wstring, Derived, Z8StringValueMap!Object, false, true);
+    auto userMap = new UserMap(); userMap.z8_add("x"w, one);
+    auto primaryMap = z8_primary_map_view(userMap);
+    primaryMap.z8_add("x"w, z8_primary_box(two)); assert(userMap.z8_get("x"w) is two);
+    primaryMap.z8_add("bad"w, z8_primary_box(12L)); invalid = false;
+    try { userMap.z8_get("bad"w); } catch (Exception) { invalid = true; } assert(invalid);
+    auto snapshot = userMap.z8_values(); invalid = false;
+    foreach (i; 0 .. snapshot.z8_size()) try { snapshot.z8_get(i); } catch (Exception) { invalid = true; }
+    assert(invalid); z8_map_add_discard(userMap, "bad"w, one);
+    assert(userMap.z8_get("bad"w) is one && primaryMap.opEquals(userMap) && userMap.opEquals(primaryMap));
+    assert(z8_optional_require(Z8p_50726F6265.m_mapRun()) == 0);
     assert(z8_optional_require(Z8p_50726F6265.m_matrixRun()) == 0);
     assert(z8_optional_require(Z8p_50726F6265.m_run()) == 0);
 }
@@ -121,8 +146,9 @@ void main() {
     }''', encoding="utf-8")
     subprocess.run([str(compiler), "build", str(source), "Objects.run", str(executable)], check=True)
     subprocess.run([str(executable)], cwd=temp, check=True)
-    (source / "Bad.bl").write_text('public class Bad { static void f() { Bad[] items; primary[] values = items; } }', encoding="utf-8")
-    if subprocess.run([str(compiler), "project", str(source), str(generated)], capture_output=True).returncode == 0:
-        raise SystemExit("Unexpectedly accepted non-primary object array")
+    for declaration in ("Bad[] items; primary[] values = items;", "Bad[string] items; primary[string] values = items;"):
+        (source / "Bad.bl").write_text('public class Bad { static void f() { ' + declaration + ' } }', encoding="utf-8")
+        if subprocess.run([str(compiler), "project", str(source), str(generated)], capture_output=True).returncode == 0:
+            raise SystemExit("Unexpectedly accepted non-primary object collection: " + declaration)
 print("User primary and object arrays share storage")
 

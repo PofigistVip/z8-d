@@ -794,7 +794,8 @@ private string emitSimple(Statement s) {
         auto e = s.expression;
         if (e.kind == ExprKind.memberCall && isMap(e.inferredType) &&
             mapKeyType(e.inferredType) == ValueType.stringType &&
-            isScalarPrimaryArray(arrayOf(mapValueType(e.inferredType)))) {
+            (isScalarPrimaryArray(arrayOf(mapValueType(e.inferredType))) ||
+             (mapValueType(e.inferredType) == ValueType.selfType && extendsBuiltinPrimary(e.objectClass)))) {
             if (e.token.text == "add" && e.arguments.length == 2)
                 return "z8_map_add_discard(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.arguments[0]) ~ ", " ~ emitExpr(e.arguments[1]) ~ ")";
             if (e.token.text == "remove" && e.arguments.length == 1)
@@ -811,7 +812,8 @@ private string emitSimple(Statement s) {
     if (s.dateTickAssignment) return "z8_date_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.target.kind == ExprKind.index && isMap(s.target.inferredType) && s.assignmentOperator == "=" &&
         mapKeyType(s.target.inferredType) == ValueType.stringType &&
-        isScalarPrimaryArray(arrayOf(mapValueType(s.target.inferredType))))
+        (isScalarPrimaryArray(arrayOf(mapValueType(s.target.inferredType))) ||
+         (mapValueType(s.target.inferredType) == ValueType.selfType && extendsBuiltinPrimary(s.target.objectClass))))
         return "z8_map_add_discard(" ~ emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.target.kind == ExprKind.index && isMap(s.target.inferredType))
         return (s.assignmentOperator == "=" ? "z8_invoke!\"z8_add\"(" : "z8_map_entry_compound!\"" ~ s.assignmentOperator[0 .. $-1] ~ "\"(") ~
