@@ -218,7 +218,9 @@ integer, decimal, boolean, GUID, date, datetime and datespan values are
 supported by both write actions, as are GeoJSON geometry values when PostGIS
 is installed in the database. File and attachment field values are stored
 as text metadata; binary fields accept an index into the request's uploaded
-files. Linked or computed fields and additional write options are rejected.
+files. Readable linked fields are supplied to the BL action hooks but are not
+written to their own tables; computed fields and additional write options are
+rejected.
 As in Java, create, update and copy ignore record properties that do not name a
 field; access checks still apply to fields that are found.
 The native `SystemFiles` table's fields and creation timestamps are available

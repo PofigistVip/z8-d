@@ -215,6 +215,7 @@ import org.zenframework.z8.base.table.value.AttachmentField;
 import org.zenframework.z8.base.table.value.Link;
 import org.zenframework.z8.base.table.value.Join;
 import org.zenframework.z8.base.sql.Connection;
+import org.zenframework.z8.base.application.Application;
 public class Sample extends Table {
     [name "Title"] public StringField title;
     [name "Amount"] public IntField amount;
@@ -227,6 +228,12 @@ public class Sample extends Table {
     ApplyAction apply; NoTransactionAction noTransaction; IncrementAction increment; ContextAction inspect;
     actions = {apply, noTransaction, increment, inspect};
     CustomReport exported; reports = {exported};
+    virtual protected void onCreateAction(guid id) {
+        if (Application.requestParameters().containsKey("verifyLinked") && nested.title.get() != "selector value") throw "missing create selector value";
+    }
+    virtual protected void onCopyAction(guid id) {
+        if (Application.requestParameters().containsKey("verifyLinked") && nested.title.get() != "selector value") throw "missing copy selector value";
+    }
     virtual protected binary processContentRequest(string[string] params, file[] files) {
         Connection.get().execute("INSERT INTO \\"ContentLog\\" VALUES (1)");
         if (params.containsKey("fail")) throw "content failed";
@@ -319,7 +326,7 @@ void main(string[] args) {
     auto setup = new Z8PostgresConnection(databaseInfo);
     setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Blob" bytea, "Documents" bytea, "ChildLink" uuid, "NestedLink" uuid, "MemoryLink" uuid, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     setup.execute(`CREATE TABLE "NestedAttachment" ("RecordId" uuid PRIMARY KEY, "Documents" bytea, "Title" text, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
-    setup.execute(`INSERT INTO "NestedAttachment" ("RecordId") VALUES ('00000000-0000-0000-0000-000000000088'), ('00000000-0000-0000-0000-000000000089'), ('00000000-0000-0000-0000-000000000090'), ('00000000-0000-0000-0000-000000000091'), ('00000000-0000-0000-0000-000000000094')`);
+    setup.execute(`INSERT INTO "NestedAttachment" ("RecordId", "Title") VALUES ('00000000-0000-0000-0000-000000000088', 'stored value'), ('00000000-0000-0000-0000-000000000089', null), ('00000000-0000-0000-0000-000000000090', null), ('00000000-0000-0000-0000-000000000091', null), ('00000000-0000-0000-0000-000000000094', null)`);
     setup.execute(`CREATE TABLE "SystemFiles" ("RecordId" uuid PRIMARY KEY, "Name" text, "File" bytea, "Path" text, "Size" bigint, "Time" bigint, "Last modified" bigint, "Location" bigint, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
     setup.execute(`CREATE TABLE "ContentLog" (value integer)`);
     setup.execute(`CREATE TABLE "SystemUsers" ("RecordId" uuid PRIMARY KEY, "Settings" bytea, "Password" text, "Change Password" smallint, "Email" text, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
@@ -349,6 +356,7 @@ void main(string[] args) {
     assert(verify.execute(`SELECT count(*) FROM "SystemFiles"`).rows[0][0].text == "0");
     assert(verify.execute(`SELECT count(*) FROM "NestedAttachment" WHERE "RecordId" IN ('00000000-0000-0000-0000-000000000089', '00000000-0000-0000-0000-000000000090')`).rows[0][0].text == "0");
     assert(verify.execute(`SELECT count(*) FROM "NestedAttachment" WHERE "RecordId" = '00000000-0000-0000-0000-000000000094'`).rows[0][0].text == "0");
+    assert(verify.execute(`SELECT "Title" FROM "NestedAttachment" WHERE "RecordId" = '00000000-0000-0000-0000-000000000088'`).rows[0][0].text == "stored value");
     verify.execute(`UPDATE "SystemUsers" SET "Password" = md5('old secret') WHERE "RecordId" = '00000000-0000-0000-0000-000000000002'`);
     auto originalConfig = z8_application_configuration(), plainConfig = z8_application_configuration();
     plainConfig.clientHashesPasswords = false; z8_application_configure(plainConfig);
@@ -757,15 +765,19 @@ void main(string[] args) {
             assert any("job failed" in text for text in messages), result
             result = request(sort='[{"property":"amount"}]')
             assert [row["amount"] for row in result["data"]] == [11, 11], result
-            new_record = '[{"recordId":"00000000-0000-0000-0000-000000000003","title":"Third","amount":25}]'
+            new_record = '[{"recordId":"00000000-0000-0000-0000-000000000003","title":"Third","amount":25,"nested.title":"selector value"}]'
             result = request(session="limited", action="create", data=new_record)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
-            result = request(action="create", data=new_record)
+            result = request(session="relation-denied", action="create", data=new_record)
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = request(action="create", data=new_record, verifyLinked="true")
             assert result["success"] and result["data"][0]["title"] == "Third", result
-            copy_record = '[{"recordId":"00000000-0000-0000-0000-000000000004","title":"Copied"}]'
+            copy_record = '[{"recordId":"00000000-0000-0000-0000-000000000004","title":"Copied","nested.title":"selector value"}]'
             result = request(session="limited", action="copy", recordId="00000000-0000-0000-0000-000000000003", data=copy_record)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
-            result = request(action="copy", recordId="00000000-0000-0000-0000-000000000003", data=copy_record)
+            result = request(session="relation-denied", action="copy", recordId="00000000-0000-0000-0000-000000000003", data=copy_record)
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = request(action="copy", recordId="00000000-0000-0000-0000-000000000003", data=copy_record, verifyLinked="true")
             assert result["success"] and result["data"][0]["title"] == "Copied" and result["data"][0]["amount"] == 25, result
             change = '[{"recordId":"00000000-0000-0000-0000-000000000002","title":"Updated","amount":12}]'
             result = request(session="limited", action="update", data=change)
