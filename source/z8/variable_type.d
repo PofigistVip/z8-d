@@ -312,7 +312,8 @@ package ValueType optionalForArray(ValueType type) {
     }
 }
 // Java's legacy Double.toString has different edge cases outside this range.
-// Retain the magnitude guard until those cases are reproduced as well.
+// Exactly representable integers through 2^53 have also been checked against
+// the original double-to-BigDecimal conversion.
 package bool safeDecimalLiteral(string text) {
     auto spelling = text.replace(" ", "").replace("\t", "");
     auto exponent = spelling.indexOf('e');
@@ -327,7 +328,8 @@ package bool safeDecimalLiteral(string text) {
         auto value = spelling.to!double;
         if (!value.isFinite) return false;
         if (first == last) return true;
-        return value != 0 && value.abs >= 1e-15 && value.abs < 1e15;
+        if (value != 0 && value.abs >= 1e-15 && value.abs < 1e15) return true;
+        return value.abs >= 1e15 && value.abs <= 9007199254740992.0 && cast(double)cast(long)value == value;
     } catch (Exception) { return false; }
 }
 package ValueType elementType(ValueType type) {
