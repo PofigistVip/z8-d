@@ -52,11 +52,12 @@ private bool digit(wchar c) { return c >= '0' && c <= '9'; }
 private bool hexDigit(wchar c) { return digit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }
 private bool space(wchar c) { return c == ' ' || c == '\t'; }
 private bool newline(wchar c) { return c == '\r' || c == '\n'; }
-// These Java identifier-part categories are also valid inside D identifiers.
-// Currency and format characters need a separate escaped-name representation.
+// Java accepts currency and format characters as identifier parts as well;
+// the D emitter encodes names containing these characters.
 private bool identifierChar(wchar c) {
-    return c == '_' || (c in unicode.L) || (c in unicode.Nl) || (c in unicode.Nd) ||
-        (c in unicode.Mn) || (c in unicode.Mc) || (c in unicode.Pc);
+    return c != '$' && (c == '_' || (c in unicode.L) || (c in unicode.Nl) || (c in unicode.Nd) ||
+        (c in unicode.Mn) || (c in unicode.Mc) || (c in unicode.Pc) ||
+        (c in unicode.Sc) || (c in unicode.Cf) || (c >= 0x7F && c <= 0x9F));
 }
 
 class Lexer {

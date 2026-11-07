@@ -91,6 +91,10 @@ private string z8_object_class_symbol_name(string symbol, string moduleName = nu
         }
         return cast(string)decoded;
     }
+    if (symbol.startsWith("_z8id_")) {
+        auto decoded = decodeHex(symbol[6 .. $]);
+        return decoded !is null && decoded.startsWith("Z8_") ? z8_object_class_symbol_name(decoded, moduleName) : null;
+    }
     if (symbol.startsWith("Z8p_")) {
         auto decoded = decodeHex(symbol[4 .. $]);
         return decoded is null ? null : decoded.replace("$", ".");

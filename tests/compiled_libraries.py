@@ -15,13 +15,14 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     for path in (alpha / "alpha", beta / "beta", app / "demo"):
         path.mkdir(parents=True)
     (alpha / "alpha/Value.bl").write_text('public class Value { public int number() { return 20; } }', encoding="utf-8")
+    (alpha / "alpha/€Value.bl").write_text('public class €Value { public int amount\u200C() { return 5; } }', encoding="utf-8")
     (alpha / "alpha/SecurityLog.bl").write_text('[native "org.zenframework.z8.server.base.security.SecurityLog"] public class SecurityLog {}', encoding="utf-8")
     (alpha / "alpha/Logger.bl").write_text('import alpha.SecurityLog; [log] public class Logger extends SecurityLog {}', encoding="utf-8")
     (beta / "beta/Value.bl").write_text('public class Value { public int number() { return 22; } }', encoding="utf-8")
     (beta / "beta/Builder.bl").write_text('import beta.Value; public class Builder { public int number() { Value v; return v.number(); } }', encoding="utf-8")
     (app / "demo/Main.bl").write_text('''
-import alpha.Value; import beta.Builder;
-public class Main { public static int run() { Value a; Builder b; return a.number() + b.number(); } }
+import alpha.Value; import alpha.€Value; import beta.Builder;
+public class Main { public static int run() { Value a; Builder b; €Value c; return a.number() + b.number() + c.amount\u200C() - 5; } }
 ''', encoding="utf-8")
     one, two = temp / "first-library", temp / "second-library"
     subprocess.run([str(compiler), "library", str(alpha), str(one), "first"], check=True)

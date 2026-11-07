@@ -1710,7 +1710,9 @@ private string moduleSegment(string part, bool root) {
     auto lower = part.toLower;
     // Reserve the escape namespace, internal generated modules, and D's __ names.
     auto first = part.to!dstring[0];
-    if ((first != '_' && !(first in unicode.L) && !(first in unicode.Nl)) ||
+    bool needsEscape;
+    foreach (dchar c; part) if ((c in unicode.Sc) || (c in unicode.Cf) || (c >= 0x7F && c <= 0x9F)) { needsEscape = true; break; }
+    if (needsEscape || (first != '_' && !(first in unicode.L) && !(first in unicode.Nl)) ||
         part.startsWith("__") || lower.startsWith("_z8_") ||
         (root && ["native_registry", "project_registry", "entry"].canFind(lower)))
         return escapedModuleSegment(part);
@@ -1776,7 +1778,7 @@ package GeneratedModule[] emitProjectModules(Program[] programs, string[string] 
         bool identifierByte(ubyte c) { return c >= 128 || c == '_' || (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'); }
         string[] dependencies; bool[string] seen;
         for (size_t i; i < body.length;) {
-            if ((i && identifierByte(cast(ubyte)body[i - 1])) || !(body[i .. $].startsWith("Z8_") || body[i .. $].startsWith("Z8q_"))) { ++i; continue; }
+            if ((i && identifierByte(cast(ubyte)body[i - 1])) || !(body[i .. $].startsWith("Z8_") || body[i .. $].startsWith("Z8q_") || body[i .. $].startsWith("_z8id_"))) { ++i; continue; }
             auto end = i;
             while (end < body.length && identifierByte(cast(ubyte)body[end])) ++end;
             auto dependency = body[i .. end] in moduleByClass;

@@ -26,6 +26,8 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     (source / "demo/Документ.bl").write_text("public class Документ {}", encoding="utf-8")
     (source / "demo/\u0301Start.bl").write_text(
         "public class \u0301Start { public static int e\u0301() { int a\u203Fb = 42; return a\u203Fb; } }", encoding="utf-8")
+    (source / "demo/€Rates.bl").write_text(
+        'public class €Rates { public static int €value() { int fee\u200C = 42; int hidden\u0085part = 0; return fee\u200C + hidden\u0085part; } public static int _z8id_6D5FE282AC76616C7565() { return 9; } }', encoding="utf-8")
     (source / "demo/__Hidden.bl").write_text("public class __Hidden {}", encoding="utf-8")
     (source / "demo/_z8_Probe.bl").write_text("public class _z8_Probe {}", encoding="utf-8")
     (source / "demo/p_Thing.bl").write_text("public class p_Thing {}", encoding="utf-8")
@@ -39,7 +41,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     (source / "entry.bl").write_text("public class entry {}", encoding="utf-8")
     (source / "NativeProbe.bl").write_text('[native "test.Native"] public class NativeProbe {}', encoding="utf-8")
     (source / "Registered.bl").write_text('[entry] public class Registered {}', encoding="utf-8")
-    (source / "demo/Main.bl").write_text("import alpha.Thing; import beta.Use; import demo.version; import demo.Документ; public class Main { public static int value() { return Thing.value() + Use.value() + version.value(); } public static Документ create() { return new Документ; } }", encoding="utf-8")
+    (source / "demo/Main.bl").write_text("import alpha.Thing; import beta.Use; import demo.version; import demo.Документ; import demo.€Rates; public class Main { public static int value() { return Thing.value() + Use.value() + version.value(); } public static int extra() { return €Rates.€value() + €Rates._z8id_6D5FE282AC76616C7565() - 9; } public static Документ create() { return new Документ; } }", encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated), "--dependency", str(other)], check=True)
     main = (generated / "z8gen/demo/Main.d").read_text(encoding="utf-8")
     assert "class Z8_Main" in main and "Z8q_alpha_2EThing.m_value()" in main
@@ -52,6 +54,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     assert (generated / "z8gen/demo/_z8_5570706572.d").is_file()
     assert (generated / "z8gen/demo/_z8_7570706572.d").is_file()
     assert (generated / "z8gen/demo/_z8_CC815374617274.d").is_file()
+    assert (generated / "z8gen/demo/_z8_E282AC5261746573.d").is_file()
     assert (generated / "z8gen/native_registry.d").is_file()
     assert (generated / "z8gen/project_registry.d").is_file()
     for name in ("native_registry", "project_registry", "entry"):
@@ -91,6 +94,7 @@ import z8gen._z8_656E747279;
 import z8.runtime;
 void main() {
     assert(Z8_Main.m_value() == 34);
+    assert(Z8_Main.m_extra() == 42);
     assert(Z8_\u0301Start.m_e\u0301() == 42);
     assert(Z8_Main.m_create().z8_class_id() == "demo.Документ"w);
     assert(Z8p_64656D6F2E4D61696E.m_value() == 34);
@@ -101,6 +105,7 @@ void main() {
     assert(z8_object_new_instance("beta.Thing"w).z8_class_id() == "beta.Thing"w);
     assert(z8_object_new_instance("demo.My_Name"w).z8_class_id() == "demo.My_Name"w);
     assert(z8_object_new_instance("demo.Документ"w).z8_class_id() == "demo.Документ"w);
+    assert(z8_object_new_instance("demo.€Rates"w).z8_class_id() == "demo.€Rates"w);
     assert(z8_object_new_instance("demo.version_"w).z8_class_id() == "demo.version_"w);
     assert(z8_object_new_instance("demo.version__"w).z8_class_id() == "demo.version__"w);
     assert(z8_object_new_instance("demo.__Hidden"w).z8_class_id() == "demo.__Hidden"w);

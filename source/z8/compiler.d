@@ -4,7 +4,7 @@ import std.format : format;
 import std.string : lastIndexOf;
 import z8.lexer : LexException, Position;
 import z8.emitter : emitPrograms, emitProjectModules, projectModuleNames;
-import z8.d_writer : formatDSource;
+import z8.d_writer : formatDSource, dIdentifier;
 public import z8.compiler_model;
 public import z8.parser : Parser;
 public import z8.semantic : Checker;
@@ -24,14 +24,14 @@ private string identifierPart(string name) {
 string compile(string source) {
     auto program = (new Parser(source)).parse();
     program.qualifiedName = program.name.text;
-    program.emittedName = "Z8_" ~ program.name.text;
+    program.emittedName = dIdentifier("Z8_" ~ program.name.text);
     Program[string] programs;
     programs[program.qualifiedName] = program;
     Program[] ordered = [program];
     void addNested(Program owner) {
         foreach (nested; owner.nestedPrograms) {
             nested.qualifiedName = owner.qualifiedName ~ "$" ~ nested.name.text;
-            nested.emittedName = owner.emittedName ~ "_" ~ nested.name.text;
+            nested.emittedName = dIdentifier(owner.emittedName ~ "_" ~ nested.name.text);
             programs[nested.qualifiedName] = nested;
             ordered ~= nested;
             addNested(nested);
@@ -121,7 +121,7 @@ GeneratedModule[] compileSources(SourceUnit[] units, string entry = "", Compilat
     foreach (program; ordered) {
         program.emittedName = options !is null && (program.qualifiedName in options.externalTypes) ?
             "Z8q_" ~ identifierPart(program.qualifiedName) : program.lexicalOwner is null && nameCounts[program.name.text] == 1 ?
-            "Z8_" ~ program.name.text : "Z8q_" ~ identifierPart(program.qualifiedName);
+            dIdentifier("Z8_" ~ program.name.text) : "Z8q_" ~ identifierPart(program.qualifiedName);
     }
     prepareInheritance(ordered, programs);
     foreach (program; ordered) {
