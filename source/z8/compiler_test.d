@@ -331,7 +331,7 @@ unittest {
     assert(parsed.methods[0].parameters[0].declaredFinal);
     assert(parsed.methods[0].body.children[0].declaredFinal);
     assert(parsed.methods[0].body.children[1].initial.declaredFinal);
-    assert(parsed.methods[0].body.children[2].catchDeclaredFinal);
+    assert(parsed.methods[0].body.children[2].catches[0].declaredFinal);
     rejects("class A { final int f() { return 1; } }");
     rejects("class A { void f() { final x = 1; } }");
     rejects("class A { void f() { final final int x = 1; } }");

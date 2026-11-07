@@ -321,6 +321,13 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     name_cases.append((False, {"Flavor": 'public enum Flavor { First, Second }', "Other": 'public enum Other { First, Second }',
                                "NameA": 'public class NameA { static void f() { int[][Flavor] source; primary[][Other] values = source; } }'}))
     name_cases.append((True, {"NameA": 'import org.zenframework.z8.lang.encoding; public class NameA extends primary { public void operator = (NameA value) {} static void f() { NameA[][encoding] source; primary[][encoding] values = source; } }'}))
+    name_cases.append((True, {"Failure": 'public class Failure extends exception { public void operator = (Failure other) {} }',
+                              "NameA": 'public class NameA { static void f() { try { Failure value; throw value; } catch (Failure value) {} catch (exception other) {} } }'}))
+    name_cases.append((False, {"Failure": 'public class Failure extends exception { public void operator = (Failure other) {} }',
+                               "NameA": 'public class NameA { static void f() { try {} catch (Failure value) {} catch (Failure other) {} } }'}))
+    name_cases.append((False, {"NameA": 'public class NameA { static void f() { try {} catch (int value) {} } }'}))
+    name_cases.append((False, {"Failure": 'public class Failure extends exception { public void operator = (Failure other) {} }',
+                               "NameA": 'public class NameA { static void f() { try {} catch (exception value) {} catch (Failure other) {} } }'}))
     for key in ("guid", "date", "datespan", "binary", "geometry", "file"):
         for kind in ("int", "string"):
             declaration = kind + '[' + key + '] source; primary[' + key + '] values = source; values.add(source);'

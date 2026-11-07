@@ -46,6 +46,35 @@ public class Probe {
         exception converted = value;
         return converted == null;
     }
+    public static bool typedCatch() {
+        UserError value = UserError.error("typed");
+        try { throw value; }
+        catch (ExtendedError other) { return false; }
+        catch (UserError caught) { return caught.getMessage() == "typed"; }
+        catch (exception other) { return false; }
+    }
+    public static UserError caughtIdentity(UserError value) {
+        try { throw value; } catch (UserError caught) { return caught; }
+    }
+    public static bool descendantCatch() {
+        ExtendedError value; try { throw value; } catch (UserError caught) { return caught instanceof ExtendedError; }
+    }
+    public static bool catchRethrow() {
+        try { try { throw UserError.error("pass"); } catch (ExtendedError other) { return false; } }
+        catch (UserError caught) { return caught.getMessage() == "pass"; }
+    }
+    public static int catchFinally() {
+        int number = 0;
+        try { throw UserError.error("finally"); }
+        catch (UserError caught) { number = 1; }
+        finally { number = number + 2; }
+        return number;
+    }
+    public static int returnFinally() {
+        try { throw UserError.error("finally"); }
+        catch (UserError caught) { return 3; }
+        finally { int value = 1; }
+    }
     public static bool invalidCast() {
         exception value = "plain";
         if (value instanceof UserError) return false;
@@ -85,8 +114,14 @@ void main() {
     assert(z8_optional_require(P.m_descendant()));
     assert(z8_optional_require(P.m_identity()));
     assert(z8_optional_require(P.m_invalidCast()));
+    assert(z8_optional_require(P.m_typedCatch()));
+    assert(z8_optional_require(P.m_descendantCatch()));
+    assert(z8_optional_require(P.m_catchRethrow()));
+    assert(z8_optional_require(P.m_catchFinally()) == 3);
+    assert(z8_optional_require(P.m_returnFinally()) == 3);
     auto original = cast(Z8p_557365724572726F72)userError("identity"w);
     assert(P.m_roundtrip(original) is original);
+    assert(P.m_caughtIdentity(original) is original);
     assert(P.m_roundtrip(null) is null);
     assert(z8_optional_require(P.m_nullIdentity(null)));
 }
@@ -95,4 +130,14 @@ void main() {
     subprocess.run(["dmd", "-I" + str(generated), *import_args(), *map(str, generated.rglob("*.d")),
                     str(harness), str(adapter_object), str(runtime), "-of=" + str(executable)], cwd=temp, check=True)
     subprocess.run([str(executable)], cwd=temp, check=True)
+    for declaration in (
+        'try {} catch (int value) {}',
+        'try {} catch (Probe value) {}',
+        'try {} catch (UserError first) {} catch (UserError second) {}',
+        'try {} catch (exception first) {} catch (exception second) {}',
+        'try {} catch (exception first) {} catch (UserError second) {}',
+    ):
+        (source / "Bad.bl").write_text('public class Bad { static void f() { ' + declaration + ' } }', encoding="utf-8")
+        if subprocess.run([str(compiler), "project", str(source), str(generated)], capture_output=True).returncode == 0:
+            raise SystemExit("Unexpectedly accepted invalid catch: " + declaration)
 print("Native exception subclasses, implicit conversions and throw verified")

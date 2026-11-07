@@ -455,20 +455,20 @@ class Parser {
             auto s = new Statement(StmtKind.tryStmt, t);
             if (current.text != "{") error("try requires a block");
             s.children ~= statement();
-            if (accept("catch")) {
-                s.hasCatch = true; expect("(");
-                s.catchDeclaredFinal = accept("final");
-                if (parseType() != ValueType.exceptionType) error("only exception catch is supported");
-                s.catchName = identifier(); expect(")");
+            while (accept("catch")) {
+                expect("(");
+                CatchClause clause; clause.declaredFinal = accept("final");
+                clause.type = parseType(); clause.objectName = parsedObjectName;
+                clause.name = identifier(); expect(")");
                 if (current.text != "{") error("catch requires a block");
-                s.children ~= statement();
+                s.catches ~= clause; s.children ~= statement();
             }
             if (accept("finally")) {
                 s.hasFinally = true;
                 if (current.text != "{") error("finally requires a block");
                 s.children ~= statement();
             }
-            if (!s.hasCatch && !s.hasFinally) error("try requires catch or finally");
+            if (!s.catches.length && !s.hasFinally) error("try requires catch or finally");
             return s;
         }
         if (accept("if")) {

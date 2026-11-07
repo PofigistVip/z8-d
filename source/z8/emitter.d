@@ -769,13 +769,25 @@ private string emitStatement(Statement s, ControlContext context = ControlContex
         case StmtKind.throwStmt:
             return "throw " ~ (s.type == ValueType.stringType ? "new Z8Exception(z8_to_utf8(" ~ emitExpr(s.expression) ~ "))" : "z8_nonnull(" ~ emitExpr(s.expression) ~ ")") ~ ";\n";
         case StmtKind.tryStmt:
-            auto result = (context.enabled && s.hasFinally && !s.hasCatch ? "" : "try ") ~ emitStatement(s.children[0], context);
-            if (s.hasCatch) {
+            auto result = (context.enabled && s.hasFinally && !s.catches.length ? "" : "try ") ~ emitStatement(s.children[0], context);
+            if (s.catches.length) {
                 auto caught = "z8_caught_" ~ s.token.position.offset.to!string;
                 result ~= "catch (Throwable " ~ caught ~ ") {\n" ~
-                    (context.enabled ? "if (cast(Z8ControlFlow)" ~ caught ~ " !is null) throw " ~ caught ~ ";\n" : "") ~
-                    "Throwable v_" ~ s.catchName.text ~ " = new Z8Exception(" ~ caught ~ ".msg, " ~ caught ~ ");\n" ~
-                    emitStatement(s.children[1], context) ~ "}\n";
+                    (context.enabled ? "if (cast(Z8ControlFlow)" ~ caught ~ " !is null) throw " ~ caught ~ ";\n" : "");
+                bool catchesAll;
+                foreach (i, clause; s.catches) {
+                    if (catchesAll) break;
+                    auto condition = clause.type == ValueType.exceptionType ? "true" :
+                        "z8_exception_is_object!(" ~ clause.objectClass.emittedName ~ ")(" ~ caught ~ ")";
+                    result ~= (i ? "else " : "") ~ "if (" ~ condition ~ ") {\n";
+                    if (clause.type == ValueType.exceptionType) {
+                        catchesAll = true;
+                        result ~= "Throwable v_" ~ clause.name.text ~ " = new Z8Exception(" ~ caught ~ ".msg, " ~ caught ~ ");\n";
+                    } else result ~= clause.objectClass.emittedName ~ " v_" ~ clause.name.text ~ " = z8_exception_cast_object!(" ~ clause.objectClass.emittedName ~ ")(" ~ caught ~ ");\n";
+                    result ~= emitStatement(s.children[i + 1], context) ~ "}\n";
+                }
+                if (!catchesAll) result ~= "else throw " ~ caught ~ ";\n";
+                result ~= "}\n";
             }
             if (s.hasFinally && context.enabled) {
                 auto suffix = s.token.position.offset.to!string;

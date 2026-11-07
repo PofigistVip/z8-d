@@ -1008,7 +1008,12 @@ class Checker {
                 return false;
             case StmtKind.tryStmt:
                 bool catchesReturn = true, finallyReturns;
-                if (s.hasCatch) catchesReturn = analyzeControlFlow(s.children[1]);
+                foreach (i, clause; s.catches) {
+                    if (clause.type == ValueType.exceptionType && i + 1 < s.catches.length)
+                        fail("unreachable catch", s.catches[i + 1].name);
+                    auto clauseReturns = analyzeControlFlow(s.children[i + 1]);
+                    catchesReturn = catchesReturn && clauseReturns;
+                }
                 if (s.hasFinally) finallyReturns = analyzeControlFlow(s.children[$-1]);
                 return (analyzeControlFlow(s.children[0]) && catchesReturn) || finallyReturns;
             case StmtKind.variable:
@@ -2900,11 +2905,23 @@ class Checker {
                 auto old = variables.dup; auto oldObjects = objectVariables.dup; auto oldKeyObjects = keyObjectVariables.dup;
                 auto tryReturns = checkStatement(s.children[0]);
                 bool catchReturns = true, finallyReturns;
-                if (s.hasCatch) {
+                Program[] caughtClasses;
+                bool caughtException;
+                foreach (i, ref clause; s.catches) {
                     variables = old.dup; objectVariables = oldObjects.dup; keyObjectVariables = oldKeyObjects.dup;
-                    if (s.catchName.text in variables) fail("duplicate or shadowed variable", s.catchName);
-                    variables[s.catchName.text] = ValueType.exceptionType;
-                    catchReturns = checkStatement(s.children[1]);
+                    if (clause.type == ValueType.selfType) {
+                        clause.objectClass = resolveClass(currentProgram, clause.objectName, clause.name);
+                        if (!extendsBuiltinException(clause.objectClass)) fail("catch requires an exception type", clause.name);
+                        if (caughtClasses.canFind(clause.objectClass)) fail("duplicate catch type", clause.name);
+                        caughtClasses ~= clause.objectClass; objectVariables[clause.name.text] = clause.objectClass;
+                    } else if (clause.type == ValueType.exceptionType) {
+                        if (caughtException) fail("duplicate catch type", clause.name);
+                        caughtException = true;
+                    } else fail("catch requires an exception type", clause.name);
+                    if (clause.name.text in variables) fail("duplicate or shadowed variable", clause.name);
+                    variables[clause.name.text] = clause.type;
+                    auto clauseReturns = checkStatement(s.children[i + 1]);
+                    catchReturns = catchReturns && clauseReturns;
                 }
                 variables = old.dup; objectVariables = oldObjects.dup; keyObjectVariables = oldKeyObjects.dup;
                 if (s.hasFinally) {

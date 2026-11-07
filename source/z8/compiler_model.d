@@ -73,6 +73,7 @@ class Expression {
     bool optionalDecimalBinary, optionalDecimalLeft, optionalDecimalRight, optionalDecimalUnary, optionalDecimalReceiver;
     this(ExprKind kind, Token token) { this.kind = kind; this.token = token; }
 }
+struct CatchClause { Token name; ValueType type; string objectName; Program objectClass; bool declaredFinal; }
 class Statement {
     StmtKind kind;
     Token token;
@@ -83,9 +84,9 @@ class Statement {
     Statement[] children;
     Statement initial, step;
     string assignmentOperator;
-    Token catchName;
-    bool hasCatch, hasFinally, hasContainer;
-    bool declaredFinal, catchDeclaredFinal;
+    CatchClause[] catches;
+    bool hasFinally, hasContainer;
+    bool declaredFinal;
     bool filePathAssignment, dateTickAssignment, userOperatorAssignment, userCompoundAssignment, isMemberInitializer;
     string objectName; string[] keyObjectNames;
     Program objectClass, nestedClass; Program[] keyObjectClasses;
