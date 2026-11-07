@@ -143,6 +143,7 @@ public class StaticReportProbe {
     public static file cloneNamedDigitRename() { CloneNamedDigitRenameReport report; return report.run(guid.Null); }
     public static file cloneNamedCellRename() { CloneNamedCellRenameReport report; return report.run(guid.Null); }
     public static file cloneNamedRussianRename() { CloneNamedRussianRenameReport report; return report.run(guid.Null); }
+    public static file collectionRange() { CollectionRangeReport report; return report.run(guid.Null); }
     public static int orderedCount() { return OrderedRows.sequence; }
     public static file expandedMultipleSheets() { ExpandedMultipleSheetReport report; return report.run(guid.Null); }
     public static file emptyFooter() { EmptyFooterReport report; return report.run(guid.Null); }
@@ -175,6 +176,7 @@ public class StaticReportProbe {
             ("InvalidRangeReport", "sample", "A1:B2", "A1"),
             ("ExpressionRangeReport", "expression", "A1", "A1"),
             ("ConstantRangeReport", "constant", "A1:G1", "A1:G1"),
+            ("CollectionRangeReport", "collection", "A1:D1", "A1:D1"),
             ("ConstantCommentRangeReport", "constant-comment", "A1:G1", "A1:G1"),
             ("ParametersRangeReport", "parameters", "A1:E1", "A1:E1"),
             ("DateRangeReport", "dates", "A1:J1", "A1:J1"),
@@ -706,6 +708,14 @@ public class %s extends Report {
     with zipfile.ZipFile(application / "reports/parameters.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in parameters.items():
             archive.writestr(name, content)
+    collection = dict(constants)
+    collection["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="3" uniqueCount="3"><si><t>${'a,b'.split(',')}</t></si><si><t>items: ${'a,b'.split(',')}</t></si><si><t>${'a,b'.split(',').size()}</t></si></sst>'''
+    collection["xl/worksheets/sheet1.xml"] = original_sheet.replace(
+        '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
+        '<c r="A1" t="s"><v>0</v></c><c r="B1" t="inlineStr"><is><t>${\'a,b\'.split(\',\')}</t></is></c>'
+        '<c r="C1" t="s"><v>1</v></c><c r="D1" t="s"><v>2</v></c>')
+    with zipfile.ZipFile(application / "reports/collection.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in collection.items(): archive.writestr(name, content)
     repeat = dict(parameters)
     repeat["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="1" uniqueCount="1"><si><t>${parameters['nested']}</t></si></sst>'''
     repeat["xl/worksheets/sheet1.xml"] = original_sheet.replace(
@@ -1265,7 +1275,8 @@ void main(string[] args) {
     bool cloneNamedDigitRename; try { P.m_cloneNamedDigitRename(); } catch (Exception) { cloneNamedDigitRename = true; } assert(cloneNamedDigitRename);
     bool cloneNamedCellRename; try { P.m_cloneNamedCellRename(); } catch (Exception) { cloneNamedCellRename = true; } assert(cloneNamedCellRename);
     bool cloneNamedRussianRename; try { P.m_cloneNamedRussianRename(); } catch (Exception) { cloneNamedRussianRename = true; } assert(cloneNamedRussianRename);
-    assert(database.begins == 130 && database.rollbacks == 130);
+    bool collectionRange; try { P.m_collectionRange(); } catch (Exception) { collectionRange = true; } assert(collectionRange);
+    assert(database.begins == 131 && database.rollbacks == 131);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -1493,8 +1504,10 @@ void main(string[] args) {
             contents = contents.replace(
                 'bool %s; try { P.m_%s(); } catch (Exception) { %s = true; } assert(%s);' % (variable, method, variable, variable),
                 'auto %s = P.m_%s(); copy(z8_file_resolve_path(%s), buildPath(args[2], "%s.xlsx"));' % (variable, method, variable, output))
-        contents = contents.replace('assert(database.begins == 130 && database.rollbacks == 130);',
-            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 37); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 38); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 39); assert(database.begins == 130 && database.rollbacks == 130);')
+        contents = contents.replace('bool collectionRange; try { P.m_collectionRange(); } catch (Exception) { collectionRange = true; } assert(collectionRange);',
+            'auto collectionRange = P.m_collectionRange(); copy(z8_file_resolve_path(collectionRange), buildPath(args[2], "collection.xlsx"));')
+        contents = contents.replace('assert(database.begins == 131 && database.rollbacks == 131);',
+            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 37); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 38); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 39); assert(database.begins == 131 && database.rollbacks == 131);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1840,11 +1853,12 @@ class PoiRangeOracle {
       }
       PoiReport report = new PoiReport(new ReportOptions()).setContext(context);
       boolean constants = args.length > 3 && "constants".equals(args[3]);
+      boolean collectionCase = args.length > 3 && "collection".equals(args[3]);
       boolean parameters = args.length > 3 && "parameters".equals(args[3]);
       boolean dates = args.length > 3 && "dates".equals(args[3]);
       Range child = new Range().setSource(customCase || jsonCase || queryCase || expandedCustomCase ? customSource : SimpleSource.newDefault())
-          .setBlock(emptySideFooterCase ? "A2:D2" : emptyHorizontalSideFooterCase ? "B1:C2" : emptyVerticalFooterCase ? "A1:D1" : headerFooterCase ? "A2:D2" : horizontalHeaderCase ? "B1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(emptySideFooterCase ? "A1:E3" : emptyHorizontalSideFooterCase ? "A1:D3" : multiSideCase ? "A1:E4" : horizontalMultiSideCase ? "A1:G3" : emptyMultiFooterCase ? "A1:D4" : emptyHorizontalMultiFooterCase ? "A1:G2" : emptyVerticalFooterCase ? "A1:D2" : emptyHorizontalFooterCase ? "A1:C2" : headerFooterCase ? "A1:E3" : horizontalHeaderCase ? "A1:D3" : multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
+          .setBlock(emptySideFooterCase ? "A2:D2" : emptyHorizontalSideFooterCase ? "B1:C2" : emptyVerticalFooterCase ? "A1:D1" : headerFooterCase ? "A2:D2" : horizontalHeaderCase ? "B1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase || collectionCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
+          .setBoundaries(emptySideFooterCase ? "A1:E3" : emptyHorizontalSideFooterCase ? "A1:D3" : multiSideCase ? "A1:E4" : horizontalMultiSideCase ? "A1:G3" : emptyMultiFooterCase ? "A1:D4" : emptyHorizontalMultiFooterCase ? "A1:G2" : emptyVerticalFooterCase ? "A1:D2" : emptyHorizontalFooterCase ? "A1:C2" : headerFooterCase ? "A1:E3" : horizontalHeaderCase ? "A1:D3" : multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase || collectionCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       if (horizontalCase) child.setAxis(1);
       if (clonedSheetsCase) {
         int prototype = clonedExistingCase ? 1 : 0;
@@ -2004,8 +2018,8 @@ class PoiRangeOracle {
         if (expected == null || result == null || expected.getPhysicalNumberOfCells() != 0 || result.getPhysicalNumberOfCells() != 0 ||
             original.getSheetAt(0).getRow(1).getCell(0).getNumericCellValue() != actual.getSheetAt(0).getRow(1).getCell(0).getNumericCellValue())
           throw new AssertionError("empty source physical cells differ");
-      } else if (constants || parameters || contextCase || dates || fieldCase || customCase || jsonCase || queryCase || multipleCase || repeatCase || mergedCase) {
-        for (int i = 0; i < (repeatCase || mergedCase ? 1 : outsideCase ? 4 : multipleCase ? 3 : customCase ? 4 : dates ? 10 : constants ? 7 : 5); ++i) {
+      } else if (constants || collectionCase || parameters || contextCase || dates || fieldCase || customCase || jsonCase || queryCase || multipleCase || repeatCase || mergedCase) {
+        for (int i = 0; i < (repeatCase || mergedCase ? 1 : outsideCase || collectionCase ? 4 : multipleCase ? 3 : customCase ? 4 : dates ? 10 : constants ? 7 : 5); ++i) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(0).getCell(i);
           if (expected.getCellType() != result.getCellType()) throw new AssertionError("cell type differs at " + i);
@@ -2052,6 +2066,10 @@ class PoiRangeOracle {
             if library_dir:
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/constant.xlsx"), str(working / "constant.xlsx"), str(config), "constants"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/collection.xlsx"), str(working / "collection.xlsx"), str(config), "collection"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",

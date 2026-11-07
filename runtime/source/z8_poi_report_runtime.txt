@@ -319,6 +319,13 @@ private void z8_poi_report_evaluate_cell(Z8EvalState state, Z8PoiWorkbook workbo
     if (!evaluated.evaluated || evaluated.context != Z8EvalContext.none || evaluated.json !is null ||
         evaluated.requestParameters !is null || evaluated.reportObject !is null)
         throw new Exception("POI report expression context is not implemented");
+    if (evaluated.collection !is null) {
+        // A single expression returns the collection itself in Java, and
+        // Range.evaluateAndSet writes its textual representation to POI.
+        if (cell.kind == "inlineStr"w && !copied) return;
+        edit.kind = Z8PoiCellEditKind.text; edit.text = z8_eval_value_text(evaluated); edits ~= edit;
+        return;
+    }
     auto value = evaluated.primary;
     // POI 3.16 leaves an inline-string cell unchanged when assigning a
     // string result; numeric and boolean results replace its type.
