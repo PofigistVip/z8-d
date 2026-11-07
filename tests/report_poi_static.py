@@ -126,6 +126,7 @@ public class StaticReportProbe {
     public static file emptyHorizontalFooter() { EmptyHorizontalFooterReport report; return report.run(guid.Null); }
     public static file emptyMultiFooter() { EmptyMultiFooterReport report; return report.run(guid.Null); }
     public static file emptyHorizontalMultiFooter() { EmptyHorizontalMultiFooterReport report; return report.run(guid.Null); }
+    public static file emptySparseFooter() { EmptySparseFooterReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -401,6 +402,7 @@ public class ExpandedTwoRowsReport extends Report {
         .replace('template = "expanded-horizontal-header"', 'template = "expanded-horizontal-side-conflict"'), encoding="utf-8")
     for name, template, address, boundaries, axis in (
             ("EmptyFooterReport", "expanded-footer", "A1:D1", "A1:D2", "0"),
+            ("EmptySparseFooterReport", "expanded-sparse-footer", "A1:D1", "A1:D2", "0"),
             ("EmptyHorizontalFooterReport", "expanded-horizontal-footer", "A1:B2", "A1:C2", "1"),
             ("EmptyMultiFooterReport", "expanded-multi-footer", "A1:D1", "A1:D4", "0"),
             ("EmptyHorizontalMultiFooterReport", "expanded-horizontal-multi-footer", "A1:B2", "A1:G2", "1")):
@@ -1044,7 +1046,8 @@ void main(string[] args) {
     bool emptyHorizontalFooter; try { P.m_emptyHorizontalFooter(); } catch (Exception) { emptyHorizontalFooter = true; } assert(emptyHorizontalFooter);
     bool emptyMultiFooter; try { P.m_emptyMultiFooter(); } catch (Exception) { emptyMultiFooter = true; } assert(emptyMultiFooter);
     bool emptyHorizontalMultiFooter; try { P.m_emptyHorizontalMultiFooter(); } catch (Exception) { emptyHorizontalMultiFooter = true; } assert(emptyHorizontalMultiFooter);
-    assert(database.begins == 103 && database.rollbacks == 103);
+    bool emptySparseFooter; try { P.m_emptySparseFooter(); } catch (Exception) { emptySparseFooter = true; } assert(emptySparseFooter);
+    assert(database.begins == 104 && database.rollbacks == 104);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -1079,7 +1082,7 @@ void main(string[] args) {
         ++writes; return result;
     }
     ubyte[] writeExpandedReport(const(ubyte)[] input, const(Z8PoiCellCopy)[] copies, const(Z8PoiCellEdit)[] cells) {
-        assert(copies.length == 2 || copies.length == 8 || copies.length == 4 || copies.length == 6 || copies.length == 10 || copies.length == 11 || copies.length == 12 || copies.length == 18 || copies.length == 20); auto result = expander.writeExpandedReport(input, copies, cells);
+        assert(copies.length == 2 || copies.length == 3 || copies.length == 8 || copies.length == 4 || copies.length == 6 || copies.length == 10 || copies.length == 11 || copies.length == 12 || copies.length == 18 || copies.length == 20); auto result = expander.writeExpandedReport(input, copies, cells);
         ++expansions; return result;
     }
     ubyte[] addReportMerges(const(ubyte)[] input, const(Z8PoiMergedRegion)[] regions) {
@@ -1225,8 +1228,11 @@ void main(string[] args) {
         contents = contents.replace(
             'bool emptyHorizontalMultiFooter; try { P.m_emptyHorizontalMultiFooter(); } catch (Exception) { emptyHorizontalMultiFooter = true; } assert(emptyHorizontalMultiFooter);',
             'auto emptyHorizontalMultiFooter = P.m_emptyHorizontalMultiFooter(); copy(z8_file_resolve_path(emptyHorizontalMultiFooter), buildPath(args[2], "empty-horizontal-multi-footer.xlsx"));')
-        contents = contents.replace('assert(database.begins == 103 && database.rollbacks == 103);',
-            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 29); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 30); assert(database.begins == 103 && database.rollbacks == 103);')
+        contents = contents.replace(
+            'bool emptySparseFooter; try { P.m_emptySparseFooter(); } catch (Exception) { emptySparseFooter = true; } assert(emptySparseFooter);',
+            'auto emptySparseFooter = P.m_emptySparseFooter(); copy(z8_file_resolve_path(emptySparseFooter), buildPath(args[2], "empty-sparse-footer.xlsx"));')
+        contents = contents.replace('assert(database.begins == 104 && database.rollbacks == 104);',
+            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 30); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 31); assert(database.begins == 104 && database.rollbacks == 104);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1438,7 +1444,7 @@ class PoiRangeOracle {
       boolean horizontalMultiFooterCase = args.length > 3 && "expanded-horizontal-multi-footer".equals(args[3]);
       boolean emptyMultiFooterCase = args.length > 3 && "empty-multi-footer".equals(args[3]);
       boolean emptyHorizontalMultiFooterCase = args.length > 3 && "empty-horizontal-multi-footer".equals(args[3]);
-      boolean emptyVerticalFooterCase = emptyMultiFooterCase || (args.length > 3 && "empty-footer".equals(args[3]));
+      boolean emptyVerticalFooterCase = emptyMultiFooterCase || (args.length > 3 && ("empty-footer".equals(args[3]) || "empty-sparse-footer".equals(args[3])));
       boolean emptyHorizontalFooterCase = emptyHorizontalMultiFooterCase || (args.length > 3 && "empty-horizontal-footer".equals(args[3]));
       boolean emptyFooterCase = emptyVerticalFooterCase || emptyHorizontalFooterCase;
       boolean footerCase = headerFooterCase || multiFooterCase || (args.length > 3 && "expanded-footer".equals(args[3]));
@@ -1705,7 +1711,7 @@ class PoiRangeOracle {
                                          str(application / "reports/json.xlsx"), str(working / "json-empty.xlsx"), str(config), "json-empty"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
-                for source_name, name in (("expanded-footer", "empty-footer"), ("expanded-horizontal-footer", "empty-horizontal-footer"),
+                for source_name, name in (("expanded-footer", "empty-footer"), ("expanded-sparse-footer", "empty-sparse-footer"), ("expanded-horizontal-footer", "empty-horizontal-footer"),
                                           ("expanded-multi-footer", "empty-multi-footer"), ("expanded-horizontal-multi-footer", "empty-horizontal-multi-footer")):
                     result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                              str(application / ("reports/" + source_name + ".xlsx")), str(working / (name + ".xlsx")), str(config), name],
