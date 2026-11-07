@@ -120,6 +120,8 @@ public class StaticReportProbe {
     public static file expandedSparseBlock() { ExpandedSparseBlockReport report; return report.run(guid.Null); }
     public static file expandedHeaderFooter() { ExpandedHeaderFooterReport report; return report.run(guid.Null); }
     public static file expandedHorizontalHeader() { ExpandedHorizontalHeaderReport report; return report.run(guid.Null); }
+    public static file expandedSideConflict() { ExpandedSideConflictReport report; return report.run(guid.Null); }
+    public static file expandedHorizontalSideConflict() { ExpandedHorizontalSideConflictReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -360,7 +362,11 @@ public class ExpandedTwoRowsReport extends Report {
         (source / "ExpandedFooterReport.bl").read_text(encoding="utf-8")
         .replace("ExpandedFooterReport", "ExpandedHeaderFooterReport")
         .replace('template = "expanded-footer"', 'template = "expanded-header-footer"')
-        .replace('[address "A1:D1"]', '[address "A2:D2"]').replace('[boundaries "A1:D2"]', '[boundaries "A1:D3"]'), encoding="utf-8")
+        .replace('[address "A1:D1"]', '[address "A2:D2"]').replace('[boundaries "A1:D2"]', '[boundaries "A1:E3"]'), encoding="utf-8")
+    (source / "ExpandedSideConflictReport.bl").write_text(
+        (source / "ExpandedHeaderFooterReport.bl").read_text(encoding="utf-8")
+        .replace("ExpandedHeaderFooterReport", "ExpandedSideConflictReport")
+        .replace('template = "expanded-header-footer"', 'template = "expanded-side-conflict"'), encoding="utf-8")
     (source / "ExpandedHorizontalReport.bl").write_text(
         (source / "ExpandedTwoRowsReport.bl").read_text(encoding="utf-8")
         .replace("ExpandedTwoRowsReport", "ExpandedHorizontalReport")
@@ -384,7 +390,11 @@ public class ExpandedTwoRowsReport extends Report {
         (source / "ExpandedHorizontalFooterReport.bl").read_text(encoding="utf-8")
         .replace("ExpandedHorizontalFooterReport", "ExpandedHorizontalHeaderReport")
         .replace('template = "expanded-horizontal-footer"', 'template = "expanded-horizontal-header"')
-        .replace('[address "A1:B2"]', '[address "B1:C2"]').replace('[boundaries "A1:C2"]', '[boundaries "A1:D2"]'), encoding="utf-8")
+        .replace('[address "A1:B2"]', '[address "B1:C2"]').replace('[boundaries "A1:C2"]', '[boundaries "A1:D3"]'), encoding="utf-8")
+    (source / "ExpandedHorizontalSideConflictReport.bl").write_text(
+        (source / "ExpandedHorizontalHeaderReport.bl").read_text(encoding="utf-8")
+        .replace("ExpandedHorizontalHeaderReport", "ExpandedHorizontalSideConflictReport")
+        .replace('template = "expanded-horizontal-header"', 'template = "expanded-horizontal-side-conflict"'), encoding="utf-8")
     (source / "UnsupportedContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.lang.Object;
@@ -692,11 +702,17 @@ public class %s extends Report {
     header_footer = dict(footer)
     header_footer["xl/worksheets/sheet1.xml"] = original_sheet.replace(
         '<row r="1"><c r="A1" t="inlineStr"><is><t>Example</t></is></c></row>',
-        '<row r="1"><c r="A1" t="s"><v>3</v></c><c r="B1" t="s"><v>4</v></c><c r="C1"><v>444</v></c><c r="D1"><v>445</v></c></row>'
+        '<row r="1"><c r="A1" t="s"><v>3</v></c><c r="B1" t="s"><v>4</v></c><c r="C1"><v>444</v></c><c r="D1"><v>445</v></c><c r="E1" t="s"><v>4</v></c></row>'
         '<row r="2"><c r="A2" t="s"><v>0</v></c><c r="B2" t="s"><v>1</v></c><c r="C2" s="0"><v>99</v></c><c r="D2" t="s"><v>2</v></c></row>'
         '<row r="3"><c r="A3" t="s"><v>3</v></c><c r="B3" t="s"><v>4</v></c><c r="C3"><v>123</v></c><c r="D3"><v>456</v></c></row>')
     with zipfile.ZipFile(application / "reports/expanded-header-footer.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in header_footer.items():
+            archive.writestr(entry_name, content)
+    side_conflict = dict(header_footer)
+    side_conflict["xl/worksheets/sheet1.xml"] = side_conflict["xl/worksheets/sheet1.xml"].replace(
+        '<c r="D3"><v>456</v></c>', '<c r="D3"><v>456</v></c><c r="E3"><v>1</v></c>')
+    with zipfile.ZipFile(application / "reports/expanded-side-conflict.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in side_conflict.items():
             archive.writestr(entry_name, content)
     custom_expanded = dict(expanded)
     custom_expanded["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="3" uniqueCount="3"><si><t>${rows.index}</t></si><si><t>${rows.index + 10}</t></si><si><t>Static</t></si></sst>'''
@@ -753,9 +769,16 @@ public class %s extends Report {
     horizontal_header["xl/worksheets/sheet1.xml"] = original_sheet.replace(
         '<row r="1"><c r="A1" t="inlineStr"><is><t>Example</t></is></c></row>',
         '<row r="1"><c r="A1" t="s"><v>4</v></c><c r="B1" t="s"><v>0</v></c><c r="C1" t="s"><v>1</v></c><c r="D1" t="s"><v>4</v></c></row>'
-        '<row r="2"><c r="A2" t="s"><v>5</v></c><c r="B2" t="s"><v>2</v></c><c r="C2" t="s"><v>3</v></c><c r="D2" t="s"><v>5</v></c></row>')
+        '<row r="2"><c r="A2" t="s"><v>5</v></c><c r="B2" t="s"><v>2</v></c><c r="C2" t="s"><v>3</v></c><c r="D2" t="s"><v>5</v></c></row>'
+        '<row r="3"><c r="A3" t="s"><v>5</v></c></row>')
     with zipfile.ZipFile(application / "reports/expanded-horizontal-header.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in horizontal_header.items():
+            archive.writestr(entry_name, content)
+    horizontal_side_conflict = dict(horizontal_header)
+    horizontal_side_conflict["xl/worksheets/sheet1.xml"] = horizontal_side_conflict["xl/worksheets/sheet1.xml"].replace(
+        '<c r="A3" t="s"><v>5</v></c>', '<c r="A3" t="s"><v>5</v></c><c r="D3"><v>1</v></c>')
+    with zipfile.ZipFile(application / "reports/expanded-horizontal-side-conflict.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in horizontal_side_conflict.items():
             archive.writestr(entry_name, content)
     merged = dict(entries)
     merged["xl/worksheets/sheet1.xml"] = original_sheet.replace("</worksheet>", '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')
@@ -994,7 +1017,9 @@ void main(string[] args) {
     bool sparseBlock; try { P.m_expandedSparseBlock(); } catch (Exception) { sparseBlock = true; } assert(sparseBlock);
     bool headerFooter; try { P.m_expandedHeaderFooter(); } catch (Exception) { headerFooter = true; } assert(headerFooter);
     bool horizontalHeader; try { P.m_expandedHorizontalHeader(); } catch (Exception) { horizontalHeader = true; } assert(horizontalHeader);
-    assert(database.begins == 97 && database.rollbacks == 97);
+    bool sideConflict; try { P.m_expandedSideConflict(); } catch (Exception) { sideConflict = true; } assert(sideConflict);
+    bool horizontalSideConflict; try { P.m_expandedHorizontalSideConflict(); } catch (Exception) { horizontalSideConflict = true; } assert(horizontalSideConflict);
+    assert(database.begins == 99 && database.rollbacks == 99);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -1481,7 +1506,7 @@ class PoiRangeOracle {
       boolean dates = args.length > 3 && "dates".equals(args[3]);
       Range child = new Range().setSource(customCase || jsonCase || queryCase || expandedCustomCase ? customSource : SimpleSource.newDefault())
           .setBlock(headerFooterCase ? "A2:D2" : horizontalHeaderCase ? "B1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(headerFooterCase ? "A1:D3" : horizontalHeaderCase ? "A1:D2" : multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
+          .setBoundaries(headerFooterCase ? "A1:E3" : horizontalHeaderCase ? "A1:D3" : multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       if (horizontalCase) child.setAxis(1);
       if (multipleCase) {
         report.addRange(0, new Range().setSource(orderedSources[1]).setBlock("C1").setBoundaries("C1"));
@@ -1513,6 +1538,16 @@ class PoiRangeOracle {
           double expected = original.getSheetAt(0).getRow(row).getCell(4).getNumericCellValue();
           double result = actual.getSheetAt(0).getRow(row).getCell(4).getNumericCellValue();
           if (expected != result) throw new AssertionError("unrelated cell differs at row " + row);
+        }
+        if (headerFooterCase || horizontalHeaderCase) {
+          int sideRow = headerFooterCase ? 0 : 2, sideColumn = headerFooterCase ? 4 : 0;
+          org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(sideRow).getCell(sideColumn);
+          org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(sideRow).getCell(sideColumn);
+          if (expected.getCellType() != result.getCellType() ||
+              (expected.getCellType() == org.apache.poi.ss.usermodel.Cell.CELL_TYPE_STRING ?
+               !expected.getStringCellValue().equals(result.getStringCellValue()) :
+               expected.getNumericCellValue() != result.getNumericCellValue()))
+            throw new AssertionError("side header differs");
         }
       } else if (constants || parameters || contextCase || dates || fieldCase || customCase || jsonCase || queryCase || multipleCase || repeatCase || mergedCase) {
         for (int i = 0; i < (repeatCase || mergedCase ? 1 : outsideCase ? 4 : multipleCase ? 3 : customCase ? 4 : dates ? 10 : constants ? 7 : 5); ++i) {

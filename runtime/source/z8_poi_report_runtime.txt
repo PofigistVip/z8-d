@@ -352,10 +352,26 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
             if (!allowExpansion || workbook.sheets.length != 1 || boundariesText is null)
                 throw new Exception("POI report range expansion layout is not implemented");
             auto boundaries = z8_poi_report_block(boundariesText);
-            if (horizontal ? (boundaries.firstRow != block.firstRow || boundaries.lastRow != block.lastRow) :
-                             (boundaries.firstColumn != block.firstColumn || boundaries.lastColumn != block.lastColumn))
-                throw new Exception("POI report range expansion layout is not implemented");
             hasFooter = horizontal ? boundaries.lastColumn > block.lastColumn : boundaries.lastRow > block.lastRow;
+            // Java clears the side bands of the expanded area and copies the
+            // entire footer width. Until cell deletion is supported, allow
+            // those bands only when both their sources and targets are empty.
+            foreach (rowNumber, row; workbook.sheets[sheet].rows) {
+                if (horizontal && hasFooter && rowNumber >= boundaries.firstRow && rowNumber <= boundaries.lastRow &&
+                    (rowNumber < block.firstRow || rowNumber > block.lastRow) && !row.safeExpansionTarget)
+                    throw new Exception("POI report side band row is not implemented");
+                foreach (columnNumber, cell; row.cells) {
+                    bool side = horizontal ? (rowNumber >= boundaries.firstRow && rowNumber <= boundaries.lastRow &&
+                                              (rowNumber < block.firstRow || rowNumber > block.lastRow)) :
+                                             (columnNumber >= boundaries.firstColumn && columnNumber <= boundaries.lastColumn &&
+                                              (columnNumber < block.firstColumn || columnNumber > block.lastColumn));
+                    auto position = horizontal ? columnNumber : rowNumber;
+                    auto blockEnd = horizontal ? block.lastColumn : block.lastRow;
+                    auto boundaryEnd = horizontal ? boundaries.lastColumn : boundaries.lastRow;
+                    if (side && position > blockEnd && position <= boundaryEnd + offset)
+                        throw new Exception("POI report occupied side band is not implemented");
+                }
+            }
             foreach (sourceRow; block.firstRow .. block.lastRow + 1) {
                 auto targetRow = sourceRow + (horizontal ? 0 : offset);
                 auto firstColumn = block.firstColumn + (horizontal ? offset : 0);
