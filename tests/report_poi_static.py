@@ -1090,7 +1090,7 @@ void main(string[] args) {
         ++merges; return result;
     }
     ubyte[] removeReportCells(const(ubyte)[] input, const(Z8PoiCellRemoval)[] cells) {
-        assert((cells.length == 1 && ((cells[0].row == 1 && cells[0].column == 2) ||
+        assert((cells.length == 1 && ((cells[0].row == 1 && (cells[0].column == 1 || cells[0].column == 2)) ||
                                       (cells[0].row == 3 && (cells[0].column == 0 || cells[0].column == 2)))) ||
                cells.length == 5 || cells.length == 4 || cells.length == 2);
         return remover.removeReportCells(input, cells);
@@ -1216,6 +1216,7 @@ void main(string[] args) {
             'auto horizontalHeader = P.m_expandedHorizontalHeader(); copy(z8_file_resolve_path(horizontalHeader), buildPath(args[2], "expanded-horizontal-header.xlsx")); assert(counter.expansions == 24);')
         contents = contents.replace('bool missingSource; try { P.m_expandedMissingSource(); } catch (Exception) { missingSource = true; } assert(missingSource);', '')
         contents = contents.replace('bool sparseFooter; try { P.m_expandedSparseFooter(); } catch (Exception) { sparseFooter = true; } assert(sparseFooter);', '')
+        contents = contents.replace('bool sparseBlock; try { P.m_expandedSparseBlock(); } catch (Exception) { sparseBlock = true; } assert(sparseBlock);', '')
         contents = contents.replace(
             'bool emptyFooter; try { P.m_emptyFooter(); } catch (Exception) { emptyFooter = true; } assert(emptyFooter);',
             'auto emptyFooter = P.m_emptyFooter(); copy(z8_file_resolve_path(emptyFooter), buildPath(args[2], "empty-footer.xlsx"));')
@@ -1232,7 +1233,7 @@ void main(string[] args) {
             'bool emptySparseFooter; try { P.m_emptySparseFooter(); } catch (Exception) { emptySparseFooter = true; } assert(emptySparseFooter);',
             'auto emptySparseFooter = P.m_emptySparseFooter(); copy(z8_file_resolve_path(emptySparseFooter), buildPath(args[2], "empty-sparse-footer.xlsx"));')
         contents = contents.replace('assert(database.begins == 104 && database.rollbacks == 104);',
-            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 30); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 31); assert(database.begins == 104 && database.rollbacks == 104);')
+            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 30); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 31); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 32); assert(database.begins == 104 && database.rollbacks == 104);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1784,6 +1785,10 @@ class PoiRangeOracle {
                     assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/expanded-sparse-footer.xlsx"), str(working / "expanded-sparse-footer.xlsx"), str(config), "expanded-footer"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/expanded-sparse-block.xlsx"), str(working / "expanded-sparse-block.xlsx"), str(config), "expanded-footer"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
 print("POI static report template, naming and transaction verified")

@@ -436,7 +436,6 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                 auto existingRow = targetRow in workbook.sheets[sheet].rows;
                 auto templateRow = sourceRow in workbook.sheets[sheet].rows;
                 if (templateRow is null) {
-                    if (hasFooter) throw new Exception("POI report sparse block with footer is not implemented");
                     if (existingRow !is null) foreach (column, cell; (*existingRow).cells)
                         if (column >= firstColumn && column <= lastColumn) {
                             if (!cell.safeCopy || cell.hasFormula) throw new Exception("POI report range expansion target cell is not implemented");
@@ -475,7 +474,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                 }
                 // POI creates a physical target row even when the source row
                 // has no cells in this block. Avoid silently omitting it.
-                if ((!templateCellCount && existingRow is null) || (hasFooter && templateCellCount != width))
+                if (!templateCellCount && existingRow is null)
                     throw new Exception("POI report empty target row is not implemented");
             }
             foreach (merge; templateMerges) {
