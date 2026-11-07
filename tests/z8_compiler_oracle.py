@@ -219,6 +219,17 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         name_cases.append((accepted, {"NameA": 'public class NameA { ' + operators + ' static void f() { guid result = guid.create(new NameA); } }'}))
     for declaration in ("guid value = guid.create(null);", "guid value = guid.create('0, 255');", "primary input = 1; guid value = guid.create(input);"):
         name_cases.append((False, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
+    for method in ("write", "append"):
+        for expression, accepted in (("null", False), ("other", False), ("true", True), ("'65, 66'", True), ("primaryValue", False)):
+            declaration = 'file destination; file other; primary primaryValue = 1; destination.' + method + '(' + expression + ');'
+            name_cases.append((accepted, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
+        for operators, accepted in (("public operator binary() { return '65, 66'; }", True),
+                                    ('public operator string() { return "text"; }', True),
+                                    ("public operator binary() { return '65, 66'; } public operator string() { return \"text\"; }", False)):
+            name_cases.append((accepted, {"NameA": 'public class NameA { ' + operators + ' static void f() { file destination; destination.' + method + '(new NameA); } }'}))
+        for expression, accepted in (("null", True), ("other", True), ("'65, 66'", False)):
+            declaration = 'file destination; file other; encoding charset; destination.' + method + '(' + expression + ', charset);'
+            name_cases.append((accepted, {"NameA": 'import org.zenframework.z8.lang.encoding; public class NameA { static void f() { ' + declaration + ' } }'}))
     for case_index, (accepted, files) in enumerate(name_cases):
         names_project = temp / ("name-attribute-project-" + str(case_index))
         names_source = names_project / "src" / "bl"

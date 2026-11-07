@@ -1629,8 +1629,21 @@ class Checker {
                     }
                     if (["write", "append"].canFind(e.token.text)) {
                         if (e.arguments.length != 1 && e.arguments.length != 2) fail("incorrect argument count", e.token);
-                        auto contentType = typeOf(e.arguments[0]);
-                        auto expectedContent = contentType == ValueType.binaryType ? ValueType.binaryType : ValueType.stringType;
+                        auto argument = e.arguments[0];
+                        auto contentType = typeOf(argument);
+                        auto expectedContent = ValueType.stringType;
+                        if (e.arguments.length == 1) {
+                            if (contentType == ValueType.nullType || contentType == ValueType.fileType)
+                                fail("ambiguous file content argument", argument.token);
+                            if (contentType == ValueType.binaryType) expectedContent = ValueType.binaryType;
+                            else if (contentType == ValueType.selfType) {
+                                auto binaryConversion = findConversion(argument.objectClass, ValueType.binaryType);
+                                auto stringConversion = findConversion(argument.objectClass, ValueType.stringType);
+                                if (binaryConversion !is null && stringConversion !is null)
+                                    fail("ambiguous file content argument", argument.token);
+                                if (binaryConversion !is null) expectedContent = ValueType.binaryType;
+                            }
+                        }
                         if (!matches(e.arguments[0], expectedContent)) fail("argument type mismatch", e.token);
                         if (e.arguments.length == 2 && (expectedContent != ValueType.stringType || !matches(e.arguments[1], ValueType.encodingType))) fail("argument type mismatch", e.token);
                         e.builtinCall = "z8_file_" ~ e.token.text; return ValueType.fileType;
