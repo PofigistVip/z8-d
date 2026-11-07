@@ -359,7 +359,7 @@ package bool safeDecimalLiteral(string text) {
         auto value = parseLiteralDouble(spelling);
         if (!value.isFinite) return false;
         if (first == last) return true;
-        if (value != 0 && value.abs >= 1e-30 && value.abs < 1e15) return true;
+        if (value != 0 && value.abs >= 1e-300 && value.abs < 1e15) return true;
         return value.abs >= 1e15 && value.abs <= 9007199254740992.0 && cast(double)cast(long)value == value;
     } catch (Exception) { return false; }
 }

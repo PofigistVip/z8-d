@@ -29,6 +29,11 @@ for _ in range(300):
     digits = str(rng.randrange(1, 10)) + "".join(str(rng.randrange(10)) for _ in range(rng.randrange(15, 26)))
     value = Decimal(digits).scaleb(rng.randrange(-30, -15) - len(digits) + 1)
     samples.append(format(value, "f"))
+samples += ["0." + "0" * 299 + "1", "-0." + "0" * 299 + "1"]
+for _ in range(200):
+    digits = str(rng.randrange(1, 10)) + "".join(str(rng.randrange(10)) for _ in range(rng.randrange(15, 26)))
+    value = Decimal(digits).scaleb(rng.randrange(-300, -30) - len(digits) + 1)
+    samples.append(format(value, "f"))
 samples += ["1000000000000000.0", "4503599627370495.0", "4503599627370496.0",
             "9007199254740991.0", "9007199254740992.0", "-9007199254740992.0",
             "2935601023316268.750052482272"]
@@ -47,7 +52,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     methods = "\n".join(f"public static decimal value{i}() {{ return {value}; }}" for i, value in enumerate(samples))
     (source / "Probe.bl").write_text("public class Probe {\n" + methods + "\n}", encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
-    for rejected in ("9007199254740994.0", "1000000000000000.125", "0.0000000000000000000000000000001",
+    for rejected in ("9007199254740994.0", "1000000000000000.125", "0." + "0" * 300 + "1",
                      "4012161563682237.749685808834", "1582087371762615.874997622157",
                      "3258245237057377.250097458906"):
         probe = temp / "Rejected.bl"
@@ -84,6 +89,7 @@ void main() {
     # without generating thousands of separate BL methods.
     random_values = [str(rng.randrange(10**15, 2**53 + 1)) + ".0" for _ in range(4096)]
     random_values += [f"{rng.randrange(10**15, 10**16)}e{e-15}" for e in range(-30, -15) for _ in range(500)]
+    random_values += [f"{rng.randrange(10**15, 10**16)}e{e-15}" for e in range(-300, -30) for _ in range(40)]
     input_text = "\n".join(random_values) + "\n"
     java_batch = temp / "DecimalDoubleBatch.java"
     java_batch.write_text('''import java.io.*;
