@@ -365,6 +365,48 @@ private void z8_poi_report_check_range_options(Z8Object range, bool allowMerge =
     }
 }
 
+private void z8_poi_report_explicit_merges(Z8PoiReportBlock[] regions, Z8PoiReportBlock block, Z8PoiReportBlock bounds,
+                                           int sheet, bool horizontal, long offset, ref Z8PoiMergedRegion[] added) {
+    foreach (merge; regions) {
+        bool withinBlock = merge.firstRow >= block.firstRow && merge.lastRow <= block.lastRow &&
+            merge.firstColumn >= block.firstColumn && merge.lastColumn <= block.lastColumn;
+        bool withinBounds = merge.firstRow >= bounds.firstRow && merge.lastRow <= bounds.lastRow &&
+            merge.firstColumn >= bounds.firstColumn && merge.lastColumn <= bounds.lastColumn;
+        bool overlapsBlock = merge.firstRow <= block.lastRow && block.firstRow <= merge.lastRow &&
+            merge.firstColumn <= block.lastColumn && block.firstColumn <= merge.lastColumn;
+        bool containsBlock = block.firstRow >= merge.firstRow && block.lastRow <= merge.lastRow &&
+            block.firstColumn >= merge.firstColumn && block.lastColumn <= merge.lastColumn;
+        if (withinBlock || !withinBounds || (overlapsBlock && !containsBlock)) continue;
+        if (offset) {
+            if (containsBlock) {
+                if (horizontal) merge.lastColumn += offset; else merge.lastRow += offset;
+            } else {
+                bool left = merge.lastColumn < block.firstColumn, right = merge.firstColumn > block.lastColumn;
+                bool top = merge.lastRow < block.firstRow, bottom = merge.firstRow > block.lastRow;
+                // bands() in Java spans the entire boundary on the other axis;
+                // side bands take precedence where two bands overlap.
+                if (!horizontal && (left || right)) merge.lastRow += offset;
+                else if (horizontal && !left && !right && (top || bottom)) merge.lastColumn += offset;
+                if (horizontal && right) { merge.firstColumn += offset; merge.lastColumn += offset; }
+                if (!horizontal && bottom) { merge.firstRow += offset; merge.lastRow += offset; }
+            }
+        }
+        if (merge.lastRow < merge.firstRow || merge.lastColumn < merge.firstColumn) {
+            if (!containsBlock && merge.lastRow >= merge.firstRow - 1 && merge.lastColumn >= merge.firstColumn - 1) continue;
+            throw new Exception("invalid POI report merged region");
+        }
+        if (merge.firstRow < 0 || merge.firstColumn < 0 || merge.lastRow >= 1048576 || merge.lastColumn >= 16384)
+            throw new Exception("POI report merged region exceeds worksheet bounds");
+        if (merge.firstRow == merge.lastRow && merge.firstColumn == merge.lastColumn)
+            throw new Exception("invalid POI report merged region");
+        foreach (previous; added) if (merge.firstRow <= previous.lastRow && previous.firstRow <= merge.lastRow &&
+            merge.firstColumn <= previous.lastColumn && previous.firstColumn <= merge.lastColumn)
+            throw new Exception("overlapping POI report merged regions");
+        added ~= Z8PoiMergedRegion(cast(uint)sheet, cast(uint)merge.firstRow, cast(uint)merge.firstColumn,
+            cast(uint)merge.lastRow, cast(uint)merge.lastColumn);
+    }
+}
+
 // Apply a single, non-expanding source to the selected report block.
 private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z8PoiWorkbook workbook,
                                               out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits,
@@ -446,7 +488,6 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     z8_report_source_open(source, sheet, fields);
     bool horizontal = axisText !is null && axisText.to!int == 1;
     if (!z8_report_source_next(source)) {
-        if (explicitMerges.length) throw new Exception("POI report explicit merge expansion is not implemented");
         // Java moves the footer over the empty block and clears the vacated
         // tail. Restrict the footer to dense, safely copyable cells.
         if (!allowExpansion || boundariesText is null || templateMerges.length)
@@ -499,6 +540,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
             if (!cell.safeCopy) throw new Exception("empty POI report target cell is not implemented");
             removals ~= Z8PoiCellRemoval(cast(uint)sheet, cast(uint)rowNumber, cast(uint)columnNumber);
         }
+        if (explicitMerges.length) z8_poi_report_explicit_merges(explicitMerges, block, boundaries, sheet, horizontal, -offset, addedMerges);
         return;
     }
     auto evalState = new Z8EvalState();
@@ -592,44 +634,8 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
         }
         ++iteration;
     } while (z8_report_source_next(source));
-    if (explicitMerges.length) {
-        auto bounds = z8_poi_report_block(boundariesText);
-        foreach (merge; explicitMerges) {
-            bool withinBlock = merge.firstRow >= block.firstRow && merge.lastRow <= block.lastRow &&
-                merge.firstColumn >= block.firstColumn && merge.lastColumn <= block.lastColumn;
-            bool withinBounds = merge.firstRow >= bounds.firstRow && merge.lastRow <= bounds.lastRow &&
-                merge.firstColumn >= bounds.firstColumn && merge.lastColumn <= bounds.lastColumn;
-            bool overlapsBlock = merge.firstRow <= block.lastRow && block.firstRow <= merge.lastRow &&
-                merge.firstColumn <= block.lastColumn && block.firstColumn <= merge.lastColumn;
-            bool containsBlock = block.firstRow >= merge.firstRow && block.lastRow <= merge.lastRow &&
-                block.firstColumn >= merge.firstColumn && block.lastColumn <= merge.lastColumn;
-            if (withinBlock || !withinBounds || (overlapsBlock && !containsBlock)) continue;
-            if (iteration > 1) {
-                auto offset = (iteration - 1) * (horizontal ? width : height);
-                if (containsBlock) {
-                    if (horizontal) merge.lastColumn += offset; else merge.lastRow += offset;
-                } else {
-                    bool left = merge.lastColumn < block.firstColumn, right = merge.firstColumn > block.lastColumn;
-                    bool top = merge.lastRow < block.firstRow, bottom = merge.firstRow > block.lastRow;
-                    // bands() in Java spans the entire boundary on the other axis;
-                    // side bands take precedence where two bands overlap.
-                    if (!horizontal && (left || right)) merge.lastRow += offset;
-                    else if (horizontal && !left && !right && (top || bottom)) merge.lastColumn += offset;
-                    if (horizontal && right) { merge.firstColumn += offset; merge.lastColumn += offset; }
-                    if (!horizontal && bottom) { merge.firstRow += offset; merge.lastRow += offset; }
-                }
-                if (merge.lastRow >= 1048576 || merge.lastColumn >= 16384)
-                    throw new Exception("POI report merged region exceeds worksheet bounds");
-            }
-            if (merge.firstRow == merge.lastRow && merge.firstColumn == merge.lastColumn)
-                throw new Exception("invalid POI report merged region");
-            foreach (previous; addedMerges) if (merge.firstRow <= previous.lastRow && previous.firstRow <= merge.lastRow &&
-                merge.firstColumn <= previous.lastColumn && previous.firstColumn <= merge.lastColumn)
-                throw new Exception("overlapping POI report merged regions");
-            addedMerges ~= Z8PoiMergedRegion(cast(uint)sheet, cast(uint)merge.firstRow, cast(uint)merge.firstColumn,
-                cast(uint)merge.lastRow, cast(uint)merge.lastColumn);
-        }
-    }
+    if (explicitMerges.length) z8_poi_report_explicit_merges(explicitMerges, block, z8_poi_report_block(boundariesText), sheet,
+                                                            horizontal, (iteration - 1) * (horizontal ? width : height), addedMerges);
     if (hasFooter && iteration > 1) {
         auto offset = (iteration - 1) * (horizontal ? width : height);
         Z8PoiCellCopy[] footerCopies;
