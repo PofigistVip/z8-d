@@ -97,7 +97,10 @@ private ubyte[] z8_poi_report_hide_columns(const(ubyte)[] input, Z8IntMap!(Z8Arr
                 throw new Exception("unsupported XLSX column element");
             auto minimum = column.attr("min"w).to!int, maximum = column.attr("max"w).to!int;
             if (minimum < 1 || maximum > 16384 || minimum > maximum) throw new Exception("invalid XLSX column range");
-            foreach (previous; sourceColumns) if (minimum <= previous.last && maximum >= previous.first) overlapping = true;
+            size_t intersections;
+            foreach (previous; sourceColumns) if (minimum <= previous.last && maximum >= previous.first) ++intersections;
+            if (intersections > 1) throw new Exception("complex overlapping XLSX column ranges are not supported");
+            if (intersections) overlapping = true;
             sourceColumns ~= Z8PoiColumn(minimum, maximum, column.name, column.attributes.dup);
         }
         if (overlapping) {
