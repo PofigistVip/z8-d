@@ -71,7 +71,7 @@ public class StaticReportProbe {
             archive.writestr(name, content)
     overlapping = dict(entries)
     overlapping["xl/worksheets/sheet1.xml"] = original_sheet.replace("<sheetData>",
-        '<cols><col min="3" max="6" width="20" customWidth="1" outlineLevel="2"/><col min="1" max="4" width="12" customWidth="1" outlineLevel="1"/></cols><cols><col min="5" max="8" hidden="1"/></cols><sheetData>')
+        '<cols><col min="3" max="6" width="20" customWidth="1" outlineLevel="2"/><col min="1" max="4" width="12" customWidth="1" outlineLevel="1"/></cols><cols xmlns:c="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><c:col min="5" max="8" hidden="1"/></cols><sheetData>')
     with zipfile.ZipFile(application / "reports/overlap.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in overlapping.items():
             archive.writestr(name, content)

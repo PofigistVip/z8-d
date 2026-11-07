@@ -89,8 +89,6 @@ private ubyte[] z8_poi_report_hide_columns(const(ubyte)[] input, Z8IntMap!(Z8Arr
         Z8PoiXmlNode[] columnGroups;
         foreach (child; sheet.children) if (z8_poi_xml_local(child.name) == "cols"w) columnGroups ~= child;
         auto cols = columnGroups.length ? columnGroups[0] : null;
-        foreach (group; columnGroups.length ? columnGroups[1 .. $] : null) if (group.attributes.length)
-            throw new Exception("unsupported attributes on additional XLSX column groups");
         auto prefixEnd = sheet.name.lastIndexOf(':');
         wstring prefix = prefixEnd < 0 ? ""w : sheet.name[0 .. prefixEnd + 1];
         Z8PoiColumn[] segments, sourceColumns;
@@ -104,7 +102,13 @@ private ubyte[] z8_poi_report_hide_columns(const(ubyte)[] input, Z8IntMap!(Z8Arr
             size_t intersections;
             foreach (previous; sourceColumns) if (minimum <= previous.last && maximum >= previous.first) ++intersections;
             if (intersections) overlapping = true;
-            sourceColumns ~= Z8PoiColumn(minimum, maximum, column.name, column.attributes.dup);
+            auto attributes = column.attributes.dup;
+            // Moving a column out of a separate <cols> must not lose namespace
+            // declarations scoped to that group. Child declarations win.
+            if (group !is cols) foreach (name, value; group.attributes)
+                if ((name == "xmlns"w || (name.length > 6 && name[0 .. 6] == "xmlns:"w)) && name !in attributes)
+                    attributes[name] = value;
+            sourceColumns ~= Z8PoiColumn(minimum, maximum, column.name, attributes);
         }
         if (overlapping) {
             // POI 3.16's ColumnHelper can retain overlapping ranges after
