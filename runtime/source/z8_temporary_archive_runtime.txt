@@ -27,8 +27,10 @@ private wstring z8_temporary_archive_store(ubyte[] data, wstring name = "archive
     name = z8_string_required(name);
     if (!name.length || name.canFind("/"w) || name.canFind("\\"w) || name.canFind("\r"w) || name.canFind("\n"w))
         throw new Exception("invalid temporary file name");
-    auto session = z8_nonnull(z8_application_require_request().session);
-    auto user = z8_nonnull(z8_nonnull(session.user).id);
+    auto request = z8_application_require_request();
+    auto session = z8_nonnull(request.generatedFileOwner is null ? request.session : request.generatedFileOwner);
+    // A job may temporarily switch users; its files belong to the authenticated session.
+    auto user = z8_nonnull(z8_nonnull(session.originalUser).id);
     auto schema = z8_temporary_archive_schema();
     if (session.id is null || !session.id.length) throw new Exception("archive requires a session ID");
     if (data.length > z8_temporary_archives_bytes_limit) throw new Exception("archive exceeds size limit");
@@ -58,8 +60,9 @@ private wstring z8_temporary_archive_store(ubyte[] data, wstring name = "archive
     }
 }
 private Z8Binary z8_temporary_archive_get(wstring path, out wstring name) {
-    auto session = z8_nonnull(z8_application_require_request().session);
-    auto user = z8_nonnull(z8_nonnull(session.user).id);
+    auto request = z8_application_require_request();
+    auto session = z8_nonnull(request.generatedFileOwner is null ? request.session : request.generatedFileOwner);
+    auto user = z8_nonnull(z8_nonnull(session.originalUser).id);
     auto schema = z8_temporary_archive_schema();
     synchronized (z8_temporary_archives_lock) {
         z8_temporary_archive_prune(MonoTime.currTime);

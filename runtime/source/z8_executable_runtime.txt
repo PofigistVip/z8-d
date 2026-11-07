@@ -98,8 +98,10 @@ bool z8_executable_run(Z8Object self) {
     auto originalUser = session.user;
     auto state = z8_executable_state(self);
     auto previousSession = state.defaultSession;
+    auto previousFileOwner = request.generatedFileOwner;
+    if (previousFileOwner is null) request.generatedFileOwner = session;
     state.defaultSession = session;
-    scope(exit) { request.session = session; session.user = originalUser; state.defaultSession = previousSession; }
+    scope(exit) { request.session = session; session.user = originalUser; state.defaultSession = previousSession; request.generatedFileOwner = previousFileOwner; }
     IZ8DatabaseConnection connection;
     bool begun;
     try {

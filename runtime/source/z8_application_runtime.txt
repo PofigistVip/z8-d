@@ -192,6 +192,8 @@ enum Z8EventsLevel { all, user, system, none }
 // The host supplies a request for the current thread; response wrappers share
 // the request's writer, as ApplicationServer.getRequest() does in Z8.
 class Z8ApplicationRequest {
+    // Job impersonation replaces session; generated files remain owned by its caller.
+    private Z8ApplicationSession generatedFileOwner;
     Z8StringMap parameters;
     Z8Array!Z8File files;
     IZ8ApplicationMonitor monitor;
@@ -447,12 +449,13 @@ private void z8_application_print(Z8File value) {
     import std.string : startsWith;
     auto request = z8_application_require_request();
     auto monitor = request.monitor;
+    auto owner = request.generatedFileOwner is null ? request.session : request.generatedFileOwner;
     // Stored files already have a download identity, and generated downloads
     // have already been published. Local files and uploads need a session-bound
     // download path before they can be returned to the web client.
     if (value !is null && (value.id is null || value.id == z8_guid_zero()) &&
-        request.session !is null && request.session.user !is null && request.session.user.id !is null &&
-        request.session.id !is null && request.session.id.length &&
+        owner !is null && owner.originalUser !is null && owner.originalUser.id !is null &&
+        owner.id !is null && owner.id.length &&
         cast(IZ8DatabaseSchema)z8_connection_current_backend() !is null &&
         !z8_string_or_empty(value.path).startsWith("storage/z8-generated/"w) &&
         !z8_string_or_empty(value.path).startsWith("storage/z8-archive/"w)) {

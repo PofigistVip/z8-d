@@ -113,10 +113,15 @@ public class NonTransactionalJob extends UpdateJob { useTransaction = false; }
     (source / "ImpersonateJob.bl").write_text('''
 import org.zenframework.z8.base.Executable;
 import org.zenframework.z8.base.application.Application;
+import org.zenframework.z8.base.form.action.Parameter;
 public class ImpersonateJob extends Executable {
     useTransaction = false;
+    Parameter printFile = Parameter.create("printFile", false); parameters = {printFile};
     virtual protected void execute() {
         switchUser('00000000-0000-0000-0000-000000000004'); info(Application.userId().toString());
+        if ((bool)printFile) {
+            file output = "impersonated.txt"; output.write("impersonated output"); Application.print(output);
+        }
         resetUser(); info(Application.userId().toString());
     }
 }
@@ -784,12 +789,16 @@ int main(string[] args) {
             assert result["success"] and "job failed" in result["info"]["messages"][-1]["text"], result
             result = request(request="UpdateJob", action=None, scheduled="true", parameters='{"missing":1}')
             assert not result["success"], result
-            result = request(request="ImpersonateJob", action=None, scheduled="true")
+            result = request(request="ImpersonateJob", action=None, scheduled="true", parameters='{"printFile":true}')
             assert result["success"] and [m["text"] for m in result["info"]["messages"]] == [
                 "00000000-0000-0000-0000-000000000004", "00000000-0000-0000-0000-000000000002"], result
+            printed = result["info"]["files"][0]
+            printed_path = "/" + quote(printed["path"], safe="/")
+            assert download(printed_path, "full", None)[::2] == (200, b"impersonated output")
+            assert download(printed_path, "full2", None)[0] == 404
             result = request(session="limited", request="ImpersonateJob", action=None, scheduled="true")
             assert result["success"] and "switch access denied" in result["info"]["messages"][-1]["text"], result
-            result = request(request="ImpersonateJob", action=None)
+            result = request(request="ImpersonateJob", action=None, parameters='{"printFile":true}')
             assert result["success"] and result["id"], result
             impersonate_id = result["id"]; impersonate_messages = []
             for _ in range(100):
@@ -801,6 +810,10 @@ int main(string[] args) {
             else:
                 raise AssertionError("impersonating job did not finish")
             assert impersonate_messages == ["00000000-0000-0000-0000-000000000004", "00000000-0000-0000-0000-000000000002"], result
+            printed = result["info"]["files"][0]
+            printed_path = "/" + quote(printed["path"], safe="/")
+            assert download(printed_path, "full", None)[::2] == (200, b"impersonated output")
+            assert download(printed_path, "full2", None)[0] == 404
             result = request(request="UpdateJob", action=None, parameters='{"amount":3,"wait":true}')
             assert result["success"] and result["id"], result
             job = result["id"]
