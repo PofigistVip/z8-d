@@ -355,12 +355,12 @@ private void z8_poi_report_evaluate_cell(Z8EvalState state, Z8PoiWorkbook workbo
 private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z8PoiWorkbook workbook,
                                               out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits,
                                               out Z8PoiCellCopy[] copies, out Z8PoiMergedRegion[] addedMerges, out Z8PoiCellRemoval[] removals,
-                                              bool allowExpansion = false, bool allowMerges = false, int inheritedSheet = -1, Z8Object[] ancestors = null) {
+                                              bool allowExpansion = false, bool allowMerges = false, int inheritedSheet = -1, Z8Object[] ancestors = null, bool inferredBounds = false) {
     import std.string : indexOf;
     range = z8_nonnull(range); range.z8_ensure();
     auto rangeState = z8_report_range_state(range);
     if (rangeState.ranges !is null && rangeState.ranges.view().z8_erased_data().z8_size()) {
-        z8_poi_report_apply_nested_simple(report, range, workbook, renameSheet, renameName, edits, copies, addedMerges, removals, inheritedSheet, ancestors);
+        z8_poi_report_apply_nested_simple(report, range, workbook, renameSheet, renameName, edits, copies, addedMerges, removals, inheritedSheet, ancestors, inferredBounds);
         return;
     }
     foreach (attribute; ["totals"w, "subtotal"w, "subtotalsBy"w, "subtotalsMerge"w, "merge"w])
@@ -394,7 +394,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
         if (block.firstRow < boundaries.firstRow || block.lastRow > boundaries.lastRow ||
             block.firstColumn < boundaries.firstColumn || block.lastColumn > boundaries.lastColumn)
             throw new Exception("POI report block is outside its boundaries");
-    } else if (inheritedSheet < 0) {
+    } else if (inheritedSheet < 0 && !inferredBounds) {
         long rows = 1, columns = 0;
         foreach (rowNumber, row; workbook.sheets[sheet].rows) {
             if (rowNumber + 1 > rows) rows = rowNumber + 1;
@@ -673,7 +673,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
 private void z8_poi_report_apply_nested_simple(Z8Object report, Z8Object range, Z8PoiWorkbook workbook,
                                                out int sheet, out wstring name, out Z8PoiCellEdit[] edits,
                                                out Z8PoiCellCopy[] copies, out Z8PoiMergedRegion[] merges,
-                                               out Z8PoiCellRemoval[] removals, int inheritedSheet, Z8Object[] ancestors) {
+                                               out Z8PoiCellRemoval[] removals, int inheritedSheet, Z8Object[] ancestors, bool inferredBounds) {
     import std.string : indexOf;
     foreach (ancestor; ancestors) if (ancestor is range) throw new Exception("cyclic POI report ranges");
     if (ancestors.length >= 32) throw new Exception("nested POI report depth is not implemented");
@@ -694,7 +694,7 @@ private void z8_poi_report_apply_nested_simple(Z8Object report, Z8Object range, 
     name = range.z8_get_attribute("sheetName"w);
     auto outer = z8_poi_report_block(range.z8_get_attribute("address"w));
     auto outerText = range.z8_get_attribute("boundaries"w);
-    if (outerText is null && inheritedSheet < 0) throw new Exception("nested POI report ranges require explicit boundaries");
+    if (outerText is null && inheritedSheet < 0 && !inferredBounds) throw new Exception("nested POI report ranges require explicit boundaries");
     // A nested parent's effective bounds were validated by its own parent.
     auto outerBounds = outerText is null ? outer : z8_poi_report_block(outerText);
     bool equal(Z8PoiReportBlock a, Z8PoiReportBlock b) {
@@ -909,6 +909,8 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
     }
     Z8PoiReportEntry[] entries;
     int sheet = -1;
+    bool haveRoot;
+    Z8PoiReportBlock root;
     foreach (range; ranges) {
         range = z8_nonnull(range);
         auto number = range.z8_get_attribute("sheet"w);
@@ -918,8 +920,17 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
         sheet = index;
         auto block = z8_poi_report_block(range.z8_get_attribute("address"w));
         auto text = range.z8_get_attribute("boundaries"w);
-        if (text is null) throw new Exception("multiple POI report ranges require explicit boundaries");
-        auto boundaries = z8_poi_report_block(text);
+        // A sheet root with multiple children gives an unbounded child its own block.
+        auto boundaries = text is null ? block : z8_poi_report_block(text);
+        if (text !is null) {
+            if (!haveRoot) { root = boundaries; haveRoot = true; }
+            else {
+                if (boundaries.firstRow < root.firstRow) root.firstRow = boundaries.firstRow;
+                if (boundaries.lastRow > root.lastRow) root.lastRow = boundaries.lastRow;
+                if (boundaries.firstColumn < root.firstColumn) root.firstColumn = boundaries.firstColumn;
+                if (boundaries.lastColumn > root.lastColumn) root.lastColumn = boundaries.lastColumn;
+            }
+        }
         foreach (previous; entries) if (boundaries.firstRow <= previous.boundaries.lastRow &&
             previous.boundaries.firstRow <= boundaries.lastRow && boundaries.firstColumn <= previous.boundaries.lastColumn &&
             previous.boundaries.firstColumn <= boundaries.lastColumn)
@@ -927,13 +938,11 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
         entries ~= Z8PoiReportEntry(range, block, boundaries);
         if (renameName is null) { renameName = range.z8_get_attribute("sheetName"w); renameSheet = index; }
     }
-    auto root = entries[0].boundaries;
-    foreach (entry; entries[1 .. $]) {
-        if (entry.boundaries.firstRow < root.firstRow) root.firstRow = entry.boundaries.firstRow;
-        if (entry.boundaries.lastRow > root.lastRow) root.lastRow = entry.boundaries.lastRow;
-        if (entry.boundaries.firstColumn < root.firstColumn) root.firstColumn = entry.boundaries.firstColumn;
-        if (entry.boundaries.lastColumn > root.lastColumn) root.lastColumn = entry.boundaries.lastColumn;
-    }
+    if (!haveRoot) throw new Exception("multiple POI report ranges require explicit boundaries");
+    foreach (entry; entries)
+        if (entry.boundaries.firstRow < root.firstRow || entry.boundaries.lastRow > root.lastRow ||
+            entry.boundaries.firstColumn < root.firstColumn || entry.boundaries.lastColumn > root.lastColumn)
+            throw new Exception("multiple POI report range layout is not implemented");
     // Java uses a stable list sort, and source open/close hooks can have effects.
     for (size_t i = 1; i < entries.length; ++i) {
         auto entry = entries[i]; auto position = i;
@@ -945,7 +954,8 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
     foreach (entry; entries) {
         int ignoredSheet; wstring ignoredName; Z8PoiCellEdit[] changes; Z8PoiCellCopy[] ignoredCopies; Z8PoiMergedRegion[] ignoredMerges;
         Z8PoiCellRemoval[] ignoredRemovals;
-        z8_poi_report_apply_simple_range(report, entry.range, workbook, ignoredSheet, ignoredName, changes, ignoredCopies, ignoredMerges, ignoredRemovals);
+        z8_poi_report_apply_simple_range(report, entry.range, workbook, ignoredSheet, ignoredName, changes, ignoredCopies, ignoredMerges, ignoredRemovals,
+                                         false, false, -1, null, entry.range.z8_get_attribute("boundaries"w) is null);
         edits ~= changes;
     }
     z8_poi_report_apply_root(report, workbook, sheet, root, copies, removals, edits);
