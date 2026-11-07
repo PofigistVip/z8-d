@@ -95,6 +95,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
         throw new Exception("expanding POI report data sources are not implemented");
     z8_report_register_data_source(report, source);
     auto evalState = new Z8EvalState();
+    evalState.reportContext = report;
     auto request = z8_application_request();
     if (request !is null && request.parameters !is null)
         evalState.variables["parameters"w] = Z8EvalVariable(null, null, request.parameters);

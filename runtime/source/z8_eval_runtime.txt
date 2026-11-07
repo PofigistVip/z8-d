@@ -3,6 +3,7 @@ private enum z8_eval_name = "org.zenframework.z8.server.base.eval.Eval"w;
 private struct Z8EvalVariable { Z8Primary primary; Z8Object json; Z8StringMap requestParameters; }
 private class Z8EvalState {
     Z8EvalVariable[wstring] variables;
+    Z8Object reportContext;
     Z8JavaMapOrder!wstring order;
     wstring[] errors;
     this() { order = new Z8JavaMapOrder!wstring(); }

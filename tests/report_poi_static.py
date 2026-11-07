@@ -54,6 +54,8 @@ public class StaticReportProbe {
     public static file constantRange() { ConstantRangeReport report; return report.run(guid.Null); }
     public static file constantComment() { ConstantCommentRangeReport report; return report.run(guid.Null); }
     public static file parametersRange() { ParametersRangeReport report; return report.run(guid.Null); }
+    public static file contextRange() { ContextRangeReport report; return report.run(guid.Null); }
+    public static file unsupportedContextRange() { UnsupportedContextRangeReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -89,6 +91,29 @@ public class %s extends Report {
     [address "%s"] [boundaries "%s"] Range region;
     ranges = {region};
 }''' % (name, template, address, boundaries), encoding="utf-8")
+    (source / "ContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+import org.zenframework.z8.base.json.JsonObject;
+public class ContextRangeReport extends Report {
+    engine = Report.POI; template = "context";
+    JsonObject info; JsonObject parameters;
+    objects = {info, parameters};
+    [address "A1:E1"] [boundaries "A1:E1"] Range region;
+    ranges = {region};
+    virtual protected void prepare(guid recordId) {
+        info.set("title", "Ada 😀"); info.set("amount", 42);
+        parameters.set("foo", "member value");
+    }
+}''', encoding="utf-8")
+    (source / "UnsupportedContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+import org.zenframework.z8.lang.Object;
+public class UnsupportedContextRangeReport extends Report {
+    engine = Report.POI; template = "parameters";
+    Object parameters; objects = {parameters};
+    [address "A1:E1"] [boundaries "A1:E1"] Range region;
+    ranges = {region};
+}''', encoding="utf-8")
     for name, template, address in (("ImplicitRangeReport", "sample", "B1"),
                                     ("InvalidImplicitRangeReport", "sample", "C1"),
                                     ("MergedRangeReport", "merged", "A1")):
@@ -222,6 +247,11 @@ public class %s extends Report {
     with zipfile.ZipFile(application / "reports/parameters.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in parameters.items():
             archive.writestr(name, content)
+    context = dict(parameters)
+    context["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="5" uniqueCount="5"><si><t>${info.title}</t></si><si><t>${info['amount']}</t></si><si><t>${parameters.foo}</t></si><si><t>Title: ${info.title}!</t></si><si><t>${info.missing}</t></si></sst>'''
+    with zipfile.ZipFile(application / "reports/context.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in context.items():
+            archive.writestr(name, content)
     merged = dict(entries)
     merged["xl/worksheets/sheet1.xml"] = original_sheet.replace("</worksheet>", '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')
     with zipfile.ZipFile(application / "reports/merged.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -322,6 +352,13 @@ void main(string[] args) {
     assert(z8_file_exists(P.m_simpleRange()));
     bool noRequest; try { P.m_parametersRange(); } catch (Exception) { noRequest = true; } assert(noRequest);
     assert(database.begins == 38 && database.rollbacks == 38);
+    z8_application_set_request(request);
+    bool context; try { P.m_contextRange(); } catch (Exception) { context = true; } assert(context);
+    assert(database.begins == 39 && database.rollbacks == 39);
+    bool unsupported; try { P.m_unsupportedContextRange(); } catch (Exception e) {
+        unsupported = e.msg == "POI report object context member is not implemented";
+    } assert(unsupported);
+    assert(database.begins == 40 && database.rollbacks == 40);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -363,6 +400,9 @@ void main(string[] args) {
         contents = contents.replace(
             'bool parameters; try { P.m_parametersRange(); } catch (Exception) { parameters = true; } assert(parameters);',
             'auto parameters = P.m_parametersRange(); copy(z8_file_resolve_path(parameters), buildPath(args[2], "parameters.xlsx"));')
+        contents = contents.replace(
+            'bool context; try { P.m_contextRange(); } catch (Exception) { context = true; } assert(context);',
+            'auto context = P.m_contextRange(); copy(z8_file_resolve_path(context), buildPath(args[2], "context.xlsx")); assert(counter.writes == 3);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -521,17 +561,30 @@ class PoiRangeOracle {
     ApplicationServer.setRequest(request);
     try (XSSFWorkbook original = new XSSFWorkbook(new FileInputStream(args[0]));
          XSSFWorkbook actual = new XSSFWorkbook(new FileInputStream(args[1]))) {
-      PoiReport report = new PoiReport(new ReportOptions()).setContext(new OBJECT.CLASS<OBJECT>(null).get());
+      OBJECT context = new OBJECT.CLASS<OBJECT>(null).get();
+      boolean contextCase = args.length > 3 && "context".equals(args[3]);
+      if (contextCase) {
+        org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> info =
+            new org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<>(context);
+        info.setIndex("info"); context.members().add(info);
+        info.get().z8_set(new org.zenframework.z8.server.types.string("title"), new org.zenframework.z8.server.types.string("Ada 😀"));
+        info.get().z8_set(new org.zenframework.z8.server.types.string("amount"), new org.zenframework.z8.server.types.integer(42));
+        org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> parametersObject =
+            new org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<>(context);
+        parametersObject.setIndex("parameters"); context.members().add(parametersObject);
+        parametersObject.get().z8_set(new org.zenframework.z8.server.types.string("foo"), new org.zenframework.z8.server.types.string("member value"));
+      }
+      PoiReport report = new PoiReport(new ReportOptions()).setContext(context);
       boolean constants = args.length > 3 && "constants".equals(args[3]);
       boolean parameters = args.length > 3 && "parameters".equals(args[3]);
       Range child = new Range().setSource(SimpleSource.newDefault())
-          .setBlock(constants ? "A1:G1" : parameters ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(constants ? "A1:G1" : parameters ? "A1:E1" : "A1:B2");
+          .setBlock(constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
+          .setBoundaries(constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       report.addRange(0, child);
       if (args.length > 3 && "rename".equals(args[3])) original.setSheetName(0, "Отчёт \\uD83D\\uDE00");
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier); modifier.close();
-      if (constants || parameters) {
+      if (constants || parameters || contextCase) {
         for (int i = 0; i < (constants ? 7 : 5); ++i) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(0).getCell(i);
@@ -573,6 +626,10 @@ class PoiRangeOracle {
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/parameters.xlsx"), str(working / "parameters.xlsx"), str(config), "parameters"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/context.xlsx"), str(working / "context.xlsx"), str(config), "context"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
 print("POI static report template, naming and transaction verified")
