@@ -25,6 +25,7 @@ private extern(C) {
     int z8_xlsx_set_cell_number(void*, uint, uint, uint, double);
     int z8_xlsx_set_cell_boolean(void*, uint, uint, uint, int);
     int z8_xlsx_copy_cell(void*, uint, uint, uint, uint, uint, int);
+    int z8_xlsx_remove_cell(void*, uint, uint, uint);
     int z8_xlsx_merge_cells(void*, uint, uint, uint, uint, uint);
     int z8_xlsx_cell_string(void*, uint, uint, uint, char*, size_t, size_t*);
     int z8_xlsx_cell_type(void*, uint, uint, uint, int*);
@@ -41,7 +42,7 @@ private void check(int result) {
 }
 
 private void checkAbi() {
-    if (z8_xlsx_abi_version() != 4) throw new Exception("incompatible OpenXLSX bridge; rebuild xlsx");
+    if (z8_xlsx_abi_version() != 5) throw new Exception("incompatible OpenXLSX bridge; rebuild xlsx");
 }
 
 class Workbook {
@@ -165,6 +166,11 @@ class Workbook {
     /// Formula references are copied literally and are not adjusted.
     void copyCell(uint sheet, uint sourceRow, uint sourceColumn, uint targetRow, uint targetColumn, bool clearFormulaCache = false) {
         check(z8_xlsx_copy_cell(handle, sheet, sourceRow, sourceColumn, targetRow, targetColumn, clearFormulaCache ? 1 : 0));
+    }
+
+    /// Remove a physical non-formula cell, retaining the row. Missing cells are ignored.
+    void removeCell(uint sheet, uint row, uint column) {
+        check(z8_xlsx_remove_cell(handle, sheet, row, column));
     }
 
     /// Merge a rectangular region without clearing the covered cell values.

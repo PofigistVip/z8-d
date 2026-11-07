@@ -106,8 +106,20 @@ void main(string[] args) {
     assertThrown!Exception(reopened.mergeCells(2, 4, 0, 4, 0));
     assertThrown!Exception(reopened.copyCell(0, 0, 2, 3, 2));
     assertThrown!Exception(reopened.copyCell(0, 0, 1, 1048576, 0));
-    auto copied = new Workbook(reopened.save());
-    assert(copied.cellNumber(0, 3, 1) == 42 && copied.cellXml(0, 3, 9).canFind("_x0041_"));
+    reopened.removeCell(0, 3, 1);
+    reopened.removeCell(0, 3, 9);
+    reopened.removeCell(0, 3, 3);
+    reopened.removeCell(0, 3, 3); // Repeated deletion is harmless.
+    reopened.removeCell(0, 9, 9); // A missing row remains absent.
+    assert(reopened.rowExists(0, 3) && reopened.cellType(0, 3, 1) == CellType.missing);
+    assert(!reopened.rowExists(0, 9));
+    assertThrown!Exception(reopened.removeCell(0, 3, 6));
+    assertThrown!Exception(reopened.removeCell(0, 1048576, 0));
+    auto copiedBytes = reopened.save();
+    write(args[6], copiedBytes);
+    auto copied = new Workbook(copiedBytes);
+    assert(copied.rowExists(0, 3) && copied.cellType(0, 3, 1) == CellType.missing && copied.cellType(0, 3, 9) == CellType.missing);
+    assert(copied.cellFormula(0, 3, 6) == "B1*2");
     assert(copied.cellNumber(2, 4, 1) == 22 && copied.sheetXml(2).canFind("A5:B5"));
     copied.close();
     reopened.close();

@@ -145,6 +145,13 @@ OpenXLSX::XLWorksheet worksheet(void* handle, unsigned sheet) {
     return doc.workbook().worksheet(sheetName(doc, sheet));
 }
 
+// OpenXLSX exposes the worksheet XML to derived classes. It does not expose
+// removal of one physical cell, which POI's Row.removeCell requires.
+struct WorksheetXml : OpenXLSX::XLXmlFile {
+    explicit WorksheetXml(const OpenXLSX::XLWorksheet& sheet) : XLXmlFile(sheet) {}
+    using OpenXLSX::XLXmlFile::xmlDocument;
+};
+
 std::string encodeCellText(const char* text, size_t size, bool escapeLiterals) {
     if (!text && size) throw std::invalid_argument("missing cell text");
     auto hex = [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); };
@@ -184,7 +191,7 @@ void copyString(const std::string& value, char* buffer, size_t capacity, size_t*
 }
 
 Z8_EXPORT const char* z8_xlsx_error() noexcept { return error.c_str(); }
-Z8_EXPORT unsigned z8_xlsx_abi_version() noexcept { return 4; }
+Z8_EXPORT unsigned z8_xlsx_abi_version() noexcept { return 5; }
 
 Z8_EXPORT int z8_xlsx_open(const char* path, void** result) noexcept {
     return protect([&] {
@@ -389,6 +396,25 @@ Z8_EXPORT int z8_xlsx_copy_cell(void* handle, unsigned sheet, unsigned sourceRow
         target.copyFrom(source);
         if (clearFormulaCache)
             target.clear(OpenXLSX::XLKeepCellStyle | OpenXLSX::XLKeepCellType | OpenXLSX::XLKeepCellFormula);
+    });
+}
+
+Z8_EXPORT int z8_xlsx_remove_cell(void* handle, unsigned sheet, unsigned row, unsigned column) noexcept {
+    return protect([&] {
+        if (row >= 1048576 || column >= 16384) throw std::out_of_range("cell index out of bounds");
+        WorksheetXml page(worksheet(handle, sheet));
+        OpenXLSX::XMLNode data = page.xmlDocument().document_element().child("sheetData");
+        auto rowNode = data.find_child([&](const OpenXLSX::XMLNode& node) {
+            return std::strcmp(node.name(), "row") == 0 && node.attribute("r").as_uint() == row + 1;
+        });
+        if (rowNode.empty()) return;
+        auto address = OpenXLSX::XLCellReference(row + 1, static_cast<uint16_t>(column + 1)).address();
+        auto cellNode = rowNode.find_child_by_attribute("c", "r", address.c_str());
+        if (cellNode.empty()) return;
+        // Removing formula cells also requires updating the workbook's
+        // calculation chain; this operation does not do that yet.
+        if (!cellNode.child("f").empty()) throw std::runtime_error("removing formula cells is not supported");
+        if (!rowNode.remove_child(cellNode)) throw std::runtime_error("cannot remove XLSX cell");
     });
 }
 
