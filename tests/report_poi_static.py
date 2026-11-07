@@ -55,6 +55,7 @@ public class StaticReportProbe {
     public static file invalidImplicitRange() { InvalidImplicitRangeReport report; return report.run(guid.Null); }
     public static file mergedRange() { MergedRangeReport report; return report.run(guid.Null); }
     public static file renamedRange() { RenamedRangeReport report; return report.run(guid.Null); }
+    public static file commentRename() { CommentRenameReport report; return report.run(guid.Null); }
     public static file invalidRename() { InvalidRenameReport report; return report.run(guid.Null); }
     public static file formulaRename() { FormulaRenameReport report; return report.run(guid.Null); }
     public static file duplicateRename() { DuplicateRenameReport report; return report.run(guid.Null); }
@@ -83,6 +84,7 @@ public class %s extends Report {
     ranges = {region};
 }''' % (name, template, address), encoding="utf-8")
     for name, template, sheet_name in (("RenamedRangeReport", "sample", "Отчёт 😀"),
+                                       ("CommentRenameReport", "comment", "Comment renamed"),
                                        ("InvalidRenameReport", "sample", "bad:name"),
                                        ("FormulaRenameReport", "formula", "Renamed"),
                                        ("DuplicateRenameReport", "multiple", "second"),
@@ -108,6 +110,10 @@ public class %s extends Report {
     with zipfile.ZipFile(workbook, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in entries.items():
             archive.writestr(name, content)
+    comment_book = application / "reports/comment.xlsx"
+    shutil.copy2(workbook, comment_book)
+    with zipfile.ZipFile(comment_book, "a") as archive:
+        archive.comment = b"preserve ZIP comment"
     original_sheet = entries["xl/worksheets/sheet1.xml"]
     entries["xl/worksheets/sheet1.xml"] = original_sheet.replace("<sheetData>",
         '<cols><col min="1" max="4" width="12" customWidth="1"/><col min="8" max="8" hidden="1" width="9"/></cols><sheetData>')
@@ -226,6 +232,10 @@ void main(string[] args) {
     bool duplicate; try { P.m_duplicateRename(); } catch (Exception) { duplicate = true; } assert(duplicate);
     auto longName = P.m_longRename(); copy(z8_file_resolve_path(longName), buildPath(args[2], "long-name.xlsx"));
     assert(database.begins == 25 && database.rollbacks == 25);
+    auto comment = P.m_commentRename(); copy(z8_file_resolve_path(comment), buildPath(args[2], "comment.xlsx"));
+    assert(database.begins == 26 && database.rollbacks == 26);
+    auto commentHidden = P.m_hidden("comment"w); copy(z8_file_resolve_path(commentHidden), buildPath(args[2], "comment-hidden.xlsx"));
+    assert(database.begins == 27 && database.rollbacks == 27);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -241,20 +251,24 @@ void main(string[] args) {
         contents = contents.replace("void main(string[] args) {", '''class CountingProvider : IZ8PoiProvider, IZ8PoiReportWriter {
     IZ8PoiProvider reader;
     IZ8PoiReportWriter writer;
-    uint renames;
+    uint renames, hides;
     this(IZ8PoiProvider provider) { reader = provider; writer = cast(IZ8PoiReportWriter)provider; assert(writer !is null); }
     IZ8PoiDocument open(const(ubyte)[] input) { return reader.open(input); }
     ubyte[] renameReportSheet(const(ubyte)[] input, uint index, wstring name) {
         auto result = writer.renameReportSheet(input, index, name);
         ++renames; return result;
     }
+    ubyte[] hideReportColumns(const(ubyte)[] input, const(Z8PoiHiddenColumn)[] columns) {
+        auto result = writer.hideReportColumns(input, columns);
+        ++hides; return result;
+    }
 }
 void main(string[] args) {
     z8_openxlsx_configure();
     auto counter = new CountingProvider(z8_poi_set_provider(null));
     z8_poi_set_provider(counter);''')
-        contents = contents.replace("assert(database.begins == 25 && database.rollbacks == 25);",
-                                    "assert(database.begins == 25 && database.rollbacks == 25); assert(counter.renames >= 2);")
+        contents = contents.replace("assert(database.begins == 27 && database.rollbacks == 27);",
+                                    "assert(database.begins == 27 && database.rollbacks == 27); assert(counter.renames == 2 && counter.hides == 1);")
         harness.write_text(contents, encoding="utf-8")
         args.extend(["-I" + str(bridge), str(bridge / "z8/xlsx/openxlsx.d"), str(bridge / "z8/xlsx/poi.d")])
         if os.name == "nt":
@@ -296,6 +310,16 @@ void main(string[] args) {
     with zipfile.ZipFile(working / "long-name.xlsx") as archive:
         renamed = ET.fromstring(archive.read("xl/workbook.xml"))
         assert renamed.find("x:sheets/x:sheet", namespace).attrib["name"] == "abcdefghijklmnopqrstuvwxyz12345"
+    with zipfile.ZipFile(working / "comment.xlsx") as archive:
+        assert archive.comment == b"preserve ZIP comment"
+        renamed = ET.fromstring(archive.read("xl/workbook.xml"))
+        assert renamed.find("x:sheets/x:sheet", namespace).attrib["name"] == "Comment renamed"
+    with zipfile.ZipFile(working / "comment-hidden.xlsx") as archive:
+        assert archive.comment == b"preserve ZIP comment"
+        sheet = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+        assert [item.attrib for item in sheet.findall("x:cols/x:col", namespace)] == [
+            {"min": "2", "max": "2", "hidden": "1"}, {"min": "4", "max": "4", "hidden": "1"},
+            {"min": "7", "max": "7", "hidden": "1"}]
     # Apache POI is optional for ordinary D builds; when available, compare
     # visibility and widths with the version used by the original server.
     cache = Path.home() / ".gradle/caches/modules-2/files-2.1"

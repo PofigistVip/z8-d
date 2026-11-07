@@ -127,7 +127,9 @@ private ubyte[] z8_poi_report_rename_sheet(const(ubyte)[] input, Z8PoiWorkbook w
     IZ8PoiProvider provider;
     synchronized (z8_poi_monitor) provider = z8_poi_provider;
     auto writer = cast(IZ8PoiReportWriter)provider;
-    if (writer !is null) {
+    auto utf16 = original.length >= 2 && ((original[0] == 0xFF && original[1] == 0xFE) ||
+        (original[0] == 0xFE && original[1] == 0xFF) || original[0] == 0 || original[1] == 0);
+    if (writer !is null && !archive.comment.length && workbook.sheets.length == 1 && !utf16 && !selected.name.canFind(':')) {
         try return writer.renameReportSheet(input, cast(uint)index, name);
         catch (Z8PoiUnsupportedWorkbook) { /* retain compatibility with uncommon workbook layouts */ }
     }
@@ -204,6 +206,8 @@ private ubyte[] z8_poi_report_hide_columns(const(ubyte)[] input, Z8IntMap!(Z8Arr
         if (target is null) throw new Exception("missing XLSX sheet relationship");
         sheets ~= z8_poi_resolve_path(base, *target);
     }
+    bool plainSheet = sheets.length == 1 && !archive.comment.length;
+    Z8PoiHiddenColumn[] changes;
     auto keys = hidden.z8_keys();
     foreach (keyIndex; 0 .. keys.z8_size()) {
         auto key = keys.z8_get(keyIndex);
@@ -214,18 +218,24 @@ private ubyte[] z8_poi_report_hide_columns(const(ubyte)[] input, Z8IntMap!(Z8Arr
         auto columns = z8_nonnull(hidden.z8_get(key));
         foreach (i; 0 .. columns.z8_size()) {
             auto number = z8_poi_report_column(columns.z8_get(i));
-            if (number !in wanted) { wanted[number] = true; wantedOrder.add(z8_optional_wrap(cast(long)number - 1)); }
+            if (number !in wanted) {
+                wanted[number] = true; wantedOrder.add(z8_optional_wrap(cast(long)number - 1));
+                changes ~= Z8PoiHiddenColumn(cast(uint)index, cast(uint)(number - 1));
+            }
         }
         if (!wanted.length) continue;
         auto member = sheets[index] in archive.directory;
         if (member is null) throw new Exception("missing XLSX worksheet");
         archive.expand(*member);
         auto original = (*member).expandedData.dup;
+        if (original.length >= 2 && ((original[0] == 0xFF && original[1] == 0xFE) ||
+            (original[0] == 0xFE && original[1] == 0xFF) || original[0] == 0 || original[1] == 0)) plainSheet = false;
         auto xml = z8_poi_xml_decode(original);
         auto sheet = (new Z8PoiXmlReader(xml)).parseDocument();
         if (z8_poi_xml_local(sheet.name) != "worksheet"w || sheet.empty) throw new Exception("invalid XLSX worksheet");
         Z8PoiXmlNode[] columnGroups;
         foreach (child; sheet.children) if (z8_poi_xml_local(child.name) == "cols"w) columnGroups ~= child;
+        if (columnGroups.length || sheet.name.lastIndexOf(':') >= 0) plainSheet = false;
         auto cols = columnGroups.length ? columnGroups[0] : null;
         auto prefixEnd = sheet.name.lastIndexOf(':');
         wstring prefix = prefixEnd < 0 ? ""w : sheet.name[0 .. prefixEnd + 1];
@@ -349,6 +359,15 @@ private ubyte[] z8_poi_report_hide_columns(const(ubyte)[] input, Z8IntMap!(Z8Arr
             xml = xml[0 .. position] ~ "<"w ~ prefix ~ "cols>"w ~ content ~ "</"w ~ prefix ~ "cols>"w ~ xml[position .. $];
         }
         (*member).expandedData = z8_poi_report_encode_xml(xml, original);
+    }
+    if (plainSheet && changes.length) {
+        IZ8PoiProvider provider;
+        synchronized (z8_poi_monitor) provider = z8_poi_provider;
+        auto writer = cast(IZ8PoiReportWriter)provider;
+        if (writer !is null) {
+            try return writer.hideReportColumns(input, changes);
+            catch (Z8PoiUnsupportedWorkbook) { /* use the compatible column editor */ }
+        }
     }
     auto output = new ZipArchive(); output.comment = archive.comment;
     foreach (member; archive.directory.byValue) output.addMember(member);

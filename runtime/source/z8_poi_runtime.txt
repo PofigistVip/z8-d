@@ -17,9 +17,11 @@ interface IZ8PoiDocument {
     void close();
 }
 interface IZ8PoiProvider { IZ8PoiDocument open(const(ubyte)[] bytes); }
+struct Z8PoiHiddenColumn { uint sheet, column; }
 /// Optional report mutations supported by the registered workbook provider.
 interface IZ8PoiReportWriter {
     ubyte[] renameReportSheet(const(ubyte)[] input, uint index, wstring name);
+    ubyte[] hideReportColumns(const(ubyte)[] input, const(Z8PoiHiddenColumn)[] columns);
 }
 /// The provider cannot read this workbook; try the built-in compatible reader.
 class Z8PoiUnsupportedWorkbook : Exception {
