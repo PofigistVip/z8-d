@@ -301,6 +301,9 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
         for (long i; i < strings.z8_size(); ++i) result.collection.z8_add(z8_primary_box(strings.z8_get(i)));
         return result;
     }
+    if (object.primary !is null && object.primary.kind == Z8PrimaryKind.text && name == "format"w &&
+        arguments.length == 1 && arguments[0].collection !is null)
+        return Z8EvalValue(true, z8_primary_box(z8_string_new(z8_string_format(object.primary.textValue, arguments[0].collection))), null, null);
     if (object.primary !is null && !arguments.length) {
         if (name == "hashCode"w) return Z8EvalValue(true, z8_primary_box(z8_primary_hash(object.primary)), null, null);
         if (name == "toString"w) return Z8EvalValue(true, z8_primary_box(z8_string_new(z8_primary_to_string(object.primary))), null, null);
