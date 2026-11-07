@@ -85,7 +85,8 @@ class SavedWorkbookOracle {
           written.getCell(1).getNumericCellValue() != 42.25 || !written.getCell(2).getBooleanCellValue() ||
           !written.getCell(3).getStringCellValue().equals("") ||
           !written.getCell(4).getStringCellValue().equals("_x00G0_ _X0041_") ||
-          !written.getCell(5).getStringCellValue().equals("\\uFFFE\\uFFFF"))
+          !written.getCell(5).getStringCellValue().equals("\\uFFFE\\uFFFF") ||
+          !written.getCell(6).getStringCellValue().equals("A _x0041_"))
         throw new AssertionError("OpenXLSX written values differ from the original POI API");
     }
     try (Workbook book = new XSSFWorkbook(new FileInputStream(args[1]))) {

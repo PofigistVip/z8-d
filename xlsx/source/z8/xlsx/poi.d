@@ -54,7 +54,7 @@ private class OpenXlsxProvider : IZ8PoiProvider, IZ8PoiReportWriter {
             auto book = new Workbook(input);
             scope(exit) book.close();
             foreach (cell; cells) final switch (cell.kind) {
-                case Z8PoiCellEditKind.text: book.setText(cell.sheet, cell.row, cell.column, cell.text.to!string); break;
+                case Z8PoiCellEditKind.text: book.setPoiText(cell.sheet, cell.row, cell.column, cell.text.to!string); break;
                 case Z8PoiCellEditKind.number: book.setNumber(cell.sheet, cell.row, cell.column, cell.number); break;
                 case Z8PoiCellEditKind.boolean: book.setBoolean(cell.sheet, cell.row, cell.column, cell.booleanValue); break;
             }

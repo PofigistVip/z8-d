@@ -5,6 +5,7 @@ import std.string : fromStringz, toStringz;
 import std.algorithm.searching : canFind;
 
 private extern(C) {
+    uint z8_xlsx_abi_version();
     const(char)* z8_xlsx_error();
     int z8_xlsx_open(const(char)*, void**);
     int z8_xlsx_open_memory(const(void)*, size_t, void**);
@@ -20,7 +21,7 @@ private extern(C) {
     int z8_xlsx_row_cell_count(void*, uint, uint, uint*);
     int z8_xlsx_rename_sheet(void*, uint, const(char)*);
     int z8_xlsx_set_column_hidden(void*, uint, uint, int);
-    int z8_xlsx_set_cell_text(void*, uint, uint, uint, const(char)*, size_t);
+    int z8_xlsx_set_cell_text(void*, uint, uint, uint, const(char)*, size_t, int);
     int z8_xlsx_set_cell_number(void*, uint, uint, uint, double);
     int z8_xlsx_set_cell_boolean(void*, uint, uint, uint, int);
     int z8_xlsx_cell_string(void*, uint, uint, uint, char*, size_t, size_t*);
@@ -37,15 +38,21 @@ private void check(int result) {
     if (result != 0) throw new Exception(fromStringz(z8_xlsx_error()).idup);
 }
 
+private void checkAbi() {
+    if (z8_xlsx_abi_version() != 1) throw new Exception("incompatible OpenXLSX bridge; rebuild xlsx");
+}
+
 class Workbook {
     private void* handle;
 
     this(string path) {
+        checkAbi();
         if (path.canFind('\0')) throw new Exception("workbook path contains NUL");
         check(z8_xlsx_open(path.toStringz, &handle));
     }
 
     this(const(ubyte)[] bytes) {
+        checkAbi();
         check(z8_xlsx_open_memory(bytes.ptr, bytes.length, &handle));
     }
 
@@ -130,9 +137,18 @@ class Workbook {
     }
 
     void setText(uint sheet, uint row, uint column, string value) {
+        setTextInternal(sheet, row, column, value, true);
+    }
+
+    /// Preserve Apache POI's interpretation of literal OOXML escape sequences.
+    void setPoiText(uint sheet, uint row, uint column, string value) {
+        setTextInternal(sheet, row, column, value, false);
+    }
+
+    private void setTextInternal(uint sheet, uint row, uint column, string value, bool escapeLiterals) {
         import std.utf : validate;
         validate(value);
-        check(z8_xlsx_set_cell_text(handle, sheet, row, column, value.ptr, value.length));
+        check(z8_xlsx_set_cell_text(handle, sheet, row, column, value.ptr, value.length, escapeLiterals ? 1 : 0));
     }
 
     void setNumber(uint sheet, uint row, uint column, double value) {

@@ -1,6 +1,6 @@
 // Eval context and native BL adapter.
 private enum z8_eval_name = "org.zenframework.z8.server.base.eval.Eval"w;
-private struct Z8EvalVariable { Z8Primary primary; Z8Object json; }
+private struct Z8EvalVariable { Z8Primary primary; Z8Object json; Z8StringMap requestParameters; }
 private class Z8EvalState {
     Z8EvalVariable[wstring] variables;
     Z8JavaMapOrder!wstring order;
@@ -8,7 +8,10 @@ private class Z8EvalState {
     this() { order = new Z8JavaMapOrder!wstring(); }
 }
 private enum Z8EvalContext { none, json, booleanType, integerType, decimalType, stringType, guidType, dateType, datespanType }
-private struct Z8EvalValue { bool evaluated; Z8Primary primary; Z8Object json; wstring expression; Z8EvalContext context; }
+private struct Z8EvalValue {
+    bool evaluated; Z8Primary primary; Z8Object json; wstring expression; Z8EvalContext context;
+    Z8StringMap requestParameters;
+}
 private Z8EvalState z8_eval_state(Z8Object self) {
     self = z8_nonnull(self);
     if (!z8_native_is_instance(z8_eval_name, self)) throw new Exception("invalid Eval object");
@@ -103,7 +106,8 @@ private wstring z8_eval_text_from_state(Z8EvalState state, wstring source, bool 
             auto expression = source[start + 2 .. last];
             if (reportSyntax && expression.canFind('"')) throw new Exception("POI report expression syntax is not implemented");
             value = z8_eval_expression(state, expression);
-            if (requireResolved && (!value.evaluated || value.context != Z8EvalContext.none || value.json !is null))
+            if (requireResolved && (!value.evaluated || value.context != Z8EvalContext.none ||
+                value.json !is null || value.requestParameters !is null))
                 throw new Exception("POI report expression context is not implemented");
         }
         catch (Exception error) {

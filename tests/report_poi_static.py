@@ -53,6 +53,8 @@ public class StaticReportProbe {
     public static file expressionRange() { ExpressionRangeReport report; return report.run(guid.Null); }
     public static file constantRange() { ConstantRangeReport report; return report.run(guid.Null); }
     public static file constantComment() { ConstantCommentRangeReport report; return report.run(guid.Null); }
+    public static file parametersRange() { ParametersRangeReport report; return report.run(guid.Null); }
+    public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
     public static file plainSymbolsRange() { PlainSymbolsRangeReport report; return report.run(guid.Null); }
@@ -74,6 +76,8 @@ public class StaticReportProbe {
             ("ExpressionRangeReport", "expression", "A1", "A1"),
             ("ConstantRangeReport", "constant", "A1:G1", "A1:G1"),
             ("ConstantCommentRangeReport", "constant-comment", "A1:G1", "A1:G1"),
+            ("ParametersRangeReport", "parameters", "A1:E1", "A1:E1"),
+            ("MapOperationRangeReport", "map-operation", "A1", "A1"),
             ("MixedRangeReport", "mixed", "A1", "A1"),
             ("UnknownMixedRangeReport", "unknown-mixed", "A1", "A1"),
             ("PlainSymbolsRangeReport", "plain-symbols", "A1", "A1"),
@@ -180,7 +184,8 @@ public class %s extends Report {
         for name, content in expression.items():
             archive.writestr(name, content)
     for name, expression_text in (("mixed", "prefix ${1+2}"), ("unknown-mixed", "prefix ${value}"),
-                                  ("plain-symbols", "cost $5 {literal}"), ("double-quoted", '${"text"}')):
+                                  ("plain-symbols", "cost $5 {literal}"), ("double-quoted", '${"text"}'),
+                                  ("map-operation", "${1 == parameters}")):
         fixture = dict(entries)
         fixture["xl/worksheets/sheet1.xml"] = original_sheet.replace("Example", expression_text)
         with zipfile.ZipFile(application / ("reports/" + name + ".xlsx"), "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -208,6 +213,15 @@ public class %s extends Report {
     shutil.copy2(application / "reports/constant.xlsx", constant_comment)
     with zipfile.ZipFile(constant_comment, "a") as archive:
         archive.comment = b"preserve expression ZIP comment"
+    parameters = dict(constants)
+    parameters["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="5" uniqueCount="5"><si><t>${parameters['foo']}</t></si><si><t>Value: ${parameters['foo']}!</t></si><si><t>${parameters['missing']}</t></si><si><t>${parameters.foo}</t></si><si><t>${parameters ? 7 : 9}</t></si></sst>'''
+    parameters["xl/worksheets/sheet1.xml"] = original_sheet.replace(
+        '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
+        '<c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c>'
+        '<c r="C1" t="s"><v>2</v></c><c r="D1" t="s"><v>3</v></c><c r="E1" t="s"><v>4</v></c>')
+    with zipfile.ZipFile(application / "reports/parameters.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in parameters.items():
+            archive.writestr(name, content)
     merged = dict(entries)
     merged["xl/worksheets/sheet1.xml"] = original_sheet.replace("</worksheet>", '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')
     with zipfile.ZipFile(application / "reports/merged.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -237,6 +251,10 @@ class Database : IZ8DatabaseConnection {
 }
 void main(string[] args) {
     z8_resources_set_application_root(args[1]); z8_file_set_roots(args[2]);
+    auto request = new Z8ApplicationRequest();
+    request.parameters.z8_add("foo"w, "данные 😀 _x0041_"w);
+    auto previousRequest = z8_application_set_request(request);
+    scope(exit) z8_application_set_request(previousRequest);
     auto database = new Database(); z8_connection_set_current(database);
     alias P = Z8_StaticReportProbe;
     auto first = P.m_run("sample"w, "hello:report"w);
@@ -296,6 +314,14 @@ void main(string[] args) {
     auto plain = P.m_plainSymbolsRange();
     assert(read(z8_file_resolve_path(plain)) == read(buildPath(args[1], "reports", "plain-symbols.xlsx")));
     assert(database.begins == 34 && database.rollbacks == 34);
+    bool parameters; try { P.m_parametersRange(); } catch (Exception) { parameters = true; } assert(parameters);
+    assert(database.begins == 35 && database.rollbacks == 35);
+    bool mapOperation; try { P.m_mapOperationRange(); } catch (Exception) { mapOperation = true; } assert(mapOperation);
+    assert(database.begins == 36 && database.rollbacks == 36);
+    z8_application_set_request(null);
+    assert(z8_file_exists(P.m_simpleRange()));
+    bool noRequest; try { P.m_parametersRange(); } catch (Exception) { noRequest = true; } assert(noRequest);
+    assert(database.begins == 38 && database.rollbacks == 38);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -334,8 +360,11 @@ void main(string[] args) {
         contents = contents.replace(
             'bool constants; try { P.m_constantRange(); } catch (Exception) { constants = true; } assert(constants);',
             'auto constants = P.m_constantRange(); copy(z8_file_resolve_path(constants), buildPath(args[2], "constant.xlsx"));')
-        contents = contents.replace("assert(database.begins == 34 && database.rollbacks == 34);",
-                                    "assert(database.begins == 34 && database.rollbacks == 34); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 1);")
+        contents = contents.replace(
+            'bool parameters; try { P.m_parametersRange(); } catch (Exception) { parameters = true; } assert(parameters);',
+            'auto parameters = P.m_parametersRange(); copy(z8_file_resolve_path(parameters), buildPath(args[2], "parameters.xlsx"));')
+        contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
+                                    "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
         args.extend(["-I" + str(bridge), str(bridge / "z8/xlsx/openxlsx.d"), str(bridge / "z8/xlsx/poi.d")])
         if os.name == "nt":
@@ -405,6 +434,13 @@ void main(string[] args) {
             assert cells[4].find("x:is/x:t", namespace).text == "${'inline'}"
             assert float(cells[5].find("x:v", namespace).text) == -2147483648
             assert float(cells[6].find("x:v", namespace).text) == 1
+        with zipfile.ZipFile(working / "parameters.xlsx") as archive:
+            sheet = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+            shared = ET.fromstring(archive.read("xl/sharedStrings.xml")).findall("x:si", namespace)
+            cells = sheet.findall("x:sheetData/x:row/x:c", namespace)
+            values = [(shared[int(cell.find("x:v", namespace).text)].find("x:t", namespace).text or "") for cell in cells[:4]]
+            assert values == ["данные 😀 _x0041_", "Value: данные 😀 _x0041_!", "", ""], values
+            assert float(cells[4].find("x:v", namespace).text) == 7
     # Apache POI is optional for ordinary D builds; when available, compare
     # visibility and widths with the version used by the original server.
     cache = Path.home() / ".gradle/caches/modules-2/files-2.1"
@@ -480,19 +516,23 @@ import org.zenframework.z8.server.reports.poi.*;
 class PoiRangeOracle {
   public static void main(String[] args) throws Exception {
     ServerConfig.load(args[2]);
-    ApplicationServer.setRequest(new Request(new Session("test")));
+    Request request = new Request(new Session("test"));
+    request.getParameters().put(new org.zenframework.z8.server.types.string("foo"), new org.zenframework.z8.server.types.string("данные 😀 _x0041_"));
+    ApplicationServer.setRequest(request);
     try (XSSFWorkbook original = new XSSFWorkbook(new FileInputStream(args[0]));
          XSSFWorkbook actual = new XSSFWorkbook(new FileInputStream(args[1]))) {
       PoiReport report = new PoiReport(new ReportOptions()).setContext(new OBJECT.CLASS<OBJECT>(null).get());
       boolean constants = args.length > 3 && "constants".equals(args[3]);
+      boolean parameters = args.length > 3 && "parameters".equals(args[3]);
       Range child = new Range().setSource(SimpleSource.newDefault())
-          .setBlock(constants ? "A1:G1" : "$A$1:A1").setBoundaries(constants ? "A1:G1" : "A1:B2");
+          .setBlock(constants ? "A1:G1" : parameters ? "A1:E1" : "$A$1:A1")
+          .setBoundaries(constants ? "A1:G1" : parameters ? "A1:E1" : "A1:B2");
       report.addRange(0, child);
       if (args.length > 3 && "rename".equals(args[3])) original.setSheetName(0, "Отчёт \\uD83D\\uDE00");
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier); modifier.close();
-      if (constants) {
-        for (int i = 0; i < 7; ++i) {
+      if (constants || parameters) {
+        for (int i = 0; i < (constants ? 7 : 5); ++i) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(0).getCell(i);
           if (expected.getCellType() != result.getCellType()) throw new AssertionError("cell type differs at " + i);
@@ -529,6 +569,10 @@ class PoiRangeOracle {
             if library_dir:
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/constant.xlsx"), str(working / "constant.xlsx"), str(config), "constants"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/parameters.xlsx"), str(working / "parameters.xlsx"), str(config), "parameters"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
 print("POI static report template, naming and transaction verified")

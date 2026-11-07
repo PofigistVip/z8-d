@@ -20,7 +20,7 @@ private Z8EvalValue z8_eval_atom(Z8EvalState state, wstring source) {
     foreach (i, c; text) if (!(isAlpha(c) || c == '_' || (i && isNumber(c))))
         throw new Exception("unsupported Eval expression");
     auto found = text in state.variables;
-    if (found !is null) return Z8EvalValue(true, found.primary, found.json, null);
+    if (found !is null) return Z8EvalValue(true, found.primary, found.json, null, Z8EvalContext.none, found.requestParameters);
     Z8EvalContext context;
     if (text == "json"w) context = Z8EvalContext.json;
     else if (text == "bool"w) context = Z8EvalContext.booleanType;
@@ -72,6 +72,9 @@ private Z8EvalValue z8_eval_json_property(Z8Object object, wstring name) {
 private Z8EvalValue z8_eval_property(Z8EvalValue object, wstring name) {
     if (!object.evaluated)
         return Z8EvalValue(false, null, null, z8_eval_expression_repr(object) ~ "."w ~ name);
+    // Java request parameters are a Map<z8.string, z8.string>; property
+    // lookup uses a Java String key and therefore does not match those keys.
+    if (object.requestParameters !is null) return Z8EvalValue(true, null, null, null);
     if (object.json is null || !z8_native_is_instance(z8_json_object_name, object.json))
         throw new Exception("unsupported Eval property");
     return z8_eval_json_property(object.json, name);
@@ -127,6 +130,12 @@ private Z8EvalValue z8_eval_json_aggregate(wstring name, Z8EvalValue[] arguments
 private Z8EvalValue z8_eval_item(Z8EvalState state, Z8EvalValue object, Z8EvalValue index) {
     if (!object.evaluated || !index.evaluated)
         return Z8EvalValue(false, null, null, z8_eval_expression_repr(object) ~ "["w ~ z8_eval_expression_repr(index) ~ "]"w);
+    if (object.requestParameters !is null) {
+        if (index.primary is null && index.json is null && index.context == Z8EvalContext.none) return object;
+        if (index.primary is null || index.primary.kind != Z8PrimaryKind.text)
+            throw new Exception("unsupported request parameter index");
+        return Z8EvalValue(true, z8_primary_box(object.requestParameters.z8_get(index.primary.textValue)), null, null);
+    }
     if ((object.primary is null && object.json is null && object.context == Z8EvalContext.none) ||
         (index.primary is null && index.json is null && index.context == Z8EvalContext.none)) return object;
     auto key = index.primary;
@@ -187,6 +196,8 @@ private Z8EvalValue z8_eval_binary(wstring op, Z8EvalValue left, Z8EvalValue rig
     if (!left.evaluated || !right.evaluated)
         return Z8EvalValue(false, null, null, z8_eval_expression_repr(left) ~ " "w ~
             (op == "&&"w || op == "||"w || op == "%"w ? "null"w : op) ~ " "w ~ z8_eval_expression_repr(right));
+    if (left.requestParameters !is null || right.requestParameters !is null)
+        throw new Exception("unsupported request parameter map operation");
     // The current Java lexer accepts &&, || and %, but Operator.parse does
     // not recognize those spellings and the evaluator fails on them.
     if (op == "&&"w || op == "||"w || op == "%"w) throw new Exception("unsupported Eval operator");

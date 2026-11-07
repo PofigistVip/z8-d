@@ -71,6 +71,7 @@ void main(string[] args) {
     memoryBook.setText(2, 2, 3, "");
     memoryBook.setText(2, 2, 4, "_x00G0_ _X0041_");
     memoryBook.setText(2, 2, 5, "\uFFFE\uFFFF");
+    memoryBook.setPoiText(2, 2, 6, "_x0041_ _x005F_x0041_");
     assertThrown!Exception(memoryBook.setNumber(0, 0, 0, double.nan));
     assertThrown!Exception(memoryBook.setText(0, 1048576, 0, "invalid"));
     assertThrown!Exception(memoryBook.setText(0, 0, 0, cast(string)[cast(ubyte)0xFF]));

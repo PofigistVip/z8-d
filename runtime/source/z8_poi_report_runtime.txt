@@ -94,6 +94,10 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     if (z8_report_source_state(source).kind != Z8ReportSourceKind.simple)
         throw new Exception("expanding POI report data sources are not implemented");
     z8_report_register_data_source(report, source);
+    auto evalState = new Z8EvalState();
+    auto request = z8_application_request();
+    if (request !is null && request.parameters !is null)
+        evalState.variables["parameters"w] = Z8EvalVariable(null, null, request.parameters);
     foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells) {
         if (cell.hasFormula || (cell.kind != "str"w && cell.kind != "inlineStr"w) ||
             cell.value.indexOf("${"w) < 0) continue;
@@ -104,7 +108,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
         auto single = cell.value.length >= 3 && cell.value[0 .. 2] == "${"w &&
             firstEnd >= 0 && cast(size_t)firstEnd + 1 == cell.value.length;
         if (!single) {
-            auto text = z8_eval_text_from_state(new Z8EvalState(), cell.value, true, true);
+            auto text = z8_eval_text_from_state(evalState, cell.value, true, true);
             if (cell.kind == "inlineStr"w) continue;
             Z8PoiCellEdit edit;
             edit.sheet = cast(uint)sheet; edit.row = cast(uint)rowNumber; edit.column = cast(uint)columnNumber;
@@ -115,8 +119,9 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
         // The original report grammar accepts single-quoted strings. The Eval
         // parser also accepts double quotes, which are not equivalent here.
         if (expression.canFind('"')) throw new Exception("POI report expression syntax is not implemented");
-        auto evaluated = z8_eval_expression(new Z8EvalState(), expression);
-        if (!evaluated.evaluated || evaluated.context != Z8EvalContext.none || evaluated.json !is null)
+        auto evaluated = z8_eval_expression(evalState, expression);
+        if (!evaluated.evaluated || evaluated.context != Z8EvalContext.none || evaluated.json !is null ||
+            evaluated.requestParameters !is null)
             throw new Exception("POI report expression context is not implemented");
         Z8PoiCellEdit edit;
         edit.sheet = cast(uint)sheet; edit.row = cast(uint)rowNumber; edit.column = cast(uint)columnNumber;

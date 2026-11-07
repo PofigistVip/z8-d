@@ -108,7 +108,8 @@ private class Z8EvalParser {
         auto parent = evaluating;
         scope(exit) evaluating = parent;
         if (take("?:"w)) {
-            bool keep = parent && condition.evaluated && (condition.primary !is null || condition.json !is null || condition.context != Z8EvalContext.none);
+            bool keep = parent && condition.evaluated && (condition.primary !is null || condition.json !is null ||
+                condition.context != Z8EvalContext.none || condition.requestParameters !is null);
             evaluating = parent && !keep;
             auto alternative = conditional();
             if (!parent) return Z8EvalValue.init;
@@ -121,7 +122,7 @@ private class Z8EvalParser {
         bool yes;
         if (known) {
             auto value = condition.primary;
-            yes = condition.json !is null || condition.context != Z8EvalContext.none || (value !is null &&
+            yes = condition.json !is null || condition.context != Z8EvalContext.none || condition.requestParameters !is null || (value !is null &&
                 (value.kind == Z8PrimaryKind.integer ? value.integerValue != 0 : value.kind == Z8PrimaryKind.boolean ? value.booleanValue : true));
         }
         evaluating = parent && (!known || yes);
