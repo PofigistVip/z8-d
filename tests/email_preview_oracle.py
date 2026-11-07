@@ -67,6 +67,15 @@ messages = [
     b'Content-Type: multipart/alternative; boundary=alt\r\n\r\n'
     b'--alt\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n<b>First</b>\r\n'
     b'--alt\r\nContent-Type: text/html; charset=x-unknown\r\n\r\nIgnored\r\n--alt--\r\n',
+    b'From: sender@example.com\r\nSubject: Missing closing boundary\r\n'
+    b'Content-Type: multipart/mixed; boundary=part\r\n\r\n'
+    b'--part\r\nContent-Type: text/plain\r\n\r\nLast part without ending',
+    b'From: sender@example.com\r\nSubject: Missing boundary with newline\r\n'
+    b'Content-Type: multipart/mixed; boundary=part\r\n\r\n'
+    b'--part\r\nContent-Type: text/plain\r\n\r\nFirst\r\nLast\r\n',
+    b'From: sender@example.com\r\nSubject: Boundary whitespace\r\n'
+    b'Content-Type: multipart/mixed; boundary=part\r\n\r\n'
+    b'--part \t\r\nContent-Type: text/plain\r\n\r\nFirst\r\n--part-- \t\r\n',
 ]
 for encoding, value in (("windows-1250", "Žluťoučký"), ("windows-1253", "Καλημέρα"),
                         ("windows-1254", "İstanbul"), ("windows-1257", "Ąžuolas"),

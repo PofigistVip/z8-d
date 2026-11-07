@@ -174,13 +174,20 @@ private wstring z8_email_part(string message, size_t depth) {
         if (!boundary.length || boundary.length > 200) throw new Exception("invalid email MIME boundary");
         string[] parts; string current; bool inside;
         foreach (line; body.splitLines()) {
-            if (line == "--" ~ boundary || line == "--" ~ boundary ~ "--") {
+            auto delimiter = line;
+            while (delimiter.length && (delimiter[$ - 1] == ' ' || delimiter[$ - 1] == '\t')) delimiter = delimiter[0 .. $ - 1];
+            if (delimiter == "--" ~ boundary || delimiter == "--" ~ boundary ~ "--") {
                 // The line break immediately before a MIME delimiter belongs
                 // to the delimiter, not to the preceding part's body.
                 if (inside) parts ~= current.length ? current[0 .. $ - 1] : current;
-                current = ""; inside = line == "--" ~ boundary;
+                current = ""; inside = delimiter == "--" ~ boundary;
                 if (!inside) break;
             } else if (inside) current ~= line ~ "\n";
+        }
+        // JavaMail accepts an unterminated final part by default.
+        if (inside) {
+            if (current.length && body.length && body[$ - 1] != '\n' && body[$ - 1] != '\r') current = current[0 .. $ - 1];
+            parts ~= current;
         }
         wstring fallback;
         foreach (part; parts) {
