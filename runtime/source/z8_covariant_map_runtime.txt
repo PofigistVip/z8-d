@@ -273,3 +273,10 @@ Z8StringValueMap!(Z8Array!Z8Primary) z8_primary_nested_map_view(V)(
     if (values is null) return null;
     auto result = new Z8StringValueMap!(Z8Array!Z8Primary)(); result.nestedData = values.data; return result;
 }
+
+Z8ScalarKeyMap!(K, Z8Array!Z8Primary) z8_primary_nested_map_view(K, V)(
+    Z8CovariantMap!(K, Z8ObjectArray!V, Z8ScalarKeyMap!(K, Object), false, true) values)
+if ((is(K == long) || is(K == bool) || is(K == Z8Decimal)) && is(V : Z8Object)) {
+    if (values is null) return null;
+    auto result = new Z8ScalarKeyMap!(K, Z8Array!Z8Primary)(); result.nestedData = values.data; return result;
+}
