@@ -9,4 +9,5 @@ z8d
 
 runtime/lib/
 postgres/lib/
+ldap/lib/
 __pycache__/

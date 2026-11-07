@@ -136,6 +136,7 @@ python tests/messageformat_value_oracle.py
 python tests/poi_runtime.py
 python tests/ldap_runtime.py path/to/original-z8
 python tests/ldap_search_runtime.py
+python tests/ldap_windows_transport.py  # Windows
 python tests/ldap_config_oracle.py path/to/original-z8
 python tests/primary_array_views.py
 python tests/primary_string_map_views.py
@@ -887,9 +888,21 @@ CivetWeb настраиваются отдельно.
 сервера. Провайдер открывает `IZ8LdapSession` и отвечает за подключение
 и поиск; входы передаются ему без журналирования runtime.
 `Z8LdapConfiguredProvider` реализует настройки Z8, формирование фильтров,
-кэширование и извлечение полей, но требует от хоста `IZ8LdapTransport` для
-сетевого LDAP-поиска, включая постраничное чтение. Встроенного сетевого
-транспорта пока нет. Возвращаемые поля, массивы и отображения создаются
+кэширование и извлечение полей. Для Windows отдельная библиотека `ldap`
+предоставляет `Z8WindowsLdapTransport` на системной WinLDAP: `ldap://` и
+`ldaps://`, простую аутентификацию, поддерево и постраничный поиск. Пример
+регистрации в коде хоста (зависимости DUB: `z8-runtime` и `z8-ldap`):
+
+```d
+import z8.runtime;
+import z8.ldap.windows;
+z8_ldap_set_provider(new Z8LdapConfiguredProvider(new Z8WindowsLdapTransport(3000), 500));
+```
+
+Аргументы задают тайм-аут подключения в миллисекундах и размер страницы;
+TLS использует системную проверку сертификата. Транспорт не регистрируется
+автоматически, а для других ОС хосту пока требуется собственная реализация
+`IZ8LdapTransport`. Возвращаемые поля, массивы и отображения создаются
 отдельно для каждого BL-объекта.
 Для native `User` хост может передать данные через `Z8UserData` и
 `z8_user_attach` или создать обёртку через `z8_user_wrap`: доступны поля,

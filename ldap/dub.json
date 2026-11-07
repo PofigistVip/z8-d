@@ -1,0 +1,10 @@
+{
+  "name": "z8-ldap",
+  "description": "Optional LDAP transports for Z8 D runtime",
+  "license": "LGPL-3.0-or-later",
+  "targetType": "staticLibrary",
+  "targetName": "z8-ldap",
+  "targetPath": "lib",
+  "sourcePaths": ["source"],
+  "dependencies": { "z8-runtime": { "path": "../runtime" } }
+}
