@@ -9,6 +9,8 @@ private enum z8_poi_cell_name = "org.zenframework.z8.server.base.poi.Cell"w;
 
 private class Z8PoiXmlNode {
     wstring name, text;
+    size_t start, startEnd, endStart, end;
+    bool empty;
     wstring[wstring] attributes;
     Z8PoiXmlNode[] children;
     Z8PoiXmlNode child(wstring wanted) {
@@ -32,14 +34,17 @@ private wstring z8_poi_xml_local(wstring name) {
 private class Z8PoiXmlReader : Z8NlsReader {
     this(wstring value) { super(value); }
     Z8PoiXmlNode node() {
+        auto start = position;
         expect("<"w); auto tag = name(); position -= tag.length + 1;
         bool empty; auto result = new Z8PoiXmlNode(); result.name = tag;
         result.attributes = startTag(tag, empty);
-        if (empty) return result;
+        result.start = start; result.startEnd = position; result.empty = empty;
+        if (empty) { result.endStart = position; result.end = position; return result; }
         for (;;) {
             if (starts("</"w)) {
+                result.endStart = position;
                 position += 2; if (name() != tag) throw new Exception("mismatched XLSX XML element");
-                whitespace(); expect(">"w); return result;
+                whitespace(); expect(">"w); result.end = position; return result;
             }
             if (starts("<!--"w)) { position += 4; until("-->"w); continue; }
             if (starts("<?"w)) { position += 2; until("?>"w); continue; }
