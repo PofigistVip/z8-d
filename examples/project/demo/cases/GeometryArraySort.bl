@@ -9,7 +9,7 @@ public class GeometryArraySort {
         if (values.size() != 4) return 2;
         geometry[] leading = {}; leading.add(null); leading.add(first); leading.sort();
         if (leading[0].toString() != "B" || leading[1] != null) return 3;
-        geometry[] emptyValue = {first, geometry.none(4326)};
+        geometry[] emptyValue = {geometry.none(4326), first};
         try { emptyValue.sort(); return 4; } catch (exception expected) {}
         return 0;
     }

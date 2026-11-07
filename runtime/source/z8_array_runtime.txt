@@ -330,16 +330,6 @@ class Z8Array(T) {
             if (z8_size() > 1) throw new Exception("object array elements are not comparable");
             ++z8_version;
             return this;
-        } else static if (is(T == Z8Guid)) {
-            if (z8_size() <= 1) { ++z8_version; return this; }
-            Z8Guid[] values;
-            foreach (i; 0 .. z8_size()) { auto value = z8_get(i); values ~= z8_nonnull(value); }
-            sort!((a, b) => cast(long)a.majorBits == cast(long)b.majorBits ?
-                  cast(long)a.minorBits < cast(long)b.minorBits : cast(long)a.majorBits < cast(long)b.majorBits, SwapStrategy.stable)(values);
-            if (primaryData !is null) foreach (i, value; values) primaryData.z8_set(cast(long)i, z8_array_primary_box(value));
-            else items = values;
-            ++z8_version;
-            return this;
         } else static if (is(T == Z8Datespan)) {
             if (z8_size() <= 1) { ++z8_version; return this; }
             if (z8_size() >= 32) throw new Exception("datespan array sorting of 32 or more elements is not implemented");
@@ -360,58 +350,48 @@ class Z8Array(T) {
             z8_java_short_sort!(Z8Datespan, compare)(values);
             storeValues(); ++z8_version;
             return this;
-        } else static if (is(T == Z8Binary) || is(T == Z8File)) {
-            // The Java implementations compare all binary/file values as
-            // equal, so a stable sort keeps the original references in place.
-            if (z8_size() > 1) {
-                bool hasNull;
-                foreach (i; 0 .. z8_size()) if (z8_get(i) is null) hasNull = true;
-                if (hasNull && (z8_size() != 2 || z8_get(0) !is null || z8_get(1) is null))
-                    throw new Exception("null array element");
-            }
-            ++z8_version;
-            return this;
-        } else static if (is(T == Z8Geometry)) {
+        } else static if (is(T == Z8Guid) || is(T == Z8Date) || is(T == Z8Binary) || is(T == Z8File) || is(T == Z8Geometry)) {
             if (z8_size() <= 1) { ++z8_version; return this; }
-            Z8Geometry[] values;
+            T[] values;
             foreach (i; 0 .. z8_size()) values ~= z8_get(i);
-            bool hasNull, hasEmpty;
-            foreach (value; values) {
-                if (value is null) hasNull = true;
-                else if (value.rawHex is null && value.shape == -1) hasEmpty = true;
+            void storeValues() {
+                if (primaryData !is null) foreach (i, value; values) primaryData.z8_set(cast(long)i, z8_array_primary_box(value));
+                else items = values;
             }
-            if (hasNull) {
-                if (values.length != 2 || values[0] !is null || values[1] is null)
-                    throw new Exception("null array element");
-                values[0] = values[1]; values[1] = null;
+            int compare(T left, T right) {
+                z8_nonnull(left);
+                static if (is(T == Z8Binary) || is(T == Z8File)) return 0;
+                else {
+                    if (right is null) return -1;
+                    static if (is(T == Z8Guid)) {
+                        auto a = cast(long)left.majorBits, b = cast(long)right.majorBits;
+                        if (a != b) return a < b ? -1 : 1;
+                        a = cast(long)left.minorBits; b = cast(long)right.minorBits;
+                        return a < b ? -1 : a > b ? 1 : 0;
+                    } else static if (is(T == Z8Date)) {
+                        auto difference = cast(long)(cast(ulong)z8_date_ticks(left) - cast(ulong)z8_date_ticks(right));
+                        return difference < 0 ? -1 : difference > 0 ? 1 : 0;
+                    } else {
+                        if (left.rawHex is null && left.shape == -1) return -1;
+                        if (right.rawHex is null && right.shape == -1) throw new Exception("empty geometry array element");
+                        auto a = z8_geometry_to_string(left), b = z8_geometry_to_string(right);
+                        return a < b ? -1 : a > b ? 1 : 0;
+                    }
+                }
+            }
+            if (values.length < 32) {
+                scope(failure) storeValues();
+                z8_java_short_sort!(T, compare)(values);
             } else {
-                // A geometry without bytes has a non-symmetric comparator in
-                // Java; reject that case until its TimSort behavior is modeled.
-                if (hasEmpty) throw new Exception("empty geometry array element");
-                sort!((a, b) => z8_geometry_to_string(a) < z8_geometry_to_string(b), SwapStrategy.stable)(values);
+                foreach (value; values) {
+                    if (value is null) throw new Exception("null array element");
+                    static if (is(T == Z8Geometry)) if (value.rawHex is null && value.shape == -1)
+                        throw new Exception("empty geometry array element");
+                }
+                static if (!is(T == Z8Binary) && !is(T == Z8File))
+                    sort!((a, b) => compare(a, b) < 0, SwapStrategy.stable)(values);
             }
-            if (primaryData !is null) foreach (i, value; values) primaryData.z8_set(cast(long)i, z8_array_primary_box(value));
-            else items = values;
-            ++z8_version;
-            return this;
-        } else static if (is(T == Z8Date)) {
-            if (z8_size() <= 1) { ++z8_version; return this; }
-            Z8Date[] values;
-            foreach (i; 0 .. z8_size()) values ~= z8_get(i);
-            bool hasNull;
-            foreach (value; values) if (value is null) hasNull = true;
-            // Java date.compareTo subtracts signed ticks, including overflow.
-            if (hasNull) {
-                // For two elements TimSort calls the second value's compareTo.
-                // A date compares less than null; calling compareTo on null fails.
-                if (values.length != 2 || values[0] !is null || values[1] is null)
-                    throw new Exception("null array element");
-                values[0] = values[1]; values[1] = null;
-            } else sort!((a, b) => cast(long)(cast(ulong)z8_date_ticks(a) - cast(ulong)z8_date_ticks(b)) < 0,
-                         SwapStrategy.stable)(values);
-            if (primaryData !is null) foreach (i, value; values) primaryData.z8_set(cast(long)i, z8_array_primary_box(value));
-            else items = values;
-            ++z8_version;
+            storeValues(); ++z8_version;
             return this;
         } else {
             static if (isPrimitive) if (primaryData !is null) {

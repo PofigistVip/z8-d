@@ -27,7 +27,7 @@ void main() {
     assert(z8_primary_cast!Z8Geometry(view.z8_get(0)) is earlier && z8_primary_cast!Z8Geometry(view.z8_get(2)) is equal);
     auto leading = new Z8Array!Z8Geometry([null, first]); leading.z8_sort();
     assert(leading.z8_get(0) is first && leading.z8_get(1) is null);
-    auto invalid = new Z8Array!Z8Geometry([first, z8_geometry_none(4326)]);
+    auto invalid = new Z8Array!Z8Geometry([z8_geometry_none(4326), first]);
     assertThrown!Exception(invalid.z8_sort());
     auto points = new Z8Array!Z8Geometry([z8_geometry_point(z8_decimal_from_int(2), z8_decimal_from_int(0), 4326),
         z8_geometry_point(z8_decimal_from_int(-1), z8_decimal_from_int(0), 4326)]);
