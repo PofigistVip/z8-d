@@ -427,20 +427,27 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     if (sheet < 0 || sheet >= workbook.sheets.length) throw new Exception("POI report sheet expansion is not implemented");
     renameSheet = sheet; renameName = range.z8_get_attribute("sheetName"w);
     auto block = z8_poi_report_block(range.z8_get_attribute("address"w));
-    Z8PoiReportBlock[] templateMerges;
+    Z8PoiReportBlock[] templateMerges, outerTemplateMerges;
     if (workbook.sheets[sheet].hasMergedRegions) {
         if (!allowMerges || workbook.sheets[sheet].mergedReferences.length == 0)
             throw new Exception("merged POI report range cells are not implemented");
         foreach (reference; workbook.sheets[sheet].mergedReferences) {
             auto merge = z8_poi_report_block(reference);
-            if (merge.firstRow < block.firstRow || merge.lastRow > block.lastRow ||
-                merge.firstColumn < block.firstColumn || merge.lastColumn > block.lastColumn ||
-                (merge.firstRow == merge.lastRow && merge.firstColumn == merge.lastColumn))
+            if (merge.firstRow == merge.lastRow && merge.firstColumn == merge.lastColumn)
                 throw new Exception("merged POI report range cells are not implemented");
             foreach (previous; templateMerges) if (merge.firstRow <= previous.lastRow && previous.firstRow <= merge.lastRow &&
                 merge.firstColumn <= previous.lastColumn && previous.firstColumn <= merge.lastColumn)
                 throw new Exception("overlapping POI report merged regions");
-            templateMerges ~= merge;
+            foreach (previous; outerTemplateMerges) if (merge.firstRow <= previous.lastRow && previous.firstRow <= merge.lastRow &&
+                merge.firstColumn <= previous.lastColumn && previous.firstColumn <= merge.lastColumn)
+                throw new Exception("overlapping POI report merged regions");
+            bool inside = merge.firstRow >= block.firstRow && merge.lastRow <= block.lastRow &&
+                merge.firstColumn >= block.firstColumn && merge.lastColumn <= block.lastColumn;
+            bool intersects = merge.firstRow <= block.lastRow && block.firstRow <= merge.lastRow &&
+                merge.firstColumn <= block.lastColumn && block.firstColumn <= merge.lastColumn;
+            if (inside) templateMerges ~= merge;
+            else if (intersects) throw new Exception("merged POI report range cells are not implemented");
+            else outerTemplateMerges ~= merge;
         }
     }
     auto boundariesText = range.z8_get_attribute("boundaries"w);
@@ -461,6 +468,13 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     }
     if (explicitMerges.length && (!allowMerges || inheritedSheet >= 0 || boundariesText is null))
         throw new Exception("POI report explicit merge layout is not implemented");
+    if (outerTemplateMerges.length) {
+        if (boundariesText is null || inheritedSheet >= 0) throw new Exception("merged POI report range cells are not implemented");
+        auto bounds = z8_poi_report_block(boundariesText);
+        foreach (merge; outerTemplateMerges) if (merge.firstRow < bounds.firstRow || merge.lastRow > bounds.lastRow ||
+            merge.firstColumn < bounds.firstColumn || merge.lastColumn > bounds.lastColumn)
+            throw new Exception("merged POI report range cells are not implemented");
+    }
     if (boundariesText !is null) {
         auto boundaries = z8_poi_report_block(boundariesText);
         if (block.firstRow < boundaries.firstRow || block.lastRow > boundaries.lastRow ||
@@ -490,7 +504,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     if (!z8_report_source_next(source)) {
         // Java moves the footer over the empty block and clears the vacated
         // tail. Restrict the footer to dense, safely copyable cells.
-        if (!allowExpansion || boundariesText is null || templateMerges.length)
+        if (!allowExpansion || boundariesText is null || templateMerges.length || outerTemplateMerges.length)
             throw new Exception("empty POI report data source layout is not implemented");
         auto boundaries = z8_poi_report_block(boundariesText);
         auto offset = horizontal ? block.lastColumn - block.firstColumn + 1 : block.lastRow - block.firstRow + 1;
@@ -556,6 +570,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
             throw new Exception("POI report range expansion exceeds worksheet bounds");
         auto offset = iteration * (horizontal ? width : height);
         if (iteration) {
+            if (outerTemplateMerges.length) throw new Exception("merged POI report range expansion is not implemented");
             if (!allowExpansion || boundariesText is null)
                 throw new Exception("POI report range expansion layout is not implemented");
             auto boundaries = z8_poi_report_block(boundariesText);
@@ -638,6 +653,10 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
         z8_poi_report_explicit_merges(explicitMerges, block, z8_poi_report_block(boundariesText), sheet,
                                       horizontal, (iteration - 1) * (horizontal ? width : height), addedMerges);
         foreach (merge; addedMerges) foreach (original; templateMerges)
+            if (merge.firstRow <= original.lastRow && original.firstRow <= merge.lastRow &&
+                merge.firstColumn <= original.lastColumn && original.firstColumn <= merge.lastColumn)
+                throw new Exception("overlapping POI report merged regions");
+        foreach (merge; addedMerges) foreach (original; outerTemplateMerges)
             if (merge.firstRow <= original.lastRow && original.firstRow <= merge.lastRow &&
                 merge.firstColumn <= original.lastColumn && original.firstColumn <= merge.lastColumn)
                 throw new Exception("overlapping POI report merged regions");
