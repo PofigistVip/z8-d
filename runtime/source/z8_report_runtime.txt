@@ -68,13 +68,11 @@ private void z8_report_write_meta(Z8Object report, Z8JsonWriterState writer) {
 private void z8_report_default_prepare(Z8Object self, Z8Guid record) { z8_nonnull(self); }
 // PoiReport can preserve the template and update column visibility.
 // Range expansion requires the full spreadsheet engine.
-private Z8File z8_report_poi_without_ranges(Z8ReportState state) {
+private Z8File z8_report_poi_run(Z8Object report, Z8ReportState state) {
     import std.algorithm.searching : endsWith;
     import std.file : copy, mkdirRecurse;
     import std.path : buildPath, dirName;
     import std.string : replace, toLower;
-    if (state.ranges !is null && state.ranges.view().z8_erased_data().z8_size())
-        throw new Exception("POI report ranges are not implemented");
     auto templateName = z8_string_required(state.templateName).to!string;
     auto templatePath = templateName.toLower().endsWith(".xlsx") ? templateName : templateName ~ ".xlsx";
     auto source = z8_resources_load(("reports/" ~ templatePath).to!wstring);
@@ -84,7 +82,12 @@ private Z8File z8_report_poi_without_ranges(Z8ReportState state) {
     scope(exit) backend.rollback();
     auto input = z8_file_to_binary(source);
     scope(exit) z8_binary_close(input);
-    z8_poi_parse(input); // Fail on invalid templates before returning a file.
+    auto workbook = z8_poi_parse(input); // Fail on invalid templates before returning a file.
+    if (state.ranges !is null) {
+        auto ranges = state.ranges.view().z8_erased_data();
+        if (ranges.z8_size() > 1) throw new Exception("multiple POI report ranges are not implemented");
+        if (ranges.z8_size()) z8_poi_report_apply_simple_range(report, cast(Z8Object)ranges.z8_get(0), workbook);
+    }
     auto name = state.name is null ? templateName : state.name.to!string;
     if (state.name is null && name.toLower().endsWith(".xlsx")) name = name[0 .. $ - 5];
     name = name.replace("/", "-").replace("\\", "-").replace(":", "-").replace("\n", " ");
@@ -102,7 +105,7 @@ private Z8File z8_report_poi_without_ranges(Z8ReportState state) {
 }
 private Z8File z8_report_default_execute(Z8Object self, Z8Guid record) {
     auto state = z8_report_state(self);
-    if (state.engine == z8_report_poi) return z8_report_poi_without_ranges(state);
+    if (state.engine == z8_report_poi) return z8_report_poi_run(self, state);
     throw new Exception("report engine is not implemented: " ~ z8_string_or_empty(state.engine).to!string);
 }
 private Z8File z8_report_run(Z8Object self, Z8Guid record) {

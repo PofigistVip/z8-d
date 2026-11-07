@@ -6,6 +6,85 @@ private struct Z8PoiColumn {
     wstring[wstring] attributes;
 }
 
+private struct Z8PoiReportBlock { long firstRow, lastRow, firstColumn, lastColumn; }
+private Z8PoiReportBlock z8_poi_report_block(wstring address) {
+    import std.string : split;
+    auto parts = z8_string_required(address).split(":"w);
+    if (parts.length != 1 && parts.length != 2) throw new Exception("invalid POI report range address");
+    void parseCell(wstring text, out long row, out long column) {
+        size_t position;
+        if (position < text.length && text[position] == '$') ++position;
+        auto start = position;
+        while (position < text.length && text[position] >= 'A' && text[position] <= 'Z') {
+            column = column * 26 + text[position++] - 'A' + 1;
+            if (column > 16384) throw new Exception("invalid POI report column");
+        }
+        if (position == start) throw new Exception("invalid POI report range address");
+        if (position < text.length && text[position] == '$') ++position;
+        start = position;
+        while (position < text.length && text[position] >= '0' && text[position] <= '9') {
+            row = row * 10 + text[position++] - '0';
+            if (row > 1048576) throw new Exception("invalid POI report row");
+        }
+        if (position == start || position != text.length || !row) throw new Exception("invalid POI report range address");
+        --row; --column;
+    }
+    Z8PoiReportBlock result;
+    parseCell(parts[0], result.firstRow, result.firstColumn);
+    if (parts.length == 2) parseCell(parts[1], result.lastRow, result.lastColumn);
+    else { result.lastRow = result.firstRow; result.lastColumn = result.firstColumn; }
+    if (result.lastRow < result.firstRow || result.lastColumn < result.firstColumn)
+        throw new Exception("invalid POI report range order");
+    return result;
+}
+
+// A single, non-expanding simple source can be applied without editing cells
+// if the sheet contains no report expressions or reserved text delimiters.
+private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z8PoiWorkbook workbook) {
+    import std.algorithm.searching : canFind;
+    range = z8_nonnull(range); range.z8_ensure();
+    auto rangeState = z8_report_range_state(range);
+    if (rangeState.ranges !is null && rangeState.ranges.view().z8_erased_data().z8_size())
+        throw new Exception("nested POI report ranges are not implemented");
+    foreach (attribute; ["totals"w, "subtotal"w, "subtotalsBy"w, "subtotalsMerge"w, "merge"w, "sheetName"w])
+        if (range.z8_get_attribute(attribute) !is null) throw new Exception("POI report range option is not implemented");
+    auto axisText = range.z8_get_attribute("axis"w);
+    if (axisText !is null && axisText.to!int != 0 && axisText.to!int != 1) throw new Exception("invalid POI report range axis");
+    auto sheetText = range.z8_get_attribute("sheet"w);
+    auto sheet = sheetText is null ? 0 : sheetText.to!int;
+    if (sheet < 0 || sheet >= workbook.sheets.length) throw new Exception("POI report sheet expansion is not implemented");
+    if (workbook.sheets[sheet].hasMergedRegions) throw new Exception("merged POI report range cells are not implemented");
+    auto block = z8_poi_report_block(range.z8_get_attribute("address"w));
+    auto boundariesText = range.z8_get_attribute("boundaries"w);
+    if (boundariesText !is null) {
+        auto boundaries = z8_poi_report_block(boundariesText);
+        if (block.firstRow < boundaries.firstRow || block.lastRow > boundaries.lastRow ||
+            block.firstColumn < boundaries.firstColumn || block.lastColumn > boundaries.lastColumn)
+            throw new Exception("POI report block is outside its boundaries");
+    } else {
+        long rows = 1, columns = 0;
+        foreach (rowNumber, row; workbook.sheets[sheet].rows) {
+            if (rowNumber + 1 > rows) rows = rowNumber + 1;
+            if (rowNumber < 1000) foreach (columnNumber, cell; row.cells) if (columnNumber + 1 > columns) columns = columnNumber + 1;
+        }
+        if (rows > 1000) rows = 1000;
+        if (++columns > 1000) columns = 1000;
+        if (block.lastRow >= rows || block.lastColumn >= columns)
+            throw new Exception("POI report block is outside its sheet boundaries");
+    }
+    auto source = *z8_report_range_source(range);
+    if (z8_report_source_state(source).kind != Z8ReportSourceKind.simple)
+        throw new Exception("expanding POI report data sources are not implemented");
+    z8_report_register_data_source(report, source);
+    foreach (row; workbook.sheets[sheet].rows) foreach (cell; row.cells)
+        if (!cell.hasFormula && (cell.kind == "str"w || cell.kind == "inlineStr"w) &&
+            (cell.value.canFind('$') || cell.value.canFind('{') || cell.value.canFind('}')))
+            throw new Exception("POI report text expressions are not implemented");
+    z8_report_source_open(source, sheet);
+    scope(exit) z8_report_source_close(source);
+    if (!z8_report_source_next(source) || z8_report_source_next(source)) throw new Exception("invalid simple POI report source");
+}
+
 private wstring z8_poi_xml_attribute_escape(wstring value) {
     import std.string : replace;
     return value.replace("&"w, "&amp;"w).replace("<"w, "&lt;"w).replace("\""w, "&quot;"w)

@@ -17,6 +17,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     shutil.copytree(language, source)
     (source / "StaticReportProbe.bl").write_text('''
 import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
 public class StaticReportProbe {
     public static file run(string templateName, string outputName) {
         Report report; report.engine = Report.POI; report.template = templateName; report.name = outputName;
@@ -47,8 +48,35 @@ public class StaticReportProbe {
         string[] columns = {"Q", "B", "R", "D"}; report.hiddenColumns.add(0, columns);
         return report.run(guid.Null);
     }
+    public static file simpleRange() { SimpleRangeReport report; return report.run(guid.Null); }
+    public static file invalidRange() { InvalidRangeReport report; return report.run(guid.Null); }
+    public static file expressionRange() { ExpressionRangeReport report; return report.run(guid.Null); }
+    public static file implicitRange() { ImplicitRangeReport report; return report.run(guid.Null); }
+    public static file invalidImplicitRange() { InvalidImplicitRangeReport report; return report.run(guid.Null); }
+    public static file mergedRange() { MergedRangeReport report; return report.run(guid.Null); }
 }
 ''', encoding="utf-8")
+    for name, template, address, boundaries in (
+            ("SimpleRangeReport", "sample", "$A$1:A1", "A1:B2"),
+            ("InvalidRangeReport", "sample", "A1:B2", "A1"),
+            ("ExpressionRangeReport", "expression", "A1", "A1")):
+        (source / (name + ".bl")).write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+public class %s extends Report {
+    engine = Report.POI; template = "%s";
+    [address "%s"] [boundaries "%s"] Range region;
+    ranges = {region};
+}''' % (name, template, address, boundaries), encoding="utf-8")
+    for name, template, address in (("ImplicitRangeReport", "sample", "B1"),
+                                    ("InvalidImplicitRangeReport", "sample", "C1"),
+                                    ("MergedRangeReport", "merged", "A1")):
+        (source / (name + ".bl")).write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+public class %s extends Report {
+    engine = Report.POI; template = "%s";
+    [address "%s"] Range region;
+    ranges = {region};
+}''' % (name, template, address), encoding="utf-8")
     application, working = temp / "application", temp / "working"
     (application / "reports").mkdir(parents=True)
     working.mkdir()
@@ -105,6 +133,16 @@ public class StaticReportProbe {
         for name, content in multiple.items():
             archive.writestr(name, content)
     (application / "reports/broken.xlsx").write_text("not a workbook", encoding="utf-8")
+    expression = dict(entries)
+    expression["xl/worksheets/sheet1.xml"] = original_sheet.replace("Example", "${value}")
+    with zipfile.ZipFile(application / "reports/expression.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in expression.items():
+            archive.writestr(name, content)
+    merged = dict(entries)
+    merged["xl/worksheets/sheet1.xml"] = original_sheet.replace("</worksheet>", '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')
+    with zipfile.ZipFile(application / "reports/merged.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in merged.items():
+            archive.writestr(name, content)
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "report.d"
     harness.write_text('''import z8.runtime;
@@ -150,6 +188,15 @@ void main(string[] args) {
     bool badSheet; try { P.m_invalidSheet(); } catch (Exception) { badSheet = true; } assert(badSheet);
     bool badColumn; try { P.m_invalidColumn(); } catch (Exception) { badColumn = true; } assert(badColumn);
     assert(database.begins == 14 && database.rollbacks == 14);
+    auto range = P.m_simpleRange();
+    assert(read(z8_file_resolve_path(range)) == read(buildPath(args[1], "reports", "sample.xlsx")));
+    copy(z8_file_resolve_path(range), buildPath(args[2], "range.xlsx"));
+    bool badRange; try { P.m_invalidRange(); } catch (Exception) { badRange = true; } assert(badRange);
+    bool expression; try { P.m_expressionRange(); } catch (Exception) { expression = true; } assert(expression);
+    assert(z8_file_exists(P.m_implicitRange()));
+    bool outside; try { P.m_invalidImplicitRange(); } catch (Exception) { outside = true; } assert(outside);
+    bool merged; try { P.m_mergedRange(); } catch (Exception) { merged = true; } assert(merged);
+    assert(database.begins == 20 && database.rollbacks == 20);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -236,4 +283,45 @@ class PoiHiddenOracle {
                                  str(application / "reports/order.xlsx"), str(working / "order.xlsx"), "ordered"],
                                 cwd=temp, capture_output=True, text=True)
         assert result.returncode == 0, result.stderr
+        original_root = os.environ.get("Z8_ORIGINAL_ROOT")
+        if original_root:
+            server_jars = list((Path(original_root) / "org.zenframework.z8.server/target/libs").glob("*.jar"))
+            antlr = list(cache.glob("org.antlr/antlr4-runtime/4.13.2/**/*.jar"))
+            commons = [p for p in cache.rglob("*.jar") if p.name.startswith(
+                ("commons-logging-", "commons-lang-", "commons-io-", "commons-fileupload-")) and not p.name.endswith("-sources.jar")]
+            if not server_jars or not antlr:
+                raise SystemExit("Original Z8 server JAR or ANTLR runtime is unavailable")
+            range_classpath = os.pathsep.join(map(str, [*server_jars, *antlr, *commons, *jars]))
+            range_oracle = temp / "PoiRangeOracle.java"
+            range_oracle.write_text('''import java.io.FileInputStream;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.zenframework.z8.server.config.ServerConfig;
+import org.zenframework.z8.server.engine.ApplicationServer;
+import org.zenframework.z8.server.engine.Session;
+import org.zenframework.z8.server.request.Request;
+import org.zenframework.z8.server.runtime.OBJECT;
+import org.zenframework.z8.server.reports.poi.*;
+class PoiRangeOracle {
+  public static void main(String[] args) throws Exception {
+    ServerConfig.load(args[2]);
+    ApplicationServer.setRequest(new Request(new Session("test")));
+    try (XSSFWorkbook original = new XSSFWorkbook(new FileInputStream(args[0]));
+         XSSFWorkbook actual = new XSSFWorkbook(new FileInputStream(args[1]))) {
+      PoiReport report = new PoiReport(new ReportOptions()).setContext(new OBJECT.CLASS<OBJECT>(null).get());
+      Range child = new Range().setSource(SimpleSource.newDefault()).setBlock("$A$1:A1").setBoundaries("A1:B2");
+      report.addRange(0, child);
+      SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
+      report.getRange(0).apply(modifier); modifier.close();
+      String expected = original.getSheetAt(0).getRow(0).getCell(0).getStringCellValue();
+      String result = actual.getSheetAt(0).getRow(0).getCell(0).getStringCellValue();
+      if (!expected.equals(result)) throw new AssertionError(expected + " != " + result);
+    } finally { ApplicationServer.setRequest(null); }
+  }
+}''', encoding="utf-8")
+            config = temp / "oracle.properties"
+            config.write_text("application.language=en\napplication.working.path=" + temp.as_posix() + "\n", encoding="utf-8")
+            subprocess.run(["javac", "-source", "8", "-target", "8", "-cp", range_classpath, str(range_oracle)], cwd=temp, check=True)
+            result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                     str(workbook), str(working / "range.xlsx"), str(config)], cwd=temp, capture_output=True, text=True)
+            assert result.returncode == 0, result.stderr
 print("POI static report template, naming and transaction verified")
