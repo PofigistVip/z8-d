@@ -20,13 +20,35 @@ private string z8_email_header(string[string] headers, string name, string fallb
     return value is null ? fallback : *value;
 }
 private string z8_email_parameter(string header, string parameter) {
-    import std.string : indexOf, split, strip, toLower;
-    foreach (part; header.split(";")) {
-        auto eq = part.indexOf('=');
-        if (eq < 0 || part[0 .. eq].strip().toLower() != parameter) continue;
-        auto value = part[eq + 1 .. $].strip();
-        if (value.length >= 2 && value[0] == '"' && value[$ - 1] == '"') value = value[1 .. $ - 1];
-        return value.idup;
+    import std.string : indexOf, strip, toLower;
+    auto first = header.indexOf(';');
+    if (first < 0) return "";
+    size_t i = cast(size_t)first + 1;
+    while (i < header.length) {
+        auto start = i;
+        while (i < header.length && header[i] != '=' && header[i] != ';') ++i;
+        if (i == header.length) break;
+        if (header[i] == ';') { ++i; continue; }
+        auto name = header[start .. i].strip().toLower();
+        ++i;
+        while (i < header.length && (header[i] == ' ' || header[i] == '\t')) ++i;
+        string value;
+        if (i < header.length && header[i] == '"') {
+            ++i; char[] decoded;
+            while (i < header.length && header[i] != '"') {
+                if (header[i] == '\\' && i + 1 < header.length) ++i;
+                decoded ~= header[i++];
+            }
+            if (i < header.length) ++i;
+            value = decoded.idup;
+            while (i < header.length && header[i] != ';') ++i;
+        } else {
+            start = i;
+            while (i < header.length && header[i] != ';') ++i;
+            value = header[start .. i].strip().idup;
+        }
+        if (name == parameter) return value;
+        if (i < header.length) ++i;
     }
     return "";
 }

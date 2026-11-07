@@ -76,6 +76,12 @@ messages = [
     b'From: sender@example.com\r\nSubject: Boundary whitespace\r\n'
     b'Content-Type: multipart/mixed; boundary=part\r\n\r\n'
     b'--part \t\r\nContent-Type: text/plain\r\n\r\nFirst\r\n--part-- \t\r\n',
+    b'From: sender@example.com\r\nSubject: Quoted boundary\r\n'
+    b'Content-Type: multipart/mixed; boundary="part;one"\r\n\r\n'
+    b'--part;one\r\nContent-Type: text/plain; charset="UTF-8"\r\n\r\nQuoted\r\n--part;one--\r\n',
+    b'From: sender@example.com\r\nSubject: Escaped boundary\r\n'
+    b'Content-Type: multipart/mixed; note="one;two"; boundary="part\\"one"\r\n\r\n'
+    b'--part"one\r\nContent-Type: text/plain\r\n\r\nEscaped\r\n--part"one--\r\n',
 ]
 for encoding, value in (("windows-1250", "Žluťoučký"), ("windows-1253", "Καλημέρα"),
                         ("windows-1254", "İstanbul"), ("windows-1257", "Ąžuolas"),
