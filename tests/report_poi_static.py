@@ -63,6 +63,12 @@ public class StaticReportProbe {
     public static IntField field(FieldRangeReport report) { return report.amount; }
     public static IntField groupField(FieldRangeReport report) { return report.group.count; }
     public static file runFieldReport(FieldRangeReport report) { return report.run(guid.Null); }
+    public static CustomRangeReport createCustomReport() { CustomRangeReport report; return report; }
+    public static file runCustomReport(CustomRangeReport report) { return report.run(guid.Null); }
+    public static int opened(CustomRangeReport report) { return report.rows.opened; }
+    public static int closed(CustomRangeReport report) { return report.rows.closed; }
+    public static void customCount(CustomRangeReport report, int count) { report.rows.n = count; }
+    public static void customFail(CustomRangeReport report) { report.rows.fail = true; }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -133,6 +139,23 @@ public class FieldRangeReport extends Report {
 import org.zenframework.z8.base.table.value.IntField;
 public class FieldGroup extends Object {
     public IntField count; objects = {count};
+}''', encoding="utf-8")
+    (source / "ReportRows.bl").write_text('''import org.zenframework.z8.base.form.report.CustomData;
+import org.zenframework.z8.base.json.JsonObject;
+public class ReportRows extends CustomData {
+    public int opened = 0; public int closed = 0; public int n = 1; public bool fail = false;
+    public JsonObject data; objects = {data};
+    virtual public int count() { return n; }
+    virtual public void open() { opened += 1; data.set("value", 123); if (fail) throw "open failed"; }
+    virtual public void close() { closed += 1; }
+}''', encoding="utf-8")
+    (source / "CustomRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+public class CustomRangeReport extends Report {
+    engine = Report.POI; template = "custom";
+    public ReportRows rows; objects = {rows};
+    [address "A1:B1"] [boundaries "A1:B1"] Range region;
+    region.source = rows; ranges = {region};
 }''', encoding="utf-8")
     (source / "UnsupportedContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
@@ -302,6 +325,14 @@ public class %s extends Report {
     with zipfile.ZipFile(application / "reports/fields.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in fields.items():
             archive.writestr(entry_name, content)
+    custom = dict(parameters)
+    custom["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="2" uniqueCount="2"><si><t>${rows.data.value}</t></si><si><t>Value: ${rows.data.value}</t></si></sst>'''
+    custom["xl/worksheets/sheet1.xml"] = original_sheet.replace(
+        '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
+        '<c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c>')
+    with zipfile.ZipFile(application / "reports/custom.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in custom.items():
+            archive.writestr(entry_name, content)
     merged = dict(entries)
     merged["xl/worksheets/sheet1.xml"] = original_sheet.replace("</worksheet>", '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')
     with zipfile.ZipFile(application / "reports/merged.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -427,6 +458,15 @@ void main(string[] args) {
     fieldCursor.closed = true;
     bool fieldClosed; try { P.m_runFieldReport(fieldReport); } catch (Exception) { fieldClosed = true; } assert(fieldClosed);
     assert(database.begins == 44 && database.rollbacks == 44);
+    auto customReport = P.m_createCustomReport();
+    bool customResult; try { P.m_runCustomReport(customReport); } catch (Exception) { customResult = true; } assert(customResult);
+    assert(z8_optional_require(P.m_opened(customReport)) == 1 && z8_optional_require(P.m_closed(customReport)) == 1);
+    P.m_customCount(customReport, z8_optional_wrap(2L));
+    bool customMany; try { P.m_runCustomReport(customReport); } catch (Exception) { customMany = true; } assert(customMany);
+    P.m_customFail(customReport);
+    bool customFailedOpen; try { P.m_runCustomReport(customReport); } catch (Exception) { customFailedOpen = true; } assert(customFailedOpen);
+    assert(z8_optional_require(P.m_opened(customReport)) == 3 && z8_optional_require(P.m_closed(customReport)) == 3);
+    assert(database.begins == 47 && database.rollbacks == 47);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -480,6 +520,9 @@ void main(string[] args) {
         contents = contents.replace(
             'bool fieldResult; try { P.m_runFieldReport(fieldReport); } catch (Exception) { fieldResult = true; } assert(fieldResult);',
             'auto fieldResult = P.m_runFieldReport(fieldReport); copy(z8_file_resolve_path(fieldResult), buildPath(args[2], "fields.xlsx")); assert(counter.writes == 6);')
+        contents = contents.replace(
+            'bool customResult; try { P.m_runCustomReport(customReport); } catch (Exception) { customResult = true; } assert(customResult);',
+            'auto customResult = P.m_runCustomReport(customReport); copy(z8_file_resolve_path(customResult), buildPath(args[2], "custom.xlsx")); assert(counter.writes == 7);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -641,6 +684,8 @@ class PoiRangeOracle {
       OBJECT context = new OBJECT.CLASS<OBJECT>(null).get();
       boolean contextCase = args.length > 3 && "context".equals(args[3]);
       boolean fieldCase = args.length > 3 && "fields".equals(args[3]);
+      boolean customCase = args.length > 3 && "custom".equals(args[3]);
+      DataSource customSource = null;
       if (contextCase) {
         org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> info =
             new org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<>(context);
@@ -675,19 +720,32 @@ class PoiRangeOracle {
             new org.zenframework.z8.server.base.table.value.IntegerField.CLASS<>(group.get());
         count.setIndex("count"); group.get().members().add(count); count.get().setCursor(cursor);
       }
+      if (customCase) {
+        OBJECT.CLASS<OBJECT> rows = new OBJECT.CLASS<>(context);
+        rows.setIndex("rows"); context.members().add(rows);
+        final org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> data =
+            new org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<>(rows.get());
+        data.setIndex("data"); rows.get().members().add(data);
+        customSource = new SimpleSource(rows.get()) {
+          @Override public void open() {
+            super.open(); data.get().z8_set(new org.zenframework.z8.server.types.string("value"),
+                                             new org.zenframework.z8.server.types.integer(123));
+          }
+        };
+      }
       PoiReport report = new PoiReport(new ReportOptions()).setContext(context);
       boolean constants = args.length > 3 && "constants".equals(args[3]);
       boolean parameters = args.length > 3 && "parameters".equals(args[3]);
       boolean dates = args.length > 3 && "dates".equals(args[3]);
-      Range child = new Range().setSource(SimpleSource.newDefault())
-          .setBlock(fieldCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(fieldCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
+      Range child = new Range().setSource(customCase ? customSource : SimpleSource.newDefault())
+          .setBlock(customCase ? "A1:B1" : fieldCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
+          .setBoundaries(customCase ? "A1:B1" : fieldCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       report.addRange(0, child);
       if (args.length > 3 && "rename".equals(args[3])) original.setSheetName(0, "Отчёт \\uD83D\\uDE00");
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier); modifier.close();
-      if (constants || parameters || contextCase || dates || fieldCase) {
-        for (int i = 0; i < (dates ? 10 : constants ? 7 : 5); ++i) {
+      if (constants || parameters || contextCase || dates || fieldCase || customCase) {
+        for (int i = 0; i < (customCase ? 2 : dates ? 10 : constants ? 7 : 5); ++i) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(0).getCell(i);
           if (expected.getCellType() != result.getCellType()) throw new AssertionError("cell type differs at " + i);
@@ -741,6 +799,10 @@ class PoiRangeOracle {
                     assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/fields.xlsx"), str(working / "fields.xlsx"), str(config), "fields"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/custom.xlsx"), str(working / "custom.xlsx"), str(config), "custom"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
 print("POI static report template, naming and transaction verified")

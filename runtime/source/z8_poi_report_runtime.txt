@@ -107,9 +107,15 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
             throw new Exception("POI report block is outside its sheet boundaries");
     }
     auto source = *z8_report_range_source(range);
-    if (z8_report_source_state(source).kind != Z8ReportSourceKind.simple)
+    auto sourceKind = z8_report_source_state(source).kind;
+    if (sourceKind != Z8ReportSourceKind.simple && sourceKind != Z8ReportSourceKind.custom)
         throw new Exception("expanding POI report data sources are not implemented");
     z8_report_register_data_source(report, source);
+    // Java opens and advances the source before evaluating cells. In
+    // particular, CustomData.open may populate report context members.
+    scope(exit) z8_report_source_close(source);
+    z8_report_source_open(source, sheet);
+    if (!z8_report_source_next(source)) throw new Exception("empty POI report data sources are not implemented");
     auto evalState = new Z8EvalState();
     evalState.reportContext = report;
     auto request = z8_application_request();
@@ -162,9 +168,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
         }
         edits ~= edit;
     }
-    z8_report_source_open(source, sheet);
-    scope(exit) z8_report_source_close(source);
-    if (!z8_report_source_next(source) || z8_report_source_next(source)) throw new Exception("invalid simple POI report source");
+    if (z8_report_source_next(source)) throw new Exception("expanding POI report data sources are not implemented");
 }
 
 private ubyte[] z8_poi_report_rename_sheet(const(ubyte)[] input, Z8PoiWorkbook workbook, int index, wstring name) {
