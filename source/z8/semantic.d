@@ -289,7 +289,7 @@ class Checker {
             (type == ValueType.selfMatrix && extendsBuiltinPrimary(e.objectClass));
     }
     private bool isPrimaryMapValueConversion(ValueType actual, ValueType expected, Expression e) {
-        return isMap(actual) && isMap(expected) && [ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType].canFind(mapKeyType(actual)) &&
+        return isMap(actual) && isMap(expected) && [ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.primaryType].canFind(mapKeyType(actual)) &&
             mapKeyType(expected) == mapKeyType(actual) && mapValueType(expected) == ValueType.primaryType &&
             (isScalarPrimaryArray(arrayOf(mapValueType(actual))) ||
              (mapValueType(actual) == ValueType.selfType && extendsBuiltinPrimary(e.objectClass)));

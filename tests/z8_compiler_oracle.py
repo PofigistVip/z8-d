@@ -248,8 +248,11 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     for kind in ("binary", "date", "datespan", "geometry"):
         declaration = kind + '[] source; primary[] values = source; for (primary item : source) {}'
         name_cases.append((True, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
-    for typed, primary in (("int[]", "primary[]"), ("int[][]", "primary[][]"), ("int[string]", "primary[string]"), ("string[string]", "primary[string]"), ("int[int]", "primary[int]")):
+    for typed, primary in (("int[]", "primary[]"), ("int[][]", "primary[][]"), ("int[string]", "primary[string]"), ("string[string]", "primary[string]"), ("int[int]", "primary[int]"), ("int[primary]", "primary[primary]")):
         name_cases.append((False, {"NameA": 'public class NameA { static void choose(' + typed + ' x) {} static void choose(' + primary + ' x) {} static void f() { ' + typed + ' x; choose(x); } }'}))
+    for kind in ("int", "string", "date"):
+        declaration = kind + '[primary] source; primary[primary] values = source; values.add(source);'
+        name_cases.append((True, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
     for key in ("int", "bool", "decimal"):
         for kind in ("int", "string", "date"):
             declaration = kind + '[' + key + '] source; primary[' + key + '] values = source; values.add(source);'
@@ -267,6 +270,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         "NameA[][] source; primary[][] values; values.removeAll(source);",
         "NameA[string] source; primary[string] values = source; values.add(source);",
         "NameA[int] source; primary[int] values = source; values.add(source);",
+        "NameA[primary] source; primary[primary] values = source; values.add(source);",
         "NameA[] source; primary[] values; primary[] result = true ? values : source;",
     ):
         name_cases.append((True, {"NameA": 'public class NameA extends primary { public void operator = (NameA value) {} static void f() { ' + declaration + ' } }'}))
