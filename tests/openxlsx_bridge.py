@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import zipfile
+import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
@@ -30,6 +31,12 @@ with tempfile.TemporaryDirectory() as directory:
     with zipfile.ZipFile(workbook, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, contents in entries.items():
             archive.writestr(name, contents.encode("utf-8"))
+    styled = temp / "styled.xlsx"
+    with zipfile.ZipFile(styled, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, contents in entries.items():
+            if name == "xl/worksheets/sheet1.xml":
+                contents = contents.replace("<sheetData>", '<cols><col min="1" max="4" width="12" customWidth="1" outlineLevel="2" collapsed="0"/></cols><sheetData>')
+            archive.writestr(name, contents.encode("utf-8"))
     executable = temp / ("probe.exe" if os.name == "nt" else "probe")
     command = ["dmd", "-I" + str(ROOT / "xlsx/source"), str(ROOT / "tests/openxlsx_bridge.d"),
                str(ROOT / "xlsx/source/z8/xlsx/openxlsx.d"), "-of=" + str(executable)]
@@ -44,10 +51,16 @@ with tempfile.TemporaryDirectory() as directory:
         environment["LD_LIBRARY_PATH"] = str(library_dir) + os.pathsep + environment.get("LD_LIBRARY_PATH", "")
     saved = temp / "saved.xlsx"
     saved_again = temp / "saved-again.xlsx"
-    subprocess.run([str(executable), str(workbook), str(saved), str(saved_again)], check=True, env=environment)
+    styled_saved = temp / "styled-saved.xlsx"
+    subprocess.run([str(executable), str(workbook), str(saved), str(saved_again), str(styled), str(styled_saved)], check=True, env=environment)
     with zipfile.ZipFile(saved) as archive:
         assert archive.testzip() is None
         assert archive.read("custom/preserved.txt") == b"An unrelated package entry"
+        sheet = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+        namespace = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        columns = [item.attrib for item in sheet.findall("x:cols/x:col", namespace)]
+        assert columns == [{"min": "2", "max": "2", "hidden": "1"},
+                           {"min": "4", "max": "4", "hidden": "1"}], columns
     cache = Path.home() / ".gradle/caches/modules-2/files-2.1"
     jars = sorted(p for p in cache.glob("org.zenframework.z8.dependencies.*/*/3.4-cert/**/*.jar")
                   if not p.name.endswith("-sources.jar"))
@@ -71,11 +84,25 @@ class SavedWorkbookOracle {
       if (!book.getSheetAt(0).isColumnHidden(1) || book.getSheetAt(0).isColumnHidden(3))
         throw new AssertionError("Repeated save did not retain column changes");
     }
+    try (Workbook before = new XSSFWorkbook(new FileInputStream(args[2]));
+         Workbook after = new XSSFWorkbook(new FileInputStream(args[0]))) {
+      for (int col : new int[]{0, 1, 2, 3})
+        if (before.getSheetAt(0).getColumnWidth(col) != after.getSheetAt(0).getColumnWidth(col))
+          throw new AssertionError("Column width changed at " + col + ": " + before.getSheetAt(0).getColumnWidth(col) + " != " + after.getSheetAt(0).getColumnWidth(col));
+    }
+    try (Workbook before = new XSSFWorkbook(new FileInputStream(args[3]));
+         Workbook after = new XSSFWorkbook(new FileInputStream(args[4]))) {
+      Sheet expected = before.getSheetAt(0), actual = after.getSheetAt(0);
+      expected.setColumnHidden(1, true); expected.setColumnHidden(3, true);
+      for (int col = 0; col < 6; ++col)
+        if (expected.getColumnWidth(col) != actual.getColumnWidth(col) || expected.isColumnHidden(col) != actual.isColumnHidden(col))
+          throw new AssertionError("Styled column differs at " + col);
+    }
   }
 }''', encoding="utf-8")
         classpath = os.pathsep.join(map(str, jars))
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8", "-cp", classpath, str(oracle)], cwd=temp, check=True)
-        subprocess.run(["java", "-cp", str(temp) + os.pathsep + classpath, "SavedWorkbookOracle", str(saved), str(saved_again)], cwd=temp, check=True)
+        subprocess.run(["java", "-cp", str(temp) + os.pathsep + classpath, "SavedWorkbookOracle", str(saved), str(saved_again), str(workbook), str(styled), str(styled_saved)], cwd=temp, check=True)
     else:
         print("POI output verification skipped: original POI jars or Java unavailable")
 print("OpenXLSX bridge: OK")

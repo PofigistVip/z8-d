@@ -1,4 +1,5 @@
 #include <OpenXLSX.hpp>
+#include <XLXmlParser.hpp>
 #include <miniz.h>
 #include <cstring>
 #include <exception>
@@ -290,8 +291,35 @@ Z8_EXPORT int z8_xlsx_rename_sheet(void* handle, unsigned sheet, const char* nam
 Z8_EXPORT int z8_xlsx_set_column_hidden(void* handle, unsigned sheet, unsigned column, int hidden) noexcept {
     return protect([&] {
         if (column >= 16384) throw std::out_of_range("column index out of bounds");
-        auto page = worksheet(handle, sheet);
-        page.column(static_cast<uint16_t>(column + 1)).setHidden(hidden != 0);
+        auto& doc = document(handle);
+        auto name = sheetName(doc, sheet);
+        auto page = doc.workbook().worksheet(name);
+        std::ostringstream contents;
+        doc.workbook().sheet(name).print(contents);
+        pugi::xml_document snapshot;
+        auto xml = contents.str();
+        if (!snapshot.load_buffer(xml.data(), xml.size())) throw std::runtime_error("cannot inspect XLSX columns");
+        auto localName = [](const char* value) {
+            auto colon = std::strrchr(value, ':');
+            return colon ? colon + 1 : value;
+        };
+        bool existed = false;
+        for (auto group : snapshot.document_element().children()) {
+            if (std::strcmp(localName(group.name()), "cols") != 0) continue;
+            for (auto node : group.children()) {
+                if (std::strcmp(localName(node.name()), "col") != 0) continue;
+                auto min = node.attribute("min").as_uint(), max = node.attribute("max").as_uint();
+                if (min <= column + 1 && column + 1 <= max) existed = true;
+            }
+        }
+        auto target = page.column(static_cast<uint16_t>(column + 1));
+        target.setHidden(hidden != 0);
+        // OpenXLSX inserts width=9.8 for new columns. POI leaves the width
+        // unspecified, so preserve the worksheet's effective default instead.
+        if (!existed) {
+            target.columnNode().remove_attribute("width");
+            target.columnNode().remove_attribute("customWidth");
+        }
     });
 }
 

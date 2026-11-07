@@ -81,6 +81,11 @@ void main(string[] args) {
     write(args[3], savedAgain);
     write(args[2], saved);
     memoryBook.close();
+    auto styled = new Workbook(cast(ubyte[])read(args[4]));
+    styled.setColumnHidden(0, 1, true);
+    styled.setColumnHidden(0, 3, true);
+    write(args[5], styled.save());
+    styled.close();
     assertThrown!Exception(new Workbook(cast(ubyte[])[]));
     assertThrown!Exception(new Workbook(cast(ubyte[])[1, 2, 3]));
 }
