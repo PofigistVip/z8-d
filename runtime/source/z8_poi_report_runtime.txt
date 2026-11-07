@@ -394,7 +394,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
         if (block.firstRow < boundaries.firstRow || block.lastRow > boundaries.lastRow ||
             block.firstColumn < boundaries.firstColumn || block.lastColumn > boundaries.lastColumn)
             throw new Exception("POI report block is outside its boundaries");
-    } else {
+    } else if (inheritedSheet < 0) {
         long rows = 1, columns = 0;
         foreach (rowNumber, row; workbook.sheets[sheet].rows) {
             if (rowNumber + 1 > rows) rows = rowNumber + 1;
@@ -694,8 +694,9 @@ private void z8_poi_report_apply_nested_simple(Z8Object report, Z8Object range, 
     name = range.z8_get_attribute("sheetName"w);
     auto outer = z8_poi_report_block(range.z8_get_attribute("address"w));
     auto outerText = range.z8_get_attribute("boundaries"w);
-    if (outerText is null) throw new Exception("nested POI report ranges require explicit boundaries");
-    auto outerBounds = z8_poi_report_block(outerText);
+    if (outerText is null && inheritedSheet < 0) throw new Exception("nested POI report ranges require explicit boundaries");
+    // A nested parent's effective bounds were validated by its own parent.
+    auto outerBounds = outerText is null ? outer : z8_poi_report_block(outerText);
     bool equal(Z8PoiReportBlock a, Z8PoiReportBlock b) {
         return a.firstRow == b.firstRow && a.lastRow == b.lastRow && a.firstColumn == b.firstColumn && a.lastColumn == b.lastColumn;
     }
@@ -709,8 +710,9 @@ private void z8_poi_report_apply_nested_simple(Z8Object report, Z8Object range, 
         child.z8_ensure();
         auto inner = z8_poi_report_block(child.z8_get_attribute("address"w));
         auto innerText = child.z8_get_attribute("boundaries"w);
-        if (innerText is null) throw new Exception("nested POI report ranges require explicit boundaries");
-        auto innerBounds = z8_poi_report_block(innerText);
+        // Java inherits the parent's block for an only child; siblings default
+        // to their own blocks. Only layouts without resizing are handled here.
+        auto innerBounds = innerText !is null ? z8_poi_report_block(innerText) : children.z8_size() == 1 ? outer : inner;
         if (!equal(inner, innerBounds) || inner.firstRow < outer.firstRow || inner.firstColumn < outer.firstColumn ||
             inner.lastRow > outer.lastRow || inner.lastColumn > outer.lastColumn)
             throw new Exception("nested POI report range layout is not implemented");

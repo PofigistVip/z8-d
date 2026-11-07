@@ -134,11 +134,15 @@ public class StaticReportProbe {
     public static file cloneHighMultiple() { CloneHighMultipleReport report; return report.run(guid.Null); }
     public static file cloneHighRenameConflict() { CloneHighRenameConflictReport report; return report.run(guid.Null); }
     public static file nestedSimple() { NestedSimpleReport report; return report.run(guid.Null); }
+    public static file nestedImplicitSingle() { NestedImplicitSingleReport report; return report.run(guid.Null); }
+    public static file nestedImplicitSiblings() { NestedImplicitSiblingsReport report; return report.run(guid.Null); }
+    public static file nestedImplicitInvalid() { NestedImplicitInvalidReport report; return report.run(guid.Null); }
     public static file nestedUnsupported() { NestedUnsupportedReport report; return report.run(guid.Null); }
     public static file nestedText() { NestedTextReport report; return report.run(guid.Null); }
     public static file nestedEval() { NestedEvalReport report; return report.run(guid.Null); }
     public static file nestedCascade() { NestedCascadeReport report; return report.run(guid.Null); }
     public static file nestedDeep() { NestedDeepReport report; return report.run(guid.Null); }
+    public static file nestedDeepImplicit() { NestedDeepImplicitReport report; return report.run(guid.Null); }
     public static file nestedParent() { NestedParentReport report; return report.run(guid.Null); }
     public static NestedParentQueryReport createNestedParentQuery() { NestedParentQueryReport report; return report; }
     public static QueryRows nestedParentQuery(NestedParentQueryReport report) { return report.q; }
@@ -414,6 +418,12 @@ public class NestedSimpleReport extends Report {
     inner.source = rows; outer.ranges = {inner}; ranges = {outer};
     virtual protected void prepare(guid recordId) { OrderedRows.sequence = 0; }
 }''', encoding="utf-8")
+    (source / "NestedImplicitSingleReport.bl").write_text(
+        (source / "NestedSimpleReport.bl").read_text(encoding="utf-8")
+        .replace("NestedSimpleReport", "NestedImplicitSingleReport").replace('[address "B1"] [boundaries "B1"]', '[address "A1:B1"]'), encoding="utf-8")
+    (source / "NestedImplicitInvalidReport.bl").write_text(
+        (source / "NestedSimpleReport.bl").read_text(encoding="utf-8")
+        .replace("NestedSimpleReport", "NestedImplicitInvalidReport").replace('[address "B1"] [boundaries "B1"]', '[address "B1"]'), encoding="utf-8")
     (source / "NestedUnsupportedReport.bl").write_text(
         (source / "NestedSimpleReport.bl").read_text(encoding="utf-8")
         .replace("NestedSimpleReport", "NestedUnsupportedReport").replace('[address "B1"] [boundaries "B1"]', '[address "A1"] [boundaries "A1"]'), encoding="utf-8")
@@ -450,6 +460,11 @@ public class NestedDeepReport extends Report {
     [address "C1"] [boundaries "C1"] Range inner;
     inner.source = rows; middle.ranges = {inner}; outer.ranges = {middle}; ranges = {outer};
 }''', encoding="utf-8")
+    (source / "NestedDeepImplicitReport.bl").write_text(
+        (source / "NestedDeepReport.bl").read_text(encoding="utf-8")
+        .replace("NestedDeepReport", "NestedDeepImplicitReport")
+        .replace('[address "B1:C1"] [boundaries "B1:C1"]', '[address "A1:C1"]')
+        .replace('[address "C1"] [boundaries "C1"]', '[address "A1:C1"]'), encoding="utf-8")
     (source / "NestedCycleReport.bl").write_text(
         (source / "NestedDeepReport.bl").read_text(encoding="utf-8")
         .replace("NestedDeepReport", "NestedCycleReport").replace('inner.source = rows;', 'inner.source = rows; inner.ranges = {outer};'), encoding="utf-8")
@@ -511,6 +526,9 @@ public class NestedSiblingsReport extends Report {
     left.source = rows; right.source = rows; outer.ranges = {right, left}; ranges = {outer};
     virtual protected void prepare(guid recordId) { OrderedRows.sequence = 0; }
 }''', encoding="utf-8")
+    (source / "NestedImplicitSiblingsReport.bl").write_text(
+        (source / "NestedSiblingsReport.bl").read_text(encoding="utf-8")
+        .replace("NestedSiblingsReport", "NestedImplicitSiblingsReport").replace(' [boundaries "B1"]', '').replace(' [boundaries "C1"]', ''), encoding="utf-8")
     (source / "NestedOverlapReport.bl").write_text(
         (source / "NestedSiblingsReport.bl").read_text(encoding="utf-8")
         .replace("NestedSiblingsReport", "NestedOverlapReport").replace('[address "C1"] [boundaries "C1"]', '[address "B1"] [boundaries "B1"]'), encoding="utf-8")
@@ -1776,8 +1794,8 @@ void main(string[] args) {
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         contents = contents.replace('assert(chain);', 'assert(chain); auto highSheet = P.m_cloneHighSheet(); copy(z8_file_resolve_path(highSheet), buildPath(args[2], "cloned-high-sheet.xlsx")); bool tooManySheets; try { P.m_cloneTooManySheets(); } catch (Exception e) { tooManySheets = e.msg == "POI report sheet expansion is not implemented"; } assert(tooManySheets); auto highMultiple = P.m_cloneHighMultiple(); copy(z8_file_resolve_path(highMultiple), buildPath(args[2], "cloned-high-multiple.xlsx")); bool renameConflict; try { P.m_cloneHighRenameConflict(); } catch (Exception e) { renameConflict = e.msg == "duplicate POI report sheet name"; } assert(renameConflict);')
-        contents = contents.replace('assert(renameConflict);', 'assert(renameConflict); auto nestedSimple = P.m_nestedSimple(); copy(z8_file_resolve_path(nestedSimple), buildPath(args[2], "nested-simple.xlsx")); bool nestedUnsupported; try { P.m_nestedUnsupported(); } catch (Exception e) { nestedUnsupported = e.msg == "nested POI report range layout is not implemented"; } assert(nestedUnsupported); auto nestedText = P.m_nestedText(); copy(z8_file_resolve_path(nestedText), buildPath(args[2], "nested-text.xlsx")); bool nestedMany; try { P.m_nestedMany(); } catch (Exception e) { nestedMany = e.msg == "POI report range expansion layout is not implemented"; } assert(nestedMany);')
-        contents = contents.replace('assert(nestedMany);', 'assert(nestedMany); auto nestedEval = P.m_nestedEval(); copy(z8_file_resolve_path(nestedEval), buildPath(args[2], "nested-eval.xlsx")); auto nestedQueryReport = P.m_createNestedParentQuery(); auto nestedQuery = P.m_nestedParentQuery(nestedQueryReport); auto nestedExecutor = new QueryExecutor(); nestedExecutor.amount = nestedQuery.f_amount; nestedExecutor.extra = nestedQuery.f_extra; z8_query_set_executor(nestedQuery, nestedExecutor); nestedQuery.m_start(); assert(z8_optional_require(nestedQuery.m_advance()) && z8_optional_require(nestedQuery.m_value()) == 7); nestedExecutor.reportMode = true; auto nestedQueryFile = P.m_runNestedParentQuery(nestedQueryReport); copy(z8_file_resolve_path(nestedQueryFile), buildPath(args[2], "nested-parent-query.xlsx")); assert(z8_optional_require(nestedQuery.m_value()) == 7 && z8_optional_require(nestedQuery.m_advance()) && z8_optional_require(nestedQuery.m_value()) == 8); nestedExecutor.reportRows = 2; bool nestedQueryMany; try { P.m_runNestedParentQuery(nestedQueryReport); } catch (Exception e) { nestedQueryMany = e.msg == "nested POI report expansion is not implemented"; } assert(nestedQueryMany && z8_optional_require(nestedQuery.m_value()) == 8); nestedExecutor.fail = true; bool nestedQueryFail; try { P.m_runNestedParentQuery(nestedQueryReport); } catch (Exception) { nestedQueryFail = true; } assert(nestedQueryFail && z8_optional_require(nestedQuery.m_value()) == 8); auto nestedParentJson = P.m_nestedParentJson(); copy(z8_file_resolve_path(nestedParentJson), buildPath(args[2], "nested-parent-json.xlsx")); bool nestedParentJsonEmpty; try { P.m_nestedParentJsonEmpty(); } catch (Exception e) { nestedParentJsonEmpty = e.msg == "nested POI report source is empty"; } assert(nestedParentJsonEmpty); bool nestedParentJsonMany; try { P.m_nestedParentJsonMany(); } catch (Exception e) { nestedParentJsonMany = e.msg == "nested POI report expansion is not implemented"; } assert(nestedParentJsonMany); auto nestedParent = P.m_nestedParent(); copy(z8_file_resolve_path(nestedParent), buildPath(args[2], "nested-parent.xlsx")); bool nestedParentMany; try { P.m_nestedParentMany(); } catch (Exception e) { nestedParentMany = e.msg == "nested POI report expansion is not implemented"; } assert(nestedParentMany); auto parentFail = P.m_nestedParentFail(); bool nestedParentFail; try { P.m_runNestedParentFail(parentFail); } catch (Exception) { nestedParentFail = true; } assert(nestedParentFail && z8_optional_require(P.m_nestedParentFailClosed(parentFail)) == 1); auto nestedDeep = P.m_nestedDeep(); copy(z8_file_resolve_path(nestedDeep), buildPath(args[2], "nested-deep.xlsx")); bool nestedCycle; try { P.m_nestedCycle(); } catch (Exception e) { nestedCycle = e.msg == "cyclic POI report ranges"; } assert(nestedCycle, "cycle was not rejected"); bool nestedSourceReuse; try { P.m_nestedSourceReuse(); } catch (Exception e) { nestedSourceReuse = e.msg == "nested POI report source is not implemented"; } assert(nestedSourceReuse, "ancestor source reuse was not rejected"); auto nestedCascade = P.m_nestedCascade(); copy(z8_file_resolve_path(nestedCascade), buildPath(args[2], "nested-cascade.xlsx")); auto nestedSiblings = P.m_nestedSiblings(); copy(z8_file_resolve_path(nestedSiblings), buildPath(args[2], "nested-siblings.xlsx")); bool nestedOverlap; try { P.m_nestedOverlap(); } catch (Exception e) { nestedOverlap = e.msg == "nested POI report range layout is not implemented"; } assert(nestedOverlap); auto nestedThree = P.m_nestedThree(); copy(z8_file_resolve_path(nestedThree), buildPath(args[2], "nested-three.xlsx")); auto nestedThreeVertical = P.m_nestedThreeVertical(); copy(z8_file_resolve_path(nestedThreeVertical), buildPath(args[2], "nested-three-vertical.xlsx")); bool nestedThreeUnsupported; try { P.m_nestedThreeUnsupported(); } catch (Exception e) { nestedThreeUnsupported = e.msg == "nested POI report ranges are not implemented"; } assert(nestedThreeUnsupported);')
+        contents = contents.replace('assert(renameConflict);', 'assert(renameConflict); auto implicitSingle = P.m_nestedImplicitSingle(); copy(z8_file_resolve_path(implicitSingle), buildPath(args[2], "nested-implicit-single.xlsx")); auto implicitSiblings = P.m_nestedImplicitSiblings(); copy(z8_file_resolve_path(implicitSiblings), buildPath(args[2], "nested-implicit-siblings.xlsx")); bool implicitInvalid; try { P.m_nestedImplicitInvalid(); } catch (Exception e) { implicitInvalid = e.msg == "nested POI report range layout is not implemented"; } assert(implicitInvalid); auto nestedSimple = P.m_nestedSimple(); copy(z8_file_resolve_path(nestedSimple), buildPath(args[2], "nested-simple.xlsx")); bool nestedUnsupported; try { P.m_nestedUnsupported(); } catch (Exception e) { nestedUnsupported = e.msg == "nested POI report range layout is not implemented"; } assert(nestedUnsupported); auto nestedText = P.m_nestedText(); copy(z8_file_resolve_path(nestedText), buildPath(args[2], "nested-text.xlsx")); bool nestedMany; try { P.m_nestedMany(); } catch (Exception e) { nestedMany = e.msg == "POI report range expansion layout is not implemented"; } assert(nestedMany);')
+        contents = contents.replace('assert(nestedMany);', 'assert(nestedMany); auto nestedEval = P.m_nestedEval(); copy(z8_file_resolve_path(nestedEval), buildPath(args[2], "nested-eval.xlsx")); auto nestedQueryReport = P.m_createNestedParentQuery(); auto nestedQuery = P.m_nestedParentQuery(nestedQueryReport); auto nestedExecutor = new QueryExecutor(); nestedExecutor.amount = nestedQuery.f_amount; nestedExecutor.extra = nestedQuery.f_extra; z8_query_set_executor(nestedQuery, nestedExecutor); nestedQuery.m_start(); assert(z8_optional_require(nestedQuery.m_advance()) && z8_optional_require(nestedQuery.m_value()) == 7); nestedExecutor.reportMode = true; auto nestedQueryFile = P.m_runNestedParentQuery(nestedQueryReport); copy(z8_file_resolve_path(nestedQueryFile), buildPath(args[2], "nested-parent-query.xlsx")); assert(z8_optional_require(nestedQuery.m_value()) == 7 && z8_optional_require(nestedQuery.m_advance()) && z8_optional_require(nestedQuery.m_value()) == 8); nestedExecutor.reportRows = 2; bool nestedQueryMany; try { P.m_runNestedParentQuery(nestedQueryReport); } catch (Exception e) { nestedQueryMany = e.msg == "nested POI report expansion is not implemented"; } assert(nestedQueryMany && z8_optional_require(nestedQuery.m_value()) == 8); nestedExecutor.fail = true; bool nestedQueryFail; try { P.m_runNestedParentQuery(nestedQueryReport); } catch (Exception) { nestedQueryFail = true; } assert(nestedQueryFail && z8_optional_require(nestedQuery.m_value()) == 8); auto nestedParentJson = P.m_nestedParentJson(); copy(z8_file_resolve_path(nestedParentJson), buildPath(args[2], "nested-parent-json.xlsx")); bool nestedParentJsonEmpty; try { P.m_nestedParentJsonEmpty(); } catch (Exception e) { nestedParentJsonEmpty = e.msg == "nested POI report source is empty"; } assert(nestedParentJsonEmpty); bool nestedParentJsonMany; try { P.m_nestedParentJsonMany(); } catch (Exception e) { nestedParentJsonMany = e.msg == "nested POI report expansion is not implemented"; } assert(nestedParentJsonMany); auto nestedParent = P.m_nestedParent(); copy(z8_file_resolve_path(nestedParent), buildPath(args[2], "nested-parent.xlsx")); bool nestedParentMany; try { P.m_nestedParentMany(); } catch (Exception e) { nestedParentMany = e.msg == "nested POI report expansion is not implemented"; } assert(nestedParentMany); auto parentFail = P.m_nestedParentFail(); bool nestedParentFail; try { P.m_runNestedParentFail(parentFail); } catch (Exception) { nestedParentFail = true; } assert(nestedParentFail && z8_optional_require(P.m_nestedParentFailClosed(parentFail)) == 1); auto nestedDeepImplicit = P.m_nestedDeepImplicit(); copy(z8_file_resolve_path(nestedDeepImplicit), buildPath(args[2], "nested-deep-implicit.xlsx")); auto nestedDeep = P.m_nestedDeep(); copy(z8_file_resolve_path(nestedDeep), buildPath(args[2], "nested-deep.xlsx")); bool nestedCycle; try { P.m_nestedCycle(); } catch (Exception e) { nestedCycle = e.msg == "cyclic POI report ranges"; } assert(nestedCycle, "cycle was not rejected"); bool nestedSourceReuse; try { P.m_nestedSourceReuse(); } catch (Exception e) { nestedSourceReuse = e.msg == "nested POI report source is not implemented"; } assert(nestedSourceReuse, "ancestor source reuse was not rejected"); auto nestedCascade = P.m_nestedCascade(); copy(z8_file_resolve_path(nestedCascade), buildPath(args[2], "nested-cascade.xlsx")); auto nestedSiblings = P.m_nestedSiblings(); copy(z8_file_resolve_path(nestedSiblings), buildPath(args[2], "nested-siblings.xlsx")); bool nestedOverlap; try { P.m_nestedOverlap(); } catch (Exception e) { nestedOverlap = e.msg == "nested POI report range layout is not implemented"; } assert(nestedOverlap); auto nestedThree = P.m_nestedThree(); copy(z8_file_resolve_path(nestedThree), buildPath(args[2], "nested-three.xlsx")); auto nestedThreeVertical = P.m_nestedThreeVertical(); copy(z8_file_resolve_path(nestedThreeVertical), buildPath(args[2], "nested-three-vertical.xlsx")); bool nestedThreeUnsupported; try { P.m_nestedThreeUnsupported(); } catch (Exception e) { nestedThreeUnsupported = e.msg == "nested POI report ranges are not implemented"; } assert(nestedThreeUnsupported);')
         harness.write_text(contents, encoding="utf-8")
         args.extend(["-I" + str(bridge), str(bridge / "z8/xlsx/openxlsx.d"), str(bridge / "z8/xlsx/poi.d")])
         if os.name == "nt":
@@ -1990,7 +2008,8 @@ class PoiRangeOracle {
     try (XSSFWorkbook original = new XSSFWorkbook(new FileInputStream(args[0]));
          XSSFWorkbook actual = new XSSFWorkbook(new FileInputStream(args[1]))) {
       OBJECT context = new OBJECT.CLASS<OBJECT>(null).get();
-      if (args.length > 3 && ("nested-simple".equals(args[3]) || "nested-text".equals(args[3]) || "nested-eval".equals(args[3]) || "nested-cascade".equals(args[3]))) {
+      if (args.length > 3 && ("nested-simple".equals(args[3]) || "nested-implicit-single".equals(args[3]) || "nested-text".equals(args[3]) || "nested-eval".equals(args[3]) || "nested-cascade".equals(args[3]))) {
+        final boolean singleImplicitCase = "nested-implicit-single".equals(args[3]);
         final boolean textCase = "nested-text".equals(args[3]);
         final boolean cascadeCase = "nested-cascade".equals(args[3]);
         final boolean evalCase = "nested-eval".equals(args[3]) || cascadeCase;
@@ -2011,7 +2030,7 @@ class PoiRangeOracle {
         };
         PoiReport nested = new PoiReport(new ReportOptions()).setContext(context);
         Range parent = new Range().setSource(SimpleSource.newDefault()).setBlock("A1:B1").setBoundaries("A1:B1");
-        parent.addRange(new Range().setSource(childSource).setBlock("B1").setBoundaries("B1"));
+        parent.addRange(singleImplicitCase ? new Range().setSource(childSource).setBlock("A1:B1") : new Range().setSource(childSource).setBlock("B1").setBoundaries("B1"));
         nested.addRange(0, parent);
         SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
         nested.getRange(0).apply(modifier); modifier.close();
@@ -2095,7 +2114,8 @@ class PoiRangeOracle {
         if (OrderedCustom.sequence != 2) throw new AssertionError("unexpected source opening count");
         return;
       }
-      if (args.length > 3 && "nested-deep".equals(args[3])) {
+      if (args.length > 3 && ("nested-deep".equals(args[3]) || "nested-deep-implicit".equals(args[3]))) {
+        final boolean implicitDeep = "nested-deep-implicit".equals(args[3]);
         OBJECT.CLASS<OBJECT> rows = new OBJECT.CLASS<>(context);
         rows.setIndex("rows"); context.members().add(rows);
         final org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> data =
@@ -2110,8 +2130,10 @@ class PoiRangeOracle {
           }
         };
         Range outer = new Range().setSource(SimpleSource.newDefault()).setBlock("A1:C1").setBoundaries("A1:C1");
-        Range middle = new Range().setSource(SimpleSource.newDefault()).setBlock("B1:C1").setBoundaries("B1:C1");
-        middle.addRange(new Range().setSource(childSource).setBlock("C1").setBoundaries("C1"));
+        Range middle = new Range().setSource(SimpleSource.newDefault()).setBlock(implicitDeep ? "A1:C1" : "B1:C1");
+        Range inner = new Range().setSource(childSource).setBlock(implicitDeep ? "A1:C1" : "C1");
+        if (!implicitDeep) { middle.setBoundaries("B1:C1"); inner.setBoundaries("C1"); }
+        middle.addRange(inner);
         outer.addRange(middle);
         PoiReport nested = new PoiReport(new ReportOptions()).setContext(context); nested.addRange(0, outer);
         SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
@@ -2122,7 +2144,8 @@ class PoiRangeOracle {
             throw new AssertionError("deep nested result differs at column " + col);
         return;
       }
-      if (args.length > 3 && ("nested-siblings".equals(args[3]) || "nested-three".equals(args[3]) || "nested-three-vertical".equals(args[3]))) {
+      if (args.length > 3 && ("nested-siblings".equals(args[3]) || "nested-implicit-siblings".equals(args[3]) || "nested-three".equals(args[3]) || "nested-three-vertical".equals(args[3]))) {
+        final boolean implicitSiblingsCase = "nested-implicit-siblings".equals(args[3]);
         final boolean verticalCase = "nested-three-vertical".equals(args[3]);
         final boolean threeCase = "nested-three".equals(args[3]) || verticalCase;
         OBJECT.CLASS<OBJECT> rows = new OBJECT.CLASS<>(context);
@@ -2141,8 +2164,10 @@ class PoiRangeOracle {
         String parentBlock = verticalCase ? "A1:A4" : threeCase ? "A1:D1" : "A1:C1";
         Range parent = new Range().setSource(SimpleSource.newDefault()).setBlock(parentBlock).setBoundaries(parentBlock);
         if (threeCase) parent.addRange(new Range().setSource(childSource).setBlock(verticalCase ? "A4" : "D1").setBoundaries(verticalCase ? "A4" : "D1"));
-        parent.addRange(new Range().setSource(childSource).setBlock(verticalCase ? "A3" : "C1").setBoundaries(verticalCase ? "A3" : "C1"));
-        parent.addRange(new Range().setSource(childSource).setBlock(verticalCase ? "A2" : "B1").setBoundaries(verticalCase ? "A2" : "B1"));
+        Range right = new Range().setSource(childSource).setBlock(verticalCase ? "A3" : "C1");
+        Range left = new Range().setSource(childSource).setBlock(verticalCase ? "A2" : "B1");
+        if (!implicitSiblingsCase) { right.setBoundaries(verticalCase ? "A3" : "C1"); left.setBoundaries(verticalCase ? "A2" : "B1"); }
+        parent.addRange(right); parent.addRange(left);
         nested.addRange(0, parent);
         SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
         nested.getRange(0).apply(modifier); modifier.close();
@@ -2692,6 +2717,15 @@ class PoiRangeOracle {
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/nested-parent-query.xlsx"), str(working / "nested-parent-query.xlsx"), str(config), "nested-parent-query"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                for fixture, case in (("nested-simple", "nested-implicit-single"), ("nested-siblings", "nested-implicit-siblings")):
+                    result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                             str(application / ("reports/" + fixture + ".xlsx")), str(working / (case + ".xlsx")), str(config), case],
+                                            cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                    assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/nested-deep.xlsx"), str(working / "nested-deep-implicit.xlsx"), str(config), "nested-deep-implicit"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
                 for source_name, name in (("clone-suffix", "cloned-suffix"), ("clone-long", "cloned-long"), ("clone-existing", "cloned-existing"), ("clone-views", "cloned-views"), ("clone-setup", "cloned-setup"), ("clone-print", "cloned-print"), ("clone-filter", "cloned-filter"), ("clone-named", "cloned-named"), ("clone-named", "cloned-named-rename"), ("clone-named", "cloned-named-original-rename"), ("clone-named", "cloned-named-quoted-rename"), ("clone-named", "cloned-named-digit-rename"), ("clone-named", "cloned-named-cell-rename"), ("clone-named", "cloned-named-russian-rename")):
