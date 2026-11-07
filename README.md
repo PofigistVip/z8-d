@@ -133,6 +133,7 @@ python tests/exception_subclasses.py
 python tests/null_object_casts.py
 python tests/exception_string_conversion.py path/to/original-z8
 python tests/messageformat_value_oracle.py
+python tests/poi_runtime.py
 python tests/primary_array_views.py
 python tests/primary_string_map_views.py
 python tests/primary_scalar_key_map_views.py
@@ -696,6 +697,14 @@ Java-исходниками вычислителя.
 У `Report` и `Range` доступны вложенные диапазоны, источник диапазона и настройки
 скрытых столбцов. Хост регистрирует источник через `z8_report_register_data_source`,
 после чего BL-код может найти его по объекту или индексу.
+Для native-классов `Workbook`, `Sheet`, `Row` и `Cell` доступно чтение XLSX:
+листов, разреженных строк и ячеек, общих и встроенных строк, чисел,
+логических значений, формул и их сохранённых результатов. Поддерживаются
+системы дат Excel 1900 и 1904. Результаты проверены по Apache POI 3.16,
+используемому оригинальной Z8. XML-части читаются в UTF-8; вычисление формул
+и восстановление текста зависимых общих формул пока не реализованы. Для такой
+формулы `getString()` сообщает об ошибке, а сохранённое числовое значение
+остаётся доступным. `tests/poi_runtime.py` использует POI из Gradle-кэша.
 Для `FileConverter` реализованы получение расширения и проверка форматов;
 списки расширений задаются параметрами `file.converter.*` при применении настроек приложения. Копирование PDF в PDF
 поддерживается для файлов и бинарных потоков. Другие поддерживаемые LibreOffice

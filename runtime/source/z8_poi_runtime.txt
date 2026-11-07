@@ -1,0 +1,280 @@
+// Read-only XLSX support for the native Workbook/Sheet/Row/Cell API.
+// The original uses XSSFWorkbook: row and cell counts are physical counts,
+// while getRow/getCell use zero-based sheet coordinates.
+private import std.zip : ZipArchive;
+private enum z8_poi_workbook_name = "org.zenframework.z8.server.base.poi.Workbook"w;
+private enum z8_poi_sheet_name = "org.zenframework.z8.server.base.poi.Sheet"w;
+private enum z8_poi_row_name = "org.zenframework.z8.server.base.poi.Row"w;
+private enum z8_poi_cell_name = "org.zenframework.z8.server.base.poi.Cell"w;
+
+private class Z8PoiXmlNode {
+    wstring name, text;
+    wstring[wstring] attributes;
+    Z8PoiXmlNode[] children;
+    Z8PoiXmlNode child(wstring wanted) {
+        foreach (item; children) if (z8_poi_xml_local(item.name) == wanted) return item;
+        return null;
+    }
+    wstring attr(wstring wanted) {
+        foreach (key, value; attributes) if (z8_poi_xml_local(key) == wanted) return value;
+        return null;
+    }
+    wstring allText() {
+        wstring result = text;
+        foreach (item; children) result ~= item.allText();
+        return result;
+    }
+}
+private wstring z8_poi_xml_local(wstring name) {
+    import std.algorithm.searching : countUntil;
+    auto colon = name.countUntil(':'); return colon < 0 ? name : name[colon + 1 .. $];
+}
+private class Z8PoiXmlReader : Z8NlsReader {
+    this(wstring value) { super(value); }
+    Z8PoiXmlNode node() {
+        expect("<"w); auto tag = name(); position -= tag.length + 1;
+        bool empty; auto result = new Z8PoiXmlNode(); result.name = tag;
+        result.attributes = startTag(tag, empty);
+        if (empty) return result;
+        for (;;) {
+            if (starts("</"w)) {
+                position += 2; if (name() != tag) throw new Exception("mismatched XLSX XML element");
+                whitespace(); expect(">"w); return result;
+            }
+            if (starts("<!--"w)) { position += 4; until("-->"w); continue; }
+            if (starts("<?"w)) { position += 2; until("?>"w); continue; }
+            if (starts("<![CDATA["w)) {
+                position += 9; auto begin = position;
+                while (position < text.length && !starts("]]>"w)) ++position;
+                result.text ~= text[begin .. position]; expect("]]>"w); continue;
+            }
+            if (position >= text.length) throw new Exception("truncated XLSX XML");
+            if (starts("<"w)) { result.children ~= node(); continue; }
+            auto begin = position; while (position < text.length && text[position] != '<') ++position;
+            result.text ~= decode(text[begin .. position]);
+        }
+    }
+    Z8PoiXmlNode parseDocument() { misc(); auto result = node(); misc(); if (position != text.length) throw new Exception("invalid XLSX XML"); return result; }
+}
+private wstring z8_poi_rich_text(Z8PoiXmlNode value) {
+    wstring result;
+    foreach (child; value.children) {
+        auto name = z8_poi_xml_local(child.name);
+        if (name == "t"w) result ~= child.allText();
+        else if (name == "r"w) { auto text = child.child("t"w); if (text !is null) result ~= text.allText(); }
+    }
+    return result.length ? result : ""w;
+}
+private class Z8PoiCell { wstring kind, value, formula; bool hasFormula, unresolvedSharedFormula; }
+private class Z8PoiRow { Z8PoiCell[long] cells; }
+private class Z8PoiSheet { Z8PoiRow[long] rows; }
+private class Z8PoiWorkbook { Z8PoiSheet[] sheets; bool date1904; }
+private class Z8PoiSheetRef { Z8PoiSheet value; }
+private class Z8PoiRowRef { Z8PoiRow value; }
+private class Z8PoiCellRef { Z8PoiCell value; bool date1904; }
+
+private Z8PoiXmlNode z8_poi_read_xml(ZipArchive archive, string path, bool required = true) {
+    auto found = path in archive.directory;
+    if (found is null) { if (required) throw new Exception("missing XLSX entry: " ~ path); return null; }
+    archive.expand(*found);
+    return (new Z8PoiXmlReader((cast(string)(*found).expandedData).to!wstring)).parseDocument();
+}
+private string z8_poi_resolve_path(string base, wstring target) {
+    import std.string : split;
+    auto text = target.to!string;
+    if (!text.length || text.canFind('\\') || text.canFind(':')) throw new Exception("invalid XLSX target path");
+    auto full = text[0] == '/' ? text[1 .. $] : base ~ text;
+    string[] parts;
+    foreach (part; full.split("/")) {
+        if (!part.length || part == ".") continue;
+        if (part == "..") { if (!parts.length) throw new Exception("invalid XLSX target path"); parts = parts[0 .. $ - 1]; }
+        else parts ~= part;
+    }
+    import std.array : join;
+    return parts.join("/");
+}
+private long z8_poi_cell_column(wstring reference, long fallback) {
+    if (!reference.length) return fallback;
+    long column; size_t i;
+    while (i < reference.length && reference[i] >= 'A' && reference[i] <= 'Z') {
+        column = column * 26 + reference[i++] - 'A' + 1;
+        if (column > 16384) throw new Exception("invalid XLSX cell column");
+    }
+    if (!i || i == reference.length) throw new Exception("invalid XLSX cell address");
+    return column - 1;
+}
+private Z8PoiWorkbook z8_poi_parse(Z8Binary input) {
+    import std.zip : ZipArchive;
+    import std.algorithm.searching : endsWith;
+    import std.string : lastIndexOf;
+    auto archive = new ZipArchive(z8_binary_read_all(z8_nonnull(input)));
+    auto packageRels = z8_poi_read_xml(archive, "_rels/.rels");
+    string workbookPath;
+    foreach (rel; packageRels.children) if (z8_poi_xml_local(rel.name) == "Relationship"w &&
+        rel.attr("TargetMode"w) != "External"w && rel.attr("Type"w).endsWith("/officeDocument"w))
+        workbookPath = z8_poi_resolve_path("", rel.attr("Target"w));
+    if (!workbookPath.length) throw new Exception("missing XLSX workbook relationship");
+    auto slash = workbookPath.lastIndexOf('/');
+    auto base = slash < 0 ? "" : workbookPath[0 .. slash + 1];
+    auto filename = slash < 0 ? workbookPath : workbookPath[slash + 1 .. $];
+    auto root = z8_poi_read_xml(archive, workbookPath);
+    auto rels = z8_poi_read_xml(archive, base ~ "_rels/" ~ filename ~ ".rels");
+    wstring[wstring] targets;
+    wstring sharedTarget;
+    foreach (rel; rels.children) if (z8_poi_xml_local(rel.name) == "Relationship"w && rel.attr("TargetMode"w) != "External"w) {
+        auto kind = rel.attr("Type"w);
+        if (kind.endsWith("/worksheet"w)) targets[rel.attr("Id"w)] = rel.attr("Target"w);
+        else if (kind.endsWith("/sharedStrings"w)) sharedTarget = rel.attr("Target"w);
+    }
+    wstring[] strings;
+    auto sharedStrings = sharedTarget is null ? null : z8_poi_read_xml(archive, z8_poi_resolve_path(base, sharedTarget));
+    if (sharedStrings !is null) foreach (entry; sharedStrings.children) if (z8_poi_xml_local(entry.name) == "si"w) strings ~= z8_poi_rich_text(entry);
+    auto result = new Z8PoiWorkbook();
+    auto properties = root.child("workbookPr"w);
+    if (properties !is null) result.date1904 = properties.attr("date1904"w) == "1"w || properties.attr("date1904"w) == "true"w;
+    auto sheets = root.child("sheets"w);
+    if (sheets is null) throw new Exception("missing XLSX sheets");
+    foreach (item; sheets.children) if (z8_poi_xml_local(item.name) == "sheet"w) {
+        auto id = item.attr("id"w), target = id in targets;
+        if (target is null) throw new Exception("missing XLSX sheet relationship");
+        auto worksheet = z8_poi_read_xml(archive, z8_poi_resolve_path(base, *target));
+        auto data = worksheet.child("sheetData"w), sheet = new Z8PoiSheet();
+        long nextRow;
+        if (data !is null) foreach (rowNode; data.children) if (z8_poi_xml_local(rowNode.name) == "row"w) {
+            auto rowNumber = rowNode.attr("r"w);
+            long rowIndex = rowNumber is null ? nextRow : rowNumber.to!long - 1;
+            if (rowIndex < 0 || rowIndex >= 1048576 || rowIndex in sheet.rows) throw new Exception("invalid XLSX row index");
+            nextRow = rowIndex + 1; auto row = new Z8PoiRow(); long nextColumn;
+            foreach (cellNode; rowNode.children) if (z8_poi_xml_local(cellNode.name) == "c"w) {
+                auto column = z8_poi_cell_column(cellNode.attr("r"w), nextColumn); nextColumn = column + 1;
+                if (column in row.cells) throw new Exception("duplicate XLSX cell");
+                auto cell = new Z8PoiCell(); cell.kind = cellNode.attr("t"w);
+                auto formula = cellNode.child("f"w); cell.hasFormula = formula !is null;
+                if (formula !is null) {
+                    cell.formula = formula.allText();
+                    cell.unresolvedSharedFormula = formula.attr("t"w) == "shared"w && !cell.formula.length;
+                }
+                auto value = cellNode.child("v"w); if (value !is null) cell.value = value.allText();
+                if (cell.kind == "inlineStr"w) { auto inlineValue = cellNode.child("is"w); cell.value = inlineValue is null ? ""w : z8_poi_rich_text(inlineValue); }
+                else if (cell.kind == "s"w) {
+                    auto index = cell.value.to!long;
+                    if (index < 0 || cast(size_t)index >= strings.length) throw new Exception("invalid XLSX shared string index");
+                    cell.value = strings[cast(size_t)index]; cell.kind = "str"w;
+                }
+                row.cells[column] = cell;
+            }
+            sheet.rows[rowIndex] = row;
+        }
+        result.sheets ~= sheet;
+    }
+    return result;
+}
+private Z8PoiWorkbook z8_poi_workbook(Z8Object self) {
+    self = z8_nonnull(self);
+    auto book = cast(Z8PoiWorkbook)self.z8_get_native_state(z8_poi_workbook_name);
+    if (book is null) throw new Exception("workbook is not open");
+    return book;
+}
+private void z8_poi_open(Z8Object self, Z8File file) {
+    self = z8_nonnull(self); self.z8_set_native_state(z8_poi_workbook_name, null);
+    auto input = z8_file_to_binary(z8_nonnull(file));
+    scope(exit) z8_binary_close(input);
+    self.z8_set_native_state(z8_poi_workbook_name, z8_poi_parse(input));
+}
+private void z8_poi_close(Z8Object self) { z8_nonnull(self).z8_set_native_state(z8_poi_workbook_name, null); }
+private Z8Optional!long z8_poi_sheet_count(Z8Object self) { return z8_optional_wrap(cast(long)z8_poi_workbook(self).sheets.length); }
+private Z8Object z8_poi_sheet(Z8Object self, Z8Optional!long index) {
+    auto book = z8_poi_workbook(self); auto n = cast(int)z8_optional_require(index);
+    if (n < 0 || cast(size_t)n >= book.sheets.length) throw new Exception("XLSX sheet index out of bounds");
+    auto result = z8_native_new(z8_poi_sheet_name); result.z8_set_container(self);
+    auto state = new Z8PoiSheetRef(); state.value = book.sheets[cast(size_t)n];
+    result.z8_set_native_state(z8_poi_sheet_name, state);
+    // Cell date interpretation follows the workbook's date window.
+    result.z8_set_native_state(z8_poi_workbook_name, book);
+    return result;
+}
+private Z8PoiSheet z8_poi_sheet_state(Z8Object self) {
+    auto state = cast(Z8PoiSheetRef)z8_nonnull(self).z8_get_native_state(z8_poi_sheet_name);
+    if (state is null || state.value is null) throw new Exception("uninitialized XLSX sheet");
+    return state.value;
+}
+private Z8Optional!long z8_poi_row_count(Z8Object self) { return z8_optional_wrap(cast(long)z8_poi_sheet_state(self).rows.length); }
+private Z8Object z8_poi_row(Z8Object self, Z8Optional!long index) {
+    auto n = cast(long)cast(int)z8_optional_require(index);
+    auto found = n in z8_poi_sheet_state(self).rows;
+    auto result = z8_native_new(z8_poi_row_name); result.z8_set_container(self);
+    auto state = new Z8PoiRowRef(); if (found !is null) state.value = *found;
+    result.z8_set_native_state(z8_poi_row_name, state);
+    result.z8_set_native_state(z8_poi_workbook_name, self.z8_get_native_state(z8_poi_workbook_name)); return result;
+}
+private Z8PoiRow z8_poi_row_state(Z8Object self) {
+    auto state = cast(Z8PoiRowRef)z8_nonnull(self).z8_get_native_state(z8_poi_row_name);
+    if (state is null || state.value is null) throw new Exception("XLSX row is absent");
+    return state.value;
+}
+private Z8Optional!long z8_poi_cell_count(Z8Object self) { return z8_optional_wrap(cast(long)z8_poi_row_state(self).cells.length); }
+private Z8Object z8_poi_cell(Z8Object self, Z8Optional!long index) {
+    auto n = cast(long)cast(int)z8_optional_require(index); if (n < 0) throw new Exception("XLSX cell index out of bounds");
+    auto found = n in z8_poi_row_state(self).cells; if (found is null) return null;
+    auto result = z8_native_new(z8_poi_cell_name); result.z8_set_container(self);
+    auto state = new Z8PoiCellRef(); state.value = *found;
+    auto book = cast(Z8PoiWorkbook)self.z8_get_native_state(z8_poi_workbook_name);
+    state.date1904 = book !is null && book.date1904;
+    result.z8_set_native_state(z8_poi_cell_name, state); return result;
+}
+private Z8PoiCellRef z8_poi_cell_state(Z8Object self) {
+    auto state = cast(Z8PoiCellRef)z8_nonnull(self).z8_get_native_state(z8_poi_cell_name);
+    if (state is null || state.value is null) throw new Exception("uninitialized XLSX cell"); return state;
+}
+private double z8_poi_number(Z8PoiCell cell) {
+    if (cell.kind == "str"w || cell.kind == "inlineStr"w || cell.kind == "b"w || cell.kind == "e"w)
+        throw new Exception("XLSX cell is not numeric");
+    return cell.value.length ? z8_literal_parse_double(cell.value.to!string) : 0;
+}
+private long z8_poi_long(double value) {
+    import std.math : isNaN;
+    return isNaN(value) ? 0 : value >= cast(double)long.max ? long.max : value <= cast(double)long.min ? long.min : cast(long)value;
+}
+private wstring z8_poi_string(Z8Object self) {
+    auto cell = z8_poi_cell_state(self).value;
+    if (cell.hasFormula) {
+        if (cell.unresolvedSharedFormula) throw new Exception("shared XLSX formula expansion is unsupported");
+        return z8_string_new(cell.formula);
+    }
+    if (cell.kind == "str"w || cell.kind == "inlineStr"w) return z8_string_new(cell.value);
+    if (cell.kind == "b"w) return cell.value == "1"w ? "true"w : "false"w;
+    if (cell.kind == "e"w || !cell.value.length) return ""w;
+    auto number = z8_poi_number(cell), integer = z8_poi_long(number);
+    return z8_string_new(number == cast(double)integer ? integer.to!wstring : z8_java_double_string(number).to!wstring);
+}
+private Z8Optional!long z8_poi_int(Z8Object self) { return z8_optional_wrap(z8_poi_long(z8_poi_number(z8_poi_cell_state(self).value))); }
+private Z8Optional!Z8Decimal z8_poi_decimal(Z8Object self) { return z8_optional_wrap(z8_math_result(z8_poi_number(z8_poi_cell_state(self).value))); }
+private Z8Date z8_poi_date(Z8Object self) {
+    import std.math : floor, isFinite;
+    auto state = z8_poi_cell_state(self); auto number = z8_poi_number(state.value);
+    if (!isFinite(number) || number < 0 || number > 2958465) throw new Exception("invalid XLSX date");
+    auto days = cast(long)floor(number);
+    auto milliseconds = cast(long)floor((number - days) * 86400000.0 + 0.5);
+    if (milliseconds == 86400000) { ++days; milliseconds = 0; }
+    auto base = z8_date_from_ticks(0);
+    z8_date_set(base, state.date1904 ? 1904 : 1899, state.date1904 ? 1 : 12, state.date1904 ? 1 : 31, 0, 0, 0);
+    auto day = z8_date_addDay(base, days - (!state.date1904 && days >= 61 ? 1 : 0));
+    z8_date_set(day, z8_date_year(day), z8_date_month(day), z8_date_day(day), milliseconds / 3600000,
+        milliseconds / 60000 % 60, milliseconds / 1000 % 60, milliseconds % 1000);
+    return day;
+}
+void z8_bind_builtin_poi() {
+    z8_native_bind(z8_poi_workbook_name ~ ".z8op_assign"w, &z8_poi_open);
+    z8_native_bind(z8_poi_workbook_name ~ ".m_close"w, &z8_poi_close);
+    z8_native_bind(z8_poi_workbook_name ~ ".m_getSheetCount"w, &z8_poi_sheet_count);
+    z8_native_bind(z8_poi_workbook_name ~ ".m_getSheet"w, &z8_poi_sheet);
+    z8_native_bind(z8_poi_sheet_name ~ ".m_getRowCount"w, &z8_poi_row_count);
+    z8_native_bind(z8_poi_sheet_name ~ ".m_getRow"w, &z8_poi_row);
+    z8_native_bind(z8_poi_row_name ~ ".m_getCellCount"w, &z8_poi_cell_count);
+    z8_native_bind(z8_poi_row_name ~ ".m_getCell"w, &z8_poi_cell);
+    z8_native_bind(z8_poi_cell_name ~ ".m_getString"w, &z8_poi_string);
+    z8_native_bind(z8_poi_cell_name ~ ".m_getInt"w, &z8_poi_int);
+    z8_native_bind(z8_poi_cell_name ~ ".m_getDecimal"w, &z8_poi_decimal);
+    z8_native_bind(z8_poi_cell_name ~ ".m_getDate"w, &z8_poi_date);
+}
+shared static this() { z8_bind_builtin_poi(); }
