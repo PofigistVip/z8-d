@@ -126,11 +126,9 @@ private void z8_application_dispatch_scheduled_job(Z8Object executable) {
     auto request = z8_application_require_request();
     auto params = z8_nonnull(request.parameters);
     auto keys = params.z8_keys();
-    for (long i; i < keys.z8_size(); ++i) {
-        auto key = keys.z8_get(i);
-        if (key == "request"w || key == "session"w || key == "server"w || key == "ip"w || key == "action"w || key == "scheduled"w || key == "parameters"w) continue;
-        if (key is null || params.z8_get(key).length) throw new Exception("unsupported job parameter");
-    }
+    // Additional request values are visible to BL through requestParameters().
+    for (long i; i < keys.z8_size(); ++i)
+        if (keys.z8_get(i) is null) throw new Exception("invalid job parameter name");
     auto json = params.z8_get("parameters"w);
     if (json !is null && json.length) {
         auto parsed = z8_json_parse(json.to!string);

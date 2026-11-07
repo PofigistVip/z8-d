@@ -118,6 +118,7 @@ public class ImpersonateJob extends Executable {
     useTransaction = false;
     Parameter printFile = Parameter.create("printFile", false); parameters = {printFile};
     virtual protected void execute() {
+        if (Application.requestParameters().containsKey("jobContext")) info(Application.requestParameters()["jobContext"]);
         switchUser('00000000-0000-0000-0000-000000000004'); info(Application.userId().toString());
         if ((bool)printFile) {
             file output = "impersonated.txt"; output.write("impersonated output"); Application.print(output);
@@ -789,16 +790,16 @@ int main(string[] args) {
             assert result["success"] and "job failed" in result["info"]["messages"][-1]["text"], result
             result = request(request="UpdateJob", action=None, scheduled="true", parameters='{"missing":1}')
             assert not result["success"], result
-            result = request(request="ImpersonateJob", action=None, scheduled="true", parameters='{"printFile":true}')
+            result = request(request="ImpersonateJob", action=None, scheduled="true", parameters='{"printFile":true}', jobContext="scheduled context")
             assert result["success"] and [m["text"] for m in result["info"]["messages"]] == [
-                "00000000-0000-0000-0000-000000000004", "00000000-0000-0000-0000-000000000002"], result
+                "scheduled context", "00000000-0000-0000-0000-000000000004", "00000000-0000-0000-0000-000000000002"], result
             printed = result["info"]["files"][0]
             printed_path = "/" + quote(printed["path"], safe="/")
             assert download(printed_path, "full", None)[::2] == (200, b"impersonated output")
             assert download(printed_path, "full2", None)[0] == 404
             result = request(session="limited", request="ImpersonateJob", action=None, scheduled="true")
             assert result["success"] and "switch access denied" in result["info"]["messages"][-1]["text"], result
-            result = request(request="ImpersonateJob", action=None, parameters='{"printFile":true}')
+            result = request(request="ImpersonateJob", action=None, parameters='{"printFile":true}', jobContext="async context")
             assert result["success"] and result["id"], result
             impersonate_id = result["id"]; impersonate_messages = []
             for _ in range(100):
@@ -809,7 +810,7 @@ int main(string[] args) {
                 time.sleep(0.02)
             else:
                 raise AssertionError("impersonating job did not finish")
-            assert impersonate_messages == ["00000000-0000-0000-0000-000000000004", "00000000-0000-0000-0000-000000000002"], result
+            assert impersonate_messages == ["async context", "00000000-0000-0000-0000-000000000004", "00000000-0000-0000-0000-000000000002"], result
             printed = result["info"]["files"][0]
             printed_path = "/" + quote(printed["path"], safe="/")
             assert download(printed_path, "full", None)[::2] == (200, b"impersonated output")
