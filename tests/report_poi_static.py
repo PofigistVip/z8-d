@@ -56,6 +56,8 @@ public class StaticReportProbe {
     public static file parametersRange() { ParametersRangeReport report; return report.run(guid.Null); }
     public static file contextRange() { ContextRangeReport report; return report.run(guid.Null); }
     public static file unsupportedContextRange() { UnsupportedContextRangeReport report; return report.run(guid.Null); }
+    public static file dateRange() { DateRangeReport report; return report.run(guid.Null); }
+    public static file date1904Range() { Date1904RangeReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -79,6 +81,8 @@ public class StaticReportProbe {
             ("ConstantRangeReport", "constant", "A1:G1", "A1:G1"),
             ("ConstantCommentRangeReport", "constant-comment", "A1:G1", "A1:G1"),
             ("ParametersRangeReport", "parameters", "A1:E1", "A1:E1"),
+            ("DateRangeReport", "dates", "A1:G1", "A1:G1"),
+            ("Date1904RangeReport", "dates1904", "A1:G1", "A1:G1"),
             ("MapOperationRangeReport", "map-operation", "A1", "A1"),
             ("MixedRangeReport", "mixed", "A1", "A1"),
             ("UnknownMixedRangeReport", "unknown-mixed", "A1", "A1"),
@@ -258,6 +262,18 @@ public class %s extends Report {
     with zipfile.ZipFile(application / "reports/context.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in context.items():
             archive.writestr(name, content)
+    dates = dict(constants)
+    dates["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="7" uniqueCount="7"><si><t>${date.parse('01/01/1900', 'dd/MM/yyyy')}</t></si><si><t>${date.parse('28/02/1900', 'dd/MM/yyyy')}</t></si><si><t>${date.parse('01/03/1900', 'dd/MM/yyyy')}</t></si><si><t>${date.parse('31/12/1899', 'dd/MM/yyyy')}</t></si><si><t>${date.parse('01/01/1904', 'dd/MM/yyyy')}</t></si><si><t>${date.parse('2024-02-29 15:16:17.123', 'yyyy-MM-dd HH:mm:ss.SSS')}</t></si><si><t>${date.parseIsoString('2024-02-29T23:30:00+02:00')}</t></si></sst>'''
+    dates["xl/worksheets/sheet1.xml"] = original_sheet.replace(
+        '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
+        ''.join('<c r="%s1" t="s"><v>%d</v></c>' % (chr(65 + i), i) for i in range(7)))
+    for name, use1904 in (("dates", False), ("dates1904", True)):
+        book = dict(dates)
+        if use1904:
+            book["xl/workbook.xml"] = book["xl/workbook.xml"].replace("<sheets>", '<workbookPr date1904="1"/><sheets>')
+        with zipfile.ZipFile(application / ("reports/" + name + ".xlsx"), "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for entry_name, content in book.items():
+                archive.writestr(entry_name, content)
     merged = dict(entries)
     merged["xl/worksheets/sheet1.xml"] = original_sheet.replace("</worksheet>", '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')
     with zipfile.ZipFile(application / "reports/merged.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -365,6 +381,9 @@ void main(string[] args) {
         unsupported = e.msg == "POI report object context member is not implemented";
     } assert(unsupported);
     assert(database.begins == 40 && database.rollbacks == 40);
+    bool dates; try { P.m_dateRange(); } catch (Exception) { dates = true; } assert(dates);
+    bool dates1904; try { P.m_date1904Range(); } catch (Exception) { dates1904 = true; } assert(dates1904);
+    assert(database.begins == 42 && database.rollbacks == 42);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -409,6 +428,12 @@ void main(string[] args) {
         contents = contents.replace(
             'bool context; try { P.m_contextRange(); } catch (Exception) { context = true; } assert(context);',
             'auto context = P.m_contextRange(); copy(z8_file_resolve_path(context), buildPath(args[2], "context.xlsx")); assert(counter.writes == 3);')
+        contents = contents.replace(
+            'bool dates; try { P.m_dateRange(); } catch (Exception) { dates = true; } assert(dates);',
+            'auto dates = P.m_dateRange(); copy(z8_file_resolve_path(dates), buildPath(args[2], "dates.xlsx"));')
+        contents = contents.replace(
+            'bool dates1904; try { P.m_date1904Range(); } catch (Exception) { dates1904 = true; } assert(dates1904);',
+            'auto dates1904 = P.m_date1904Range(); copy(z8_file_resolve_path(dates1904), buildPath(args[2], "dates1904.xlsx")); assert(counter.writes == 5);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -589,21 +614,22 @@ class PoiRangeOracle {
       PoiReport report = new PoiReport(new ReportOptions()).setContext(context);
       boolean constants = args.length > 3 && "constants".equals(args[3]);
       boolean parameters = args.length > 3 && "parameters".equals(args[3]);
+      boolean dates = args.length > 3 && "dates".equals(args[3]);
       Range child = new Range().setSource(SimpleSource.newDefault())
-          .setBlock(constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
+          .setBlock(constants || dates ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
+          .setBoundaries(constants || dates ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       report.addRange(0, child);
       if (args.length > 3 && "rename".equals(args[3])) original.setSheetName(0, "Отчёт \\uD83D\\uDE00");
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier); modifier.close();
-      if (constants || parameters || contextCase) {
-        for (int i = 0; i < (constants ? 7 : 5); ++i) {
+      if (constants || parameters || contextCase || dates) {
+        for (int i = 0; i < (constants || dates ? 7 : 5); ++i) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(0).getCell(i);
           if (expected.getCellType() != result.getCellType()) throw new AssertionError("cell type differs at " + i);
           switch (expected.getCellType()) {
             case org.apache.poi.ss.usermodel.Cell.CELL_TYPE_NUMERIC:
-              if (expected.getNumericCellValue() != result.getNumericCellValue()) throw new AssertionError("number differs at " + i); break;
+              if (expected.getNumericCellValue() != result.getNumericCellValue()) throw new AssertionError("number differs at " + i + ": " + expected.getNumericCellValue() + " != " + result.getNumericCellValue()); break;
             case org.apache.poi.ss.usermodel.Cell.CELL_TYPE_BOOLEAN:
               if (expected.getBooleanCellValue() != result.getBooleanCellValue()) throw new AssertionError("boolean differs at " + i); break;
             case org.apache.poi.ss.usermodel.Cell.CELL_TYPE_STRING:
@@ -644,4 +670,9 @@ class PoiRangeOracle {
                                          str(application / "reports/context.xlsx"), str(working / "context.xlsx"), str(config), "context"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
+                for name in ("dates", "dates1904"):
+                    result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                             str(application / ("reports/" + name + ".xlsx")), str(working / (name + ".xlsx")), str(config), "dates"],
+                                            cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                    assert result.returncode == 0, result.stderr
 print("POI static report template, naming and transaction verified")

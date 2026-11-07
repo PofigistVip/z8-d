@@ -54,6 +54,22 @@ private Z8PoiReportBlock z8_poi_report_block(wstring address) {
     return result;
 }
 
+// POI DateUtil uses the date's Calendar zone and includes Excel's fictional
+// 1900-02-29 in the 1900 date system.
+private double z8_poi_report_excel_date(Z8Date input, bool date1904) {
+    auto value = z8_nonnull(input);
+    auto fields = z8_calendar_fields(value.value);
+    if (fields.year <= 0) throw new Exception("POI report BCE dates are not implemented");
+    if (fields.year < (date1904 ? 1904 : 1900)) return -1.0;
+    auto epoch = date1904 ? z8_calendar_day_number(1904, 1, 1, false) :
+        z8_calendar_day_number(1899, 12, 31, false);
+    auto days = fields.dayNumber - epoch;
+    if (!date1904 && days >= 60) ++days;
+    auto milliseconds = ((z8_date_hours(value) * 60 + z8_date_minutes(value)) * 60 +
+        z8_date_seconds(value)) * 1000 + z8_date_milliseconds(value);
+    return cast(double)days + cast(double)milliseconds / 86400000.0;
+}
+
 // Apply a single, non-expanding simple source to the selected report block.
 private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z8PoiWorkbook workbook,
                                               out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits) {
@@ -137,6 +153,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
             // 32-bit narrowing for values outside the int range.
             case Z8PrimaryKind.integer: edit.kind = Z8PoiCellEditKind.number; edit.number = cast(double)cast(int)value.integerValue; break;
             case Z8PrimaryKind.decimal: edit.kind = Z8PoiCellEditKind.number; edit.number = value.decimalValue.z8_as_double(); break;
+            case Z8PrimaryKind.date: edit.kind = Z8PoiCellEditKind.number; edit.number = z8_poi_report_excel_date(value.dateValue, workbook.date1904); break;
             case Z8PrimaryKind.text: edit.kind = Z8PoiCellEditKind.text; edit.text = value.textValue; break;
             default: throw new Exception("POI report expression result type is not implemented");
         }
