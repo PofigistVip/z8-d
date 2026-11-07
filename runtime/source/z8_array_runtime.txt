@@ -427,29 +427,53 @@ class Z8Array(T) {
             }
             storeValues(); ++z8_version;
             return this;
+        } else static if (isPrimitive || is(T == wstring)) {
+            if (z8_size() <= 1) { ++z8_version; return this; }
+            Element[] values;
+            foreach (i; 0 .. z8_size()) values ~= z8_get(i);
+            void storeValues() {
+                if (primaryData !is null) foreach (i, value; values) primaryData.z8_set(cast(long)i, z8_array_primary_box(value));
+                else items = values;
+            }
+            int compare(Element left, Element right) {
+                static if (isPrimitive) {
+                    if (!left.present) throw new Exception("null array element");
+                    if (!right.present) return -1;
+                    static if (is(T == long)) {
+                        auto difference = cast(long)(cast(ulong)left.value - cast(ulong)right.value);
+                        return difference < 0 ? -1 : difference > 0 ? 1 : 0;
+                    } else static if (is(T == bool)) return left.value == right.value ? 0 : left.value ? 1 : -1;
+                    else return left.value.opCmp(right.value);
+                } else {
+                    if (left is null) throw new Exception("null array element");
+                    if (right is null) return -1;
+                    return left < right ? -1 : left > right ? 1 : 0;
+                }
+            }
+            if (values.length < 32) {
+                scope(failure) storeValues();
+                z8_java_short_sort!(Element, compare)(values);
+            } else {
+                foreach (value; values) {
+                    static if (isPrimitive) { if (!value.present) throw new Exception("null array element"); }
+                    else if (value is null) throw new Exception("null array element");
+                }
+                static if (is(T == long)) {
+                    long minimum = values[0].value, maximum = minimum;
+                    foreach (value; values) {
+                        if (value.value < minimum) minimum = value.value;
+                        if (value.value > maximum) maximum = value.value;
+                    }
+                    if (cast(ulong)maximum - cast(ulong)minimum > cast(ulong)long.max)
+                        throw new Exception("large integer array sort with overflowing comparison is not implemented");
+                }
+                scope(failure) storeValues();
+                sort!((a, b) => compare(a, b) < 0, SwapStrategy.stable)(values);
+            }
+            storeValues(); ++z8_version;
+            return this;
         } else {
-            static if (isPrimitive) if (primaryData !is null) {
-                Element[] values;
-                foreach (i; 0 .. z8_size()) values ~= z8_get(i);
-                if (values.length > 1) foreach (value; values) if (!value.present) throw new Exception("null array element");
-                sort!("a < b", SwapStrategy.stable)(values);
-                foreach (i, value; values) primaryData.z8_set(cast(long)i, z8_array_primary_box(value));
-                ++primaryData.z8_version;
-                return this;
-            }
-            static if (is(T == wstring)) if (primaryData !is null) {
-                wstring[] values;
-                foreach (i; 0 .. z8_size()) values ~= z8_get(i);
-                if (values.length > 1) foreach (value; values) if (value is null) throw new Exception("null array element");
-                sort!("a < b", SwapStrategy.stable)(values);
-                foreach (i, value; values) primaryData.z8_set(cast(long)i, z8_array_primary_box(value));
-                ++primaryData.z8_version;
-                return this;
-            }
-            static if (is(T == wstring)) if (items.length > 1) foreach (item; items) if (item is null) throw new Exception("null array element");
-            static if (isPrimitive) if (items.length > 1) foreach (item; items) if (!item.present) throw new Exception("null array element");
-            sort!("a < b", SwapStrategy.stable)(items);
-            ++z8_version;
+            sort!("a < b", SwapStrategy.stable)(items); ++z8_version;
             return this;
         }
     }

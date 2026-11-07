@@ -1,0 +1,15 @@
+public class ValueArraySort {
+    public static int run() {
+        int[] extremes = {int.Min, int.Max}; extremes.sort();
+        if (extremes[0] != int.Max || extremes[1] != int.Min) return 1;
+        int[] leading = {}; leading.add(null); leading.add(1); leading.sort();
+        if (leading[0] != 1 || leading[1] != null) return 2;
+        int[] invalid = {1}; invalid.add(null);
+        try { invalid.sort(); return 3; } catch (exception expected) {}
+        bool[] flags = {true, false}; flags.sort();
+        if (flags[0] || !flags[1]) return 4;
+        string[] words = {"B", "A"}; words.sort();
+        if (words[0] != "A" || words[1] != "B") return 5;
+        return 0;
+    }
+}
