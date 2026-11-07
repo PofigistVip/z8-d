@@ -53,6 +53,8 @@ public class StaticReportProbe {
     public static file simpleRange() { SimpleRangeReport report; return report.run(guid.Null); }
     public static file explicitMerge() { ExplicitMergeReport report; return report.run(guid.Null); }
     public static file explicitMergeExpansion() { ExpandedExplicitMergeReport report; return report.run(guid.Null); }
+    public static file explicitMergeHorizontal() { ExpandedExplicitHorizontalReport report; return report.run(guid.Null); }
+    public static file explicitMergeUnsupported() { ExpandedExplicitUnsupportedReport report; return report.run(guid.Null); }
     public static file invalidRange() { InvalidRangeReport report; return report.run(guid.Null); }
     public static file expressionRange() { ExpressionRangeReport report; return report.run(guid.Null); }
     public static file constantRange() { ConstantRangeReport report; return report.run(guid.Null); }
@@ -671,6 +673,10 @@ public class %s extends Report {
         (source / "ExpandedReport.bl").read_text(encoding="utf-8")
         .replace("ExpandedReport", "ExpandedExplicitMergeReport")
         .replace('[address "A1:D1"] [boundaries "A1:D1"] Range region;', '[merge "A1:D2"] [address "A1:D1"] [boundaries "A1:D2"] Range region;'), encoding="utf-8")
+    (source / "ExpandedExplicitUnsupportedReport.bl").write_text(
+        (source / "ExpandedExplicitMergeReport.bl").read_text(encoding="utf-8")
+        .replace("ExpandedExplicitMergeReport", "ExpandedExplicitUnsupportedReport")
+        .replace('[merge "A1:D2"]', '[merge "E1:E2"]').replace('[boundaries "A1:D2"]', '[boundaries "A1:E2"]'), encoding="utf-8")
     (source / "ExpandedMultipleSheetReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.base.json.JsonObject;
@@ -756,6 +762,10 @@ public class ExpandedTwoRowsReport extends Report {
         .replace("ExpandedTwoRowsReport", "ExpandedHorizontalReport")
         .replace('template = "expanded-two"', 'template = "expanded-horizontal"')
         .replace('[address "A1:B2"]', '[axis "1"] [address "A1:B2"]'), encoding="utf-8")
+    (source / "ExpandedExplicitHorizontalReport.bl").write_text(
+        (source / "ExpandedHorizontalReport.bl").read_text(encoding="utf-8")
+        .replace("ExpandedHorizontalReport", "ExpandedExplicitHorizontalReport")
+        .replace('[boundaries "A1:B2"]', '[merge "A1:C2"] [boundaries "A1:C2"]'), encoding="utf-8")
     (source / "ExpandedHorizontalMergedReport.bl").write_text(
         (source / "ExpandedHorizontalReport.bl").read_text(encoding="utf-8")
         .replace("ExpandedHorizontalReport", "ExpandedHorizontalMergedReport")
@@ -1708,11 +1718,11 @@ void main(string[] args) {
         ++writes; return result;
     }
     ubyte[] writeExpandedReport(const(ubyte)[] input, const(Z8PoiCellCopy)[] copies, const(Z8PoiCellEdit)[] cells) {
-        assert(copies.length == 2 || copies.length == 3 || copies.length == 5 || copies.length == 8 || copies.length == 4 || copies.length == 6 || copies.length == 10 || copies.length == 11 || copies.length == 12 || copies.length == 13 || copies.length == 18 || copies.length == 20 || copies.length == 22 || copies.length == 23); auto result = expander.writeExpandedReport(input, copies, cells);
+        assert(copies.length == 2 || copies.length == 3 || copies.length == 5 || copies.length == 8 || copies.length == 9 || copies.length == 4 || copies.length == 6 || copies.length == 10 || copies.length == 11 || copies.length == 12 || copies.length == 13 || copies.length == 18 || copies.length == 20 || copies.length == 22 || copies.length == 23); auto result = expander.writeExpandedReport(input, copies, cells);
         ++expansions; return result;
     }
     ubyte[] addReportMerges(const(ubyte)[] input, const(Z8PoiMergedRegion)[] regions) {
-        assert(regions.length == 2); auto result = mergeWriter.addReportMerges(input, regions);
+        assert(regions.length == 1 || regions.length == 2); auto result = mergeWriter.addReportMerges(input, regions);
         ++merges; return result;
     }
     ubyte[] removeReportCells(const(ubyte)[] input, const(Z8PoiCellRemoval)[] cells) {
@@ -1913,7 +1923,7 @@ void main(string[] args) {
         contents = contents.replace('assert(chain);', 'assert(chain); auto highSheet = P.m_cloneHighSheet(); copy(z8_file_resolve_path(highSheet), buildPath(args[2], "cloned-high-sheet.xlsx")); bool tooManySheets; try { P.m_cloneTooManySheets(); } catch (Exception e) { tooManySheets = e.msg == "POI report sheet expansion is not implemented"; } assert(tooManySheets); auto highMultiple = P.m_cloneHighMultiple(); copy(z8_file_resolve_path(highMultiple), buildPath(args[2], "cloned-high-multiple.xlsx")); bool renameConflict; try { P.m_cloneHighRenameConflict(); } catch (Exception e) { renameConflict = e.msg == "duplicate POI report sheet name"; } assert(renameConflict);')
         contents = contents.replace('assert(renameConflict);', 'assert(renameConflict); auto implicitSingle = P.m_nestedImplicitSingle(); copy(z8_file_resolve_path(implicitSingle), buildPath(args[2], "nested-implicit-single.xlsx")); auto implicitSiblings = P.m_nestedImplicitSiblings(); copy(z8_file_resolve_path(implicitSiblings), buildPath(args[2], "nested-implicit-siblings.xlsx")); auto implicitPartial = P.m_nestedImplicitPartial(); copy(z8_file_resolve_path(implicitPartial), buildPath(args[2], "nested-implicit-partial.xlsx")); auto nestedSimple = P.m_nestedSimple(); copy(z8_file_resolve_path(nestedSimple), buildPath(args[2], "nested-simple.xlsx")); bool nestedUnsupported; try { P.m_nestedUnsupported(); } catch (Exception e) { nestedUnsupported = e.msg == "nested POI report range layout is not implemented"; } assert(nestedUnsupported); auto nestedText = P.m_nestedText(); copy(z8_file_resolve_path(nestedText), buildPath(args[2], "nested-text.xlsx")); bool nestedMany; try { P.m_nestedMany(); } catch (Exception e) { nestedMany = e.msg == "POI report range expansion layout is not implemented"; } assert(nestedMany);')
         contents = contents.replace('assert(nestedMany);', 'assert(nestedMany); auto nestedEval = P.m_nestedEval(); copy(z8_file_resolve_path(nestedEval), buildPath(args[2], "nested-eval.xlsx")); bool implicitRootOutside; try { P.m_implicitRootOutside(); } catch (Exception e) { implicitRootOutside = e.msg == "multiple POI report range layout is not implemented"; } assert(implicitRootOutside); auto implicitRootNested = P.m_implicitRootNested(); copy(z8_file_resolve_path(implicitRootNested), buildPath(args[2], "implicit-root-nested.xlsx")); auto implicitRoot = P.m_implicitRootRanges(); copy(z8_file_resolve_path(implicitRoot), buildPath(args[2], "implicit-root.xlsx")); auto nestedQueryReport = P.m_createNestedParentQuery(); auto nestedQuery = P.m_nestedParentQuery(nestedQueryReport); auto nestedExecutor = new QueryExecutor(); nestedExecutor.amount = nestedQuery.f_amount; nestedExecutor.extra = nestedQuery.f_extra; z8_query_set_executor(nestedQuery, nestedExecutor); nestedQuery.m_start(); assert(z8_optional_require(nestedQuery.m_advance()) && z8_optional_require(nestedQuery.m_value()) == 7); nestedExecutor.reportMode = true; auto nestedQueryFile = P.m_runNestedParentQuery(nestedQueryReport); copy(z8_file_resolve_path(nestedQueryFile), buildPath(args[2], "nested-parent-query.xlsx")); assert(z8_optional_require(nestedQuery.m_value()) == 7 && z8_optional_require(nestedQuery.m_advance()) && z8_optional_require(nestedQuery.m_value()) == 8); nestedExecutor.reportRows = 2; bool nestedQueryMany; try { P.m_runNestedParentQuery(nestedQueryReport); } catch (Exception e) { nestedQueryMany = e.msg == "nested POI report expansion is not implemented"; } assert(nestedQueryMany && z8_optional_require(nestedQuery.m_value()) == 8); nestedExecutor.fail = true; bool nestedQueryFail; try { P.m_runNestedParentQuery(nestedQueryReport); } catch (Exception) { nestedQueryFail = true; } assert(nestedQueryFail && z8_optional_require(nestedQuery.m_value()) == 8); auto nestedParentJson = P.m_nestedParentJson(); copy(z8_file_resolve_path(nestedParentJson), buildPath(args[2], "nested-parent-json.xlsx")); bool nestedParentJsonEmpty; try { P.m_nestedParentJsonEmpty(); } catch (Exception e) { nestedParentJsonEmpty = e.msg == "nested POI report source is empty"; } assert(nestedParentJsonEmpty); bool nestedParentJsonMany; try { P.m_nestedParentJsonMany(); } catch (Exception e) { nestedParentJsonMany = e.msg == "nested POI report expansion is not implemented"; } assert(nestedParentJsonMany); auto nestedParent = P.m_nestedParent(); copy(z8_file_resolve_path(nestedParent), buildPath(args[2], "nested-parent.xlsx")); bool nestedParentMany; try { P.m_nestedParentMany(); } catch (Exception e) { nestedParentMany = e.msg == "nested POI report expansion is not implemented"; } assert(nestedParentMany); auto parentFail = P.m_nestedParentFail(); bool nestedParentFail; try { P.m_runNestedParentFail(parentFail); } catch (Exception) { nestedParentFail = true; } assert(nestedParentFail && z8_optional_require(P.m_nestedParentFailClosed(parentFail)) == 1); auto deepWide = P.m_nestedDeepWide(); copy(z8_file_resolve_path(deepWide), buildPath(args[2], "nested-deep-wide.xlsx")); auto deepPartialImplicit = P.m_nestedDeepPartialImplicit(); copy(z8_file_resolve_path(deepPartialImplicit), buildPath(args[2], "nested-deep-partial-implicit.xlsx")); auto nestedDeepImplicit = P.m_nestedDeepImplicit(); copy(z8_file_resolve_path(nestedDeepImplicit), buildPath(args[2], "nested-deep-implicit.xlsx")); auto nestedDeep = P.m_nestedDeep(); copy(z8_file_resolve_path(nestedDeep), buildPath(args[2], "nested-deep.xlsx")); bool nestedCycle; try { P.m_nestedCycle(); } catch (Exception e) { nestedCycle = e.msg == "cyclic POI report ranges"; } assert(nestedCycle, "cycle was not rejected"); bool nestedSourceReuse; try { P.m_nestedSourceReuse(); } catch (Exception e) { nestedSourceReuse = e.msg == "nested POI report source is not implemented"; } assert(nestedSourceReuse, "ancestor source reuse was not rejected"); auto nestedCascade = P.m_nestedCascade(); copy(z8_file_resolve_path(nestedCascade), buildPath(args[2], "nested-cascade.xlsx")); auto nestedWideBounds = P.m_nestedWideBounds(); copy(z8_file_resolve_path(nestedWideBounds), buildPath(args[2], "nested-wide-bounds.xlsx")); bool nestedWideOverlap; try { P.m_nestedWideOverlap(); } catch (Exception e) { nestedWideOverlap = e.msg == "nested POI report range layout is not implemented"; } assert(nestedWideOverlap); auto nestedSiblings = P.m_nestedSiblings(); copy(z8_file_resolve_path(nestedSiblings), buildPath(args[2], "nested-siblings.xlsx")); bool nestedOverlap; try { P.m_nestedOverlap(); } catch (Exception e) { nestedOverlap = e.msg == "nested POI report range layout is not implemented"; } assert(nestedOverlap); auto diagonal = P.m_nestedDiagonal(); copy(z8_file_resolve_path(diagonal), buildPath(args[2], "nested-diagonal.xlsx")); bool ambiguous; try { P.m_nestedAmbiguous(); } catch (Exception e) { ambiguous = e.msg == "nested POI report ranges are not implemented"; } assert(ambiguous); auto nestedThree = P.m_nestedThree(); copy(z8_file_resolve_path(nestedThree), buildPath(args[2], "nested-three.xlsx")); auto nestedThreeVertical = P.m_nestedThreeVertical(); copy(z8_file_resolve_path(nestedThreeVertical), buildPath(args[2], "nested-three-vertical.xlsx")); bool nestedThreeUnsupported; try { P.m_nestedThreeUnsupported(); } catch (Exception e) { nestedThreeUnsupported = e.msg == "nested POI report ranges are not implemented"; } assert(nestedThreeUnsupported);')
-        contents = contents.replace('assert(renameConflict);', 'assert(renameConflict); auto explicitMerge = P.m_explicitMerge(); copy(z8_file_resolve_path(explicitMerge), buildPath(args[2], "explicit-merge.xlsx")); bool unsupportedExplicitExpansion; try { P.m_explicitMergeExpansion(); } catch (Exception e) { unsupportedExplicitExpansion = e.msg == "POI report explicit merge expansion is not implemented"; } assert(unsupportedExplicitExpansion);')
+        contents = contents.replace('assert(renameConflict);', 'assert(renameConflict); auto explicitMerge = P.m_explicitMerge(); copy(z8_file_resolve_path(explicitMerge), buildPath(args[2], "explicit-merge.xlsx")); auto expandedExplicitMerge = P.m_explicitMergeExpansion(); copy(z8_file_resolve_path(expandedExplicitMerge), buildPath(args[2], "expanded-explicit-merge.xlsx")); auto horizontalExplicitMerge = P.m_explicitMergeHorizontal(); copy(z8_file_resolve_path(horizontalExplicitMerge), buildPath(args[2], "horizontal-explicit-merge.xlsx")); bool unsupportedExplicitExpansion; try { P.m_explicitMergeUnsupported(); } catch (Exception e) { unsupportedExplicitExpansion = e.msg == "POI report explicit merge expansion is not implemented"; } assert(unsupportedExplicitExpansion);')
         harness.write_text(contents, encoding="utf-8")
         args.extend(["-I" + str(bridge), str(bridge / "z8/xlsx/openxlsx.d"), str(bridge / "z8/xlsx/poi.d")])
         if os.name == "nt":
@@ -2450,11 +2460,12 @@ class PoiRangeOracle {
       boolean clonedExistingCase = args.length > 3 && "cloned-existing".equals(args[3]);
       boolean clonedNamedCase = args.length > 3 && ("cloned-named".equals(args[3]) || "cloned-named-rename".equals(args[3]) || "cloned-named-original-rename".equals(args[3]) || "cloned-named-quoted-rename".equals(args[3]) || "cloned-named-digit-rename".equals(args[3]) || "cloned-named-cell-rename".equals(args[3]) || "cloned-named-russian-rename".equals(args[3]));
       boolean clonedSheetsCase = clonedExistingCase || clonedNamedCase || (args.length > 3 && ("cloned-sheets".equals(args[3]) || "cloned-suffix".equals(args[3]) || "cloned-long".equals(args[3]) || "cloned-views".equals(args[3]) || "cloned-setup".equals(args[3]) || "cloned-print".equals(args[3]) || "cloned-filter".equals(args[3])));
-      boolean horizontalCase = emptyHorizontalFooterCase || horizontalFooterCase || (args.length > 3 && ("expanded-horizontal".equals(args[3]) || "expanded-horizontal-merged".equals(args[3])));
+      boolean horizontalCase = emptyHorizontalFooterCase || horizontalFooterCase || (args.length > 3 && ("expanded-horizontal".equals(args[3]) || "expanded-horizontal-merged".equals(args[3]) || "horizontal-explicit-merge".equals(args[3])));
       boolean expandedEmptyCase = args.length > 3 && "expanded-empty".equals(args[3]);
+      boolean expandedExplicitCase = args.length > 3 && ("expanded-explicit-merge".equals(args[3]) || "horizontal-explicit-merge".equals(args[3]));
       boolean jsonEmptyCase = args.length > 3 && "json-empty".equals(args[3]);
       boolean expandedTwoCase = horizontalCase || expandedEmptyCase || (args.length > 3 && "expanded-two".equals(args[3]));
-      boolean expandedCase = expandedMultipleSheetCase || footerCase || expandedCustomCase || expandedTwoCase || expandedMergedCase || (args.length > 3 && "expanded".equals(args[3]));
+      boolean expandedCase = expandedMultipleSheetCase || footerCase || expandedCustomCase || expandedTwoCase || expandedMergedCase || expandedExplicitCase || (args.length > 3 && "expanded".equals(args[3]));
       boolean jsonInlineCase = args.length > 3 && "json-inline".equals(args[3]);
       boolean repeatCase = args.length > 3 && "repeat".equals(args[3]);
       boolean mergedCase = args.length > 3 && "merged".equals(args[3]);
@@ -2584,6 +2595,7 @@ class PoiRangeOracle {
       if (args.length <= 3) child.setMerges(" , ").setSubtotalMerges(" , ").setSubtotalsBy("");
       if (args.length > 3 && "explicit-merge".equals(args[3]))
         child.setBoundaries("A1:C2").setMerges(" A1:A2, A1:A2, B1:C1, A1, D1:E1 ");
+      if (expandedExplicitCase) child.setBoundaries(horizontalCase ? "A1:C2" : "A1:D2").setMerges(horizontalCase ? "A1:C2" : "A1:D2");
       if (horizontalCase) child.setAxis(1);
       if (clonedSheetsCase) {
         int prototype = clonedExistingCase ? 1 : 0;
@@ -2626,6 +2638,9 @@ class PoiRangeOracle {
           else if (ec.getCellType() != ac.getCellType() || !ec.toString().equals(ac.toString())) throw new AssertionError("explicit merge cell differs");
         }
       }
+      if (expandedExplicitCase && (original.getSheetAt(0).getNumMergedRegions() != 1 || actual.getSheetAt(0).getNumMergedRegions() != 1 ||
+          !original.getSheetAt(0).getMergedRegion(0).formatAsString().equals(actual.getSheetAt(0).getMergedRegion(0).formatAsString())))
+        throw new AssertionError("expanded explicit merged region differs");
       if (expandedMultipleSheetCase) {
         double expected = original.getSheetAt(1).getRow(0).getCell(0).getNumericCellValue();
         double result = actual.getSheetAt(1).getRow(0).getCell(0).getNumericCellValue();
@@ -2798,6 +2813,12 @@ class PoiRangeOracle {
             assert result.returncode == 0, result.stderr
             result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                      str(application / "reports/explicit-merge.xlsx"), str(working / "explicit-merge.xlsx"), str(config), "explicit-merge"], cwd=temp, capture_output=True, text=True)
+            assert result.returncode == 0, result.stderr
+            result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                     str(application / "reports/expanded.xlsx"), str(working / "expanded-explicit-merge.xlsx"), str(config), "expanded-explicit-merge"], cwd=temp, capture_output=True, text=True)
+            assert result.returncode == 0, result.stderr
+            result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                     str(application / "reports/expanded-horizontal.xlsx"), str(working / "horizontal-explicit-merge.xlsx"), str(config), "horizontal-explicit-merge"], cwd=temp, capture_output=True, text=True)
             assert result.returncode == 0, result.stderr
             result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                      str(workbook), str(working / "renamed.xlsx"), str(config), "rename"],

@@ -510,7 +510,6 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     long iteration, height = block.lastRow - block.firstRow + 1, width = block.lastColumn - block.firstColumn + 1;
     bool hasFooter;
     do {
-        if (iteration && explicitMerges.length) throw new Exception("POI report explicit merge expansion is not implemented");
         if (iteration > (horizontal ? (16383 - block.lastColumn) / width : (1048575 - block.lastRow) / height))
             throw new Exception("POI report range expansion exceeds worksheet bounds");
         auto offset = iteration * (horizontal ? width : height);
@@ -605,6 +604,13 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
             bool containsBlock = block.firstRow >= merge.firstRow && block.lastRow <= merge.lastRow &&
                 block.firstColumn >= merge.firstColumn && block.lastColumn <= merge.lastColumn;
             if (withinBlock || !withinBounds || (overlapsBlock && !containsBlock)) continue;
+            if (iteration > 1) {
+                if (!containsBlock) throw new Exception("POI report explicit merge expansion is not implemented");
+                auto offset = (iteration - 1) * (horizontal ? width : height);
+                if (horizontal) merge.lastColumn += offset; else merge.lastRow += offset;
+                if (merge.lastRow >= 1048576 || merge.lastColumn >= 16384)
+                    throw new Exception("POI report merged region exceeds worksheet bounds");
+            }
             if (merge.firstRow == merge.lastRow && merge.firstColumn == merge.lastColumn)
                 throw new Exception("invalid POI report merged region");
             foreach (previous; addedMerges) if (merge.firstRow <= previous.lastRow && previous.firstRow <= merge.lastRow &&
