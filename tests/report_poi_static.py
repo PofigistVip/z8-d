@@ -62,6 +62,8 @@ public class StaticReportProbe {
     public static file expandedOuterTemplate() { ExpandedOuterTemplateReport report; return report.run(guid.Null); }
     public static file expandedOuterTemplateExplicit() { ExpandedOuterTemplateExplicitReport report; return report.run(guid.Null); }
     public static file expandedOuterTemplateConflict() { ExpandedOuterTemplateConflictReport report; return report.run(guid.Null); }
+    public static file movedTemplateFooter() { MovedTemplateFooterReport report; return report.run(guid.Null); }
+    public static file movedTemplateHorizontalFooter() { MovedTemplateHorizontalFooterReport report; return report.run(guid.Null); }
     public static file explicitMergeExpansion() { ExpandedExplicitMergeReport report; return report.run(guid.Null); }
     public static file explicitMergeHorizontal() { ExpandedExplicitHorizontalReport report; return report.run(guid.Null); }
     public static file explicitMergeSide() { ExpandedExplicitSideReport report; return report.run(guid.Null); }
@@ -794,6 +796,9 @@ public class ExpandedTwoRowsReport extends Report {
         .replace("ExpandedFooterReport", "ExpandedMultiFooterReport")
         .replace('template = "expanded-footer"', 'template = "expanded-multi-footer"')
         .replace('[boundaries "A1:D2"]', '[boundaries "A1:D4"]'), encoding="utf-8")
+    (source / "MovedTemplateFooterReport.bl").write_text(
+        (source / "ExpandedFooterReport.bl").read_text(encoding="utf-8")
+        .replace("ExpandedFooterReport", "MovedTemplateFooterReport").replace('template = "expanded-footer"', 'template = "moved-template-footer"'), encoding="utf-8")
     (source / "ExpandedMultiSideReport.bl").write_text(
         (source / "ExpandedMultiFooterReport.bl").read_text(encoding="utf-8")
         .replace("ExpandedMultiFooterReport", "ExpandedMultiSideReport").replace('template = "expanded-multi-footer"', 'template = "expanded-multi-side"')
@@ -832,6 +837,9 @@ public class ExpandedTwoRowsReport extends Report {
         .replace("ExpandedHorizontalReport", "ExpandedHorizontalFooterReport")
         .replace('template = "expanded-horizontal"', 'template = "expanded-horizontal-footer"')
         .replace('[boundaries "A1:B2"]', '[boundaries "A1:C2"]'), encoding="utf-8")
+    (source / "MovedTemplateHorizontalFooterReport.bl").write_text(
+        (source / "ExpandedHorizontalFooterReport.bl").read_text(encoding="utf-8")
+        .replace("ExpandedHorizontalFooterReport", "MovedTemplateHorizontalFooterReport").replace('template = "expanded-horizontal-footer"', 'template = "moved-template-horizontal-footer"'), encoding="utf-8")
     (source / "ExpandedHorizontalMultiFooterReport.bl").write_text(
         (source / "ExpandedHorizontalFooterReport.bl").read_text(encoding="utf-8")
         .replace("ExpandedHorizontalFooterReport", "ExpandedHorizontalMultiFooterReport")
@@ -1357,6 +1365,11 @@ public class %s extends Report {
     footer["xl/worksheets/sheet1.xml"] = footer["xl/worksheets/sheet1.xml"].replace(
         '</sheetData>', '<row r="2"><c r="A2" t="s"><v>3</v></c><c r="B2" t="s"><v>4</v></c>'
         '<c r="C2"><v>123</v></c><c r="D2"><v>456</v></c></row></sheetData>')
+    moved_footer = dict(footer)
+    moved_footer["xl/worksheets/sheet1.xml"] = moved_footer["xl/worksheets/sheet1.xml"].replace(
+        '</worksheet>', '<mergeCells count="1"><mergeCell ref="A2:D2"/></mergeCells></worksheet>')
+    with zipfile.ZipFile(application / "reports/moved-template-footer.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in moved_footer.items(): archive.writestr(name, content)
     for filename in ("expanded-footer", "expanded-sparse-footer", "expanded-sparse-formula", "expanded-sparse-shared-formula", "expanded-sparse-chain-formula", "expanded-footer-conflict", "expanded-sparse-block"):
         book = dict(footer)
         if filename in ("expanded-sparse-footer", "expanded-sparse-formula", "expanded-sparse-shared-formula", "expanded-sparse-chain-formula"):
@@ -1450,6 +1463,11 @@ public class %s extends Report {
     with zipfile.ZipFile(application / "reports/expanded-horizontal-footer.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in horizontal_footer.items():
             archive.writestr(entry_name, content)
+    moved_horizontal_footer = dict(horizontal_footer)
+    moved_horizontal_footer["xl/worksheets/sheet1.xml"] = moved_horizontal_footer["xl/worksheets/sheet1.xml"].replace(
+        '</worksheet>', '<mergeCells count="1"><mergeCell ref="C1:C2"/></mergeCells></worksheet>')
+    with zipfile.ZipFile(application / "reports/moved-template-horizontal-footer.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in moved_horizontal_footer.items(): archive.writestr(name, content)
     horizontal_multi = dict(horizontal_footer)
     horizontal_multi["xl/worksheets/sheet1.xml"] = horizontal_multi["xl/worksheets/sheet1.xml"].replace(
         '<c r="C1" t="s"><v>4</v></c></row>', '<c r="C1" t="s"><v>4</v></c>' +
@@ -2020,6 +2038,7 @@ void main(string[] args) {
         contents = contents.replace('assert(renameConflict);', 'assert(renameConflict); auto expandedExisting = P.m_expandedExistingExplicit(); copy(z8_file_resolve_path(expandedExisting), buildPath(args[2], "expanded-existing-explicit.xlsx")); bool expandedExistingConflict; try { P.m_expandedExistingConflict(); } catch (Exception e) { expandedExistingConflict = e.msg == "overlapping POI report merged regions"; } assert(expandedExistingConflict);')
         contents = contents.replace('assert(renameConflict);', 'assert(renameConflict); auto outerExisting = P.m_existingOuter(); copy(z8_file_resolve_path(outerExisting), buildPath(args[2], "existing-outer.xlsx")); auto outerExplicit = P.m_existingOuterExplicit(); copy(z8_file_resolve_path(outerExplicit), buildPath(args[2], "existing-outer-explicit.xlsx")); bool outerConflict; try { P.m_existingOuterConflict(); } catch (Exception e) { outerConflict = e.msg == "overlapping POI report merged regions"; } assert(outerConflict);')
         contents = contents.replace('assert(renameConflict);', 'assert(renameConflict); auto expandedOuter = P.m_expandedOuterTemplate(); copy(z8_file_resolve_path(expandedOuter), buildPath(args[2], "expanded-outer-template.xlsx")); auto expandedOuterExplicit = P.m_expandedOuterTemplateExplicit(); copy(z8_file_resolve_path(expandedOuterExplicit), buildPath(args[2], "expanded-outer-template-explicit.xlsx")); bool expandedOuterConflict; try { P.m_expandedOuterTemplateConflict(); } catch (Exception e) { expandedOuterConflict = e.msg == "overlapping POI report merged regions"; } assert(expandedOuterConflict);')
+        contents = contents.replace('assert(renameConflict);', 'assert(renameConflict); auto movedFooter = P.m_movedTemplateFooter(); copy(z8_file_resolve_path(movedFooter), buildPath(args[2], "moved-template-footer.xlsx")); auto movedHorizontalFooter = P.m_movedTemplateHorizontalFooter(); copy(z8_file_resolve_path(movedHorizontalFooter), buildPath(args[2], "moved-template-horizontal-footer.xlsx"));')
         harness.write_text(contents, encoding="utf-8")
         args.extend(["-I" + str(bridge), str(bridge / "z8/xlsx/openxlsx.d"), str(bridge / "z8/xlsx/poi.d")])
         if os.name == "nt":
@@ -2549,8 +2568,8 @@ class PoiRangeOracle {
       boolean emptyVerticalFooterCase = emptySideFooterCase || emptyMultiFooterCase || (args.length > 3 && ("empty-footer".equals(args[3]) || "empty-sparse-footer".equals(args[3]) || "empty-explicit-footer".equals(args[3])));
       boolean emptyHorizontalFooterCase = emptyHorizontalSideFooterCase || emptyHorizontalMultiFooterCase || (args.length > 3 && ("empty-horizontal-footer".equals(args[3]) || "empty-explicit-horizontal-footer".equals(args[3])));
       boolean emptyFooterCase = emptyVerticalFooterCase || emptyHorizontalFooterCase;
-      boolean footerCase = headerFooterCase || multiFooterCase || (args.length > 3 && "expanded-footer".equals(args[3]));
-      boolean horizontalFooterCase = horizontalHeaderCase || horizontalMultiFooterCase || (args.length > 3 && "expanded-horizontal-footer".equals(args[3]));
+      boolean footerCase = headerFooterCase || multiFooterCase || (args.length > 3 && ("expanded-footer".equals(args[3]) || "moved-template-footer".equals(args[3])));
+      boolean horizontalFooterCase = horizontalHeaderCase || horizontalMultiFooterCase || (args.length > 3 && ("expanded-horizontal-footer".equals(args[3]) || "moved-template-horizontal-footer".equals(args[3])));
       boolean expandedMergedCase = args.length > 3 && ("expanded-merged".equals(args[3]) || "expanded-horizontal-merged".equals(args[3]) || "expanded-merged-formula".equals(args[3]) || "expanded-existing-explicit".equals(args[3]));
       boolean expandedMultipleSheetCase = args.length > 3 && "expanded-multi-sheet".equals(args[3]);
       boolean clonedExistingCase = args.length > 3 && "cloned-existing".equals(args[3]);
@@ -2744,6 +2763,10 @@ class PoiRangeOracle {
       if (multipleSheetCase) report.getRange(1).apply(modifier.setSheet(1));
       if (clonedSheetsCase) { int lastSheet = clonedExistingCase ? 3 : 2; report.getRange(lastSheet).apply(modifier.setSheet(lastSheet)); }
       modifier.close();
+      if (args.length > 3 && ("moved-template-footer".equals(args[3]) || "moved-template-horizontal-footer".equals(args[3])) &&
+          (original.getSheetAt(0).getNumMergedRegions() != 1 || actual.getSheetAt(0).getNumMergedRegions() != 1 ||
+           !original.getSheetAt(0).getMergedRegion(0).formatAsString().equals(actual.getSheetAt(0).getMergedRegion(0).formatAsString())))
+        throw new AssertionError("moved template footer merge differs");
       if (args.length > 3 && "explicit-merge".equals(args[3])) {
         java.util.Set<String> expected = new java.util.HashSet<>(), result = new java.util.HashSet<>();
         for (int i = 0; i < original.getSheetAt(0).getNumMergedRegions(); ++i) expected.add(original.getSheetAt(0).getMergedRegion(i).formatAsString());
@@ -2984,6 +3007,10 @@ class PoiRangeOracle {
             for case in ("expanded-outer-template", "expanded-outer-template-explicit"):
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/expanded-outer-template.xlsx"), str(working / (case + ".xlsx")), str(config), case], cwd=temp, capture_output=True, text=True)
+                assert result.returncode == 0, result.stderr
+            for case in ("moved-template-footer", "moved-template-horizontal-footer"):
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / ("reports/" + case + ".xlsx")), str(working / (case + ".xlsx")), str(config), case], cwd=temp, capture_output=True, text=True)
                 assert result.returncode == 0, result.stderr
             result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                      str(application / "reports/expanded.xlsx"), str(working / "expanded-explicit-merge.xlsx"), str(config), "expanded-explicit-merge"], cwd=temp, capture_output=True, text=True)
