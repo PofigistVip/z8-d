@@ -92,6 +92,15 @@ class LdapValuesOracle {
         LdapAPI defaultConfig = LdapAPI.getLdapAPI("ldap://example", "bind", "secret");
         defaultConfig.close(); return true;
     }
+    public static bool verifyConfigured() {
+        string config = "{baseDn:'dc=example',users:{baseDn:'ou=users',loginField:'uid',groupField:'memberOf'},groups:{baseDn:'ou=groups',nameField:'cn',memberField:'member'}}";
+        LdapAPI api = LdapAPI.getLdapAPI("ldap://example", "bind", "secret", config);
+        LdapUser user = api.getUser("alice"); LdapGroup group = api.getGroup("admins");
+        if (user == null || user.login != "alice" || user.memberOf.size() != 1 || user.memberOf[0] != "cn=admins" ||
+            group == null || group.name != "admins" || group.members.size() != 1 || group.members[0] != "cn=alice") return false;
+        if (api.getUsers().size() != 1 || api.getGroups().size() != 1) return false;
+        api.close(); return !api.isOpened();
+    }
 }''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "main.d"
@@ -127,6 +136,28 @@ class Provider : IZ8LdapProvider {
         return new Session();
     }
 }
+class RawDirectory : IZ8LdapDirectory {
+    bool opened = true;
+    bool isOpen() { return opened; }
+    void close() { opened = false; }
+    Z8LdapDirectoryEntry[] search(wstring base, wstring filter, int page) {
+        auto entry = new Z8LdapDirectoryEntry();
+        if (base == "ou=users,dc=example"w) {
+            assert(filter == "(objectCategory=Person)"w || filter == "(&(objectCategory=Person)(uid=alice))"w);
+            entry.distinguishedName = "cn=alice"w; entry.attributes["uid"w] = ["alice"w]; entry.attributes["memberOf"w] = ["cn=admins"w];
+        } else {
+            assert(base == "ou=groups,dc=example"w);
+            assert(filter == "(objectCategory=Group)"w || filter == "(&(objectCategory=Group)(cn=admins))"w);
+            entry.distinguishedName = "cn=admins"w; entry.attributes["cn"w] = ["admins"w]; entry.attributes["member"w] = ["cn=alice"w];
+        }
+        return [entry];
+    }
+}
+class RawTransport : IZ8LdapTransport {
+    IZ8LdapDirectory connect(wstring url, wstring principal, wstring credentials) {
+        assert(url == "ldap://example"w && principal == "bind"w && credentials == "secret"w); return new RawDirectory();
+    }
+}
 void main() {
     assert(z8_optional_require(Z8p_6F72672E7A656E6672616D65776F726B2E7A382E626173652E6C6461702E50726F6265.m_unavailable()));
     auto provider = new Provider(); auto previous = z8_ldap_set_provider(provider);
@@ -134,7 +165,10 @@ void main() {
     worker.start(); worker.join(); assert(provider.calls == 2);
     z8_native_clear_bindings(); z8_bind_builtin_ldap(); provider.calls = 0;
     assert(z8_optional_require(Z8p_6F72672E7A656E6672616D65776F726B2E7A382E626173652E6C6461702E50726F6265.m_verify()));
-    assert(provider.calls == 2); z8_ldap_set_provider(previous);
+    assert(provider.calls == 2);
+    z8_ldap_set_provider(new Z8LdapConfiguredProvider(new RawTransport()));
+    assert(z8_optional_require(Z8p_6F72672E7A656E6672616D65776F726B2E7A382E626173652E6C6461702E50726F6265.m_verifyConfigured()));
+    z8_ldap_set_provider(previous);
 }''', encoding="utf-8")
     executable = temp / ("ldap.exe" if os.name == "nt" else "ldap")
     subprocess.run(["dmd", "-I" + str(generated), *import_args(), *map(str, generated.rglob("*.d")),

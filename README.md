@@ -135,6 +135,8 @@ python tests/exception_string_conversion.py path/to/original-z8
 python tests/messageformat_value_oracle.py
 python tests/poi_runtime.py
 python tests/ldap_runtime.py path/to/original-z8
+python tests/ldap_search_runtime.py
+python tests/ldap_config_oracle.py path/to/original-z8
 python tests/primary_array_views.py
 python tests/primary_string_map_views.py
 python tests/primary_scalar_key_map_views.py
@@ -882,10 +884,13 @@ CivetWeb настраиваются отдельно.
 Для BL-классов `LdapAPI`, `LdapUser` и `LdapGroup` доступны поля и вызовы
 поиска через зарегистрированный хостом `IZ8LdapProvider`; провайдер задаётся
 функцией `z8_ldap_set_provider` и должен быть пригоден для вызовов из потоков
-сервера. Провайдер открывает `IZ8LdapSession` и отвечает за подключение,
-настройку LDAP, поиск и кэширование; входы передаются ему без журналирования
-runtime. Встроенного сетевого LDAP-провайдера пока нет. Возвращаемые поля,
-массивы и отображения создаются отдельно для каждого BL-объекта.
+сервера. Провайдер открывает `IZ8LdapSession` и отвечает за подключение
+и поиск; входы передаются ему без журналирования runtime.
+`Z8LdapConfiguredProvider` реализует настройки Z8, формирование фильтров,
+кэширование и извлечение полей, но требует от хоста `IZ8LdapTransport` для
+сетевого LDAP-поиска, включая постраничное чтение. Встроенного сетевого
+транспорта пока нет. Возвращаемые поля, массивы и отображения создаются
+отдельно для каждого BL-объекта.
 Для native `User` хост может передать данные через `Z8UserData` и
 `z8_user_attach` или создать обёртку через `z8_user_wrap`: доступны поля,
 признаки администратора и чтение параметров. Загрузка пользователя из базы и

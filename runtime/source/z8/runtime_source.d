@@ -4,6 +4,7 @@ module z8.runtime_source;
 package enum string runtimeSource = import("z8_core_runtime.txt") ~ import("z8_native_runtime.txt") ~ import("z8_object_runtime.txt") ~ import("z8_crypto_runtime.txt") ~ import("z8_base34_runtime.txt") ~ import("z8_recordlock_runtime.txt") ~ import("z8_login_parameters_runtime.txt") ~ import("z8_cron_runtime.txt") ~
     import("z8_map_runtime.txt") ~ import("z8_array_runtime.txt") ~ import("z8_object_array_runtime.txt") ~ import("z8_nested_array_runtime.txt") ~ import("z8_int_map_runtime.txt") ~ import("z8_string_value_map_runtime.txt") ~ import("z8_guid_map_runtime.txt") ~ "\n" ~
     import("z8_ldap_runtime.txt") ~ "\n" ~
+    import("z8_ldap_search_runtime.txt") ~ "\n" ~
     import("z8_sorter_runtime.txt") ~ "\n" ~
     import("z8_poi_runtime.txt") ~ "\n" ~
     import("z8_server_config_runtime.txt") ~ "\n" ~

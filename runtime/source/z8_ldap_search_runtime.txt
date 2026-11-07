@@ -1,0 +1,207 @@
+// Directory-independent LDAP search/configuration behavior from the Java LdapAPI.
+class Z8LdapDirectoryEntry {
+    wstring distinguishedName;
+    wstring[][wstring] attributes;
+}
+interface IZ8LdapDirectory {
+    bool isOpen();
+    void close();
+    // pageSize == 0 requests a single unpaged search. Positive sizes request
+    // the same paged-results behavior as the original LDAP search enumeration.
+    Z8LdapDirectoryEntry[] search(wstring searchBase, wstring searchFilter, int pageSize);
+}
+interface IZ8LdapTransport {
+    IZ8LdapDirectory connect(wstring url, wstring principal, wstring credentials);
+}
+private struct Z8LdapConfig {
+    bool configured;
+    bool invalidUserFields, invalidGroupFields;
+    wstring usersBase, loginField, memberOfField, expiresField, usersFilter, userFilter;
+    wstring groupsBase, groupNameField, groupMemberField, groupsFilter, groupFilter;
+    wstring[wstring] userFields, groupFields;
+}
+private Z8LdapConfig z8_ldap_parse_config(wstring text) {
+    Z8LdapConfig result;
+    if (text is null || !text.length) return result;
+    auto root = z8_json_object_read(text);
+    if (!root.object.length) return result;
+    result.configured = true;
+    JSONValue objectAt(JSONValue parent, string name) {
+        if (parent.type != JSONType.object) return JSONValue.init;
+        auto value = name in parent.object;
+        return value is null || value.type != JSONType.object ? JSONValue.init : *value;
+    }
+    wstring stringAt(JSONValue parent, string name, wstring fallback) {
+        if (parent.type != JSONType.object) return fallback;
+        auto value = name in parent.object;
+        if (value is null || value.type == JSONType.null_) return fallback;
+        if (value.type != JSONType.string) throw new Exception("LDAP configuration value must be a string");
+        return value.str.to!wstring;
+    }
+    wstring[wstring] fieldsAt(JSONValue parent, out bool invalidValues) {
+        wstring[wstring] fields;
+        if (parent.type != JSONType.object) return fields;
+        auto value = "fields" in parent.object;
+        if (value is null || value.type == JSONType.null_) return fields;
+        if (value.type != JSONType.object) throw new Exception("LDAP configuration fields must be an object");
+        foreach (key, field; value.object) {
+            if (field.type != JSONType.string) invalidValues = true;
+            else fields[key.to!wstring] = field.str.to!wstring;
+        }
+        return fields;
+    }
+    auto base = stringAt(root, "baseDn", ""w);
+    auto users = objectAt(root, "users"), groups = objectAt(root, "groups");
+    result.usersBase = stringAt(users, "baseDn", ""w);
+    result.usersBase ~= base.length && result.usersBase.length ? ","w ~ base : base;
+    result.loginField = stringAt(users, "loginField", "sAMAccountname"w);
+    result.memberOfField = stringAt(users, "groupField", null);
+    result.expiresField = stringAt(users, "expiresField", "accountExpires"w);
+    result.usersFilter = stringAt(users, "filter", "(objectCategory=Person)"w);
+    result.userFilter = "(&"w ~ result.usersFilter ~ "("w ~ result.loginField ~ "={0}))"w;
+    result.userFields = fieldsAt(users, result.invalidUserFields);
+    result.groupsBase = stringAt(groups, "baseDn", null);
+    if (result.groupsBase !is null) result.groupsBase ~= base.length && result.groupsBase.length ? ","w ~ base : base;
+    result.groupNameField = stringAt(groups, "nameField", "sAMAccountname"w);
+    result.groupMemberField = stringAt(groups, "memberField", null);
+    result.groupsFilter = stringAt(groups, "filter", "(objectCategory=Group)"w);
+    result.groupFilter = "(&"w ~ result.groupsFilter ~ "("w ~ result.groupNameField ~ "={0}))"w;
+    result.groupFields = fieldsAt(groups, result.invalidGroupFields);
+    return result;
+}
+private bool z8_ldap_find_attribute(Z8LdapDirectoryEntry entry, wstring name, out wstring[] result) {
+    z8_nonnull(entry);
+    if (name is null) return false;
+    foreach (key, values; entry.attributes) if (z8_str_compareNoCase(key, name) == 0) { result = values; return true; }
+    return false;
+}
+private wstring[] z8_ldap_attribute(Z8LdapDirectoryEntry entry, wstring name) {
+    wstring[] result; z8_ldap_find_attribute(entry, name, result); return result;
+}
+private wstring z8_ldap_first_attribute(Z8LdapDirectoryEntry entry, wstring name) {
+    auto values = z8_ldap_attribute(entry, name); return values.length ? values[0] : null;
+}
+private wstring[wstring] z8_ldap_parameters(Z8LdapDirectoryEntry entry, wstring[wstring] fields) {
+    wstring[wstring] result;
+    foreach (name, attribute; fields) {
+        auto values = z8_ldap_attribute(entry, attribute);
+        if (values.length == 1) result[name] = values[0];
+    }
+    return result;
+}
+private wstring[] z8_ldap_unique_values(wstring[] values) {
+    wstring[] result;
+    foreach (value; values) {
+        bool found;
+        foreach (previous; result) if (z8_string_equals(previous, value)) { found = true; break; }
+        if (!found) result ~= value;
+    }
+    return result;
+}
+private class Z8ConfiguredLdapSession : IZ8LdapSession {
+    IZ8LdapDirectory directory;
+    Z8LdapConfig config;
+    int pageSize;
+    Z8LdapUserData[wstring] userCache;
+    Z8LdapGroupData[wstring] groupCache;
+    Z8LdapUserData nullUser;
+    Z8LdapGroupData nullGroup;
+    this(IZ8LdapDirectory directory, Z8LdapConfig config, int pageSize) {
+        this.directory = directory; this.config = config; this.pageSize = pageSize;
+    }
+    bool isOpen() { return directory.isOpen(); }
+    void close() { directory.close(); }
+    Z8LdapDirectoryEntry[] search(wstring base, wstring filter, int page) {
+        if (base is null) return [];
+        return directory.search(base, z8_string_required(filter), page);
+    }
+    Z8LdapUserData extractUser(Z8LdapDirectoryEntry entry) {
+        import std.datetime.systime : Clock;
+        import std.datetime.timezone : UTC;
+        if (!config.configured) throw new Exception("invalid LDAP user configuration");
+        auto result = new Z8LdapUserData();
+        result.domainName = entry.distinguishedName;
+        result.login = z8_ldap_first_attribute(entry, config.loginField);
+        auto expires = z8_ldap_first_attribute(entry, config.expiresField);
+        if (expires !is null) {
+            if (expires.length && (expires[$ - 1] == 'L' || expires[$ - 1] == 'l')) throw new Exception("invalid LDAP account expiration");
+            auto ticks = z8_int_parse(expires);
+            auto now = (Clock.currTime(UTC()) - SysTime.fromUnixTime(0, UTC())).total!"msecs";
+            result.locked = ticks > 0 && (ticks / 10000 - 11644473600000L) < now;
+        }
+        wstring[] memberships;
+        if (z8_ldap_find_attribute(entry, config.memberOfField, memberships)) result.memberOf = z8_ldap_unique_values(memberships);
+        else foreach (group; groups()) foreach (member; group.members) if (z8_string_equals(member, result.domainName)) {
+            result.memberOf ~= group.domainName; break;
+        }
+        result.memberOf = z8_ldap_unique_values(result.memberOf);
+        if (config.invalidUserFields) throw new Exception("invalid LDAP user configuration field");
+        result.parameters = z8_ldap_parameters(entry, config.userFields); return result;
+    }
+    Z8LdapGroupData extractGroup(Z8LdapDirectoryEntry entry) {
+        if (!config.configured) throw new Exception("invalid LDAP group configuration");
+        auto result = new Z8LdapGroupData();
+        result.domainName = entry.distinguishedName;
+        result.name = z8_ldap_first_attribute(entry, config.groupNameField);
+        auto members = z8_ldap_attribute(entry, config.groupMemberField);
+        if (members !is null) result.members = z8_ldap_unique_values(members);
+        if (config.invalidGroupFields) throw new Exception("invalid LDAP group configuration field");
+        result.parameters = z8_ldap_parameters(entry, config.groupFields); return result;
+    }
+    Z8LdapUserData[] searchUsers(wstring base, wstring filter, int page) {
+        Z8LdapUserData[] result; foreach (entry; search(base, filter, page)) result ~= extractUser(entry); return result;
+    }
+    Z8LdapGroupData[] searchGroups(wstring base, wstring filter, int page) {
+        Z8LdapGroupData[] result; foreach (entry; search(base, filter, page)) result ~= extractGroup(entry); return result;
+    }
+    Z8LdapUserData user(wstring login) {
+        if (login is null && nullUser !is null) return nullUser;
+        auto found = login in userCache; if (found !is null && *found !is null) return *found;
+        auto filter = z8_string_format(z8_string_required(config.userFilter), new Z8Array!Z8Primary([z8_primary_box(login)]));
+        return user(config.usersBase, filter);
+    }
+    Z8LdapUserData user(wstring base, wstring filter) {
+        auto found = searchUsers(base, filter, 0);
+        if (found.length > 1) throw new Exception("multiple LDAP users found"); return found.length ? found[0] : null;
+    }
+    Z8LdapUserData[] users() {
+        if (!userCache.length && nullUser is null) foreach (value; searchUsers(config.usersBase, config.usersFilter, pageSize)) {
+            if (value.login is null) nullUser = value; else userCache[value.login] = value;
+        }
+        Z8LdapUserData[] result; if (nullUser !is null) result ~= nullUser;
+        foreach (value; userCache) result ~= value; return result;
+    }
+    Z8LdapUserData[] users(wstring base, wstring filter) { return searchUsers(base, filter, pageSize); }
+    Z8LdapGroupData group(wstring name) {
+        if (name is null && nullGroup !is null) return nullGroup;
+        auto found = name in groupCache; if (found !is null && *found !is null) return *found;
+        auto filter = z8_string_format(z8_string_required(config.groupFilter), new Z8Array!Z8Primary([z8_primary_box(name)]));
+        return group(config.groupsBase, filter);
+    }
+    Z8LdapGroupData group(wstring base, wstring filter) {
+        auto found = searchGroups(base, filter, pageSize);
+        if (found.length > 1) throw new Exception("multiple LDAP groups found"); return found.length ? found[0] : null;
+    }
+    Z8LdapGroupData[] groups() {
+        if (!groupCache.length && nullGroup is null) foreach (value; searchGroups(config.groupsBase, config.groupsFilter, pageSize)) {
+            if (value.name is null) nullGroup = value; else groupCache[value.name] = value;
+        }
+        Z8LdapGroupData[] result; if (nullGroup !is null) result ~= nullGroup;
+        foreach (value; groupCache) result ~= value; return result;
+    }
+    Z8LdapGroupData[] groups(wstring base, wstring filter) { return searchGroups(base, filter, pageSize); }
+}
+class Z8LdapConfiguredProvider : IZ8LdapProvider {
+    IZ8LdapTransport transport;
+    int pageSize;
+    this(IZ8LdapTransport transport, int pageSize = 500) {
+        if (transport is null) throw new Exception("LDAP transport is not configured");
+        this.transport = transport; this.pageSize = pageSize;
+    }
+    IZ8LdapSession open(wstring url, wstring principal, wstring credentials, wstring config) {
+        auto directory = transport.connect(url, principal, credentials);
+        if (directory is null) throw new Exception("LDAP transport returned no directory");
+        scope(failure) try { directory.close(); } catch (Throwable ignored) { }
+        return new Z8ConfiguredLdapSession(directory, z8_ldap_parse_config(config), pageSize);
+    }
+}
