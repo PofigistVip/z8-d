@@ -141,6 +141,7 @@ python tests/ldap_runtime.py path/to/original-z8
 python tests/ldap_search_runtime.py
 python tests/ldap_windows_transport.py  # Windows
 python tests/ldap_config_oracle.py path/to/original-z8
+python tests/report_poi_static.py
 python tests/primary_array_views.py
 python tests/primary_string_map_views.py
 python tests/primary_scalar_key_map_views.py
@@ -708,6 +709,10 @@ Java-исходниками вычислителя.
 У `Report` и `Range` доступны вложенные диапазоны, источник диапазона и настройки
 скрытых столбцов. Хост регистрирует источник через `z8_report_register_data_source`,
 после чего BL-код может найти его по объекту или индексу.
+Для отчёта с движком `poi` без диапазонов и скрытых столбцов `run` проверяет
+XLSX-шаблон в `reports` каталога приложения и создаёт отдельный файл отчёта в
+рабочем каталоге, выполняя операцию внутри транзакции с откатом. Развёртывание
+диапазонов, скрытие столбцов и движок BIRT ещё не реализованы.
 Для native-классов `Workbook`, `Sheet`, `Row` и `Cell` доступно чтение XLSX:
 листов, разреженных строк и ячеек, общих и встроенных строк (включая OOXML-последовательности `_xHHHH_`), чисел,
 логических значений, формул и их сохранённых результатов. Поддерживаются

@@ -66,8 +66,39 @@ private void z8_report_write_meta(Z8Object report, Z8JsonWriterState writer) {
     writer.finish('}');
 }
 private void z8_report_default_prepare(Z8Object self, Z8Guid record) { z8_nonnull(self); }
+// PoiReport with no ranges or hidden columns retains the template's workbook.
+// Range expansion and column modification require the full spreadsheet engine.
+private Z8File z8_report_poi_without_ranges(Z8ReportState state) {
+    import std.algorithm.searching : endsWith;
+    import std.file : copy, mkdirRecurse;
+    import std.path : buildPath, dirName;
+    import std.string : replace, toLower;
+    if ((state.ranges !is null && state.ranges.view().z8_erased_data().z8_size()) ||
+        (state.hiddenColumns !is null && state.hiddenColumns.z8_size()))
+        throw new Exception("POI report ranges and hidden columns are not implemented");
+    auto templateName = z8_string_required(state.templateName).to!string;
+    auto templatePath = templateName.toLower().endsWith(".xlsx") ? templateName : templateName ~ ".xlsx";
+    auto source = z8_resources_load(("reports/" ~ templatePath).to!wstring);
+    auto backend = z8_connection_current_backend();
+    if (backend is null) throw new Exception("report requires a database connection");
+    backend.beginTransaction();
+    scope(exit) backend.rollback();
+    auto input = z8_file_to_binary(source);
+    scope(exit) z8_binary_close(input);
+    z8_poi_parse(input); // Fail on invalid templates before returning a file.
+    auto name = state.name is null ? templateName : state.name.to!string;
+    if (state.name is null && name.toLower().endsWith(".xlsx")) name = name[0 .. $ - 5];
+    name = name.replace("/", "-").replace("\\", "-").replace(":", "-").replace("\n", " ");
+    if (name.endsWith(".")) name = name[0 .. $ - 1];
+    auto day = z8_date_toString(z8_date_now(), "yyyy.MM.dd"w).to!string;
+    auto target = buildPath(z8_file_working_root, "reports", day, z8_guid_to_string(z8_guid_create_random()).to!string, name ~ ".xlsx");
+    mkdirRecurse(dirName(target));
+    copy(z8_file_system_path(source), target);
+    return z8_file_from_disk(target);
+}
 private Z8File z8_report_default_execute(Z8Object self, Z8Guid record) {
     auto state = z8_report_state(self);
+    if (state.engine == z8_report_poi) return z8_report_poi_without_ranges(state);
     throw new Exception("report engine is not implemented: " ~ z8_string_or_empty(state.engine).to!string);
 }
 private Z8File z8_report_run(Z8Object self, Z8Guid record) {
