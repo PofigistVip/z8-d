@@ -311,10 +311,23 @@ class Checker {
         return (!hasObjectClass(actual) || e.objectClass is expectedClass) &&
             innerMapKeyClasses(actual, e.keyObjectClasses) == expectedKeys;
     }
+    private bool isPrimaryMapBothConversion(ValueType actual, ValueType expected, Expression e) {
+        if (!isMap(actual) || !isMap(expected) || mapKeyType(expected) != ValueType.primaryType || mapValueType(expected) != ValueType.primaryType) return false;
+        auto key = mapKeyType(actual);
+        if (key == ValueType.selfType) {
+            if (!e.keyObjectClasses.length || !extendsBuiltinPrimary(outerMapKeyClass(actual, e.keyObjectClasses))) return false;
+        } else if (![ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.guidType,
+                     ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(key)) return false;
+        return isScalarPrimaryArray(arrayOf(mapValueType(actual))) ||
+            (mapValueType(actual) == ValueType.selfType && extendsBuiltinPrimary(e.objectClass));
+    }
     private bool matches(Expression e, ValueType expected, Program expectedClass = null, Program[] expectedKeyClasses = null) {
         if (e.kind == ExprKind.arrayLiteral && hasObjectClass(expected)) e.objectClass = expectedClass;
         if (e.kind == ExprKind.arrayLiteral && hasMapKeyClass(expected)) e.keyObjectClasses = expectedKeyClasses;
         auto actual = typeOf(e, expected);
+        if (isPrimaryMapBothConversion(actual, expected, e)) {
+            e.convertPrimaryMapKey = true; e.convertPrimaryMapValue = true; e.primaryMapKeyClass = null; return true;
+        }
         if (isPrimaryMapKeyConversion(actual, expected, e, expectedClass, expectedKeyClasses)) { e.convertPrimaryMapKey = true; return true; }
         if (isPrimaryMapValueConversion(actual, expected, e, expectedKeyClasses)) {
             e.convertPrimaryMapValue = true;
@@ -533,7 +546,7 @@ class Checker {
                         }
                         if (hasMapKeyClass(actual) && e.arguments[i].keyObjectClasses != resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name)) applicable = false;
                     }
-                } else if (isPrimaryMapKeyConversion(actual, p.type, e.arguments[i], hasObjectClass(p.type) ? resolveClass(candidate.owner, p.objectName, p.name) : null,
+                } else if (isPrimaryMapBothConversion(actual, p.type, e.arguments[i]) || isPrimaryMapKeyConversion(actual, p.type, e.arguments[i], hasObjectClass(p.type) ? resolveClass(candidate.owner, p.objectName, p.name) : null,
                             hasMapKeyClass(p.type) ? resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name) : null) || isPrimaryMapValueConversion(actual, p.type, e.arguments[i], hasMapKeyClass(p.type) ? resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name) : null) ||
                            (isPrimaryArrayConversion(actual, e.arguments[i]) && p.type == ValueType.primaryArray) ||
                            (isPrimaryMatrixConversion(actual, e.arguments[i]) && p.type == ValueType.primaryMatrix)) {
@@ -2602,6 +2615,8 @@ class Checker {
                     left = ValueType.primaryType;
                 if (right != ValueType.primaryType && left == ValueType.primaryType && matches(e.third, ValueType.primaryType))
                     right = ValueType.primaryType;
+                if (isPrimaryMapBothConversion(left, right, e.right) && matches(e.right, right)) left = right;
+                if (isPrimaryMapBothConversion(right, left, e.third) && matches(e.third, left)) right = left;
                 if (isPrimaryMapKeyConversion(left, right, e.right, e.third.objectClass, e.third.keyObjectClasses) && matches(e.right, right, e.third.objectClass, e.third.keyObjectClasses)) left = right;
                 if (isPrimaryMapKeyConversion(right, left, e.third, e.right.objectClass, e.right.keyObjectClasses) && matches(e.third, left, e.right.objectClass, e.right.keyObjectClasses)) right = left;
                 if (isPrimaryMapValueConversion(left, right, e.right, e.third.keyObjectClasses) && matches(e.right, right, null, e.third.keyObjectClasses)) left = right;
