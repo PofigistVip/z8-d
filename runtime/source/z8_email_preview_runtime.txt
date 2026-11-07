@@ -92,6 +92,16 @@ private wstring z8_email_decode(const(ubyte)[] bytes, string charset) {
         case "windows-1257": case "cp1257": id = 13; break;
         case "koi8-r": id = 2; break;
         case "cp866": case "ibm866": id = 1; break;
+        case "iso-8859-2": case "iso8859-2": case "latin2":
+            enum latin2 = "\u00A0\u0104\u02D8\u0141\u00A4\u013D\u015A\u00A7\u00A8\u0160\u015E\u0164\u0179\u00AD\u017D\u017B"w ~
+                "\u00B0\u0105\u02DB\u0142\u00B4\u013E\u015B\u02C7\u00B8\u0161\u015F\u0165\u017A\u02DD\u017E\u017C"w ~
+                "\u0154\u00C1\u00C2\u0102\u00C4\u0139\u0106\u00C7\u010C\u00C9\u0118\u00CB\u011A\u00CD\u00CE\u010E"w ~
+                "\u0110\u0143\u0147\u00D3\u00D4\u0150\u00D6\u00D7\u0158\u016E\u00DA\u0170\u00DC\u00DD\u0162\u00DF"w ~
+                "\u0155\u00E1\u00E2\u0103\u00E4\u013A\u0107\u00E7\u010D\u00E9\u0119\u00EB\u011B\u00ED\u00EE\u010F"w ~
+                "\u0111\u0144\u0148\u00F3\u00F4\u0151\u00F6\u00F7\u0159\u016F\u00FA\u0171\u00FC\u00FD\u0163\u02D9"w;
+            wchar[] latin2Value;
+            foreach (b; bytes) latin2Value ~= b < 0xA0 ? cast(wchar)b : latin2[b - 0xA0];
+            return latin2Value.idup;
         case "iso-8859-5": case "iso8859-5":
             enum cyrillic = "\u00A0\u0401\u0402\u0403\u0404\u0405\u0406\u0407\u0408\u0409\u040A\u040B\u040C\u00AD\u040E\u040F"w ~
                 "\u0410\u0411\u0412\u0413\u0414\u0415\u0416\u0417\u0418\u0419\u041A\u041B\u041C\u041D\u041E\u041F"w ~
@@ -118,7 +128,21 @@ private wstring z8_email_decode(const(ubyte)[] bytes, string charset) {
                 }
             }
             return latin9Value.idup;
-        case "iso-8859-1": case "latin1":
+        case "iso-8859-9": case "iso8859-9": case "latin5":
+            wchar[] latin5Value;
+            foreach (b; bytes) {
+                switch (b) {
+                    case 0xD0: latin5Value ~= '\u011E'; break;
+                    case 0xDD: latin5Value ~= '\u0130'; break;
+                    case 0xDE: latin5Value ~= '\u015E'; break;
+                    case 0xF0: latin5Value ~= '\u011F'; break;
+                    case 0xFD: latin5Value ~= '\u0131'; break;
+                    case 0xFE: latin5Value ~= '\u015F'; break;
+                    default: latin5Value ~= cast(wchar)b; break;
+                }
+            }
+            return latin5Value.idup;
+        case "iso-8859-1": case "iso8859-1": case "latin1":
             wchar[] value; foreach (b; bytes) value ~= cast(wchar)b; return value.idup;
         default: throw new Exception("unsupported email charset: " ~ charset);
     }

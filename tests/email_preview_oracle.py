@@ -85,6 +85,7 @@ messages = [
 ]
 for encoding, value in (("windows-1250", "Žluťoučký"), ("windows-1253", "Καλημέρα"),
                         ("windows-1254", "İstanbul"), ("windows-1257", "Ąžuolas"),
+                        ("iso-8859-2", "Žluťoučký kůň"), ("iso-8859-9", "İstanbul ığdır Şeker"),
                         ("iso-8859-5", "Привет Ёж №1"), ("iso-8859-15", "Œuvre Šž € Ÿ")):
     messages.append(("From: sender@example.com\r\nSubject: " + encoding + "\r\n"
                      "Content-Type: text/plain; charset=" + encoding + "\r\n"
@@ -92,9 +93,15 @@ for encoding, value in (("windows-1250", "Žluťoučký"), ("windows-1253", "Κ�
     encoded = base64.b64encode(value.encode(encoding)).decode("ascii")
     messages.append(("From: sender@example.com\r\nSubject: =?" + encoding + "?B?" + encoded + "?=\r\n"
                      "Content-Type: text/plain; charset=US-ASCII\r\n\r\nBody").encode("ascii"))
-for encoding in ("iso-8859-5", "iso-8859-15"):
+for encoding in ("iso-8859-2", "iso-8859-5", "iso-8859-9", "iso-8859-15"):
     messages.append(("From: sender@example.com\r\nSubject: all bytes\r\nContent-Type: text/plain; charset=" +
                      encoding + "\r\nContent-Transfer-Encoding: 8bit\r\n\r\n").encode("ascii") + bytes(range(0xA0, 0x100)))
+for alias, encoding, value in (("iso8859-1", "iso-8859-1", "café"), ("iso8859-2", "iso-8859-2", "Žluťoučký"),
+                               ("latin2", "iso-8859-2", "Žluťoučký"), ("iso8859-9", "iso-8859-9", "İstanbul"),
+                               ("latin5", "iso-8859-9", "İstanbul")):
+    encoded = base64.b64encode(value.encode(encoding)).decode("ascii")
+    messages.append(("From: sender@example.com\r\nSubject: =?" + alias + "?B?" + encoded + "?=\r\n"
+                     "Content-Type: text/plain; charset=" + alias + "\r\n\r\n").encode("ascii") + value.encode(encoding))
 with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     temp = Path(directory)
     java = temp / "EmailOracle.java"
