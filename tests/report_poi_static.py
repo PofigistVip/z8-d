@@ -96,6 +96,8 @@ public class StaticReportProbe {
     public static file expandedRowHeight() { ExpandedRowHeightReport report; return report.run(guid.Null); }
     public static file expandedInlineTarget() { ExpandedInlineTargetReport report; return report.run(guid.Null); }
     public static file expandedMissingSource() { ExpandedMissingSourceReport report; return report.run(guid.Null); }
+    public static file expandedTwoRows() { ExpandedTwoRowsReport report; return report.run(guid.Null); }
+    public static file expandedEmptyRow() { ExpandedEmptyRowReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -288,6 +290,25 @@ public class ExpandedCustomReport extends Report {
     [address "A1:D1"] [boundaries "A1:D1"] Range region;
     region.source = rows; ranges = {region};
 }''', encoding="utf-8")
+    (source / "ExpandedTwoRowsReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+import org.zenframework.z8.base.json.JsonObject;
+import org.zenframework.z8.base.json.JsonArray;
+public class ExpandedTwoRowsReport extends Report {
+    engine = Report.POI; template = "expanded-two";
+    JsonArray rows; objects = {rows};
+    [address "A1:B2"] [boundaries "A1:B2"] Range region;
+    region.source = rows; ranges = {region};
+    virtual protected void prepare(guid recordId) {
+        JsonObject one; one.set("amount", 10); one.set("title", "First"); rows.add(one);
+        JsonObject two; two.set("amount", 20); two.set("title", "Второй 😀"); rows.add(two);
+        JsonObject three; three.set("amount", 30); three.set("title", "Third"); rows.add(three);
+    }
+}''', encoding="utf-8")
+    (source / "ExpandedEmptyRowReport.bl").write_text(
+        (source / "ExpandedTwoRowsReport.bl").read_text(encoding="utf-8")
+        .replace("ExpandedTwoRowsReport", "ExpandedEmptyRowReport").replace('template = "expanded-two"', 'template = "expanded-empty-row"'),
+        encoding="utf-8")
     (source / "UnsupportedContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.lang.Object;
@@ -548,6 +569,21 @@ public class %s extends Report {
     with zipfile.ZipFile(application / "reports/expanded-custom.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in custom_expanded.items():
             archive.writestr(entry_name, content)
+    two_rows = dict(expanded)
+    two_rows["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="4" uniqueCount="4"><si><t>${rows.item.amount}</t></si><si><t>Top</t></si><si><t>Detail</t></si><si><t>${rows.index}</t></si></sst>'''
+    two_rows["xl/worksheets/sheet1.xml"] = original_sheet.replace(
+        '<row r="1"><c r="A1" t="inlineStr"><is><t>Example</t></is></c></row>',
+        '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>'
+        '<row r="2"><c r="A2" t="s"><v>2</v></c><c r="B2" t="s"><v>3</v></c></row>')
+    with zipfile.ZipFile(application / "reports/expanded-two.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in two_rows.items():
+            archive.writestr(entry_name, content)
+    empty_row = dict(two_rows)
+    empty_row["xl/worksheets/sheet1.xml"] = empty_row["xl/worksheets/sheet1.xml"].replace(
+        '<row r="2"><c r="A2" t="s"><v>2</v></c><c r="B2" t="s"><v>3</v></c></row>', '')
+    with zipfile.ZipFile(application / "reports/expanded-empty-row.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in empty_row.items():
+            archive.writestr(entry_name, content)
     merged = dict(entries)
     merged["xl/worksheets/sheet1.xml"] = original_sheet.replace("</worksheet>", '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')
     with zipfile.ZipFile(application / "reports/merged.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -749,7 +785,9 @@ void main(string[] args) {
     bool rowHeight; try { P.m_expandedRowHeight(); } catch (Exception) { rowHeight = true; } assert(rowHeight);
     bool inlineTarget; try { P.m_expandedInlineTarget(); } catch (Exception) { inlineTarget = true; } assert(inlineTarget);
     bool missingSource; try { P.m_expandedMissingSource(); } catch (Exception) { missingSource = true; } assert(missingSource);
-    assert(database.begins == 73 && database.rollbacks == 73);
+    bool twoRows; try { P.m_expandedTwoRows(); } catch (Exception) { twoRows = true; } assert(twoRows);
+    bool emptyRow; try { P.m_expandedEmptyRow(); } catch (Exception) { emptyRow = true; } assert(emptyRow);
+    assert(database.begins == 75 && database.rollbacks == 75);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -850,6 +888,9 @@ void main(string[] args) {
         contents = contents.replace(
             'bool otherColumns; try { P.m_expandedOtherColumns(); } catch (Exception) { otherColumns = true; } assert(otherColumns);',
             'auto otherColumns = P.m_expandedOtherColumns(); copy(z8_file_resolve_path(otherColumns), buildPath(args[2], "expanded-other-columns.xlsx")); assert(counter.expansions == 8);')
+        contents = contents.replace(
+            'bool twoRows; try { P.m_expandedTwoRows(); } catch (Exception) { twoRows = true; } assert(twoRows);',
+            'auto twoRows = P.m_expandedTwoRows(); copy(z8_file_resolve_path(twoRows), buildPath(args[2], "expanded-two.xlsx")); assert(counter.expansions == 9);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1048,7 +1089,8 @@ class PoiRangeOracle {
       boolean fieldCase = args.length > 3 && "fields".equals(args[3]);
       boolean customCase = args.length > 3 && "custom".equals(args[3]);
       boolean expandedCustomCase = args.length > 3 && "expanded-custom".equals(args[3]);
-      boolean expandedCase = expandedCustomCase || (args.length > 3 && "expanded".equals(args[3]));
+      boolean expandedTwoCase = args.length > 3 && "expanded-two".equals(args[3]);
+      boolean expandedCase = expandedCustomCase || expandedTwoCase || (args.length > 3 && "expanded".equals(args[3]));
       boolean jsonInlineCase = args.length > 3 && "json-inline".equals(args[3]);
       boolean repeatCase = args.length > 3 && "repeat".equals(args[3]);
       boolean jsonCase = jsonInlineCase || (expandedCase && !expandedCustomCase) || (args.length > 3 && "json".equals(args[3]));
@@ -1161,8 +1203,8 @@ class PoiRangeOracle {
       boolean parameters = args.length > 3 && "parameters".equals(args[3]);
       boolean dates = args.length > 3 && "dates".equals(args[3]);
       Range child = new Range().setSource(customCase || jsonCase || queryCase || expandedCustomCase ? customSource : SimpleSource.newDefault())
-          .setBlock(repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
+          .setBlock(expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
+          .setBoundaries(expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       if (multipleCase) {
         report.addRange(0, new Range().setSource(orderedSources[1]).setBlock("C1").setBoundaries("C1"));
         report.addRange(0, new Range().setSource(orderedSources[0]).setBlock("A1").setBoundaries("A1"));
@@ -1171,7 +1213,7 @@ class PoiRangeOracle {
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier); modifier.close();
       if (expandedCase) {
-        for (int row = 0; row < 3; ++row) for (int col = 0; col < 4; ++col) {
+        for (int row = 0; row < (expandedTwoCase ? 6 : 3); ++row) for (int col = 0; col < (expandedTwoCase ? 2 : 4); ++col) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(row).getCell(col);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(row).getCell(col);
           if (expected.getCellType() != result.getCellType() || expected.getCellStyle().getIndex() != result.getCellStyle().getIndex())
@@ -1279,6 +1321,10 @@ class PoiRangeOracle {
                 assert result.returncode != 0 and "NullPointerException" in result.stderr, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/expanded-custom.xlsx"), str(working / "expanded-custom.xlsx"), str(config), "expanded-custom"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/expanded-two.xlsx"), str(working / "expanded-two.xlsx"), str(config), "expanded-two"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
