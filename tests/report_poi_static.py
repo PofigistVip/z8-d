@@ -137,6 +137,7 @@ public class StaticReportProbe {
     public static file cloneFilter() { CloneFilterReport report; return report.run(guid.Null); }
     public static file cloneNamed() { CloneNamedReport report; return report.run(guid.Null); }
     public static file cloneNamedRename() { CloneNamedRenameReport report; return report.run(guid.Null); }
+    public static file cloneNamedOriginalRename() { CloneNamedOriginalRenameReport report; return report.run(guid.Null); }
     public static int orderedCount() { return OrderedRows.sequence; }
     public static file expandedMultipleSheets() { ExpandedMultipleSheetReport report; return report.run(guid.Null); }
     public static file emptyFooter() { EmptyFooterReport report; return report.run(guid.Null); }
@@ -335,10 +336,11 @@ public class CloneSheetsReport extends Report {
     (source / "CloneUnsupportedReport.bl").write_text(
         (source / "CloneSheetsReport.bl").read_text(encoding="utf-8")
         .replace("CloneSheetsReport", "CloneUnsupportedReport").replace('template = "constant"', 'template = "clone-unsupported"'), encoding="utf-8")
-    for name, template in (("CloneSuffixReport", "clone-suffix"), ("CloneLongReport", "clone-long"), ("CloneExistingReport", "clone-existing"), ("CloneViewsReport", "clone-views"), ("CloneSetupReport", "clone-setup"), ("ClonePrintReport", "clone-print"), ("CloneFilterReport", "clone-filter"), ("CloneNamedReport", "clone-named"), ("CloneNamedRenameReport", "clone-named")):
+    for name, template in (("CloneSuffixReport", "clone-suffix"), ("CloneLongReport", "clone-long"), ("CloneExistingReport", "clone-existing"), ("CloneViewsReport", "clone-views"), ("CloneSetupReport", "clone-setup"), ("ClonePrintReport", "clone-print"), ("CloneFilterReport", "clone-filter"), ("CloneNamedReport", "clone-named"), ("CloneNamedRenameReport", "clone-named"), ("CloneNamedOriginalRenameReport", "clone-named")):
         content = (source / "CloneSheetsReport.bl").read_text(encoding="utf-8").replace("CloneSheetsReport", name).replace('template = "constant"', 'template = "' + template + '"')
         if name == "CloneExistingReport": content = content.replace('[sheet "2"]', '[sheet "3"]')
         if name == "CloneNamedReport": content = content.replace(' [sheetName "Final"]', '')
+        if name == "CloneNamedOriginalRenameReport": content = content.replace('[sheet "0"]', '[sheet "0"] [sheetName "Renamed"]')
         (source / (name + ".bl")).write_text(content, encoding="utf-8")
     (source / "MissingBoundariesReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
@@ -1247,7 +1249,8 @@ void main(string[] args) {
     bool cloneFilter; try { P.m_cloneFilter(); } catch (Exception) { cloneFilter = true; } assert(cloneFilter);
     bool cloneNamed; try { P.m_cloneNamed(); } catch (Exception) { cloneNamed = true; } assert(cloneNamed);
     bool cloneNamedRename; try { P.m_cloneNamedRename(); } catch (Exception) { cloneNamedRename = true; } assert(cloneNamedRename);
-    assert(database.begins == 124 && database.rollbacks == 124);
+    bool cloneNamedOriginalRename; try { P.m_cloneNamedOriginalRename(); } catch (Exception) { cloneNamedOriginalRename = true; } assert(cloneNamedOriginalRename);
+    assert(database.begins == 125 && database.rollbacks == 125);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -1471,12 +1474,12 @@ void main(string[] args) {
         contents = contents.replace(
             'bool cloneSheets; try { P.m_cloneSheets(); } catch (Exception) { cloneSheets = true; } assert(cloneSheets);',
             'auto cloneSheets = P.m_cloneSheets(); copy(z8_file_resolve_path(cloneSheets), buildPath(args[2], "cloned-sheets.xlsx"));')
-        for variable, method, output in (("cloneSuffix", "cloneSuffix", "cloned-suffix"), ("cloneLong", "cloneLong", "cloned-long"), ("cloneExisting", "cloneExisting", "cloned-existing"), ("cloneViews", "cloneViews", "cloned-views"), ("cloneSetup", "cloneSetup", "cloned-setup"), ("clonePrint", "clonePrint", "cloned-print"), ("cloneFilter", "cloneFilter", "cloned-filter"), ("cloneNamed", "cloneNamed", "cloned-named")):
+        for variable, method, output in (("cloneSuffix", "cloneSuffix", "cloned-suffix"), ("cloneLong", "cloneLong", "cloned-long"), ("cloneExisting", "cloneExisting", "cloned-existing"), ("cloneViews", "cloneViews", "cloned-views"), ("cloneSetup", "cloneSetup", "cloned-setup"), ("clonePrint", "clonePrint", "cloned-print"), ("cloneFilter", "cloneFilter", "cloned-filter"), ("cloneNamed", "cloneNamed", "cloned-named"), ("cloneNamedRename", "cloneNamedRename", "cloned-named-rename")):
             contents = contents.replace(
                 'bool %s; try { P.m_%s(); } catch (Exception) { %s = true; } assert(%s);' % (variable, method, variable, variable),
                 'auto %s = P.m_%s(); copy(z8_file_resolve_path(%s), buildPath(args[2], "%s.xlsx"));' % (variable, method, variable, output))
-        contents = contents.replace('assert(database.begins == 124 && database.rollbacks == 124);',
-            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 37); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 38); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 39); assert(database.begins == 124 && database.rollbacks == 124);')
+        contents = contents.replace('assert(database.begins == 125 && database.rollbacks == 125);',
+            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 37); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 38); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 39); assert(database.begins == 125 && database.rollbacks == 125);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1702,7 +1705,7 @@ class PoiRangeOracle {
       boolean expandedMergedCase = args.length > 3 && ("expanded-merged".equals(args[3]) || "expanded-horizontal-merged".equals(args[3]) || "expanded-merged-formula".equals(args[3]));
       boolean expandedMultipleSheetCase = args.length > 3 && "expanded-multi-sheet".equals(args[3]);
       boolean clonedExistingCase = args.length > 3 && "cloned-existing".equals(args[3]);
-      boolean clonedNamedCase = args.length > 3 && "cloned-named".equals(args[3]);
+      boolean clonedNamedCase = args.length > 3 && ("cloned-named".equals(args[3]) || "cloned-named-rename".equals(args[3]));
       boolean clonedSheetsCase = clonedExistingCase || clonedNamedCase || (args.length > 3 && ("cloned-sheets".equals(args[3]) || "cloned-suffix".equals(args[3]) || "cloned-long".equals(args[3]) || "cloned-views".equals(args[3]) || "cloned-setup".equals(args[3]) || "cloned-print".equals(args[3]) || "cloned-filter".equals(args[3])));
       boolean horizontalCase = emptyHorizontalFooterCase || horizontalFooterCase || (args.length > 3 && ("expanded-horizontal".equals(args[3]) || "expanded-horizontal-merged".equals(args[3])));
       boolean expandedEmptyCase = args.length > 3 && "expanded-empty".equals(args[3]);
@@ -1830,7 +1833,7 @@ class PoiRangeOracle {
       if (horizontalCase) child.setAxis(1);
       if (clonedSheetsCase) {
         int prototype = clonedExistingCase ? 1 : 0;
-        original.cloneSheet(prototype); original.cloneSheet(prototype); if (!clonedNamedCase) original.setSheetName(prototype + 2, "Final");
+        original.cloneSheet(prototype); original.cloneSheet(prototype); if (!"cloned-named".equals(args[3])) original.setSheetName(prototype + 2, "Final");
         report.addRange(prototype + 2, new Range().setSource(SimpleSource.newDefault()).setBlock("A1").setBoundaries("A1"));
         report.addRange(0, new Range().setSource(SimpleSource.newDefault()).setBlock("A1").setBoundaries("A1"));
       } else if (expandedMultipleSheetCase) {
@@ -2091,7 +2094,7 @@ class PoiRangeOracle {
                                          str(application / "reports/constant.xlsx"), str(working / "cloned-sheets.xlsx"), str(config), "cloned-sheets"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
-                for source_name, name in (("clone-suffix", "cloned-suffix"), ("clone-long", "cloned-long"), ("clone-existing", "cloned-existing"), ("clone-views", "cloned-views"), ("clone-setup", "cloned-setup"), ("clone-print", "cloned-print"), ("clone-filter", "cloned-filter"), ("clone-named", "cloned-named")):
+                for source_name, name in (("clone-suffix", "cloned-suffix"), ("clone-long", "cloned-long"), ("clone-existing", "cloned-existing"), ("clone-views", "cloned-views"), ("clone-setup", "cloned-setup"), ("clone-print", "cloned-print"), ("clone-filter", "cloned-filter"), ("clone-named", "cloned-named"), ("clone-named", "cloned-named-rename")):
                     result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                              str(application / ("reports/" + source_name + ".xlsx")), str(working / (name + ".xlsx")), str(config), name],
                                             cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")

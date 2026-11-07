@@ -804,6 +804,42 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
     z8_poi_report_apply_root(report, workbook, sheet, root, copies, removals, edits);
 }
 
+// POI only considers workbook-scoped names and names scoped to the renamed
+// sheet. Accept simple references to other sheets, which require no rewrite.
+private bool z8_poi_report_names_unaffected(Z8PoiXmlNode definedNames, int index, wstring oldName) {
+    import std.algorithm.searching : countUntil;
+    if (definedNames is null) return true;
+    foreach (item; definedNames.children) {
+        if (z8_poi_xml_local(item.name) != "definedName"w || item.children.length) return false;
+        auto localSheet = item.attr("localSheetId"w);
+        if (localSheet !is null) {
+            try { auto localIndex = localSheet.to!int; if (localIndex < 0) return false; if (localIndex != index) continue; }
+            catch (Exception) return false;
+        }
+        auto formula = item.text;
+        auto separator = formula.countUntil('!');
+        if (separator <= 0 || separator == formula.length - 1 || formula[separator + 1 .. $].countUntil('!') >= 0) return false;
+        auto sheet = formula[0 .. separator];
+        if (sheet[0] == '\'') {
+            if (sheet.length < 2 || sheet[$ - 1] != '\'') return false;
+            wstring unquoted;
+            for (size_t i = 1; i < sheet.length - 1; ++i) {
+                if (sheet[i] == '\'') {
+                    if (++i >= sheet.length - 1 || sheet[i] != '\'') return false;
+                }
+                unquoted ~= sheet[i];
+            }
+            sheet = unquoted;
+        } else foreach (c; sheet) {
+            if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.')) return false;
+        }
+        if (z8_str_compareNoCase(sheet, oldName) == 0) return false;
+        foreach (c; formula[separator + 1 .. $])
+            if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '$' || c == ':')) return false;
+    }
+    return true;
+}
+
 private ubyte[] z8_poi_report_rename_sheet(const(ubyte)[] input, Z8PoiWorkbook workbook, int index, wstring name) {
     import std.algorithm.searching : canFind, endsWith;
     import std.zip : ZipArchive;
@@ -832,7 +868,7 @@ private ubyte[] z8_poi_report_rename_sheet(const(ubyte)[] input, Z8PoiWorkbook w
     auto xml = z8_poi_xml_decode(original);
     auto root = (new Z8PoiXmlReader(xml)).parseDocument();
     auto definedNames = root.child("definedNames"w);
-    if (definedNames !is null && definedNames.children.length)
+    if (!z8_poi_report_names_unaffected(definedNames, index, workbook.sheets[index].name))
         throw new Exception("renaming a POI report sheet with defined names is not implemented");
     auto sheets = root.child("sheets"w);
     if (sheets is null) throw new Exception("missing XLSX sheets");
