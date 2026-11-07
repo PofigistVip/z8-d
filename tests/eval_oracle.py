@@ -183,6 +183,14 @@ public class EvalOracle {
         for (String pattern : new String[]{"${firstSubject.setupMatcher('a')}", "${secondSubject.setupMatcher('b')}", "${firstSubject.next()}", "${aliasSubject.getGroup(0)}", "${secondSubject.next()}", "${secondSubject.getGroup(0)}", "${aliasSubject.next()}"})
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
+        jsonEval.z8_setVariable(new string("filePath"), new string("folder/report.xlsx"));
+        jsonEval.z8_setVariable(new string("fileJson"), new string("[{size:0}]"));
+        for (String pattern : new String[]{"${filePath.file().name('folder/report.xlsx')}", "${filePath.file().baseName('folder/report.xlsx')}", "${filePath.file().extension('folder/report.xlsx')}", "${filePath.file().extension('README')}", "${filePath.file().parse('[]').size()}", "${filePath.file().parse(fileJson).first().size}", "${filePath.file().toJson(filePath.file().parse(fileJson))}", "${filePath.file().parse('bad')}", "${filePath.file().name(42)}"})
+            try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
+            catch (Exception error) { System.out.println("error"); }
+        for (String expression : new String[]{"filePath.file().toJson(filePath.file().parse('[]')) == '[]'", "filePath.file().toJson(filePath.file().parse(fileJson)).length() > 2", "filePath.file().toJson('x'.split(',')) == '[]'"})
+            try { System.out.println(jsonEval.z8_evaluateBoolean(new string(expression)).get()); }
+            catch (Exception error) { System.out.println("error"); }
     }
 }
 ''', encoding="utf-8")
@@ -388,6 +396,14 @@ void main() {
     jsonEval.m_setVariable("secondSubject"w, z8_primary_box("ab"w));
     foreach (pattern; ["${firstSubject.setupMatcher('a')}"w, "${secondSubject.setupMatcher('b')}"w, "${firstSubject.next()}"w, "${aliasSubject.getGroup(0)}"w, "${secondSubject.next()}"w, "${secondSubject.getGroup(0)}"w, "${aliasSubject.next()}"w])
         try { writeln(jsonEval.m_evaluateText(pattern).to!string); }
+        catch (Exception) { writeln("error"); }
+    jsonEval.m_setVariable("filePath"w, z8_primary_box("folder/report.xlsx"w));
+    jsonEval.m_setVariable("fileJson"w, z8_primary_box("[{size:0}]"w));
+    foreach (pattern; ["${filePath.file().name('folder/report.xlsx')}"w, "${filePath.file().baseName('folder/report.xlsx')}"w, "${filePath.file().extension('folder/report.xlsx')}"w, "${filePath.file().extension('README')}"w, "${filePath.file().parse('[]').size()}"w, "${filePath.file().parse(fileJson).first().size}"w, "${filePath.file().toJson(filePath.file().parse(fileJson))}"w, "${filePath.file().parse('bad')}"w, "${filePath.file().name(42)}"w])
+        try { writeln(jsonEval.m_evaluateText(pattern).to!string); }
+        catch (Exception) { writeln("error"); }
+    foreach (expression; ["filePath.file().toJson(filePath.file().parse('[]')) == '[]'"w, "filePath.file().toJson(filePath.file().parse(fileJson)).length() > 2"w, "filePath.file().toJson('x'.split(',')) == '[]'"w])
+        try { writeln(z8_optional_require(jsonEval.m_evaluateBoolean(expression))); }
         catch (Exception) { writeln("error"); }
 }
 ''', encoding="utf-8")

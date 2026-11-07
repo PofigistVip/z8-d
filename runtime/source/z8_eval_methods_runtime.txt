@@ -377,6 +377,30 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
     }
     if (object.primary !is null && object.primary.kind == Z8PrimaryKind.file) {
         auto file = object.primary.fileValue;
+        if (name == "toJson"w && arguments.length == 1 && arguments[0].collection !is null) {
+            auto values = new Z8Array!Z8File();
+            auto source = arguments[0].collection;
+            for (long i; i < source.z8_size(); ++i) {
+                auto value = source.z8_get(i);
+                if (value is null || value.kind != Z8PrimaryKind.file) throw new Exception("invalid Eval file value");
+                values.z8_add(value.fileValue);
+            }
+            return Z8EvalValue(true, z8_primary_box(z8_string_new(z8_file_toJson(values))), null, null);
+        }
+        if (arguments.length == 1 && ["name"w, "baseName"w, "extension"w, "parse"w].canFind(name) &&
+            arguments[0].primary !is null && arguments[0].primary.kind == Z8PrimaryKind.text) {
+            auto value = arguments[0].primary.textValue;
+            if (name == "parse"w) {
+                auto files = z8_file_parse(value);
+                auto result = Z8EvalValue(true);
+                result.collection = new Z8Array!Z8Primary();
+                for (long i; i < files.z8_size(); ++i) result.collection.z8_add(z8_primary_box(files.z8_get(i)));
+                return result;
+            }
+            auto text = name == "name"w ? z8_file_name(value) :
+                name == "baseName"w ? z8_file_baseName(value) : z8_file_extension(value);
+            return Z8EvalValue(true, z8_primary_box(z8_string_new(text)), null, null);
+        }
         if ((name == "zip"w || name == "unzip"w) && arguments.length == 1 && arguments[0].primary !is null && arguments[0].primary.kind == Z8PrimaryKind.file) {
             auto target = arguments[0].primary.fileValue;
             return Z8EvalValue(true, z8_primary_box(name == "zip"w ? z8_file_zip(file, target) : z8_file_unzip(file, target)), null, null);
