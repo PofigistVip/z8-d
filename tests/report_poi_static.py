@@ -144,6 +144,8 @@ public class StaticReportProbe {
     public static file cloneNamedCellRename() { CloneNamedCellRenameReport report; return report.run(guid.Null); }
     public static file cloneNamedRussianRename() { CloneNamedRussianRenameReport report; return report.run(guid.Null); }
     public static file collectionRange() { CollectionRangeReport report; return report.run(guid.Null); }
+    public static file mapValueRange() { MapValueRangeReport report; return report.run(guid.Null); }
+    public static file mapDerivedRange() { MapDerivedRangeReport report; return report.run(guid.Null); }
     public static int orderedCount() { return OrderedRows.sequence; }
     public static file expandedMultipleSheets() { ExpandedMultipleSheetReport report; return report.run(guid.Null); }
     public static file emptyFooter() { EmptyFooterReport report; return report.run(guid.Null); }
@@ -177,6 +179,8 @@ public class StaticReportProbe {
             ("ExpressionRangeReport", "expression", "A1", "A1"),
             ("ConstantRangeReport", "constant", "A1:G1", "A1:G1"),
             ("CollectionRangeReport", "collection", "A1:D1", "A1:D1"),
+            ("MapValueRangeReport", "map-value", "A1:D1", "A1:D1"),
+            ("MapDerivedRangeReport", "map-derived", "A1", "A1"),
             ("ConstantCommentRangeReport", "constant-comment", "A1:G1", "A1:G1"),
             ("ParametersRangeReport", "parameters", "A1:E1", "A1:E1"),
             ("DateRangeReport", "dates", "A1:J1", "A1:J1"),
@@ -716,6 +720,17 @@ public class %s extends Report {
         '<c r="C1" t="s"><v>1</v></c><c r="D1" t="s"><v>2</v></c>')
     with zipfile.ZipFile(application / "reports/collection.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in collection.items(): archive.writestr(name, content)
+    map_value = dict(collection)
+    map_value["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="3" uniqueCount="3"><si><t>${parameters}</t></si><si><t>values: ${parameters}</t></si><si><t>${parameters.size()}</t></si></sst>'''
+    map_value["xl/worksheets/sheet1.xml"] = collection["xl/worksheets/sheet1.xml"].replace("${'a,b'.split(',')}", "${parameters}")
+    with zipfile.ZipFile(application / "reports/map-value.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in map_value.items(): archive.writestr(name, content)
+    map_derived = dict(collection)
+    map_derived["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="1" uniqueCount="1"><si><t>${('prefix ' + parameters).toUpperCase()}</t></si></sst>'''
+    map_derived["xl/worksheets/sheet1.xml"] = original_sheet.replace(
+        '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>', '<c r="A1" t="s"><v>0</v></c>')
+    with zipfile.ZipFile(application / "reports/map-derived.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in map_derived.items(): archive.writestr(name, content)
     repeat = dict(parameters)
     repeat["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="1" uniqueCount="1"><si><t>${parameters['nested']}</t></si></sst>'''
     repeat["xl/worksheets/sheet1.xml"] = original_sheet.replace(
@@ -1276,7 +1291,9 @@ void main(string[] args) {
     bool cloneNamedCellRename; try { P.m_cloneNamedCellRename(); } catch (Exception) { cloneNamedCellRename = true; } assert(cloneNamedCellRename);
     bool cloneNamedRussianRename; try { P.m_cloneNamedRussianRename(); } catch (Exception) { cloneNamedRussianRename = true; } assert(cloneNamedRussianRename);
     bool collectionRange; try { P.m_collectionRange(); } catch (Exception) { collectionRange = true; } assert(collectionRange);
-    assert(database.begins == 131 && database.rollbacks == 131);
+    bool mapValueRange; try { P.m_mapValueRange(); } catch (Exception) { mapValueRange = true; } assert(mapValueRange);
+    bool mapDerivedRange; try { P.m_mapDerivedRange(); } catch (Exception) { mapDerivedRange = true; } assert(mapDerivedRange);
+    assert(database.begins == 133 && database.rollbacks == 133);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -1506,8 +1523,8 @@ void main(string[] args) {
                 'auto %s = P.m_%s(); copy(z8_file_resolve_path(%s), buildPath(args[2], "%s.xlsx"));' % (variable, method, variable, output))
         contents = contents.replace('bool collectionRange; try { P.m_collectionRange(); } catch (Exception) { collectionRange = true; } assert(collectionRange);',
             'auto collectionRange = P.m_collectionRange(); copy(z8_file_resolve_path(collectionRange), buildPath(args[2], "collection.xlsx"));')
-        contents = contents.replace('assert(database.begins == 131 && database.rollbacks == 131);',
-            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 37); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 38); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 39); assert(database.begins == 131 && database.rollbacks == 131);')
+        contents = contents.replace('assert(database.begins == 133 && database.rollbacks == 133);',
+            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 37); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 38); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 39); assert(database.begins == 133 && database.rollbacks == 133);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")

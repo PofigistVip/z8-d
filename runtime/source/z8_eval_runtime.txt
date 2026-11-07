@@ -15,6 +15,7 @@ private struct Z8EvalValue {
     Z8StringMap requestParameters;
     Z8Object reportObject;
     Z8Array!Z8Primary collection;
+    bool stringifiedMap;
 }
 private Z8EvalState z8_eval_state(Z8Object self) {
     self = z8_nonnull(self);
@@ -132,7 +133,7 @@ private wstring z8_eval_text_from_state(Z8EvalState state, wstring source, bool 
             if (reportSyntax && expression.canFind('"')) throw new Exception("POI report expression syntax is not implemented");
             value = z8_eval_expression(state, expression);
             if (requireResolved && (!value.evaluated || value.context != Z8EvalContext.none ||
-                value.json !is null || value.requestParameters !is null || value.reportObject !is null))
+                value.json !is null || value.requestParameters !is null || value.reportObject !is null || value.stringifiedMap))
                 throw new Exception("POI report expression context is not implemented");
         }
         catch (Exception error) {

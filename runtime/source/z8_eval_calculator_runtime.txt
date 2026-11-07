@@ -326,5 +326,7 @@ private Z8EvalValue z8_eval_binary(wstring op, Z8EvalValue left, Z8EvalValue rig
         }
     }
     if (result is null) throw new Exception("unsupported Eval binary operands");
-    return Z8EvalValue(true, result, null, null);
+    auto output = Z8EvalValue(true, result, null, null);
+    output.stringifiedMap = left.stringifiedMap || right.stringifiedMap || right.requestParameters !is null;
+    return output;
 }

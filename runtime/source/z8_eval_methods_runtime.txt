@@ -230,7 +230,10 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
         auto map = object.requestParameters;
         if (name == "size"w) return Z8EvalValue(true, z8_primary_box(map.z8_size()), null, null);
         if (name == "isEmpty"w) return Z8EvalValue(true, z8_primary_box(map.z8_isEmpty()), null, null);
-        if (name == "toString"w) return Z8EvalValue(true, z8_primary_box(z8_eval_value_text(object)), null, null);
+        if (name == "toString"w) {
+            auto result = Z8EvalValue(true, z8_primary_box(z8_eval_value_text(object)), null, null);
+            result.stringifiedMap = true; return result;
+        }
         if (name == "clear"w) { map.z8_clear(); return Z8EvalValue(true); }
         if (name == "hashCode"w) {
             uint hash; auto keys = map.z8_keys();

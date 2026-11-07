@@ -48,7 +48,10 @@ private class Z8EvalParser {
             auto name = text[start .. position];
             if (take("("w)) {
                 auto values = arguments();
-                return evaluating ? z8_eval_function(name, values) : Z8EvalValue.init;
+                if (!evaluating) return Z8EvalValue.init;
+                auto result = z8_eval_function(name, values);
+                foreach (argument; values) result.stringifiedMap |= argument.stringifiedMap;
+                return result;
             }
         } else throw new Exception("unsupported Eval expression");
         return evaluating ? z8_eval_atom(state, text[start .. position]) : Z8EvalValue.init;
@@ -66,12 +69,22 @@ private class Z8EvalParser {
                 auto name = text[start .. position];
                 if (take("("w)) {
                     auto values = arguments();
-                    if (evaluating) value = z8_eval_method(value, name, values);
-                } else if (evaluating) value = z8_eval_property(state, value, name);
+                    if (evaluating) {
+                        auto derived = value.stringifiedMap;
+                        foreach (argument; values) derived |= argument.stringifiedMap;
+                        value = z8_eval_method(value, name, values); value.stringifiedMap |= derived;
+                    }
+                } else if (evaluating) {
+                    auto derived = value.stringifiedMap;
+                    value = z8_eval_property(state, value, name); value.stringifiedMap |= derived;
+                }
             } else if (take("["w)) {
                 auto index = conditional();
                 if (!take("]"w)) throw new Exception("unclosed Eval index");
-                if (evaluating) value = z8_eval_item(state, value, index);
+                if (evaluating) {
+                    auto derived = value.stringifiedMap || index.stringifiedMap;
+                    value = z8_eval_item(state, value, index); value.stringifiedMap |= derived;
+                }
             } else break;
         }
         return value;

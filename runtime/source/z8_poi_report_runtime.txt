@@ -317,7 +317,7 @@ private void z8_poi_report_evaluate_cell(Z8EvalState state, Z8PoiWorkbook workbo
     if (expression.canFind('"')) throw new Exception("POI report expression syntax is not implemented");
     auto evaluated = z8_eval_expression(state, expression);
     if (!evaluated.evaluated || evaluated.context != Z8EvalContext.none || evaluated.json !is null ||
-        evaluated.requestParameters !is null || evaluated.reportObject !is null)
+        evaluated.requestParameters !is null || evaluated.reportObject !is null || evaluated.stringifiedMap)
         throw new Exception("POI report expression context is not implemented");
     if (evaluated.collection !is null) {
         // A single expression returns the collection itself in Java, and
