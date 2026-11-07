@@ -1,7 +1,7 @@
 /// Optional OpenXLSX document provider for the Z8 native POI facade.
 module z8.xlsx.poi;
 
-import z8.runtime : IZ8PoiDocument, IZ8PoiProvider, IZ8XlsxExportWriter, IZ8PoiReportWriter, IZ8PoiReportExpander, IZ8PoiReportMergeWriter, IZ8PoiReportCellRemover, IZ8PoiReportSheetCloner, Z8PoiHiddenColumn, Z8PoiCellEdit, Z8PoiCellEditKind, Z8PoiCellCopy, Z8PoiMergedRegion, Z8PoiCellRemoval,
+import z8.runtime : IZ8PoiDocument, IZ8PoiProvider, IZ8XlsxExportWriter, IZ8PoiReportWriter, IZ8PoiReportExpander, IZ8PoiReportMergeWriter, IZ8PoiReportMergeRemover, IZ8PoiReportCellRemover, IZ8PoiReportSheetCloner, Z8PoiHiddenColumn, Z8PoiCellEdit, Z8PoiCellEditKind, Z8PoiCellCopy, Z8PoiMergedRegion, Z8PoiCellRemoval,
     Z8PoiUnsupportedWorkbook, z8_poi_set_provider;
 import z8.xlsx.openxlsx : Workbook;
 import std.conv : to;
@@ -31,7 +31,7 @@ private class OpenXlsxDocument : IZ8PoiDocument {
     void close() { book.close(); }
 }
 
-private class OpenXlsxProvider : IZ8PoiProvider, IZ8XlsxExportWriter, IZ8PoiReportWriter, IZ8PoiReportExpander, IZ8PoiReportMergeWriter, IZ8PoiReportCellRemover, IZ8PoiReportSheetCloner {
+private class OpenXlsxProvider : IZ8PoiProvider, IZ8XlsxExportWriter, IZ8PoiReportWriter, IZ8PoiReportExpander, IZ8PoiReportMergeWriter, IZ8PoiReportMergeRemover, IZ8PoiReportCellRemover, IZ8PoiReportSheetCloner {
     IZ8PoiDocument open(const(ubyte)[] bytes) { return new OpenXlsxDocument(bytes); }
     ubyte[] createExport(const(Z8PoiCellEdit)[] cells, const(double)[] widths) {
         auto book = Workbook.create();
@@ -82,6 +82,14 @@ private class OpenXlsxProvider : IZ8PoiProvider, IZ8XlsxExportWriter, IZ8PoiRepo
             auto book = new Workbook(input);
             scope(exit) book.close();
             foreach (merge; merges) book.mergeCells(merge.sheet, merge.firstRow, merge.firstColumn, merge.lastRow, merge.lastColumn);
+            return book.save();
+        } catch (Exception error) throw new Z8PoiUnsupportedWorkbook(error.msg);
+    }
+    ubyte[] removeReportMerges(const(ubyte)[] input, const(Z8PoiMergedRegion)[] merges) {
+        try {
+            auto book = new Workbook(input);
+            scope(exit) book.close();
+            foreach (merge; merges) book.unmergeCells(merge.sheet, merge.firstRow, merge.firstColumn, merge.lastRow, merge.lastColumn);
             return book.save();
         } catch (Exception error) throw new Z8PoiUnsupportedWorkbook(error.msg);
     }

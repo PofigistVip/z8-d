@@ -1757,15 +1757,16 @@ void main(string[] args) {
         bridge = ROOT / "xlsx/source"
         contents = harness.read_text(encoding="utf-8")
         contents = contents.replace("import z8.runtime;", "import z8.runtime;\nimport z8.xlsx.poi : z8_openxlsx_configure;")
-        contents = contents.replace("void main(string[] args) {", '''class CountingProvider : IZ8PoiProvider, IZ8PoiReportWriter, IZ8PoiReportExpander, IZ8PoiReportMergeWriter, IZ8PoiReportCellRemover, IZ8PoiReportSheetCloner {
+        contents = contents.replace("void main(string[] args) {", '''class CountingProvider : IZ8PoiProvider, IZ8PoiReportWriter, IZ8PoiReportExpander, IZ8PoiReportMergeWriter, IZ8PoiReportMergeRemover, IZ8PoiReportCellRemover, IZ8PoiReportSheetCloner {
     IZ8PoiProvider reader;
     IZ8PoiReportWriter writer;
     IZ8PoiReportExpander expander;
     IZ8PoiReportMergeWriter mergeWriter;
+    IZ8PoiReportMergeRemover mergeRemover;
     IZ8PoiReportCellRemover remover;
     IZ8PoiReportSheetCloner cloner;
     uint renames, hides, writes, expansions, merges;
-    this(IZ8PoiProvider provider) { reader = provider; writer = cast(IZ8PoiReportWriter)provider; expander = cast(IZ8PoiReportExpander)provider; mergeWriter = cast(IZ8PoiReportMergeWriter)provider; remover = cast(IZ8PoiReportCellRemover)provider; cloner = cast(IZ8PoiReportSheetCloner)provider; assert(writer !is null && expander !is null && mergeWriter !is null && remover !is null && cloner !is null); }
+    this(IZ8PoiProvider provider) { reader = provider; writer = cast(IZ8PoiReportWriter)provider; expander = cast(IZ8PoiReportExpander)provider; mergeWriter = cast(IZ8PoiReportMergeWriter)provider; mergeRemover = cast(IZ8PoiReportMergeRemover)provider; remover = cast(IZ8PoiReportCellRemover)provider; cloner = cast(IZ8PoiReportSheetCloner)provider; assert(writer !is null && expander !is null && mergeWriter !is null && mergeRemover !is null && remover !is null && cloner !is null); }
     IZ8PoiDocument open(const(ubyte)[] input) { return reader.open(input); }
     ubyte[] renameReportSheet(const(ubyte)[] input, uint index, wstring name) {
         auto result = writer.renameReportSheet(input, index, name);
@@ -1787,6 +1788,9 @@ void main(string[] args) {
         assert(regions.length == 1 || regions.length == 2 || regions.length == 3); auto result = mergeWriter.addReportMerges(input, regions);
         ++merges; return result;
     }
+    ubyte[] removeReportMerges(const(ubyte)[] input, const(Z8PoiMergedRegion)[] regions) {
+        return mergeRemover.removeReportMerges(input, regions);
+    }
     ubyte[] removeReportCells(const(ubyte)[] input, const(Z8PoiCellRemoval)[] cells) {
         assert((cells.length == 1 && ((cells[0].row == 2 && (cells[0].column == 3 || cells[0].column == 4)) ||
                                       (cells[0].row == 1 && (cells[0].column == 1 || cells[0].column == 2)) ||
@@ -1802,7 +1806,14 @@ void main(string[] args) {
 void main(string[] args) {
     z8_openxlsx_configure();
     auto counter = new CountingProvider(z8_poi_set_provider(null));
-    z8_poi_set_provider(counter);''')
+    z8_poi_set_provider(counter);
+    {
+        import std.algorithm.searching : canFind;
+        auto bytes = cast(const(ubyte)[])read(buildPath(args[1], "reports", "merged.xlsx"));
+        auto removed = counter.removeReportMerges(bytes, [Z8PoiMergedRegion(0, 0, 0, 0, 1)]);
+        auto document = counter.open(removed); scope(exit) document.close();
+        assert(!document.sheetXml(0).canFind("A1:B1") && document.sheetXml(0).canFind("Example"));
+    }''')
         contents = contents.replace(
             'bool constants; try { P.m_constantRange(); } catch (Exception) { constants = true; } assert(constants);',
             'auto constants = P.m_constantRange(); copy(z8_file_resolve_path(constants), buildPath(args[2], "constant.xlsx"));')

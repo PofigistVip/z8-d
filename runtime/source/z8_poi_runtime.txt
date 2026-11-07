@@ -46,6 +46,10 @@ interface IZ8PoiReportExpander {
 interface IZ8PoiReportMergeWriter {
     ubyte[] addReportMerges(const(ubyte)[] input, const(Z8PoiMergedRegion)[] merges);
 }
+/// Optional capability for removing selected merged regions before report edits.
+interface IZ8PoiReportMergeRemover {
+    ubyte[] removeReportMerges(const(ubyte)[] input, const(Z8PoiMergedRegion)[] merges);
+}
 /// Optional capability for physically removing cells in sparse report copies.
 interface IZ8PoiReportCellRemover {
     ubyte[] removeReportCells(const(ubyte)[] input, const(Z8PoiCellRemoval)[] cells);
