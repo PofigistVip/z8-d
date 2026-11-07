@@ -1,0 +1,16 @@
+public class DatespanArraySort {
+    public static int run() {
+        datespan first; first.set(1000);
+        datespan second; second.set(2000);
+        datespan[] values = {first, second};
+        datespan[] sorted = values.sort();
+        if (first.milliseconds() != 1000 || second.milliseconds() != -1000) return 1;
+        if (sorted[0].milliseconds() != -1000 || sorted[1].milliseconds() != 1000) return 2;
+        sorted.add(first); if (values.size() != 3) return 3;
+        datespan[] leading = {}; leading.add(null); leading.add(first); leading.sort();
+        if (leading[0].milliseconds() != 1000 || leading[1] != null) return 4;
+        datespan[] invalid = {first}; invalid.add(null);
+        try { invalid.sort(); return 5; } catch (exception expected) {}
+        return 0;
+    }
+}

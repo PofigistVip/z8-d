@@ -1,3 +1,29 @@
+// java.util.ComparableTimSort uses this run detection and binary insertion
+// path for arrays shorter than MIN_MERGE (32). Some Z8 comparators mutate
+// their operands, so the number and order of comparisons are observable.
+private void z8_java_short_sort(T, alias compare)(ref T[] values) {
+    auto length = values.length;
+    if (length < 2) return;
+    size_t run = 2;
+    if (compare(values[1], values[0]) < 0) {
+        while (run < length && compare(values[run], values[run - 1]) < 0) ++run;
+        for (size_t i = 0, j = run - 1; i < j; ++i, --j) {
+            auto value = values[i]; values[i] = values[j]; values[j] = value;
+        }
+    } else while (run < length && compare(values[run], values[run - 1]) >= 0) ++run;
+    foreach (position; run .. length) {
+        auto pivot = values[position];
+        size_t left, right = position;
+        while (left < right) {
+            auto middle = (left + right) / 2;
+            if (compare(pivot, values[middle]) < 0) right = middle;
+            else left = middle + 1;
+        }
+        for (auto cursor = position; cursor > left; --cursor) values[cursor] = values[cursor - 1];
+        values[left] = pivot;
+    }
+}
+
 // User-defined BL enums compile to singleton objects; their declaration order
 // is supplied by generated code, so separately compiled enums remain usable.
 Z8Array!T z8_enum_array_sort(T)(Z8Array!T array, T[] order) if (is(T == class)) {
@@ -313,6 +339,26 @@ class Z8Array(T) {
             if (primaryData !is null) foreach (i, value; values) primaryData.z8_set(cast(long)i, z8_array_primary_box(value));
             else items = values;
             ++z8_version;
+            return this;
+        } else static if (is(T == Z8Datespan)) {
+            if (z8_size() <= 1) { ++z8_version; return this; }
+            if (z8_size() >= 32) throw new Exception("datespan array sorting of 32 or more elements is not implemented");
+            Z8Datespan[] values;
+            foreach (i; 0 .. z8_size()) values ~= z8_get(i);
+            void storeValues() {
+                if (primaryData !is null) foreach (i, value; values) primaryData.z8_set(cast(long)i, z8_array_primary_box(value));
+                else items = values;
+            }
+            int compare(Z8Datespan left, Z8Datespan right) {
+                z8_nonnull(left);
+                if (right is null) return -1;
+                // The original assigns -right.ticks to left while comparing.
+                left.ticks = cast(long)(0UL - cast(ulong)right.ticks);
+                return left.ticks < 0 ? -1 : left.ticks > 0 ? 1 : 0;
+            }
+            scope(failure) storeValues();
+            z8_java_short_sort!(Z8Datespan, compare)(values);
+            storeValues(); ++z8_version;
             return this;
         } else static if (is(T == Z8Binary) || is(T == Z8File)) {
             // The Java implementations compare all binary/file values as
