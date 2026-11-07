@@ -701,7 +701,8 @@ private void z8_poi_report_apply_nested_simple(Z8Object report, Z8Object range, 
     }
     if (!equal(outer, outerBounds)) throw new Exception("nested POI report range layout is not implemented");
     auto parentSource = *z8_report_range_source(range);
-    if (z8_report_source_state(parentSource).kind != Z8ReportSourceKind.simple)
+    auto parentKind = z8_report_source_state(parentSource).kind;
+    if (parentKind != Z8ReportSourceKind.simple && parentKind != Z8ReportSourceKind.custom)
         throw new Exception("nested POI report source is not implemented");
     Z8PoiReportEntry[] entries;
     long lastRow = outer.firstRow, lastColumn = outer.firstColumn;
