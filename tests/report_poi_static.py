@@ -92,6 +92,8 @@ public class StaticReportProbe {
     public static file jsonInlineRange() { JsonInlineRangeReport report; return report.run(guid.Null); }
     public static file expandedInlineNumber() { ExpandedInlineNumberReport report; return report.run(guid.Null); }
     public static file expandedInlineConstant() { ExpandedInlineConstantReport report; return report.run(guid.Null); }
+    public static file expandedOtherColumns() { ExpandedOtherColumnsReport report; return report.run(guid.Null); }
+    public static file expandedRowHeight() { ExpandedRowHeightReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -256,7 +258,8 @@ public class MissingBoundariesReport extends Report {
                            ("ExpandedOccupiedReport", "expanded-occupied"), ("ExpandedStaticReport", "expanded-static"),
                            ("ExpandedFormulaReport", "expanded-formula"), ("ExpandedMetadataReport", "expanded-metadata"),
                            ("ExpandedRichReport", "expanded-rich"), ("ExpandedInlineNumberReport", "expanded-inline-number"),
-                           ("ExpandedInlineConstantReport", "expanded-inline-constant")):
+                           ("ExpandedInlineConstantReport", "expanded-inline-constant"),
+                           ("ExpandedOtherColumnsReport", "expanded-other-columns"), ("ExpandedRowHeightReport", "expanded-row-height")):
         (source / (name + ".bl")).write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.base.json.JsonObject;
@@ -502,7 +505,7 @@ public class %s extends Report {
         '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
         '<c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c>'
         '<c r="C1" s="0"><v>99</v></c><c r="D1" t="s"><v>2</v></c>')
-    for filename in ("expanded", "expanded-inline", "expanded-occupied", "expanded-static", "expanded-formula", "expanded-metadata", "expanded-rich", "expanded-inline-number", "expanded-inline-constant"):
+    for filename in ("expanded", "expanded-inline", "expanded-occupied", "expanded-static", "expanded-formula", "expanded-metadata", "expanded-rich", "expanded-inline-number", "expanded-inline-constant", "expanded-other-columns", "expanded-row-height"):
         book = dict(expanded)
         if filename == "expanded-inline":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace(
@@ -524,6 +527,10 @@ public class %s extends Report {
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0"><v>99</v></c>', '<c r="C1" s="0"><f>1+1</f><v>2</v></c>')
         if filename == "expanded-metadata":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0">', '<c r="C1" s="0" cm="1">')
+        if filename in ("expanded-other-columns", "expanded-row-height"):
+            attrs = ' r="2" spans="5:5"' if filename == "expanded-other-columns" else ' r="2" ht="30" customHeight="1"'
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace(
+                '</sheetData>', '<row' + attrs + '><c r="E2"><v>77</v></c></row><row r="3"><c r="E3"><v>88</v></c></row></sheetData>')
         with zipfile.ZipFile(application / ("reports/" + filename + ".xlsx"), "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for entry_name, content in book.items():
                 archive.writestr(entry_name, content)
@@ -729,7 +736,9 @@ void main(string[] args) {
     bool jsonInline; try { P.m_jsonInlineRange(); } catch (Exception) { jsonInline = true; } assert(jsonInline);
     bool inlineNumber; try { P.m_expandedInlineNumber(); } catch (Exception) { inlineNumber = true; } assert(inlineNumber);
     bool inlineConstant; try { P.m_expandedInlineConstant(); } catch (Exception) { inlineConstant = true; } assert(inlineConstant);
-    assert(database.begins == 69 && database.rollbacks == 69);
+    bool otherColumns; try { P.m_expandedOtherColumns(); } catch (Exception) { otherColumns = true; } assert(otherColumns);
+    bool rowHeight; try { P.m_expandedRowHeight(); } catch (Exception) { rowHeight = true; } assert(rowHeight);
+    assert(database.begins == 71 && database.rollbacks == 71);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -824,6 +833,9 @@ void main(string[] args) {
         contents = contents.replace(
             'bool inlineConstant; try { P.m_expandedInlineConstant(); } catch (Exception) { inlineConstant = true; } assert(inlineConstant);',
             'auto inlineConstant = P.m_expandedInlineConstant(); copy(z8_file_resolve_path(inlineConstant), buildPath(args[2], "expanded-inline-constant.xlsx")); assert(counter.expansions == 6);')
+        contents = contents.replace(
+            'bool otherColumns; try { P.m_expandedOtherColumns(); } catch (Exception) { otherColumns = true; } assert(otherColumns);',
+            'auto otherColumns = P.m_expandedOtherColumns(); copy(z8_file_resolve_path(otherColumns), buildPath(args[2], "expanded-other-columns.xlsx")); assert(counter.expansions == 7);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1155,6 +1167,11 @@ class PoiRangeOracle {
           } else if (expected.getNumericCellValue() != result.getNumericCellValue())
             throw new AssertionError("expanded number differs at " + row + "," + col);
         }
+        if (args[0].contains("expanded-other-columns")) for (int row = 1; row < 3; ++row) {
+          double expected = original.getSheetAt(0).getRow(row).getCell(4).getNumericCellValue();
+          double result = actual.getSheetAt(0).getRow(row).getCell(4).getNumericCellValue();
+          if (expected != result) throw new AssertionError("unrelated cell differs at row " + row);
+        }
       } else if (constants || parameters || contextCase || dates || fieldCase || customCase || jsonCase || queryCase || multipleCase || repeatCase) {
         for (int i = 0; i < (repeatCase ? 1 : outsideCase ? 4 : multipleCase ? 3 : customCase ? 4 : dates ? 10 : constants ? 7 : 5); ++i) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
@@ -1236,7 +1253,7 @@ class PoiRangeOracle {
                                          str(application / "reports/expanded.xlsx"), str(working / "expanded.xlsx"), str(config), "expanded"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
-                for name in ("expanded-static", "expanded-rich", "expanded-inline-number", "expanded-inline-constant"):
+                for name in ("expanded-static", "expanded-rich", "expanded-inline-number", "expanded-inline-constant", "expanded-other-columns"):
                     result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                              str(application / ("reports/" + name + ".xlsx")), str(working / (name + ".xlsx")), str(config), "expanded"],
                                             cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")

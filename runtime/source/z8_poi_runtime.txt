@@ -131,7 +131,7 @@ private wstring z8_poi_rich_text(Z8PoiXmlNode value) {
     return z8_poi_decode_text(result);
 }
 private class Z8PoiCell { wstring kind, rawKind, value, formula, sharedId; bool hasFormula, unresolvedSharedFormula, safeCopy; long row, column; }
-private class Z8PoiRow { Z8PoiCell[long] cells; }
+private class Z8PoiRow { Z8PoiCell[long] cells; bool safeExpansionTarget; }
 private class Z8PoiSheet { Z8PoiRow[long] rows; wstring name; bool hasMergedRegions; }
 private class Z8PoiWorkbook { Z8PoiSheet[] sheets; bool date1904; }
 private class Z8PoiSheetRef { Z8PoiSheet value; }
@@ -431,7 +431,10 @@ private Z8PoiWorkbook z8_poi_parse(Z8Binary input) {
             auto rowNumber = rowNode.attr("r"w);
             long rowIndex = rowNumber is null ? nextRow : rowNumber.to!long - 1;
             if (rowIndex < 0 || rowIndex >= 1048576 || rowIndex in sheet.rows) throw new Exception("invalid XLSX row index");
-            nextRow = rowIndex + 1; auto row = new Z8PoiRow(); long nextColumn;
+            nextRow = rowIndex + 1; auto row = new Z8PoiRow(); row.safeExpansionTarget = true;
+            foreach (attribute, ignored; rowNode.attributes)
+                if (attribute != "r"w && attribute != "spans"w) row.safeExpansionTarget = false;
+            long nextColumn;
             foreach (cellNode; rowNode.children) if (z8_poi_xml_local(cellNode.name) == "c"w) {
                 auto column = z8_poi_cell_column(cellNode.attr("r"w), nextColumn); nextColumn = column + 1;
                 if (column in row.cells) throw new Exception("duplicate XLSX cell");

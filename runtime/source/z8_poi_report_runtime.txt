@@ -244,8 +244,15 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
             auto boundaries = z8_poi_report_block(boundariesText);
             if (boundaries.firstRow != block.firstRow || boundaries.lastRow != block.lastRow ||
                 boundaries.firstColumn != block.firstColumn || boundaries.lastColumn != block.lastColumn ||
-                targetRow >= 1048576 || (targetRow in workbook.sheets[sheet].rows) !is null)
+                targetRow >= 1048576)
                 throw new Exception("POI report range expansion layout is not implemented");
+            auto existingRow = targetRow in workbook.sheets[sheet].rows;
+            if (existingRow !is null) {
+                if (!(*existingRow).safeExpansionTarget) throw new Exception("POI report range expansion row is not implemented");
+                foreach (column, cell; (*existingRow).cells)
+                    if (column >= block.firstColumn && column <= block.lastColumn)
+                        throw new Exception("POI report range expansion would overwrite a cell");
+            }
             auto templateRow = block.firstRow in workbook.sheets[sheet].rows;
             if (templateRow is null || !(*templateRow).cells.length)
                 throw new Exception("POI report range expansion layout is not implemented");
