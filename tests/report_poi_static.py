@@ -130,6 +130,8 @@ public class StaticReportProbe {
     public static file multipleSheetsBothRename() { MultipleSheetBothRenameReport report; return report.run(guid.Null); }
     public static file multipleSheetsDuplicate() { MultipleSheetDuplicateReport report; return report.run(guid.Null); }
     public static file cloneSheets() { CloneSheetsReport report; return report.run(guid.Null); }
+    public static file cloneHighSheet() { CloneHighSheetReport report; return report.run(guid.Null); }
+    public static file cloneTooManySheets() { CloneTooManySheetsReport report; return report.run(guid.Null); }
     public static file cloneUnsupported() { CloneUnsupportedReport report; return report.run(guid.Null); }
     public static file cloneSuffix() { CloneSuffixReport report; return report.run(guid.Null); }
     public static file cloneLong() { CloneLongReport report; return report.run(guid.Null); }
@@ -350,6 +352,16 @@ public class CloneSheetsReport extends Report {
     (source / "CloneUnsupportedReport.bl").write_text(
         (source / "CloneSheetsReport.bl").read_text(encoding="utf-8")
         .replace("CloneSheetsReport", "CloneUnsupportedReport").replace('template = "constant"', 'template = "clone-unsupported"'), encoding="utf-8")
+    (source / "CloneHighSheetReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+public class CloneHighSheetReport extends Report {
+    engine = Report.POI; template = "constant";
+    [sheet "16"] [sheetName "Final"] [address "A1"] [boundaries "A1"] Range region;
+    ranges = {region};
+}''', encoding="utf-8")
+    (source / "CloneTooManySheetsReport.bl").write_text(
+        (source / "CloneHighSheetReport.bl").read_text(encoding="utf-8")
+        .replace("CloneHighSheetReport", "CloneTooManySheetsReport").replace('[sheet "16"]', '[sheet "257"]'), encoding="utf-8")
     for name, template in (("CloneSuffixReport", "clone-suffix"), ("CloneLongReport", "clone-long"), ("CloneExistingReport", "clone-existing"), ("CloneViewsReport", "clone-views"), ("CloneSetupReport", "clone-setup"), ("ClonePrintReport", "clone-print"), ("CloneFilterReport", "clone-filter"), ("CloneNamedReport", "clone-named"), ("CloneNamedRenameReport", "clone-named"), ("CloneNamedOriginalRenameReport", "clone-named"), ("CloneNamedUnsupportedRenameReport", "clone-named"), ("CloneNamedQuotedRenameReport", "clone-named"), ("CloneNamedDigitRenameReport", "clone-named"), ("CloneNamedCellRenameReport", "clone-named"), ("CloneNamedRussianRenameReport", "clone-named")):
         content = (source / "CloneSheetsReport.bl").read_text(encoding="utf-8").replace("CloneSheetsReport", name).replace('template = "constant"', 'template = "' + template + '"')
         if name == "CloneExistingReport": content = content.replace('[sheet "2"]', '[sheet "3"]')
@@ -1361,7 +1373,7 @@ void main(string[] args) {
         return remover.removeReportCells(input, cells);
     }
     ubyte[] cloneReportSheets(const(ubyte)[] input, uint prototype, const(wstring)[] names) {
-        assert(prototype <= 1 && names.length == 2 && names[0] != names[1]);
+        assert(prototype <= 1 && (names.length == 2 || names.length == 16) && names[0] != names[1]);
         return cloner.cloneReportSheets(input, prototype, names);
     }
 }
@@ -1548,6 +1560,7 @@ void main(string[] args) {
             'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 37); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 38); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 39); assert(database.begins == 133 && database.rollbacks == 133); auto sparseFormula = P.m_expandedSparseFormula(); copy(z8_file_resolve_path(sparseFormula), buildPath(args[2], "expanded-sparse-formula.xlsx")); bool sparseSharedBlocked; try { P.m_expandedSparseSharedFormula(); } catch (Exception) { sparseSharedBlocked = true; } assert(sparseSharedBlocked); bool chain; try { P.m_expandedSparseChainFormula(); } catch (Exception) { chain = true; } assert(chain);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
+        contents = contents.replace('assert(chain);', 'assert(chain); auto highSheet = P.m_cloneHighSheet(); copy(z8_file_resolve_path(highSheet), buildPath(args[2], "cloned-high-sheet.xlsx")); bool tooManySheets; try { P.m_cloneTooManySheets(); } catch (Exception e) { tooManySheets = e.msg == "POI report sheet expansion is not implemented"; } assert(tooManySheets);')
         harness.write_text(contents, encoding="utf-8")
         args.extend(["-I" + str(bridge), str(bridge / "z8/xlsx/openxlsx.d"), str(bridge / "z8/xlsx/poi.d")])
         if os.name == "nt":
@@ -1747,6 +1760,20 @@ class PoiRangeOracle {
     try (XSSFWorkbook original = new XSSFWorkbook(new FileInputStream(args[0]));
          XSSFWorkbook actual = new XSSFWorkbook(new FileInputStream(args[1]))) {
       OBJECT context = new OBJECT.CLASS<OBJECT>(null).get();
+      if (args.length > 3 && "cloned-high-sheet".equals(args[3])) {
+        for (int i = 0; i < 16; ++i) original.cloneSheet(0);
+        original.setSheetName(16, "Final");
+        PoiReport high = new PoiReport(new ReportOptions()).setContext(context);
+        high.addRange(16, new Range().setSource(SimpleSource.newDefault()).setBlock("A1").setBoundaries("A1"));
+        SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(16);
+        high.getRange(16).apply(modifier); modifier.close();
+        if (actual.getNumberOfSheets() != original.getNumberOfSheets()) throw new AssertionError("sheet count differs");
+        for (int i = 0; i < original.getNumberOfSheets(); ++i)
+          if (!original.getSheetName(i).equals(actual.getSheetName(i))) throw new AssertionError("sheet name differs at " + i);
+        if (actual.getSheetAt(16).getRow(0).getCell(0).getNumericCellValue() != original.getSheetAt(16).getRow(0).getCell(0).getNumericCellValue())
+          throw new AssertionError("high-sheet expression differs");
+        return;
+      }
       boolean contextCase = args.length > 3 && "context".equals(args[3]);
       boolean fieldCase = args.length > 3 && "fields".equals(args[3]);
       boolean customCase = args.length > 3 && "custom".equals(args[3]);
@@ -2178,6 +2205,10 @@ class PoiRangeOracle {
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/constant.xlsx"), str(working / "cloned-sheets.xlsx"), str(config), "cloned-sheets"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/constant.xlsx"), str(working / "cloned-high-sheet.xlsx"), str(config), "cloned-high-sheet"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
                 for source_name, name in (("clone-suffix", "cloned-suffix"), ("clone-long", "cloned-long"), ("clone-existing", "cloned-existing"), ("clone-views", "cloned-views"), ("clone-setup", "cloned-setup"), ("clone-print", "cloned-print"), ("clone-filter", "cloned-filter"), ("clone-named", "cloned-named"), ("clone-named", "cloned-named-rename"), ("clone-named", "cloned-named-original-rename"), ("clone-named", "cloned-named-quoted-rename"), ("clone-named", "cloned-named-digit-rename"), ("clone-named", "cloned-named-cell-rename"), ("clone-named", "cloned-named-russian-rename")):

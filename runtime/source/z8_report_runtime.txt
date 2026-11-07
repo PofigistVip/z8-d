@@ -97,7 +97,10 @@ private Z8File z8_report_poi_run(Z8Object report, Z8ReportState state) {
             if (index > lastSheet) lastSheet = index;
         }
         if (lastSheet >= workbook.sheets.length) {
-            if (!workbook.sheets.length || lastSheet >= 16) throw new Exception("POI report sheet expansion is not implemented");
+            // Bound cloning work while allowing reports to address more than
+            // the first 16 sheets. Cross-sheet ordering is checked below.
+            if (!workbook.sheets.length || cast(size_t)lastSheet - workbook.sheets.length >= 256)
+                throw new Exception("POI report sheet expansion is not implemented");
             import std.zip : ZipArchive;
             preparedBytes = cast(ubyte[])read(z8_file_system_path(source));
             if (!z8_poi_report_clone_safe(new ZipArchive(preparedBytes.dup), workbook))
