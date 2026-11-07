@@ -125,17 +125,45 @@ private int z8_poi_whole_range(wstring text, size_t start, long rowOffset, long 
     }
     end = i; return 1;
 }
+private bool z8_poi_normalize_formula(wstring source, out wstring result) {
+    import std.uni : isAlpha, isNumber;
+    bool operand(wchar c) { return isAlpha(c) || isNumber(c) || c == '_' || c == '$' || c == '.' || c == '\''; }
+    size_t i;
+    while (i < source.length) {
+        auto c = source[i];
+        if (c == '"' || c == '\'') {
+            auto start = i++, quote = c; bool closed;
+            while (i < source.length) {
+                if (source[i++] != quote) continue;
+                if (i < source.length && source[i] == quote) { ++i; continue; }
+                closed = true; break;
+            }
+            if (!closed) return false;
+            result ~= source[start .. i]; continue;
+        }
+        if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+            while (i < source.length && (source[i] == ' ' || source[i] == '\t' || source[i] == '\r' || source[i] == '\n')) ++i;
+            // A space can be the Excel intersection operator; don't turn it
+            // into a concatenated identifier without parsing both operands.
+            if (result.length && i < source.length && (operand(result[$ - 1]) || result[$ - 1] == ')') && operand(source[i])) return false;
+            continue;
+        }
+        result ~= c; ++i;
+    }
+    return true;
+}
 // Translate ordinary A1 references while leaving string literals, quoted sheet
 // names, absolute coordinates and function names untouched.
-private bool z8_poi_shift_formula(wstring formula, long rowOffset, long columnOffset, out wstring result) {
+private bool z8_poi_shift_formula(wstring source, long rowOffset, long columnOffset, out wstring result) {
     import std.uni : isAlpha, isNumber;
+    wstring formula;
+    if (!z8_poi_normalize_formula(source, formula)) return false;
     bool identifier(wchar c) { return isAlpha(c) || isNumber(c) || c == '_' || c == '.'; }
     size_t i;
     while (i < formula.length) {
         auto c = formula[i];
-        // POI parses and normalizes formulas; avoid guessing about whitespace
-        // intersection operators or external/structured references.
-        if (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '[') return false;
+        // External and structured references need the full POI parser.
+        if (c == '[') return false;
         if (c == '#') {
             bool recognized;
             foreach (error; ["#NULL!"w, "#DIV/0!"w, "#VALUE!"w, "#REF!"w, "#NAME?"w, "#NUM!"w, "#N/A"w, "#GETTING_DATA"w]) {

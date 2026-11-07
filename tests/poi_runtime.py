@@ -32,7 +32,7 @@ public class Probe {
         if (row.getCell(2).getInt() != 42 || row.getCell(2).getDecimal() != 42.25) return 5;
         if (row.getCell(3).getString() != "true") return 6;
         if (row.getCell(4).getString() != "C1*2" || row.getCell(4).getInt() != 84) return 7;
-        Row third = sheet.getRow(2); if (third.getCellCount() != 14) return 8;
+        Row third = sheet.getRow(2); if (third.getCellCount() != 18) return 8;
         if (third.getCell(1).getString() != "Inline Unicode") return 9;
         date day = third.getCell(2).getDate();
         if (day.year() != 2024 || day.month() != 2 || day.day() != 29 || day.hours() != 12) return 10;
@@ -44,8 +44,10 @@ public class Probe {
             third.getCell(9).getString() != "D3*2") return 21;
         if (third.getCell(11).getString() != "SUM(D3,$C3,D$3,$C$3)+IF(\\\"A1\\\"=\\\"A1\\\",0,0)+SUM(D$1:D$1048576,$D$1:$D$1048576,$A2:$XFD2,$A$3:$XFD$3)+D3+$C3+IFERROR(D3,#REF!)") return 22;
         if (sheet.getRow(3).getCell(12).getString() != "SUM(C4,$C4,C$3,$C$3,$A3:$XFD3,$A$3:$XFD$3)") return 23;
-        try { string unsupported = third.getCell(14).getString(); return 24; } catch (exception expected) {}
+        if (third.getCell(14).getString() != "B1+1") return 24;
         if (third.getCell(15).getString() != "XFD1") return 25;
+        if (third.getCell(18).getString() != "IF(\\\"A1 B1\\\"=\\\"A1 B1\\\",D3,0)") return 26;
+        try { string intersection = third.getCell(20).getString(); return 27; } catch (exception expected) {}
         try { string bad = row.getCell(0).getInt().toString(); return 12; } catch (exception expected) {}
         try { int absent = sheet.getRow(1).getCellCount(); return 13; } catch (exception expected) {}
         if (book.getSheet(1).getRowCount() != 0) return 14;
@@ -80,7 +82,7 @@ public class Probe {
         "xl/workbook.xml": '''<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="One" sheetId="1" r:id="rId1"/><sheet name="Two" sheetId="2" r:id="rId2"/></sheets></workbook>''',
         "xl/_rels/workbook.xml.rels": '''<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="/xl/worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>''',
         "xl/sharedStrings.xml": '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><r><t>Hi &amp; </t></r><r><t>😀</t></r></si></sst>''',
-        "xl/worksheets/sheet1.xml": '''<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="C1"><v>42.25</v></c><c r="D1" t="b"><v>1</v></c><c r="E1"><f>C1*2</f><v>84.5</v></c></row><row r="3"><c r="B3" t="inlineStr"><is><t>Inline Unicode</t></is></c><c r="C3"><v>45351.5</v></c><c r="F3"/><c r="G3"><v>60</v></c><c r="H3"><v>61</v></c><c r="I3"><f t="shared" si="0" ref="I3:J3">C3*2</f><v>10</v></c><c r="J3"><f t="shared" si="0"/><v>11</v></c><c r="K3"><f t="shared" si="1" ref="K3:L3">SUM(C3,$C3,C$3,$C$3)+IF("A1"="A1",0,0)+SUM(C:C,$D:$D,2:2,$3:$3)+Two!C3+'Two'!$C3+IFERROR(C3,#REF!)</f><v>20</v></c><c r="L3"><f t="shared" si="1"/><v>21</v></c><c r="M3"><f t="shared" si="2" ref="M3:M4">SUM(C3,$C3,C$3,$C$3,2:2,$3:$3)</f><v>30</v></c><c r="N3"><f t="shared" si="3" ref="N3:O3">A1 + 1</f><v>31</v></c><c r="O3"><f t="shared" si="3"/><v>32</v></c><c r="P3"><f t="shared" si="4"/><v>34</v></c><c r="Q3"><f t="shared" si="4" ref="P3:Q3">A1</f><v>35</v></c></row><row r="4"><c r="M4"><f t="shared" si="2"/><v>33</v></c></row></sheetData></worksheet>''',
+        "xl/worksheets/sheet1.xml": '''<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="C1"><v>42.25</v></c><c r="D1" t="b"><v>1</v></c><c r="E1"><f>C1*2</f><v>84.5</v></c></row><row r="3"><c r="B3" t="inlineStr"><is><t>Inline Unicode</t></is></c><c r="C3"><v>45351.5</v></c><c r="F3"/><c r="G3"><v>60</v></c><c r="H3"><v>61</v></c><c r="I3"><f t="shared" si="0" ref="I3:J3">C3*2</f><v>10</v></c><c r="J3"><f t="shared" si="0"/><v>11</v></c><c r="K3"><f t="shared" si="1" ref="K3:L3">SUM(C3,$C3,C$3,$C$3)+IF("A1"="A1",0,0)+SUM(C:C,$D:$D,2:2,$3:$3)+Two!C3+'Two'!$C3+IFERROR(C3,#REF!)</f><v>20</v></c><c r="L3"><f t="shared" si="1"/><v>21</v></c><c r="M3"><f t="shared" si="2" ref="M3:M4">SUM(C3,$C3,C$3,$C$3,2:2,$3:$3)</f><v>30</v></c><c r="N3"><f t="shared" si="3" ref="N3:O3">A1 + 1</f><v>31</v></c><c r="O3"><f t="shared" si="3"/><v>32</v></c><c r="P3"><f t="shared" si="4"/><v>34</v></c><c r="Q3"><f t="shared" si="4" ref="P3:Q3">A1</f><v>35</v></c><c r="R3"><f t="shared" si="5" ref="R3:S3">IF( "A1 B1" = "A1 B1" , C3 , 0 )</f><v>36</v></c><c r="S3"><f t="shared" si="5"/><v>37</v></c><c r="T3"><f t="shared" si="6" ref="T3:U3">SUM(A1 B1)</f><v>38</v></c><c r="U3"><f t="shared" si="6"/><v>39</v></c></row><row r="4"><c r="M4"><f t="shared" si="2"/><v>33</v></c></row></sheetData></worksheet>''',
         "xl/worksheets/sheet2.xml": '''<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/></worksheet>''',
     }
     with zipfile.ZipFile(workbook, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -132,7 +134,7 @@ class PoiOracle {
           !first.getCell(0).getStringCellValue().equals("Hi & 😀") ||
           first.getCell(2).getNumericCellValue() != 42.25 || !first.getCell(3).getBooleanCellValue() ||
           !first.getCell(4).getCellFormula().equals("C1*2") || first.getCell(4).getNumericCellValue() != 84.5 ||
-          third.getPhysicalNumberOfCells() != 14 || !third.getCell(1).getStringCellValue().equals("Inline Unicode") ||
+          third.getPhysicalNumberOfCells() != 18 || !third.getCell(1).getStringCellValue().equals("Inline Unicode") ||
           third.getCell(5).getNumericCellValue() != 0 || book.getSheetAt(1).getPhysicalNumberOfRows() != 0)
         throw new AssertionError("Unexpected POI workbook values");
       if (sheet.getRow(-1) != null || sheet.getRow(1048576) != null || first.getCell(16384) != null)
@@ -146,6 +148,11 @@ class PoiOracle {
       if (!sheet.getRow(3).getCell(12).getCellFormula().equals("SUM(C4,$C4,C$3,$C$3,$A3:$XFD3,$A$3:$XFD$3)"))
         throw new AssertionError("Unexpected vertically shifted formula");
       if (!third.getCell(15).getCellFormula().equals("XFD1")) throw new AssertionError("Unexpected formula boundary");
+      if (!third.getCell(18).getCellFormula().equals("IF(\\\"A1 B1\\\"=\\\"A1 B1\\\",D3,0)"))
+        throw new AssertionError("Unexpected quoted whitespace normalization");
+      boolean intersectionFailed = false;
+      try { third.getCell(20).getCellFormula(); } catch (RuntimeException expected) { intersectionFailed = true; }
+      if (!intersectionFailed) throw new AssertionError("POI accepted the intersection expression");
       if (!third.getCell(14).getCellFormula().equals("B1+1"))
         throw new AssertionError("Unexpected whitespace normalization");
       Calendar date = Calendar.getInstance(); date.setTime(third.getCell(2).getDateCellValue());
