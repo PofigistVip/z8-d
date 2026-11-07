@@ -70,6 +70,52 @@ private double z8_poi_report_excel_date(Z8Date input, bool date1904) {
     return cast(double)days + cast(double)milliseconds / 86400000.0;
 }
 
+// POI validates a copied formula. Limit this path to simple arithmetic over
+// numeric literals and A1 references until a full Excel parser is available.
+private bool z8_poi_report_simple_formula(wstring text) {
+    size_t position;
+    void whitespace() { while (position < text.length && (text[position] == ' ' || text[position] == '\t')) ++position; }
+    bool digit(wchar c) { return c >= '0' && c <= '9'; }
+    bool letter(wchar c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); }
+    bool operand() {
+        whitespace();
+        if (position < text.length && (text[position] == '+' || text[position] == '-')) { ++position; whitespace(); }
+        if (position == text.length) return false;
+        if (digit(text[position])) {
+            while (position < text.length && digit(text[position])) ++position;
+            if (position < text.length && text[position] == '.') {
+                auto first = ++position;
+                while (position < text.length && digit(text[position])) ++position;
+                if (position == first) return false;
+            }
+            return true;
+        }
+        if (text[position] == '$') ++position;
+        auto first = position; uint column;
+        while (position < text.length && letter(text[position])) {
+            auto c = text[position++];
+            column = column * 26 + cast(uint)((c >= 'a' ? c - 'a' : c - 'A') + 1);
+            if (column > 16384) return false;
+        }
+        if (position == first || !column) return false;
+        if (position < text.length && text[position] == '$') ++position;
+        first = position; uint row;
+        while (position < text.length && digit(text[position])) {
+            row = row * 10 + cast(uint)(text[position++] - '0');
+            if (row > 1048576) return false;
+        }
+        return position != first && row != 0;
+    }
+    if (!operand()) return false;
+    for (;;) {
+        whitespace();
+        if (position == text.length) return true;
+        if (text[position] != '+' && text[position] != '-' && text[position] != '*' && text[position] != '/') return false;
+        ++position;
+        if (!operand()) return false;
+    }
+}
+
 // Collect directly named Field members before opening a query source, as
 // QuerySource.collectFields does in Java. Quoted text is never a reference.
 private Z8Object[] z8_poi_report_query_fields(Z8Object report, Z8Object query, Z8PoiSheet sheet,
@@ -268,11 +314,12 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                 foreach (column, cell; (*templateRow).cells) {
                     if (column < block.firstColumn || column > block.lastColumn) continue;
                     hasTemplateCell = true;
-                    if (!cell.safeCopy || cell.hasFormula || (cell.rawKind !is null && cell.rawKind != "s"w &&
+                    if (!cell.safeCopy || (cell.hasFormula && ((cell.rawKind !is null && cell.rawKind != "n"w) ||
+                        !z8_poi_report_simple_formula(cell.formula))) || (cell.rawKind !is null && cell.rawKind != "s"w &&
                         cell.rawKind != "inlineStr"w && cell.rawKind != "n"w && cell.rawKind != "b"w))
                         throw new Exception("POI report range expansion cell is not implemented");
                     copies ~= Z8PoiCellCopy(cast(uint)sheet, cast(uint)sourceRow, cast(uint)column,
-                                            cast(uint)targetRow, cast(uint)(column + (horizontal ? offset : 0)));
+                                            cast(uint)targetRow, cast(uint)(column + (horizontal ? offset : 0)), cell.hasFormula);
                     // POI copies a string's plain value into a new shared-string
                     // cell, even when the template used inline or rich text.
                     if ((cell.rawKind == "s"w || cell.rawKind == "inlineStr"w) && cell.value.indexOf("${"w) < 0) {

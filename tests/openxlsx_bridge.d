@@ -90,10 +90,14 @@ void main(string[] args) {
     reopened.copyCell(0, 0, 1, 3, 1);
     reopened.copyCell(0, 0, 9, 3, 9);
     reopened.copyCell(0, 0, 3, 3, 3);
+    reopened.copyCell(0, 0, 6, 3, 6, true);
+    reopened.copyCell(0, 0, 6, 4, 6);
     reopened.copyCell(0, 3, 1, 3, 1);
     assert(reopened.cellNumber(0, 3, 1) == 42);
     assert(reopened.cellXml(0, 3, 1).canFind(`s="0"`));
     assert(reopened.cellType(0, 3, 3) == CellType.blank);
+    assert(reopened.cellFormula(0, 3, 6) == "B1*2" && !reopened.cellXml(0, 3, 6).canFind("<v"));
+    assert(reopened.cellFormula(0, 4, 6) == "B1*2" && reopened.cellNumber(0, 4, 6) == 84);
     assert(reopened.cellXml(0, 3, 9).canFind("First") && reopened.cellXml(0, 3, 9).canFind("_x0041_"));
     assertThrown!Exception(reopened.copyCell(0, 0, 2, 3, 2));
     assertThrown!Exception(reopened.copyCell(0, 0, 1, 1048576, 0));

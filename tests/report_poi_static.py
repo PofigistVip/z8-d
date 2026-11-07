@@ -99,6 +99,9 @@ public class StaticReportProbe {
     public static file expandedTwoRows() { ExpandedTwoRowsReport report; return report.run(guid.Null); }
     public static file expandedEmptyRow() { ExpandedEmptyRowReport report; return report.run(guid.Null); }
     public static file expandedHorizontal() { ExpandedHorizontalReport report; return report.run(guid.Null); }
+    public static file expandedSharedFormula() { ExpandedSharedFormulaReport report; return report.run(guid.Null); }
+    public static file expandedComplexFormula() { ExpandedComplexFormulaReport report; return report.run(guid.Null); }
+    public static file expandedInvalidFormula() { ExpandedInvalidFormulaReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -265,7 +268,9 @@ public class MissingBoundariesReport extends Report {
                            ("ExpandedRichReport", "expanded-rich"), ("ExpandedInlineNumberReport", "expanded-inline-number"),
                            ("ExpandedInlineConstantReport", "expanded-inline-constant"),
                            ("ExpandedOtherColumnsReport", "expanded-other-columns"), ("ExpandedRowHeightReport", "expanded-row-height"),
-                           ("ExpandedInlineTargetReport", "expanded-inline-target"), ("ExpandedMissingSourceReport", "expanded-missing-source")):
+                           ("ExpandedInlineTargetReport", "expanded-inline-target"), ("ExpandedMissingSourceReport", "expanded-missing-source"),
+                           ("ExpandedSharedFormulaReport", "expanded-shared-formula"), ("ExpandedComplexFormulaReport", "expanded-complex-formula"),
+                           ("ExpandedInvalidFormulaReport", "expanded-invalid-formula")):
         (source / (name + ".bl")).write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.base.json.JsonObject;
@@ -535,7 +540,7 @@ public class %s extends Report {
         '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
         '<c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c>'
         '<c r="C1" s="0"><v>99</v></c><c r="D1" t="s"><v>2</v></c>')
-    for filename in ("expanded", "expanded-inline", "expanded-occupied", "expanded-static", "expanded-formula", "expanded-metadata", "expanded-rich", "expanded-inline-number", "expanded-inline-constant", "expanded-other-columns", "expanded-row-height", "expanded-inline-target", "expanded-missing-source"):
+    for filename in ("expanded", "expanded-inline", "expanded-occupied", "expanded-static", "expanded-formula", "expanded-metadata", "expanded-rich", "expanded-inline-number", "expanded-inline-constant", "expanded-other-columns", "expanded-row-height", "expanded-inline-target", "expanded-missing-source", "expanded-shared-formula", "expanded-complex-formula", "expanded-invalid-formula"):
         book = dict(expanded)
         if filename == "expanded-inline":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace(
@@ -560,7 +565,13 @@ public class %s extends Report {
         if filename == "expanded-static":
             book["xl/sharedStrings.xml"] = book["xl/sharedStrings.xml"].replace('${rows.item.title}', 'Static')
         if filename == "expanded-formula":
-            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0"><v>99</v></c>', '<c r="C1" s="0"><f>1+1</f><v>2</v></c>')
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0"><v>99</v></c>', '<c r="C1" s="0"><f>$A$1+1</f><v>2</v></c>')
+        if filename == "expanded-shared-formula":
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0"><v>99</v></c>', '<c r="C1" s="0"><f t="shared" si="0" ref="C1:C1">1+1</f><v>2</v></c>')
+        if filename == "expanded-complex-formula":
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0"><v>99</v></c>', '<c r="C1" s="0"><f>SUM(A1:A2)</f><v>2</v></c>')
+        if filename == "expanded-invalid-formula":
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0"><v>99</v></c>', '<c r="C1" s="0"><f>XFE1+1</f><v>2</v></c>')
         if filename == "expanded-metadata":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0">', '<c r="C1" s="0" cm="1">')
         if filename in ("expanded-other-columns", "expanded-row-height"):
@@ -801,7 +812,10 @@ void main(string[] args) {
     bool twoRows; try { P.m_expandedTwoRows(); } catch (Exception) { twoRows = true; } assert(twoRows);
     bool emptyRow; try { P.m_expandedEmptyRow(); } catch (Exception) { emptyRow = true; } assert(emptyRow);
     bool horizontal; try { P.m_expandedHorizontal(); } catch (Exception) { horizontal = true; } assert(horizontal);
-    assert(database.begins == 76 && database.rollbacks == 76);
+    bool sharedFormula; try { P.m_expandedSharedFormula(); } catch (Exception) { sharedFormula = true; } assert(sharedFormula);
+    bool complexFormula; try { P.m_expandedComplexFormula(); } catch (Exception) { complexFormula = true; } assert(complexFormula);
+    bool invalidFormula; try { P.m_expandedInvalidFormula(); } catch (Exception) { invalidFormula = true; } assert(invalidFormula);
+    assert(database.begins == 79 && database.rollbacks == 79);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -885,29 +899,32 @@ void main(string[] args) {
             'bool expandedStatic; try { P.m_expandedStatic(); } catch (Exception) { expandedStatic = true; } assert(expandedStatic);',
             'auto expandedStatic = P.m_expandedStatic(); copy(z8_file_resolve_path(expandedStatic), buildPath(args[2], "expanded-static.xlsx")); assert(counter.expansions == 3);')
         contents = contents.replace(
+            'bool expandedFormula; try { P.m_expandedFormula(); } catch (Exception) { expandedFormula = true; } assert(expandedFormula);',
+            'auto expandedFormula = P.m_expandedFormula(); copy(z8_file_resolve_path(expandedFormula), buildPath(args[2], "expanded-formula.xlsx")); assert(counter.expansions == 4);')
+        contents = contents.replace(
             'bool expandedRich; try { P.m_expandedRich(); } catch (Exception) { expandedRich = true; } assert(expandedRich);',
-            'auto expandedRich = P.m_expandedRich(); copy(z8_file_resolve_path(expandedRich), buildPath(args[2], "expanded-rich.xlsx")); assert(counter.expansions == 4);')
+            'auto expandedRich = P.m_expandedRich(); copy(z8_file_resolve_path(expandedRich), buildPath(args[2], "expanded-rich.xlsx")); assert(counter.expansions == 5);')
         contents = contents.replace(
             'bool expandedCustom; try { P.m_expandedCustom(); } catch (Exception) { expandedCustom = true; } assert(expandedCustom);',
-            'auto expandedCustom = P.m_expandedCustom(); copy(z8_file_resolve_path(expandedCustom), buildPath(args[2], "expanded-custom.xlsx")); assert(counter.expansions == 5);')
+            'auto expandedCustom = P.m_expandedCustom(); copy(z8_file_resolve_path(expandedCustom), buildPath(args[2], "expanded-custom.xlsx")); assert(counter.expansions == 6);')
         contents = contents.replace(
             'bool repeat; try { P.m_repeatRange(); } catch (Exception) { repeat = true; } assert(repeat);',
             'auto repeat = P.m_repeatRange(); copy(z8_file_resolve_path(repeat), buildPath(args[2], "repeat.xlsx")); assert(counter.writes == 12);')
         contents = contents.replace(
             'bool inlineNumber; try { P.m_expandedInlineNumber(); } catch (Exception) { inlineNumber = true; } assert(inlineNumber);',
-            'auto inlineNumber = P.m_expandedInlineNumber(); copy(z8_file_resolve_path(inlineNumber), buildPath(args[2], "expanded-inline-number.xlsx")); assert(counter.expansions == 6);')
+            'auto inlineNumber = P.m_expandedInlineNumber(); copy(z8_file_resolve_path(inlineNumber), buildPath(args[2], "expanded-inline-number.xlsx")); assert(counter.expansions == 7);')
         contents = contents.replace(
             'bool inlineConstant; try { P.m_expandedInlineConstant(); } catch (Exception) { inlineConstant = true; } assert(inlineConstant);',
-            'auto inlineConstant = P.m_expandedInlineConstant(); copy(z8_file_resolve_path(inlineConstant), buildPath(args[2], "expanded-inline-constant.xlsx")); assert(counter.expansions == 7);')
+            'auto inlineConstant = P.m_expandedInlineConstant(); copy(z8_file_resolve_path(inlineConstant), buildPath(args[2], "expanded-inline-constant.xlsx")); assert(counter.expansions == 8);')
         contents = contents.replace(
             'bool otherColumns; try { P.m_expandedOtherColumns(); } catch (Exception) { otherColumns = true; } assert(otherColumns);',
-            'auto otherColumns = P.m_expandedOtherColumns(); copy(z8_file_resolve_path(otherColumns), buildPath(args[2], "expanded-other-columns.xlsx")); assert(counter.expansions == 8);')
+            'auto otherColumns = P.m_expandedOtherColumns(); copy(z8_file_resolve_path(otherColumns), buildPath(args[2], "expanded-other-columns.xlsx")); assert(counter.expansions == 9);')
         contents = contents.replace(
             'bool twoRows; try { P.m_expandedTwoRows(); } catch (Exception) { twoRows = true; } assert(twoRows);',
-            'auto twoRows = P.m_expandedTwoRows(); copy(z8_file_resolve_path(twoRows), buildPath(args[2], "expanded-two.xlsx")); assert(counter.expansions == 9);')
+            'auto twoRows = P.m_expandedTwoRows(); copy(z8_file_resolve_path(twoRows), buildPath(args[2], "expanded-two.xlsx")); assert(counter.expansions == 10);')
         contents = contents.replace(
             'bool horizontal; try { P.m_expandedHorizontal(); } catch (Exception) { horizontal = true; } assert(horizontal);',
-            'auto horizontal = P.m_expandedHorizontal(); copy(z8_file_resolve_path(horizontal), buildPath(args[2], "expanded-horizontal.xlsx")); assert(counter.expansions == 10);')
+            'auto horizontal = P.m_expandedHorizontal(); copy(z8_file_resolve_path(horizontal), buildPath(args[2], "expanded-horizontal.xlsx")); assert(counter.expansions == 11);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -986,6 +1003,13 @@ void main(string[] args) {
             values = [(shared[int(cell.find("x:v", namespace).text)].find("x:t", namespace).text or "") for cell in cells[:4]]
             assert values == ["данные 😀 _x0041_", "Value: данные 😀 _x0041_!", "", ""], values
             assert float(cells[4].find("x:v", namespace).text) == 7
+        with zipfile.ZipFile(working / "expanded-formula.xlsx") as archive:
+            sheet = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+            cells = {cell.attrib["r"]: cell for cell in sheet.findall("x:sheetData/x:row/x:c", namespace)}
+            assert cells["C1"].find("x:v", namespace).text == "2"
+            for address in ("C2", "C3"):
+                assert cells[address].find("x:f", namespace).text == "$A$1+1"
+                assert cells[address].find("x:v", namespace) is None
     # Apache POI is optional for ordinary D builds; when available, compare
     # visibility and widths with the version used by the original server.
     cache = Path.home() / ".gradle/caches/modules-2/files-2.1"
@@ -1240,6 +1264,9 @@ class PoiRangeOracle {
             throw new AssertionError("expanded cell type/style differs at " + row + "," + col);
           if (expected.getCellType() == org.apache.poi.ss.usermodel.Cell.CELL_TYPE_STRING) {
             if (!expected.getStringCellValue().equals(result.getStringCellValue())) throw new AssertionError("expanded text differs at " + row + "," + col);
+          } else if (expected.getCellType() == org.apache.poi.ss.usermodel.Cell.CELL_TYPE_FORMULA) {
+            if (!expected.getCellFormula().equals(result.getCellFormula()) || expected.getNumericCellValue() != result.getNumericCellValue())
+              throw new AssertionError("expanded formula differs at " + row + "," + col);
           } else if (expected.getNumericCellValue() != result.getNumericCellValue())
             throw new AssertionError("expanded number differs at " + row + "," + col);
         }
@@ -1329,7 +1356,7 @@ class PoiRangeOracle {
                                          str(application / "reports/expanded.xlsx"), str(working / "expanded.xlsx"), str(config), "expanded"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
-                for name in ("expanded-static", "expanded-rich", "expanded-inline-number", "expanded-inline-constant", "expanded-other-columns", "expanded-occupied"):
+                for name in ("expanded-static", "expanded-rich", "expanded-inline-number", "expanded-inline-constant", "expanded-other-columns", "expanded-occupied", "expanded-formula"):
                     result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                              str(application / ("reports/" + name + ".xlsx")), str(working / (name + ".xlsx")), str(config), "expanded"],
                                             cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")

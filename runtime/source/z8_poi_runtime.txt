@@ -26,7 +26,7 @@ struct Z8PoiCellEdit {
     double number;
     bool booleanValue;
 }
-struct Z8PoiCellCopy { uint sheet, sourceRow, sourceColumn, targetRow, targetColumn; }
+struct Z8PoiCellCopy { uint sheet, sourceRow, sourceColumn, targetRow, targetColumn; bool clearFormulaCache; }
 /// Optional report mutations supported by the registered workbook provider.
 interface IZ8PoiReportWriter {
     ubyte[] renameReportSheet(const(ubyte)[] input, uint index, wstring name);
@@ -444,7 +444,8 @@ private Z8PoiWorkbook z8_poi_parse(Z8Binary input) {
                     if (attribute != "r"w && attribute != "s"w && attribute != "t"w) cell.safeCopy = false;
                 foreach (child; cellNode.children) {
                     auto name = z8_poi_xml_local(child.name);
-                    if (name != "v"w && !(cell.rawKind == "inlineStr"w && name == "is"w)) cell.safeCopy = false;
+                    if (name != "v"w && !(cell.rawKind == "inlineStr"w && name == "is"w) &&
+                        !(name == "f"w && !child.attributes.length)) cell.safeCopy = false;
                 }
                 auto formula = cellNode.child("f"w); cell.hasFormula = formula !is null;
                 if (formula !is null) {
