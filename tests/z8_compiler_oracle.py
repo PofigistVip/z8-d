@@ -248,6 +248,13 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     for kind in ("binary", "date", "datespan", "geometry"):
         declaration = kind + '[] source; primary[] values = source; for (primary item : source) {}'
         name_cases.append((True, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
+    for declaration in (
+        "NameA[] source; primary[] value = source; for (primary item : source) {}",
+        "NameA[] source; primary[] values; values.removeAll(source);",
+        "NameA[] source; primary[] values; primary[] result = true ? values : source;",
+    ):
+        name_cases.append((True, {"NameA": 'public class NameA extends primary { public void operator = (NameA value) {} static void f() { ' + declaration + ' } }'}))
+    name_cases.append((False, {"NameA": 'public class NameA { static void f() { NameA[] source; primary[] value = source; } }'}))
     for declaration, accepted in (("int[] values; values.removeAll(null);", False),
                                   ("string[] values; values.removeAll(null);", False),
                                   ("primary[] values; values.removeAll(null);", False),

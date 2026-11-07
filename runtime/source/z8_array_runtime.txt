@@ -36,10 +36,23 @@ wstring z8_enum_array_join(T)(Z8Array!T array, T[] values, wstring[] names, wstr
     return result;
 }
 
+private Z8Primary z8_array_primary_box(T)(T value) {
+    static if (is(T == Object)) {
+        if (value is null) return null;
+        auto object = cast(Z8Object)value;
+        if (object is null) throw new Exception("invalid primary array element");
+        return z8_primary_box(object);
+    } else return z8_primary_box(value);
+}
+private auto z8_array_primary_cast(T)(Z8Primary value) {
+    static if (is(T == Object)) return cast(Object)z8_primary_cast!Z8Object(value);
+    else return z8_primary_cast!T(value);
+}
+
 class Z8Array(T) {
     enum isPrimitive = is(T == long) || is(T == bool) || is(T == Z8Decimal);
     enum sharePrimary = isPrimitive || is(T == wstring) || is(T == Z8Guid) || is(T == Z8File) ||
-        is(T == Z8Binary) || is(T == Z8Datespan) || is(T == Z8Date) || is(T == Z8Geometry);
+        is(T == Z8Binary) || is(T == Z8Datespan) || is(T == Z8Date) || is(T == Z8Geometry) || is(T == Object);
     static if (isPrimitive) alias Element = Z8Optional!T;
     else alias Element = T;
     private Element[] items;
@@ -76,6 +89,8 @@ class Z8Array(T) {
             if (primary !is null) return z8_primary_array_view(this).opEquals(primary);
         }
         static if (is(T == Z8Primary)) {
+            auto objects = cast(IZ8ObjectArrayView)other;
+            if (objects !is null) return this.opEquals(z8_primary_array_view(objects.z8_erased_data()));
             auto strings = cast(Z8Array!wstring)other;
             if (strings !is null) return this.opEquals(z8_primary_array_view(strings));
             auto guids = cast(Z8Array!Z8Guid)other;
@@ -128,12 +143,12 @@ class Z8Array(T) {
         Z8Array!T z8_add(long index, T value) { return z8_add(index, z8_optional_wrap(value)); }
     }
     Z8Array!T z8_add(Element value) {
-        static if (sharePrimary) if (primaryData !is null) { primaryData.z8_add(z8_primary_box(value)); return this; }
+        static if (sharePrimary) if (primaryData !is null) { primaryData.z8_add(z8_array_primary_box(value)); return this; }
         static if (is(T == Object)) z8_attach_member(value, true);
         ++z8_version; items ~= value; return this;
     }
     Z8Array!T z8_add(long index, Element value) {
-        static if (sharePrimary) if (primaryData !is null) { primaryData.z8_add(index, z8_primary_box(value)); return this; }
+        static if (sharePrimary) if (primaryData !is null) { primaryData.z8_add(index, z8_array_primary_box(value)); return this; }
         auto i = cast(int)index;
         if (i < 0 || cast(size_t)i > items.length) throw new Exception("array index out of bounds");
         static if (is(T == Object)) z8_attach_member(value, false);
@@ -157,7 +172,7 @@ class Z8Array(T) {
     }
     static if (isPrimitive) long z8_indexOf(T value) { return z8_indexOf(z8_optional_wrap(value)); }
     long z8_indexOf(Element value) {
-        static if (sharePrimary) if (primaryData !is null) return primaryData.z8_indexOf(z8_primary_box(value));
+        static if (sharePrimary) if (primaryData !is null) return primaryData.z8_indexOf(z8_array_primary_box(value));
         foreach (i, item; items) {
             static if (isPrimitive) {
                 if (!item.present && !value.present) return cast(long)i;
@@ -186,7 +201,7 @@ class Z8Array(T) {
         return true;
     }
     Element z8_removeAt(long index) {
-        static if (sharePrimary) if (primaryData !is null) return z8_primary_cast!T(primaryData.z8_removeAt(index));
+        static if (sharePrimary) if (primaryData !is null) return z8_array_primary_cast!T(primaryData.z8_removeAt(index));
         auto i = cast(int)index;
         if (i < 0 || cast(size_t)i >= items.length) throw new Exception("array index out of bounds");
         auto value = items[i];
@@ -195,7 +210,7 @@ class Z8Array(T) {
     }
     static if (isPrimitive) bool z8_remove(T value) { return z8_remove(z8_optional_wrap(value)); }
     bool z8_remove(Element value) {
-        static if (sharePrimary) if (primaryData !is null) return primaryData.z8_remove(z8_primary_box(value));
+        static if (sharePrimary) if (primaryData !is null) return primaryData.z8_remove(z8_array_primary_box(value));
         static if (isPrimitive || is(T == class) || is(T == wstring)) {
             foreach (i, item; items) {
                 static if (isPrimitive) bool equal = item.present == value.present && (!value.present || value.value == item.value);
@@ -254,7 +269,7 @@ class Z8Array(T) {
             foreach (i; 0 .. z8_size()) { auto value = z8_get(i); values ~= z8_nonnull(value); }
             sort!((a, b) => cast(long)a.majorBits == cast(long)b.majorBits ?
                   cast(long)a.minorBits < cast(long)b.minorBits : cast(long)a.majorBits < cast(long)b.majorBits, SwapStrategy.stable)(values);
-            if (primaryData !is null) foreach (i, value; values) primaryData.z8_set(cast(long)i, z8_primary_box(value));
+            if (primaryData !is null) foreach (i, value; values) primaryData.z8_set(cast(long)i, z8_array_primary_box(value));
             else items = values;
             ++z8_version;
             return this;
@@ -264,7 +279,7 @@ class Z8Array(T) {
                 foreach (i; 0 .. z8_size()) values ~= z8_get(i);
                 if (values.length > 1) foreach (value; values) if (!value.present) throw new Exception("null array element");
                 sort!("a < b", SwapStrategy.stable)(values);
-                foreach (i, value; values) primaryData.z8_set(cast(long)i, z8_primary_box(value));
+                foreach (i, value; values) primaryData.z8_set(cast(long)i, z8_array_primary_box(value));
                 ++primaryData.z8_version;
                 return this;
             }
@@ -273,7 +288,7 @@ class Z8Array(T) {
                 foreach (i; 0 .. z8_size()) values ~= z8_get(i);
                 if (values.length > 1) foreach (value; values) if (value is null) throw new Exception("null array element");
                 sort!("a < b", SwapStrategy.stable)(values);
-                foreach (i, value; values) primaryData.z8_set(cast(long)i, z8_primary_box(value));
+                foreach (i, value; values) primaryData.z8_set(cast(long)i, z8_array_primary_box(value));
                 ++primaryData.z8_version;
                 return this;
             }
@@ -367,7 +382,9 @@ class Z8Array(T) {
             static if (isPrimitive) throw new Exception("primitive array element requires checked access");
             else {
             auto value = primaryData.z8_get(index);
-            if (value is null || !z8_primary_is!T(value)) throw new Exception("array element requires checked access");
+            static if (is(T == Object)) {
+                if (value is null || value.kind != Z8PrimaryKind.user) throw new Exception("array element requires checked access");
+            } else if (value is null || !z8_primary_is!T(value)) throw new Exception("array element requires checked access");
             static if (is(T == wstring)) return value.textValue;
             else static if (is(T == Z8Guid)) return value.guidValue;
             else static if (is(T == Z8File)) return value.fileValue;
@@ -375,6 +392,7 @@ class Z8Array(T) {
             else static if (is(T == Z8Datespan)) return value.datespanValue;
             else static if (is(T == Z8Date)) return value.dateValue;
             else static if (is(T == Z8Geometry)) return value.geometryValue;
+            else static if (is(T == Object)) return *cast(Object*)&value.userValue;
             }
         }
         auto i = cast(int)index;
@@ -382,23 +400,23 @@ class Z8Array(T) {
         return items[i];
     }
     Element z8_get(long index) {
-        static if (sharePrimary) if (primaryData !is null) return z8_primary_cast!T(primaryData.z8_get(index));
+        static if (sharePrimary) if (primaryData !is null) return z8_array_primary_cast!T(primaryData.z8_get(index));
         return z8_at(index);
     }
     static if (isPrimitive) void z8_set(long index, T value) { z8_set(index, z8_optional_wrap(value)); }
     void z8_set(long index, Element value) {
-        static if (sharePrimary) if (primaryData !is null) { primaryData.z8_set(index, z8_primary_box(value)); return; }
+        static if (sharePrimary) if (primaryData !is null) { primaryData.z8_set(index, z8_array_primary_box(value)); return; }
         z8_at(index) = value;
     }
 }
 // The JVM shares the same erased RCollection when a scalar array widens to primary[].
 Z8Array!Z8Primary z8_primary_array_view(T)(Z8Array!T values)
 if (is(T == wstring) || is(T == Z8Guid) || is(T == Z8File) || is(T == Z8Binary) || is(T == Z8Datespan) ||
-    is(T == Z8Date) || is(T == Z8Geometry) || is(T == long) || is(T == bool) || is(T == Z8Decimal)) {
+    is(T == Z8Date) || is(T == Z8Geometry) || is(T == long) || is(T == bool) || is(T == Z8Decimal) || is(T == Object)) {
     if (values is null) return null;
     if (values.primaryData is null) {
         auto data = new Z8Array!Z8Primary();
-        foreach (value; values.items) data.z8_add(z8_primary_box(value));
+        foreach (value; values.items) data.z8_add(z8_array_primary_box(value));
         data.z8_version = values.arrayVersion;
         values.items = null;
         values.primaryData = data;

@@ -281,11 +281,14 @@ class Checker {
         if (type == ValueType.enumType) return actualClass is expectedClass;
         return true;
     }
+    private bool isPrimaryArrayConversion(ValueType type, Expression e) {
+        return isScalarPrimaryArray(type) || (type == ValueType.selfArray && extendsBuiltinPrimary(e.objectClass));
+    }
     private bool matches(Expression e, ValueType expected, Program expectedClass = null, Program[] expectedKeyClasses = null) {
         if (e.kind == ExprKind.arrayLiteral && hasObjectClass(expected)) e.objectClass = expectedClass;
         if (e.kind == ExprKind.arrayLiteral && hasMapKeyClass(expected)) e.keyObjectClasses = expectedKeyClasses;
         auto actual = typeOf(e, expected);
-        if (expected == ValueType.primaryArray && isScalarPrimaryArray(actual)) {
+        if (expected == ValueType.primaryArray && isPrimaryArrayConversion(actual, e)) {
             e.convertScalarPrimaryArray = true;
             return true;
         }
@@ -496,7 +499,7 @@ class Checker {
                         }
                         if (hasMapKeyClass(actual) && e.arguments[i].keyObjectClasses != resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name)) applicable = false;
                     }
-                } else if (isScalarPrimaryArray(actual) && p.type == ValueType.primaryArray) {
+                } else if (isPrimaryArrayConversion(actual, e.arguments[i]) && p.type == ValueType.primaryArray) {
                     ++weight;
                 } else if (actual == ValueType.selfType && p.type == ValueType.primaryType && extendsBuiltinPrimary(e.arguments[i].objectClass)) {
                     if (binaryOperator) ++distance;
@@ -1981,7 +1984,7 @@ class Checker {
                             if (e.arguments.length != 1) fail("incorrect argument count", e.token);
                             auto argType = typeOf(e.arguments[0]);
                             if (argType == ValueType.nullType) fail("ambiguous removeAll argument", e.arguments[0].token);
-                            if (argType == receiver || (receiver == ValueType.primaryArray && isScalarPrimaryArray(argType))) {
+                            if (argType == receiver || (receiver == ValueType.primaryArray && isPrimaryArrayConversion(argType, e.arguments[0]))) {
                                 if (!matches(e.arguments[0], receiver, e.left.objectClass, e.left.keyObjectClasses)) fail("removeAll requires an array of the same type", e.token);
                             } else if (!matchesStored(e.arguments[0], elementType(receiver), e.left.objectClass, e.left.keyObjectClasses)) fail("removeAll requires an element or array of the same type", e.token);
                             return receiver;
@@ -2561,8 +2564,8 @@ class Checker {
                     left = ValueType.primaryType;
                 if (right != ValueType.primaryType && left == ValueType.primaryType && matches(e.third, ValueType.primaryType))
                     right = ValueType.primaryType;
-                if (isScalarPrimaryArray(left) && right == ValueType.primaryArray && matches(e.right, ValueType.primaryArray)) left = right;
-                if (isScalarPrimaryArray(right) && left == ValueType.primaryArray && matches(e.third, ValueType.primaryArray)) right = left;
+                if (isPrimaryArrayConversion(left, e.right) && right == ValueType.primaryArray && matches(e.right, ValueType.primaryArray)) left = right;
+                if (isPrimaryArrayConversion(right, e.third) && left == ValueType.primaryArray && matches(e.third, ValueType.primaryArray)) right = left;
                 if (left == ValueType.decimalType && right == ValueType.intType) { e.third.promoteToDecimal = true; right = ValueType.decimalType; }
                 if (left == ValueType.intType && right == ValueType.decimalType) { e.right.promoteToDecimal = true; left = ValueType.decimalType; }
                 if (left == ValueType.stringType && hasStringConversion(right)) {
@@ -2576,7 +2579,7 @@ class Checker {
                 bool selectedReferenceType;
                 Program conditionalClass;
                 Program[] conditionalKeys;
-                if (left == right && (isArray(left) || isMap(left)) &&
+                if (left == right && (isArray(left) || isMap(left)) && (hasObjectClass(left) || hasMapKeyClass(left)) &&
                     (e.right.objectClass !is e.third.objectClass || e.right.keyObjectClasses != e.third.keyObjectClasses)) {
                     if (covariantCollectionMatches(left, e.right.objectClass, e.right.keyObjectClasses, e.third.objectClass, e.third.keyObjectClasses)) {
                         if (!matches(e.right, left, e.third.objectClass, e.third.keyObjectClasses)) fail("conditional branch type mismatch", e.token);
@@ -2784,7 +2787,7 @@ class Checker {
                 auto old = variables.dup; auto oldObjects = objectVariables.dup; auto oldKeyObjects = keyObjectVariables.dup;
                 auto array = typeOf(s.expression);
                 checkStatement(s.initial);
-                if (isScalarPrimaryArray(array) && s.initial.type == ValueType.primaryType && matches(s.expression, ValueType.primaryArray)) array = ValueType.primaryArray;
+                if (isPrimaryArrayConversion(array, s.expression) && s.initial.type == ValueType.primaryType && matches(s.expression, ValueType.primaryArray)) array = ValueType.primaryArray;
                 if (!isArray(array) || elementType(array) != s.initial.type) fail("foreach element type mismatch", s.token);
                 if (!matches(s.expression, array, s.initial.objectClass, s.initial.keyObjectClasses)) fail("foreach element type mismatch", s.token);
                 ++loopDepth; checkStatement(s.children[0]); --loopDepth;
