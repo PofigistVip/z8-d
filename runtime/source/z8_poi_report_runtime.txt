@@ -713,7 +713,10 @@ private void z8_poi_report_apply_nested_simple(Z8Object report, Z8Object range, 
         // Java inherits the parent's block for an only child; siblings default
         // to their own blocks. Only layouts without resizing are handled here.
         auto innerBounds = innerText !is null ? z8_poi_report_block(innerText) : children.z8_size() == 1 ? outer : inner;
-        if (!equal(inner, innerBounds) || inner.firstRow < outer.firstRow || inner.firstColumn < outer.firstColumn ||
+        auto grandchildren = z8_report_range_state(child).ranges;
+        bool leaf = grandchildren is null || !grandchildren.view().z8_erased_data().z8_size();
+        bool inheritedParentBounds = innerText is null && children.z8_size() == 1 && leaf;
+        if ((!equal(inner, innerBounds) && !inheritedParentBounds) || inner.firstRow < outer.firstRow || inner.firstColumn < outer.firstColumn ||
             inner.lastRow > outer.lastRow || inner.lastColumn > outer.lastColumn)
             throw new Exception("nested POI report range layout is not implemented");
         foreach (entry; entries)
@@ -729,8 +732,8 @@ private void z8_poi_report_apply_nested_simple(Z8Object report, Z8Object range, 
                 throw new Exception("nested POI report source is not implemented");
         }
         entries ~= Z8PoiReportEntry(child, inner, innerBounds);
-        if (inner.lastRow > lastRow) lastRow = inner.lastRow;
-        if (inner.lastColumn > lastColumn) lastColumn = inner.lastColumn;
+        if (innerBounds.lastRow > lastRow) lastRow = innerBounds.lastRow;
+        if (innerBounds.lastColumn > lastColumn) lastColumn = innerBounds.lastColumn;
     }
     if (lastRow != outer.lastRow || lastColumn != outer.lastColumn)
         throw new Exception("nested POI report range layout is not implemented");
