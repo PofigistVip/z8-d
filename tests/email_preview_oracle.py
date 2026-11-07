@@ -4,6 +4,7 @@ Usage: python tests/email_preview_oracle.py <original-z8-root>
 Requires the original server JAR and its Gradle-cached mail dependencies.
 """
 from pathlib import Path
+import base64
 import os
 import shutil
 import subprocess
@@ -54,10 +55,17 @@ messages = [
     b'<<<unfinished\r\n<<second <b>closed</b>',
 ]
 for encoding, value in (("windows-1250", "Žluťoučký"), ("windows-1253", "Καλημέρα"),
-                        ("windows-1254", "İstanbul"), ("windows-1257", "Ąžuolas")):
+                        ("windows-1254", "İstanbul"), ("windows-1257", "Ąžuolas"),
+                        ("iso-8859-5", "Привет Ёж №1"), ("iso-8859-15", "Œuvre Šž € Ÿ")):
     messages.append(("From: sender@example.com\r\nSubject: " + encoding + "\r\n"
                      "Content-Type: text/plain; charset=" + encoding + "\r\n"
                      "Content-Transfer-Encoding: 8bit\r\n\r\n").encode("ascii") + value.encode(encoding))
+    encoded = base64.b64encode(value.encode(encoding)).decode("ascii")
+    messages.append(("From: sender@example.com\r\nSubject: =?" + encoding + "?B?" + encoded + "?=\r\n"
+                     "Content-Type: text/plain; charset=US-ASCII\r\n\r\nBody").encode("ascii"))
+for encoding in ("iso-8859-5", "iso-8859-15"):
+    messages.append(("From: sender@example.com\r\nSubject: all bytes\r\nContent-Type: text/plain; charset=" +
+                     encoding + "\r\nContent-Transfer-Encoding: 8bit\r\n\r\n").encode("ascii") + bytes(range(0xA0, 0x100)))
 with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     temp = Path(directory)
     java = temp / "EmailOracle.java"
