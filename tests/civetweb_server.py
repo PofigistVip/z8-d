@@ -50,6 +50,22 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     (source / "User.bl").write_text('''
 [native "org.zenframework.z8.server.base.security.User"] public class User { public string login; }
 ''', encoding="utf-8")
+    (source / "SecurityLog.bl").write_text('''
+[native "org.zenframework.z8.server.base.security.SecurityLog"] public class SecurityLog {}
+''', encoding="utf-8")
+    (source / "SecurityObject.bl").write_text('''
+[native "org.zenframework.z8.server.base.security.SecurityObject"] public class SecurityObject {}
+''', encoding="utf-8")
+    (source / "SecurityEvent.bl").write_text('''
+[native "org.zenframework.z8.server.base.security.SecurityEvent"] public class SecurityEvent {}
+''', encoding="utf-8")
+    (source / "CustomSecurityLog.bl").write_text('''
+[log] public class CustomSecurityLog extends SecurityLog {
+    public bool contextAvailable = false;
+    public void constructor() { contextAvailable = Application.requestParameters().containsKey("ip"); }
+    public bool hasContext() { return contextAvailable; }
+}
+''', encoding="utf-8")
     (source / "Object.bl").write_text('''
 [native "org.zenframework.z8.server.runtime.OBJECT"] public class Object {
     virtual protected JsonArray getData(string[string] parameters);
@@ -124,9 +140,14 @@ public class Probe {
         (source / "Application.bl").unlink()
         (source / "JsonWriter.bl").unlink()
         (source / "User.bl").unlink()
+        (source / "SecurityLog.bl").unlink()
+        (source / "SecurityObject.bl").unlink()
+        (source / "SecurityEvent.bl").unlink()
         (source / "Object.bl").unlink()
         (source / "JsonArray.bl").unlink()
         shutil.copytree(language, source, dirs_exist_ok=True)
+        custom_log = source / "CustomSecurityLog.bl"
+        custom_log.write_text("import org.zenframework.z8.base.security.SecurityLog;\nimport org.zenframework.z8.base.application.Application;\n" + custom_log.read_text(encoding="utf-8"), encoding="utf-8")
         probe = source / "Probe.bl"
         probe.write_text("import org.zenframework.z8.base.application.Application;\nimport org.zenframework.z8.base.json.JsonWriter;\n" +
                          probe.read_text(encoding="utf-8"), encoding="utf-8")
@@ -142,6 +163,8 @@ public class Probe {
 import z8.runtime;
 import z8.webserver.civetweb;
 import z8gen.Probe;
+import z8gen.project_registry;
+import z8gen.CustomSecurityLog;
 import std.stdio : writeln, stdout, readln;
 import core.memory : GC;
 import std.string : indexOf;
@@ -182,6 +205,9 @@ class Authority : IZ8HttpAuthority {
     }
 }
 void runRequest(Z8HttpRequest request) {
+    assert(z8_application_request().securityLog !is null &&
+           z8_application_request().securityLog.z8_class_id() == "CustomSecurityLog"w);
+    assert(z8_optional_require((cast(Z8p_437573746F6D53656375726974794C6F67)z8_application_request().securityLog).m_hasContext()));
     if (request.query.indexOf("collect=1") >= 0) GC.collect();
     if (request.query.indexOf("stream=1") >= 0) {
         auto binary = z8_binary_from_file(binaryPath);
@@ -207,6 +233,7 @@ void runRequest(Z8HttpRequest request) {
     }
 }
 void main(string[] args) {
+    auto registry = new Z8RuntimeRegistry(); z8_register_project(registry); z8_runtime_set_registry(registry);
     binaryPath = args[2];
     auto server = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048);
     auto protocol = new Z8CivetServer("127.0.0.1:0", &runRequest, 2048, Z8ResponseMode.application, "server-1"w);

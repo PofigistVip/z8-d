@@ -210,6 +210,8 @@ shared static this() {
 }
 class Z8RuntimeRegistry {
     private Z8RuntimeRegistration[] tableEntries, requestEntries, jobEntries, entryEntries, executableEntries, namedEntries;
+    private TypeInfo_Class securityLogType;
+    private wstring securityLogClassId;
     private Z8Object[wstring] namedSingletons;
     private Object mutex;
     this() { mutex = new Object(); }
@@ -269,6 +271,25 @@ class Z8RuntimeRegistry {
         add(jobEntries, entry, false);
     }
     void registerEntry(Z8Object entry) { add(entryEntries, descriptor(entry, false), false); }
+    void registerSecurityLog(Z8Object log) {
+        log = z8_nonnull(log);
+        registerSecurityLogType(log.z8_class_id(), log.classinfo);
+    }
+    void registerSecurityLogType(wstring classId, TypeInfo_Class type) {
+        classId = z8_string_required(classId);
+        if (!classId.length || !z8_native_is_subtype("org.zenframework.z8.server.base.security.SecurityLog"w, type))
+            throw new Exception("runtime security log registration requires a SecurityLog");
+        synchronized (mutex) {
+            if (securityLogType is null || securityLogType.isBaseOf(type)) {
+                securityLogType = type; securityLogClassId = z8_string_new(classId);
+            }
+        }
+    }
+    Z8Object newSecurityLog() {
+        wstring classId;
+        synchronized (mutex) classId = securityLogClassId;
+        return classId is null ? null : z8_object_new_instance(classId);
+    }
     void registerExecutable(Z8Object executable) {
         if (!z8_native_is_instance(z8_executable_name, executable)) throw new Exception("runtime executable registration requires an Executable");
         add(executableEntries, descriptor(executable, false), false, true);

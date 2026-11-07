@@ -112,6 +112,14 @@ bool z8_native_is_instance(wstring name, Z8Object value) {
     }
     return false;
 }
+private bool z8_native_is_subtype(wstring name, TypeInfo_Class type) {
+    if (type is null) return false;
+    synchronized (z8_native_monitor) {
+        auto found = name in z8_native_factories;
+        if (found !is null) foreach (entry; *found) if (entry.type.isBaseOf(type)) return true;
+    }
+    return false;
+}
 // A native Java subclass can override an inherited virtual method without
 // repeating its declaration in BL. Look for the most specific registered
 // implementation before falling back to the base native implementation.

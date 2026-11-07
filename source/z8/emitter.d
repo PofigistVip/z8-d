@@ -1828,7 +1828,7 @@ package GeneratedModule[] emitProjectModules(Program[] programs, string[string] 
         source ~= "}\nvoid z8_link_native_registry() {}\n";
         modules ~= GeneratedModule(nativeRegistry, nativeRegistry.replace(".", "/") ~ ".d", "", formatDSource(source));
     }
-    // StartupCodeLines registers named classes, tables, requests, jobs and entries.
+    // StartupCodeLines also registers the directly annotated security log.
     // Keep the generated registry explicit so applications choose when to
     // instantiate classes and connect their runtime services.
     bool directAttribute(Program program, string name) {
@@ -1848,7 +1848,7 @@ package GeneratedModule[] emitProjectModules(Program[] programs, string[string] 
     Program[] registrations;
     foreach (program; programs) if (!external(program) && program.lexicalOwner is null && !program.isEnum && !isPrimaryClass(program) &&
         (directAttribute(program, "generatable") || inheritedAttribute(program, "request") ||
-         directAttribute(program, "job") || directAttribute(program, "entry") ||
+         directAttribute(program, "job") || directAttribute(program, "entry") || directAttribute(program, "log") ||
          inheritedAttribute(program, "name"))) registrations ~= program;
     if (registrations.length || (options !is null && (options.libraryOutput || options.libraryPrefixes.length))) {
         string body = "void z8_register_project(Z8RuntimeRegistry registry) {\nbool[wstring] visited;\nz8_register_project_tree(registry, visited);\n}\n" ~
@@ -1879,6 +1879,10 @@ package GeneratedModule[] emitProjectModules(Program[] programs, string[string] 
                     "if (request !is null && (!request.length || z8_str_compareNoCase(request, \"true\"w) == 0)) registry.registerRequest(value);\n";
             if (directAttribute(program, "job")) body ~= "registry.registerJob(value);\n";
             if (directAttribute(program, "entry")) body ~= "registry.registerEntry(value);\n";
+            if (directAttribute(program, "log")) {
+                auto classId = program.isNative ? program.nativeName : program.qualifiedName.replace("$", ".").to!wstring;
+                body ~= "registry.registerSecurityLogType(" ~ emitRawWStringLiteral(classId) ~ ", typeid(" ~ program.emittedName ~ "));\n";
+            }
             if (executable)
                 body ~= "auto executableName = value.z8_get_attribute(\"name\"w);\n" ~
                     "if (executableName !is null && executableName.length) registry.registerExecutable(value);\n";

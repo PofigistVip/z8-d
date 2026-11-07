@@ -15,6 +15,8 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     for path in (alpha / "alpha", beta / "beta", app / "demo"):
         path.mkdir(parents=True)
     (alpha / "alpha/Value.bl").write_text('public class Value { public int number() { return 20; } }', encoding="utf-8")
+    (alpha / "alpha/SecurityLog.bl").write_text('[native "org.zenframework.z8.server.base.security.SecurityLog"] public class SecurityLog {}', encoding="utf-8")
+    (alpha / "alpha/Logger.bl").write_text('import alpha.SecurityLog; [log] public class Logger extends SecurityLog {}', encoding="utf-8")
     (beta / "beta/Value.bl").write_text('public class Value { public int number() { return 22; } }', encoding="utf-8")
     (beta / "beta/Builder.bl").write_text('import beta.Value; public class Builder { public int number() { Value v; return v.number(); } }', encoding="utf-8")
     (app / "demo/Main.bl").write_text('''
@@ -46,6 +48,7 @@ void main() {
     assert(Z8_Main.m_run() == 42);
     assert(z8_object_new_instance("alpha.Value"w).z8_class_id() == "alpha.Value"w);
     assert(z8_object_new_instance("beta.Value"w).z8_class_id() == "beta.Value"w);
+    assert(registry.newSecurityLog().z8_class_id() == "alpha.Logger"w);
 }''', encoding="utf-8")
     binary = temp / ("probe.exe" if os.name == "nt" else "probe")
     archive = lambda p: p / ("z8-library.lib" if os.name == "nt" else "libz8-library.a")
@@ -58,7 +61,7 @@ void main() {
 
     manifest_path = one / "z8-library.json"
     old_api = json.loads(manifest_path.read_text(encoding="utf-8"))
-    del old_api["registryApi"]
+    old_api["registryApi"] = 2
     manifest_path.write_text(json.dumps(old_api), encoding="utf-8")
     incompatible_api = subprocess.run([str(compiler), "project", str(app), str(temp / "old-api"), *libraries], capture_output=True, text=True)
     assert incompatible_api.returncode and "registry API changed; rebuild first" in incompatible_api.stderr, incompatible_api.stderr

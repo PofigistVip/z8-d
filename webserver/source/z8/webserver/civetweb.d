@@ -359,7 +359,6 @@ class Z8CivetServer {
             auto type = request.contentType.toLower();
             auto application = new Z8ApplicationRequest();
             application.securityLogSink = securityLogSink;
-            if (securityLogFactory !is null) application.securityLog = securityLogFactory();
             application.jobUserResolver = cast(IZ8JobUserResolver)authority;
             application.userChangeNotifier = cast(IZ8UserChangeNotifier)authority;
             application.roleChangeNotifier = cast(IZ8RoleChangeNotifier)authority;
@@ -371,6 +370,13 @@ class Z8CivetServer {
                 if (type.startsWith("application/x-www-form-urlencoded")) addParameters(application.parameters, cast(string)request.body);
             }
             application.parameters.z8_add("ip"w, request.remoteAddress.to!wstring);
+            auto previous = z8_application_set_request(application);
+            scope (exit) z8_application_set_request(previous);
+            if (securityLogFactory !is null) application.securityLog = securityLogFactory();
+            else {
+                auto registry = z8_runtime_get_registry();
+                if (registry !is null) application.securityLog = registry.newSecurityLog();
+            }
             auto requestId = application.parameters.z8_get("request"w);
             if (authority !is null) {
                 auto sessionId = application.parameters.z8_get("session"w);
@@ -407,8 +413,6 @@ class Z8CivetServer {
                     return respond(connection, 401, "Unauthorized", JSONValue(denied).toString());
                 }
             }
-            auto previous = z8_application_set_request(application);
-            scope (exit) z8_application_set_request(previous);
             if (responseMode == Z8ResponseMode.application) z8_application_start_response(application, requestId);
             try {
                 if (responseMode == Z8ResponseMode.application && requestId == "logout"w) {

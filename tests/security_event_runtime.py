@@ -29,7 +29,9 @@ import org.zenframework.z8.base.security.SecurityLog;
 import org.zenframework.z8.base.security.SecurityEvent;
 import org.zenframework.z8.base.security.SecurityObject;
 import org.zenframework.z8.base.security.User;
-public class CustomSecurityLog extends SecurityLog {
+[log] public class CustomSecurityLog extends SecurityLog {
+    public static int created = 0;
+    public void constructor() { created = created + 1; }
     public int count = 0; public string last = "";
     virtual protected bool acceptEvent(SecurityEvent event) { return event.getAction() != "skip"; }
     virtual protected void writeEvent(SecurityEvent event) { count = count + 1; last = event.getAction() + ":" + event.getMessage(); }
@@ -37,6 +39,12 @@ public class CustomSecurityLog extends SecurityLog {
     public string formatUser(User user) { return super.format(user); }
     public string[string] filtered(string[string] params) { return super.filterParameters(params); }
 }
+''', encoding="utf-8")
+    (source / "DerivedSecurityLog.bl").write_text('''
+[log] public class DerivedSecurityLog extends CustomSecurityLog {}
+''', encoding="utf-8")
+    (source / "UnregisteredSecurityLog.bl").write_text('''
+public class UnregisteredSecurityLog extends DerivedSecurityLog {}
 ''', encoding="utf-8")
     (source / "SecurityEndpoint.bl").write_text('''
 import org.zenframework.z8.lang.Object;
@@ -73,6 +81,7 @@ public class SecurityProbe {
     }
     public static bool customType(SecurityObject object) { return object.getType() == "custom"; }
     public static CustomSecurityLog log() { CustomSecurityLog value; return value; }
+    public static int logCount() { return CustomSecurityLog.created; }
     public static FormattingSecurityLog formattingLog() { FormattingSecurityLog value; return value; }
     public static User userType() { User value; return value; }
     public static void add(guid id) {
@@ -87,6 +96,7 @@ public class SecurityProbe {
     harness.write_text('''
 import z8.runtime;
 import z8gen.SecurityProbe;
+import z8gen.project_registry;
 import std.file : exists, readText;
 import std.string : indexOf;
 import std.path : buildPath;
@@ -102,6 +112,15 @@ class Sink : IZ8SecurityLogSink {
 }
 void main(string[] args) {
     alias P = Z8p_536563757269747950726F6265;
+    auto registry = new Z8RuntimeRegistry(); z8_register_project(registry);
+    assert(z8_optional_require(P.m_logCount()) == 0);
+    auto registeredLog = registry.newSecurityLog();
+    assert(registeredLog !is null && registeredLog.z8_class_id() == "DerivedSecurityLog"w);
+    assert(z8_optional_require(P.m_logCount()) == 1);
+    assert(registry.newSecurityLog() !is registeredLog);
+    registry.registerSecurityLog(P.m_log());
+    assert(registry.newSecurityLog().z8_class_id() == "DerivedSecurityLog"w);
+    bool wrongLog; try { registry.registerSecurityLog(P.m_custom()); } catch (Exception) { wrongLog = true; } assert(wrongLog);
     auto id = z8_guid_create(7); auto object = P.m_make(id);
     auto event = z8_security_event_new(object, "update"w);
     z8_security_event_set_result(event, false, "denied"w);
