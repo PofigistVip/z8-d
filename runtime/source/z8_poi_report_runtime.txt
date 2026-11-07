@@ -300,7 +300,6 @@ private Z8Object[] z8_poi_report_query_fields(Z8Object report, Z8Object query, Z
 
 private void z8_poi_report_evaluate_cell(Z8EvalState state, Z8PoiWorkbook workbook, Z8PoiCell cell,
                                          long sheet, long row, long column, ref Z8PoiCellEdit[] edits, bool copied = false) {
-    import std.algorithm.searching : canFind;
     import std.string : indexOf;
     auto first = z8_eval_text_expression_start(cell.value);
     ptrdiff_t firstEnd = first < 0 ? -1 : cell.value[cast(size_t)first + 2 .. $].indexOf('}');
@@ -316,15 +315,12 @@ private void z8_poi_report_evaluate_cell(Z8EvalState state, Z8PoiWorkbook workbo
     Z8PoiCellEdit edit;
     edit.sheet = cast(uint)sheet; edit.row = cast(uint)row; edit.column = cast(uint)column;
     if (!single) {
-        auto text = z8_eval_text_from_state(state, cell.value, true, true);
+        auto text = z8_eval_text_from_state(state, cell.value, true);
         if (cell.kind == "inlineStr"w && !copied) return;
         edit.kind = Z8PoiCellEditKind.text; edit.text = text; edits ~= edit;
         return;
     }
     auto expression = cell.value[cast(size_t)first + 2 .. cast(size_t)firstEnd];
-    // The original report grammar accepts single-quoted strings. The Eval
-    // parser also accepts double quotes, which are not equivalent here.
-    if (expression.canFind('"')) throw new Exception("POI report expression syntax is not implemented");
     auto evaluated = z8_eval_expression(state, expression);
     if (!evaluated.evaluated || evaluated.context != Z8EvalContext.none || evaluated.json !is null || evaluated.reportObject !is null)
         throw new Exception("POI report expression context is not implemented");

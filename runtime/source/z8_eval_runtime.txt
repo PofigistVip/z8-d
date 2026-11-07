@@ -146,8 +146,7 @@ private Z8Optional!bool z8_eval_boolean(Z8Object self, wstring expression) {
     if (value.primary is null || value.primary.kind != Z8PrimaryKind.boolean) throw new Exception("Eval boolean result expected");
     return z8_optional_wrap(value.primary.booleanValue);
 }
-private wstring z8_eval_text_from_state(Z8EvalState state, wstring source, bool requireResolved = false, bool reportSyntax = false) {
-    import std.algorithm.searching : canFind;
+private wstring z8_eval_text_from_state(Z8EvalState state, wstring source, bool requireResolved = false) {
     import std.string : indexOf;
     if (source is null) return "null"w;
     // TextParser recovers a missing final '}' when the expression body is a
@@ -178,7 +177,6 @@ private wstring z8_eval_text_from_state(Z8EvalState state, wstring source, bool 
         failed = false;
         try {
             auto expression = source[start + 2 .. last];
-            if (reportSyntax && expression.canFind('"')) throw new Exception("POI report expression syntax is not implemented");
             value = z8_eval_expression(state, expression);
             if (requireResolved && (!value.evaluated || value.context != Z8EvalContext.none ||
                 value.json !is null || value.reportObject !is null))

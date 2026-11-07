@@ -46,6 +46,8 @@ public class EvalOracle {
         eval.z8_setVariable(new string("nil"), (primary)null);
         String[] patterns = {"plain text", "${name}", "Hello ${name}!", "${count}", "Count ${count}", "${true}", "${missing}", "before ${missing} after", "${'literal'}", "${count + 2}", "twice ${count * 2}", "${'Hi ' + name}", "${missing + 2}", "${(missing)}", "result ${true && false}!", "${1.5 + 2}", "${2 * 1.25}", "${7.0 / 2}", "decimal=${1.25}", "large=${1234.5}", "negative=${0.0 - 0.001}", "${flag ? name : missing}", "${false ? missing : 'fallback'}", "${nil ?: name}", "${name ?: missing}", "${unknown ?: 'default'}", "${unknown ? 'yes' : 'no'}", "${count ? name : missing}"};
         for (String pattern : patterns) System.out.println(eval.z8_evaluateText(new string(pattern)).get());
+        for (String pattern : new String[]{"${«Привет»}", "prefix ${„мир“}!"})
+            System.out.println(eval.z8_evaluateText(new string(pattern)).get());
         for (String pattern : new String[]{"a{b}c", "cost $5", "{foo=bar}", "x}y", "x${1+2}y", "${1+2} } tail", "money $$ value", "x$${1+2}y", "x$$${1+2}y", "$a${1+2}", "$a${1.25}", "${1.25}$a", "single $"})
             System.out.println(eval.z8_evaluateText(new string(pattern)).get());
         Eval unfinished = new Eval(null);
@@ -170,7 +172,7 @@ public class EvalOracle {
                     *(sources / "org/zenframework/z8/server/base/json/parser" / (name + ".java") for name in ("JsonObject", "JsonArray", "JsonUtil")),
                     original / "org.zenframework.z8.boot/src/main/java/org/zenframework/z8/rmi/ObjectIO.java",
                     sources / "org/zenframework/z8/server/base/eval/Eval.java", stub, java]
-    subprocess.run(["javac", "-source", "8", "-target", "8", "-cp", classpath, "-sourcepath", str(temp),
+    subprocess.run(["javac", "-source", "8", "-target", "8", "-encoding", "UTF-8", "-cp", classpath, "-sourcepath", str(temp),
                     "-d", str(temp), *map(str, java_sources)], cwd=temp, check=True)
     config = temp / "server.properties"
     config.write_text("application.language=en\n", encoding="utf-8")
@@ -202,6 +204,8 @@ void main() {
                        "decimal=${1.25}"w, "large=${1234.5}"w, "negative=${0.0 - 0.001}"w,
                        "${flag ? name : missing}"w, "${false ? missing : 'fallback'}"w, "${nil ?: name}"w,
                        "${name ?: missing}"w, "${unknown ?: 'default'}"w, "${unknown ? 'yes' : 'no'}"w, "${count ? name : missing}"w])
+        writeln(eval.m_evaluateText(pattern).to!string);
+    foreach (pattern; ["${«Привет»}"w, "prefix ${„мир“}!"w])
         writeln(eval.m_evaluateText(pattern).to!string);
     foreach (pattern; ["a{b}c"w, "cost $5"w, "{foo=bar}"w, "x}y"w, "x${1+2}y"w,
                        "${1+2} } tail"w, "money $$ value"w, "x$${1+2}y"w, "x$$${1+2}y"w,

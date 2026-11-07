@@ -215,7 +215,7 @@ public class ContextRangeReport extends Report {
     engine = Report.POI; template = "context";
     JsonObject info; JsonObject parameters; ContextGroup group;
     objects = {info, parameters, group};
-    [address "A1:G1"] [boundaries "A1:G1"] Range region;
+    [address "A1:L1"] [boundaries "A1:L1"] Range region;
     ranges = {region};
     virtual protected void prepare(guid recordId) {
         info.set("title", "Ada 😀"); info.set("amount", 42);
@@ -783,9 +783,9 @@ public class %s extends Report {
         for entry_name, content in json_inline.items():
             archive.writestr(entry_name, content)
     context = dict(parameters)
-    context["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="7" uniqueCount="7"><si><t>${info['title']}</t></si><si><t>${group.data.amount}</t></si><si><t>${parameters.foo}</t></si><si><t>Title: ${info.title}!</t></si><si><t>${info.missing}</t></si><si><t>${group ? 'yes' : 'no'}</t></si><si><t>${(group ?: info.missing).data.amount}</t></si></sst>'''
+    context["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="12" uniqueCount="12"><si><t>${info['title']}</t></si><si><t>${group.data.amount}</t></si><si><t>${parameters.foo}</t></si><si><t>Title: ${info.title}!</t></si><si><t>${info.missing}</t></si><si><t>${group ? 'yes' : 'no'}</t></si><si><t>${(group ?: info.missing).data.amount}</t></si><si><t>${"text"}</t></si><si><t>prefix ${"hi"}!</t></si><si><t>${'say "yes"'}</t></si><si><t>${«Привет»}</t></si><si><t>prefix ${„мир“}!</t></si></sst>'''
     context["xl/worksheets/sheet1.xml"] = context["xl/worksheets/sheet1.xml"].replace(
-        '<c r="E1" t="s"><v>4</v></c>', '<c r="E1" t="s"><v>4</v></c><c r="F1" t="s"><v>5</v></c><c r="G1" t="s"><v>6</v></c>')
+        '<c r="E1" t="s"><v>4</v></c>', '<c r="E1" t="s"><v>4</v></c><c r="F1" t="s"><v>5</v></c><c r="G1" t="s"><v>6</v></c><c r="H1" t="s"><v>7</v></c><c r="I1" t="s"><v>8</v></c><c r="J1" t="s"><v>9</v></c><c r="K1" t="s"><v>10</v></c><c r="L1" t="s"><v>11</v></c>')
     with zipfile.ZipFile(application / "reports/context.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in context.items():
             archive.writestr(name, content)
@@ -1198,7 +1198,8 @@ void main(string[] args) {
     assert(database.begins == 30 && database.rollbacks == 30);
     auto mixed = P.m_mixedRange();
     assert(read(z8_file_resolve_path(mixed)) == read(buildPath(args[1], "reports", "mixed.xlsx")));
-    bool quoted; try { P.m_doubleQuotedRange(); } catch (Exception) { quoted = true; } assert(quoted);
+    auto quoted = P.m_doubleQuotedRange();
+    assert(read(z8_file_resolve_path(quoted)) == read(buildPath(args[1], "reports", "double-quoted.xlsx")));
     assert(database.begins == 32 && database.rollbacks == 32);
     bool unknown; try { P.m_unknownMixedRange(); } catch (Exception) { unknown = true; } assert(unknown);
     auto plain = P.m_plainSymbolsRange();
@@ -1985,8 +1986,8 @@ class PoiRangeOracle {
       boolean parameters = args.length > 3 && "parameters".equals(args[3]);
       boolean dates = args.length > 3 && "dates".equals(args[3]);
       Range child = new Range().setSource(customCase || jsonCase || queryCase || expandedCustomCase ? customSource : SimpleSource.newDefault())
-          .setBlock(emptySideFooterCase ? "A2:D2" : emptyHorizontalSideFooterCase ? "B1:C2" : emptyVerticalFooterCase ? "A1:D1" : headerFooterCase ? "A2:D2" : horizontalHeaderCase ? "B1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase || mapValueCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : collectionCase ? "A1:I1" : constants || contextCase ? "A1:G1" : parameters ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(emptySideFooterCase ? "A1:E3" : emptyHorizontalSideFooterCase ? "A1:D3" : multiSideCase ? "A1:E4" : horizontalMultiSideCase ? "A1:G3" : emptyMultiFooterCase ? "A1:D4" : emptyHorizontalMultiFooterCase ? "A1:G2" : emptyVerticalFooterCase ? "A1:D2" : emptyHorizontalFooterCase ? "A1:C2" : headerFooterCase ? "A1:E3" : horizontalHeaderCase ? "A1:D3" : multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase || mapValueCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : collectionCase ? "A1:I1" : constants || contextCase ? "A1:G1" : parameters ? "A1:E1" : "A1:B2");
+          .setBlock(emptySideFooterCase ? "A2:D2" : emptyHorizontalSideFooterCase ? "B1:C2" : emptyVerticalFooterCase ? "A1:D1" : headerFooterCase ? "A2:D2" : horizontalHeaderCase ? "B1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase || mapValueCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : contextCase ? "A1:L1" : dates ? "A1:J1" : collectionCase ? "A1:I1" : constants ? "A1:G1" : parameters ? "A1:E1" : "$A$1:A1")
+          .setBoundaries(emptySideFooterCase ? "A1:E3" : emptyHorizontalSideFooterCase ? "A1:D3" : multiSideCase ? "A1:E4" : horizontalMultiSideCase ? "A1:G3" : emptyMultiFooterCase ? "A1:D4" : emptyHorizontalMultiFooterCase ? "A1:G2" : emptyVerticalFooterCase ? "A1:D2" : emptyHorizontalFooterCase ? "A1:C2" : headerFooterCase ? "A1:E3" : horizontalHeaderCase ? "A1:D3" : multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase || mapValueCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : contextCase ? "A1:L1" : dates ? "A1:J1" : collectionCase ? "A1:I1" : constants ? "A1:G1" : parameters ? "A1:E1" : "A1:B2");
       if (horizontalCase) child.setAxis(1);
       if (clonedSheetsCase) {
         int prototype = clonedExistingCase ? 1 : 0;
@@ -2147,7 +2148,7 @@ class PoiRangeOracle {
             original.getSheetAt(0).getRow(1).getCell(0).getNumericCellValue() != actual.getSheetAt(0).getRow(1).getCell(0).getNumericCellValue())
           throw new AssertionError("empty source physical cells differ");
       } else if (constants || collectionCase || mapValueCase || parameters || contextCase || dates || fieldCase || customCase || jsonCase || queryCase || multipleCase || repeatCase || mergedCase) {
-        for (int i = 0; i < (repeatCase || mergedCase ? 1 : outsideCase || mapValueCase ? 4 : multipleCase ? 3 : customCase ? 4 : dates ? 10 : collectionCase ? 9 : constants || contextCase ? 7 : 5); ++i) {
+        for (int i = 0; i < (repeatCase || mergedCase ? 1 : outsideCase || mapValueCase ? 4 : multipleCase ? 3 : customCase ? 4 : contextCase ? 12 : dates ? 10 : collectionCase ? 9 : constants ? 7 : 5); ++i) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(0).getCell(i);
           if (expected.getCellType() != result.getCellType()) throw new AssertionError("cell type differs at " + i);

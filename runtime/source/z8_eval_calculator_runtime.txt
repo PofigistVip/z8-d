@@ -5,7 +5,8 @@ private Z8EvalValue z8_eval_atom(Z8EvalState state, wstring source) {
     if (!text.length) throw new Exception("empty Eval expression");
     if (text == "true"w || text == "false"w)
         return Z8EvalValue(true, z8_primary_box(text == "true"w), null, null);
-    if (text.length >= 2 && (text[0] == '\'' || text[0] == '"') && text[$ - 1] == text[0])
+    if (text.length >= 2 && ((text[0] == '\'' || text[0] == '"') && text[$ - 1] == text[0] ||
+        text[0] == '«' && text[$ - 1] == '»' || text[0] == '„' && text[$ - 1] == '“'))
         return Z8EvalValue(true, z8_primary_box(z8_string_new(text[1 .. $ - 1])), null, null);
     bool digits = true, decimal;
     foreach (c; text) {

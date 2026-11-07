@@ -28,9 +28,10 @@ private class Z8EvalParser {
         }
         if (position == text.length) throw new Exception("missing Eval operand");
         auto start = position; auto c = text[position];
-        if (c == '\'' || c == '"') {
+        if (c == '\'' || c == '"' || c == '«' || c == '„') {
+            auto closing = c == '«' ? '»' : c == '„' ? '“' : c;
             ++position;
-            while (position < text.length && text[position] != c) {
+            while (position < text.length && text[position] != closing) {
                 if (text[position] == '\\' && position + 1 < text.length) ++position;
                 ++position;
             }
