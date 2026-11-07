@@ -848,7 +848,7 @@ void main(string[] args) {
         ++writes; return result;
     }
     ubyte[] writeExpandedReport(const(ubyte)[] input, const(Z8PoiCellCopy)[] copies, const(Z8PoiCellEdit)[] cells) {
-        assert(copies.length == 8); auto result = expander.writeExpandedReport(input, copies, cells);
+        assert(copies.length == 8 || copies.length == 4); auto result = expander.writeExpandedReport(input, copies, cells);
         ++expansions; return result;
     }
 }
@@ -924,7 +924,10 @@ void main(string[] args) {
             'auto twoRows = P.m_expandedTwoRows(); copy(z8_file_resolve_path(twoRows), buildPath(args[2], "expanded-two.xlsx")); assert(counter.expansions == 10);')
         contents = contents.replace(
             'bool horizontal; try { P.m_expandedHorizontal(); } catch (Exception) { horizontal = true; } assert(horizontal);',
-            'auto horizontal = P.m_expandedHorizontal(); copy(z8_file_resolve_path(horizontal), buildPath(args[2], "expanded-horizontal.xlsx")); assert(counter.expansions == 11);')
+            'auto horizontal = P.m_expandedHorizontal(); copy(z8_file_resolve_path(horizontal), buildPath(args[2], "expanded-horizontal.xlsx")); assert(counter.expansions == 12);')
+        contents = contents.replace(
+            'bool emptyRow; try { P.m_expandedEmptyRow(); } catch (Exception) { emptyRow = true; } assert(emptyRow);',
+            'auto emptyRow = P.m_expandedEmptyRow(); copy(z8_file_resolve_path(emptyRow), buildPath(args[2], "expanded-empty-row.xlsx")); assert(counter.expansions == 11);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1131,7 +1134,8 @@ class PoiRangeOracle {
       boolean customCase = args.length > 3 && "custom".equals(args[3]);
       boolean expandedCustomCase = args.length > 3 && "expanded-custom".equals(args[3]);
       boolean horizontalCase = args.length > 3 && "expanded-horizontal".equals(args[3]);
-      boolean expandedTwoCase = horizontalCase || (args.length > 3 && "expanded-two".equals(args[3]));
+      boolean expandedEmptyCase = args.length > 3 && "expanded-empty".equals(args[3]);
+      boolean expandedTwoCase = horizontalCase || expandedEmptyCase || (args.length > 3 && "expanded-two".equals(args[3]));
       boolean expandedCase = expandedCustomCase || expandedTwoCase || (args.length > 3 && "expanded".equals(args[3]));
       boolean jsonInlineCase = args.length > 3 && "json-inline".equals(args[3]);
       boolean repeatCase = args.length > 3 && "repeat".equals(args[3]);
@@ -1258,6 +1262,10 @@ class PoiRangeOracle {
       if (expandedCase) {
         for (int row = 0; row < (horizontalCase ? 2 : expandedTwoCase ? 6 : 3); ++row)
           for (int col = 0; col < (horizontalCase ? 6 : expandedTwoCase ? 2 : 4); ++col) {
+          if (original.getSheetAt(0).getRow(row) == null) {
+            if (actual.getSheetAt(0).getRow(row) != null) throw new AssertionError("unexpected physical row " + row);
+            continue;
+          }
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(row).getCell(col);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(row).getCell(col);
           if (expected.getCellType() != result.getCellType() || expected.getCellStyle().getIndex() != result.getCellStyle().getIndex())
@@ -1372,6 +1380,10 @@ class PoiRangeOracle {
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/expanded-two.xlsx"), str(working / "expanded-two.xlsx"), str(config), "expanded-two"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/expanded-empty-row.xlsx"), str(working / "expanded-empty-row.xlsx"), str(config), "expanded-empty"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",

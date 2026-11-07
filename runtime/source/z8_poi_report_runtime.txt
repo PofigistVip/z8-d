@@ -299,8 +299,14 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                 auto lastColumn = block.lastColumn + (horizontal ? offset : 0);
                 auto existingRow = targetRow in workbook.sheets[sheet].rows;
                 auto templateRow = sourceRow in workbook.sheets[sheet].rows;
-                if (templateRow is null || !(*templateRow).cells.length)
-                    throw new Exception("POI report range expansion layout is not implemented");
+                if (templateRow is null) {
+                    // POI clears existing cells in this part of an absent
+                    // source row. Cell deletion is not supported yet.
+                    if (existingRow !is null) foreach (column, cell; (*existingRow).cells)
+                        if (column >= firstColumn && column <= lastColumn)
+                            throw new Exception("POI report range expansion target cell is not implemented");
+                    continue;
+                }
                 if (existingRow !is null) {
                     if (!(*existingRow).safeExpansionTarget) throw new Exception("POI report range expansion row is not implemented");
                     foreach (column, cell; (*existingRow).cells) {
@@ -328,7 +334,10 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                         edit.kind = Z8PoiCellEditKind.text; edit.text = cell.value; edits ~= edit;
                     }
                 }
-                if (!hasTemplateCell) throw new Exception("POI report range expansion layout is not implemented");
+                // POI creates a physical target row even when the source row
+                // has no cells in this block. Avoid silently omitting it.
+                if (!hasTemplateCell && existingRow is null)
+                    throw new Exception("POI report empty target row is not implemented");
             }
         }
         foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells) {
