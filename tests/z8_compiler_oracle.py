@@ -250,6 +250,11 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         name_cases.append((True, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
     for typed, primary in (("int[]", "primary[]"), ("int[][]", "primary[][]"), ("int[string]", "primary[string]"), ("string[string]", "primary[string]"), ("int[int]", "primary[int]"), ("int[primary]", "primary[primary]"), ("int[guid]", "primary[guid]")):
         name_cases.append((False, {"NameA": 'public class NameA { static void choose(' + typed + ' x) {} static void choose(' + primary + ' x) {} static void f() { ' + typed + ' x; choose(x); } }'}))
+    name_cases.append((True, {"BaseKey": 'public class BaseKey {}', "ChildKey": 'public class ChildKey extends BaseKey {}',
+                              "NameA": 'public class NameA { static void f() { int[ChildKey] source; primary[BaseKey] target = source; } }'}))
+    name_cases.append((False, {"BaseKey": 'public class BaseKey {}', "ChildKey": 'public class ChildKey extends BaseKey {}',
+                               "NameA": 'public class NameA { static void f() { int[BaseKey] source; primary[ChildKey] target = source; } }'}))
+    name_cases.append((True, {"Key": 'public class Key {}', "NameA": 'public class NameA extends primary { public void operator = (NameA value) {} static void f() { NameA[Key] source; primary[Key] target = source; } }'}))
     for key in ("guid", "date", "datespan", "binary", "geometry", "file"):
         for kind in ("int", "string"):
             declaration = kind + '[' + key + '] source; primary[' + key + '] values = source; values.add(source);'

@@ -46,6 +46,23 @@ class Z8CovariantMap(K, V, M, bool keyObject, bool valueObject) : IZ8CollectionV
             auto primary = cast(Z8ReferenceKeyMap!(K, Z8Primary))other;
             if (primary !is null) return z8_primary_map_view(data).opEquals(primary);
         }
+        static if (keyObject && is(M == Z8ReferenceKeyMap!(Z8Object, U), U) && Z8PrimaryKeyMap!U.sharePrimary) {
+            auto collection = cast(IZ8CollectionView)other;
+            if (collection !is null) {
+                auto primary = cast(Z8ReferenceKeyMap!(Z8Object, Z8Primary))collection.z8_erased_storage();
+                if (primary !is null) return z8_primary_map_view(data).opEquals(primary);
+            }
+        }
+        static if (keyObject && is(M == Z8ReferenceKeyMap!(Z8Object, Z8Primary))) {
+            auto collection = cast(IZ8CollectionView)other;
+            if (collection !is null) {
+                import std.meta : AliasSeq;
+                static foreach (Candidate; AliasSeq!(long, bool, Z8Decimal, wstring, Z8Guid, Z8Binary, Z8Datespan, Z8Date, Z8Geometry, Z8File, Object)) {{
+                    auto typed = cast(Z8ReferenceKeyMap!(Z8Object, Candidate))collection.z8_erased_storage();
+                    if (typed !is null) return data.opEquals(z8_primary_map_view(typed));
+                }}
+            }
+        }
         auto view = cast(IZ8CollectionView)other;
         auto right = view is null ? null : cast(M)view.z8_erased_storage();
         return right !is null && data.opEquals(right);
@@ -115,4 +132,30 @@ if (is(V : Z8Object)) {
 Z8ReferenceKeyMap!(K, Z8Primary) z8_primary_map_view(K, V)(Z8CovariantMap!(K, V, Z8ReferenceKeyMap!(K, Object), false, true) values)
 if ((is(K == Z8Date) || is(K == Z8Datespan) || is(K == Z8Binary) || is(K == Z8Geometry) || is(K == Z8File)) && is(V : Z8Object)) {
     return values is null ? null : z8_primary_map_view(values.data);
+}
+
+Z8CovariantMap!(K, Z8Primary, Z8ReferenceKeyMap!(Z8Object, Z8Primary), true, false)
+z8_primary_map_view(K, V)(Z8CovariantMap!(K, V, Z8ReferenceKeyMap!(Z8Object, V), true, false) values)
+if (is(K : Z8Object) && Z8PrimaryKeyMap!V.sharePrimary) {
+    if (values is null) return null;
+    return new Z8CovariantMap!(K, Z8Primary, Z8ReferenceKeyMap!(Z8Object, Z8Primary), true, false)(z8_primary_map_view(values.data));
+}
+Z8CovariantMap!(K, Z8Primary, Z8ReferenceKeyMap!(Z8Object, Z8Primary), true, false)
+z8_primary_map_view(K, V)(Z8CovariantMap!(K, V, Z8ReferenceKeyMap!(Z8Object, Object), true, true) values)
+if (is(K : Z8Object) && is(V : Z8Object)) {
+    if (values is null) return null;
+    return new Z8CovariantMap!(K, Z8Primary, Z8ReferenceKeyMap!(Z8Object, Z8Primary), true, false)(z8_primary_map_view(values.data));
+}
+
+Z8CovariantMap!(To, Z8Primary, Z8ReferenceKeyMap!(Z8Object, Z8Primary), true, false)
+z8_primary_object_key_map_view(To, From, V)(Z8CovariantMap!(From, V, Z8ReferenceKeyMap!(Z8Object, V), true, false) values)
+if (is(To : Z8Object) && is(From : Z8Object) && Z8PrimaryKeyMap!V.sharePrimary) {
+    if (values is null) return null;
+    return new Z8CovariantMap!(To, Z8Primary, Z8ReferenceKeyMap!(Z8Object, Z8Primary), true, false)(z8_primary_map_view(values.data));
+}
+Z8CovariantMap!(To, Z8Primary, Z8ReferenceKeyMap!(Z8Object, Z8Primary), true, false)
+z8_primary_object_key_map_view(To, From, V)(Z8CovariantMap!(From, V, Z8ReferenceKeyMap!(Z8Object, Object), true, true) values)
+if (is(To : Z8Object) && is(From : Z8Object) && is(V : Z8Object)) {
+    if (values is null) return null;
+    return new Z8CovariantMap!(To, Z8Primary, Z8ReferenceKeyMap!(Z8Object, Z8Primary), true, false)(z8_primary_map_view(values.data));
 }

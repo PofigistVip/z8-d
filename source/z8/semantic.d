@@ -288,17 +288,26 @@ class Checker {
         return (isArray(type) && isScalarPrimaryArray(elementType(type))) ||
             (type == ValueType.selfMatrix && extendsBuiltinPrimary(e.objectClass));
     }
-    private bool isPrimaryMapValueConversion(ValueType actual, ValueType expected, Expression e) {
-        return isMap(actual) && isMap(expected) && [ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.primaryType, ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(mapKeyType(actual)) &&
-            mapKeyType(expected) == mapKeyType(actual) && mapValueType(expected) == ValueType.primaryType &&
-            (isScalarPrimaryArray(arrayOf(mapValueType(actual))) ||
-             (mapValueType(actual) == ValueType.selfType && extendsBuiltinPrimary(e.objectClass)));
+    private bool isPrimaryMapValueConversion(ValueType actual, ValueType expected, Expression e, Program[] expectedKeys) {
+        if (!isMap(actual) || !isMap(expected) || mapValueType(expected) != ValueType.primaryType || mapKeyType(expected) != mapKeyType(actual)) return false;
+        auto key = mapKeyType(actual);
+        if (key == ValueType.selfType) {
+            if (!e.keyObjectClasses.length || !expectedKeys.length ||
+                !isAssignable(outerMapKeyClass(actual, e.keyObjectClasses), outerMapKeyClass(expected, expectedKeys))) return false;
+        } else if (![ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.primaryType,
+                     ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(key)) return false;
+        return isScalarPrimaryArray(arrayOf(mapValueType(actual))) ||
+            (mapValueType(actual) == ValueType.selfType && extendsBuiltinPrimary(e.objectClass));
     }
     private bool matches(Expression e, ValueType expected, Program expectedClass = null, Program[] expectedKeyClasses = null) {
         if (e.kind == ExprKind.arrayLiteral && hasObjectClass(expected)) e.objectClass = expectedClass;
         if (e.kind == ExprKind.arrayLiteral && hasMapKeyClass(expected)) e.keyObjectClasses = expectedKeyClasses;
         auto actual = typeOf(e, expected);
-        if (isPrimaryMapValueConversion(actual, expected, e)) { e.convertPrimaryMapValue = true; return true; }
+        if (isPrimaryMapValueConversion(actual, expected, e, expectedKeyClasses)) {
+            e.convertPrimaryMapValue = true;
+            e.primaryMapKeyClass = mapKeyType(actual) == ValueType.selfType ? outerMapKeyClass(expected, expectedKeyClasses) : null;
+            return true;
+        }
         if ((expected == ValueType.primaryArray && isPrimaryArrayConversion(actual, e)) ||
             (expected == ValueType.primaryMatrix && isPrimaryMatrixConversion(actual, e))) {
             e.convertScalarPrimaryArray = true;
@@ -511,7 +520,7 @@ class Checker {
                         }
                         if (hasMapKeyClass(actual) && e.arguments[i].keyObjectClasses != resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name)) applicable = false;
                     }
-                } else if (isPrimaryMapValueConversion(actual, p.type, e.arguments[i]) ||
+                } else if (isPrimaryMapValueConversion(actual, p.type, e.arguments[i], hasMapKeyClass(p.type) ? resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name) : null) ||
                            (isPrimaryArrayConversion(actual, e.arguments[i]) && p.type == ValueType.primaryArray) ||
                            (isPrimaryMatrixConversion(actual, e.arguments[i]) && p.type == ValueType.primaryMatrix)) {
                     // VariableType.getCastTo assigns both exact and collection-widening casts weight zero.
@@ -2579,8 +2588,8 @@ class Checker {
                     left = ValueType.primaryType;
                 if (right != ValueType.primaryType && left == ValueType.primaryType && matches(e.third, ValueType.primaryType))
                     right = ValueType.primaryType;
-                if (isPrimaryMapValueConversion(left, right, e.right) && matches(e.right, right)) left = right;
-                if (isPrimaryMapValueConversion(right, left, e.third) && matches(e.third, left)) right = left;
+                if (isPrimaryMapValueConversion(left, right, e.right, e.third.keyObjectClasses) && matches(e.right, right, null, e.third.keyObjectClasses)) left = right;
+                if (isPrimaryMapValueConversion(right, left, e.third, e.right.keyObjectClasses) && matches(e.third, left, null, e.right.keyObjectClasses)) right = left;
                 if (isPrimaryMatrixConversion(left, e.right) && right == ValueType.primaryMatrix && matches(e.right, ValueType.primaryMatrix)) left = right;
                 if (isPrimaryMatrixConversion(right, e.third) && left == ValueType.primaryMatrix && matches(e.third, ValueType.primaryMatrix)) right = left;
                 if (isPrimaryArrayConversion(left, e.right) && right == ValueType.primaryArray && matches(e.right, ValueType.primaryArray)) left = right;

@@ -54,6 +54,7 @@ class Expression {
     string builtinCall;
     string emittedOverride;
     Program objectClass;
+    Program primaryMapKeyClass;
     Program[] keyObjectClasses;
     ValueType collectionConversionType;
     Program collectionConversionClass;

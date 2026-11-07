@@ -390,7 +390,10 @@ private string emitExprSingle(Expression e) {
     if (e.makeException) value = "new Z8Exception(z8_to_utf8(z8_string_required(" ~ value ~ ")))";
     if (e.convertExceptionObject) value = "z8_exception_from_object(" ~ value ~ ")";
     if (e.convertScalarPrimaryArray) value = "z8_primary_array_view(" ~ value ~ ")";
-    if (e.convertPrimaryMapValue) value = "z8_primary_map_view(" ~ value ~ ")";
+    if (e.convertPrimaryMapValue) {
+        if (e.primaryMapKeyClass !is null) value = "z8_primary_object_key_map_view!(" ~ e.primaryMapKeyClass.emittedName ~ ")(" ~ value ~ ")";
+        else value = "z8_primary_map_view(" ~ value ~ ")";
+    }
     if (e.convertToDate) value = "z8_date_from_ticks(" ~ value ~ ")";
     if (e.convertToBinary == ValueType.fileType) return "z8_file_to_binary(" ~ value ~ ")";
     if (e.convertToBinary == ValueType.stringType || e.convertToBinary == ValueType.nullableString) return "z8_binary_from_string(" ~ value ~ ")";
@@ -793,7 +796,7 @@ private string emitSimple(Statement s) {
     if (s.kind == StmtKind.expressionStmt) {
         auto e = s.expression;
         if (e.kind == ExprKind.memberCall && isMap(e.inferredType) &&
-            [ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.primaryType, ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(mapKeyType(e.inferredType)) &&
+            [ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.primaryType, ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType, ValueType.selfType].canFind(mapKeyType(e.inferredType)) &&
             (isScalarPrimaryArray(arrayOf(mapValueType(e.inferredType))) ||
              (mapValueType(e.inferredType) == ValueType.selfType && extendsBuiltinPrimary(e.objectClass)))) {
             if (e.token.text == "add" && e.arguments.length == 2)
@@ -811,7 +814,7 @@ private string emitSimple(Statement s) {
     if (s.filePathAssignment) return "z8_file_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.dateTickAssignment) return "z8_date_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.target.kind == ExprKind.index && isMap(s.target.inferredType) && s.assignmentOperator == "=" &&
-        [ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.primaryType, ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(mapKeyType(s.target.inferredType)) &&
+        [ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.primaryType, ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType, ValueType.selfType].canFind(mapKeyType(s.target.inferredType)) &&
         (isScalarPrimaryArray(arrayOf(mapValueType(s.target.inferredType))) ||
          (mapValueType(s.target.inferredType) == ValueType.selfType && extendsBuiltinPrimary(s.target.objectClass))))
         return "z8_map_add_discard(" ~ emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
