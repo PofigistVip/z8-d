@@ -218,6 +218,18 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
     if (object.primary !is null && !arguments.length) {
         if (name == "hashCode"w) return Z8EvalValue(true, z8_primary_box(z8_primary_hash(object.primary)), null, null);
         if (name == "toString"w) return Z8EvalValue(true, z8_primary_box(z8_string_new(z8_primary_to_string(object.primary))), null, null);
+        if (name == "get"w) {
+            auto value = object.primary;
+            if (value.kind == Z8PrimaryKind.boolean || value.kind == Z8PrimaryKind.guid) return Z8EvalValue(true, value, null, null);
+            if (value.kind == Z8PrimaryKind.datespan)
+                return Z8EvalValue(true, z8_primary_box(z8_datespan_milliseconds(value.datespanValue)), null, null);
+            if (value.kind == Z8PrimaryKind.date) {
+                auto source = z8_nonnull(value.dateValue);
+                auto copy = new Z8Date(source.value);
+                copy.explicitOffset = source.explicitOffset; copy.fullFirstWeek = source.fullFirstWeek;
+                return Z8EvalValue(true, z8_primary_box(copy), null, null);
+            }
+        }
     }
     if (object.primary !is null) {
         Z8EvalContext type;
