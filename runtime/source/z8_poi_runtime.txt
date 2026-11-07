@@ -17,6 +17,10 @@ interface IZ8PoiDocument {
     void close();
 }
 interface IZ8PoiProvider { IZ8PoiDocument open(const(ubyte)[] bytes); }
+/// Optional report mutations supported by the registered workbook provider.
+interface IZ8PoiReportWriter {
+    ubyte[] renameReportSheet(const(ubyte)[] input, uint index, wstring name);
+}
 /// The provider cannot read this workbook; try the built-in compatible reader.
 class Z8PoiUnsupportedWorkbook : Exception {
     this(string message) { super(message); }
@@ -349,7 +353,8 @@ private Z8PoiWorkbook z8_poi_parse(Z8Binary input) {
             if (document is null) throw new Exception("XLSX provider returned no document");
             scope(exit) document.close();
             Z8PoiXmlNode read(string xml) {
-                return (new Z8PoiXmlReader(z8_poi_xml_decode(cast(const(ubyte)[])xml))).parseDocument();
+                try return (new Z8PoiXmlReader(z8_poi_xml_decode(cast(const(ubyte)[])xml))).parseDocument();
+                catch (Exception error) throw new Z8PoiUnsupportedWorkbook(error.msg);
             }
             root = read(document.workbookXml());
             auto sharedXml = document.sharedStringsXml();

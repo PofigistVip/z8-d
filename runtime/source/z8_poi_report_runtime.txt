@@ -124,6 +124,13 @@ private ubyte[] z8_poi_report_rename_sheet(const(ubyte)[] input, Z8PoiWorkbook w
         if (current++ == index) { selected = item; break; }
     }
     if (selected is null) throw new Exception("invalid POI report sheet index");
+    IZ8PoiProvider provider;
+    synchronized (z8_poi_monitor) provider = z8_poi_provider;
+    auto writer = cast(IZ8PoiReportWriter)provider;
+    if (writer !is null) {
+        try return writer.renameReportSheet(input, cast(uint)index, name);
+        catch (Z8PoiUnsupportedWorkbook) { /* retain compatibility with uncommon workbook layouts */ }
+    }
     auto opening = "<"w ~ selected.name;
     foreach (key, value; selected.attributes) {
         if (z8_poi_xml_local(key) == "name"w) value = name;

@@ -231,10 +231,42 @@ void main(string[] args) {
     executable = temp / ("report.exe" if os.name == "nt" else "report")
     args = ["-I" + str(generated), *import_args(), *map(str, generated.rglob("*.d")),
             str(harness), str(runtime), "-of=" + str(executable)]
+    environment = os.environ.copy()
+    library_dir = os.environ.get("Z8_OPENXLSX_DIR")
+    if library_dir:
+        library_dir = Path(library_dir).resolve()
+        bridge = ROOT / "xlsx/source"
+        contents = harness.read_text(encoding="utf-8")
+        contents = contents.replace("import z8.runtime;", "import z8.runtime;\nimport z8.xlsx.poi : z8_openxlsx_configure;")
+        contents = contents.replace("void main(string[] args) {", '''class CountingProvider : IZ8PoiProvider, IZ8PoiReportWriter {
+    IZ8PoiProvider reader;
+    IZ8PoiReportWriter writer;
+    uint renames;
+    this(IZ8PoiProvider provider) { reader = provider; writer = cast(IZ8PoiReportWriter)provider; assert(writer !is null); }
+    IZ8PoiDocument open(const(ubyte)[] input) { return reader.open(input); }
+    ubyte[] renameReportSheet(const(ubyte)[] input, uint index, wstring name) {
+        auto result = writer.renameReportSheet(input, index, name);
+        ++renames; return result;
+    }
+}
+void main(string[] args) {
+    z8_openxlsx_configure();
+    auto counter = new CountingProvider(z8_poi_set_provider(null));
+    z8_poi_set_provider(counter);''')
+        contents = contents.replace("assert(database.begins == 25 && database.rollbacks == 25);",
+                                    "assert(database.begins == 25 && database.rollbacks == 25); assert(counter.renames >= 2);")
+        harness.write_text(contents, encoding="utf-8")
+        args.extend(["-I" + str(bridge), str(bridge / "z8/xlsx/openxlsx.d"), str(bridge / "z8/xlsx/poi.d")])
+        if os.name == "nt":
+            args.append(str(library_dir / "z8_openxlsx.lib"))
+            shutil.copy2(library_dir / "z8_openxlsx.dll", temp)
+        else:
+            args.extend(["-L-L" + str(library_dir), "-L-lz8_openxlsx"])
+            environment["LD_LIBRARY_PATH"] = str(library_dir) + os.pathsep + environment.get("LD_LIBRARY_PATH", "")
     response = temp / "dmd.rsp"
     response.write_text("\n".join('"' + arg.replace('\\', '/') + '"' for arg in args), encoding="utf-8")
     subprocess.run(["dmd", "@" + str(response)], cwd=temp, check=True)
-    subprocess.run([str(executable), str(application), str(working)], cwd=temp, check=True)
+    subprocess.run([str(executable), str(application), str(working)], cwd=temp, env=environment, check=True)
     namespace = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
     def columns(path):
         with zipfile.ZipFile(path) as archive:
