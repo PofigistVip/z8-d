@@ -80,19 +80,26 @@ public class CustomReport extends Report {
     virtual protected void prepare(guid id) {
         if (id != '00000000-0000-0000-0000-000000000001') throw "invalid report record";
     }
-    virtual protected file execute(guid id) { file result = name + "." + format; return result; }
+    virtual protected file execute(guid id) {
+        file result = name + "." + format; result.write("custom report"); return result;
+    }
 }
 ''', encoding="utf-8")
     (source / "UpdateJob.bl").write_text('''
 import org.zenframework.z8.base.Executable;
 import org.zenframework.z8.base.form.action.Parameter;
 import org.zenframework.z8.base.sql.Connection;
+import org.zenframework.z8.base.application.Application;
 public class UpdateJob extends Executable {
     Parameter amount = Parameter.create("amount", 1); Parameter fail = Parameter.create("fail", false); Parameter wait = Parameter.create("wait", false);
     parameters = {amount, fail, wait};
     virtual protected void execute(Parameter[] args) {
         Connection.get().execute("UPDATE \\"Sample\\" SET \\"CreatedAt\\" = COALESCE(\\"CreatedAt\\", 0) + " + ((int)amount).toString() + " WHERE \\"RecordId\\" = '00000000-0000-0000-0000-000000000002'");
-        progress(50); if ((bool)wait) Connection.get().execute("SELECT pg_sleep(0.4)");
+        progress(50);
+        if ((bool)wait) {
+            Connection.get().execute("SELECT pg_sleep(0.4)");
+            file output = "job-result.txt"; output.write("background job output"); Application.print(output);
+        }
         if ((bool)fail) throw "job failed"; info("job complete");
     }
 }
@@ -429,6 +436,17 @@ void main(string[] args) {
                     return json.loads(response.read())
                 finally:
                     conn.close()
+            def download(path, session, file_id, method="GET"):
+                client = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+                try:
+                    params = {"session": session}
+                    if file_id is not None:
+                        params["id"] = file_id
+                    client.request(method, path + "?&" + urlencode(params) + "&noCache")
+                    response = client.getresponse(); body = response.read()
+                    return response.status, dict(response.getheaders()), body
+                finally:
+                    client.close()
             result = request(request="MemoryQuery", action="meta")
             assert result["success"] and result["isQuery"] and result["readOnly"], result
             assert [field["name"] for field in result["columns"]] == ["recordId", "title"], result
@@ -631,6 +649,9 @@ void main(string[] args) {
             assert not result["success"], result
             result = request(action="report", id="exported", recordId="00000000-0000-0000-0000-000000000001", name="invoice", format="pdf")
             assert result["success"] and result["info"]["files"][0]["name"] == "invoice.pdf", result
+            report_path = "/" + quote(result["info"]["files"][0]["path"], safe="/")
+            assert download(report_path, "full", None)[::2] == (200, b"custom report")
+            assert download(report_path, "full2", None)[0] == 404
             result = request(action="report", link="otherJoin", query="missing", id="exported", recordId="00000000-0000-0000-0000-000000000001", name="invoice", format="pdf")
             assert result["success"] and result["info"]["files"][0]["name"] == "invoice.pdf", result
             for session in ("relation-denied", "target-denied"):
@@ -715,6 +736,11 @@ void main(string[] args) {
             else:
                 raise AssertionError("background job did not finish")
             assert result["worked"] == 50 and "job complete" in messages, result
+            files = result["info"]["files"]
+            assert len(files) == 1 and files[0]["name"] == "job-result.txt", result
+            job_path = "/" + quote(files[0]["path"], safe="/")
+            assert download(job_path, "full", None)[::2] == (200, b"background job output")
+            assert download(job_path, "full2", None)[0] == 404
             result = request(request="UpdateJob", action=None, job=job)
             assert result["done"] and result["worked"] == 100, result
             result = request(request="UpdateJob", action=None, parameters='{"amount":8,"fail":true}')
@@ -826,17 +852,6 @@ void main(string[] args) {
             assert len(metadata) == 1 and metadata[0]["name"] == "данные.txt" and metadata[0]["details"]["kind"] == "document", result
             first_id = metadata[0]["id"]
             download_path = "/" + quote(metadata[0]["path"], safe="/")
-            def download(path, session, file_id, method="GET"):
-                client = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
-                try:
-                    params = {"session": session}
-                    if file_id is not None:
-                        params["id"] = file_id
-                    client.request(method, path + "?&" + urlencode(params) + "&noCache")
-                    response = client.getresponse(); body = response.read()
-                    return response.status, dict(response.getheaders()), body
-                finally:
-                    client.close()
             status, headers, content = download(download_path, "full", first_id)
             assert status == 200 and content == bytes([0, 255, 65]), (status, headers, content)
             nested_target = "00000000-0000-0000-0000-000000000088"
