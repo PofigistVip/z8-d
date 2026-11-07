@@ -63,7 +63,7 @@ def page_control(cookie):
 
 
 class Fixture:
-    def __init__(self, tls_context=None, reject_tls=False):
+    def __init__(self, tls_context=None, reject_tls=False, bind_code=0):
         self.listener = socket.socket()
         self.listener.bind(("127.0.0.1", 0))
         self.listener.listen()
@@ -73,6 +73,7 @@ class Fixture:
         self.failure = None
         self.tls_context = tls_context
         self.reject_tls = reject_tls
+        self.bind_code = bind_code
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.thread.start()
 
@@ -90,7 +91,12 @@ class Fixture:
                 connection.settimeout(15)
                 page = 0
                 while True:
-                    message = recv_message(connection)
+                    try:
+                        message = recv_message(connection)
+                    except EOFError:
+                        if self.bind_code:
+                            break
+                        raise
                     _, mid, offset = read_tlv(message)
                     tag, operation, offset = read_tlv(message, offset)
                     message_id = tlv(2, mid)
@@ -99,7 +105,7 @@ class Fixture:
                         _, principal, pos = read_tlv(operation, pos)
                         _, password, _ = read_tlv(operation, pos)
                         self.events.append(("bind", principal, password))
-                        connection.sendall(tlv(0x30, message_id + tlv(0x61, result())))
+                        connection.sendall(tlv(0x30, message_id + tlv(0x61, result(self.bind_code))))
                     elif tag == 0x63:
                         _, base, pos = read_tlv(operation)
                         _, scope, pos = read_tlv(operation, pos)
@@ -157,6 +163,8 @@ void main(string[] args) {
                               "ldap.ssl.trusted"w: trusted ? "true"w : "false"w]);
     auto previous = z8_windows_ldap_configure(); auto configured = z8_ldap_set_provider(previous);
     auto url = (tls ? "ldaps://127.0.0.1:"w : "ldap://127.0.0.1:"w) ~ args[1].to!wstring;
+    if (args.length > 3 && args[2] == "failover")
+        url = " \tldap://127.0.0.1:"w ~ args[3].to!wstring ~ "  "w ~ url ~ "  "w;
     if (tls && !trusted) {
         bool rejected; try { configured.open(url, "cn=admin"w, "secret"w, "{}"w); } catch (Exception) { rejected = true; }
         assert(rejected); return;
@@ -203,6 +211,76 @@ void main(string[] args) {
         fixture.thread.join(20)
     if fixture.failure:
         raise fixture.failure
+    assert fixture.events == [("bind", b"cn=admin", b"secret"), ("search", b"dc=example", b""),
+                              ("search", b"dc=example", b"next"), ("unbind",)]
+    unavailable = socket.socket()
+    unavailable.bind(("127.0.0.1", 0))  # A reserved port without a listener.
+    try:
+        fixture = Fixture()
+        try:
+            subprocess.run([str(exe), str(fixture.port), "failover", str(unavailable.getsockname()[1])],
+                           cwd=temp, timeout=20, check=True)
+        finally:
+            fixture.thread.join(20)
+        if fixture.failure:
+            raise fixture.failure
+        assert fixture.events == [("bind", b"cn=admin", b"secret"), ("search", b"dc=example", b""),
+                                  ("search", b"dc=example", b"next"), ("unbind",)]
+        # Compare failover with the JNDI provider used by the Java LdapAPI.
+        if shutil.which("javac") and shutil.which("java"):
+            oracle = temp / "LdapFailoverOracle.java"
+            oracle.write_text('''import java.util.Hashtable;
+import javax.naming.Context;
+import javax.naming.directory.InitialDirContext;
+class LdapFailoverOracle {
+    public static void main(String[] args) throws Exception {
+        Hashtable<String, String> env = new Hashtable<>();
+        env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.ldap.LdapCtxFactory");
+        env.put(Context.PROVIDER_URL, "ldap://127.0.0.1:" + args[0] + " ldap://127.0.0.1:" + args[1]);
+        env.put(Context.SECURITY_AUTHENTICATION, "simple");
+        env.put(Context.SECURITY_PRINCIPAL, "cn=admin");
+        env.put(Context.SECURITY_CREDENTIALS, "secret");
+        env.put("com.sun.jndi.ldap.connect.timeout", "3000");
+        new InitialDirContext(env).close();
+    }
+}
+''', encoding="utf-8")
+            subprocess.run(["javac", "-source", "8", "-target", "8", str(oracle)], cwd=temp, check=True)
+            fixture = Fixture()
+            try:
+                subprocess.run(["java", "-cp", str(temp), "LdapFailoverOracle",
+                                str(unavailable.getsockname()[1]), str(fixture.port)], cwd=temp, timeout=20, check=True)
+            finally:
+                fixture.thread.join(20)
+            if fixture.failure:
+                raise fixture.failure
+            assert fixture.events == [("bind", b"cn=admin", b"secret"), ("unbind",)]
+            denied, fixture = Fixture(bind_code=49), Fixture()
+            try:
+                subprocess.run(["java", "-cp", str(temp), "LdapFailoverOracle", str(denied.port), str(fixture.port)],
+                               cwd=temp, timeout=20, check=True)
+            finally:
+                denied.thread.join(20)
+                fixture.thread.join(20)
+            if denied.failure:
+                raise denied.failure
+            if fixture.failure:
+                raise fixture.failure
+            assert denied.events[0] == ("bind", b"cn=admin", b"secret")
+            assert fixture.events == [("bind", b"cn=admin", b"secret"), ("unbind",)]
+    finally:
+        unavailable.close()
+    denied, fixture = Fixture(bind_code=49), Fixture()
+    try:
+        subprocess.run([str(exe), str(fixture.port), "failover", str(denied.port)], cwd=temp, timeout=20, check=True)
+    finally:
+        denied.thread.join(20)
+        fixture.thread.join(20)
+    if denied.failure:
+        raise denied.failure
+    if fixture.failure:
+        raise fixture.failure
+    assert denied.events[0] == ("bind", b"cn=admin", b"secret")
     assert fixture.events == [("bind", b"cn=admin", b"secret"), ("search", b"dc=example", b""),
                               ("search", b"dc=example", b"next"), ("unbind",)]
     openssl = shutil.which("openssl")

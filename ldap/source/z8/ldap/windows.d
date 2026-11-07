@@ -76,6 +76,24 @@ class Z8WindowsLdapTransport : IZ8LdapTransport {
         this.timeoutMilliseconds = timeoutMilliseconds; this.sslTrusted = sslTrusted;
     }
     IZ8LdapDirectory connect(wstring url, wstring principal, wstring credentials) {
+        // JNDI accepts a whitespace-separated list of provider URLs and
+        // proceeds to the next server when a connection or bind fails.
+        bool whitespace(wchar c) { return c == ' ' || c == '\t' || c == '\r' || c == '\n'; }
+        size_t start;
+        Exception last;
+        while (start < url.length) {
+            while (start < url.length && whitespace(url[start])) ++start;
+            if (start == url.length) break;
+            size_t end = start;
+            while (end < url.length && !whitespace(url[end])) ++end;
+            try { return connectOne(url[start .. end], principal, credentials); }
+            catch (Exception error) { last = error; }
+            start = end;
+        }
+        if (last !is null) throw last;
+        throw new Exception("Expected an ldap:// or ldaps:// URL");
+    }
+    private IZ8LdapDirectory connectOne(wstring url, wstring principal, wstring credentials) {
         auto address = parseAddress(url);
         auto host = terminated(address.host);
         auto handle = address.secure ? ldap_sslinitW(host.ptr, address.port, 1) : ldap_initW(host.ptr, address.port);
@@ -88,7 +106,7 @@ class Z8WindowsLdapTransport : IZ8LdapTransport {
         LDAP_TIMEVAL timeout;
         timeout.tv_sec = cast(int)(timeoutMilliseconds / 1000);
         timeout.tv_usec = cast(int)((timeoutMilliseconds % 1000) * 1000);
-        check(ldap_connect(handle, &timeout), "connect");
+        check(ldap_connect(handle, timeoutMilliseconds ? &timeout : null), "connect");
         auto user = terminated(principal), password = terminated(credentials);
         scope(exit) password[] = '\0';
         check(ldap_simple_bind_sW(handle, user.ptr, password.ptr), "bind");
