@@ -1,0 +1,110 @@
+// Rendering of the system TablesReport's original ODT template. This is a
+// deliberately limited implementation of the two loops used by Tables.odt,
+// not a general FreeMarker or ODT template engine.
+struct Z8TablesReportField {
+    wstring name, type, description;
+}
+struct Z8TablesReportTable {
+    wstring name, classId, description;
+    Z8TablesReportField[] fields;
+}
+
+private wstring z8_tables_report_xml_text(wstring value) {
+    wchar[] result;
+    foreach (wchar c; value) {
+        if ((c < 0x20 && c != '\t' && c != '\n' && c != '\r') || c == 0xFFFE || c == 0xFFFF)
+            throw new Exception("invalid XML character in table report value");
+        switch (c) {
+            case '&': result ~= "&amp;"w; break;
+            case '<': result ~= "&lt;"w; break;
+            case '>': result ~= "&gt;"w; break;
+            case '\n': result ~= "<text:line-break/>"w; break;
+            default: result ~= c; break;
+        }
+    }
+    return result.length ? result.idup : ""w;
+}
+
+private wstring z8_tables_report_substitute(wstring pattern, Z8TablesReportTable table,
+                                            Z8TablesReportField field, size_t sequence) {
+    import std.string : indexOf;
+    enum inputStart = `<text:text-input text:description="jooscript">`w;
+    enum inputEnd = `</text:text-input>`w;
+    enum scriptStart = `<text:script script:language="jooscript">`w;
+    enum scriptEnd = `</text:script>`w;
+    wstring[] tokens = [inputStart ~ "${table.name}"w ~ inputEnd,
+        inputStart ~ "${table.classId}"w ~ inputEnd, inputStart ~ "${table.description}"w ~ inputEnd,
+        scriptStart ~ "${field.sequence}"w ~ scriptEnd, inputStart ~ "${field.name}"w ~ inputEnd,
+        inputStart ~ "${field.type}"w ~ inputEnd, inputStart ~ "${field.description}"w ~ inputEnd];
+    wstring[] values = [table.name, table.classId, table.description, sequence.to!wstring,
+        field.name, field.type, field.description];
+    wstring result;
+    while (pattern.length) {
+        ptrdiff_t first = -1; size_t selected;
+        foreach (index, token; tokens) {
+            auto found = pattern.indexOf(token);
+            if (found >= 0 && (first < 0 || found < first)) { first = found; selected = index; }
+        }
+        if (first < 0) return result ~ pattern;
+        result ~= pattern[0 .. cast(size_t)first] ~ z8_tables_report_xml_text(values[selected]);
+        pattern = pattern[cast(size_t)first + tokens[selected].length .. $];
+    }
+    return result;
+}
+
+/// Render the original Tables.odt layout, preserving the other ODT entries.
+ubyte[] z8_tables_report_render(const(ubyte)[] source, Z8TablesReportTable[] tables) {
+    import std.algorithm.searching : canFind;
+    import std.string : indexOf, lastIndexOf, replace;
+    import std.zip : ZipArchive, CompressionMethod;
+    auto archive = new ZipArchive(cast(ubyte[])source.dup);
+    auto mime = "mimetype" in archive.directory;
+    auto content = "content.xml" in archive.directory;
+    if (mime is null || content is null || (*mime).index != 0 || (*mime).compressionMethod != CompressionMethod.none ||
+        cast(string)archive.expand(*mime) != "application/vnd.oasis.opendocument.text")
+        throw new Exception("invalid TablesReport ODT template");
+    auto xml = (cast(string)archive.expand(*content)).to!wstring;
+    enum open = `<text:script script:language="jooscript">@text:p`w ~ "\n"w ~
+        `[#list tables as table]</text:script>`w;
+    enum close = `<text:script script:language="jooscript">@/text:p`w ~ "\n"w ~
+        `[/#list]`w ~ "\n"w ~ `</text:script>`w;
+    enum inner = `<text:script script:language="jooscript">@table:table-row`w ~ "\n"w ~
+        `[#list table.fields as field]`w ~ "\n"w ~ `@/table:table-row`w ~ "\n"w ~
+        `[/#list]</text:script>`w;
+    auto openAt = xml.indexOf(open), closeAt = xml.indexOf(close);
+    if (openAt < 0 || closeAt <= openAt || xml[cast(size_t)openAt + open.length .. $].canFind(open) ||
+        xml[cast(size_t)closeAt + close.length .. $].canFind(close))
+        throw new Exception("unsupported TablesReport ODT template");
+    auto first = xml[0 .. cast(size_t)openAt].lastIndexOf("<text:p "w);
+    auto closeEnd = xml[cast(size_t)closeAt + close.length .. $].indexOf("</text:p>"w);
+    if (first < 0 || closeEnd < 0) throw new Exception("invalid TablesReport table loop");
+    auto last = cast(size_t)closeAt + close.length + cast(size_t)closeEnd + "</text:p>".length;
+    auto block = xml[cast(size_t)first .. last].replace(open, ""w).replace(close, ""w);
+    auto innerAt = block.indexOf(inner);
+    if (innerAt < 0 || block[cast(size_t)innerAt + inner.length .. $].canFind(inner))
+        throw new Exception("unsupported TablesReport field loop");
+    auto checked = z8_tables_report_substitute(block.replace(inner, ""w), Z8TablesReportTable.init,
+        Z8TablesReportField.init, 0);
+    if (checked.canFind("jooscript"w) || checked.canFind("[#"w) || checked.canFind("${"w))
+        throw new Exception("unsupported TablesReport template expression");
+    auto rowStart = block[0 .. cast(size_t)innerAt].lastIndexOf("<table:table-row"w);
+    auto rowEnd = block[cast(size_t)innerAt + inner.length .. $].indexOf("</table:table-row>"w);
+    if (rowStart < 0 || rowEnd < 0) throw new Exception("invalid TablesReport field row");
+    auto rowLast = cast(size_t)innerAt + inner.length + cast(size_t)rowEnd + "</table:table-row>".length;
+    auto row = block[cast(size_t)rowStart .. rowLast].replace(inner, ""w);
+    wstring rendered;
+    foreach (table; tables) {
+        rendered ~= z8_tables_report_substitute(block[0 .. cast(size_t)rowStart], table, Z8TablesReportField.init, 0);
+        foreach (index, field; table.fields)
+            rendered ~= z8_tables_report_substitute(row, table, field, index + 1);
+        rendered ~= z8_tables_report_substitute(block[rowLast .. $], table, Z8TablesReportField.init, 0);
+    }
+    (*content).expandedData = cast(ubyte[])(xml[0 .. cast(size_t)first] ~ rendered ~ xml[last .. $]).to!string.dup;
+    auto output = new ZipArchive(); output.comment = archive.comment;
+    foreach (entry; archive.directory.byValue) {
+        if (entry !is *content) entry.expandedData = archive.expand(entry);
+        entry.flags &= cast(ushort)~8;
+        output.addMember(entry);
+    }
+    return cast(ubyte[])output.build();
+}
