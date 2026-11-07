@@ -321,17 +321,25 @@ class Checker {
         return isScalarPrimaryArray(arrayOf(mapValueType(actual))) ||
             (mapValueType(actual) == ValueType.selfType && extendsBuiltinPrimary(e.objectClass));
     }
-    private bool isPrimaryNestedMapConversion(ValueType actual, ValueType expected, Expression e) {
-        return isMap(actual) && isMap(expected) && [ValueType.primaryType, ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType,
-            ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(mapKeyType(actual)) &&
-            mapKeyType(expected) == mapKeyType(actual) && mapValueType(expected) == ValueType.primaryArray &&
-            isPrimaryArrayConversion(mapValueType(actual), e);
+    private bool isPrimaryNestedMapConversion(ValueType actual, ValueType expected, Expression e, Program[] expectedKeys) {
+        if (!isMap(actual) || !isMap(expected) || mapKeyType(actual) != mapKeyType(expected) || mapValueType(expected) != ValueType.primaryArray) return false;
+        auto key = mapKeyType(actual);
+        if (key == ValueType.selfType) {
+            if (!e.keyObjectClasses.length || !expectedKeys.length ||
+                !isAssignable(outerMapKeyClass(actual, e.keyObjectClasses), outerMapKeyClass(expected, expectedKeys))) return false;
+        } else if (![ValueType.primaryType, ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType,
+                     ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(key)) return false;
+        return isPrimaryArrayConversion(mapValueType(actual), e);
     }
     private bool matches(Expression e, ValueType expected, Program expectedClass = null, Program[] expectedKeyClasses = null) {
         if (e.kind == ExprKind.arrayLiteral && hasObjectClass(expected)) e.objectClass = expectedClass;
         if (e.kind == ExprKind.arrayLiteral && hasMapKeyClass(expected)) e.keyObjectClasses = expectedKeyClasses;
         auto actual = typeOf(e, expected);
-        if (isPrimaryNestedMapConversion(actual, expected, e)) { e.convertPrimaryNestedMap = true; return true; }
+        if (isPrimaryNestedMapConversion(actual, expected, e, expectedKeyClasses)) {
+            e.convertPrimaryNestedMap = true;
+            e.primaryNestedMapKeyClass = mapKeyType(actual) == ValueType.selfType ? outerMapKeyClass(expected, expectedKeyClasses) : null;
+            return true;
+        }
         if (isPrimaryMapBothConversion(actual, expected, e)) {
             e.convertPrimaryMapKey = true; e.convertPrimaryMapValue = true; e.primaryMapKeyClass = null;
             e.primaryMapKeyTargetType = ValueType.voidType; e.primaryMapKeyTargetClass = null; e.primaryMapKeyTargetKeys = null;
@@ -565,7 +573,7 @@ class Checker {
                         }
                         if (hasMapKeyClass(actual) && e.arguments[i].keyObjectClasses != resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name)) applicable = false;
                     }
-                } else if (isPrimaryNestedMapConversion(actual, p.type, e.arguments[i]) || isPrimaryMapBothConversion(actual, p.type, e.arguments[i]) || isPrimaryMapKeyConversion(actual, p.type, e.arguments[i], hasObjectClass(p.type) ? resolveClass(candidate.owner, p.objectName, p.name) : null,
+                } else if (isPrimaryNestedMapConversion(actual, p.type, e.arguments[i], hasMapKeyClass(p.type) ? resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name) : null) || isPrimaryMapBothConversion(actual, p.type, e.arguments[i]) || isPrimaryMapKeyConversion(actual, p.type, e.arguments[i], hasObjectClass(p.type) ? resolveClass(candidate.owner, p.objectName, p.name) : null,
                             hasMapKeyClass(p.type) ? resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name) : null) || isPrimaryMapValueConversion(actual, p.type, e.arguments[i], hasMapKeyClass(p.type) ? resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name) : null) ||
                            (isPrimaryArrayConversion(actual, e.arguments[i]) && p.type == ValueType.primaryArray) ||
                            (isPrimaryMatrixConversion(actual, e.arguments[i]) && p.type == ValueType.primaryMatrix)) {
@@ -2634,8 +2642,8 @@ class Checker {
                     left = ValueType.primaryType;
                 if (right != ValueType.primaryType && left == ValueType.primaryType && matches(e.third, ValueType.primaryType))
                     right = ValueType.primaryType;
-                if (isPrimaryNestedMapConversion(left, right, e.right) && matches(e.right, right)) left = right;
-                if (isPrimaryNestedMapConversion(right, left, e.third) && matches(e.third, left)) right = left;
+                if (isPrimaryNestedMapConversion(left, right, e.right, e.third.keyObjectClasses) && matches(e.right, right, null, e.third.keyObjectClasses)) left = right;
+                if (isPrimaryNestedMapConversion(right, left, e.third, e.right.keyObjectClasses) && matches(e.third, left, null, e.right.keyObjectClasses)) right = left;
                 if (isPrimaryMapBothConversion(left, right, e.right) && matches(e.right, right)) left = right;
                 if (isPrimaryMapBothConversion(right, left, e.third) && matches(e.third, left)) right = left;
                 if (isPrimaryMapKeyConversion(left, right, e.right, e.third.objectClass, e.third.keyObjectClasses) && matches(e.right, right, e.third.objectClass, e.third.keyObjectClasses)) left = right;

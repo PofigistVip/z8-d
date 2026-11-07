@@ -394,7 +394,10 @@ private string emitExprSingle(Expression e) {
     if (e.makeException) value = "new Z8Exception(z8_to_utf8(z8_string_required(" ~ value ~ ")))";
     if (e.convertExceptionObject) value = "z8_exception_from_object(" ~ value ~ ")";
     if (e.convertScalarPrimaryArray) value = "z8_primary_array_view(" ~ value ~ ")";
-    if (e.convertPrimaryNestedMap) value = "z8_primary_nested_map_view(" ~ value ~ ")";
+    if (e.convertPrimaryNestedMap) {
+        if (e.primaryNestedMapKeyClass !is null) value = "z8_primary_nested_object_key_map_view!(" ~ e.primaryNestedMapKeyClass.emittedName ~ ")(" ~ value ~ ")";
+        else value = "z8_primary_nested_map_view(" ~ value ~ ")";
+    }
     if (e.convertPrimaryMapKey) {
         value = "z8_primary_key_map_view(" ~ value ~ ")";
         if (e.primaryMapKeyTargetType != ValueType.voidType)

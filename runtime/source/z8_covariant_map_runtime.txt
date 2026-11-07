@@ -292,3 +292,19 @@ if ((is(K == Z8Date) || is(K == Z8Datespan) || is(K == Z8Binary) || is(K == Z8Ge
     if (values is null) return null;
     auto result = new Z8ReferenceKeyMap!(K, Z8Array!Z8Primary)(); result.entries.nestedData = values.data.entries; return result;
 }
+
+Z8CovariantMap!(To, Z8Array!Z8Primary, Z8ReferenceKeyMap!(Z8Object, Z8Array!Z8Primary), true, false)
+z8_primary_nested_object_key_map_view(To, From, T)(
+    Z8CovariantMap!(From, Z8Array!T, Z8ReferenceKeyMap!(Z8Object, Z8Array!T), true, false) values)
+if (is(To : Z8Object) && is(From : Z8Object) && Z8PrimaryKeyMap!(Z8Array!T).shareNestedPrimary) {
+    if (values is null) return null;
+    return new Z8CovariantMap!(To, Z8Array!Z8Primary, Z8ReferenceKeyMap!(Z8Object, Z8Array!Z8Primary), true, false)(z8_primary_nested_map_view(values.data));
+}
+Z8CovariantMap!(To, Z8Array!Z8Primary, Z8ReferenceKeyMap!(Z8Object, Z8Array!Z8Primary), true, false)
+z8_primary_nested_object_key_map_view(To, From, V)(
+    Z8CovariantMap!(From, Z8ObjectArray!V, Z8ReferenceKeyMap!(Z8Object, Object), true, true) values)
+if (is(To : Z8Object) && is(From : Z8Object) && is(V : Z8Object)) {
+    if (values is null) return null;
+    auto data = new Z8ReferenceKeyMap!(Z8Object, Z8Array!Z8Primary)(); data.entries.nestedData = values.data.entries;
+    return new Z8CovariantMap!(To, Z8Array!Z8Primary, Z8ReferenceKeyMap!(Z8Object, Z8Array!Z8Primary), true, false)(data);
+}

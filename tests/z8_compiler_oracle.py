@@ -260,6 +260,11 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         name_cases.append((True, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
     name_cases.append((True, {"NameA": 'public class NameA { static void f() { NameA[string] source; NameA[primary] values = source; } }'}))
     name_cases.append((True, {"NameA": 'public class NameA { static void f() { int[][string] source; int[][primary] values = source; } }'}))
+    for declaration, accepted in (("int[][ChildKey] source; primary[][BaseKey] values = source;", True),
+                                  ("int[][BaseKey] source; primary[][ChildKey] values = source;", False)):
+        name_cases.append((accepted, {"BaseKey": 'public class BaseKey {}', "ChildKey": 'public class ChildKey extends BaseKey {}',
+                                     "NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
+    name_cases.append((True, {"BaseKey": 'public class BaseKey {}', "NameA": 'public class NameA extends primary { public void operator = (NameA value) {} static void f() { NameA[][BaseKey] source; primary[][BaseKey] values = source; } }'}))
     for key in ("guid", "date", "datespan", "binary", "geometry", "file"):
         for kind in ("int", "string"):
             declaration = kind + '[][' + key + '] source; primary[][' + key + '] values = source; values.add(source);'

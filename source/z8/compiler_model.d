@@ -55,6 +55,7 @@ class Expression {
     string emittedOverride;
     Program objectClass;
     Program primaryMapKeyClass;
+    Program primaryNestedMapKeyClass;
     ValueType primaryMapKeyTargetType;
     Program primaryMapKeyTargetClass;
     Program[] primaryMapKeyTargetKeys;
