@@ -327,8 +327,12 @@ class Checker {
         if (key == ValueType.selfType) {
             if (!e.keyObjectClasses.length || !expectedKeys.length ||
                 !isAssignable(outerMapKeyClass(actual, e.keyObjectClasses), outerMapKeyClass(expected, expectedKeys))) return false;
-        } else if (![ValueType.primaryType, ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType,
-                     ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(key)) return false;
+        } else if (key == ValueType.enumType) {
+            if (!e.keyObjectClasses.length || !expectedKeys.length ||
+                outerMapKeyClass(actual, e.keyObjectClasses) !is outerMapKeyClass(expected, expectedKeys)) return false;
+        } else if (!isSqlType(key) && ![ValueType.primaryType, ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType,
+                     ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType,
+                     ValueType.exceptionType, ValueType.encodingType, ValueType.ftsType, ValueType.ftsQueryType].canFind(key)) return false;
         return isPrimaryArrayConversion(mapValueType(actual), e);
     }
     private bool matches(Expression e, ValueType expected, Program expectedClass = null, Program[] expectedKeyClasses = null) {
