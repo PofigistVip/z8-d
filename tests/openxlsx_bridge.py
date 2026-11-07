@@ -53,7 +53,8 @@ with tempfile.TemporaryDirectory() as directory:
     saved_again = temp / "saved-again.xlsx"
     styled_saved = temp / "styled-saved.xlsx"
     removed_saved = temp / "removed.xlsx"
-    subprocess.run([str(executable), str(workbook), str(saved), str(saved_again), str(styled), str(styled_saved), str(removed_saved)], check=True, env=environment)
+    cloned_saved = temp / "cloned.xlsx"
+    subprocess.run([str(executable), str(workbook), str(saved), str(saved_again), str(styled), str(styled_saved), str(removed_saved), str(cloned_saved)], check=True, env=environment)
     with zipfile.ZipFile(saved) as archive:
         assert archive.testzip() is None
         assert archive.read("custom/preserved.txt") == b"An unrelated package entry"
@@ -115,11 +116,19 @@ class SavedWorkbookOracle {
         throw new AssertionError("Removed cells or retained row differ from POI");
       if (book.getSheetAt(0).getRow(9) != null) throw new AssertionError("Missing row was created");
     }
+    try (Workbook book = new XSSFWorkbook(new FileInputStream(args[6]))) {
+      if (book.getNumberOfSheets() != 4 || !book.getSheetName(3).equals("Копия") ||
+          book.getSheetAt(0).getRow(5).getCell(0).getNumericCellValue() != 7 ||
+          book.getSheetAt(3).getRow(5).getCell(0).getNumericCellValue() != 9 ||
+          !book.getSheetAt(3).getRow(0).getCell(6).getCellFormula().equals("B1*2") ||
+          book.getSheetAt(3).getRow(0).getCell(6).getNumericCellValue() != 84)
+        throw new AssertionError("Cloned sheet differs from the original");
+    }
   }
 }''', encoding="utf-8")
         classpath = os.pathsep.join(map(str, jars))
         subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8", "-cp", classpath, str(oracle)], cwd=temp, check=True)
-        subprocess.run(["java", "-cp", str(temp) + os.pathsep + classpath, "SavedWorkbookOracle", str(saved), str(saved_again), str(workbook), str(styled), str(styled_saved), str(removed_saved)], cwd=temp, check=True)
+        subprocess.run(["java", "-cp", str(temp) + os.pathsep + classpath, "SavedWorkbookOracle", str(saved), str(saved_again), str(workbook), str(styled), str(styled_saved), str(removed_saved), str(cloned_saved)], cwd=temp, check=True)
     else:
         print("POI output verification skipped: original POI jars or Java unavailable")
 print("OpenXLSX bridge: OK")

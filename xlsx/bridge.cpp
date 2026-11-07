@@ -191,7 +191,7 @@ void copyString(const std::string& value, char* buffer, size_t capacity, size_t*
 }
 
 Z8_EXPORT const char* z8_xlsx_error() noexcept { return error.c_str(); }
-Z8_EXPORT unsigned z8_xlsx_abi_version() noexcept { return 5; }
+Z8_EXPORT unsigned z8_xlsx_abi_version() noexcept { return 6; }
 
 Z8_EXPORT int z8_xlsx_open(const char* path, void** result) noexcept {
     return protect([&] {
@@ -315,6 +315,16 @@ Z8_EXPORT int z8_xlsx_rename_sheet(void* handle, unsigned sheet, const char* nam
         if (!name) throw std::invalid_argument("missing sheet name");
         auto& doc = document(handle);
         doc.workbook().worksheet(sheetName(doc, sheet)).setName(name);
+    });
+}
+
+Z8_EXPORT int z8_xlsx_clone_sheet(void* handle, unsigned sheet, const char* name) noexcept {
+    return protect([&] {
+        if (!name) throw std::invalid_argument("missing sheet name");
+        auto& doc = document(handle);
+        auto existing = sheetName(doc, sheet);
+        (void)doc.workbook().worksheet(existing);
+        doc.workbook().cloneSheet(existing, name);
     });
 }
 

@@ -20,6 +20,7 @@ private extern(C) {
     int z8_xlsx_row_exists(void*, uint, uint, int*);
     int z8_xlsx_row_cell_count(void*, uint, uint, uint*);
     int z8_xlsx_rename_sheet(void*, uint, const(char)*);
+    int z8_xlsx_clone_sheet(void*, uint, const(char)*);
     int z8_xlsx_set_column_hidden(void*, uint, uint, int);
     int z8_xlsx_set_cell_text(void*, uint, uint, uint, const(char)*, size_t, int);
     int z8_xlsx_set_cell_number(void*, uint, uint, uint, double);
@@ -42,7 +43,7 @@ private void check(int result) {
 }
 
 private void checkAbi() {
-    if (z8_xlsx_abi_version() != 5) throw new Exception("incompatible OpenXLSX bridge; rebuild xlsx");
+    if (z8_xlsx_abi_version() != 6) throw new Exception("incompatible OpenXLSX bridge; rebuild xlsx");
 }
 
 class Workbook {
@@ -133,6 +134,12 @@ class Workbook {
     void renameSheet(uint sheet, string name) {
         if (name.canFind('\0')) throw new Exception("sheet name contains NUL");
         check(z8_xlsx_rename_sheet(handle, sheet, name.toStringz));
+    }
+
+    /// Clone a worksheet. OpenXLSX does not copy its related drawing/table parts.
+    void cloneSheet(uint sheet, string name) {
+        if (name.canFind('\0')) throw new Exception("sheet name contains NUL");
+        check(z8_xlsx_clone_sheet(handle, sheet, name.toStringz));
     }
 
     void setColumnHidden(uint sheet, uint column, bool hidden) {

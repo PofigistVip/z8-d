@@ -122,6 +122,16 @@ void main(string[] args) {
     assert(copied.cellFormula(0, 3, 6) == "B1*2");
     assert(copied.cellNumber(2, 4, 1) == 22 && copied.sheetXml(2).canFind("A5:B5"));
     copied.close();
+    auto cloned = new Workbook(saved);
+    cloned.setNumber(0, 5, 0, 7);
+    cloned.cloneSheet(0, "Копия");
+    assert(cloned.sheetCount() == 4 && cloned.sheetName(3) == "Копия" && cloned.cellNumber(3, 5, 0) == 7);
+    assert(cloned.cellFormula(3, 0, 6) == "B1*2" && cloned.cellNumber(3, 0, 6) == 84);
+    cloned.setNumber(3, 5, 0, 9); assert(cloned.cellNumber(0, 5, 0) == 7);
+    assertThrown!Exception(cloned.cloneSheet(0, "Копия"));
+    assertThrown!Exception(cloned.cloneSheet(0, "invalid\0name"));
+    assertThrown!Exception(cloned.cloneSheet(4, "Missing"));
+    write(args[7], cloned.save()); cloned.close();
     reopened.close();
     memoryBook.setColumnHidden(0, 3, false);
     auto savedAgain = memoryBook.save();
