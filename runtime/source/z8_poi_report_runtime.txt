@@ -45,7 +45,7 @@ private bool z8_poi_report_clone_safe(ZipArchive archive, Z8PoiWorkbook workbook
             if (!name.startsWith("xl/worksheets/") || !name.endsWith(".xml")) continue;
             auto worksheet = z8_poi_read_xml(archive, name);
             foreach (child; worksheet.children)
-                if (!["sheetPr"w, "dimension"w, "sheetViews"w, "sheetFormatPr"w, "cols"w, "sheetData"w, "mergeCells"w,
+                if (!["sheetPr"w, "dimension"w, "sheetViews"w, "sheetFormatPr"w, "cols"w, "sheetData"w, "autoFilter"w, "mergeCells"w,
                       "printOptions"w, "pageMargins"w, "pageSetup"w, "headerFooter"w, "rowBreaks"w, "colBreaks"w].canFind(z8_poi_xml_local(child.name))) return false;
         }
     } catch (Exception) return false;
