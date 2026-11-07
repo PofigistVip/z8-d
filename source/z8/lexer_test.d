@@ -27,13 +27,14 @@ unittest {
 }
 
 unittest {
-    auto tokens = scan("class e\u0301 { int a\u203Fb; int \u0301mark; int \u0661digit; int €price\u200C; int hidden\u0085part; }");
+    auto tokens = scan("class e\u0301 { int a\u203Fb; int \u0301mark; int \u0661digit; int €price\u200C; int hidden\u0085part; int del\u007Fpart; }");
     assert(tokens[1].text == "e\u0301");
     assert(tokens[4].text == "a\u203Fb");
     assert(tokens[7].text == "\u0301mark");
     assert(tokens[10].text == "\u0661digit");
     assert(tokens[13].text == "€price\u200C");
     assert(tokens[16].text == "hidden\u0085part");
+    assert(tokens[19].text == "del\u007Fpart");
     rejects("a\u00B2"); // Java identifier parts exclude the No category.
     rejects("price$"); // Z8 excludes the dollar sign even though Java accepts it.
 }

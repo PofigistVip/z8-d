@@ -55,9 +55,10 @@ private bool newline(wchar c) { return c == '\r' || c == '\n'; }
 // Java accepts currency and format characters as identifier parts as well;
 // the D emitter encodes names containing these characters.
 private bool identifierChar(wchar c) {
-    return c != '$' && (c == '_' || (c in unicode.L) || (c in unicode.Nl) || (c in unicode.Nd) ||
+    if (c < 128) return c == 0x7F || c == '_' || digit(c) || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+    return (c in unicode.L) || (c in unicode.Nl) || (c in unicode.Nd) ||
         (c in unicode.Mn) || (c in unicode.Mc) || (c in unicode.Pc) ||
-        (c in unicode.Sc) || (c in unicode.Cf) || (c >= 0x7F && c <= 0x9F));
+        (c in unicode.Sc) || (c in unicode.Cf) || (c >= 0x80 && c <= 0x9F);
 }
 
 class Lexer {
