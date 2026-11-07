@@ -585,6 +585,10 @@ class Parser {
             auto op = take(); auto p = precedence(op.text);
             auto node = new Expression(ExprKind.binary, op);
             node.left = left; node.right = expression(p + 1); left = node;
+            // The original relational and equality productions allow one
+            // operator each; parentheses start a fresh expression.
+            if ((p == 6 || p == 7) && precedence(current.text) == p)
+                error("chained comparison requires parentheses");
         }
         if (minPrecedence == 1 && current.text == "?") {
             auto node = new Expression(ExprKind.conditional, take());

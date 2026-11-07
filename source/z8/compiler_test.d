@@ -22,6 +22,15 @@ unittest {
     rejects(q{auto auto class A {}});
     rejects(q{static static enum A { One }});
     rejects(q{virtual virtual class A {}});
+    rejects(q{class A { bool f() { return true == false == true; } }});
+    rejects(q{class A { bool f() { return true != false == true; } }});
+    bool chainedRelation;
+    try { (new Parser(q{class A { bool f() { return 1 < 2 < 3; } }})).parse(); }
+    catch (CompileException) { chainedRelation = true; }
+    assert(chainedRelation);
+    compile(q{class A { bool f() { return (true == false) == true; } }});
+    compile(q{class A { bool f() { return true == (false == true); } }});
+    compile(q{class A { bool f() { return (1 < 2) == (3 < 4); } }});
     rejects(q{[flag] [flag] class A {}});
     rejects(q{final public class A {}});
     rejects(q{[request "true"] class A {}});
