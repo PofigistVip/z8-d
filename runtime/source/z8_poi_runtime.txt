@@ -7,6 +7,22 @@ private enum z8_poi_sheet_name = "org.zenframework.z8.server.base.poi.Sheet"w;
 private enum z8_poi_row_name = "org.zenframework.z8.server.base.poi.Row"w;
 private enum z8_poi_cell_name = "org.zenframework.z8.server.base.poi.Cell"w;
 
+// Optional document provider. Each open call returns an independent document.
+// XML is UTF-8 and each sheet must be in workbook order.
+interface IZ8PoiDocument {
+    string workbookXml();
+    string sharedStringsXml();
+    uint sheetCount();
+    string sheetXml(uint index);
+    void close();
+}
+interface IZ8PoiProvider { IZ8PoiDocument open(const(ubyte)[] bytes); }
+private __gshared IZ8PoiProvider z8_poi_provider;
+private __gshared Object z8_poi_monitor;
+IZ8PoiProvider z8_poi_set_provider(IZ8PoiProvider provider) {
+    synchronized (z8_poi_monitor) { auto previous = z8_poi_provider; z8_poi_provider = provider; return previous; }
+}
+
 private class Z8PoiXmlNode {
     wstring name, text;
     size_t start, startEnd, endStart, end;
@@ -317,37 +333,62 @@ private Z8PoiWorkbook z8_poi_parse(Z8Binary input) {
     import std.zip : ZipArchive;
     import std.algorithm.searching : endsWith;
     import std.string : lastIndexOf;
-    auto archive = new ZipArchive(z8_binary_read_all(z8_nonnull(input)));
-    auto packageRels = z8_poi_read_xml(archive, "_rels/.rels");
-    string workbookPath;
-    foreach (rel; packageRels.children) if (z8_poi_xml_local(rel.name) == "Relationship"w &&
-        rel.attr("TargetMode"w) != "External"w && rel.attr("Type"w).endsWith("/officeDocument"w))
-        workbookPath = z8_poi_resolve_path("", rel.attr("Target"w));
-    if (!workbookPath.length) throw new Exception("missing XLSX workbook relationship");
-    auto slash = workbookPath.lastIndexOf('/');
-    auto base = slash < 0 ? "" : workbookPath[0 .. slash + 1];
-    auto filename = slash < 0 ? workbookPath : workbookPath[slash + 1 .. $];
-    auto root = z8_poi_read_xml(archive, workbookPath);
-    auto rels = z8_poi_read_xml(archive, base ~ "_rels/" ~ filename ~ ".rels");
-    wstring[wstring] targets;
-    wstring sharedTarget;
-    foreach (rel; rels.children) if (z8_poi_xml_local(rel.name) == "Relationship"w && rel.attr("TargetMode"w) != "External"w) {
-        auto kind = rel.attr("Type"w);
-        if (kind.endsWith("/worksheet"w)) targets[rel.attr("Id"w)] = rel.attr("Target"w);
-        else if (kind.endsWith("/sharedStrings"w)) sharedTarget = rel.attr("Target"w);
+    auto bytes = z8_binary_read_all(z8_nonnull(input));
+    IZ8PoiProvider provider;
+    synchronized (z8_poi_monitor) provider = z8_poi_provider;
+    Z8PoiXmlNode root, sharedStrings;
+    Z8PoiXmlNode[] worksheets;
+    if (provider !is null) {
+        auto document = provider.open(bytes);
+        if (document is null) throw new Exception("XLSX provider returned no document");
+        scope(exit) document.close();
+        Z8PoiXmlNode read(string xml) {
+            return (new Z8PoiXmlReader(z8_poi_xml_decode(cast(const(ubyte)[])xml))).parseDocument();
+        }
+        root = read(document.workbookXml());
+        auto sharedXml = document.sharedStringsXml();
+        if (sharedXml.length) sharedStrings = read(sharedXml);
+        foreach (i; 0 .. document.sheetCount()) worksheets ~= read(document.sheetXml(i));
+    } else {
+        auto archive = new ZipArchive(bytes);
+        auto packageRels = z8_poi_read_xml(archive, "_rels/.rels");
+        string workbookPath;
+        foreach (rel; packageRels.children) if (z8_poi_xml_local(rel.name) == "Relationship"w &&
+            rel.attr("TargetMode"w) != "External"w && rel.attr("Type"w).endsWith("/officeDocument"w))
+            workbookPath = z8_poi_resolve_path("", rel.attr("Target"w));
+        if (!workbookPath.length) throw new Exception("missing XLSX workbook relationship");
+        auto slash = workbookPath.lastIndexOf('/');
+        auto base = slash < 0 ? "" : workbookPath[0 .. slash + 1];
+        auto filename = slash < 0 ? workbookPath : workbookPath[slash + 1 .. $];
+        root = z8_poi_read_xml(archive, workbookPath);
+        auto rels = z8_poi_read_xml(archive, base ~ "_rels/" ~ filename ~ ".rels");
+        wstring[wstring] targets;
+        wstring sharedTarget;
+        foreach (rel; rels.children) if (z8_poi_xml_local(rel.name) == "Relationship"w && rel.attr("TargetMode"w) != "External"w) {
+            auto kind = rel.attr("Type"w);
+            if (kind.endsWith("/worksheet"w)) targets[rel.attr("Id"w)] = rel.attr("Target"w);
+            else if (kind.endsWith("/sharedStrings"w)) sharedTarget = rel.attr("Target"w);
+        }
+        sharedStrings = sharedTarget is null ? null : z8_poi_read_xml(archive, z8_poi_resolve_path(base, sharedTarget));
+        auto sheets = root.child("sheets"w);
+        if (sheets is null) throw new Exception("missing XLSX sheets");
+        foreach (item; sheets.children) if (z8_poi_xml_local(item.name) == "sheet"w) {
+            auto target = item.attr("id"w) in targets;
+            if (target is null) throw new Exception("missing XLSX sheet relationship");
+            worksheets ~= z8_poi_read_xml(archive, z8_poi_resolve_path(base, *target));
+        }
     }
     wstring[] strings;
-    auto sharedStrings = sharedTarget is null ? null : z8_poi_read_xml(archive, z8_poi_resolve_path(base, sharedTarget));
     if (sharedStrings !is null) foreach (entry; sharedStrings.children) if (z8_poi_xml_local(entry.name) == "si"w) strings ~= z8_poi_rich_text(entry);
     auto result = new Z8PoiWorkbook();
     auto properties = root.child("workbookPr"w);
     if (properties !is null) result.date1904 = properties.attr("date1904"w) == "1"w || properties.attr("date1904"w) == "true"w;
     auto sheets = root.child("sheets"w);
     if (sheets is null) throw new Exception("missing XLSX sheets");
+    size_t sheetIndex;
     foreach (item; sheets.children) if (z8_poi_xml_local(item.name) == "sheet"w) {
-        auto id = item.attr("id"w), target = id in targets;
-        if (target is null) throw new Exception("missing XLSX sheet relationship");
-        auto worksheet = z8_poi_read_xml(archive, z8_poi_resolve_path(base, *target));
+        if (sheetIndex >= worksheets.length) throw new Exception("XLSX provider omitted a sheet");
+        auto worksheet = worksheets[sheetIndex++];
         auto data = worksheet.child("sheetData"w), sheet = new Z8PoiSheet();
         sheet.name = item.attr("name"w);
         auto merges = worksheet.child("mergeCells"w);
@@ -393,6 +434,7 @@ private Z8PoiWorkbook z8_poi_parse(Z8Binary input) {
         }
         result.sheets ~= sheet;
     }
+    if (sheetIndex != worksheets.length) throw new Exception("XLSX provider returned extra sheets");
     return result;
 }
 private Z8PoiWorkbook z8_poi_workbook(Z8Object self) {
@@ -503,4 +545,4 @@ void z8_bind_builtin_poi() {
     z8_native_bind(z8_poi_cell_name ~ ".m_getDecimal"w, &z8_poi_decimal);
     z8_native_bind(z8_poi_cell_name ~ ".m_getDate"w, &z8_poi_date);
 }
-shared static this() { z8_bind_builtin_poi(); }
+shared static this() { z8_poi_monitor = new Object(); z8_bind_builtin_poi(); }

@@ -11,6 +11,9 @@ private extern(C) {
     void z8_xlsx_close(void*);
     int z8_xlsx_sheet_count(void*, uint*);
     int z8_xlsx_sheet_name(void*, uint, char*, size_t, size_t*);
+    int z8_xlsx_workbook_xml(void*, char*, size_t, size_t*);
+    int z8_xlsx_shared_strings_xml(void*, char*, size_t, size_t*);
+    int z8_xlsx_sheet_xml(void*, uint, char*, size_t, size_t*);
     int z8_xlsx_row_count(void*, uint, uint*);
     int z8_xlsx_row_exists(void*, uint, uint, int*);
     int z8_xlsx_row_cell_count(void*, uint, uint, uint*);
@@ -57,6 +60,30 @@ class Workbook {
         check(z8_xlsx_sheet_name(handle, index, null, 0, &length));
         auto result = new char[length];
         check(z8_xlsx_sheet_name(handle, index, result.ptr, result.length, &length));
+        return result.idup;
+    }
+
+    string workbookXml() {
+        size_t length;
+        check(z8_xlsx_workbook_xml(handle, null, 0, &length));
+        auto result = new char[length];
+        check(z8_xlsx_workbook_xml(handle, result.ptr, result.length, &length));
+        return result.idup;
+    }
+
+    string sharedStringsXml() {
+        size_t length;
+        check(z8_xlsx_shared_strings_xml(handle, null, 0, &length));
+        auto result = new char[length];
+        check(z8_xlsx_shared_strings_xml(handle, result.ptr, result.length, &length));
+        return result.idup;
+    }
+
+    string sheetXml(uint sheet) {
+        size_t length;
+        check(z8_xlsx_sheet_xml(handle, sheet, null, 0, &length));
+        auto result = new char[length];
+        check(z8_xlsx_sheet_xml(handle, sheet, result.ptr, result.length, &length));
         return result.idup;
     }
 

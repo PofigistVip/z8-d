@@ -9,6 +9,9 @@ void main(string[] args) {
     assert(book.sheetCount() == 3);
     assert(book.sheetName(0) == "Данные 😀");
     assert(book.sheetName(1) == "Second");
+    assert(book.workbookXml().canFind("Данные 😀"));
+    assert(book.sharedStringsXml().canFind("sst"));
+    assert(book.sheetXml(0).canFind("_x0041_"));
     assert(book.rowCount(0) == 2 && book.rowCount(1) == 2);
     assert(book.rowCount(2) == 0 && !book.rowExists(2, 0));
     assert(!book.rowExists(1, 0) && book.rowExists(1, 1));

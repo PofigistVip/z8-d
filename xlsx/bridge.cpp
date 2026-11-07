@@ -164,6 +164,33 @@ Z8_EXPORT int z8_xlsx_sheet_name(void* handle, unsigned index, char* buffer,
     return protect([&] { copyString(sheetName(document(handle), index), buffer, capacity, length); });
 }
 
+Z8_EXPORT int z8_xlsx_workbook_xml(void* handle, char* buffer, size_t capacity, size_t* length) noexcept {
+    return protect([&] {
+        std::ostringstream xml;
+        document(handle).workbook().print(xml);
+        copyString(xml.str(), buffer, capacity, length);
+    });
+}
+
+Z8_EXPORT int z8_xlsx_shared_strings_xml(void* handle, char* buffer, size_t capacity, size_t* length) noexcept {
+    return protect([&] {
+        std::ostringstream xml;
+        document(handle).sharedStrings().print(xml);
+        copyString(xml.str(), buffer, capacity, length);
+    });
+}
+
+Z8_EXPORT int z8_xlsx_sheet_xml(void* handle, unsigned sheet, char* buffer, size_t capacity, size_t* length) noexcept {
+    return protect([&] {
+        auto& doc = document(handle);
+        auto name = sheetName(doc, sheet);
+        (void)doc.workbook().worksheet(name); // The native POI facade expects worksheets.
+        std::ostringstream xml;
+        doc.workbook().sheet(name).print(xml);
+        copyString(xml.str(), buffer, capacity, length);
+    });
+}
+
 Z8_EXPORT int z8_xlsx_row_count(void* handle, unsigned sheet, unsigned* result) noexcept {
     return protect([&] {
         if (!result) throw std::invalid_argument("missing output");
