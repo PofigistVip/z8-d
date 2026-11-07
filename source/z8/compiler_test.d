@@ -12,6 +12,16 @@ private void rejects(string source) {
 
 unittest {
     compile(q{[flag] public [label "hello"] class A {}});
+    // The original parser accepts these type modifiers but does not apply
+    // them to class or enum visibility, unlike member modifiers.
+    foreach (modifier; ["private", "protected", "public", "static", "auto", "virtual"])
+        compile(modifier ~ " class A {}");
+    compile(q{private [flag] static virtual auto final class A {}});
+    compile(q{protected static virtual auto enum A { One }});
+    rejects(q{private public class A {}});
+    rejects(q{auto auto class A {}});
+    rejects(q{static static enum A { One }});
+    rejects(q{virtual virtual class A {}});
     rejects(q{[flag] [flag] class A {}});
     rejects(q{final public class A {}});
     rejects(q{[request "true"] class A {}});

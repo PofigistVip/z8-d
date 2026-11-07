@@ -243,9 +243,15 @@ class Parser {
             while (accept(".")) name ~= "." ~ identifier().text;
             expect(";"); result.imports ~= Import(name, start);
         }
-        bool isPublic, hasNativeName;
-        while (current.text == "[" || current.text == "public") {
-            if (accept("public")) { if (isPublic) error("duplicate public modifier"); isPublic = true; continue; }
+        bool hasAccess, isStatic, isAuto, isVirtual, hasNativeName;
+        while (current.text == "[" || ["public", "private", "protected", "static", "virtual", "auto"].canFind(current.text)) {
+            if (current.text != "[") {
+                if (current.text == "static") { if (isStatic) error("duplicate static modifier"); isStatic = true; }
+                else if (current.text == "auto") { if (isAuto) error("duplicate auto modifier"); isAuto = true; }
+                else if (current.text == "virtual") { if (isVirtual) error("duplicate virtual modifier"); isVirtual = true; }
+                else { if (hasAccess) error("duplicate access modifier"); hasAccess = true; }
+                take(); continue;
+            }
             auto attribute = parseAttribute(result.attributes);
             if (["native", "primary"].canFind(attribute.name.text)) {
                 if (!attribute.hasValue || attribute.expression !is null || attribute.value.kind != TokenKind.stringLiteral)
