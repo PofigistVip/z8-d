@@ -1,0 +1,20 @@
+public class BinaryFileArraySort {
+    public static int run() {
+        binary first = '1, 2'; binary second = '3';
+        binary[] values = {first, second};
+        binary[] sorted = values.sort();
+        if (sorted[0].length() != 2 || sorted[1].length() != 1) return 1;
+        sorted.add(first);
+        if (values.size() != 3) return 2;
+        binary[] leading = {}; leading.add(null); leading.add(first); leading.sort();
+        if (leading[0] != null || leading[1].length() != 2) return 3;
+        binary[] invalid = {first}; invalid.add(null);
+        try { invalid.sort(); return 4; } catch (exception expected) {}
+        file a = "one.txt"; file b = "two.txt";
+        file[] files = {b, a}; files.sort();
+        if (files[0].path != "two.txt" || files[1].path != "one.txt") return 5;
+        file[] fileLeading = {}; fileLeading.add(null); fileLeading.add(a); fileLeading.sort();
+        if (fileLeading[0] != null || fileLeading[1].path != "one.txt") return 6;
+        return 0;
+    }
+}
