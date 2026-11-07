@@ -410,24 +410,11 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                 throw new Exception("POI report range expansion layout is not implemented");
             auto boundaries = z8_poi_report_block(boundariesText);
             hasFooter = horizontal ? boundaries.lastColumn > block.lastColumn : boundaries.lastRow > block.lastRow;
-            // Java clears the side bands of the expanded area and copies the
-            // entire footer width. Until cell deletion is supported, allow
-            // those bands only when both their sources and targets are empty.
+            // Copying a horizontal footer also resets the height of side rows.
             foreach (rowNumber, row; workbook.sheets[sheet].rows) {
                 if (horizontal && hasFooter && rowNumber >= boundaries.firstRow && rowNumber <= boundaries.lastRow &&
                     (rowNumber < block.firstRow || rowNumber > block.lastRow) && !row.safeExpansionTarget)
                     throw new Exception("POI report side band row is not implemented");
-                foreach (columnNumber, cell; row.cells) {
-                    bool side = horizontal ? (rowNumber >= boundaries.firstRow && rowNumber <= boundaries.lastRow &&
-                                              (rowNumber < block.firstRow || rowNumber > block.lastRow)) :
-                                             (columnNumber >= boundaries.firstColumn && columnNumber <= boundaries.lastColumn &&
-                                              (columnNumber < block.firstColumn || columnNumber > block.lastColumn));
-                    auto position = horizontal ? columnNumber : rowNumber;
-                    auto blockEnd = horizontal ? block.lastColumn : block.lastRow;
-                    auto boundaryEnd = horizontal ? boundaries.lastColumn : boundaries.lastRow;
-                    if (side && position > blockEnd && position <= boundaryEnd + offset)
-                        throw new Exception("POI report occupied side band is not implemented");
-                }
             }
             foreach (sourceRow; block.firstRow .. block.lastRow + 1) {
                 auto targetRow = sourceRow + (horizontal ? 0 : offset);
@@ -547,6 +534,60 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
         }
         copies = footerCopies ~ copies;
         edits ~= footerEdits;
+    }
+    if (iteration > 1) {
+        import std.algorithm.sorting : sort;
+        auto offset = (iteration - 1) * (horizontal ? width : height);
+        auto boundaries = z8_poi_report_block(boundariesText);
+        auto blockEnd = horizontal ? block.lastColumn : block.lastRow;
+        auto boundaryEnd = horizontal ? boundaries.lastColumn : boundaries.lastRow;
+        ulong[] sources;
+        foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells) {
+            bool side = horizontal ? (rowNumber >= boundaries.firstRow && rowNumber <= boundaries.lastRow &&
+                                      (rowNumber < block.firstRow || rowNumber > block.lastRow)) :
+                                     (columnNumber >= boundaries.firstColumn && columnNumber <= boundaries.lastColumn &&
+                                      (columnNumber < block.firstColumn || columnNumber > block.lastColumn));
+            if (!side) continue;
+            auto position = horizontal ? columnNumber : rowNumber;
+            if (position > blockEnd && position <= boundaryEnd)
+                sources ~= horizontal ? (cast(ulong)columnNumber << 20) | cast(ulong)rowNumber :
+                                        (cast(ulong)rowNumber << 14) | cast(ulong)columnNumber;
+            bool clear = position > blockEnd && position <= blockEnd + offset;
+            if (position > blockEnd + offset && position <= boundaryEnd + offset) {
+                auto sourceRowNumber = rowNumber - (horizontal ? 0 : offset);
+                auto sourceColumn = columnNumber - (horizontal ? offset : 0);
+                auto originalRow = sourceRowNumber in workbook.sheets[sheet].rows;
+                clear = originalRow is null || (sourceColumn in (*originalRow).cells) is null;
+            }
+            if (clear) {
+                if (!cell.safeCopy || cell.hasFormula) throw new Exception("POI report side band target cell is not implemented");
+                removals ~= Z8PoiCellRemoval(cast(uint)sheet, cast(uint)rowNumber, cast(uint)columnNumber);
+            }
+        }
+        sort(sources);
+        foreach_reverse (position; sources) {
+            auto rowNumber = cast(long)(horizontal ? position & ((1UL << 20) - 1) : position >> 14);
+            auto columnNumber = cast(long)(horizontal ? position >> 20 : position & ((1UL << 14) - 1));
+            auto cell = workbook.sheets[sheet].rows[rowNumber].cells[columnNumber];
+            auto targetRow = rowNumber + (horizontal ? 0 : offset);
+            auto targetColumn = columnNumber + (horizontal ? offset : 0);
+            if (targetRow >= 1048576 || targetColumn >= 16384) throw new Exception("POI report side band exceeds worksheet bounds");
+            if (!z8_poi_report_copyable_cell(cell)) throw new Exception("POI report side band cell is not implemented");
+            auto row = targetRow in workbook.sheets[sheet].rows;
+            if (row !is null) {
+                if (!(*row).safeExpansionTarget) throw new Exception("POI report side band target row is not implemented");
+                auto target = targetColumn in (*row).cells;
+                if (target !is null && (!(*target).safeCopy || (*target).hasFormula || (*target).rawKind == "inlineStr"w))
+                    throw new Exception("POI report side band target cell is not implemented");
+            }
+            copies ~= Z8PoiCellCopy(cast(uint)sheet, cast(uint)rowNumber, cast(uint)columnNumber,
+                                     cast(uint)targetRow, cast(uint)targetColumn, cell.hasFormula);
+            if (cell.rawKind == "s"w || cell.rawKind == "inlineStr"w) {
+                Z8PoiCellEdit edit;
+                edit.sheet = cast(uint)sheet; edit.row = cast(uint)targetRow; edit.column = cast(uint)targetColumn;
+                edit.kind = Z8PoiCellEditKind.text; edit.text = cell.value; edits ~= edit;
+            }
+        }
     }
 }
 
