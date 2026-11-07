@@ -334,18 +334,51 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     auto fields = sourceKind == Z8ReportSourceKind.query ?
         z8_poi_report_query_fields(report, z8_report_source_object(source), workbook.sheets[sheet], block) : null;
     z8_report_source_open(source, sheet, fields);
+    bool horizontal = axisText !is null && axisText.to!int == 1;
     if (!z8_report_source_next(source)) {
-        // With no footer or side bands Java shrinks the range to zero and
-        // removes every physical cell in the block, retaining its rows.
+        // Java moves the footer over the empty block and clears the vacated
+        // tail. Restrict the footer to dense, safely copyable cells.
         if (!allowExpansion || workbook.sheets.length != 1 || boundariesText is null || templateMerges.length)
             throw new Exception("empty POI report data source layout is not implemented");
         auto boundaries = z8_poi_report_block(boundariesText);
-        if (boundaries.firstRow != block.firstRow || boundaries.lastRow != block.lastRow ||
-            boundaries.firstColumn != block.firstColumn || boundaries.lastColumn != block.lastColumn)
+        if (horizontal ? (boundaries.firstRow != block.firstRow || boundaries.lastRow != block.lastRow) :
+                         (boundaries.firstColumn != block.firstColumn || boundaries.lastColumn != block.lastColumn))
             throw new Exception("empty POI report data source layout is not implemented");
+        auto offset = horizontal ? block.lastColumn - block.firstColumn + 1 : block.lastRow - block.firstRow + 1;
+        auto firstRow = horizontal ? block.firstRow : block.lastRow + 1;
+        auto lastRow = horizontal ? block.lastRow : boundaries.lastRow;
+        auto firstColumn = horizontal ? block.lastColumn + 1 : block.firstColumn;
+        auto lastColumn = horizontal ? boundaries.lastColumn : block.lastColumn;
+        if (firstRow <= lastRow && firstColumn <= lastColumn) foreach (rowNumber; firstRow .. lastRow + 1) {
+            auto sourceRow = rowNumber in workbook.sheets[sheet].rows;
+            if (sourceRow is null) throw new Exception("empty POI report sparse footer is not implemented");
+            auto targetRow = rowNumber - (horizontal ? 0 : offset);
+            auto target = targetRow in workbook.sheets[sheet].rows;
+            if (target !is null && !(*target).safeExpansionTarget)
+                throw new Exception("empty POI report footer target row is not implemented");
+            foreach (column; firstColumn .. lastColumn + 1) {
+                auto original = column in (*sourceRow).cells;
+                if (original is null || (*original).hasFormula || !z8_poi_report_copyable_cell(*original))
+                    throw new Exception("empty POI report sparse footer is not implemented");
+                auto targetColumn = column - (horizontal ? offset : 0);
+                if (target !is null) {
+                    auto destination = targetColumn in (*target).cells;
+                    if (destination !is null && (!(*destination).safeCopy || (*destination).hasFormula || (*destination).rawKind == "inlineStr"w))
+                        throw new Exception("empty POI report footer target cell is not implemented");
+                }
+                auto cell = *original;
+                copies ~= Z8PoiCellCopy(cast(uint)sheet, cast(uint)rowNumber, cast(uint)column, cast(uint)targetRow, cast(uint)targetColumn, false);
+                if (cell.rawKind == "s"w || cell.rawKind == "inlineStr"w) {
+                    Z8PoiCellEdit edit;
+                    edit.sheet = cast(uint)sheet; edit.row = cast(uint)targetRow; edit.column = cast(uint)targetColumn;
+                    edit.kind = Z8PoiCellEditKind.text; edit.text = cell.value; edits ~= edit;
+                }
+            }
+        }
         foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells) {
-            if (rowNumber < block.firstRow || rowNumber > block.lastRow ||
-                columnNumber < block.firstColumn || columnNumber > block.lastColumn) continue;
+            if (rowNumber < boundaries.firstRow || rowNumber > boundaries.lastRow ||
+                columnNumber < boundaries.firstColumn || columnNumber > boundaries.lastColumn) continue;
+            if (horizontal ? columnNumber <= boundaries.lastColumn - offset : rowNumber <= boundaries.lastRow - offset) continue;
             if (!cell.safeCopy || cell.hasFormula) throw new Exception("empty POI report target cell is not implemented");
             removals ~= Z8PoiCellRemoval(cast(uint)sheet, cast(uint)rowNumber, cast(uint)columnNumber);
         }
@@ -357,7 +390,6 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     auto request = z8_application_request();
     if (request !is null && request.parameters !is null)
         evalState.variables["parameters"w] = Z8EvalVariable(null, null, request.parameters);
-    bool horizontal = axisText !is null && axisText.to!int == 1;
     long iteration, height = block.lastRow - block.firstRow + 1, width = block.lastColumn - block.firstColumn + 1;
     bool hasFooter;
     do {

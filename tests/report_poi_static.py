@@ -122,6 +122,10 @@ public class StaticReportProbe {
     public static file expandedHorizontalHeader() { ExpandedHorizontalHeaderReport report; return report.run(guid.Null); }
     public static file expandedSideConflict() { ExpandedSideConflictReport report; return report.run(guid.Null); }
     public static file expandedHorizontalSideConflict() { ExpandedHorizontalSideConflictReport report; return report.run(guid.Null); }
+    public static file emptyFooter() { EmptyFooterReport report; return report.run(guid.Null); }
+    public static file emptyHorizontalFooter() { EmptyHorizontalFooterReport report; return report.run(guid.Null); }
+    public static file emptyMultiFooter() { EmptyMultiFooterReport report; return report.run(guid.Null); }
+    public static file emptyHorizontalMultiFooter() { EmptyHorizontalMultiFooterReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -395,6 +399,20 @@ public class ExpandedTwoRowsReport extends Report {
         (source / "ExpandedHorizontalHeaderReport.bl").read_text(encoding="utf-8")
         .replace("ExpandedHorizontalHeaderReport", "ExpandedHorizontalSideConflictReport")
         .replace('template = "expanded-horizontal-header"', 'template = "expanded-horizontal-side-conflict"'), encoding="utf-8")
+    for name, template, address, boundaries, axis in (
+            ("EmptyFooterReport", "expanded-footer", "A1:D1", "A1:D2", "0"),
+            ("EmptyHorizontalFooterReport", "expanded-horizontal-footer", "A1:B2", "A1:C2", "1"),
+            ("EmptyMultiFooterReport", "expanded-multi-footer", "A1:D1", "A1:D4", "0"),
+            ("EmptyHorizontalMultiFooterReport", "expanded-horizontal-multi-footer", "A1:B2", "A1:G2", "1")):
+        (source / (name + ".bl")).write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+import org.zenframework.z8.base.json.JsonArray;
+public class %s extends Report {
+    engine = Report.POI; template = "%s";
+    JsonArray rows; objects = {rows};
+    [axis "%s"] [address "%s"] [boundaries "%s"] Range region;
+    region.source = rows; ranges = {region};
+}''' % (name, template, axis, address, boundaries), encoding="utf-8")
     (source / "UnsupportedContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.lang.Object;
@@ -1021,7 +1039,11 @@ void main(string[] args) {
     bool horizontalHeader; try { P.m_expandedHorizontalHeader(); } catch (Exception) { horizontalHeader = true; } assert(horizontalHeader);
     bool sideConflict; try { P.m_expandedSideConflict(); } catch (Exception) { sideConflict = true; } assert(sideConflict);
     bool horizontalSideConflict; try { P.m_expandedHorizontalSideConflict(); } catch (Exception) { horizontalSideConflict = true; } assert(horizontalSideConflict);
-    assert(database.begins == 99 && database.rollbacks == 99);
+    bool emptyFooter; try { P.m_emptyFooter(); } catch (Exception) { emptyFooter = true; } assert(emptyFooter);
+    bool emptyHorizontalFooter; try { P.m_emptyHorizontalFooter(); } catch (Exception) { emptyHorizontalFooter = true; } assert(emptyHorizontalFooter);
+    bool emptyMultiFooter; try { P.m_emptyMultiFooter(); } catch (Exception) { emptyMultiFooter = true; } assert(emptyMultiFooter);
+    bool emptyHorizontalMultiFooter; try { P.m_emptyHorizontalMultiFooter(); } catch (Exception) { emptyHorizontalMultiFooter = true; } assert(emptyHorizontalMultiFooter);
+    assert(database.begins == 103 && database.rollbacks == 103);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -1056,7 +1078,7 @@ void main(string[] args) {
         ++writes; return result;
     }
     ubyte[] writeExpandedReport(const(ubyte)[] input, const(Z8PoiCellCopy)[] copies, const(Z8PoiCellEdit)[] cells) {
-        assert(copies.length == 8 || copies.length == 4 || copies.length == 6 || copies.length == 10 || copies.length == 12 || copies.length == 18 || copies.length == 20); auto result = expander.writeExpandedReport(input, copies, cells);
+        assert(copies.length == 2 || copies.length == 8 || copies.length == 4 || copies.length == 6 || copies.length == 10 || copies.length == 12 || copies.length == 18 || copies.length == 20); auto result = expander.writeExpandedReport(input, copies, cells);
         ++expansions; return result;
     }
     ubyte[] addReportMerges(const(ubyte)[] input, const(Z8PoiMergedRegion)[] regions) {
@@ -1065,7 +1087,8 @@ void main(string[] args) {
     }
     ubyte[] removeReportCells(const(ubyte)[] input, const(Z8PoiCellRemoval)[] cells) {
         assert((cells.length == 1 && ((cells[0].row == 1 && cells[0].column == 2) ||
-                                      (cells[0].row == 3 && cells[0].column == 0))) || cells.length == 5);
+                                      (cells[0].row == 3 && cells[0].column == 0))) ||
+               cells.length == 5 || cells.length == 4 || cells.length == 2);
         return remover.removeReportCells(input, cells);
     }
 }
@@ -1188,8 +1211,20 @@ void main(string[] args) {
             'bool horizontalHeader; try { P.m_expandedHorizontalHeader(); } catch (Exception) { horizontalHeader = true; } assert(horizontalHeader);',
             'auto horizontalHeader = P.m_expandedHorizontalHeader(); copy(z8_file_resolve_path(horizontalHeader), buildPath(args[2], "expanded-horizontal-header.xlsx")); assert(counter.expansions == 24);')
         contents = contents.replace('bool missingSource; try { P.m_expandedMissingSource(); } catch (Exception) { missingSource = true; } assert(missingSource);', '')
-        contents = contents.replace('assert(database.begins == 99 && database.rollbacks == 99);',
-            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 25); assert(database.begins == 99 && database.rollbacks == 99);')
+        contents = contents.replace(
+            'bool emptyFooter; try { P.m_emptyFooter(); } catch (Exception) { emptyFooter = true; } assert(emptyFooter);',
+            'auto emptyFooter = P.m_emptyFooter(); copy(z8_file_resolve_path(emptyFooter), buildPath(args[2], "empty-footer.xlsx"));')
+        contents = contents.replace(
+            'bool emptyHorizontalFooter; try { P.m_emptyHorizontalFooter(); } catch (Exception) { emptyHorizontalFooter = true; } assert(emptyHorizontalFooter);',
+            'auto emptyHorizontalFooter = P.m_emptyHorizontalFooter(); copy(z8_file_resolve_path(emptyHorizontalFooter), buildPath(args[2], "empty-horizontal-footer.xlsx"));')
+        contents = contents.replace(
+            'bool emptyMultiFooter; try { P.m_emptyMultiFooter(); } catch (Exception) { emptyMultiFooter = true; } assert(emptyMultiFooter);',
+            'auto emptyMultiFooter = P.m_emptyMultiFooter(); copy(z8_file_resolve_path(emptyMultiFooter), buildPath(args[2], "empty-multi-footer.xlsx"));')
+        contents = contents.replace(
+            'bool emptyHorizontalMultiFooter; try { P.m_emptyHorizontalMultiFooter(); } catch (Exception) { emptyHorizontalMultiFooter = true; } assert(emptyHorizontalMultiFooter);',
+            'auto emptyHorizontalMultiFooter = P.m_emptyHorizontalMultiFooter(); copy(z8_file_resolve_path(emptyHorizontalMultiFooter), buildPath(args[2], "empty-horizontal-multi-footer.xlsx"));')
+        contents = contents.replace('assert(database.begins == 103 && database.rollbacks == 103);',
+            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 29); assert(database.begins == 103 && database.rollbacks == 103);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1399,10 +1434,15 @@ class PoiRangeOracle {
       boolean horizontalHeaderCase = args.length > 3 && "expanded-horizontal-header".equals(args[3]);
       boolean multiFooterCase = args.length > 3 && "expanded-multi-footer".equals(args[3]);
       boolean horizontalMultiFooterCase = args.length > 3 && "expanded-horizontal-multi-footer".equals(args[3]);
+      boolean emptyMultiFooterCase = args.length > 3 && "empty-multi-footer".equals(args[3]);
+      boolean emptyHorizontalMultiFooterCase = args.length > 3 && "empty-horizontal-multi-footer".equals(args[3]);
+      boolean emptyVerticalFooterCase = emptyMultiFooterCase || (args.length > 3 && "empty-footer".equals(args[3]));
+      boolean emptyHorizontalFooterCase = emptyHorizontalMultiFooterCase || (args.length > 3 && "empty-horizontal-footer".equals(args[3]));
+      boolean emptyFooterCase = emptyVerticalFooterCase || emptyHorizontalFooterCase;
       boolean footerCase = headerFooterCase || multiFooterCase || (args.length > 3 && "expanded-footer".equals(args[3]));
       boolean horizontalFooterCase = horizontalHeaderCase || horizontalMultiFooterCase || (args.length > 3 && "expanded-horizontal-footer".equals(args[3]));
       boolean expandedMergedCase = args.length > 3 && ("expanded-merged".equals(args[3]) || "expanded-horizontal-merged".equals(args[3]) || "expanded-merged-formula".equals(args[3]));
-      boolean horizontalCase = horizontalFooterCase || (args.length > 3 && ("expanded-horizontal".equals(args[3]) || "expanded-horizontal-merged".equals(args[3])));
+      boolean horizontalCase = emptyHorizontalFooterCase || horizontalFooterCase || (args.length > 3 && ("expanded-horizontal".equals(args[3]) || "expanded-horizontal-merged".equals(args[3])));
       boolean expandedEmptyCase = args.length > 3 && "expanded-empty".equals(args[3]);
       boolean jsonEmptyCase = args.length > 3 && "json-empty".equals(args[3]);
       boolean expandedTwoCase = horizontalCase || expandedEmptyCase || (args.length > 3 && "expanded-two".equals(args[3]));
@@ -1410,7 +1450,7 @@ class PoiRangeOracle {
       boolean jsonInlineCase = args.length > 3 && "json-inline".equals(args[3]);
       boolean repeatCase = args.length > 3 && "repeat".equals(args[3]);
       boolean mergedCase = args.length > 3 && "merged".equals(args[3]);
-      boolean jsonCase = jsonEmptyCase || jsonInlineCase || (expandedCase && !expandedCustomCase) || (args.length > 3 && "json".equals(args[3]));
+      boolean jsonCase = emptyFooterCase || jsonEmptyCase || jsonInlineCase || (expandedCase && !expandedCustomCase) || (args.length > 3 && "json".equals(args[3]));
       boolean queryCase = args.length > 3 && "query".equals(args[3]);
       boolean outsideCase = args.length > 3 && "outside".equals(args[3]);
       boolean multipleCase = outsideCase || (args.length > 3 && "multiple".equals(args[3]));
@@ -1471,7 +1511,7 @@ class PoiRangeOracle {
             new org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<>(null);
         item.get().z8_set(new org.zenframework.z8.server.types.string("title"), new org.zenframework.z8.server.types.string("Ada 😀"));
         item.get().z8_set(new org.zenframework.z8.server.types.string("amount"), new org.zenframework.z8.server.types.integer(42));
-        if (expandedCase) {
+        if (expandedCase && !emptyFooterCase) {
           item.get().z8_set(new org.zenframework.z8.server.types.string("title"), new org.zenframework.z8.server.types.string("First"));
           item.get().z8_set(new org.zenframework.z8.server.types.string("amount"), new org.zenframework.z8.server.types.integer(10));
           rows.get().z8_add(item);
@@ -1482,7 +1522,7 @@ class PoiRangeOracle {
             next.get().z8_set(new org.zenframework.z8.server.types.string("amount"), new org.zenframework.z8.server.types.integer(i == 1 ? 20 : 30));
             rows.get().z8_add(next);
           }
-        } else if (!jsonEmptyCase) rows.get().z8_add(item);
+        } else if (!jsonEmptyCase && !emptyFooterCase) rows.get().z8_add(item);
         customSource = new JsonSource(rows.get());
       }
       if (queryCase) {
@@ -1520,8 +1560,8 @@ class PoiRangeOracle {
       boolean parameters = args.length > 3 && "parameters".equals(args[3]);
       boolean dates = args.length > 3 && "dates".equals(args[3]);
       Range child = new Range().setSource(customCase || jsonCase || queryCase || expandedCustomCase ? customSource : SimpleSource.newDefault())
-          .setBlock(headerFooterCase ? "A2:D2" : horizontalHeaderCase ? "B1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(headerFooterCase ? "A1:E3" : horizontalHeaderCase ? "A1:D3" : multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
+          .setBlock(emptyVerticalFooterCase ? "A1:D1" : headerFooterCase ? "A2:D2" : horizontalHeaderCase ? "B1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
+          .setBoundaries(emptyMultiFooterCase ? "A1:D4" : emptyHorizontalMultiFooterCase ? "A1:G2" : emptyVerticalFooterCase ? "A1:D2" : emptyHorizontalFooterCase ? "A1:C2" : headerFooterCase ? "A1:E3" : horizontalHeaderCase ? "A1:D3" : multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       if (horizontalCase) child.setAxis(1);
       if (multipleCase) {
         report.addRange(0, new Range().setSource(orderedSources[1]).setBlock("C1").setBoundaries("C1"));
@@ -1530,7 +1570,19 @@ class PoiRangeOracle {
       if (args.length > 3 && "rename".equals(args[3])) original.setSheetName(0, "Отчёт \\uD83D\\uDE00");
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier); modifier.close();
-      if (expandedCase) {
+      if (emptyFooterCase) {
+        for (int row = 0; row < (emptyMultiFooterCase ? 4 : 2); ++row) for (int col = 0; col < (emptyVerticalFooterCase ? 4 : emptyHorizontalMultiFooterCase ? 7 : 3); ++col) {
+          org.apache.poi.ss.usermodel.Row expectedRow = original.getSheetAt(0).getRow(row), actualRow = actual.getSheetAt(0).getRow(row);
+          if (expectedRow == null || actualRow == null) { if (expectedRow != actualRow) throw new AssertionError("empty footer row differs"); continue; }
+          org.apache.poi.ss.usermodel.Cell expected = expectedRow.getCell(col), result = actualRow.getCell(col);
+          if (expected == null || result == null) { if (expected != result) throw new AssertionError("empty footer cell differs"); continue; }
+          if (expected.getCellType() != result.getCellType() || expected.getCellStyle().getIndex() != result.getCellStyle().getIndex())
+            throw new AssertionError("empty footer type differs");
+          if (expected.getCellType() == org.apache.poi.ss.usermodel.Cell.CELL_TYPE_STRING ?
+              !expected.getStringCellValue().equals(result.getStringCellValue()) : expected.getNumericCellValue() != result.getNumericCellValue())
+            throw new AssertionError("empty footer value differs");
+        }
+      } else if (expandedCase) {
         for (int row = 0; row < (horizontalCase ? 2 : expandedTwoCase || multiFooterCase ? 6 : headerFooterCase ? 5 : footerCase ? 4 : 3); ++row)
           for (int col = 0; col < (horizontalMultiFooterCase ? 11 : horizontalHeaderCase ? 8 : horizontalFooterCase ? 7 : horizontalCase ? 6 : expandedTwoCase ? 2 : 4); ++col) {
           if (original.getSheetAt(0).getRow(row) == null) {
@@ -1651,6 +1703,12 @@ class PoiRangeOracle {
                                          str(application / "reports/json.xlsx"), str(working / "json-empty.xlsx"), str(config), "json-empty"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
+                for source_name, name in (("expanded-footer", "empty-footer"), ("expanded-horizontal-footer", "empty-horizontal-footer"),
+                                          ("expanded-multi-footer", "empty-multi-footer"), ("expanded-horizontal-multi-footer", "empty-horizontal-multi-footer")):
+                    result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                             str(application / ("reports/" + source_name + ".xlsx")), str(working / (name + ".xlsx")), str(config), name],
+                                            cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                    assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/query.xlsx"), str(working / "query.xlsx"), str(config), "query"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
