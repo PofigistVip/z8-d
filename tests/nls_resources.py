@@ -88,7 +88,7 @@ void main() {
     # Auto-discovery follows the server's _<language>.nls / .xml naming rules.
     resources = temp / "resources"
     resources.mkdir()
-    (resources / "a_ru.nls").write_text('<properties><entry key="hello">Первый</entry></properties>', encoding="utf-8")
+    (resources / "a_ru.nls").write_text('<properties><entry key="hello">Первый</entry><entry key="framework">Платформа</entry></properties>', encoding="utf-8")
     (resources / "b_ru.xml").write_text('<properties><entry key="hello">Русский</entry></properties>', encoding="utf-8")
     (resources / "a_en.nls").write_text('<properties><entry key="hello">English</entry></properties>', encoding="utf-8")
     (resources / "ignored.nls").write_text('not an XML file', encoding="utf-8")
@@ -108,4 +108,27 @@ void main(string[] args) { assert(z8_string_new("$hello$"w) == args[1].to!wstrin
     environment["Z8_NLS_DIR"] = str(resources)
     environment["Z8_NLS_FILES"] = str(override_be)
     subprocess.run([str(discover_exe), "Итог"], cwd=temp, env=environment, check=True)
+    # Configuration keeps the bundles beside the executable and overlays
+    # resources from the application root, unless the host overrides NLS paths.
+    application = temp / "application"
+    (application / "resources").mkdir(parents=True)
+    (application / "resources/application_ru.nls").write_text(
+        '<properties><entry key="hello">Приложение</entry></properties>', encoding="utf-8")
+    configure = temp / "configure.d"
+    configure.write_text('''import z8.runtime;
+import std.conv : to;
+void main(string[] args) {
+    z8_string_configure_nls(args[1], "ru"w);
+    assert(z8_string_new("$framework$"w) == args[2].to!wstring);
+    assert(z8_string_new("$hello$"w) == args[3].to!wstring);
+}
+''', encoding="utf-8")
+    configure_exe = temp / ("configure.exe" if os.name == "nt" else "configure")
+    subprocess.run(["dmd", str(configure), *import_args(), str(runtime_lib), "-of=" + str(configure_exe)], cwd=temp, check=True)
+    for key in ("Z8_NLS_FILES", "Z8_NLS_DIR", "Z8_LANGUAGE"):
+        environment.pop(key, None)
+    subprocess.run([str(configure_exe), str(application), "Платформа", "Приложение"], cwd=temp, env=environment, check=True)
+    environment["Z8_NLS_DIR"] = str(application / "resources")
+    environment["Z8_NLS_FILES"] = str(override_be)
+    subprocess.run([str(configure_exe), str(application), "framework", "Итог"], cwd=temp, env=environment, check=True)
 print("NLS resources match Java XML properties")

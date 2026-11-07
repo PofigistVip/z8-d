@@ -1,4 +1,4 @@
-"""Synchronize unmodified Z8 BL/web sources and monitor native Java classes."""
+"""Synchronize unmodified Z8 sources and resources and monitor native Java classes."""
 from pathlib import Path
 import argparse
 import hashlib
@@ -14,6 +14,7 @@ TABLES_REPORT = "org.zenframework.z8.server/WEB-INF/reports/system/Tables.odt"
 TREES = {
     "bl": ("org.zenframework.z8.lang/src/bl",),
     "web": ("org.zenframework.z8.js/src", "org.zenframework.z8.resources/src/web"),
+    "resources": ("org.zenframework.z8.server/WEB-INF/resources",),
 }
 ATTRIBUTE = re.compile(r'\[(?:native|primary)\s+"([A-Za-z_$][\w.$]*)"\s*\]')
 
@@ -180,13 +181,13 @@ def native_report(original, accept):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("group", choices=("bl", "web", "reports", "native"))
+    parser.add_argument("group", choices=("bl", "web", "resources", "reports", "native"))
     parser.add_argument("original", type=Path, help="Original org.zenframework.z8 checkout")
-    parser.add_argument("--apply", action="store_true", help="Apply BL, web or report-template changes")
+    parser.add_argument("--apply", action="store_true", help="Apply source or resource changes")
     parser.add_argument("--accept", action="store_true", help="Update the native Java baseline after review")
     args = parser.parse_args()
     if (args.group == "native" and args.apply) or (args.group != "native" and args.accept):
-        parser.error("--apply is for bl/web/reports; --accept is for native")
+        parser.error("--apply is for bl/web/resources/reports; --accept is for native")
     original = args.original.resolve()
     if not original.is_dir():
         parser.error("Original checkout not found")

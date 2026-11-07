@@ -1124,7 +1124,9 @@ Unicode D и может отличаться от Java при специфичн
 Язык задаётся через `Z8_LANGUAGE` (по умолчанию `ru`), а папки вместо стандартной —
 через `Z8_NLS_DIR`. Файлы в каждой папке загружаются в алфавитном порядке; значения
 из последнего файла переопределяют предыдущие. Явно перечисленные в `Z8_NLS_FILES`
-файлы загружаются после найденных автоматически. Несколько путей в переменных
+файлы загружаются после найденных автоматически. При загрузке конфигурации
+ресурсы рядом с исполняемым файлом дополняются ресурсами корня приложения;
+последние имеют приоритет. Несколько путей в переменных
 разделяются системным разделителем (`;` в Windows, `:` в Unix).
 
 Команда `z8d check-resources <путь-к-bl> <папка-ресурсов> <язык>` проверяет
@@ -1375,9 +1377,11 @@ $env:Z8_RUNTIME_LIB = (Resolve-Path runtime/lib/z8-runtime.lib).Path
 ```powershell
 python tools/sync_z8.py bl C:/path/to/org.zenframework.z8
 python tools/sync_z8.py web C:/path/to/org.zenframework.z8
+python tools/sync_z8.py resources C:/path/to/org.zenframework.z8
 python tools/sync_z8.py reports C:/path/to/org.zenframework.z8
 python tools/sync_z8.py bl C:/path/to/org.zenframework.z8 --apply
 python tools/sync_z8.py web C:/path/to/org.zenframework.z8 --apply
+python tools/sync_z8.py resources C:/path/to/org.zenframework.z8 --apply
 python tools/sync_z8.py reports C:/path/to/org.zenframework.z8 --apply
 python tools/sync_z8.py native C:/path/to/org.zenframework.z8
 ```
@@ -1385,6 +1389,7 @@ python tools/sync_z8.py native C:/path/to/org.zenframework.z8
 Команды без `--apply` показывают изменения и возвращают код 1, если они есть.
 Группа `reports` обновляет встроенную побайтовую копию системного `Tables.odt`;
 после изменения шаблона необходимо пересобрать runtime.
+Группа `resources` копирует серверные языковые файлы без изменения их содержимого.
 `--apply` копирует файлы без преобразования и удаляет исчезнувшие в исходном
 дереве файлы только при совпадении с последней синхронизацией. При локальных
 изменениях копирование останавливается без перезаписи; сначала разрешите

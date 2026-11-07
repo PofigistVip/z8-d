@@ -19,16 +19,23 @@ size_t z8_string_load_nls_directory(string directory, string language) {
 // Reload at host startup after server.properties supplies the application root
 // and language. Environment overrides keep the standalone runtime behavior.
 void z8_string_configure_nls(string applicationRoot, wstring configuredLanguage) {
-    import std.path : buildPath, pathSeparator;
+    import std.file : thisExePath;
+    import std.path : absolutePath, buildPath, dirName, pathSeparator;
     import std.process : environment;
     import std.string : split;
     auto language = environment.get("Z8_LANGUAGE", "");
     if (!language.length) language = configuredLanguage is null || !configuredLanguage.length ? "ru" : configuredLanguage.to!string;
-    auto directories = environment.get("Z8_NLS_DIR", "");
-    if (!directories.length) directories = buildPath(applicationRoot, "resources");
     string[] files;
-    foreach (directory; directories.split(pathSeparator))
-        if (directory.length) files ~= z8_nls_find_files(directory, language);
+    auto directories = environment.get("Z8_NLS_DIR", "");
+    if (directories.length) {
+        foreach (directory; directories.split(pathSeparator))
+            if (directory.length) files ~= z8_nls_find_files(directory, language);
+    } else {
+        auto bundled = buildPath(dirName(thisExePath()), "resources");
+        auto application = buildPath(applicationRoot, "resources");
+        files ~= z8_nls_find_files(bundled, language);
+        if (absolutePath(application) != absolutePath(bundled)) files ~= z8_nls_find_files(application, language);
+    }
     foreach (file; environment.get("Z8_NLS_FILES", "").split(pathSeparator)) if (file.length) files ~= file;
     wstring[wstring] entries;
     foreach (file; files) foreach (key, value; z8_nls_read(file)) entries[key] = value;

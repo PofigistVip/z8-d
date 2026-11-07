@@ -24,17 +24,20 @@ with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):
     helper = java.parent / "Helper.java"
     web = original / sync.TREES["web"][0] / "js/Z8.js"
     html = original / sync.TREES["web"][1] / "index.html"
+    resource = original / sync.TREES["resources"][0] / "server_ru.nls"
     report = original / sync.TABLES_REPORT
-    for path in (bl, java, web, html, report):
+    for path in (bl, java, web, html, report, resource):
         path.parent.mkdir(parents=True, exist_ok=True)
     bl.write_bytes(b'[native "example.Value"]\r\nclass Value {}\r\n')
     java.write_bytes(b'class Value { int n = 1; }\n')
     helper.write_bytes(b'class Helper {}\n')
     web.write_bytes(b'// bytes \xef\xbb\xbf\r\n')
     html.write_bytes(b'<html>\r\n')
+    resource.write_bytes(b'<properties>\r\n</properties>\r\n')
     report.write_bytes(b'original ODT\x00\xff')
     assert sync.synchronize(original, "bl", True)
     assert sync.synchronize(original, "web", True)
+    assert sync.synchronize(original, "resources", True)
     assert sync.synchronize(original, "reports", True)
     report_target = temp / "runtime/source/z8_tables_report_template.odt"
     assert report_target.read_bytes() == report.read_bytes()
@@ -49,6 +52,10 @@ with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):
     assert sync.synchronize(original, "reports", True)
     assert report_target.read_bytes() == report.read_bytes()
     assert (sync.VENDOR / web.relative_to(original)).read_bytes() == web.read_bytes()
+    assert (sync.VENDOR / resource.relative_to(original)).read_bytes() == resource.read_bytes()
+    resource.write_bytes(b'upstream resource\r\n')
+    assert sync.synchronize(original, "resources", True)
+    assert (sync.VENDOR / resource.relative_to(original)).read_bytes() == resource.read_bytes()
     assert (sync.VENDOR / bl.relative_to(original)).read_bytes() == bl.read_bytes()
     assert sync.native_report(original, True)
     assert not sync.native_report(original, False)
