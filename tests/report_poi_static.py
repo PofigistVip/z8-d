@@ -19,6 +19,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
 import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.base.table.value.IntField;
+import org.zenframework.z8.base.table.value.GeometryField;
 public class StaticReportProbe {
     public static file run(string templateName, string outputName) {
         Report report; report.engine = Report.POI; report.template = templateName; report.name = outputName;
@@ -62,6 +63,7 @@ public class StaticReportProbe {
     public static FieldRangeReport createFieldReport() { FieldRangeReport report; return report; }
     public static IntField field(FieldRangeReport report) { return report.amount; }
     public static IntField groupField(FieldRangeReport report) { return report.group.count; }
+    public static GeometryField geometryField(FieldRangeReport report) { return report.point; }
     public static file runFieldReport(FieldRangeReport report) { return report.run(guid.Null); }
     public static CustomRangeReport createCustomReport() { CustomRangeReport report; return report; }
     public static file runCustomReport(CustomRangeReport report) { return report.run(guid.Null); }
@@ -269,10 +271,11 @@ public class ContextGroup extends Object {
     (source / "FieldRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.base.table.value.IntField;
+import org.zenframework.z8.base.table.value.GeometryField;
 public class FieldRangeReport extends Report {
     engine = Report.POI; template = "fields";
-    public IntField amount; public FieldGroup group; objects = {amount, group};
-    [address "A1:E1"] [boundaries "A1:E1"] Range region;
+    public IntField amount; public GeometryField point; public FieldGroup group; objects = {amount, point, group};
+    [address "A1:H1"] [boundaries "A1:H1"] Range region;
     ranges = {region};
 }''', encoding="utf-8")
     (source / "FieldGroup.bl").write_text('''import org.zenframework.z8.lang.Object;
@@ -1039,10 +1042,10 @@ public class %s extends Report {
             for entry_name, content in book.items():
                 archive.writestr(entry_name, content)
     fields = dict(parameters)
-    fields["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="5" uniqueCount="5"><si><t>${amount}</t></si><si><t>${amount + 1}</t></si><si><t>Value: ${amount}</t></si><si><t>${group.count}</t></si><si><t>${group.count + 1}</t></si></sst>'''
+    fields["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="8" uniqueCount="8"><si><t>${amount}</t></si><si><t>${amount + 1}</t></si><si><t>Value: ${amount}</t></si><si><t>${group.count}</t></si><si><t>${group.count + 1}</t></si><si><t>${point.x()}</t></si><si><t>${point.srs()}</t></si><si><t>${point.toGeoJson()}</t></si></sst>'''
     fields["xl/worksheets/sheet1.xml"] = original_sheet.replace(
         '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
-        ''.join('<c r="%s1" t="s"><v>%d</v></c>' % (chr(65 + i), i) for i in range(5)))
+        ''.join('<c r="%s1" t="s"><v>%d</v></c>' % (chr(65 + i), i) for i in range(8)))
     with zipfile.ZipFile(application / "reports/fields.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in fields.items():
             archive.writestr(entry_name, content)
@@ -1414,7 +1417,10 @@ class FieldCursor : IZ8FieldCursor {
     bool isClosed() { return closed; }
     bool isGrouped() { return false; }
     Z8Primary read(Z8Object field, bool asArray, out bool wasNull) {
-        assert(!asArray); wasNull = false; return z8_primary_box(42L);
+        assert(!asArray); wasNull = false;
+        if (z8_field_type_id(field) == "geometry"w)
+            return z8_primary_box(z8_geometry_point(z8_decimal_from_int(2), z8_decimal_from_int(3), 4326));
+        return z8_primary_box(42L);
     }
 }
 class QueryCursor : IZ8QueryCursor {
@@ -1528,6 +1534,7 @@ void main(string[] args) {
     auto fieldReport = P.m_createFieldReport();
     auto fieldCursor = new FieldCursor(); z8_field_set_cursor(P.m_field(fieldReport), fieldCursor);
     z8_field_set_cursor(P.m_groupField(fieldReport), fieldCursor);
+    z8_field_set_cursor(P.m_geometryField(fieldReport), fieldCursor);
     bool fieldResult; try { P.m_runFieldReport(fieldReport); } catch (Exception) { fieldResult = true; } assert(fieldResult);
     fieldCursor.closed = true;
     bool fieldClosed; try { P.m_runFieldReport(fieldReport); } catch (Exception) { fieldClosed = true; } assert(fieldClosed);
@@ -2466,10 +2473,15 @@ class PoiRangeOracle {
         org.zenframework.z8.server.db.Select cursor = new org.zenframework.z8.server.db.Select() {
           @Override public boolean isClosed() { return false; }
           @Override public org.zenframework.z8.server.types.primary get(org.zenframework.z8.server.base.table.value.Field field) {
+            if (field instanceof org.zenframework.z8.server.base.table.value.GeometryField)
+              return new org.zenframework.z8.server.types.geometry(2, 3, 4326);
             return new org.zenframework.z8.server.types.integer(42);
           }
         };
         amount.get().setCursor(cursor);
+        org.zenframework.z8.server.base.table.value.GeometryField.CLASS<org.zenframework.z8.server.base.table.value.GeometryField> point =
+            new org.zenframework.z8.server.base.table.value.GeometryField.CLASS<>(context);
+        point.setIndex("point"); context.members().add(point); point.get().setCursor(cursor);
         OBJECT.CLASS<OBJECT> group = new OBJECT.CLASS<>(context);
         group.setIndex("group"); context.members().add(group);
         org.zenframework.z8.server.base.table.value.IntegerField.CLASS<org.zenframework.z8.server.base.table.value.IntegerField> count =
@@ -2548,8 +2560,8 @@ class PoiRangeOracle {
       boolean parameters = args.length > 3 && "parameters".equals(args[3]);
       boolean dates = args.length > 3 && "dates".equals(args[3]);
       Range child = new Range().setSource(customCase || jsonCase || queryCase || expandedCustomCase ? customSource : SimpleSource.newDefault())
-          .setBlock(emptySideFooterCase ? "A2:D2" : emptyHorizontalSideFooterCase ? "B1:C2" : emptyVerticalFooterCase ? "A1:D1" : headerFooterCase ? "A2:D2" : horizontalHeaderCase ? "B1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase || mapValueCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : contextCase ? "A1:R1" : dates ? "A1:J1" : collectionCase ? "A1:I1" : constants ? "A1:G1" : parameters ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(emptySideFooterCase ? "A1:E3" : emptyHorizontalSideFooterCase ? "A1:D3" : multiSideCase ? "A1:E4" : horizontalMultiSideCase ? "A1:G3" : emptyMultiFooterCase ? "A1:D4" : emptyHorizontalMultiFooterCase ? "A1:G2" : emptyVerticalFooterCase ? "A1:D2" : emptyHorizontalFooterCase ? "A1:C2" : headerFooterCase ? "A1:E3" : horizontalHeaderCase ? "A1:D3" : multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase || mapValueCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : contextCase ? "A1:R1" : dates ? "A1:J1" : collectionCase ? "A1:I1" : constants ? "A1:G1" : parameters ? "A1:E1" : "A1:B2");
+          .setBlock(emptySideFooterCase ? "A2:D2" : emptyHorizontalSideFooterCase ? "B1:C2" : emptyVerticalFooterCase ? "A1:D1" : headerFooterCase ? "A2:D2" : horizontalHeaderCase ? "B1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase || mapValueCase ? "A1:D1" : fieldCase ? "A1:H1" : jsonCase || queryCase ? "A1:E1" : contextCase ? "A1:R1" : dates ? "A1:J1" : collectionCase ? "A1:I1" : constants ? "A1:G1" : parameters ? "A1:E1" : "$A$1:A1")
+          .setBoundaries(emptySideFooterCase ? "A1:E3" : emptyHorizontalSideFooterCase ? "A1:D3" : multiSideCase ? "A1:E4" : horizontalMultiSideCase ? "A1:G3" : emptyMultiFooterCase ? "A1:D4" : emptyHorizontalMultiFooterCase ? "A1:G2" : emptyVerticalFooterCase ? "A1:D2" : emptyHorizontalFooterCase ? "A1:C2" : headerFooterCase ? "A1:E3" : horizontalHeaderCase ? "A1:D3" : multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase || mapValueCase ? "A1:D1" : fieldCase ? "A1:H1" : jsonCase || queryCase ? "A1:E1" : contextCase ? "A1:R1" : dates ? "A1:J1" : collectionCase ? "A1:I1" : constants ? "A1:G1" : parameters ? "A1:E1" : "A1:B2");
       if (horizontalCase) child.setAxis(1);
       if (clonedSheetsCase) {
         int prototype = clonedExistingCase ? 1 : 0;
@@ -2710,7 +2722,7 @@ class PoiRangeOracle {
             original.getSheetAt(0).getRow(1).getCell(0).getNumericCellValue() != actual.getSheetAt(0).getRow(1).getCell(0).getNumericCellValue())
           throw new AssertionError("empty source physical cells differ");
       } else if (constants || collectionCase || mapValueCase || parameters || contextCase || dates || fieldCase || customCase || jsonCase || queryCase || multipleCase || repeatCase || mergedCase) {
-        for (int i = 0; i < (repeatCase || mergedCase ? 1 : outsideCase || mapValueCase ? 4 : multipleCase ? 3 : customCase ? 4 : contextCase ? 18 : dates ? 10 : collectionCase ? 9 : constants ? 7 : 5); ++i) {
+        for (int i = 0; i < (repeatCase || mergedCase ? 1 : outsideCase || mapValueCase ? 4 : multipleCase ? 3 : customCase ? 4 : contextCase ? 18 : fieldCase ? 8 : dates ? 10 : collectionCase ? 9 : constants ? 7 : 5); ++i) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(0).getCell(i);
           if (expected.getCellType() != result.getCellType()) throw new AssertionError("cell type differs at " + i);
