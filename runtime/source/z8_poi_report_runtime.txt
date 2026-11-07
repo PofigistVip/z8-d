@@ -31,9 +31,6 @@ private bool z8_poi_report_clone_safe(ZipArchive archive, Z8PoiWorkbook workbook
     if (!z8_poi_report_openxlsx_safe(archive, workbook.sheets.length, true)) return false;
     foreach (sheet; workbook.sheets) foreach (row; sheet.rows) foreach (cell; row.cells) if (cell.hasFormula) return false;
     try {
-        auto root = z8_poi_read_xml(archive, "xl/workbook.xml");
-        auto defined = root.child("definedNames"w);
-        if (defined !is null && defined.children.length) return false;
         auto relationships = z8_poi_read_xml(archive, "xl/_rels/workbook.xml.rels");
         foreach (relationship; relationships.children) if (z8_poi_xml_local(relationship.name) == "Relationship"w &&
             relationship.attr("Type"w).endsWith("/worksheet"w)) {
