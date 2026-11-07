@@ -60,16 +60,21 @@ IZ8LdapProvider z8_windows_ldap_configure() {
     auto options = z8_ldap_server_options();
     if (options.connectTimeoutMilliseconds < 0 || options.pageSize < 0)
         throw new Exception("LDAP timeout and page size must be nonnegative");
-    if (options.sslTrusted)
-        throw new Exception("ldap.ssl.trusted is not yet supported by the Windows LDAP transport");
     return z8_ldap_set_provider(new Z8LdapConfiguredProvider(
-        new Z8WindowsLdapTransport(cast(uint)options.connectTimeoutMilliseconds), options.pageSize));
+        new Z8WindowsLdapTransport(cast(uint)options.connectTimeoutMilliseconds, options.sslTrusted), options.pageSize));
 }
+
+// WinLDAP calls this per connection only when the host explicitly enables the
+// same trust-all behavior as Java's TrustedSSLSocketFactory.
+private extern(C) ubyte acceptServerCertificate(LDAP* connection, void** certificate) nothrow @nogc { return 1; }
 
 /// A connection is bound with LDAP simple authentication; ldaps:// uses TLS.
 class Z8WindowsLdapTransport : IZ8LdapTransport {
     private uint timeoutMilliseconds;
-    this(uint timeoutMilliseconds = 3000) { this.timeoutMilliseconds = timeoutMilliseconds; }
+    private bool sslTrusted;
+    this(uint timeoutMilliseconds = 3000, bool sslTrusted = false) {
+        this.timeoutMilliseconds = timeoutMilliseconds; this.sslTrusted = sslTrusted;
+    }
     IZ8LdapDirectory connect(wstring url, wstring principal, wstring credentials) {
         auto address = parseAddress(url);
         auto host = terminated(address.host);
@@ -78,6 +83,8 @@ class Z8WindowsLdapTransport : IZ8LdapTransport {
         scope(failure) ldap_unbind_s(handle);
         uint protocolVersion = LDAP_VERSION3;
         check(ldap_set_optionW(handle, LDAP_OPT_PROTOCOL_VERSION, &protocolVersion), "set protocol version");
+        if (address.secure && sslTrusted)
+            check(ldap_set_optionW(handle, LDAP_OPT_SERVER_CERTIFICATE, cast(void*)&acceptServerCertificate), "set TLS certificate policy");
         LDAP_TIMEVAL timeout;
         timeout.tv_sec = cast(int)(timeoutMilliseconds / 1000);
         timeout.tv_usec = cast(int)((timeoutMilliseconds % 1000) * 1000);

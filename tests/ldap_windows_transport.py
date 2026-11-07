@@ -1,7 +1,9 @@
 """Exercise the Windows LDAP transport against a local LDAP protocol fixture."""
 import os
 from pathlib import Path
+import shutil
 import socket
+import ssl
 import subprocess
 import tempfile
 import threading
@@ -61,7 +63,7 @@ def page_control(cookie):
 
 
 class Fixture:
-    def __init__(self):
+    def __init__(self, tls_context=None, reject_tls=False):
         self.listener = socket.socket()
         self.listener.bind(("127.0.0.1", 0))
         self.listener.listen()
@@ -69,12 +71,21 @@ class Fixture:
         self.port = self.listener.getsockname()[1]
         self.events = []
         self.failure = None
+        self.tls_context = tls_context
+        self.reject_tls = reject_tls
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.thread.start()
 
     def run(self):
         try:
             connection, _ = self.listener.accept()
+            if self.tls_context:
+                try:
+                    connection = self.tls_context.wrap_socket(connection, server_side=True)
+                except (ssl.SSLError, ConnectionResetError):
+                    if self.reject_tls:
+                        return
+                    raise
             with connection:
                 connection.settimeout(15)
                 page = 0
@@ -138,14 +149,20 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
 import z8.ldap.windows;
 import std.conv : to;
 void main(string[] args) {
-    z8_server_config_replace(["ldap.ssl.trusted"w: "true"w]);
-    bool unsupported; try { z8_windows_ldap_configure(); } catch (Exception) { unsupported = true; } assert(unsupported);
     z8_server_config_replace(["ldap.read.pageSize"w: "-1"w]);
     bool invalid; try { z8_windows_ldap_configure(); } catch (Exception) { invalid = true; } assert(invalid);
-    z8_server_config_replace(["ldap.read.pageSize"w: "1"w, "ldap.connect.timeout"w: "3000"w]);
+    bool tls = args.length > 2 && (args[2] == "tls-verified" || args[2] == "tls-trusted");
+    bool trusted = args.length > 2 && args[2] == "tls-trusted";
+    z8_server_config_replace(["ldap.read.pageSize"w: "1"w, "ldap.connect.timeout"w: "3000"w,
+                              "ldap.ssl.trusted"w: trusted ? "true"w : "false"w]);
     auto previous = z8_windows_ldap_configure(); auto configured = z8_ldap_set_provider(previous);
+    auto url = (tls ? "ldaps://127.0.0.1:"w : "ldap://127.0.0.1:"w) ~ args[1].to!wstring;
+    if (tls && !trusted) {
+        bool rejected; try { configured.open(url, "cn=admin"w, "secret"w, "{}"w); } catch (Exception) { rejected = true; }
+        assert(rejected); return;
+    }
     if (args.length > 2) {
-        auto session = configured.open("ldap://127.0.0.1:"w ~ args[1].to!wstring, "cn=admin"w, "secret"w,
+        auto session = configured.open(url, "cn=admin"w, "secret"w,
             `{users:{loginField:"uid",groupField:"memberOf"}}`w);
         auto users = session.users("dc=example"w, "(objectClass=*)"w);
         assert(users.length == 2 && users[0].login == "alice"w && users[1].login == "bob"w);
@@ -153,8 +170,8 @@ void main(string[] args) {
         session.close(); return;
     }
     auto transport = new Z8WindowsLdapTransport();
-    foreach (url; ["http://host"w, "ldap://"w, "ldap://host:"w, "ldap://host:0"w, "ldap://host:65536"w, "ldap://host/path"w]) {
-        bool failed; try { transport.connect(url, ""w, ""w); } catch (Exception) { failed = true; } assert(failed);
+    foreach (invalidUrl; ["http://host"w, "ldap://"w, "ldap://host:"w, "ldap://host:0"w, "ldap://host:65536"w, "ldap://host/path"w]) {
+        bool failed; try { transport.connect(invalidUrl, ""w, ""w); } catch (Exception) { failed = true; } assert(failed);
     }
     auto directory = transport.connect("ldap://127.0.0.1:"w ~ args[1].to!wstring, "cn=admin"w, "secret"w);
     assert(directory.isOpen());
@@ -188,4 +205,30 @@ void main(string[] args) {
         raise fixture.failure
     assert fixture.events == [("bind", b"cn=admin", b"secret"), ("search", b"dc=example", b""),
                               ("search", b"dc=example", b"next"), ("unbind",)]
+    openssl = shutil.which("openssl")
+    if not openssl:
+        git_openssl = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git/mingw64/bin/openssl.exe"
+        openssl = str(git_openssl) if git_openssl.is_file() else None
+    if openssl:
+        key, cert = temp / "key.pem", temp / "cert.pem"
+        subprocess.run([openssl, "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", str(key),
+                        "-out", str(cert), "-days", "1", "-subj", "/CN=127.0.0.1"],
+                       cwd=temp, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(cert, key)
+        for mode in ("tls-verified", "tls-trusted"):
+            fixture = Fixture(context, reject_tls=mode == "tls-verified")
+            try:
+                subprocess.run([str(exe), str(fixture.port), mode], cwd=temp, timeout=20, check=True)
+            finally:
+                fixture.thread.join(20)
+            if fixture.failure:
+                raise fixture.failure
+            if mode == "tls-trusted":
+                assert fixture.events == [("bind", b"cn=admin", b"secret"), ("search", b"dc=example", b""),
+                                          ("search", b"dc=example", b"next"), ("unbind",)]
+            else:
+                assert fixture.events == []
+    else:
+        print("TLS fixture skipped: openssl not found")
     print("Windows LDAP transport: OK")
