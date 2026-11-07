@@ -109,6 +109,8 @@ public class StaticReportProbe {
     public static file mergedInsideStatic() { MergedInsideStaticReport report; return report.run(guid.Null); }
     public static file expandedMerged() { ExpandedMergedReport report; return report.run(guid.Null); }
     public static file mergedOverlap() { MergedOverlapReport report; return report.run(guid.Null); }
+    public static file expandedHorizontalMerged() { ExpandedHorizontalMergedReport report; return report.run(guid.Null); }
+    public static file expandedMergedFormula() { ExpandedMergedFormulaReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -330,11 +332,19 @@ public class ExpandedTwoRowsReport extends Report {
         (source / "ExpandedReport.bl").read_text(encoding="utf-8")
         .replace("ExpandedReport", "ExpandedMergedReport").replace('template = "expanded"', 'template = "expanded-merged"'),
         encoding="utf-8")
+    (source / "ExpandedMergedFormulaReport.bl").write_text(
+        (source / "ExpandedMergedReport.bl").read_text(encoding="utf-8")
+        .replace("ExpandedMergedReport", "ExpandedMergedFormulaReport").replace('template = "expanded-merged"', 'template = "expanded-merged-formula"'),
+        encoding="utf-8")
     (source / "ExpandedHorizontalReport.bl").write_text(
         (source / "ExpandedTwoRowsReport.bl").read_text(encoding="utf-8")
         .replace("ExpandedTwoRowsReport", "ExpandedHorizontalReport")
         .replace('template = "expanded-two"', 'template = "expanded-horizontal"')
         .replace('[address "A1:B2"]', '[axis "1"] [address "A1:B2"]'), encoding="utf-8")
+    (source / "ExpandedHorizontalMergedReport.bl").write_text(
+        (source / "ExpandedHorizontalReport.bl").read_text(encoding="utf-8")
+        .replace("ExpandedHorizontalReport", "ExpandedHorizontalMergedReport")
+        .replace('template = "expanded-horizontal"', 'template = "expanded-horizontal-merged"'), encoding="utf-8")
     (source / "UnsupportedContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.lang.Object;
@@ -608,6 +618,12 @@ public class %s extends Report {
     with zipfile.ZipFile(application / "reports/expanded-merged.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in expanded_merged.items():
             archive.writestr(entry_name, content)
+    merged_formula = dict(expanded_merged)
+    merged_formula["xl/worksheets/sheet1.xml"] = merged_formula["xl/worksheets/sheet1.xml"].replace(
+        '<c r="C1" s="0"><v>99</v></c>', '<c r="C1" s="0"><f>$A$1+1</f><v>2</v></c>')
+    with zipfile.ZipFile(application / "reports/expanded-merged-formula.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in merged_formula.items():
+            archive.writestr(entry_name, content)
     custom_expanded = dict(expanded)
     custom_expanded["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="3" uniqueCount="3"><si><t>${rows.index}</t></si><si><t>${rows.index + 10}</t></si><si><t>Static</t></si></sst>'''
     with zipfile.ZipFile(application / "reports/expanded-custom.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -634,6 +650,12 @@ public class %s extends Report {
         '<c r="B2" t="s"><v>3</v></c></row>', '<c r="B2" t="s"><v>3</v></c><c r="E2" t="s"><v>1</v></c></row>')
     with zipfile.ZipFile(application / "reports/expanded-horizontal.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in horizontal.items():
+            archive.writestr(entry_name, content)
+    horizontal_merged = dict(horizontal)
+    horizontal_merged["xl/worksheets/sheet1.xml"] = horizontal_merged["xl/worksheets/sheet1.xml"].replace(
+        '</worksheet>', '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')
+    with zipfile.ZipFile(application / "reports/expanded-horizontal-merged.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in horizontal_merged.items():
             archive.writestr(entry_name, content)
     merged = dict(entries)
     merged["xl/worksheets/sheet1.xml"] = original_sheet.replace("</worksheet>", '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')
@@ -861,7 +883,9 @@ void main(string[] args) {
     assert(z8_file_exists(P.m_mergedInsideStatic()));
     bool expandedMerged; try { P.m_expandedMerged(); } catch (Exception) { expandedMerged = true; } assert(expandedMerged);
     bool mergedOverlap; try { P.m_mergedOverlap(); } catch (Exception) { mergedOverlap = true; } assert(mergedOverlap);
-    assert(database.begins == 86 && database.rollbacks == 86);
+    bool horizontalMerged; try { P.m_expandedHorizontalMerged(); } catch (Exception) { horizontalMerged = true; } assert(horizontalMerged);
+    bool mergedFormula; try { P.m_expandedMergedFormula(); } catch (Exception) { mergedFormula = true; } assert(mergedFormula);
+    assert(database.begins == 88 && database.rollbacks == 88);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -874,12 +898,13 @@ void main(string[] args) {
         bridge = ROOT / "xlsx/source"
         contents = harness.read_text(encoding="utf-8")
         contents = contents.replace("import z8.runtime;", "import z8.runtime;\nimport z8.xlsx.poi : z8_openxlsx_configure;")
-        contents = contents.replace("void main(string[] args) {", '''class CountingProvider : IZ8PoiProvider, IZ8PoiReportWriter, IZ8PoiReportExpander {
+        contents = contents.replace("void main(string[] args) {", '''class CountingProvider : IZ8PoiProvider, IZ8PoiReportWriter, IZ8PoiReportExpander, IZ8PoiReportMergeWriter {
     IZ8PoiProvider reader;
     IZ8PoiReportWriter writer;
     IZ8PoiReportExpander expander;
-    uint renames, hides, writes, expansions;
-    this(IZ8PoiProvider provider) { reader = provider; writer = cast(IZ8PoiReportWriter)provider; expander = cast(IZ8PoiReportExpander)provider; assert(writer !is null && expander !is null); }
+    IZ8PoiReportMergeWriter mergeWriter;
+    uint renames, hides, writes, expansions, merges;
+    this(IZ8PoiProvider provider) { reader = provider; writer = cast(IZ8PoiReportWriter)provider; expander = cast(IZ8PoiReportExpander)provider; mergeWriter = cast(IZ8PoiReportMergeWriter)provider; assert(writer !is null && expander !is null && mergeWriter !is null); }
     IZ8PoiDocument open(const(ubyte)[] input) { return reader.open(input); }
     ubyte[] renameReportSheet(const(ubyte)[] input, uint index, wstring name) {
         auto result = writer.renameReportSheet(input, index, name);
@@ -896,6 +921,10 @@ void main(string[] args) {
     ubyte[] writeExpandedReport(const(ubyte)[] input, const(Z8PoiCellCopy)[] copies, const(Z8PoiCellEdit)[] cells) {
         assert(copies.length == 8 || copies.length == 4); auto result = expander.writeExpandedReport(input, copies, cells);
         ++expansions; return result;
+    }
+    ubyte[] addReportMerges(const(ubyte)[] input, const(Z8PoiMergedRegion)[] regions) {
+        assert(regions.length == 2); auto result = mergeWriter.addReportMerges(input, regions);
+        ++merges; return result;
     }
 }
 void main(string[] args) {
@@ -986,6 +1015,15 @@ void main(string[] args) {
         contents = contents.replace(
             'bool mergedInside; try { P.m_mergedInside(); } catch (Exception) { mergedInside = true; } assert(mergedInside);',
             'auto mergedInside = P.m_mergedInside(); copy(z8_file_resolve_path(mergedInside), buildPath(args[2], "merged-inside.xlsx")); assert(counter.writes == 13);')
+        contents = contents.replace(
+            'bool expandedMerged; try { P.m_expandedMerged(); } catch (Exception) { expandedMerged = true; } assert(expandedMerged);',
+            'auto expandedMerged = P.m_expandedMerged(); copy(z8_file_resolve_path(expandedMerged), buildPath(args[2], "expanded-merged.xlsx")); assert(counter.expansions == 16 && counter.merges == 1);')
+        contents = contents.replace(
+            'bool horizontalMerged; try { P.m_expandedHorizontalMerged(); } catch (Exception) { horizontalMerged = true; } assert(horizontalMerged);',
+            'auto horizontalMerged = P.m_expandedHorizontalMerged(); copy(z8_file_resolve_path(horizontalMerged), buildPath(args[2], "expanded-horizontal-merged.xlsx")); assert(counter.expansions == 17 && counter.merges == 2);')
+        contents = contents.replace(
+            'bool mergedFormula; try { P.m_expandedMergedFormula(); } catch (Exception) { mergedFormula = true; } assert(mergedFormula);',
+            'auto mergedFormula = P.m_expandedMergedFormula(); copy(z8_file_resolve_path(mergedFormula), buildPath(args[2], "expanded-merged-formula.xlsx")); assert(counter.expansions == 18 && counter.merges == 3);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1191,10 +1229,11 @@ class PoiRangeOracle {
       boolean fieldCase = args.length > 3 && "fields".equals(args[3]);
       boolean customCase = args.length > 3 && "custom".equals(args[3]);
       boolean expandedCustomCase = args.length > 3 && "expanded-custom".equals(args[3]);
-      boolean horizontalCase = args.length > 3 && "expanded-horizontal".equals(args[3]);
+      boolean expandedMergedCase = args.length > 3 && ("expanded-merged".equals(args[3]) || "expanded-horizontal-merged".equals(args[3]) || "expanded-merged-formula".equals(args[3]));
+      boolean horizontalCase = args.length > 3 && ("expanded-horizontal".equals(args[3]) || "expanded-horizontal-merged".equals(args[3]));
       boolean expandedEmptyCase = args.length > 3 && "expanded-empty".equals(args[3]);
       boolean expandedTwoCase = horizontalCase || expandedEmptyCase || (args.length > 3 && "expanded-two".equals(args[3]));
-      boolean expandedCase = expandedCustomCase || expandedTwoCase || (args.length > 3 && "expanded".equals(args[3]));
+      boolean expandedCase = expandedCustomCase || expandedTwoCase || expandedMergedCase || (args.length > 3 && "expanded".equals(args[3]));
       boolean jsonInlineCase = args.length > 3 && "json-inline".equals(args[3]);
       boolean repeatCase = args.length > 3 && "repeat".equals(args[3]);
       boolean mergedCase = args.length > 3 && "merged".equals(args[3]);
@@ -1366,6 +1405,12 @@ class PoiRangeOracle {
       if (mergedCase && (original.getSheetAt(0).getNumMergedRegions() != 1 || actual.getSheetAt(0).getNumMergedRegions() != 1 ||
           !original.getSheetAt(0).getMergedRegion(0).formatAsString().equals(actual.getSheetAt(0).getMergedRegion(0).formatAsString())))
         throw new AssertionError("merged region differs");
+      if (expandedMergedCase) {
+        java.util.Set<String> expected = new java.util.HashSet<>(), result = new java.util.HashSet<>();
+        for (int i = 0; i < original.getSheetAt(0).getNumMergedRegions(); ++i) expected.add(original.getSheetAt(0).getMergedRegion(i).formatAsString());
+        for (int i = 0; i < actual.getSheetAt(0).getNumMergedRegions(); ++i) result.add(actual.getSheetAt(0).getMergedRegion(i).formatAsString());
+        if (expected.size() != 3 || !expected.equals(result)) throw new AssertionError("expanded merged regions: " + expected + " != " + result);
+      }
       if (!original.getSheetName(0).equals(actual.getSheetName(0))) throw new AssertionError("sheet name differs");
     } finally { ApplicationServer.setRequest(null); }
   }
@@ -1465,4 +1510,9 @@ class PoiRangeOracle {
                                          str(application / "reports/merged-inside.xlsx"), str(working / "merged-inside.xlsx"), str(config), "merged"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
+                for name in ("expanded-merged", "expanded-horizontal-merged", "expanded-merged-formula"):
+                    result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                             str(application / ("reports/" + name + ".xlsx")), str(working / (name + ".xlsx")), str(config), name],
+                                            cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                    assert result.returncode == 0, result.stderr
 print("POI static report template, naming and transaction verified")

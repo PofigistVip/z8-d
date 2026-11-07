@@ -25,6 +25,7 @@ private extern(C) {
     int z8_xlsx_set_cell_number(void*, uint, uint, uint, double);
     int z8_xlsx_set_cell_boolean(void*, uint, uint, uint, int);
     int z8_xlsx_copy_cell(void*, uint, uint, uint, uint, uint, int);
+    int z8_xlsx_merge_cells(void*, uint, uint, uint, uint, uint);
     int z8_xlsx_cell_string(void*, uint, uint, uint, char*, size_t, size_t*);
     int z8_xlsx_cell_type(void*, uint, uint, uint, int*);
     int z8_xlsx_cell_number(void*, uint, uint, uint, double*);
@@ -40,7 +41,7 @@ private void check(int result) {
 }
 
 private void checkAbi() {
-    if (z8_xlsx_abi_version() != 3) throw new Exception("incompatible OpenXLSX bridge; rebuild xlsx");
+    if (z8_xlsx_abi_version() != 4) throw new Exception("incompatible OpenXLSX bridge; rebuild xlsx");
 }
 
 class Workbook {
@@ -164,6 +165,11 @@ class Workbook {
     /// Formula references are copied literally and are not adjusted.
     void copyCell(uint sheet, uint sourceRow, uint sourceColumn, uint targetRow, uint targetColumn, bool clearFormulaCache = false) {
         check(z8_xlsx_copy_cell(handle, sheet, sourceRow, sourceColumn, targetRow, targetColumn, clearFormulaCache ? 1 : 0));
+    }
+
+    /// Merge a rectangular region without clearing the covered cell values.
+    void mergeCells(uint sheet, uint firstRow, uint firstColumn, uint lastRow, uint lastColumn) {
+        check(z8_xlsx_merge_cells(handle, sheet, firstRow, firstColumn, lastRow, lastColumn));
     }
 
     /// Raw OpenXLSX conversion; rich inline text and OOXML escapes may need

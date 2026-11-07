@@ -27,6 +27,7 @@ struct Z8PoiCellEdit {
     bool booleanValue;
 }
 struct Z8PoiCellCopy { uint sheet, sourceRow, sourceColumn, targetRow, targetColumn; bool clearFormulaCache; }
+struct Z8PoiMergedRegion { uint sheet, firstRow, firstColumn, lastRow, lastColumn; }
 /// Optional report mutations supported by the registered workbook provider.
 interface IZ8PoiReportWriter {
     ubyte[] renameReportSheet(const(ubyte)[] input, uint index, wstring name);
@@ -36,6 +37,9 @@ interface IZ8PoiReportWriter {
 /// Optional capability for copying template cells before writing report values.
 interface IZ8PoiReportExpander {
     ubyte[] writeExpandedReport(const(ubyte)[] input, const(Z8PoiCellCopy)[] copies, const(Z8PoiCellEdit)[] cells);
+}
+interface IZ8PoiReportMergeWriter {
+    ubyte[] addReportMerges(const(ubyte)[] input, const(Z8PoiMergedRegion)[] merges);
 }
 /// The provider cannot read this workbook; try the built-in compatible reader.
 class Z8PoiUnsupportedWorkbook : Exception {

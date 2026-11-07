@@ -99,10 +99,16 @@ void main(string[] args) {
     assert(reopened.cellFormula(0, 3, 6) == "B1*2" && !reopened.cellXml(0, 3, 6).canFind("<v"));
     assert(reopened.cellFormula(0, 4, 6) == "B1*2" && reopened.cellNumber(0, 4, 6) == 84);
     assert(reopened.cellXml(0, 3, 9).canFind("First") && reopened.cellXml(0, 3, 9).canFind("_x0041_"));
+    reopened.setNumber(2, 4, 0, 11); reopened.setNumber(2, 4, 1, 22);
+    reopened.mergeCells(2, 4, 0, 4, 1);
+    assert(reopened.cellNumber(2, 4, 1) == 22 && reopened.sheetXml(2).canFind("A5:B5"));
+    assertThrown!Exception(reopened.mergeCells(2, 4, 1, 4, 0));
+    assertThrown!Exception(reopened.mergeCells(2, 4, 0, 4, 0));
     assertThrown!Exception(reopened.copyCell(0, 0, 2, 3, 2));
     assertThrown!Exception(reopened.copyCell(0, 0, 1, 1048576, 0));
     auto copied = new Workbook(reopened.save());
     assert(copied.cellNumber(0, 3, 1) == 42 && copied.cellXml(0, 3, 9).canFind("_x0041_"));
+    assert(copied.cellNumber(2, 4, 1) == 22 && copied.sheetXml(2).canFind("A5:B5"));
     copied.close();
     reopened.close();
     memoryBook.setColumnHidden(0, 3, false);

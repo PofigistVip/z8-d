@@ -271,7 +271,8 @@ private void z8_poi_report_evaluate_cell(Z8EvalState state, Z8PoiWorkbook workbo
 // Apply a single, non-expanding source to the selected report block.
 private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z8PoiWorkbook workbook,
                                               out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits,
-                                              out Z8PoiCellCopy[] copies, bool allowExpansion = false, bool allowMerges = false) {
+                                              out Z8PoiCellCopy[] copies, out Z8PoiMergedRegion[] addedMerges,
+                                              bool allowExpansion = false, bool allowMerges = false) {
     import std.string : indexOf;
     range = z8_nonnull(range); range.z8_ensure();
     auto rangeState = z8_report_range_state(range);
@@ -286,20 +287,20 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     if (sheet < 0 || sheet >= workbook.sheets.length) throw new Exception("POI report sheet expansion is not implemented");
     renameSheet = sheet; renameName = range.z8_get_attribute("sheetName"w);
     auto block = z8_poi_report_block(range.z8_get_attribute("address"w));
+    Z8PoiReportBlock[] templateMerges;
     if (workbook.sheets[sheet].hasMergedRegions) {
         if (!allowMerges || workbook.sheets[sheet].mergedReferences.length == 0)
             throw new Exception("merged POI report range cells are not implemented");
-        Z8PoiReportBlock[] seen;
         foreach (reference; workbook.sheets[sheet].mergedReferences) {
             auto merge = z8_poi_report_block(reference);
             if (merge.firstRow < block.firstRow || merge.lastRow > block.lastRow ||
                 merge.firstColumn < block.firstColumn || merge.lastColumn > block.lastColumn ||
                 (merge.firstRow == merge.lastRow && merge.firstColumn == merge.lastColumn))
                 throw new Exception("merged POI report range cells are not implemented");
-            foreach (previous; seen) if (merge.firstRow <= previous.lastRow && previous.firstRow <= merge.lastRow &&
+            foreach (previous; templateMerges) if (merge.firstRow <= previous.lastRow && previous.firstRow <= merge.lastRow &&
                 merge.firstColumn <= previous.lastColumn && previous.firstColumn <= merge.lastColumn)
                 throw new Exception("overlapping POI report merged regions");
-            seen ~= merge;
+            templateMerges ~= merge;
         }
     }
     auto boundariesText = range.z8_get_attribute("boundaries"w);
@@ -342,7 +343,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
             throw new Exception("POI report range expansion exceeds worksheet bounds");
         auto offset = iteration * (horizontal ? width : height);
         if (iteration) {
-            if (!allowExpansion || workbook.sheets.length != 1 || boundariesText is null || workbook.sheets[sheet].hasMergedRegions)
+            if (!allowExpansion || workbook.sheets.length != 1 || boundariesText is null)
                 throw new Exception("POI report range expansion layout is not implemented");
             auto boundaries = z8_poi_report_block(boundariesText);
             if (boundaries.firstRow != block.firstRow || boundaries.lastRow != block.lastRow ||
@@ -393,6 +394,12 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                 // has no cells in this block. Avoid silently omitting it.
                 if (!hasTemplateCell && existingRow is null)
                     throw new Exception("POI report empty target row is not implemented");
+            }
+            foreach (merge; templateMerges) {
+                auto rowOffset = horizontal ? 0 : offset, columnOffset = horizontal ? offset : 0;
+                addedMerges ~= Z8PoiMergedRegion(cast(uint)sheet, cast(uint)(merge.firstRow + rowOffset),
+                    cast(uint)(merge.firstColumn + columnOffset), cast(uint)(merge.lastRow + rowOffset),
+                    cast(uint)(merge.lastColumn + columnOffset));
             }
         }
         foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells) {
@@ -460,11 +467,11 @@ private void z8_poi_report_apply_root(Z8Object report, Z8PoiWorkbook workbook, i
 }
 private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8PoiWorkbook workbook,
                                         out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits,
-                                        out Z8PoiCellCopy[] copies) {
+                                        out Z8PoiCellCopy[] copies, out Z8PoiMergedRegion[] addedMerges) {
     import std.string : indexOf;
     if (!ranges.length) return;
     if (ranges.length == 1) {
-        z8_poi_report_apply_simple_range(report, ranges[0], workbook, renameSheet, renameName, edits, copies, true, true);
+        z8_poi_report_apply_simple_range(report, ranges[0], workbook, renameSheet, renameName, edits, copies, addedMerges, true, true);
         auto boundaries = ranges[0].z8_get_attribute("boundaries"w);
         Z8PoiReportBlock root;
         if (boundaries !is null) root = z8_poi_report_block(boundaries);
@@ -519,8 +526,8 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
         entries[position] = entry;
     }
     foreach (entry; entries) {
-        int ignoredSheet; wstring ignoredName; Z8PoiCellEdit[] changes; Z8PoiCellCopy[] ignoredCopies;
-        z8_poi_report_apply_simple_range(report, entry.range, workbook, ignoredSheet, ignoredName, changes, ignoredCopies);
+        int ignoredSheet; wstring ignoredName; Z8PoiCellEdit[] changes; Z8PoiCellCopy[] ignoredCopies; Z8PoiMergedRegion[] ignoredMerges;
+        z8_poi_report_apply_simple_range(report, entry.range, workbook, ignoredSheet, ignoredName, changes, ignoredCopies, ignoredMerges);
         edits ~= changes;
     }
     z8_poi_report_apply_root(report, workbook, sheet, root, copies, edits);

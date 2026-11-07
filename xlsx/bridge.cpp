@@ -184,7 +184,7 @@ void copyString(const std::string& value, char* buffer, size_t capacity, size_t*
 }
 
 Z8_EXPORT const char* z8_xlsx_error() noexcept { return error.c_str(); }
-Z8_EXPORT unsigned z8_xlsx_abi_version() noexcept { return 3; }
+Z8_EXPORT unsigned z8_xlsx_abi_version() noexcept { return 4; }
 
 Z8_EXPORT int z8_xlsx_open(const char* path, void** result) noexcept {
     return protect([&] {
@@ -389,6 +389,18 @@ Z8_EXPORT int z8_xlsx_copy_cell(void* handle, unsigned sheet, unsigned sourceRow
         target.copyFrom(source);
         if (clearFormulaCache)
             target.clear(OpenXLSX::XLKeepCellStyle | OpenXLSX::XLKeepCellType | OpenXLSX::XLKeepCellFormula);
+    });
+}
+
+Z8_EXPORT int z8_xlsx_merge_cells(void* handle, unsigned sheet, unsigned firstRow, unsigned firstColumn,
+                                  unsigned lastRow, unsigned lastColumn) noexcept {
+    return protect([&] {
+        if (firstRow > lastRow || firstColumn > lastColumn || lastRow >= 1048576 || lastColumn >= 16384)
+            throw std::out_of_range("merged range out of bounds");
+        auto page = worksheet(handle, sheet);
+        auto range = page.range(OpenXLSX::XLCellReference(firstRow + 1, static_cast<uint16_t>(firstColumn + 1)),
+                                OpenXLSX::XLCellReference(lastRow + 1, static_cast<uint16_t>(lastColumn + 1)));
+        page.mergeCells(range, false);
     });
 }
 
