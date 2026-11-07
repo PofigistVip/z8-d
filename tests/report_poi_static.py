@@ -87,6 +87,7 @@ public class StaticReportProbe {
     public static file expandedFormula() { ExpandedFormulaReport report; return report.run(guid.Null); }
     public static file expandedMetadata() { ExpandedMetadataReport report; return report.run(guid.Null); }
     public static file expandedRich() { ExpandedRichReport report; return report.run(guid.Null); }
+    public static file expandedCustom() { ExpandedCustomReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -254,6 +255,16 @@ public class %s extends Report {
         JsonObject three; three.set("amount", 30); three.set("title", "Third"); rows.add(three);
     }
 }''' % (name, template), encoding="utf-8")
+    (source / "ThreeRows.bl").write_text('''import org.zenframework.z8.base.form.report.CustomData;
+public class ThreeRows extends CustomData { virtual public int count() { return 3; } }''', encoding="utf-8")
+    (source / "ExpandedCustomReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+public class ExpandedCustomReport extends Report {
+    engine = Report.POI; template = "expanded-custom";
+    ThreeRows rows; objects = {rows};
+    [address "A1:D1"] [boundaries "A1:D1"] Range region;
+    region.source = rows; ranges = {region};
+}''', encoding="utf-8")
     (source / "UnsupportedContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.lang.Object;
@@ -481,6 +492,11 @@ public class %s extends Report {
         with zipfile.ZipFile(application / ("reports/" + filename + ".xlsx"), "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for entry_name, content in book.items():
                 archive.writestr(entry_name, content)
+    custom_expanded = dict(expanded)
+    custom_expanded["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="3" uniqueCount="3"><si><t>${rows.index}</t></si><si><t>${rows.index + 10}</t></si><si><t>Static</t></si></sst>'''
+    with zipfile.ZipFile(application / "reports/expanded-custom.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in custom_expanded.items():
+            archive.writestr(entry_name, content)
     merged = dict(entries)
     merged["xl/worksheets/sheet1.xml"] = original_sheet.replace("</worksheet>", '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')
     with zipfile.ZipFile(application / "reports/merged.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -671,7 +687,8 @@ void main(string[] args) {
     bool expandedFormula; try { P.m_expandedFormula(); } catch (Exception) { expandedFormula = true; } assert(expandedFormula);
     bool expandedMetadata; try { P.m_expandedMetadata(); } catch (Exception) { expandedMetadata = true; } assert(expandedMetadata);
     bool expandedRich; try { P.m_expandedRich(); } catch (Exception) { expandedRich = true; } assert(expandedRich);
-    assert(database.begins == 64 && database.rollbacks == 64);
+    bool expandedCustom; try { P.m_expandedCustom(); } catch (Exception) { expandedCustom = true; } assert(expandedCustom);
+    assert(database.begins == 65 && database.rollbacks == 65);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -754,6 +771,9 @@ void main(string[] args) {
         contents = contents.replace(
             'bool expandedRich; try { P.m_expandedRich(); } catch (Exception) { expandedRich = true; } assert(expandedRich);',
             'auto expandedRich = P.m_expandedRich(); copy(z8_file_resolve_path(expandedRich), buildPath(args[2], "expanded-rich.xlsx")); assert(counter.expansions == 3);')
+        contents = contents.replace(
+            'bool expandedCustom; try { P.m_expandedCustom(); } catch (Exception) { expandedCustom = true; } assert(expandedCustom);',
+            'auto expandedCustom = P.m_expandedCustom(); copy(z8_file_resolve_path(expandedCustom), buildPath(args[2], "expanded-custom.xlsx")); assert(counter.expansions == 4);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -931,6 +951,14 @@ class PoiRangeOracle {
     FakeQueryClass(org.zenframework.z8.server.runtime.IObject owner) { super(owner); setJavaClass(FakeQuery.class); }
     @Override public Object newObject(org.zenframework.z8.server.runtime.IObject owner) { return new FakeQuery(owner); }
   }
+  static class FakeCustom extends org.zenframework.z8.server.base.form.report.CustomData {
+    FakeCustom(org.zenframework.z8.server.runtime.IObject owner) { super(owner); }
+    @Override public org.zenframework.z8.server.types.integer z8_count() { return new org.zenframework.z8.server.types.integer(3); }
+  }
+  static class FakeCustomClass extends org.zenframework.z8.server.base.form.report.CustomData.CLASS<FakeCustom> {
+    FakeCustomClass(org.zenframework.z8.server.runtime.IObject owner) { super(owner); setJavaClass(FakeCustom.class); }
+    @Override public Object newObject(org.zenframework.z8.server.runtime.IObject owner) { return new FakeCustom(owner); }
+  }
   public static void main(String[] args) throws Exception {
     ServerConfig.load(args[2]);
     Request request = new Request(new Session("test"));
@@ -942,8 +970,9 @@ class PoiRangeOracle {
       boolean contextCase = args.length > 3 && "context".equals(args[3]);
       boolean fieldCase = args.length > 3 && "fields".equals(args[3]);
       boolean customCase = args.length > 3 && "custom".equals(args[3]);
-      boolean expandedCase = args.length > 3 && "expanded".equals(args[3]);
-      boolean jsonCase = expandedCase || (args.length > 3 && "json".equals(args[3]));
+      boolean expandedCustomCase = args.length > 3 && "expanded-custom".equals(args[3]);
+      boolean expandedCase = expandedCustomCase || (args.length > 3 && "expanded".equals(args[3]));
+      boolean jsonCase = (expandedCase && !expandedCustomCase) || (args.length > 3 && "json".equals(args[3]));
       boolean queryCase = args.length > 3 && "query".equals(args[3]);
       boolean outsideCase = args.length > 3 && "outside".equals(args[3]);
       boolean multipleCase = outsideCase || (args.length > 3 && "multiple".equals(args[3]));
@@ -1028,6 +1057,10 @@ class PoiRangeOracle {
         }
         customSource = new QuerySource(q.get());
       }
+      if (expandedCustomCase) {
+        FakeCustomClass rows = new FakeCustomClass(context); rows.setIndex("rows"); context.members().add(rows);
+        customSource = new CustomSource(rows.get());
+      }
       if (multipleCase) {
         final int[] order = {0};
         for (int i = 0; i < 2; ++i) {
@@ -1048,7 +1081,7 @@ class PoiRangeOracle {
       boolean constants = args.length > 3 && "constants".equals(args[3]);
       boolean parameters = args.length > 3 && "parameters".equals(args[3]);
       boolean dates = args.length > 3 && "dates".equals(args[3]);
-      Range child = new Range().setSource(customCase || jsonCase || queryCase ? customSource : SimpleSource.newDefault())
+      Range child = new Range().setSource(customCase || jsonCase || queryCase || expandedCustomCase ? customSource : SimpleSource.newDefault())
           .setBlock(customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
           .setBoundaries(customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       if (multipleCase) {
@@ -1160,4 +1193,8 @@ class PoiRangeOracle {
                                          str(inline), str(inline), str(config), "expanded"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode != 0 and "NullPointerException" in result.stderr, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/expanded-custom.xlsx"), str(working / "expanded-custom.xlsx"), str(config), "expanded-custom"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
 print("POI static report template, naming and transaction verified")
