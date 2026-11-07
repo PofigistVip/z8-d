@@ -201,6 +201,9 @@ private Z8Primary z8_eval_type_method(Z8EvalContext context, wstring name, Z8Eva
     throw new Exception("unsupported Eval type method");
 }
 private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue[] arguments) {
+    if (object.reportObject !is null) throw new Exception("POI report object context member is not implemented");
+    foreach (argument; arguments) if (argument.reportObject !is null)
+        throw new Exception("POI report object context member is not implemented");
     bool evaluated = object.evaluated;
     foreach (argument; arguments) evaluated = evaluated && argument.evaluated;
     if (!evaluated) {
@@ -304,6 +307,8 @@ private wstring z8_eval_format_decimal(Z8Decimal number, wstring pattern) {
     return result;
 }
 private Z8EvalValue z8_eval_function(wstring name, Z8EvalValue[] arguments) {
+    foreach (argument; arguments) if (argument.reportObject !is null)
+        throw new Exception("POI report object context member is not implemented");
     bool evaluated = true;
     foreach (argument; arguments) evaluated = evaluated && argument.evaluated;
     if (!evaluated) {

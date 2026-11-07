@@ -122,7 +122,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
         if (expression.canFind('"')) throw new Exception("POI report expression syntax is not implemented");
         auto evaluated = z8_eval_expression(evalState, expression);
         if (!evaluated.evaluated || evaluated.context != Z8EvalContext.none || evaluated.json !is null ||
-            evaluated.requestParameters !is null)
+            evaluated.requestParameters !is null || evaluated.reportObject !is null)
             throw new Exception("POI report expression context is not implemented");
         Z8PoiCellEdit edit;
         edit.sheet = cast(uint)sheet; edit.row = cast(uint)rowNumber; edit.column = cast(uint)columnNumber;

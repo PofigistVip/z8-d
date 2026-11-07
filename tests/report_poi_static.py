@@ -96,14 +96,20 @@ import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.base.json.JsonObject;
 public class ContextRangeReport extends Report {
     engine = Report.POI; template = "context";
-    JsonObject info; JsonObject parameters;
-    objects = {info, parameters};
+    JsonObject info; JsonObject parameters; ContextGroup group;
+    objects = {info, parameters, group};
     [address "A1:E1"] [boundaries "A1:E1"] Range region;
     ranges = {region};
     virtual protected void prepare(guid recordId) {
         info.set("title", "Ada 😀"); info.set("amount", 42);
         parameters.set("foo", "member value");
+        group.data.set("amount", 42);
     }
+}''', encoding="utf-8")
+    (source / "ContextGroup.bl").write_text('''import org.zenframework.z8.lang.Object;
+import org.zenframework.z8.base.json.JsonObject;
+public class ContextGroup extends Object {
+    public JsonObject data; objects = {data};
 }''', encoding="utf-8")
     (source / "UnsupportedContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
@@ -248,7 +254,7 @@ public class %s extends Report {
         for name, content in parameters.items():
             archive.writestr(name, content)
     context = dict(parameters)
-    context["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="5" uniqueCount="5"><si><t>${info.title}</t></si><si><t>${info['amount']}</t></si><si><t>${parameters.foo}</t></si><si><t>Title: ${info.title}!</t></si><si><t>${info.missing}</t></si></sst>'''
+    context["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="5" uniqueCount="5"><si><t>${info['title']}</t></si><si><t>${group.data.amount}</t></si><si><t>${parameters.foo}</t></si><si><t>Title: ${info.title}!</t></si><si><t>${info.missing}</t></si></sst>'''
     with zipfile.ZipFile(application / "reports/context.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in context.items():
             archive.writestr(name, content)
@@ -573,6 +579,12 @@ class PoiRangeOracle {
             new org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<>(context);
         parametersObject.setIndex("parameters"); context.members().add(parametersObject);
         parametersObject.get().z8_set(new org.zenframework.z8.server.types.string("foo"), new org.zenframework.z8.server.types.string("member value"));
+        OBJECT.CLASS<OBJECT> group = new OBJECT.CLASS<>(context);
+        group.setIndex("group"); context.members().add(group);
+        org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> data =
+            new org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<>(group.get());
+        data.setIndex("data"); group.get().members().add(data);
+        data.get().z8_set(new org.zenframework.z8.server.types.string("amount"), new org.zenframework.z8.server.types.integer(42));
       }
       PoiReport report = new PoiReport(new ReportOptions()).setContext(context);
       boolean constants = args.length > 3 && "constants".equals(args[3]);

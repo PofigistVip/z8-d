@@ -12,6 +12,7 @@ private enum Z8EvalContext { none, json, booleanType, integerType, decimalType, 
 private struct Z8EvalValue {
     bool evaluated; Z8Primary primary; Z8Object json; wstring expression; Z8EvalContext context;
     Z8StringMap requestParameters;
+    Z8Object reportObject;
 }
 private Z8EvalState z8_eval_state(Z8Object self) {
     self = z8_nonnull(self);
@@ -42,6 +43,7 @@ private Z8Object z8_eval_clear(Z8Object self) {
 private Z8Array!wstring z8_eval_errors(Z8Object self) { return new Z8Array!wstring(z8_eval_state(self).errors.dup); }
 private wstring z8_eval_value_text(Z8EvalValue value) {
     if (!value.evaluated) return value.expression;
+    if (value.reportObject !is null) throw new Exception("POI report object context member is not implemented");
     if (value.context != Z8EvalContext.none && value.context != Z8EvalContext.json) {
         wstring typeName;
         final switch (value.context) {
@@ -108,7 +110,7 @@ private wstring z8_eval_text_from_state(Z8EvalState state, wstring source, bool 
             if (reportSyntax && expression.canFind('"')) throw new Exception("POI report expression syntax is not implemented");
             value = z8_eval_expression(state, expression);
             if (requireResolved && (!value.evaluated || value.context != Z8EvalContext.none ||
-                value.json !is null || value.requestParameters !is null))
+                value.json !is null || value.requestParameters !is null || value.reportObject !is null))
                 throw new Exception("POI report expression context is not implemented");
         }
         catch (Exception error) {

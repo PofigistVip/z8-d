@@ -20,13 +20,8 @@ private Z8EvalValue z8_eval_atom(Z8EvalState state, wstring source) {
     foreach (i, c; text) if (!(isAlpha(c) || c == '_' || (i && isNumber(c))))
         throw new Exception("unsupported Eval expression");
     // ObjectContext searches report members before the parent context.
-    if (state.reportContext !is null) foreach (member; z8_object_members(state.reportContext)) {
-        if (member.z8_index() != text) continue;
-        member.z8_ensure();
-        if (!z8_native_is_instance(z8_json_object_name, member) && !z8_native_is_instance(z8_json_array_name, member))
-            throw new Exception("POI report object context member is not implemented");
-        return Z8EvalValue(true, null, member, null);
-    }
+    if (state.reportContext !is null) foreach (member; z8_object_members(state.reportContext))
+        if (member.z8_index() == text) return z8_eval_report_member(member);
     auto found = text in state.variables;
     if (found !is null) return Z8EvalValue(true, found.primary, found.json, null, Z8EvalContext.none, found.requestParameters);
     Z8EvalContext context;
@@ -42,6 +37,12 @@ private Z8EvalValue z8_eval_atom(Z8EvalState state, wstring source) {
     auto pattern = z8_string_new("$Expression.variableIsNotSet$"w);
     state.errors ~= z8_string_format(pattern, new Z8Array!Z8Primary([z8_primary_box(text)]));
     return Z8EvalValue(false, null, null, text.idup);
+}
+private Z8EvalValue z8_eval_report_member(Z8Object member) {
+    member.z8_ensure();
+    if (z8_native_is_instance(z8_json_object_name, member) || z8_native_is_instance(z8_json_array_name, member))
+        return Z8EvalValue(true, null, member, null);
+    return Z8EvalValue(true, null, null, null, Z8EvalContext.none, null, member);
 }
 private wstring z8_eval_expression_repr(Z8EvalValue value) {
     if (!value.evaluated) return value.expression;
@@ -83,6 +84,11 @@ private Z8EvalValue z8_eval_property(Z8EvalValue object, wstring name) {
     // Java request parameters are a Map<z8.string, z8.string>; property
     // lookup uses a Java String key and therefore does not match those keys.
     if (object.requestParameters !is null) return Z8EvalValue(true, null, null, null);
+    if (object.reportObject !is null) {
+        foreach (member; z8_object_members(object.reportObject))
+            if (member.z8_index() == name) return z8_eval_report_member(member);
+        throw new Exception("POI report object context member is not implemented");
+    }
     if (object.json is null || !z8_native_is_instance(z8_json_object_name, object.json))
         throw new Exception("unsupported Eval property");
     return z8_eval_json_property(object.json, name);
@@ -138,6 +144,8 @@ private Z8EvalValue z8_eval_json_aggregate(wstring name, Z8EvalValue[] arguments
 private Z8EvalValue z8_eval_item(Z8EvalState state, Z8EvalValue object, Z8EvalValue index) {
     if (!object.evaluated || !index.evaluated)
         return Z8EvalValue(false, null, null, z8_eval_expression_repr(object) ~ "["w ~ z8_eval_expression_repr(index) ~ "]"w);
+    if (object.reportObject !is null || index.reportObject !is null)
+        throw new Exception("POI report object context member is not implemented");
     if (object.requestParameters !is null) {
         if (index.primary is null && index.json is null && index.context == Z8EvalContext.none) return object;
         if (index.primary is null || index.primary.kind != Z8PrimaryKind.text)
@@ -204,6 +212,8 @@ private Z8EvalValue z8_eval_binary(wstring op, Z8EvalValue left, Z8EvalValue rig
     if (!left.evaluated || !right.evaluated)
         return Z8EvalValue(false, null, null, z8_eval_expression_repr(left) ~ " "w ~
             (op == "&&"w || op == "||"w || op == "%"w ? "null"w : op) ~ " "w ~ z8_eval_expression_repr(right));
+    if (left.reportObject !is null || right.reportObject !is null)
+        throw new Exception("POI report object context member is not implemented");
     if (left.requestParameters !is null || right.requestParameters !is null)
         throw new Exception("unsupported request parameter map operation");
     // The current Java lexer accepts &&, || and %, but Operator.parse does
