@@ -53,6 +53,20 @@ messages = [
     b'First <not closed\r\nline> Second <b>bold</b> End <unfinished',
     b'From: html@example.com\r\nSubject: Many open tags\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n'
     b'<<<unfinished\r\n<<second <b>closed</b>',
+    b'From: sender@example.com\r\nSubject: Alternative binary\r\n'
+    b'Content-Type: multipart/alternative; boundary=alt\r\n\r\n'
+    b'--alt\r\nContent-Type: text/html\r\n\r\n<b>HTML</b>\r\n'
+    b'--alt\r\nContent-Type: application/octet-stream\r\n\r\nignored\r\n'
+    b'--alt\r\nContent-Type: text/plain\r\n\r\nPlain\r\n--alt--\r\n',
+    b'From: sender@example.com\r\nSubject: Alternative nested\r\n'
+    b'Content-Type: multipart/alternative; boundary=alt\r\n\r\n'
+    b'--alt\r\nContent-Type: multipart/mixed; boundary=inside\r\n\r\n'
+    b'--inside\r\nContent-Type: text/plain\r\n\r\nNested\r\n--inside--\r\n'
+    b'--alt\r\nContent-Type: text/plain\r\n\r\nLater\r\n--alt--\r\n',
+    b'From: sender@example.com\r\nSubject: Alternative HTML\r\n'
+    b'Content-Type: multipart/alternative; boundary=alt\r\n\r\n'
+    b'--alt\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n<b>First</b>\r\n'
+    b'--alt\r\nContent-Type: text/html; charset=x-unknown\r\n\r\nIgnored\r\n--alt--\r\n',
 ]
 for encoding, value in (("windows-1250", "Žluťoučký"), ("windows-1253", "Καλημέρα"),
                         ("windows-1254", "İstanbul"), ("windows-1257", "Ąžuolas"),

@@ -184,14 +184,22 @@ private wstring z8_email_part(string message, size_t depth) {
         }
         wstring fallback;
         foreach (part; parts) {
-            auto text = z8_email_part(part, depth + 1);
-            if (text is null) continue;
-            if (mediaType != "multipart/alternative") return text;
-            auto split = part.indexOf("\n\n");
-            auto partHeaders = split < 0 ? null : z8_email_headers(part[0 .. split]);
-            auto partType = z8_email_header(partHeaders, "content-type", "text/plain").toLower();
-            if (partType.length >= 10 && partType[0 .. 10] == "text/plain") return text;
-            if (fallback is null) fallback = text;
+            if (mediaType == "multipart/alternative") {
+                auto split = part.indexOf("\n\n");
+                auto partHeaders = split < 0 ? null : z8_email_headers(part[0 .. split]);
+                auto partType = z8_email_header(partHeaders, "content-type", "text/plain");
+                auto typeEnd = partType.indexOf(';');
+                partType = (typeEnd < 0 ? partType : partType[0 .. typeEnd]).strip().toLower();
+                if (partType == "text/html") {
+                    if (fallback is null) fallback = z8_email_part(part, depth + 1);
+                } else if (partType == "text/plain") {
+                    auto text = z8_email_part(part, depth + 1);
+                    if (text !is null) return text;
+                } else return z8_email_part(part, depth + 1);
+            } else {
+                auto text = z8_email_part(part, depth + 1);
+                if (text !is null) return text;
+            }
         }
         return fallback;
     }
