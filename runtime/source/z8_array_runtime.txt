@@ -325,6 +325,29 @@ class Z8Array(T) {
             }
             ++z8_version;
             return this;
+        } else static if (is(T == Z8Geometry)) {
+            if (z8_size() <= 1) { ++z8_version; return this; }
+            Z8Geometry[] values;
+            foreach (i; 0 .. z8_size()) values ~= z8_get(i);
+            bool hasNull, hasEmpty;
+            foreach (value; values) {
+                if (value is null) hasNull = true;
+                else if (value.rawHex is null && value.shape == -1) hasEmpty = true;
+            }
+            if (hasNull) {
+                if (values.length != 2 || values[0] !is null || values[1] is null)
+                    throw new Exception("null array element");
+                values[0] = values[1]; values[1] = null;
+            } else {
+                // A geometry without bytes has a non-symmetric comparator in
+                // Java; reject that case until its TimSort behavior is modeled.
+                if (hasEmpty) throw new Exception("empty geometry array element");
+                sort!((a, b) => z8_geometry_to_string(a) < z8_geometry_to_string(b), SwapStrategy.stable)(values);
+            }
+            if (primaryData !is null) foreach (i, value; values) primaryData.z8_set(cast(long)i, z8_array_primary_box(value));
+            else items = values;
+            ++z8_version;
+            return this;
         } else static if (is(T == Z8Date)) {
             if (z8_size() <= 1) { ++z8_version; return this; }
             Z8Date[] values;

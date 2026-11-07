@@ -1,0 +1,16 @@
+public class GeometryArraySort {
+    public static int run() {
+        geometry first = geometry.fromHexString("B");
+        geometry equal = geometry.fromHexString("B");
+        geometry[] values = {first, geometry.fromHexString("A"), equal};
+        geometry[] sorted = values.sort();
+        if (sorted[0].toString() != "A" || sorted[1].toString() != "B" || sorted[2].toString() != "B") return 1;
+        sorted.add(first);
+        if (values.size() != 4) return 2;
+        geometry[] leading = {}; leading.add(null); leading.add(first); leading.sort();
+        if (leading[0].toString() != "B" || leading[1] != null) return 3;
+        geometry[] emptyValue = {first, geometry.none(4326)};
+        try { emptyValue.sort(); return 4; } catch (exception expected) {}
+        return 0;
+    }
+}
