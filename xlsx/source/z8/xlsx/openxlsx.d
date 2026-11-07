@@ -11,6 +11,9 @@ private extern(C) {
     void z8_xlsx_close(void*);
     int z8_xlsx_sheet_count(void*, uint*);
     int z8_xlsx_sheet_name(void*, uint, char*, size_t, size_t*);
+    int z8_xlsx_row_count(void*, uint, uint*);
+    int z8_xlsx_row_exists(void*, uint, uint, int*);
+    int z8_xlsx_row_cell_count(void*, uint, uint, uint*);
     int z8_xlsx_cell_string(void*, uint, uint, uint, char*, size_t, size_t*);
     int z8_xlsx_cell_type(void*, uint, uint, uint, int*);
     int z8_xlsx_cell_number(void*, uint, uint, uint, double*);
@@ -53,6 +56,24 @@ class Workbook {
         auto result = new char[length];
         check(z8_xlsx_sheet_name(handle, index, result.ptr, result.length, &length));
         return result.idup;
+    }
+
+    uint rowCount(uint sheet) {
+        uint result;
+        check(z8_xlsx_row_count(handle, sheet, &result));
+        return result;
+    }
+
+    bool rowExists(uint sheet, uint row) {
+        int result;
+        check(z8_xlsx_row_exists(handle, sheet, row, &result));
+        return result != 0;
+    }
+
+    uint cellCount(uint sheet, uint row) {
+        uint result;
+        check(z8_xlsx_row_cell_count(handle, sheet, row, &result));
+        return result;
     }
 
     string cellString(uint sheet, uint row, uint column) {

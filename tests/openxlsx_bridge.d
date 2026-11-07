@@ -5,9 +5,18 @@ import std.file : read;
 void main(string[] args) {
     assertThrown!Exception(new Workbook(args[1] ~ ".missing"));
     auto book = new Workbook(args[1]);
-    assert(book.sheetCount() == 2);
+    assert(book.sheetCount() == 3);
     assert(book.sheetName(0) == "Данные 😀");
     assert(book.sheetName(1) == "Second");
+    assert(book.rowCount(0) == 2 && book.rowCount(1) == 2);
+    assert(book.rowCount(2) == 0 && !book.rowExists(2, 0));
+    assert(!book.rowExists(1, 0) && book.rowExists(1, 1));
+    assert(!book.rowExists(1, 2) && book.rowExists(1, 3));
+    assert(book.cellCount(0, 0) == 8 && book.cellCount(0, 1) == 1);
+    assert(book.cellCount(1, 1) == 1 && book.cellCount(1, 3) == 0);
+    assertThrown!Exception(book.cellCount(1, 0));
+    assertThrown!Exception(book.rowExists(0, 1048576));
+    assert(book.rowCount(1) == 2);
     assert(book.cellString(0, 0, 0) == "Привет 😀 & text");
     assert(book.cellString(0, 0, 1) == "42");
     assert(book.cellType(0, 0, 0) == CellType.text);
@@ -31,7 +40,7 @@ void main(string[] args) {
     assertThrown!Exception(book.cellString(0, 0, 2));
     assert(book.cellType(0, 0, 2) == CellType.missing);
     assert(book.cellString(1, 1, 2) == "other");
-    assertThrown!Exception(book.sheetName(2));
+    assertThrown!Exception(book.sheetName(3));
     assertThrown!Exception(book.cellString(0, 1048576, 0));
     book.close();
     book.close();
@@ -40,7 +49,7 @@ void main(string[] args) {
     auto bytes = cast(ubyte[])read(args[1]);
     auto memoryBook = new Workbook(bytes);
     bytes[] = 0; // The bridge retains its own archive data.
-    assert(memoryBook.sheetCount() == 2);
+    assert(memoryBook.sheetCount() == 3);
     assert(memoryBook.cellString(0, 0, 0) == "Привет 😀 & text");
     memoryBook.close();
     assertThrown!Exception(new Workbook(cast(ubyte[])[]));

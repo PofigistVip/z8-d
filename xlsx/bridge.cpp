@@ -102,6 +102,18 @@ OpenXLSX::XLCell requireCell(void* handle, unsigned sheet, unsigned row, unsigne
     return cell;
 }
 
+OpenXLSX::XLWorksheet worksheet(void* handle, unsigned sheet) {
+    auto& doc = document(handle);
+    return doc.workbook().worksheet(sheetName(doc, sheet));
+}
+
+OpenXLSX::XLRow findRow(OpenXLSX::XLWorksheet& sheet, unsigned row) {
+    if (row >= 1048576) throw std::out_of_range("row index out of bounds");
+    auto rows = sheet.rows(row + 1, row + 1);
+    auto item = rows.begin();
+    return item.rowExists() ? *item : OpenXLSX::XLRow{};
+}
+
 void copyString(const std::string& value, char* buffer, size_t capacity, size_t* length) {
     if (!length) throw std::invalid_argument("missing output length");
     *length = value.size();
@@ -149,6 +161,41 @@ Z8_EXPORT int z8_xlsx_sheet_count(void* handle, unsigned* result) noexcept {
 Z8_EXPORT int z8_xlsx_sheet_name(void* handle, unsigned index, char* buffer,
                                   size_t capacity, size_t* length) noexcept {
     return protect([&] { copyString(sheetName(document(handle), index), buffer, capacity, length); });
+}
+
+Z8_EXPORT int z8_xlsx_row_count(void* handle, unsigned sheet, unsigned* result) noexcept {
+    return protect([&] {
+        if (!result) throw std::invalid_argument("missing output");
+        auto page = worksheet(handle, sheet);
+        auto rows = page.rows();
+        unsigned count = 0;
+        for (auto it = rows.begin(); it != rows.end(); ++it) if (it.rowExists()) ++count;
+        *result = count;
+    });
+}
+
+Z8_EXPORT int z8_xlsx_row_exists(void* handle, unsigned sheet, unsigned row, int* result) noexcept {
+    return protect([&] {
+        if (!result) throw std::invalid_argument("missing output");
+        auto page = worksheet(handle, sheet);
+        *result = !findRow(page, row).empty();
+    });
+}
+
+Z8_EXPORT int z8_xlsx_row_cell_count(void* handle, unsigned sheet, unsigned row, unsigned* result) noexcept {
+    return protect([&] {
+        if (!result) throw std::invalid_argument("missing output");
+        auto page = worksheet(handle, sheet);
+        auto record = findRow(page, row);
+        if (record.empty()) throw std::out_of_range("row does not exist");
+        unsigned count = 0;
+        auto last = record.cellCount();
+        if (last) {
+            auto range = page.range(OpenXLSX::XLCellReference(row + 1, 1), OpenXLSX::XLCellReference(row + 1, last));
+            for (auto it = range.begin(); it != range.end(); ++it) if (it.cellExists()) ++count;
+        }
+        *result = count;
+    });
 }
 
 Z8_EXPORT int z8_xlsx_cell_string(void* handle, unsigned sheet, unsigned row, unsigned column,
