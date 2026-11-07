@@ -209,6 +209,7 @@ import org.zenframework.z8.base.application.Application;
     (source / "Sample.bl").write_text('''
 import org.zenframework.z8.base.table.Table;
 import org.zenframework.z8.base.table.value.IntField;
+import org.zenframework.z8.base.table.value.IntExpression;
 import org.zenframework.z8.base.table.value.StringField;
 import org.zenframework.z8.base.table.value.BinaryField;
 import org.zenframework.z8.base.table.value.AttachmentField;
@@ -218,6 +219,7 @@ import org.zenframework.z8.base.sql.Connection;
 import org.zenframework.z8.base.application.Application;
 public class Sample extends Table {
     [name "Title"] public StringField title;
+    [name "TitleLength"] public IntExpression titleLength = title.sql_string().length();
     [name "Amount"] public IntField amount;
     [name "Blob"] public BinaryField blob;
     [name "Documents"] public AttachmentField documents;
@@ -230,9 +232,14 @@ public class Sample extends Table {
     CustomReport exported; reports = {exported};
     virtual protected void onCreateAction(guid id) {
         if (Application.requestParameters().containsKey("verifyLinked") && nested.title.get() != "selector value") throw "missing create selector value";
+        if (Application.requestParameters().containsKey("verifyComputed") && titleLength.get() != 17) throw "missing create expression value";
     }
     virtual protected void onCopyAction(guid id) {
         if (Application.requestParameters().containsKey("verifyLinked") && nested.title.get() != "selector value") throw "missing copy selector value";
+        if (Application.requestParameters().containsKey("verifyComputed") && titleLength.get() != 17) throw "missing copy expression value";
+    }
+    virtual protected void onUpdateAction(guid id) {
+        if (Application.requestParameters().containsKey("verifyComputed") && titleLength.get() != 17) throw "missing update expression value";
     }
     virtual protected binary processContentRequest(string[string] params, file[] files) {
         Connection.get().execute("INSERT INTO \\"ContentLog\\" VALUES (1)");
@@ -278,7 +285,7 @@ __gshared string databaseInfo;
 
 class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
     Z8ApplicationSession authorize(Z8HttpRequest request, wstring id, wstring server) {
-        if (server != "test"w || (id != "full"w && id != "full2"w && id != "limited"w && id != "denied"w && id != "field-denied"w && id != "relation-denied"w && id != "target-denied"w && id != "query-denied"w && id != "leaf-denied"w && id != "leaf-link-denied"w)) return null;
+        if (server != "test"w || (id != "full"w && id != "full2"w && id != "limited"w && id != "denied"w && id != "field-denied"w && id != "expression-denied"w && id != "relation-denied"w && id != "target-denied"w && id != "query-denied"w && id != "leaf-denied"w && id != "leaf-link-denied"w)) return null;
         auto user = new Z8UserData(); user.id = z8_guid_create(id == "full"w || id == "full2"w ? 2 : 3);
         user.builtinAdministrator = id == "full"w || id == "full2"w;
         user.login = "Alice"w; user.firstName = "Alice"w; user.email = "old@example.org"w; user.settings = "{}"w; user.changePassword = true;
@@ -300,6 +307,7 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.Documents"w), Z8Access.init);
             user.privileges.setFieldAccess(z8_guid_create_name("NestedAttachment.Documents"w), Z8Access.init);
         }
+        if (id == "expression-denied"w) user.privileges.setFieldAccess(z8_guid_create_name("Sample.TitleLength"w), Z8Access(true, false, false, false, false, false));
         if (id == "relation-denied"w) {
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.NestedLink"w), Z8Access.init);
             user.privileges.setFieldAccess(z8_guid_create_name("Sample.OtherJoin"w), Z8Access.init);
@@ -765,24 +773,26 @@ void main(string[] args) {
             assert any("job failed" in text for text in messages), result
             result = request(sort='[{"property":"amount"}]')
             assert [row["amount"] for row in result["data"]] == [11, 11], result
-            new_record = '[{"recordId":"00000000-0000-0000-0000-000000000003","title":"Third","amount":25,"nested.title":"selector value"}]'
+            new_record = '[{"recordId":"00000000-0000-0000-0000-000000000003","title":"Third","amount":25,"nested.title":"selector value","titleLength":17}]'
             result = request(session="limited", action="create", data=new_record)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(session="relation-denied", action="create", data=new_record)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
-            result = request(action="create", data=new_record, verifyLinked="true")
+            result = request(action="create", data=new_record, verifyLinked="true", verifyComputed="true")
             assert result["success"] and result["data"][0]["title"] == "Third", result
-            copy_record = '[{"recordId":"00000000-0000-0000-0000-000000000004","title":"Copied","nested.title":"selector value"}]'
+            copy_record = '[{"recordId":"00000000-0000-0000-0000-000000000004","title":"Copied","nested.title":"selector value","titleLength":17}]'
             result = request(session="limited", action="copy", recordId="00000000-0000-0000-0000-000000000003", data=copy_record)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(session="relation-denied", action="copy", recordId="00000000-0000-0000-0000-000000000003", data=copy_record)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
-            result = request(action="copy", recordId="00000000-0000-0000-0000-000000000003", data=copy_record, verifyLinked="true")
+            result = request(action="copy", recordId="00000000-0000-0000-0000-000000000003", data=copy_record, verifyLinked="true", verifyComputed="true")
             assert result["success"] and result["data"][0]["title"] == "Copied" and result["data"][0]["amount"] == 25, result
-            change = '[{"recordId":"00000000-0000-0000-0000-000000000002","title":"Updated","amount":12}]'
+            change = '[{"recordId":"00000000-0000-0000-0000-000000000002","title":"Updated","amount":12,"titleLength":17}]'
             result = request(session="limited", action="update", data=change)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
-            result = request(action="update", data=change)
+            result = request(session="expression-denied", action="update", data=change)
+            assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+            result = request(action="update", data=change, verifyComputed="true")
             assert result["success"] and result["data"][0]["title"] == "Updated" and result["data"][0]["amount"] == 12, result
             nested_id = "00000000-0000-0000-0000-000000000092"
             nested_copy = "00000000-0000-0000-0000-000000000093"

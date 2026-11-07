@@ -109,8 +109,6 @@ private void z8_application_dispatch_query_update_target(wstring className, Z8Ob
                 z8_application_query_set_value(field, value, true);
                 continue;
             }
-            if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
-                throw new Exception("computed fields are not supported by query update");
             auto fieldKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, field);
             if (!privileges.getFieldAccess(queryKey, fieldKey).write) throw new Exception("query update field access denied");
             z8_application_query_set_value(field, value, true);

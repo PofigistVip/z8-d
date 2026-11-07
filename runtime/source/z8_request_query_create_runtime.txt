@@ -58,8 +58,6 @@ private void z8_application_dispatch_query_create_target(wstring className, Z8Ob
                 z8_application_query_set_value(field, value, true);
                 continue;
             }
-            if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
-                throw new Exception("computed fields are not supported by query create");
             z8_application_query_set_value(field, value, true);
         }
         z8_field_set(key, z8_primary_box(id));

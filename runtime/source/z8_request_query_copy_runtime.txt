@@ -56,8 +56,6 @@ private void z8_application_dispatch_query_copy_target(wstring className, Z8Obje
                 if (z8_field_type_id(field) != "binary"w) z8_application_query_set_value(field, value);
                 continue;
             }
-            if (z8_native_is_instance("org.zenframework.z8.server.base.table.value.Expression"w, field))
-                throw new Exception("computed fields are not supported by query copy");
             if (z8_field_type_id(field) != "binary"w) z8_application_query_set_value(field, value);
         }
         if (z8_query_user_events_enabled()) query.z8_query_virtual_onCopyAction(id);
