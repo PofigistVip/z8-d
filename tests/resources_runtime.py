@@ -32,6 +32,8 @@ public class ResourceProbe {
     public static file convert(file source, file target) { return FileConverter.convert(source, target); }
     public static file convertOptions(file source, file target, string[string] options) { return FileConverter.convert(source, target, options); }
     public static file convertBinary(binary source, string type, file target) { return FileConverter.convert(source, type, target); }
+    public static file convertBinaryOptions(binary source, file target, string[string] options) { return FileConverter.convert(source, target, options); }
+    public static file convertBinaryTypeOptions(binary source, string type, file target, string[string] options) { return FileConverter.convert(source, type, target, options); }
 }
 ''', encoding="utf-8")
     application, working = temp / "application", temp / "working"
@@ -79,6 +81,9 @@ void main(string[] args) {
     assert(z8_file_read(P.m_convertOptions(source, target, options)) == "%PDF-test"w);
     auto binaryTarget = z8_file_from_path(buildPath(args[2], "out", "binary.pdf").to!wstring);
     assert(z8_file_read(P.m_convertBinary(z8_binary_from_string("%PDF-binary"w), "pdf"w, binaryTarget)) == "%PDF-binary"w);
+    auto binaryOptions = new Z8StringMap(); binaryOptions.z8_add("reset"w, "true"w);
+    assert(z8_file_read(P.m_convertBinaryOptions(z8_binary_from_string("%PDF-new"w), binaryTarget, binaryOptions)) == "%PDF-binary"w);
+    assert(z8_file_read(P.m_convertBinaryTypeOptions(z8_binary_from_string("%PDF-new"w), "pdf"w, binaryTarget, binaryOptions)) == "%PDF-new"w);
     bool unsupported; try { P.m_convertOptions(z8_file_from_path(buildPath(args[1], "data", "resource.txt").to!wstring), target, options); }
     catch (Exception) { unsupported = true; }
     assert(unsupported && z8_file_read(target) == "%PDF-test"w);

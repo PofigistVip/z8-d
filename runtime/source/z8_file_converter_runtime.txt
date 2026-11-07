@@ -151,7 +151,8 @@ private Z8File z8_file_converter_files(Z8File source, Z8File target, Z8StringMap
 }
 private Z8File z8_file_converter_files_default(Z8File source, Z8File target) { return z8_file_converter_files(source, target, null); }
 private Z8File z8_file_converter_binary(Z8Binary source, Z8File target) { return z8_file_converter_copy(source, null, target, null); }
-private Z8File z8_file_converter_binary_map(Z8Binary source, Z8File target, Z8StringMap parameters) { return z8_file_converter_copy(source, null, target, parameters); }
+// The original overload without an explicit type ignores its parameters.
+private Z8File z8_file_converter_binary_map(Z8Binary source, Z8File target, Z8StringMap parameters) { return z8_file_converter_copy(source, null, target, null); }
 private Z8File z8_file_converter_binary_type(Z8Binary source, wstring type, Z8File target) { return z8_file_converter_copy(source, type, target, null); }
 private Z8File z8_file_converter_binary_type_map(Z8Binary source, wstring type, Z8File target, Z8StringMap parameters) { return z8_file_converter_copy(source, type, target, parameters); }
 private Z8File z8_file_converter_docx_file(Z8File source, Z8File target) {
