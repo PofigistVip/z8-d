@@ -702,8 +702,6 @@ private void z8_poi_report_apply_nested_simple(Z8Object report, Z8Object range, 
     if (!equal(outer, outerBounds)) throw new Exception("nested POI report range layout is not implemented");
     auto parentSource = *z8_report_range_source(range);
     auto parentKind = z8_report_source_state(parentSource).kind;
-    if (parentKind != Z8ReportSourceKind.simple && parentKind != Z8ReportSourceKind.custom && parentKind != Z8ReportSourceKind.json)
-        throw new Exception("nested POI report source is not implemented");
     Z8PoiReportEntry[] entries;
     long lastRow = outer.firstRow, lastColumn = outer.firstColumn;
     foreach (index; 0 .. children.z8_size()) {
@@ -753,7 +751,9 @@ private void z8_poi_report_apply_nested_simple(Z8Object report, Z8Object range, 
     }
     z8_report_register_data_source(report, parentSource);
     scope(exit) z8_report_source_close(parentSource);
-    z8_report_source_open(parentSource, sheet);
+    auto fields = parentKind == Z8ReportSourceKind.query ?
+        z8_poi_report_query_fields(report, z8_report_source_object(parentSource), workbook.sheets[sheet], outer) : null;
+    z8_report_source_open(parentSource, sheet, fields);
     if (!z8_report_source_next(parentSource)) throw new Exception("nested POI report source is empty");
     foreach (entry; entries) {
         int childSheet; wstring childName; Z8PoiCellEdit[] changes; Z8PoiCellCopy[] childCopies;
