@@ -120,6 +120,14 @@ void main(string[] args) {
     reopened.setNumber(2, 4, 0, 11); reopened.setNumber(2, 4, 1, 22);
     reopened.mergeCells(2, 4, 0, 4, 1);
     assert(reopened.cellNumber(2, 4, 1) == 22 && reopened.sheetXml(2).canFind("A5:B5"));
+    reopened.unmergeCells(2, 4, 0, 4, 1);
+    assert(reopened.cellNumber(2, 4, 0) == 11 && reopened.cellNumber(2, 4, 1) == 22 && !reopened.sheetXml(2).canFind("A5:B5"));
+    auto unmerged = new Workbook(reopened.save());
+    assert(unmerged.cellNumber(2, 4, 1) == 22 && !unmerged.sheetXml(2).canFind("A5:B5"));
+    unmerged.close();
+    assertThrown!Exception(reopened.unmergeCells(2, 4, 0, 4, 1));
+    assertThrown!Exception(reopened.unmergeCells(2, 4, 1, 4, 0));
+    reopened.mergeCells(2, 4, 0, 4, 1);
     assertThrown!Exception(reopened.mergeCells(2, 4, 1, 4, 0));
     assertThrown!Exception(reopened.mergeCells(2, 4, 0, 4, 0));
     assertThrown!Exception(reopened.copyCell(0, 0, 2, 3, 2));
