@@ -65,13 +65,146 @@ private wstring z8_poi_rich_text(Z8PoiXmlNode value) {
     }
     return result.length ? result : ""w;
 }
-private class Z8PoiCell { wstring kind, value, formula; bool hasFormula, unresolvedSharedFormula; }
+private class Z8PoiCell { wstring kind, value, formula, sharedId; bool hasFormula, unresolvedSharedFormula; long row, column; }
 private class Z8PoiRow { Z8PoiCell[long] cells; }
 private class Z8PoiSheet { Z8PoiRow[long] rows; }
 private class Z8PoiWorkbook { Z8PoiSheet[] sheets; bool date1904; }
 private class Z8PoiSheetRef { Z8PoiSheet value; }
 private class Z8PoiRowRef { Z8PoiRow value; }
 private class Z8PoiCellRef { Z8PoiCell value; bool date1904; }
+private struct Z8PoiSharedFormula { wstring text; long row, column; }
+
+private wstring z8_poi_column_name(long column) {
+    wchar[] result;
+    while (column) { --column; result = [cast(wchar)('A' + column % 26)] ~ result; column /= 26; }
+    return result.idup;
+}
+// POI expands C:C to C$1:C$1048576 and 2:2 to $A2:$XFD2.
+private int z8_poi_whole_range(wstring text, size_t start, long rowOffset, long columnOffset,
+                               out size_t end, out wstring result) {
+    import std.uni : isAlpha, isNumber;
+    bool identifier(wchar c) { return isAlpha(c) || isNumber(c) || c == '_' || c == '.'; }
+    if (start && identifier(text[start - 1])) return 0;
+    size_t i = start;
+    bool[2] fixed;
+    long[2] values;
+    bool columns;
+    foreach (part; 0 .. 2) {
+        if (i < text.length && text[i] == '$') { fixed[part] = true; ++i; }
+        auto begin = i;
+        bool letters = i < text.length && ((text[i] >= 'A' && text[i] <= 'Z') || (text[i] >= 'a' && text[i] <= 'z'));
+        if (part == 0) columns = letters; else if (letters != columns) return 0;
+        if (letters) {
+            while (i < text.length && ((text[i] >= 'A' && text[i] <= 'Z') || (text[i] >= 'a' && text[i] <= 'z'))) {
+                wchar ch = text[i++]; if (ch >= 'a') ch -= 'a' - 'A';
+                if (i - begin <= 3) values[part] = values[part] * 26 + ch - 'A' + 1;
+            }
+            if (i == begin || i - begin > 3 || values[part] > 16384) return 0;
+        } else {
+            while (i < text.length && text[i] >= '0' && text[i] <= '9') {
+                if (i - begin < 7) values[part] = values[part] * 10 + text[i] - '0';
+                ++i;
+            }
+            if (i == begin || i - begin > 7 || values[part] < 1 || values[part] > 1048576) return 0;
+        }
+        if (part == 0) { if (i >= text.length || text[i] != ':') return 0; ++i; }
+    }
+    if (i < text.length && (identifier(text[i]) || text[i] == '!' || text[i] == '(')) return 0;
+    foreach (part; 0 .. 2) {
+        auto limit = columns ? 16384L : 1048576L;
+        auto offset = fixed[part] ? 0 : columns ? columnOffset : rowOffset;
+        auto shifted = ((values[part] - 1 + offset) & (limit - 1)) + 1;
+        if (part) result ~= ':';
+        if (columns) {
+            if (fixed[part]) result ~= '$'; result ~= z8_poi_column_name(shifted);
+            result ~= part == 0 ? "$1"w : "$1048576"w;
+        } else {
+            result ~= part == 0 ? "$A"w : "$XFD"w;
+            if (fixed[part]) result ~= '$'; result ~= shifted.to!wstring;
+        }
+    }
+    end = i; return 1;
+}
+// Translate ordinary A1 references while leaving string literals, quoted sheet
+// names, absolute coordinates and function names untouched.
+private bool z8_poi_shift_formula(wstring formula, long rowOffset, long columnOffset, out wstring result) {
+    import std.uni : isAlpha, isNumber;
+    bool identifier(wchar c) { return isAlpha(c) || isNumber(c) || c == '_' || c == '.'; }
+    size_t i;
+    while (i < formula.length) {
+        auto c = formula[i];
+        // POI parses and normalizes formulas; avoid guessing about whitespace
+        // intersection operators or external/structured references.
+        if (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '[') return false;
+        if (c == '#') {
+            bool recognized;
+            foreach (error; ["#NULL!"w, "#DIV/0!"w, "#VALUE!"w, "#REF!"w, "#NAME?"w, "#NUM!"w, "#N/A"w, "#GETTING_DATA"w]) {
+                if (i + error.length <= formula.length && formula[i .. i + error.length] == error) {
+                    result ~= error; i += error.length; recognized = true; break;
+                }
+            }
+            if (!recognized) return false;
+            continue;
+        }
+        if (c == '"' || c == '\'') {
+            auto quote = c, start = i++;
+            bool closed;
+            while (i < formula.length) {
+                if (formula[i++] != quote) continue;
+                if (i < formula.length && formula[i] == quote) { ++i; continue; }
+                closed = true; break;
+            }
+            if (!closed) return false;
+            // POI 3.16's shared-formula conversion drops sheet qualifiers
+            // when translating references (including quoted sheet names).
+            if (quote == '\'' && i < formula.length && formula[i] == '!') { ++i; continue; }
+            result ~= formula[start .. i]; continue;
+        }
+        if ((isAlpha(c) || c == '_') && (i == 0 || !identifier(formula[i - 1]))) {
+            auto endName = i + 1;
+            while (endName < formula.length && identifier(formula[endName])) ++endName;
+            if (endName < formula.length && formula[endName] == '!') { i = endName + 1; continue; }
+        }
+        if (c == '$' || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+            size_t end; wstring range;
+            auto matched = z8_poi_whole_range(formula, i, rowOffset, columnOffset, end, range);
+            if (matched < 0) return false;
+            if (matched > 0) { result ~= range; i = end; continue; }
+        }
+        if ((c == '$' || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) &&
+            (i == 0 || !identifier(formula[i - 1]))) {
+            auto start = i, cursor = i;
+            bool fixedColumn = formula[cursor] == '$'; if (fixedColumn) ++cursor;
+            auto letters = cursor; long column;
+            while (cursor < formula.length && ((formula[cursor] >= 'A' && formula[cursor] <= 'Z') ||
+                   (formula[cursor] >= 'a' && formula[cursor] <= 'z'))) {
+                wchar ch = formula[cursor++]; if (ch >= 'a') ch -= 'a' - 'A';
+                if (cursor - letters <= 3) column = column * 26 + ch - 'A' + 1;
+            }
+            auto letterCount = cursor - letters;
+            bool fixedRow = cursor < formula.length && formula[cursor] == '$'; if (fixedRow) ++cursor;
+            auto digits = cursor; long row;
+            while (cursor < formula.length && formula[cursor] >= '0' && formula[cursor] <= '9') {
+                if (cursor - digits < 7) row = row * 10 + formula[cursor] - '0';
+                ++cursor;
+            }
+            if (letterCount && letterCount <= 3 && column <= 16384 && cursor > digits && cursor - digits <= 7 &&
+                row > 0 && row <= 1048576 && (cursor == formula.length ||
+                (!identifier(formula[cursor]) && formula[cursor] != '(' && formula[cursor] != '!'))) {
+                // SharedFormula in POI 3.16 wraps relative coordinates at the
+                // XLSX row and column boundaries.
+                auto shiftedColumn = ((column - 1 + (fixedColumn ? 0 : columnOffset)) & 16383L) + 1;
+                auto shiftedRow = ((row - 1 + (fixedRow ? 0 : rowOffset)) & 1048575L) + 1;
+                if (fixedColumn) result ~= '$'; result ~= z8_poi_column_name(shiftedColumn);
+                if (fixedRow) result ~= '$'; result ~= shiftedRow.to!wstring;
+                i = cursor; continue;
+            }
+            i = start;
+        }
+        result ~= formula[i++];
+    }
+    return true;
+}
 
 private Z8PoiXmlNode z8_poi_read_xml(ZipArchive archive, string path, bool required = true) {
     auto found = path in archive.directory;
@@ -139,6 +272,7 @@ private Z8PoiWorkbook z8_poi_parse(Z8Binary input) {
         if (target is null) throw new Exception("missing XLSX sheet relationship");
         auto worksheet = z8_poi_read_xml(archive, z8_poi_resolve_path(base, *target));
         auto data = worksheet.child("sheetData"w), sheet = new Z8PoiSheet();
+        Z8PoiSharedFormula[wstring] sharedFormulas;
         long nextRow;
         if (data !is null) foreach (rowNode; data.children) if (z8_poi_xml_local(rowNode.name) == "row"w) {
             auto rowNumber = rowNode.attr("r"w);
@@ -152,7 +286,12 @@ private Z8PoiWorkbook z8_poi_parse(Z8Binary input) {
                 auto formula = cellNode.child("f"w); cell.hasFormula = formula !is null;
                 if (formula !is null) {
                     cell.formula = formula.allText();
-                    cell.unresolvedSharedFormula = formula.attr("t"w) == "shared"w && !cell.formula.length;
+                    if (formula.attr("t"w) == "shared"w) {
+                        cell.sharedId = formula.attr("si"w); cell.row = rowIndex; cell.column = column;
+                        if (cell.sharedId is null) throw new Exception("missing XLSX shared formula index");
+                        if (cell.formula.length) sharedFormulas[cell.sharedId] = Z8PoiSharedFormula(cell.formula, rowIndex, column);
+                        else cell.unresolvedSharedFormula = true;
+                    }
                 }
                 auto value = cellNode.child("v"w); if (value !is null) cell.value = value.allText();
                 if (cell.kind == "inlineStr"w) { auto inlineValue = cellNode.child("is"w); cell.value = inlineValue is null ? ""w : z8_poi_rich_text(inlineValue); }
@@ -164,6 +303,13 @@ private Z8PoiWorkbook z8_poi_parse(Z8Binary input) {
                 row.cells[column] = cell;
             }
             sheet.rows[rowIndex] = row;
+        }
+        foreach (row; sheet.rows) foreach (cell; row.cells) if (cell.unresolvedSharedFormula) {
+            auto master = cell.sharedId in sharedFormulas;
+            wstring expanded;
+            if (master !is null && z8_poi_shift_formula(master.text, cell.row - master.row, cell.column - master.column, expanded)) {
+                cell.formula = expanded; cell.unresolvedSharedFormula = false;
+            }
         }
         result.sheets ~= sheet;
     }

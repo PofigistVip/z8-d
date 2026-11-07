@@ -26,13 +26,13 @@ public class Probe {
     public static int verify(file input) {
         Workbook book; book = input;
         if (book.getSheetCount() != 2) return 1;
-        Sheet sheet = book.getSheet(0); if (sheet.getRowCount() != 2) return 2;
+        Sheet sheet = book.getSheet(0); if (sheet.getRowCount() != 3) return 2;
         Row row = sheet.getRow(0); if (row.getCellCount() != 4 || row.getCell(1) != null) return 3;
         if (row.getCell(0).getString() != "Hi & 😀") return 4;
         if (row.getCell(2).getInt() != 42 || row.getCell(2).getDecimal() != 42.25) return 5;
         if (row.getCell(3).getString() != "true") return 6;
         if (row.getCell(4).getString() != "C1*2" || row.getCell(4).getInt() != 84) return 7;
-        Row third = sheet.getRow(2); if (third.getCellCount() != 7) return 8;
+        Row third = sheet.getRow(2); if (third.getCellCount() != 14) return 8;
         if (third.getCell(1).getString() != "Inline Unicode") return 9;
         date day = third.getCell(2).getDate();
         if (day.year() != 2024 || day.month() != 2 || day.day() != 29 || day.hours() != 12) return 10;
@@ -40,8 +40,12 @@ public class Probe {
         date leap = third.getCell(6).getDate(); date next = third.getCell(7).getDate();
         if (leap.year() != 1900 || leap.month() != 3 || leap.day() != 1 ||
             next.year() != 1900 || next.month() != 3 || next.day() != 1) return 20;
-        if (third.getCell(8).getString() != "C3*2" || third.getCell(9).getInt() != 11) return 21;
-        try { string formula = third.getCell(9).getString(); return 22; } catch (exception expected) {}
+        if (third.getCell(8).getString() != "C3*2" || third.getCell(9).getInt() != 11 ||
+            third.getCell(9).getString() != "D3*2") return 21;
+        if (third.getCell(11).getString() != "SUM(D3,$C3,D$3,$C$3)+IF(\\\"A1\\\"=\\\"A1\\\",0,0)+SUM(D$1:D$1048576,$D$1:$D$1048576,$A2:$XFD2,$A$3:$XFD$3)+D3+$C3+IFERROR(D3,#REF!)") return 22;
+        if (sheet.getRow(3).getCell(12).getString() != "SUM(C4,$C4,C$3,$C$3,$A3:$XFD3,$A$3:$XFD$3)") return 23;
+        try { string unsupported = third.getCell(14).getString(); return 24; } catch (exception expected) {}
+        if (third.getCell(15).getString() != "XFD1") return 25;
         try { string bad = row.getCell(0).getInt().toString(); return 12; } catch (exception expected) {}
         try { int absent = sheet.getRow(1).getCellCount(); return 13; } catch (exception expected) {}
         if (book.getSheet(1).getRowCount() != 0) return 14;
@@ -76,7 +80,7 @@ public class Probe {
         "xl/workbook.xml": '''<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="One" sheetId="1" r:id="rId1"/><sheet name="Two" sheetId="2" r:id="rId2"/></sheets></workbook>''',
         "xl/_rels/workbook.xml.rels": '''<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="/xl/worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>''',
         "xl/sharedStrings.xml": '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><r><t>Hi &amp; </t></r><r><t>😀</t></r></si></sst>''',
-        "xl/worksheets/sheet1.xml": '''<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="C1"><v>42.25</v></c><c r="D1" t="b"><v>1</v></c><c r="E1"><f>C1*2</f><v>84.5</v></c></row><row r="3"><c r="B3" t="inlineStr"><is><t>Inline Unicode</t></is></c><c r="C3"><v>45351.5</v></c><c r="F3"/><c r="G3"><v>60</v></c><c r="H3"><v>61</v></c><c r="I3"><f t="shared" si="0" ref="I3:J3">C3*2</f><v>10</v></c><c r="J3"><f t="shared" si="0"/><v>11</v></c></row></sheetData></worksheet>''',
+        "xl/worksheets/sheet1.xml": '''<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="C1"><v>42.25</v></c><c r="D1" t="b"><v>1</v></c><c r="E1"><f>C1*2</f><v>84.5</v></c></row><row r="3"><c r="B3" t="inlineStr"><is><t>Inline Unicode</t></is></c><c r="C3"><v>45351.5</v></c><c r="F3"/><c r="G3"><v>60</v></c><c r="H3"><v>61</v></c><c r="I3"><f t="shared" si="0" ref="I3:J3">C3*2</f><v>10</v></c><c r="J3"><f t="shared" si="0"/><v>11</v></c><c r="K3"><f t="shared" si="1" ref="K3:L3">SUM(C3,$C3,C$3,$C$3)+IF("A1"="A1",0,0)+SUM(C:C,$D:$D,2:2,$3:$3)+Two!C3+'Two'!$C3+IFERROR(C3,#REF!)</f><v>20</v></c><c r="L3"><f t="shared" si="1"/><v>21</v></c><c r="M3"><f t="shared" si="2" ref="M3:M4">SUM(C3,$C3,C$3,$C$3,2:2,$3:$3)</f><v>30</v></c><c r="N3"><f t="shared" si="3" ref="N3:O3">A1 + 1</f><v>31</v></c><c r="O3"><f t="shared" si="3"/><v>32</v></c><c r="P3"><f t="shared" si="4"/><v>34</v></c><c r="Q3"><f t="shared" si="4" ref="P3:Q3">A1</f><v>35</v></c></row><row r="4"><c r="M4"><f t="shared" si="2"/><v>33</v></c></row></sheetData></worksheet>''',
         "xl/worksheets/sheet2.xml": '''<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/></worksheet>''',
     }
     with zipfile.ZipFile(workbook, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -123,12 +127,12 @@ class PoiOracle {
     TimeZone.setDefault(TimeZone.getTimeZone("Europe/Moscow"));
     try (Workbook book = new XSSFWorkbook(new FileInputStream(args[0]))) {
       Sheet sheet = book.getSheetAt(0); Row first = sheet.getRow(0), third = sheet.getRow(2);
-      if (book.getNumberOfSheets() != 2 || sheet.getPhysicalNumberOfRows() != 2 ||
+      if (book.getNumberOfSheets() != 2 || sheet.getPhysicalNumberOfRows() != 3 ||
           first.getPhysicalNumberOfCells() != 4 || first.getCell(1) != null ||
           !first.getCell(0).getStringCellValue().equals("Hi & 😀") ||
           first.getCell(2).getNumericCellValue() != 42.25 || !first.getCell(3).getBooleanCellValue() ||
           !first.getCell(4).getCellFormula().equals("C1*2") || first.getCell(4).getNumericCellValue() != 84.5 ||
-          third.getPhysicalNumberOfCells() != 7 || !third.getCell(1).getStringCellValue().equals("Inline Unicode") ||
+          third.getPhysicalNumberOfCells() != 14 || !third.getCell(1).getStringCellValue().equals("Inline Unicode") ||
           third.getCell(5).getNumericCellValue() != 0 || book.getSheetAt(1).getPhysicalNumberOfRows() != 0)
         throw new AssertionError("Unexpected POI workbook values");
       if (sheet.getRow(-1) != null || sheet.getRow(1048576) != null || first.getCell(16384) != null)
@@ -137,6 +141,13 @@ class PoiOracle {
       catch (IllegalArgumentException expected) {}
       if (!third.getCell(8).getCellFormula().equals("C3*2") || !third.getCell(9).getCellFormula().equals("D3*2") || third.getCell(9).getNumericCellValue() != 11)
         throw new AssertionError("Unexpected shared formula");
+      if (!third.getCell(11).getCellFormula().equals("SUM(D3,$C3,D$3,$C$3)+IF(\\\"A1\\\"=\\\"A1\\\",0,0)+SUM(D$1:D$1048576,$D$1:$D$1048576,$A2:$XFD2,$A$3:$XFD$3)+D3+$C3+IFERROR(D3,#REF!)"))
+        throw new AssertionError("Unexpected complex shared formula: " + third.getCell(11).getCellFormula());
+      if (!sheet.getRow(3).getCell(12).getCellFormula().equals("SUM(C4,$C4,C$3,$C$3,$A3:$XFD3,$A$3:$XFD$3)"))
+        throw new AssertionError("Unexpected vertically shifted formula");
+      if (!third.getCell(15).getCellFormula().equals("XFD1")) throw new AssertionError("Unexpected formula boundary");
+      if (!third.getCell(14).getCellFormula().equals("B1+1"))
+        throw new AssertionError("Unexpected whitespace normalization");
       Calendar date = Calendar.getInstance(); date.setTime(third.getCell(2).getDateCellValue());
       if (date.get(Calendar.YEAR) != 2024 || date.get(Calendar.MONTH) != 1 || date.get(Calendar.DAY_OF_MONTH) != 29 || date.get(Calendar.HOUR_OF_DAY) != 12)
         throw new AssertionError("Unexpected POI date");
