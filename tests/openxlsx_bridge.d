@@ -4,6 +4,21 @@ import std.file : read, write;
 import std.algorithm.searching : canFind;
 
 void main(string[] args) {
+    auto created = Workbook.create();
+    assert(created.sheetCount() == 1);
+    created.renameSheet(0, "Export");
+    created.setColumnWidth(0, 0, 12.5);
+    assertThrown!Exception(created.setColumnWidth(0, 0, 0));
+    assertThrown!Exception(created.setColumnWidth(0, 0, 256));
+    created.setText(0, 0, 0, "Привет 😀");
+    created.setNumber(0, 1, 0, 42);
+    created.setBoolean(0, 1, 1, true);
+    auto createdCopy = new Workbook(created.save());
+    assert(createdCopy.sheetName(0) == "Export");
+    assert(createdCopy.sheetXml(0).canFind("12.5"));
+    assert(createdCopy.cellString(0, 0, 0) == "Привет 😀");
+    assert(createdCopy.cellNumber(0, 1, 0) == 42 && createdCopy.cellType(0, 1, 1) == CellType.boolean);
+    createdCopy.close(); created.close();
     assertThrown!Exception(new Workbook(args[1] ~ ".missing"));
     auto book = new Workbook(args[1]);
     assert(book.sheetCount() == 3);

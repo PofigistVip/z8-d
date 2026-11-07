@@ -192,7 +192,19 @@ void copyString(const std::string& value, char* buffer, size_t capacity, size_t*
 }
 
 Z8_EXPORT const char* z8_xlsx_error() noexcept { return error.c_str(); }
-Z8_EXPORT unsigned z8_xlsx_abi_version() noexcept { return 7; }
+Z8_EXPORT unsigned z8_xlsx_abi_version() noexcept { return 8; }
+
+// OpenXLSX creates workbooks from its own empty template. The caller supplies
+// a fresh temporary path and reopens the resulting archive in memory.
+Z8_EXPORT int z8_xlsx_create(const char* path) noexcept {
+    return protect([&] {
+        if (!path) throw std::invalid_argument("missing workbook path");
+        OpenXLSX::XLDocument book;
+        book.create(path, false);
+        book.save();
+        book.close();
+    });
+}
 
 Z8_EXPORT int z8_xlsx_open(const char* path, void** result) noexcept {
     return protect([&] {
@@ -389,6 +401,14 @@ Z8_EXPORT int z8_xlsx_set_column_hidden(void* handle, unsigned sheet, unsigned c
             target.columnNode().remove_attribute("width");
             target.columnNode().remove_attribute("customWidth");
         }
+    });
+}
+
+Z8_EXPORT int z8_xlsx_set_column_width(void* handle, unsigned sheet, unsigned column, double width) noexcept {
+    return protect([&] {
+        if (column >= 16384) throw std::out_of_range("column index out of bounds");
+        if (!std::isfinite(width) || width < 1 || width > 255) throw std::invalid_argument("invalid XLSX column width");
+        worksheet(handle, sheet).column(static_cast<uint16_t>(column + 1)).setWidth(static_cast<float>(width));
     });
 }
 

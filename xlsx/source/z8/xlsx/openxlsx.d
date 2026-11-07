@@ -7,6 +7,7 @@ import std.algorithm.searching : canFind;
 private extern(C) {
     uint z8_xlsx_abi_version();
     const(char)* z8_xlsx_error();
+    int z8_xlsx_create(const(char)*);
     int z8_xlsx_open(const(char)*, void**);
     int z8_xlsx_open_memory(const(void)*, size_t, void**);
     void z8_xlsx_close(void*);
@@ -22,6 +23,7 @@ private extern(C) {
     int z8_xlsx_rename_sheet(void*, uint, const(char)*);
     int z8_xlsx_clone_sheet(void*, uint, const(char)*);
     int z8_xlsx_set_column_hidden(void*, uint, uint, int);
+    int z8_xlsx_set_column_width(void*, uint, uint, double);
     int z8_xlsx_set_cell_text(void*, uint, uint, uint, const(char)*, size_t, int);
     int z8_xlsx_set_cell_number(void*, uint, uint, uint, double);
     int z8_xlsx_set_cell_boolean(void*, uint, uint, uint, int);
@@ -43,11 +45,26 @@ private void check(int result) {
 }
 
 private void checkAbi() {
-    if (z8_xlsx_abi_version() != 7) throw new Exception("incompatible OpenXLSX bridge; rebuild xlsx");
+    if (z8_xlsx_abi_version() != 8) throw new Exception("incompatible OpenXLSX bridge; rebuild xlsx");
 }
 
 class Workbook {
     private void* handle;
+
+    /// Create an empty workbook using OpenXLSX's own template.
+    static Workbook create() {
+        import std.file : mkdir, read, rmdirRecurse, tempDir;
+        import std.path : buildPath;
+        import std.conv : to;
+        import std.uuid : randomUUID;
+        checkAbi();
+        auto directory = buildPath(tempDir(), "z8-xlsx-" ~ randomUUID().to!string);
+        mkdir(directory);
+        scope(exit) rmdirRecurse(directory);
+        auto path = buildPath(directory, "workbook.xlsx");
+        check(z8_xlsx_create(path.toStringz));
+        return new Workbook(cast(const(ubyte)[])read(path));
+    }
 
     this(string path) {
         checkAbi();
@@ -144,6 +161,10 @@ class Workbook {
 
     void setColumnHidden(uint sheet, uint column, bool hidden) {
         check(z8_xlsx_set_column_hidden(handle, sheet, column, hidden ? 1 : 0));
+    }
+
+    void setColumnWidth(uint sheet, uint column, double width) {
+        check(z8_xlsx_set_column_width(handle, sheet, column, width));
     }
 
     void setText(uint sheet, uint row, uint column, string value) {
