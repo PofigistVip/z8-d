@@ -59,6 +59,9 @@ public class StaticReportProbe {
     public static file existingOuter() { ExistingOuterReport report; return report.run(guid.Null); }
     public static file existingOuterExplicit() { ExistingOuterExplicitReport report; return report.run(guid.Null); }
     public static file existingOuterConflict() { ExistingOuterConflictReport report; return report.run(guid.Null); }
+    public static file expandedOuterTemplate() { ExpandedOuterTemplateReport report; return report.run(guid.Null); }
+    public static file expandedOuterTemplateExplicit() { ExpandedOuterTemplateExplicitReport report; return report.run(guid.Null); }
+    public static file expandedOuterTemplateConflict() { ExpandedOuterTemplateConflictReport report; return report.run(guid.Null); }
     public static file explicitMergeExpansion() { ExpandedExplicitMergeReport report; return report.run(guid.Null); }
     public static file explicitMergeHorizontal() { ExpandedExplicitHorizontalReport report; return report.run(guid.Null); }
     public static file explicitMergeSide() { ExpandedExplicitSideReport report; return report.run(guid.Null); }
@@ -764,6 +767,16 @@ public class ExpandedTwoRowsReport extends Report {
     (source / "ExpandedExistingConflictReport.bl").write_text(
         (source / "ExpandedExistingExplicitReport.bl").read_text(encoding="utf-8")
         .replace("ExpandedExistingExplicitReport", "ExpandedExistingConflictReport").replace('[merge "E1:E2"]', '[merge "A1:D2"]'), encoding="utf-8")
+    (source / "ExpandedOuterTemplateReport.bl").write_text(
+        (source / "ExpandedReport.bl").read_text(encoding="utf-8")
+        .replace("ExpandedReport", "ExpandedOuterTemplateReport").replace('template = "expanded"', 'template = "expanded-outer-template"')
+        .replace('[boundaries "A1:D1"]', '[boundaries "A1:E2"]'), encoding="utf-8")
+    (source / "ExpandedOuterTemplateExplicitReport.bl").write_text(
+        (source / "ExpandedOuterTemplateReport.bl").read_text(encoding="utf-8")
+        .replace("ExpandedOuterTemplateReport", "ExpandedOuterTemplateExplicitReport").replace('Range region;', '[merge "A1:D2"] Range region;'), encoding="utf-8")
+    (source / "ExpandedOuterTemplateConflictReport.bl").write_text(
+        (source / "ExpandedOuterTemplateReport.bl").read_text(encoding="utf-8")
+        .replace("ExpandedOuterTemplateReport", "ExpandedOuterTemplateConflictReport").replace('Range region;', '[merge "E1:E2"] Range region;'), encoding="utf-8")
     (source / "ExpandedMergedFormulaReport.bl").write_text(
         (source / "ExpandedMergedReport.bl").read_text(encoding="utf-8")
         .replace("ExpandedMergedReport", "ExpandedMergedFormulaReport").replace('template = "expanded-merged"', 'template = "expanded-merged-formula"'),
@@ -1264,6 +1277,12 @@ public class %s extends Report {
         '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
         '<c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c>'
         '<c r="C1" s="0"><v>99</v></c><c r="D1" t="s"><v>2</v></c>')
+    expanded_outer_template = dict(expanded)
+    expanded_outer_template["xl/worksheets/sheet1.xml"] = expanded_outer_template["xl/worksheets/sheet1.xml"].replace(
+        '</row>', '<c r="E1"><v>77</v></c></row>', 1).replace(
+        '</worksheet>', '<mergeCells count="1"><mergeCell ref="E1:E2"/></mergeCells></worksheet>')
+    with zipfile.ZipFile(application / "reports/expanded-outer-template.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in expanded_outer_template.items(): archive.writestr(name, content)
     expanded_multi_sheet = dict(multi_sheet)
     expanded_multi_sheet["xl/worksheets/sheet1.xml"] = expanded["xl/worksheets/sheet1.xml"]
     expanded_multi_sheet["xl/worksheets/sheet2.xml"] = original_sheet.replace(
@@ -2000,6 +2019,7 @@ void main(string[] args) {
         contents = contents.replace('assert(renameConflict);', 'assert(renameConflict); auto existingExplicit = P.m_explicitMergeExisting(); copy(z8_file_resolve_path(existingExplicit), buildPath(args[2], "existing-explicit-merge.xlsx")); bool existingConflict; try { P.m_explicitMergeExistingConflict(); } catch (Exception e) { existingConflict = e.msg == "overlapping POI report merged regions"; } assert(existingConflict);')
         contents = contents.replace('assert(renameConflict);', 'assert(renameConflict); auto expandedExisting = P.m_expandedExistingExplicit(); copy(z8_file_resolve_path(expandedExisting), buildPath(args[2], "expanded-existing-explicit.xlsx")); bool expandedExistingConflict; try { P.m_expandedExistingConflict(); } catch (Exception e) { expandedExistingConflict = e.msg == "overlapping POI report merged regions"; } assert(expandedExistingConflict);')
         contents = contents.replace('assert(renameConflict);', 'assert(renameConflict); auto outerExisting = P.m_existingOuter(); copy(z8_file_resolve_path(outerExisting), buildPath(args[2], "existing-outer.xlsx")); auto outerExplicit = P.m_existingOuterExplicit(); copy(z8_file_resolve_path(outerExplicit), buildPath(args[2], "existing-outer-explicit.xlsx")); bool outerConflict; try { P.m_existingOuterConflict(); } catch (Exception e) { outerConflict = e.msg == "overlapping POI report merged regions"; } assert(outerConflict);')
+        contents = contents.replace('assert(renameConflict);', 'assert(renameConflict); auto expandedOuter = P.m_expandedOuterTemplate(); copy(z8_file_resolve_path(expandedOuter), buildPath(args[2], "expanded-outer-template.xlsx")); auto expandedOuterExplicit = P.m_expandedOuterTemplateExplicit(); copy(z8_file_resolve_path(expandedOuterExplicit), buildPath(args[2], "expanded-outer-template-explicit.xlsx")); bool expandedOuterConflict; try { P.m_expandedOuterTemplateConflict(); } catch (Exception e) { expandedOuterConflict = e.msg == "overlapping POI report merged regions"; } assert(expandedOuterConflict);')
         harness.write_text(contents, encoding="utf-8")
         args.extend(["-I" + str(bridge), str(bridge / "z8/xlsx/openxlsx.d"), str(bridge / "z8/xlsx/poi.d")])
         if os.name == "nt":
@@ -2541,7 +2561,8 @@ class PoiRangeOracle {
       boolean expandedExplicitCase = args.length > 3 && ("expanded-explicit-merge".equals(args[3]) || "horizontal-explicit-merge".equals(args[3]) || "expanded-explicit-side".equals(args[3]) || "expanded-explicit-footer".equals(args[3]) || "horizontal-explicit-side".equals(args[3]) || "horizontal-explicit-footer".equals(args[3]));
       boolean jsonEmptyCase = args.length > 3 && "json-empty".equals(args[3]);
       boolean expandedTwoCase = horizontalCase || expandedEmptyCase || (args.length > 3 && "expanded-two".equals(args[3]));
-      boolean expandedCase = expandedMultipleSheetCase || footerCase || expandedCustomCase || expandedTwoCase || expandedMergedCase || expandedExplicitCase || (args.length > 3 && "expanded".equals(args[3]));
+      boolean expandedOuterTemplateCase = args.length > 3 && ("expanded-outer-template".equals(args[3]) || "expanded-outer-template-explicit".equals(args[3]));
+      boolean expandedCase = expandedMultipleSheetCase || footerCase || expandedCustomCase || expandedTwoCase || expandedMergedCase || expandedExplicitCase || expandedOuterTemplateCase || (args.length > 3 && "expanded".equals(args[3]));
       boolean jsonInlineCase = args.length > 3 && "json-inline".equals(args[3]);
       boolean repeatCase = args.length > 3 && "repeat".equals(args[3]);
       boolean mergedCase = args.length > 3 && "merged".equals(args[3]);
@@ -2678,6 +2699,10 @@ class PoiRangeOracle {
         if ("existing-outer-explicit".equals(args[3])) child.setMerges("E1:E2");
       }
       if (args.length > 3 && "expanded-existing-explicit".equals(args[3])) child.setBoundaries("A1:E2").setMerges("E1:E2");
+      if (expandedOuterTemplateCase) {
+        child.setBoundaries("A1:E2");
+        if ("expanded-outer-template-explicit".equals(args[3])) child.setMerges("A1:D2");
+      }
       if (expandedExplicitCase) {
         String which = args[3];
         String bounds = "expanded-explicit-side".equals(which) ? "A1:E2" : "horizontal-explicit-side".equals(which) ? "A1:C3" : horizontalCase ? "A1:C2" : "A1:D2";
@@ -2748,6 +2773,19 @@ class PoiRangeOracle {
           org.apache.poi.ss.usermodel.Cell ec = er == null ? null : er.getCell(col), ac = ar == null ? null : ar.getCell(col);
           if (ec == null || ac == null) { if (ec != ac) throw new AssertionError("outer merged cell presence differs"); }
           else if (ec.getCellType() != ac.getCellType() || !ec.toString().equals(ac.toString())) throw new AssertionError("outer merged cell differs");
+        }
+      }
+      if (expandedOuterTemplateCase) {
+        java.util.Set<String> expected = new java.util.HashSet<>(), result = new java.util.HashSet<>();
+        for (int i = 0; i < original.getSheetAt(0).getNumMergedRegions(); ++i) expected.add(original.getSheetAt(0).getMergedRegion(i).formatAsString());
+        for (int i = 0; i < actual.getSheetAt(0).getNumMergedRegions(); ++i) result.add(actual.getSheetAt(0).getMergedRegion(i).formatAsString());
+        if (expected.size() != ("expanded-outer-template".equals(args[3]) ? 1 : 2) || !expected.equals(result))
+          throw new AssertionError("expanded outer template merges: " + expected + " != " + result);
+        for (int row = 0; row < 4; ++row) {
+          org.apache.poi.ss.usermodel.Row er = original.getSheetAt(0).getRow(row), ar = actual.getSheetAt(0).getRow(row);
+          org.apache.poi.ss.usermodel.Cell ec = er == null ? null : er.getCell(4), ac = ar == null ? null : ar.getCell(4);
+          if (ec == null || ac == null) { if (ec != ac) throw new AssertionError("outer template cell presence differs"); }
+          else if (ec.getCellType() != ac.getCellType() || !ec.toString().equals(ac.toString())) throw new AssertionError("outer template cell differs");
         }
       }
       if (expandedExplicitCase && (original.getSheetAt(0).getNumMergedRegions() != 1 || actual.getSheetAt(0).getNumMergedRegions() != 1 ||
@@ -2942,6 +2980,10 @@ class PoiRangeOracle {
             for case in ("existing-outer", "existing-outer-explicit"):
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/existing-outer.xlsx"), str(working / (case + ".xlsx")), str(config), case], cwd=temp, capture_output=True, text=True)
+                assert result.returncode == 0, result.stderr
+            for case in ("expanded-outer-template", "expanded-outer-template-explicit"):
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/expanded-outer-template.xlsx"), str(working / (case + ".xlsx")), str(config), case], cwd=temp, capture_output=True, text=True)
                 assert result.returncode == 0, result.stderr
             result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                      str(application / "reports/expanded.xlsx"), str(working / "expanded-explicit-merge.xlsx"), str(config), "expanded-explicit-merge"], cwd=temp, capture_output=True, text=True)
