@@ -253,7 +253,7 @@ private string emitExprSingle(Expression e) {
         ValueType[] savedBinaryConversions;
         ValueType[] savedStringConversions;
         bool[] savedPromotions;
-        bool[] savedFileConversions, savedExceptionConversions, savedExceptionObjectConversions, savedPrimaryArrayConversions, savedDateConversions, savedSqlBoolConversions, savedSqlIntConversions, savedSqlDecimalConversions, savedSqlIntDecimalConversions, savedSqlStringConversions;
+        bool[] savedFileConversions, savedExceptionConversions, savedExceptionObjectConversions, savedPrimaryArrayConversions, savedPrimaryMapConversions, savedDateConversions, savedSqlBoolConversions, savedSqlIntConversions, savedSqlDecimalConversions, savedSqlIntDecimalConversions, savedSqlStringConversions;
         Method[] savedUserConversions;
         ValueType[] savedCollectionTypes;
         Program[] savedCollectionClasses;
@@ -269,6 +269,7 @@ private string emitExprSingle(Expression e) {
             savedExceptionConversions ~= argument.makeException;
             savedExceptionObjectConversions ~= argument.convertExceptionObject;
             savedPrimaryArrayConversions ~= argument.convertScalarPrimaryArray;
+            savedPrimaryMapConversions ~= argument.convertPrimaryMapValue;
             savedDateConversions ~= argument.convertToDate;
             savedSqlBoolConversions ~= argument.convertToSqlBool;
             savedSqlIntConversions ~= argument.convertToSqlInt;
@@ -284,7 +285,7 @@ private string emitExprSingle(Expression e) {
             argument.optionalRequired = required; argument.promoteToDecimal = required && promote;
             argument.convertToString = required ? convert : ValueType.voidType;
             argument.convertToBinary = ValueType.voidType;
-            argument.makeFile = false; argument.makeException = false; argument.convertExceptionObject = false; argument.convertScalarPrimaryArray = false;
+            argument.makeFile = false; argument.makeException = false; argument.convertExceptionObject = false; argument.convertScalarPrimaryArray = false; argument.convertPrimaryMapValue = false;
             argument.convertToDate = required ? savedDateConversions[$ - 1] : false;
             argument.convertToSqlBool = required && savedSqlBoolConversions[$ - 1];
             argument.convertToSqlInt = required && savedSqlIntConversions[$ - 1];
@@ -308,6 +309,7 @@ private string emitExprSingle(Expression e) {
             argument.makeFile = savedFileConversions[i]; argument.makeException = savedExceptionConversions[i];
             argument.convertExceptionObject = savedExceptionObjectConversions[i];
             argument.convertScalarPrimaryArray = savedPrimaryArrayConversions[i];
+            argument.convertPrimaryMapValue = savedPrimaryMapConversions[i];
             argument.convertToDate = savedDateConversions[i];
             argument.convertToSqlBool = savedSqlBoolConversions[i];
             argument.convertToSqlInt = savedSqlIntConversions[i];
@@ -388,6 +390,7 @@ private string emitExprSingle(Expression e) {
     if (e.makeException) value = "new Z8Exception(z8_to_utf8(z8_string_required(" ~ value ~ ")))";
     if (e.convertExceptionObject) value = "z8_exception_from_object(" ~ value ~ ")";
     if (e.convertScalarPrimaryArray) value = "z8_primary_array_view(" ~ value ~ ")";
+    if (e.convertPrimaryMapValue) value = "z8_primary_map_view(" ~ value ~ ")";
     if (e.convertToDate) value = "z8_date_from_ticks(" ~ value ~ ")";
     if (e.convertToBinary == ValueType.fileType) return "z8_file_to_binary(" ~ value ~ ")";
     if (e.convertToBinary == ValueType.stringType || e.convertToBinary == ValueType.nullableString) return "z8_binary_from_string(" ~ value ~ ")";
@@ -787,7 +790,19 @@ private string emitSimple(Statement s) {
     if (s.kind == StmtKind.variable)
         return dStorageType(s.type, s.objectClass, s.keyObjectClasses) ~ " v_" ~ s.token.text ~ " = " ~
             (s.expression !is null ? emitExpr(s.expression) : s.type == ValueType.intType ? "z8_optional_wrap(0L)" : s.type == ValueType.boolType ? "z8_optional_wrap(false)" : s.type == ValueType.decimalType ? "z8_optional_wrap(z8_decimal_from_int(0))" : defaultValue(s.type, s.objectClass, s.hasContainer, s.keyObjectClasses));
-    if (s.kind == StmtKind.expressionStmt) return "cast(void)(" ~ emitExpr(s.expression) ~ ")";
+    if (s.kind == StmtKind.expressionStmt) {
+        auto e = s.expression;
+        if (e.kind == ExprKind.memberCall && isMap(e.inferredType) &&
+            mapKeyType(e.inferredType) == ValueType.stringType &&
+            mapValueType(e.inferredType) != ValueType.stringType &&
+            isScalarPrimaryArray(arrayOf(mapValueType(e.inferredType)))) {
+            if (e.token.text == "add" && e.arguments.length == 2)
+                return "z8_map_add_discard(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.arguments[0]) ~ ", " ~ emitExpr(e.arguments[1]) ~ ")";
+            if (e.token.text == "remove" && e.arguments.length == 1)
+                return "z8_map_remove_discard(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.arguments[0]) ~ ")";
+        }
+        return "cast(void)(" ~ emitExpr(e) ~ ")";
+    }
     assert(s.kind == StmtKind.assignment);
     if (s.userOperatorAssignment)
         return emitReceiver(s.target) ~ ".z8op_assign(" ~ emitExpr(s.expression) ~ ")";
@@ -795,6 +810,10 @@ private string emitSimple(Statement s) {
         return "z8_object_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.filePathAssignment) return "z8_file_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.dateTickAssignment) return "z8_date_assign(" ~ emitExpr(s.target) ~ ", " ~ emitExpr(s.expression) ~ ")";
+    if (s.target.kind == ExprKind.index && isMap(s.target.inferredType) && s.assignmentOperator == "=" &&
+        mapKeyType(s.target.inferredType) == ValueType.stringType && mapValueType(s.target.inferredType) != ValueType.stringType &&
+        isScalarPrimaryArray(arrayOf(mapValueType(s.target.inferredType))))
+        return "z8_map_add_discard(" ~ emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";
     if (s.target.kind == ExprKind.index && isMap(s.target.inferredType))
         return (s.assignmentOperator == "=" ? "z8_invoke!\"z8_add\"(" : "z8_map_entry_compound!\"" ~ s.assignmentOperator[0 .. $-1] ~ "\"(") ~
             emitExpr(s.target.left) ~ ", " ~ emitExpr(s.target.right) ~ ", " ~ emitExpr(s.expression) ~ ")";

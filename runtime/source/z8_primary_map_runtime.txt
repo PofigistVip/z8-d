@@ -5,6 +5,11 @@ class Z8PrimaryMap {
     private Z8Primary nullKeyValue;
     override bool opEquals(Object other) {
         auto right = cast(Z8PrimaryMap)other;
+        import std.meta : AliasSeq;
+        static foreach (V; AliasSeq!(long, bool, Z8Decimal, Z8Guid, Z8Binary, Z8Datespan, Z8Date, Z8Geometry, Z8File)) {{
+            auto typed = cast(Z8StringValueMap!V)other;
+            if (typed !is null) return this.opEquals(z8_primary_map_view(typed));
+        }}
         return right !is null && z8_map_content_equals(this, right);
     }
     long z8_size() { return cast(long)entries.length + (hasNullKey ? 1 : 0); }

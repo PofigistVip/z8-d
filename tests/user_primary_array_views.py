@@ -22,7 +22,6 @@ public class Value extends primary {
 public class Probe {
     public static primary[] choice(bool b, primary[] left, Value[] right) { return b ? left : right; }
     public static int size(primary[] values) { return values.size(); }
-    public static int choose(primary[] values) { return 1; }
     public static int choose(Value[] values) { return 2; }
     public static primary[][] matrixChoice(bool b, primary[][] left, Value[][] right) { return b ? left : right; }
     public static int matrixSize(primary[][] values) { return values.size(); }

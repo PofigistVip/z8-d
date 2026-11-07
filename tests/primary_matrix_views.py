@@ -13,7 +13,6 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     source.mkdir()
     (source / "Probe.bl").write_text('''public class Probe {
     static int size(primary[][] values) { return values.size(); }
-    static int choose(primary[][] values) { return 1; }
     static int choose(int[][] values) { return 2; }
     static primary[][] choice(bool flag, primary[][] a, int[][] b) { return flag ? a : b; }
     public static int run() {

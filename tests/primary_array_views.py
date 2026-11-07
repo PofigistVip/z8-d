@@ -126,7 +126,6 @@ public class Probe {
     public static primary[] asPrimary(string[] values) { return values; }
     public static primary[] choice(bool first, primary[] left, string[] right) { return first ? left : right; }
     public static primary[] dateChoice(bool first, primary[] left, date[] right) { return first ? left : right; }
-    private static int choose(primary[] values) { return 1; }
     private static int choose(date[] values) { return 2; }
     public static int count(string[] values) { int result = 0; for (primary part : values) { result += 1; } return result; }
     public static int guidCount(guid[] values) { int result = 0; for (primary part : values) { result += 1; } return result; }

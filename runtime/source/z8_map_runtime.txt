@@ -1,3 +1,15 @@
+// Discarded map results must not trigger a generic value cast on the JVM.
+void z8_map_add_discard(M, K, V)(M map, K key, V value) {
+    z8_nonnull(map);
+    static if (__traits(compiles, map.z8_add_discard(key, value))) map.z8_add_discard(key, value);
+    else map.z8_add(key, value);
+}
+void z8_map_remove_discard(M, K)(M map, K key) {
+    z8_nonnull(map);
+    static if (__traits(compiles, map.z8_remove_discard(key))) map.z8_remove_discard(key);
+    else map.z8_remove(key);
+}
+
 // Indexed assignment is a z8-d extension. Resolve its receiver and key once,
 // then read the old entry before evaluating the right-hand side.
 void z8_map_entry_compound(string op, M, K, V)(M map, K key, lazy V value) {

@@ -132,6 +132,8 @@ python tests/cast_container.py
 python tests/exception_subclasses.py
 python tests/exception_string_conversion.py path/to/original-z8
 python tests/primary_array_views.py
+python tests/primary_string_map_views.py
+python tests/primary_string_map_oracle.py path/to/original-z8
 python tests/primary_matrix_views.py
 python tests/user_primary_array_views.py
 python tests/covariant_array_union.py path/to/original-z8
