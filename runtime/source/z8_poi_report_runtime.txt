@@ -743,28 +743,34 @@ private void z8_poi_report_apply_nested_simple(Z8Object report, Z8Object range, 
         z8_poi_report_apply_simple_range(report, entry.range, workbook, childSheet, childName, changes, childCopies, childMerges, childRemovals, false, false, sheet);
         if (childCopies.length || childMerges.length || childRemovals.length)
             throw new Exception("nested POI report expansion is not implemented");
-        foreach (edit; changes) if (edit.kind == Z8PoiCellEditKind.text &&
-            (z8_eval_text_has_special(edit.text) || z8_poi_decode_text(edit.text) != edit.text))
-            throw new Exception("nested POI report text reevaluation is not implemented");
         edits ~= changes;
     }
     auto state = new Z8EvalState(); state.reportContext = report; state.reportSource = parentSource;
     auto request = z8_application_request();
     if (request !is null && request.parameters !is null)
         state.variables["parameters"w] = Z8EvalVariable(null, null, request.parameters);
-    foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells) {
-        if (rowNumber < outer.firstRow || rowNumber > outer.lastRow || columnNumber < outer.firstColumn || columnNumber > outer.lastColumn ||
-            cell.hasFormula || (cell.kind != "str"w && cell.kind != "inlineStr"w)) continue;
+    // Apply the parent visitor to the cells after the child edits, in sheet order.
+    import std.algorithm.sorting : sort;
+    Z8PoiCellEdit[ulong] childEdits;
+    foreach (edit; edits) childEdits[(cast(ulong)edit.row << 14) | edit.column] = edit;
+    ulong[] positions;
+    foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells)
+        if (rowNumber >= outer.firstRow && rowNumber <= outer.lastRow && columnNumber >= outer.firstColumn && columnNumber <= outer.lastColumn)
+            positions ~= (cast(ulong)rowNumber << 14) | cast(ulong)columnNumber;
+    sort(positions);
+    foreach (position; positions) {
+        auto rowNumber = cast(long)(position >> 14), columnNumber = cast(long)(position & 16383);
+        auto cell = workbook.sheets[sheet].rows[rowNumber].cells[columnNumber];
         bool inChild;
         foreach (entry; entries) if (rowNumber >= entry.block.firstRow && rowNumber <= entry.block.lastRow &&
             columnNumber >= entry.block.firstColumn && columnNumber <= entry.block.lastColumn) { inChild = true; break; }
         if (inChild) {
-            bool edited;
-            foreach (edit; edits) if (edit.row == rowNumber && edit.column == columnNumber) { edited = true; break; }
-            if (!edited && (z8_eval_text_has_special(cell.value) || z8_poi_decode_text(cell.value) != cell.value))
-                throw new Exception("nested POI report text reevaluation is not implemented");
-            continue;
+            if (auto edit = position in childEdits) {
+                if (edit.kind != Z8PoiCellEditKind.text) continue;
+                cell = new Z8PoiCell(); cell.kind = "str"w; cell.value = z8_poi_decode_text(edit.text);
+            }
         }
+        if (cell.hasFormula || (cell.kind != "str"w && cell.kind != "inlineStr"w)) continue;
         if (cell.value.indexOf("${"w) < 0 &&
             (cell.kind == "inlineStr"w || (!z8_eval_text_has_special(cell.value) && z8_poi_decode_text(cell.value) == cell.value))) continue;
         z8_poi_report_evaluate_cell(state, workbook, cell, sheet, rowNumber, columnNumber, edits);

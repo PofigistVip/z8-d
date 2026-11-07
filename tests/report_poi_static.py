@@ -136,6 +136,8 @@ public class StaticReportProbe {
     public static file nestedSimple() { NestedSimpleReport report; return report.run(guid.Null); }
     public static file nestedUnsupported() { NestedUnsupportedReport report; return report.run(guid.Null); }
     public static file nestedText() { NestedTextReport report; return report.run(guid.Null); }
+    public static file nestedEval() { NestedEvalReport report; return report.run(guid.Null); }
+    public static file nestedCascade() { NestedCascadeReport report; return report.run(guid.Null); }
     public static file nestedMany() { NestedManyReport report; return report.run(guid.Null); }
     public static file nestedSiblings() { NestedSiblingsReport report; return report.run(guid.Null); }
     public static file nestedOverlap() { NestedOverlapReport report; return report.run(guid.Null); }
@@ -405,6 +407,18 @@ public class NestedSimpleReport extends Report {
     (source / "NestedTextReport.bl").write_text(
         (source / "NestedSimpleReport.bl").read_text(encoding="utf-8")
         .replace("NestedSimpleReport", "NestedTextReport").replace("OrderedRows rows;", "NestedTextRows rows;"), encoding="utf-8")
+    (source / "NestedEvalRows.bl").write_text('''public class NestedEvalRows extends OrderedRows {
+    virtual public void open() { data.set("value", "${1+2}"); }
+}''', encoding="utf-8")
+    (source / "NestedEvalReport.bl").write_text(
+        (source / "NestedSimpleReport.bl").read_text(encoding="utf-8")
+        .replace("NestedSimpleReport", "NestedEvalReport").replace("OrderedRows rows;", "NestedEvalRows rows;"), encoding="utf-8")
+    (source / "NestedCascadeRows.bl").write_text('''public class NestedCascadeRows extends OrderedRows {
+    virtual public void open() { data.set("value", "${rows.data.after}"); data.set("after", "${1+2}"); }
+}''', encoding="utf-8")
+    (source / "NestedCascadeReport.bl").write_text(
+        (source / "NestedSimpleReport.bl").read_text(encoding="utf-8")
+        .replace("NestedSimpleReport", "NestedCascadeReport").replace("OrderedRows rows;", "NestedCascadeRows rows;"), encoding="utf-8")
     (source / "NestedSiblingsReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 public class NestedSiblingsReport extends Report {
@@ -1645,7 +1659,7 @@ void main(string[] args) {
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         contents = contents.replace('assert(chain);', 'assert(chain); auto highSheet = P.m_cloneHighSheet(); copy(z8_file_resolve_path(highSheet), buildPath(args[2], "cloned-high-sheet.xlsx")); bool tooManySheets; try { P.m_cloneTooManySheets(); } catch (Exception e) { tooManySheets = e.msg == "POI report sheet expansion is not implemented"; } assert(tooManySheets); auto highMultiple = P.m_cloneHighMultiple(); copy(z8_file_resolve_path(highMultiple), buildPath(args[2], "cloned-high-multiple.xlsx")); bool renameConflict; try { P.m_cloneHighRenameConflict(); } catch (Exception e) { renameConflict = e.msg == "duplicate POI report sheet name"; } assert(renameConflict);')
         contents = contents.replace('assert(renameConflict);', 'assert(renameConflict); auto nestedSimple = P.m_nestedSimple(); copy(z8_file_resolve_path(nestedSimple), buildPath(args[2], "nested-simple.xlsx")); bool nestedUnsupported; try { P.m_nestedUnsupported(); } catch (Exception e) { nestedUnsupported = e.msg == "nested POI report range layout is not implemented"; } assert(nestedUnsupported); auto nestedText = P.m_nestedText(); copy(z8_file_resolve_path(nestedText), buildPath(args[2], "nested-text.xlsx")); bool nestedMany; try { P.m_nestedMany(); } catch (Exception e) { nestedMany = e.msg == "POI report range expansion layout is not implemented"; } assert(nestedMany);')
-        contents = contents.replace('assert(nestedMany);', 'assert(nestedMany); auto nestedSiblings = P.m_nestedSiblings(); copy(z8_file_resolve_path(nestedSiblings), buildPath(args[2], "nested-siblings.xlsx")); bool nestedOverlap; try { P.m_nestedOverlap(); } catch (Exception e) { nestedOverlap = e.msg == "nested POI report range layout is not implemented"; } assert(nestedOverlap); bool nestedThree; try { P.m_nestedThree(); } catch (Exception e) { nestedThree = e.msg == "nested POI report ranges are not implemented"; } assert(nestedThree);')
+        contents = contents.replace('assert(nestedMany);', 'assert(nestedMany); auto nestedEval = P.m_nestedEval(); copy(z8_file_resolve_path(nestedEval), buildPath(args[2], "nested-eval.xlsx")); auto nestedCascade = P.m_nestedCascade(); copy(z8_file_resolve_path(nestedCascade), buildPath(args[2], "nested-cascade.xlsx")); auto nestedSiblings = P.m_nestedSiblings(); copy(z8_file_resolve_path(nestedSiblings), buildPath(args[2], "nested-siblings.xlsx")); bool nestedOverlap; try { P.m_nestedOverlap(); } catch (Exception e) { nestedOverlap = e.msg == "nested POI report range layout is not implemented"; } assert(nestedOverlap); bool nestedThree; try { P.m_nestedThree(); } catch (Exception e) { nestedThree = e.msg == "nested POI report ranges are not implemented"; } assert(nestedThree);')
         harness.write_text(contents, encoding="utf-8")
         args.extend(["-I" + str(bridge), str(bridge / "z8/xlsx/openxlsx.d"), str(bridge / "z8/xlsx/poi.d")])
         if os.name == "nt":
@@ -1845,8 +1859,10 @@ class PoiRangeOracle {
     try (XSSFWorkbook original = new XSSFWorkbook(new FileInputStream(args[0]));
          XSSFWorkbook actual = new XSSFWorkbook(new FileInputStream(args[1]))) {
       OBJECT context = new OBJECT.CLASS<OBJECT>(null).get();
-      if (args.length > 3 && ("nested-simple".equals(args[3]) || "nested-text".equals(args[3]))) {
+      if (args.length > 3 && ("nested-simple".equals(args[3]) || "nested-text".equals(args[3]) || "nested-eval".equals(args[3]) || "nested-cascade".equals(args[3]))) {
         final boolean textCase = "nested-text".equals(args[3]);
+        final boolean cascadeCase = "nested-cascade".equals(args[3]);
+        final boolean evalCase = "nested-eval".equals(args[3]) || cascadeCase;
         OBJECT.CLASS<OBJECT> rows = new OBJECT.CLASS<>(context);
         rows.setIndex("rows"); context.members().add(rows);
         final org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> data =
@@ -1856,8 +1872,10 @@ class PoiRangeOracle {
         DataSource childSource = new SimpleSource(rows.get()) {
           @Override public void open() {
             super.open(); ++sequence[0];
+            if (cascadeCase) data.get().z8_set(new org.zenframework.z8.server.types.string("after"), new org.zenframework.z8.server.types.string("${1+2}"));
             data.get().z8_set(new org.zenframework.z8.server.types.string("value"), textCase ?
-                new org.zenframework.z8.server.types.string("обычный текст") : new org.zenframework.z8.server.types.integer(sequence[0]));
+                new org.zenframework.z8.server.types.string("обычный текст") : evalCase ?
+                new org.zenframework.z8.server.types.string(cascadeCase ? "${rows.data.after}" : "${1+2}") : new org.zenframework.z8.server.types.integer(sequence[0]));
           }
         };
         PoiReport nested = new PoiReport(new ReportOptions()).setContext(context);
@@ -1873,7 +1891,7 @@ class PoiRangeOracle {
           throw new AssertionError("nested child result differs");
         if (sequence[0] != 1 || original.getSheetAt(0).getRow(0).getCell(0).getNumericCellValue() != 3 ||
             (textCase ? !original.getSheetAt(0).getRow(0).getCell(1).getStringCellValue().equals("обычный текст") :
-                        original.getSheetAt(0).getRow(0).getCell(1).getNumericCellValue() != 1))
+                        original.getSheetAt(0).getRow(0).getCell(1).getNumericCellValue() != (evalCase ? 3 : 1)))
           throw new AssertionError("unexpected nested range evaluation");
         return;
       }
@@ -2406,6 +2424,14 @@ class PoiRangeOracle {
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/nested-simple.xlsx"), str(working / "nested-text.xlsx"), str(config), "nested-text"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/nested-simple.xlsx"), str(working / "nested-eval.xlsx"), str(config), "nested-eval"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/nested-simple.xlsx"), str(working / "nested-cascade.xlsx"), str(config), "nested-cascade"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
