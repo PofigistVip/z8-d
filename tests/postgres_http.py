@@ -782,22 +782,22 @@ void main(string[] args) {
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(session="relation-denied", action="create", data=new_record)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
-            result = request(action="create", data=new_record, verifyLinked="true", verifyComputed="true")
-            assert result["success"] and result["data"][0]["title"] == "Third", result
+            result = request(action="create", fields='["title","amount","titleLength"]', data=new_record, verifyLinked="true", verifyComputed="true")
+            assert result["success"] and result["data"][0]["title"] == "Third" and result["data"][0]["titleLength"] == 5, result
             copy_record = '[{"recordId":"00000000-0000-0000-0000-000000000004","title":"Copied","nested.title":"selector value","titleLength":17}]'
             result = request(session="limited", action="copy", recordId="00000000-0000-0000-0000-000000000003", data=copy_record)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(session="relation-denied", action="copy", recordId="00000000-0000-0000-0000-000000000003", data=copy_record)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
-            result = request(action="copy", recordId="00000000-0000-0000-0000-000000000003", data=copy_record, verifyLinked="true", verifyComputed="true")
-            assert result["success"] and result["data"][0]["title"] == "Copied" and result["data"][0]["amount"] == 25, result
+            result = request(action="copy", fields='["title","amount","titleLength"]', recordId="00000000-0000-0000-0000-000000000003", data=copy_record, verifyLinked="true", verifyComputed="true")
+            assert result["success"] and result["data"][0]["title"] == "Copied" and result["data"][0]["amount"] == 25 and result["data"][0]["titleLength"] == 6, result
             change = '[{"recordId":"00000000-0000-0000-0000-000000000002","title":"Updated","amount":12,"titleLength":17}]'
             result = request(session="limited", action="update", data=change)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = request(session="expression-denied", action="update", data=change)
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
-            result = request(action="update", data=change, verifyComputed="true")
-            assert result["success"] and result["data"][0]["title"] == "Updated" and result["data"][0]["amount"] == 12, result
+            result = request(action="update", fields='["title","amount","titleLength"]', data=change, verifyComputed="true")
+            assert result["success"] and result["data"][0]["title"] == "Updated" and result["data"][0]["amount"] == 12 and result["data"][0]["titleLength"] == 7, result
             owner_id = "00000000-0000-0000-0000-000000000005"
             result = request(action="create", data=json.dumps([{"recordId": owner_id, "title": "Owner"}]))
             assert result["success"], result
