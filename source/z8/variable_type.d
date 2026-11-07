@@ -2,8 +2,39 @@ module z8.variable_type;
 
 import std.algorithm : canFind;
 import std.conv : to;
-import std.string : replace, indexOf;
+import std.string : replace, indexOf, toStringz;
 import std.math : isFinite, abs;
+
+// Use the same locale-independent C conversion as the runtime. std.conv's
+// decimal parser can round a few values differently near double boundaries.
+version (Windows) {
+    private extern(C) void* _create_locale(int category, const(char)* locale);
+    private extern(C) double _strtod_l(const(char)* input, char** end, void* locale);
+    private __gshared void* literalNumericLocale;
+    shared static this() {
+        import core.stdc.locale : LC_NUMERIC;
+        literalNumericLocale = _create_locale(LC_NUMERIC, "C".ptr);
+        if (literalNumericLocale is null) throw new Exception("cannot create numeric locale");
+    }
+} else version (Posix) {
+    private import core.sys.posix.locale : locale_t, newlocale, LC_NUMERIC_MASK;
+    private extern(C) double strtod_l(const(char)* input, char** end, locale_t locale);
+    private __gshared locale_t literalNumericLocale;
+    shared static this() {
+        literalNumericLocale = newlocale(LC_NUMERIC_MASK, "C".ptr, null);
+        if (literalNumericLocale is null) throw new Exception("cannot create numeric locale");
+    }
+}
+private double parseLiteralDouble(string input) {
+    const(char)* end;
+    auto source = input.toStringz;
+    double result;
+    version (Windows) result = _strtod_l(source, cast(char**)&end, literalNumericLocale);
+    else version (Posix) result = strtod_l(source, cast(char**)&end, literalNumericLocale);
+    else return input.to!double;
+    if (!input.length || end != source + input.length) throw new Exception("invalid double literal");
+    return result;
+}
 
 enum ValueType : uint {
     voidType, intType, decimalType, boolType, stringType, guidType,
@@ -325,10 +356,10 @@ package bool safeDecimalLiteral(string text) {
     while (first < last && digits[first] == '0') ++first;
     while (last > first && digits[last - 1] == '0') --last;
     try {
-        auto value = spelling.to!double;
+        auto value = parseLiteralDouble(spelling);
         if (!value.isFinite) return false;
         if (first == last) return true;
-        if (value != 0 && value.abs >= 1e-15 && value.abs < 1e15) return true;
+        if (value != 0 && value.abs >= 1e-30 && value.abs < 1e15) return true;
         return value.abs >= 1e15 && value.abs <= 9007199254740992.0 && cast(double)cast(long)value == value;
     } catch (Exception) { return false; }
 }

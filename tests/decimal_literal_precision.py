@@ -24,8 +24,14 @@ for _ in range(300):
     value = Decimal(digits).scaleb(rng.randrange(-14, 14) - len(digits) + 1)
     text = format(value, "f")
     samples.append(text if "." in text else text + ".0")
+samples += ["0." + "0" * 29 + "1", "-0." + "0" * 29 + "1"]
+for _ in range(300):
+    digits = str(rng.randrange(1, 10)) + "".join(str(rng.randrange(10)) for _ in range(rng.randrange(15, 26)))
+    value = Decimal(digits).scaleb(rng.randrange(-30, -15) - len(digits) + 1)
+    samples.append(format(value, "f"))
 samples += ["1000000000000000.0", "4503599627370495.0", "4503599627370496.0",
-            "9007199254740991.0", "9007199254740992.0", "-9007199254740992.0"]
+            "9007199254740991.0", "9007199254740992.0", "-9007199254740992.0",
+            "2935601023316268.750052482272"]
 for _ in range(200):
     integer = rng.randrange(10**15, 2**53 + 1)
     samples.append(("-" if rng.randrange(2) else "") + str(integer) + ".0")
@@ -41,7 +47,9 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     methods = "\n".join(f"public static decimal value{i}() {{ return {value}; }}" for i, value in enumerate(samples))
     (source / "Probe.bl").write_text("public class Probe {\n" + methods + "\n}", encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
-    for rejected in ("9007199254740994.0", "1000000000000000.125", "0.0000000000000001"):
+    for rejected in ("9007199254740994.0", "1000000000000000.125", "0.0000000000000000000000000000001",
+                     "4012161563682237.749685808834", "1582087371762615.874997622157",
+                     "3258245237057377.250097458906"):
         probe = temp / "Rejected.bl"
         probe.write_text("public class Rejected { public static decimal value() { return " + rejected + "; } }", encoding="utf-8")
         result = subprocess.run([str(compiler), "compile", str(probe)], capture_output=True, text=True, encoding="utf-8")
@@ -75,6 +83,7 @@ void main() {
     # Check a larger sample of the newly accepted integral-double range
     # without generating thousands of separate BL methods.
     random_values = [str(rng.randrange(10**15, 2**53 + 1)) + ".0" for _ in range(4096)]
+    random_values += [f"{rng.randrange(10**15, 10**16)}e{e-15}" for e in range(-30, -15) for _ in range(500)]
     input_text = "\n".join(random_values) + "\n"
     java_batch = temp / "DecimalDoubleBatch.java"
     java_batch.write_text('''import java.io.*;
@@ -98,4 +107,4 @@ void main() { foreach (line; stdin.byLine) writeln(z8_decimal_literal(line.idup)
     if expected_batch != actual_batch:
         mismatch = next((i for i, (a, b) in enumerate(zip(actual_batch, expected_batch)) if a != b), None)
         raise SystemExit(f"Integral double mismatch at {mismatch}: D={actual_batch[mismatch]!r}, Java={expected_batch[mismatch]!r}" if mismatch is not None else "Integral double result count differs")
-print(f"{len(samples)} BL literals and {len(random_values)} integral double values match Java")
+print(f"{len(samples)} BL literals and {len(random_values)} double values match Java")
