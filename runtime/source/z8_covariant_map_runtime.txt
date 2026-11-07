@@ -63,6 +63,12 @@ class Z8CovariantMap(K, V, M, bool keyObject, bool valueObject) : IZ8CollectionV
                 }}
             }
         }
+        static if (is(K == class)) {
+            static if (is(M == Z8ObjectKeyMap!(K, Object)) && is(V : Z8Object)) {
+                auto primary = cast(Z8ObjectKeyMap!(K, Z8Primary))other;
+                if (primary !is null) return z8_primary_map_view(data).opEquals(primary);
+            }
+        }
         auto view = cast(IZ8CollectionView)other;
         auto right = view is null ? null : cast(M)view.z8_erased_storage();
         return right !is null && data.opEquals(right);
@@ -158,4 +164,9 @@ z8_primary_object_key_map_view(To, From, V)(Z8CovariantMap!(From, V, Z8Reference
 if (is(To : Z8Object) && is(From : Z8Object) && is(V : Z8Object)) {
     if (values is null) return null;
     return new Z8CovariantMap!(To, Z8Primary, Z8ReferenceKeyMap!(Z8Object, Z8Primary), true, false)(z8_primary_map_view(values.data));
+}
+
+Z8ObjectKeyMap!(K, Z8Primary) z8_primary_map_view(K, V)(Z8CovariantMap!(K, V, Z8ObjectKeyMap!(K, Object), false, true) values)
+if (is(K == class) && is(V : Z8Object)) {
+    return values is null ? null : z8_primary_map_view(values.data);
 }

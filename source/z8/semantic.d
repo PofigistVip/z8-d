@@ -291,10 +291,12 @@ class Checker {
     private bool isPrimaryMapValueConversion(ValueType actual, ValueType expected, Expression e, Program[] expectedKeys) {
         if (!isMap(actual) || !isMap(expected) || mapValueType(expected) != ValueType.primaryType || mapKeyType(expected) != mapKeyType(actual)) return false;
         auto key = mapKeyType(actual);
-        if (key == ValueType.selfType) {
-            if (!e.keyObjectClasses.length || !expectedKeys.length ||
-                !isAssignable(outerMapKeyClass(actual, e.keyObjectClasses), outerMapKeyClass(expected, expectedKeys))) return false;
-        } else if (![ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.primaryType,
+        if (key == ValueType.selfType || key == ValueType.enumType) {
+            if (!e.keyObjectClasses.length || !expectedKeys.length) return false;
+            auto fromKey = outerMapKeyClass(actual, e.keyObjectClasses), toKey = outerMapKeyClass(expected, expectedKeys);
+            if (key == ValueType.selfType ? !isAssignable(fromKey, toKey) : fromKey !is toKey) return false;
+        } else if (!isSqlType(key) && ![ValueType.exceptionType, ValueType.encodingType, ValueType.ftsType, ValueType.ftsQueryType,
+                     ValueType.stringType, ValueType.intType, ValueType.boolType, ValueType.decimalType, ValueType.primaryType,
                      ValueType.guidType, ValueType.dateType, ValueType.datespanType, ValueType.binaryType, ValueType.geometryType, ValueType.fileType].canFind(key)) return false;
         return isScalarPrimaryArray(arrayOf(mapValueType(actual))) ||
             (mapValueType(actual) == ValueType.selfType && extendsBuiltinPrimary(e.objectClass));

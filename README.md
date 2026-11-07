@@ -136,6 +136,7 @@ python tests/primary_string_map_views.py
 python tests/primary_scalar_key_map_views.py
 python tests/primary_reference_key_map_views.py
 python tests/primary_user_key_map_views.py
+python tests/primary_native_key_map_views.py
 python tests/primary_primary_key_map_views.py
 python tests/primary_string_map_oracle.py path/to/original-z8
 python tests/primary_matrix_views.py

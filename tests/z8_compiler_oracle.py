@@ -255,6 +255,13 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     name_cases.append((False, {"BaseKey": 'public class BaseKey {}', "ChildKey": 'public class ChildKey extends BaseKey {}',
                                "NameA": 'public class NameA { static void f() { int[BaseKey] source; primary[ChildKey] target = source; } }'}))
     name_cases.append((True, {"Key": 'public class Key {}', "NameA": 'public class NameA extends primary { public void operator = (NameA value) {} static void f() { NameA[Key] source; primary[Key] target = source; } }'}))
+    for key in ("exception", "encoding", "sql_int", "sql_string"):
+        declaration = 'int[' + key + '] source; primary[' + key + '] values = source; values.add(source);'
+        prefix = 'import org.zenframework.z8.lang.encoding; ' if key == "encoding" else ""
+        name_cases.append((True, {"NameA": prefix + 'public class NameA { static void f() { ' + declaration + ' } }'}))
+    name_cases.append((True, {"Flavor": 'public enum Flavor { First, Second }', "NameA": 'public class NameA { static void f() { int[Flavor] source; primary[Flavor] values = source; } }'}))
+    name_cases.append((False, {"Flavor": 'public enum Flavor { First, Second }', "Other": 'public enum Other { First, Second }',
+                               "NameA": 'public class NameA { static void f() { int[Flavor] source; primary[Other] values = source; } }'}))
     for key in ("guid", "date", "datespan", "binary", "geometry", "file"):
         for kind in ("int", "string"):
             declaration = kind + '[' + key + '] source; primary[' + key + '] values = source; values.add(source);'
@@ -272,6 +279,7 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
     for kind in ("int", "bool", "decimal", "string", "guid", "binary", "date", "datespan", "geometry", "file"):
         declaration = kind + '[][] source; primary[][] values = source; for (primary[] row : source) {}'
         name_cases.append((True, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
+    name_cases.append((True, {"NameA": 'import org.zenframework.z8.lang.encoding; public class NameA extends primary { public void operator = (NameA value) {} static void f() { NameA[encoding] source; primary[encoding] values = source; values.add(source); } }'}))
     for declaration in (
         "NameA[] source; primary[] value = source; for (primary item : source) {}",
         "NameA[] source; primary[] values; values.removeAll(source);",
