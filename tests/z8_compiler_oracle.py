@@ -188,6 +188,27 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         (False, {"NameA": '[name] public class NameA {}',
                  "NameB": '[name ""] public class NameB {}'}),
     ]
+    # Null has no map-entry key/value type in the original compiler. A typed
+    # variable holding null, however, has a valid map type and is accepted.
+    for declaration in (
+        'string[string] values = {("key", null)};',
+        'string[string] values = {(null, "value")};',
+        'int[string] values = {("key", null)};',
+        'string[int] values = {(null, "value")};',
+        'primary[string] values = {("key", null)};',
+        'string[primary] values = {(null, "value")};',
+        'string[string] values = {(null, null)};',
+    ):
+        name_cases.append((False, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
+    for declaration in (
+        'string x = null; string[string] values = {("key", x)};',
+        'string x = null; string[string] values = {(x, "value")};',
+        'int x = null; int[string] values = {("key", x)};',
+        'int x = null; string[int] values = {(x, "value")};',
+        'primary x = null; primary[string] values = {("key", x)};',
+        'primary x = null; string[primary] values = {(x, "value")};',
+    ):
+        name_cases.append((True, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
     for case_index, (accepted, files) in enumerate(name_cases):
         names_project = temp / ("name-attribute-project-" + str(case_index))
         names_source = names_project / "src" / "bl"
