@@ -107,6 +107,7 @@ package enum string runtimeSource = import("z8_core_runtime.txt") ~ import("z8_n
     import("z8_request_query_copy_runtime.txt") ~ "\n" ~
     import("z8_request_query_attachment_runtime.txt") ~ "\n" ~
     import("z8_request_query_archive_runtime.txt") ~ "\n" ~
+    import("z8_request_query_preview_runtime.txt") ~ "\n" ~
     import("z8_request_query_action_runtime.txt") ~ "\n" ~
     import("z8_request_query_report_runtime.txt") ~ "\n" ~
     import("z8_request_query_content_runtime.txt") ~ "\n" ~

@@ -253,6 +253,10 @@ download path. Archive bytes are process-local, scoped to the creating session,
 user and database schema, retained for up to ten minutes, and bounded to 64 MiB
 and 128 cached archives; the oldest archives are evicted when necessary. A single
 archive accepts at most 1,000 files and 64 MiB of uncompressed content.
+`action=preview` reads one attachment from a readable record and returns a
+session-bound PDF download path. PDF files are validated with `pdfinfo`;
+other convertible files use LibreOffice. Combining multiple attachments and
+the original's comment page for unsupported formats are not yet supported.
 The current archive and download paths authorize the session and request but do
 not infer field-level access from a file ID.
 Optional `values` are checked before a create, update or copy transaction and

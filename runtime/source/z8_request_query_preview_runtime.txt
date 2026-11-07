@@ -1,0 +1,53 @@
+// PreviewAction for a single convertible attachment. Multi-file PDF merging
+// requires a PDF merger and is deliberately rejected until it is available.
+private void z8_application_dispatch_query_preview_target(wstring className, Z8Object context) {
+    import std.file : exists, mkdir, rmdirRecurse, tempDir;
+    import std.path : absolutePath, buildPath;
+    import std.uuid : randomUUID;
+    auto request = z8_application_require_request();
+    auto session = z8_nonnull(request.session);
+    if (!z8_application_may_execute(session, className, "preview"w)) throw new Exception("request access denied");
+    auto privileges = z8_nonnull(z8_nonnull(session.user).privileges);
+    auto params = request.parameters;
+    auto query = z8_application_action_query(context, privileges, params.z8_get("query"w), params.z8_get("link"w));
+    auto queryKey = z8_native_call!Z8Guid("org.zenframework.z8.server.runtime.OBJECT.m_key"w, query);
+    if (!privileges.getTableAccess(queryKey).read) throw new Exception("preview access denied");
+    auto fieldId = params.z8_get("field"w);
+    if (fieldId is null || !fieldId.length) throw new Exception("preview field is required");
+    auto field = z8_query_find_field_id(query, fieldId);
+    if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("preview field access denied");
+    if (field.z8_get_owner() !is query || !["file"w, "attachments"w, "string"w, "text"w].canFind(z8_field_type_id(field)))
+        throw new Exception("preview requires a file field owned by the query");
+    auto record = params.z8_get("recordId"w);
+    if (record is null || !record.length) throw new Exception("preview record ID is required");
+    auto id = z8_guid_parse(record);
+    if (id is null || id == z8_guid_zero()) throw new Exception("preview record ID is required");
+    auto files = z8_attachment_read_current(field, id);
+    if (!files.z8_size()) throw new Exception("preview attachment was not found");
+    if (files.z8_size() != 1) throw new Exception("preview of multiple attachments is not implemented");
+    auto metadata = z8_nonnull(files.z8_get(0));
+    auto file = z8_system_files_get_id(metadata.id);
+    if (file is null) throw new Exception("preview attachment was not found");
+    file.name = z8_string_required(metadata.name);
+    auto extension = z8_file_converter_extension(file.name);
+    if (!z8_optional_require(z8_file_converter_convertible(extension))) throw new Exception("unsupported preview file format");
+    file = z8_system_files_get_file(file);
+    string temporary;
+    scope(exit) if (temporary.length && exists(temporary)) rmdirRecurse(temporary);
+    if (!z8_optional_require(z8_file_converter_pdf(extension))) {
+        temporary = buildPath(absolutePath(tempDir()), "z8-preview-" ~ randomUUID().toString());
+        mkdir(temporary);
+        auto target = z8_file_from_path(buildPath(temporary, "preview.pdf").to!wstring);
+        file = z8_file_converter_files(file, target, params);
+    } else if (params.z8_containsKey("background"w) || params.z8_containsKey("stamps"w)) {
+        temporary = buildPath(absolutePath(tempDir()), "z8-preview-" ~ randomUUID().toString());
+        mkdir(temporary);
+        auto target = z8_file_from_path(buildPath(temporary, "preview.pdf").to!wstring);
+        file = z8_file_converter_files(file, target, params);
+    }
+    if (z8_attachment_pdf_page_count(file) < 1) throw new Exception("preview PDF is invalid");
+    auto input = z8_file_to_binary(file);
+    ubyte[] bytes;
+    { scope(exit) z8_binary_close(input); bytes = z8_binary_snapshot(input, z8_temporary_archives_bytes_limit); }
+    z8_monitor_property(request.writer, "source"w, z8_temporary_archive_store(bytes, "preview.pdf"w));
+}

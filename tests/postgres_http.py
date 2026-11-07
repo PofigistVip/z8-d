@@ -293,6 +293,7 @@ import z8.webserver.civetweb;
 import std.stdio : writeln, stdout, readln;
 import std.string : startsWith;
 import std.conv : to;
+import std.process : environment;
 __gshared string databaseInfo;
 wstring parentTitle(Z8Object child) {
     auto parent = z8_nonnull(z8_object_container(child));
@@ -350,6 +351,10 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
 }
 void main(string[] args) {
     z8_native_bind("ContextProbe.m_parentTitle"w, &parentTitle);
+    wstring[wstring] properties;
+    if (auto info = environment.get("Z8_TEST_PDFINFO")) properties["pdf.info.executable"w] = info.to!wstring;
+    if (auto office = environment.get("Z8_TEST_OFFICE_HOME")) properties["office.home"w] = office.to!wstring;
+    z8_server_config_replace(properties);
     databaseInfo = args[1];
     auto setup = new Z8PostgresConnection(databaseInfo);
     setup.execute(`CREATE TABLE "Sample" ("RecordId" uuid PRIMARY KEY, "Title" text, "Amount" bigint, "Blob" bytea, "Documents" bytea, "ChildLink" uuid, "NestedLink" uuid, "MemoryLink" uuid, "Lock" bigint DEFAULT 0, "CreatedAt" bigint, "CreatedBy" uuid, "ModifiedAt" bigint, "ModifiedBy" uuid)`);
@@ -411,6 +416,13 @@ void main(string[] args) {
     response_file.write_text("\n".join('"' + arg.replace('"', r'\"') + '"' for arg in args[1:]) + "\n", encoding="utf-8")
     subprocess.run(["dmd", "@" + str(response_file)], cwd=temp, check=True)
     with temporary_postgres(bin_dir) as (connection, environment):
+        pdfinfo = environment.get("Z8_TEST_PDFINFO") or shutil.which("pdfinfo")
+        if pdfinfo:
+            environment["Z8_TEST_PDFINFO"] = str(pdfinfo)
+        office = environment.get("Z8_TEST_OFFICE_HOME")
+        if not office and os.name == "nt" and Path("C:/Program Files/LibreOffice/program/soffice.com").is_file():
+            office = "C:/Program Files/LibreOffice"
+            environment["Z8_TEST_OFFICE_HOME"] = office
         process = subprocess.Popen([str(exe), connection], cwd=temp, env=environment, stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
         try:
@@ -906,6 +918,61 @@ void main(string[] args) {
                 finally:
                     client.close()
             target = "00000000-0000-0000-0000-000000000002"
+            if pdfinfo:
+                preview_record = "00000000-0000-0000-0000-000000000006"
+                result = request(action="create", data=json.dumps([{"recordId": preview_record, "title": "Preview"}]))
+                assert result["success"], result
+                preview_args = dict(action="preview", field="documents", recordId=preview_record)
+                result = request(**preview_args)
+                assert not result["success"] and "not found" in result["info"]["messages"][-1]["text"], result
+                result = attach_file("full", preview_record, "unknown.bin", b"not convertible")
+                unsupported = json.loads(result["data"][0]["documents"])[0]
+                result = request(**preview_args)
+                assert not result["success"] and "unsupported" in result["info"]["messages"][-1]["text"], result
+                result = request(action="detach", field="documents", recordId=preview_record, data=json.dumps([unsupported["id"]]))
+                assert result["success"], result
+                objects = [b"<< /Type /Catalog /Pages 2 0 R >>",
+                           b"<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+                           b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>"]
+                pdf, offsets = bytearray(b"%PDF-1.4\n"), []
+                for number, obj in enumerate(objects, 1):
+                    offsets.append(len(pdf)); pdf.extend(f"{number} 0 obj\n".encode() + obj + b"\nendobj\n")
+                xref = len(pdf); pdf.extend(f"xref\n0 {len(objects)+1}\n0000000000 65535 f \n".encode())
+                for offset in offsets: pdf.extend(f"{offset:010d} 00000 n \n".encode())
+                pdf.extend(f"trailer\n<< /Size {len(objects)+1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
+                result = attach_file("full", preview_record, "document.pdf", bytes(pdf))
+                assert result["success"], result
+                pdf_file = json.loads(result["data"][0]["documents"])[0]
+                result = request(session="field-denied", **preview_args)
+                assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+                result = request(**preview_args)
+                assert result["success"] and result["source"].endswith("/preview.pdf"), result
+                preview_path = "/" + quote(result["source"], safe="/")
+                assert download(preview_path, "full", None)[::2] == (200, bytes(pdf))
+                assert download(preview_path, "full2", None)[0] == 404
+                result = attach_file("full", preview_record, "extra.pdf", bytes(pdf))
+                second_file = json.loads(result["data"][0]["documents"])[1]
+                result = request(**preview_args)
+                assert not result["success"] and "multiple attachments" in result["info"]["messages"][-1]["text"], result
+                result = request(action="detach", field="documents", recordId=preview_record, data=json.dumps([pdf_file["id"], second_file["id"]]))
+                assert result["success"], result
+                result = attach_file("full", preview_record, "broken.pdf", b"not a PDF")
+                broken = json.loads(result["data"][0]["documents"])[0]
+                result = request(**preview_args)
+                assert not result["success"] and "invalid" in result["info"]["messages"][-1]["text"], result
+                result = request(action="detach", field="documents", recordId=preview_record, data=json.dumps([broken["id"]]))
+                assert result["success"], result
+                if office:
+                    result = attach_file("full", preview_record, "document.txt", b"Preview text")
+                    text_file = json.loads(result["data"][0]["documents"])[0]
+                    result = request(**preview_args)
+                    assert result["success"], result
+                    status, _, content = download("/" + quote(result["source"], safe="/"), "full", None)
+                    assert status == 200 and content.startswith(b"%PDF-"), (status, content[:100])
+                    result = request(action="detach", field="documents", recordId=preview_record, data=json.dumps([text_file["id"]]))
+                    assert result["success"], result
+                result = request(action="destroy", data=json.dumps([preview_record]))
+                assert result["success"], result
             result = attach_file("limited", target, "denied.txt", b"no")
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
             result = attach_file("field-denied", target, "denied.txt", b"no")
@@ -931,6 +998,13 @@ void main(string[] args) {
             assert result["success"], result
             nested_file = json.loads(result["data"][0]["nested.documents"])[0]
             assert download("/" + quote(nested_file["path"], safe="/"), "full", nested_file["id"])[2] == b"nested"
+            if pdfinfo and office:
+                nested_preview = dict(action="preview", link="nestedLink", field="nested.documents", recordId=nested_target)
+                result = request(session="relation-denied", **nested_preview)
+                assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+                result = request(**nested_preview)
+                assert result["success"], result
+                assert download("/" + quote(result["source"], safe="/"), "full", None)[2].startswith(b"%PDF-")
             result = request(session="relation-denied", action="detach", link="nestedLink", field="nested.documents",
                              fields='["nested.documents"]', recordId=nested_target, data=json.dumps([nested_file["id"]]))
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result

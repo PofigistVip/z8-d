@@ -358,6 +358,7 @@ private void z8_application_dispatch_request_impl() {
         else if (action == "copy"w) z8_application_dispatch_query_copy_target(className, target);
         else if (action == "attach"w || action == "detach"w) z8_application_dispatch_query_attachment_target(className, target, action == "detach"w);
         else if (action == "archive"w) z8_application_dispatch_query_archive_target(className, target);
+        else if (action == "preview"w) z8_application_dispatch_query_preview_target(className, target);
         else if (action == "export"w) z8_application_dispatch_query_export_target(className, target);
         else if (action == "action"w) z8_application_dispatch_query_action_target(className, target);
         else if (action == "report"w) z8_application_dispatch_query_report_target(className, target);
