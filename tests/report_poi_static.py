@@ -42,6 +42,11 @@ public class StaticReportProbe {
         string[] columns = {""}; report.hiddenColumns.add(0, columns);
         return report.run(guid.Null);
     }
+    public static file ordered() {
+        Report report; report.engine = Report.POI; report.template = "order";
+        string[] columns = {"Q", "B", "R", "D"}; report.hiddenColumns.add(0, columns);
+        return report.run(guid.Null);
+    }
 }
 ''', encoding="utf-8")
     application, working = temp / "application", temp / "working"
@@ -82,6 +87,12 @@ public class StaticReportProbe {
         with zipfile.ZipFile(application / ("reports/case" + str(number) + ".xlsx"), "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for name, content in case.items():
                 archive.writestr(name, content)
+    ordered = dict(entries)
+    ordered["xl/worksheets/sheet1.xml"] = original_sheet.replace("<sheetData>",
+        '<cols><col min="2" max="8" width="10"/><col min="15" max="20" width="12"/><col min="1" max="22" outlineLevel="2"/></cols><sheetData>')
+    with zipfile.ZipFile(application / "reports/order.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in ordered.items():
+            archive.writestr(name, content)
     multiple = dict(entries)
     multiple["xl/workbook.xml"] = multiple["xl/workbook.xml"].replace('</sheets>', '<sheet name="Second" sheetId="2" r:id="rId2"/></sheets>')
     multiple["xl/_rels/workbook.xml.rels"] = multiple["xl/_rels/workbook.xml.rels"].replace('</Relationships>',
@@ -129,19 +140,16 @@ void main(string[] args) {
     copy(z8_file_resolve_path(secondSheet), buildPath(args[2], "multiple.xlsx"));
     auto overlap = P.m_hidden("overlap"w);
     copy(z8_file_resolve_path(overlap), buildPath(args[2], "overlap.xlsx"));
-    foreach (i; 0 .. 2) {
+    foreach (i; 0 .. 4) {
         auto name = "case" ~ i.to!string;
         auto result = P.m_hidden(name.to!wstring);
         copy(z8_file_resolve_path(result), buildPath(args[2], name ~ ".xlsx"));
     }
-    foreach (i; 2 .. 4) {
-        bool complex; try { P.m_hidden(("case" ~ i.to!string).to!wstring); } catch (Exception) { complex = true; }
-        assert(complex);
-    }
-    assert(database.begins == 11 && database.rollbacks == 11);
+    auto ordered = P.m_ordered(); copy(z8_file_resolve_path(ordered), buildPath(args[2], "order.xlsx"));
+    assert(database.begins == 12 && database.rollbacks == 12);
     bool badSheet; try { P.m_invalidSheet(); } catch (Exception) { badSheet = true; } assert(badSheet);
     bool badColumn; try { P.m_invalidColumn(); } catch (Exception) { badColumn = true; } assert(badColumn);
-    assert(database.begins == 13 && database.rollbacks == 13);
+    assert(database.begins == 14 && database.rollbacks == 14);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -183,13 +191,16 @@ void main(string[] args) {
         oracle.write_text('''import java.io.FileInputStream;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import java.util.HashSet;
 class PoiHiddenOracle {
   public static void main(String[] args) throws Exception {
     try (XSSFWorkbook original = new XSSFWorkbook(new FileInputStream(args[0]));
          XSSFWorkbook actual = new XSSFWorkbook(new FileInputStream(args[1]))) {
       Sheet expected = original.getSheetAt(0), result = actual.getSheetAt(0);
-      for (int column : new int[]{1, 3, 6}) expected.setColumnHidden(column, true);
-      for (int column = 0; column < 10; column++)
+      HashSet<Integer> hidden = new HashSet<>();
+      for (int column : args.length > 2 ? new int[]{16, 1, 17, 3} : new int[]{1, 3, 6}) hidden.add(column);
+      for (int column : hidden) expected.setColumnHidden(column, true);
+      for (int column = 0; column < 24; column++)
         if (expected.isColumnHidden(column) != result.isColumnHidden(column) ||
             expected.getColumnWidth(column) != result.getColumnWidth(column) ||
             expected.getColumnOutlineLevel(column) != result.getColumnOutlineLevel(column))
@@ -207,9 +218,13 @@ class PoiHiddenOracle {
                                          (application / "reports/styled.xlsx", working / "styled.xlsx"),
                                          (application / "reports/overlap.xlsx", working / "overlap.xlsx")]
         pairs += [(application / ("reports/case" + str(number) + ".xlsx"), working / ("case" + str(number) + ".xlsx"))
-                  for number in range(2)]
+                  for number in range(len(cases))]
         for source_path, result_path in pairs:
             result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + classpath, "PoiHiddenOracle",
                                      str(source_path), str(result_path)], cwd=temp, capture_output=True, text=True)
             assert result.returncode == 0, result.stderr
+        result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + classpath, "PoiHiddenOracle",
+                                 str(application / "reports/order.xlsx"), str(working / "order.xlsx"), "ordered"],
+                                cwd=temp, capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
 print("POI static report template, naming and transaction verified")

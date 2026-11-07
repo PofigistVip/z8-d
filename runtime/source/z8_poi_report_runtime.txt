@@ -72,8 +72,12 @@ private ubyte[] z8_poi_report_hide_columns(const(ubyte)[] input, Z8IntMap!(Z8Arr
         auto index = cast(int)z8_optional_require(key);
         if (index < 0 || index >= sheets.length) throw new Exception("invalid POI report sheet index");
         bool[int] wanted;
+        auto wantedOrder = new Z8JavaMapOrder!(Z8Optional!long)();
         auto columns = z8_nonnull(hidden.z8_get(key));
-        foreach (i; 0 .. columns.z8_size()) wanted[z8_poi_report_column(columns.z8_get(i))] = true;
+        foreach (i; 0 .. columns.z8_size()) {
+            auto number = z8_poi_report_column(columns.z8_get(i));
+            if (number !in wanted) { wanted[number] = true; wantedOrder.add(z8_optional_wrap(cast(long)number - 1)); }
+        }
         if (!wanted.length) continue;
         auto member = sheets[index] in archive.directory;
         if (member is null) throw new Exception("missing XLSX worksheet");
@@ -99,38 +103,77 @@ private ubyte[] z8_poi_report_hide_columns(const(ubyte)[] input, Z8IntMap!(Z8Arr
             if (minimum < 1 || maximum > 16384 || minimum > maximum) throw new Exception("invalid XLSX column range");
             size_t intersections;
             foreach (previous; sourceColumns) if (minimum <= previous.last && maximum >= previous.first) ++intersections;
-            if (intersections > 1) throw new Exception("complex overlapping XLSX column ranges are not supported");
             if (intersections) overlapping = true;
             sourceColumns ~= Z8PoiColumn(minimum, maximum, column.name, column.attributes.dup);
         }
         if (overlapping) {
-            // POI normalizes overlaps in document order: an explicitly set
-            // attribute in a later definition overrides the earlier value.
+            // POI 3.16's ColumnHelper can retain overlapping ranges after
+            // cleaning. Model its insertion/splitting order before flattening
+            // them, otherwise a broad range can acquire the wrong width.
+            void mergeAttributes(ref Z8PoiColumn target, Z8PoiColumn source) {
+                bool collapsed;
+                foreach (name, value; source.attributes) {
+                    auto local = z8_poi_xml_local(name);
+                    if (local == "min"w || local == "max"w) continue;
+                    if (local == "collapsed"w) collapsed = true;
+                    target.attributes[name] = value;
+                }
+                foreach (name; target.attributes.keys) if (z8_poi_xml_local(name) == "collapsed"w) target.attributes.remove(name);
+                target.attributes["collapsed"w] = collapsed ? "1"w : "0"w;
+            }
+            Z8PoiColumn clone(Z8PoiColumn source, int first, int last) {
+                Z8PoiColumn result = Z8PoiColumn(first, last, source.name, null);
+                mergeAttributes(result, source); return result;
+            }
+            Z8PoiColumn[] clean;
+            void addUnique(Z8PoiColumn item) {
+                foreach (previous; clean) if (previous.first == item.first && previous.last == item.last) return;
+                clean ~= item;
+            }
+            foreach (column; sourceColumns) {
+                Z8PoiColumn[] intersections, remainder;
+                foreach (item; clean) {
+                    if (column.first <= item.last && column.last >= item.first) intersections ~= item;
+                    else remainder ~= item;
+                }
+                clean = remainder;
+                if (!intersections.length) addUnique(clone(column, column.first, column.last));
+                else foreach (old; intersections) {
+                    auto start = old.first > column.first ? old.first : column.first;
+                    auto end = old.last < column.last ? old.last : column.last;
+                    auto common = clone(old, start, end); mergeAttributes(common, column); addUnique(common);
+                    auto left = old.first < column.first ? old : column;
+                    auto leftStart = old.first < column.first ? old.first : column.first;
+                    if (leftStart < start) addUnique(clone(left, leftStart, start - 1));
+                    auto right = old.last > column.last ? old : column;
+                    auto rightEnd = old.last > column.last ? old.last : column.last;
+                    if (end < rightEnd) addUnique(clone(right, end + 1, rightEnd));
+                }
+                sort!((a, b) => a.first == b.first ? a.last < b.last : a.first < b.first)(clean);
+            }
+            foreach (wantedKey; wantedOrder.ordered()) {
+                auto n = cast(int)z8_optional_require(wantedKey) + 1;
+                size_t columnIndex;
+                while (columnIndex < clean.length && !(clean[columnIndex].first <= n && clean[columnIndex].last >= n)) ++columnIndex;
+                if (columnIndex == clean.length) clean ~= Z8PoiColumn(n, n, prefix ~ "col"w, ["hidden"w: "1"w]);
+                else {
+                    auto current = clean[columnIndex];
+                    current.attributes = current.attributes.dup;
+                    clean[columnIndex].first = n; clean[columnIndex].last = n;
+                    clean[columnIndex].attributes["hidden"w] = "1"w;
+                    if (current.first < n) clean = [clone(current, current.first, n - 1)] ~ clean;
+                    if (current.last > n) clean = [clone(current, n + 1, current.last)] ~ clean;
+                }
+                covered[n] = true;
+            }
             auto slots = new Z8PoiColumn[16385];
             bool[16385] occupied;
-            foreach (column; sourceColumns) foreach (n; column.first .. column.last + 1) {
-                if (!occupied[n]) {
-                    slots[n] = Z8PoiColumn(n, n, column.name, column.attributes.dup);
-                    occupied[n] = true;
-                } else foreach (name, value; column.attributes) {
-                    auto local = z8_poi_xml_local(name);
-                    if (local != "min"w && local != "max"w) slots[n].attributes[name] = value;
-                }
-            }
-            foreach (n; wanted.keys) {
-                if (!occupied[n]) { slots[n] = Z8PoiColumn(n, n, prefix ~ "col"w, null); occupied[n] = true; }
-                auto attributes = slots[n].attributes;
-                foreach (attribute; attributes.keys) if (z8_poi_xml_local(attribute) == "hidden"w) attributes.remove(attribute);
-                attributes["hidden"w] = "1"w; slots[n].attributes = attributes;
-                covered[n] = true;
+            foreach (column; clean) foreach (n; column.first .. column.last + 1) if (!occupied[n]) {
+                slots[n] = column; occupied[n] = true;
             }
             foreach (n; 1 .. 16385) if (occupied[n]) {
                 auto item = slots[n];
-                // min/max are emitted separately and differ between ranges.
-                foreach (attribute; item.attributes.keys) {
-                    auto local = z8_poi_xml_local(attribute);
-                    if (local == "min"w || local == "max"w) item.attributes.remove(attribute);
-                }
+                item.first = item.last = n;
                 if (segments.length && segments[$ - 1].last + 1 == n && segments[$ - 1].name == item.name &&
                     segments[$ - 1].attributes == item.attributes) segments[$ - 1].last = n;
                 else segments ~= item;
