@@ -161,6 +161,19 @@ void main() {
     auto first = registry.newTableByName("Orders"w), second = registry.newTableByClass("Orders"w);
     assert(first !is null && second !is null && first !is second && first.z8_class_id() == "Orders"w);
     assert(registry.newTableByName("Missing"w) is null && registry.newRequestByClass("Api"w).z8_class_id() == "Api"w);
+    // Keys are based on table name for tables and on class ID for other categories.
+    auto byTableKey = registry.newTableByKey(z8_guid_create_name("Orders"w));
+    assert(byTableKey !is null && byTableKey !is first && byTableKey.z8_class_id() == "Orders"w);
+    assert(registry.newTableByKey(z8_guid_create_name("Inherited"w)).z8_class_id() == "DerivedTable"w);
+    assert(registry.newTableByKey(z8_guid_create_name("DerivedTable"w)) is null);
+    assert(registry.newRequestByKey(z8_guid_create_name("Api"w)).z8_class_id() == "Api"w);
+    assert(registry.newJobByKey(z8_guid_create_name("DailyJob"w)).z8_class_id() == "DailyJob"w);
+    assert(registry.newEntryByKey(z8_guid_create_name("MenuEntry"w)).z8_class_id() == "MenuEntry"w);
+    auto missingKey = z8_guid_create_name("not registered"w);
+    assert(registry.newTableByKey(missingKey) is null && registry.newRequestByKey(missingKey) is null &&
+           registry.newJobByKey(missingKey) is null && registry.newEntryByKey(missingKey) is null);
+    assert(registry.newTableByKey(null) is null && registry.newRequestByKey(null) is null &&
+           registry.newJobByKey(null) is null && registry.newEntryByKey(null) is null);
     assert(registry.newTables().length == 2);
     auto previousRegistry = z8_runtime_set_registry(registry);
     alias NamedFactory = Z8p_4E616D6564466163746F7279;

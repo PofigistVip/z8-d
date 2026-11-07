@@ -334,6 +334,15 @@ class Z8RuntimeRegistry {
     Z8Guid[] requestKeys() { Z8Guid[] keys; foreach (item; requests()) keys ~= item.key; return keys; }
     Z8Guid[] jobKeys() { Z8Guid[] keys; foreach (item; jobs()) keys ~= item.key; return keys; }
     Z8Guid[] entryKeys() { Z8Guid[] keys; foreach (item; entries()) keys ~= item.key; return keys; }
+    private Z8Object newByKey(Z8RuntimeRegistration[] entries, Z8Guid key) {
+        if (key is null) return null;
+        foreach (item; entries) if (item.key == key) return z8_object_new_instance(item.classId);
+        return null;
+    }
+    Z8Object newTableByKey(Z8Guid key) { return newByKey(tables(), key); }
+    Z8Object newRequestByKey(Z8Guid key) { return newByKey(requests(), key); }
+    Z8Object newJobByKey(Z8Guid key) { return newByKey(jobs(), key); }
+    Z8Object newEntryByKey(Z8Guid key) { return newByKey(entries(), key); }
     Z8Object newTableByName(wstring name) {
         name = z8_string_required(name);
         foreach (item; tables()) if (item.name == name) return z8_object_new_instance(item.classId);
