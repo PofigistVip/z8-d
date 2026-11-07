@@ -123,6 +123,21 @@ private Z8EvalValue z8_eval_property(Z8EvalState state, Z8EvalValue object, wstr
             if (member.z8_index() == name) return z8_eval_report_member(member);
         throw new Exception("POI report object context member is not implemented");
     }
+    if (object.primary !is null) {
+        auto value = object.primary;
+        if (value.kind == Z8PrimaryKind.binary && name == "name"w)
+            return Z8EvalValue(true, z8_primary_box(z8_binary_get_name(value.binaryValue)), null, null);
+        if (value.kind == Z8PrimaryKind.file) {
+            auto file = z8_nonnull(value.fileValue);
+            if (name == "name"w) return Z8EvalValue(true, z8_primary_box(file.name), null, null);
+            if (name == "path"w) return Z8EvalValue(true, z8_primary_box(file.path), null, null);
+            if (name == "author"w) return Z8EvalValue(true, z8_primary_box(file.author), null, null);
+            if (name == "id"w) return Z8EvalValue(true, z8_primary_box(file.id), null, null);
+            if (name == "user"w) return Z8EvalValue(true, z8_primary_box(file.user), null, null);
+            if (name == "size"w) return Z8EvalValue(true, z8_primary_box(file.size), null, null);
+            if (name == "time"w) return Z8EvalValue(true, z8_primary_box(file.time), null, null);
+        }
+    }
     if (object.json is null || !z8_native_is_instance(z8_json_object_name, object.json))
         throw new Exception("unsupported Eval property");
     return z8_eval_json_property(object.json, name);

@@ -22,6 +22,7 @@ private Z8Primary z8_eval_string_method(wstring value, wstring name, Z8EvalValue
         if (name == "firstToUpperCase"w) return z8_primary_box(z8_str_firstToUpperCase(value));
         if (name == "firstToLowerCase"w) return z8_primary_box(z8_str_firstToLowerCase(value));
         if (name == "file"w) return z8_primary_box(z8_file_from_path(value));
+        if (name == "binary"w) return z8_primary_box(new Z8Binary(z8_encoding_encode(value, z8_encoding_by_id(0))));
     } else if (arguments.length == 1) {
         if (name == "compare"w) return z8_primary_box(z8_str_compare(value, textArg(0)));
         if (name == "compareNoCase"w) return z8_primary_box(z8_str_compareNoCase(value, textArg(0)));
@@ -325,6 +326,17 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
     }
     if (object.primary !is null && object.primary.kind == Z8PrimaryKind.text)
         return Z8EvalValue(true, z8_eval_string_method(object.primary.textValue, name, arguments), null, null);
+    if (object.primary !is null && object.primary.kind == Z8PrimaryKind.binary) {
+        auto binary = object.primary.binaryValue;
+        if (!arguments.length) {
+            if (name == "length"w) return Z8EvalValue(true, z8_primary_box(z8_binary_length(binary)), null, null);
+            if (name == "getName"w) return Z8EvalValue(true, z8_primary_box(z8_string_new(z8_binary_get_name(binary))), null, null);
+            if (name == "getBaseName"w) return Z8EvalValue(true, z8_primary_box(z8_string_new(z8_binary_base_name(binary))), null, null);
+            if (name == "getExtension"w) return Z8EvalValue(true, z8_primary_box(z8_string_new(z8_binary_extension(binary))), null, null);
+        }
+        if (name == "setName"w && arguments.length == 1 && arguments[0].primary !is null && arguments[0].primary.kind == Z8PrimaryKind.text)
+            return Z8EvalValue(true, z8_primary_box(z8_binary_set_name(binary, arguments[0].primary.textValue)), null, null);
+    }
     if (object.primary !is null && object.primary.kind == Z8PrimaryKind.file && !arguments.length) {
         auto file = object.primary.fileValue;
         if (name == "fileName"w) return Z8EvalValue(true, z8_primary_box(z8_string_new(z8_file_fileName(file))), null, null);
