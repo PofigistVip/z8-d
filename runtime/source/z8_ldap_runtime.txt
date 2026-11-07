@@ -1,0 +1,168 @@
+// BL LDAP facade. A host-supplied provider owns the actual directory session.
+private enum z8_ldap_api_name = "org.zenframework.z8.server.base.ldap.LdapAPI"w;
+private enum z8_ldap_user_name = "org.zenframework.z8.server.base.ldap.LdapUser"w;
+private enum z8_ldap_group_name = "org.zenframework.z8.server.base.ldap.LdapGroup"w;
+
+class Z8LdapUserData {
+    wstring domainName, login;
+    bool locked;
+    wstring[] memberOf;
+    wstring[wstring] parameters;
+}
+class Z8LdapGroupData {
+    wstring domainName, name;
+    wstring[] members;
+    wstring[wstring] parameters;
+}
+// Sessions implement searching, directory-specific configuration and caching.
+// A null single result represents an absent entry; empty lists are allowed.
+interface IZ8LdapSession {
+    bool isOpen();
+    void close();
+    Z8LdapUserData user(wstring login);
+    Z8LdapUserData user(wstring searchBase, wstring searchFilter);
+    Z8LdapUserData[] users();
+    Z8LdapUserData[] users(wstring searchBase, wstring searchFilter);
+    Z8LdapGroupData group(wstring name);
+    Z8LdapGroupData group(wstring searchBase, wstring searchFilter);
+    Z8LdapGroupData[] groups();
+    Z8LdapGroupData[] groups(wstring searchBase, wstring searchFilter);
+}
+interface IZ8LdapProvider {
+    IZ8LdapSession open(wstring url, wstring principal, wstring credentials, wstring config);
+}
+private __gshared IZ8LdapProvider z8_ldap_provider;
+private __gshared Object z8_ldap_monitor;
+IZ8LdapProvider z8_ldap_set_provider(IZ8LdapProvider provider) {
+    synchronized (z8_ldap_monitor) { auto previous = z8_ldap_provider; z8_ldap_provider = provider; return previous; }
+}
+private class Z8LdapApiState { IZ8LdapSession session; }
+private class Z8LdapUserState {
+    wstring domainName = ""w, login = ""w;
+    Z8Optional!bool locked;
+    Z8Array!wstring memberOf;
+    Z8StringMap parameters;
+    this() { locked = z8_optional_wrap(false); memberOf = new Z8Array!wstring(); parameters = new Z8StringMap(); }
+}
+private class Z8LdapGroupState {
+    wstring domainName = ""w, name = ""w;
+    Z8Array!wstring members;
+    Z8StringMap parameters;
+    this() { members = new Z8Array!wstring(); parameters = new Z8StringMap(); }
+}
+private Z8LdapUserState z8_ldap_user_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_ldap_user_name, self)) throw new Exception("invalid LDAP user");
+    auto state = cast(Z8LdapUserState)self.z8_get_native_state(z8_ldap_user_name);
+    if (state is null) { state = new Z8LdapUserState(); self.z8_set_native_state(z8_ldap_user_name, state); }
+    return state;
+}
+private Z8LdapGroupState z8_ldap_group_state(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_ldap_group_name, self)) throw new Exception("invalid LDAP group");
+    auto state = cast(Z8LdapGroupState)self.z8_get_native_state(z8_ldap_group_name);
+    if (state is null) { state = new Z8LdapGroupState(); self.z8_set_native_state(z8_ldap_group_name, state); }
+    return state;
+}
+private wstring* z8_ldap_user_domain(Z8Object self) { return &z8_ldap_user_state(self).domainName; }
+private wstring* z8_ldap_user_login(Z8Object self) { return &z8_ldap_user_state(self).login; }
+private Z8Optional!bool* z8_ldap_user_locked(Z8Object self) { return &z8_ldap_user_state(self).locked; }
+private Z8Array!wstring* z8_ldap_user_member_of(Z8Object self) { return &z8_ldap_user_state(self).memberOf; }
+private Z8StringMap* z8_ldap_user_parameters(Z8Object self) { return &z8_ldap_user_state(self).parameters; }
+private wstring* z8_ldap_group_domain(Z8Object self) { return &z8_ldap_group_state(self).domainName; }
+private wstring* z8_ldap_group_name_field(Z8Object self) { return &z8_ldap_group_state(self).name; }
+private Z8Array!wstring* z8_ldap_group_members(Z8Object self) { return &z8_ldap_group_state(self).members; }
+private Z8StringMap* z8_ldap_group_parameters(Z8Object self) { return &z8_ldap_group_state(self).parameters; }
+private void z8_ldap_copy_members(Z8Array!wstring target, wstring[] values) {
+    bool[wstring] seen;
+    bool sawNull;
+    foreach (value; values) {
+        if (value is null) { if (sawNull) continue; sawNull = true; }
+        else { if (value in seen) continue; seen[value] = true; }
+        target.z8_add(z8_string_new(z8_string_or_empty(value)));
+    }
+}
+Z8Object z8_ldap_wrap_user(Z8LdapUserData data) {
+    if (data is null) return null;
+    auto result = z8_native_new(z8_ldap_user_name), state = z8_ldap_user_state(result);
+    state.domainName = z8_string_new(z8_string_or_empty(data.domainName)); state.login = z8_string_new(z8_string_or_empty(data.login));
+    state.locked = z8_optional_wrap(data.locked);
+    z8_ldap_copy_members(state.memberOf, data.memberOf);
+    foreach (key, value; data.parameters) state.parameters.z8_add(z8_string_new(z8_string_or_empty(key)), z8_string_new(z8_string_or_empty(value)));
+    return result;
+}
+Z8Object z8_ldap_wrap_group(Z8LdapGroupData data) {
+    if (data is null) return null;
+    auto result = z8_native_new(z8_ldap_group_name), state = z8_ldap_group_state(result);
+    state.domainName = z8_string_new(z8_string_or_empty(data.domainName)); state.name = z8_string_new(z8_string_or_empty(data.name));
+    z8_ldap_copy_members(state.members, data.members);
+    foreach (key, value; data.parameters) state.parameters.z8_add(z8_string_new(z8_string_or_empty(key)), z8_string_new(z8_string_or_empty(value)));
+    return result;
+}
+private IZ8LdapSession z8_ldap_session(Z8Object self) {
+    self = z8_nonnull(self);
+    if (!z8_native_is_instance(z8_ldap_api_name, self)) throw new Exception("invalid LDAP API");
+    auto state = cast(Z8LdapApiState)self.z8_get_native_state(z8_ldap_api_name);
+    if (state is null || state.session is null) throw new Exception("LDAP session is not configured");
+    return state.session;
+}
+private Z8Object z8_ldap_open(wstring url, wstring principal, wstring credentials, wstring config) {
+    url = z8_string_required(url); principal = z8_string_required(principal); credentials = z8_string_required(credentials);
+    IZ8LdapProvider provider;
+    synchronized (z8_ldap_monitor) provider = z8_ldap_provider;
+    if (provider is null) throw new Exception("LDAP provider is not configured");
+    auto session = provider.open(url, principal, credentials, config);
+    if (session is null) throw new Exception("LDAP provider returned no session");
+    scope(failure) try { session.close(); } catch (Throwable ignored) { }
+    auto result = z8_native_new(z8_ldap_api_name), state = new Z8LdapApiState();
+    state.session = session; result.z8_set_native_state(z8_ldap_api_name, state); return result;
+}
+private Z8Object z8_ldap_open_default(wstring url, wstring principal, wstring credentials) { return z8_ldap_open(url, principal, credentials, null); }
+private Z8Optional!bool z8_ldap_is_open(Z8Object self) {
+    self = z8_nonnull(self);
+    auto state = cast(Z8LdapApiState)self.z8_get_native_state(z8_ldap_api_name);
+    return z8_optional_wrap(state !is null && state.session !is null && state.session.isOpen());
+}
+private void z8_ldap_close(Z8Object self) {
+    self = z8_nonnull(self);
+    auto state = cast(Z8LdapApiState)self.z8_get_native_state(z8_ldap_api_name);
+    if (state !is null && state.session !is null) state.session.close();
+}
+private Z8Object z8_ldap_user(Z8Object self, wstring login) { return z8_ldap_wrap_user(z8_ldap_session(self).user(z8_string_required(login))); }
+private Z8Object z8_ldap_user_filter(Z8Object self, wstring base, wstring filter) { return z8_ldap_wrap_user(z8_ldap_session(self).user(z8_string_required(base), z8_string_required(filter))); }
+private Z8Object z8_ldap_group(Z8Object self, wstring name) { return z8_ldap_wrap_group(z8_ldap_session(self).group(z8_string_required(name))); }
+private Z8Object z8_ldap_group_filter(Z8Object self, wstring base, wstring filter) { return z8_ldap_wrap_group(z8_ldap_session(self).group(z8_string_required(base), z8_string_required(filter))); }
+private Z8ObjectArray!Z8Object z8_ldap_users_result(Z8LdapUserData[] data) {
+    auto result = new Z8ObjectArray!Z8Object(); foreach (value; data) result.z8_add(z8_ldap_wrap_user(value)); return result;
+}
+private Z8ObjectArray!Z8Object z8_ldap_groups_result(Z8LdapGroupData[] data) {
+    auto result = new Z8ObjectArray!Z8Object(); foreach (value; data) result.z8_add(z8_ldap_wrap_group(value)); return result;
+}
+private Z8ObjectArray!Z8Object z8_ldap_users(Z8Object self) { return z8_ldap_users_result(z8_ldap_session(self).users()); }
+private Z8ObjectArray!Z8Object z8_ldap_users_filter(Z8Object self, wstring base, wstring filter) { return z8_ldap_users_result(z8_ldap_session(self).users(z8_string_required(base), z8_string_required(filter))); }
+private Z8ObjectArray!Z8Object z8_ldap_groups(Z8Object self) { return z8_ldap_groups_result(z8_ldap_session(self).groups()); }
+private Z8ObjectArray!Z8Object z8_ldap_groups_filter(Z8Object self, wstring base, wstring filter) { return z8_ldap_groups_result(z8_ldap_session(self).groups(z8_string_required(base), z8_string_required(filter))); }
+void z8_bind_builtin_ldap() {
+    z8_native_bind_field(z8_ldap_user_name ~ ".f_domainName"w, &z8_ldap_user_domain);
+    z8_native_bind_field(z8_ldap_user_name ~ ".f_login"w, &z8_ldap_user_login);
+    z8_native_bind_field(z8_ldap_user_name ~ ".f_locked"w, &z8_ldap_user_locked);
+    z8_native_bind_field(z8_ldap_user_name ~ ".f_memberOf"w, &z8_ldap_user_member_of);
+    z8_native_bind_field(z8_ldap_user_name ~ ".f_parameters"w, &z8_ldap_user_parameters);
+    z8_native_bind_field(z8_ldap_group_name ~ ".f_domainName"w, &z8_ldap_group_domain);
+    z8_native_bind_field(z8_ldap_group_name ~ ".f_name"w, &z8_ldap_group_name_field);
+    z8_native_bind_field(z8_ldap_group_name ~ ".f_members"w, &z8_ldap_group_members);
+    z8_native_bind_field(z8_ldap_group_name ~ ".f_parameters"w, &z8_ldap_group_parameters);
+    z8_native_bind(z8_ldap_api_name ~ ".m_getLdapAPI"w, &z8_ldap_open_default);
+    z8_native_bind(z8_ldap_api_name ~ ".m_getLdapAPI"w, &z8_ldap_open);
+    z8_native_bind(z8_ldap_api_name ~ ".m_isOpened"w, &z8_ldap_is_open);
+    z8_native_bind(z8_ldap_api_name ~ ".m_close"w, &z8_ldap_close);
+    z8_native_bind(z8_ldap_api_name ~ ".m_getUser"w, &z8_ldap_user);
+    z8_native_bind(z8_ldap_api_name ~ ".m_getUser"w, &z8_ldap_user_filter);
+    z8_native_bind(z8_ldap_api_name ~ ".m_getGroup"w, &z8_ldap_group);
+    z8_native_bind(z8_ldap_api_name ~ ".m_getGroup"w, &z8_ldap_group_filter);
+    z8_native_bind(z8_ldap_api_name ~ ".m_getUsers"w, &z8_ldap_users);
+    z8_native_bind(z8_ldap_api_name ~ ".m_getUsers"w, &z8_ldap_users_filter);
+    z8_native_bind(z8_ldap_api_name ~ ".m_getGroups"w, &z8_ldap_groups);
+    z8_native_bind(z8_ldap_api_name ~ ".m_getGroups"w, &z8_ldap_groups_filter);
+}
+shared static this() { z8_ldap_monitor = new Object(); z8_bind_builtin_ldap(); }
