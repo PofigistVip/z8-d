@@ -120,19 +120,24 @@ private Z8File z8_report_poi_run(Z8Object report, Z8ReportState state) {
         wstring[] sheetNames = new wstring[workbook.sheets.length];
         bool[] named = new bool[workbook.sheets.length];
         bool[] used = new bool[workbook.sheets.length]; size_t usedCount;
+        auto nameOrder = new Z8JavaMapOrder!ulong();
         foreach (range; selected) {
             auto number = range.z8_get_attribute("sheet"w);
             auto index = number is null ? 0 : number.to!int;
             if (index < 0 || index >= workbook.sheets.length) throw new Exception("invalid POI report sheet");
             if (!used[index]) { used[index] = true; ++usedCount; }
             auto requested = range.z8_get_attribute("sheetName"w);
-            if (requested !is null && !named[index]) { sheetNames[index] = requested; named[index] = true; hasRenames = true; }
+            if (requested !is null && !named[index]) {
+                sheetNames[index] = requested; named[index] = true; hasRenames = true;
+                nameOrder.add(cast(ulong)index);
+            }
         }
         if (usedCount > 1) foreach (index, selectedSheet; used)
-            if (selectedSheet && index >= 16) throw new Exception("POI report sheet ordering is not implemented");
+            if (selectedSheet && index >= 256) throw new Exception("POI report sheet ordering is not implemented");
         if (hasRenames) {
             if (!hasClones) preparedBytes = cast(ubyte[])read(z8_file_system_path(source));
-            foreach (index, requested; sheetNames) if (named[index]) {
+            foreach (index; nameOrder.ordered()) {
+                auto requested = sheetNames[index];
                 preparedBytes = z8_poi_report_rename_sheet(preparedBytes, workbook, cast(int)index, requested);
                 workbook.sheets[index].name = requested.length > 31 ? requested[0 .. 31] : requested;
             }

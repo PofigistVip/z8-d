@@ -751,24 +751,27 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
     // A Java PoiReport has a synthetic root per sheet. Process each sheet
     // independently so its parent pass cannot read edits from another sheet.
     Z8Object[][] bySheet = new Z8Object[][](workbook.sheets.length);
+    auto sheetOrder = new Z8JavaMapOrder!ulong();
     size_t sheetCount;
     foreach (range; ranges) {
         range = z8_nonnull(range);
         auto number = range.z8_get_attribute("sheet"w);
         auto index = number is null ? 0 : number.to!int;
         if (index < 0 || index >= workbook.sheets.length) throw new Exception("invalid POI report sheet");
-        if (!bySheet[index].length) ++sheetCount;
+        if (!bySheet[index].length) { ++sheetCount; sheetOrder.add(cast(ulong)index); }
         bySheet[index] ~= range;
     }
     if (sheetCount > 1) {
         foreach (index, group; bySheet) {
             if (!group.length) continue;
-            // Java iterates integer sheet keys using a HashMap. Restrict the
-            // supported indices to the range whose order is always ascending.
-            if (index >= 16) throw new Exception("POI report sheet ordering is not implemented");
+            // Above this range Java may treeify collision buckets, which have
+            // ordering beyond the ordinary HashMap bucket algorithm.
+            if (index >= 256) throw new Exception("POI report sheet ordering is not implemented");
         }
-        foreach (index, group; bySheet) {
-            if (!group.length) continue;
+        // PoiReport stores sheet ranges in a Java HashMap, including insertion
+        // order within colliding buckets (for example sheet 16 before sheet 0).
+        foreach (index; sheetOrder.ordered()) {
+            auto group = bySheet[index];
             int ignoredSheet; wstring ignoredName; Z8PoiCellEdit[] sheetEdits; Z8PoiCellCopy[] sheetCopies;
             Z8PoiMergedRegion[] sheetMerges; Z8PoiCellRemoval[] sheetRemovals;
             z8_poi_report_apply_ranges(report, group, workbook, ignoredSheet, ignoredName, sheetEdits, sheetCopies, sheetMerges, sheetRemovals);

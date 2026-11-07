@@ -131,6 +131,8 @@ public class StaticReportProbe {
     public static file multipleSheetsDuplicate() { MultipleSheetDuplicateReport report; return report.run(guid.Null); }
     public static file cloneSheets() { CloneSheetsReport report; return report.run(guid.Null); }
     public static file cloneHighSheet() { CloneHighSheetReport report; return report.run(guid.Null); }
+    public static file cloneHighMultiple() { CloneHighMultipleReport report; return report.run(guid.Null); }
+    public static file cloneHighRenameConflict() { CloneHighRenameConflictReport report; return report.run(guid.Null); }
     public static file cloneTooManySheets() { CloneTooManySheetsReport report; return report.run(guid.Null); }
     public static file cloneUnsupported() { CloneUnsupportedReport report; return report.run(guid.Null); }
     public static file cloneSuffix() { CloneSuffixReport report; return report.run(guid.Null); }
@@ -362,6 +364,21 @@ public class CloneHighSheetReport extends Report {
     (source / "CloneTooManySheetsReport.bl").write_text(
         (source / "CloneHighSheetReport.bl").read_text(encoding="utf-8")
         .replace("CloneHighSheetReport", "CloneTooManySheetsReport").replace('[sheet "16"]', '[sheet "257"]'), encoding="utf-8")
+    (source / "CloneHighMultipleReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+public class CloneHighMultipleReport extends Report {
+    engine = Report.POI; template = "ordered-high";
+    OrderedRows rows; objects = {rows};
+    [sheet "0"] [address "A1"] [boundaries "A1"] Range first;
+    [sheet "16"] [address "A1"] [boundaries "A1"] Range second;
+    first.source = rows; second.source = rows; ranges = {second, first};
+    virtual protected void prepare(guid recordId) { OrderedRows.sequence = 0; }
+}''', encoding="utf-8")
+    (source / "CloneHighRenameConflictReport.bl").write_text(
+        (source / "CloneHighMultipleReport.bl").read_text(encoding="utf-8")
+        .replace("CloneHighMultipleReport", "CloneHighRenameConflictReport")
+        .replace('[sheet "0"]', '[sheet "0"] [sheetName "Renamed"]')
+        .replace('[sheet "16"]', '[sheet "16"] [sheetName "Sheet1"]'), encoding="utf-8")
     for name, template in (("CloneSuffixReport", "clone-suffix"), ("CloneLongReport", "clone-long"), ("CloneExistingReport", "clone-existing"), ("CloneViewsReport", "clone-views"), ("CloneSetupReport", "clone-setup"), ("ClonePrintReport", "clone-print"), ("CloneFilterReport", "clone-filter"), ("CloneNamedReport", "clone-named"), ("CloneNamedRenameReport", "clone-named"), ("CloneNamedOriginalRenameReport", "clone-named"), ("CloneNamedUnsupportedRenameReport", "clone-named"), ("CloneNamedQuotedRenameReport", "clone-named"), ("CloneNamedDigitRenameReport", "clone-named"), ("CloneNamedCellRenameReport", "clone-named"), ("CloneNamedRussianRenameReport", "clone-named")):
         content = (source / "CloneSheetsReport.bl").read_text(encoding="utf-8").replace("CloneSheetsReport", name).replace('template = "constant"', 'template = "' + template + '"')
         if name == "CloneExistingReport": content = content.replace('[sheet "2"]', '[sheet "3"]')
@@ -820,6 +837,12 @@ public class %s extends Report {
     multi["xl/worksheets/sheet1.xml"] = original_sheet.replace(
         '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
         '<c r="A1" t="s"><v>0</v></c><c r="B1" t="inlineStr"><is><t>${10+20}</t></is></c><c r="C1" t="s"><v>1</v></c>')
+    ordered_high = dict(parameters)
+    ordered_high["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="1" uniqueCount="1"><si><t>${rows.data.value}</t></si></sst>'''
+    ordered_high["xl/worksheets/sheet1.xml"] = original_sheet.replace(
+        '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>', '<c r="A1" t="s"><v>0</v></c>')
+    with zipfile.ZipFile(application / "reports/ordered-high.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in ordered_high.items(): archive.writestr(entry_name, content)
     for filename in ("multi-range", "outside-range"):
         book = dict(multi)
         if filename == "outside-range":
@@ -1560,7 +1583,7 @@ void main(string[] args) {
             'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 37); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 38); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 39); assert(database.begins == 133 && database.rollbacks == 133); auto sparseFormula = P.m_expandedSparseFormula(); copy(z8_file_resolve_path(sparseFormula), buildPath(args[2], "expanded-sparse-formula.xlsx")); bool sparseSharedBlocked; try { P.m_expandedSparseSharedFormula(); } catch (Exception) { sparseSharedBlocked = true; } assert(sparseSharedBlocked); bool chain; try { P.m_expandedSparseChainFormula(); } catch (Exception) { chain = true; } assert(chain);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
-        contents = contents.replace('assert(chain);', 'assert(chain); auto highSheet = P.m_cloneHighSheet(); copy(z8_file_resolve_path(highSheet), buildPath(args[2], "cloned-high-sheet.xlsx")); bool tooManySheets; try { P.m_cloneTooManySheets(); } catch (Exception e) { tooManySheets = e.msg == "POI report sheet expansion is not implemented"; } assert(tooManySheets);')
+        contents = contents.replace('assert(chain);', 'assert(chain); auto highSheet = P.m_cloneHighSheet(); copy(z8_file_resolve_path(highSheet), buildPath(args[2], "cloned-high-sheet.xlsx")); bool tooManySheets; try { P.m_cloneTooManySheets(); } catch (Exception e) { tooManySheets = e.msg == "POI report sheet expansion is not implemented"; } assert(tooManySheets); auto highMultiple = P.m_cloneHighMultiple(); copy(z8_file_resolve_path(highMultiple), buildPath(args[2], "cloned-high-multiple.xlsx")); bool renameConflict; try { P.m_cloneHighRenameConflict(); } catch (Exception e) { renameConflict = e.msg == "duplicate POI report sheet name"; } assert(renameConflict);')
         harness.write_text(contents, encoding="utf-8")
         args.extend(["-I" + str(bridge), str(bridge / "z8/xlsx/openxlsx.d"), str(bridge / "z8/xlsx/poi.d")])
         if os.name == "nt":
@@ -1772,6 +1795,45 @@ class PoiRangeOracle {
           if (!original.getSheetName(i).equals(actual.getSheetName(i))) throw new AssertionError("sheet name differs at " + i);
         if (actual.getSheetAt(16).getRow(0).getCell(0).getNumericCellValue() != original.getSheetAt(16).getRow(0).getCell(0).getNumericCellValue())
           throw new AssertionError("high-sheet expression differs");
+        return;
+      }
+      if (args.length > 3 && "cloned-high-multiple".equals(args[3])) {
+        for (int i = 0; i < 16; ++i) original.cloneSheet(0);
+        OBJECT.CLASS<OBJECT> rows = new OBJECT.CLASS<>(context);
+        rows.setIndex("rows"); context.members().add(rows);
+        final org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<org.zenframework.z8.server.base.json.parser.JsonObject> data =
+            new org.zenframework.z8.server.base.json.parser.JsonObject.CLASS<>(rows.get());
+        data.setIndex("data"); rows.get().members().add(data);
+        final int[] sequence = {0};
+        DataSource source = new SimpleSource(rows.get()) {
+          @Override public void open() {
+            super.open(); data.get().z8_set(new org.zenframework.z8.server.types.string("value"),
+                                            new org.zenframework.z8.server.types.integer(++sequence[0]));
+          }
+        };
+        PoiReport high = new PoiReport(new ReportOptions()).setContext(context);
+        high.addRange(16, new Range().setSource(source).setBlock("A1").setBoundaries("A1"));
+        high.addRange(0, new Range().setSource(source).setBlock("A1").setBoundaries("A1"));
+        java.util.Map<Integer, Boolean> order = new java.util.HashMap<>();
+        order.put(16, true); order.put(0, true);
+        SheetModifier modifier = new SheetModifier().setWorkbook(original);
+        for (int sheet : order.keySet()) high.getRange(sheet).apply(modifier.setSheet(sheet));
+        modifier.close();
+        for (int sheet : new int[]{0, 16})
+          if (actual.getSheetAt(sheet).getRow(0).getCell(0).getNumericCellValue() != original.getSheetAt(sheet).getRow(0).getCell(0).getNumericCellValue())
+            throw new AssertionError("multi-sheet source order differs at " + sheet);
+        if (original.getSheetAt(16).getRow(0).getCell(0).getNumericCellValue() != 1 ||
+            original.getSheetAt(0).getRow(0).getCell(0).getNumericCellValue() != 2)
+          throw new AssertionError("unexpected Java HashMap order");
+        try (XSSFWorkbook renames = new XSSFWorkbook(new FileInputStream(args[0]))) {
+          for (int i = 0; i < 16; ++i) renames.cloneSheet(0);
+          java.util.Map<Integer, String> names = new java.util.HashMap<>();
+          names.put(16, "Sheet1"); names.put(0, "Renamed");
+          boolean duplicate = false;
+          try { for (java.util.Map.Entry<Integer, String> entry : names.entrySet()) renames.setSheetName(entry.getKey(), entry.getValue()); }
+          catch (IllegalArgumentException e) { duplicate = true; }
+          if (!duplicate) throw new AssertionError("expected Java sheet rename conflict");
+        }
         return;
       }
       boolean contextCase = args.length > 3 && "context".equals(args[3]);
@@ -2209,6 +2271,10 @@ class PoiRangeOracle {
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/constant.xlsx"), str(working / "cloned-high-sheet.xlsx"), str(config), "cloned-high-sheet"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/ordered-high.xlsx"), str(working / "cloned-high-multiple.xlsx"), str(config), "cloned-high-multiple"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
                 for source_name, name in (("clone-suffix", "cloned-suffix"), ("clone-long", "cloned-long"), ("clone-existing", "cloned-existing"), ("clone-views", "cloned-views"), ("clone-setup", "cloned-setup"), ("clone-print", "cloned-print"), ("clone-filter", "cloned-filter"), ("clone-named", "cloned-named"), ("clone-named", "cloned-named-rename"), ("clone-named", "cloned-named-original-rename"), ("clone-named", "cloned-named-quoted-rename"), ("clone-named", "cloned-named-digit-rename"), ("clone-named", "cloned-named-cell-rename"), ("clone-named", "cloned-named-russian-rename")):
