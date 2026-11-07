@@ -95,6 +95,12 @@ public class Probe {
     workbook1904 = temp / "fixture-1904.xlsx"
     workbookPoi = temp / "poi-generated.xlsx"
     workbookMoved = temp / "relocated.xlsx"
+    workbookUtf16Le = temp / "utf16le.xlsx"
+    workbookUtf16Be = temp / "utf16be.xlsx"
+    workbookUtf16NoBom = temp / "utf16-nobom.xlsx"
+    workbookUtf16LeNoBom = temp / "utf16le-nobom.xlsx"
+    workbookUtf16Bad = temp / "utf16-truncated.xlsx"
+    workbookUtf16BadPair = temp / "utf16-invalid-surrogate.xlsx"
     broken = temp / "broken.xlsx"
     broken.write_bytes(b"not a zip file")
     with zipfile.ZipFile(workbook1904, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -116,6 +122,31 @@ public class Probe {
             elif name == "xl/sharedStrings.xml":
                 name = "content/shared.xml"
             archive.writestr(name, content)
+    for path, encoding, marker in ((workbookUtf16Le, "utf-16-le", b"\xff\xfe"),
+                                   (workbookUtf16Be, "utf-16-be", b"\xfe\xff"),
+                                   (workbookUtf16NoBom, "utf-16-be", b""),
+                                   (workbookUtf16LeNoBom, "utf-16-le", b"")):
+        with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for name, content in entries.items():
+                declared = "UTF-16" if marker else "UTF-16BE" if encoding.endswith("be") else "UTF-16LE"
+                content = content.replace('encoding="UTF-8"', 'encoding="' + declared + '"')
+                if not content.startswith("<?xml"):
+                    content = '<?xml version="1.0" encoding="' + declared + '"?>' + content
+                archive.writestr(name, marker + content.encode(encoding))
+    with zipfile.ZipFile(workbookUtf16Bad, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in entries.items():
+            if name == "xl/workbook.xml":
+                content = content.replace('encoding="UTF-8"', 'encoding="UTF-16"')
+                archive.writestr(name, b"\xfe\xff" + content.encode("utf-16-be") + b"\x00")
+            else:
+                archive.writestr(name, content)
+    with zipfile.ZipFile(workbookUtf16BadPair, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in entries.items():
+            if name == "xl/workbook.xml":
+                content = content.replace('encoding="UTF-8"', 'encoding="UTF-16"').replace("</workbook>", "X</workbook>")
+                archive.writestr(name, b"\xfe\xff" + content.encode("utf-16-be").replace(b"\x00X", b"\xd8\x00"))
+            else:
+                archive.writestr(name, content)
     # Compare the same workbook with the POI 3.16 jars used by original Z8.
     cache = Path.home() / ".gradle/caches/modules-2/files-2.1"
     jars = sorted(p for p in cache.glob("org.zenframework.z8.dependencies.*/*/3.4-cert/**/*.jar")
@@ -184,6 +215,16 @@ class PoiOracle {
       if (book.getNumberOfSheets() != 2 || !book.getSheetAt(0).getRow(0).getCell(0).getStringCellValue().equals("Hi & 😀"))
         throw new AssertionError("Unexpected relocated workbook");
     }
+    for (int i = 4; i <= 7; ++i) try (Workbook book = new XSSFWorkbook(new FileInputStream(args[i]))) {
+      if (book.getNumberOfSheets() != 2 || !book.getSheetAt(0).getRow(0).getCell(0).getStringCellValue().equals("Hi & 😀"))
+        throw new AssertionError("Unexpected UTF-16 workbook");
+    }
+    for (int i = 8; i <= 9; ++i) {
+      boolean invalidUtf16 = false;
+      try (Workbook book = new XSSFWorkbook(new FileInputStream(args[i]))) { book.getNumberOfSheets(); }
+      catch (Exception expected) { invalidUtf16 = true; }
+      if (!invalidUtf16) throw new AssertionError("Invalid UTF-16 accepted");
+    }
     try (Workbook book = new XSSFWorkbook()) {
       Row row = book.createSheet("Generated").createRow(1);
       row.createCell(0).setCellValue("Generated & 😀");
@@ -196,7 +237,7 @@ class PoiOracle {
 }""", encoding="utf-8")
     classpath = os.pathsep.join(map(str, jars))
     subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8", "-cp", classpath, str(java)], cwd=temp, check=True)
-    subprocess.run(["java", "-cp", str(temp) + os.pathsep + classpath, "PoiOracle", str(workbook), str(workbook1904), str(workbookPoi), str(workbookMoved)], cwd=temp, check=True)
+    subprocess.run(["java", "-cp", str(temp) + os.pathsep + classpath, "PoiOracle", str(workbook), str(workbook1904), str(workbookPoi), str(workbookMoved), str(workbookUtf16Le), str(workbookUtf16Be), str(workbookUtf16NoBom), str(workbookUtf16LeNoBom), str(workbookUtf16Bad), str(workbookUtf16BadPair)], cwd=temp, check=True)
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     harness = temp / "main.d"
     harness.write_text('''import z8.runtime;
@@ -207,10 +248,16 @@ void main(string[] args) {
     assert(z8_optional_require(Z8p_50726F6265.m_verifyPoi(z8_file_from_path(args[3].to!wstring))));
     assert(z8_optional_require(Z8p_50726F6265.m_verify(z8_file_from_path(args[4].to!wstring))) == 0);
     assert(z8_optional_require(Z8p_50726F6265.m_failedOpen(z8_file_from_path(args[1].to!wstring), z8_file_from_path(args[5].to!wstring))));
+    assert(z8_optional_require(Z8p_50726F6265.m_verify(z8_file_from_path(args[6].to!wstring))) == 0);
+    assert(z8_optional_require(Z8p_50726F6265.m_verify(z8_file_from_path(args[7].to!wstring))) == 0);
+    assert(z8_optional_require(Z8p_50726F6265.m_verify(z8_file_from_path(args[8].to!wstring))) == 0);
+    assert(z8_optional_require(Z8p_50726F6265.m_verify(z8_file_from_path(args[9].to!wstring))) == 0);
+    assert(z8_optional_require(Z8p_50726F6265.m_failedOpen(z8_file_from_path(args[1].to!wstring), z8_file_from_path(args[10].to!wstring))));
+    assert(z8_optional_require(Z8p_50726F6265.m_failedOpen(z8_file_from_path(args[1].to!wstring), z8_file_from_path(args[11].to!wstring))));
 }
 '''.replace('import z8gen.Probe;', 'import z8gen.Probe;\nimport std.conv : to;'), encoding="utf-8")
     executable = temp / ("poi.exe" if os.name == "nt" else "poi")
     subprocess.run(["dmd", "-I" + str(generated), *import_args(), *map(str, generated.rglob("*.d")),
                     str(harness), str(runtime), "-of=" + str(executable)], cwd=temp, check=True)
-    subprocess.run([str(executable), str(workbook), str(workbook1904), str(workbookPoi), str(workbookMoved), str(broken)], cwd=temp, check=True)
+    subprocess.run([str(executable), str(workbook), str(workbook1904), str(workbookPoi), str(workbookMoved), str(broken), str(workbookUtf16Le), str(workbookUtf16Be), str(workbookUtf16NoBom), str(workbookUtf16LeNoBom), str(workbookUtf16Bad), str(workbookUtf16BadPair)], cwd=temp, check=True)
 print("XLSX workbook, sparse rows, shared strings and cells verified")
