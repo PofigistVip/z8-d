@@ -38,7 +38,8 @@ wstring z8_enum_array_join(T)(Z8Array!T array, T[] values, wstring[] names, wstr
 
 class Z8Array(T) {
     enum isPrimitive = is(T == long) || is(T == bool) || is(T == Z8Decimal);
-    enum sharePrimary = isPrimitive || is(T == wstring) || is(T == Z8Guid) || is(T == Z8File);
+    enum sharePrimary = isPrimitive || is(T == wstring) || is(T == Z8Guid) || is(T == Z8File) ||
+        is(T == Z8Binary) || is(T == Z8Datespan) || is(T == Z8Date) || is(T == Z8Geometry);
     static if (isPrimitive) alias Element = Z8Optional!T;
     else alias Element = T;
     private Element[] items;
@@ -81,6 +82,14 @@ class Z8Array(T) {
             if (guids !is null) return this.opEquals(z8_primary_array_view(guids));
             auto files = cast(Z8Array!Z8File)other;
             if (files !is null) return this.opEquals(z8_primary_array_view(files));
+            auto binaries = cast(Z8Array!Z8Binary)other;
+            if (binaries !is null) return this.opEquals(z8_primary_array_view(binaries));
+            auto spans = cast(Z8Array!Z8Datespan)other;
+            if (spans !is null) return this.opEquals(z8_primary_array_view(spans));
+            auto dates = cast(Z8Array!Z8Date)other;
+            if (dates !is null) return this.opEquals(z8_primary_array_view(dates));
+            auto geometries = cast(Z8Array!Z8Geometry)other;
+            if (geometries !is null) return this.opEquals(z8_primary_array_view(geometries));
             auto integers = cast(Z8Array!long)other;
             if (integers !is null) return this.opEquals(z8_primary_array_view(integers));
             auto booleans = cast(Z8Array!bool)other;
@@ -362,6 +371,10 @@ class Z8Array(T) {
             static if (is(T == wstring)) return value.textValue;
             else static if (is(T == Z8Guid)) return value.guidValue;
             else static if (is(T == Z8File)) return value.fileValue;
+            else static if (is(T == Z8Binary)) return value.binaryValue;
+            else static if (is(T == Z8Datespan)) return value.datespanValue;
+            else static if (is(T == Z8Date)) return value.dateValue;
+            else static if (is(T == Z8Geometry)) return value.geometryValue;
             }
         }
         auto i = cast(int)index;
@@ -380,7 +393,8 @@ class Z8Array(T) {
 }
 // The JVM shares the same erased RCollection when a scalar array widens to primary[].
 Z8Array!Z8Primary z8_primary_array_view(T)(Z8Array!T values)
-if (is(T == wstring) || is(T == Z8Guid) || is(T == Z8File) || is(T == long) || is(T == bool) || is(T == Z8Decimal)) {
+if (is(T == wstring) || is(T == Z8Guid) || is(T == Z8File) || is(T == Z8Binary) || is(T == Z8Datespan) ||
+    is(T == Z8Date) || is(T == Z8Geometry) || is(T == long) || is(T == bool) || is(T == Z8Decimal)) {
     if (values is null) return null;
     if (values.primaryData is null) {
         auto data = new Z8Array!Z8Primary();

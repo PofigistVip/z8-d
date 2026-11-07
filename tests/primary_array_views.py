@@ -12,7 +12,26 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     source = temp / "main.d"
     source.write_text('''
 import z8.runtime;
+void checkReferenceView(T)(T first, T second) {
+    auto typed = new Z8Array!T([first, null]);
+    auto sharedValues = z8_primary_array_view(typed);
+    assert(sharedValues is z8_primary_array_view(typed) && typed.z8_get(1) is null);
+    sharedValues.z8_set(1, z8_primary_box(second));
+    assert(typed.z8_get(1) is second);
+    typed.z8_at(0) = second;
+    assert(z8_primary_cast!T(sharedValues.z8_get(0)) is second);
+    sharedValues.z8_add(z8_primary_box("wrong"w));
+    bool rejected;
+    try { typed.z8_get(2); } catch (Exception) { rejected = true; }
+    assert(rejected); sharedValues.z8_removeAt(2);
+    assert(sharedValues.opEquals(typed) && typed.opEquals(sharedValues));
+    assert(z8_primary_array_view(cast(Z8Array!T)null) is null);
+}
 void main() {
+    checkReferenceView(z8_binary_literal("65"), z8_binary_literal("66"));
+    checkReferenceView(z8_datespan_literal("1 00:00:00"), z8_datespan_literal("2 00:00:00"));
+    checkReferenceView(z8_date_from_ticks(0), z8_date_from_ticks(1_000));
+    checkReferenceView(z8_geometry_none(4326), z8_geometry_point(z8_decimal_from_int(1), z8_decimal_from_int(2), 4326));
     auto strings = new Z8Array!wstring(["one"w, "two"w]);
     auto before = strings.z8_version;
     auto values = z8_primary_array_view(strings);
@@ -106,6 +125,9 @@ void main() {
 public class Probe {
     public static primary[] asPrimary(string[] values) { return values; }
     public static primary[] choice(bool first, primary[] left, string[] right) { return first ? left : right; }
+    public static primary[] dateChoice(bool first, primary[] left, date[] right) { return first ? left : right; }
+    private static int choose(primary[] values) { return 1; }
+    private static int choose(date[] values) { return 2; }
     public static int count(string[] values) { int result = 0; for (primary part : values) { result += 1; } return result; }
     public static int guidCount(guid[] values) { int result = 0; for (primary part : values) { result += 1; } return result; }
     public static int guidRun() {
@@ -151,6 +173,39 @@ public class Probe {
         if (count != 2) return 5;
         return 0;
     }
+    public static int otherPrimaryRun() {
+        binary first = '65'; first.setName("first"); binary second = '66'; second.setName("second");
+        binary[] binaries = {first, null}; primary[] binaryValues = binaries;
+        binaryValues.set(1, second); if (binaries[1].getName() != "second") return 1;
+        binaryValues.add("wrong");
+        try { binary bad = binaries[2]; return 2; } catch (exception expected) {}
+        binaryValues.removeAt(2); if (Input.size(binaries) != 2) return 3;
+        date a = '01/01/2024'; date b = '02/01/2024';
+        date[] dates = {a, null}; primary[] dateValues = dates;
+        dateValues.set(1, b); dates[0] = b;
+        if (dates[1] != b || (date)dateValues[0] != b || dateChoice(false, dateValues, dates).size() != 2) return 4;
+        dateValues.add(null); dates[2] = a;
+        if ((date)dateValues[2] != a || choose(dates) != 2) return 9;
+        int count = 0; for (primary value : dates) count += 1;
+        if (count != 3) return 5;
+        datespan aSpan = '1 00:00:00'; datespan bSpan = '2 00:00:00';
+        datespan[] spans = {aSpan}; primary[] spanValues = spans;
+        spanValues.set(0, bSpan); if (spans[0] != bSpan || Input.size(spans) != 1) return 6;
+        geometry firstPoint = geometry.point(1, 2, 4326); geometry nextPoint = geometry.point(3, 4, 4326);
+        geometry[] points = {firstPoint}; primary[] geometryValues = points;
+        geometryValues.set(0, nextPoint); if (points[0].toString() != nextPoint.toString() || Input.size(points) != 1) return 7;
+        primary[] mixed = {1, 2, "keep"}; int[] removeNumbers = {1}; mixed.removeAll(removeNumbers);
+        if (mixed.size() != 2 || mixed.contains(1)) return 8;
+        primary[] mixedRefs = {first, aSpan, a, firstPoint, "keep"};
+        binary[] removeBinaries = {first}; datespan[] removeSpans = {aSpan};
+        date[] removeDates = {a}; geometry[] removeGeometries = {firstPoint};
+        mixedRefs.removeAll(removeBinaries); mixedRefs.removeAll(removeSpans);
+        mixedRefs.removeAll(removeDates); mixedRefs.removeAll(removeGeometries);
+        if (mixedRefs.size() != 1 || !mixedRefs.contains("keep")) return 10;
+        int missing = null; int[] nullable = {null, 1}; nullable.removeAll(missing);
+        if (nullable.size() != 1 || nullable[0] != 1) return 11;
+        return 0;
+    }
     public static int run() {
         string[] words = {"one", "two"};
         primary[] values = words;
@@ -175,6 +230,7 @@ public class Probe {
     harness.write_text('''
 import z8.runtime;
 import z8gen.Probe;
+import std.conv : to;
 Z8Optional!long count(Z8Array!Z8Primary values) { return z8_optional_wrap(z8_nonnull(values).z8_size()); }
 void main() {
     z8_native_bind("example.Input.m_size"w, &count);
@@ -182,10 +238,17 @@ void main() {
     assert(z8_optional_require(Z8p_50726F6265.m_guidRun()) == 0);
     assert(z8_optional_require(Z8p_50726F6265.m_fileRun()) == 0);
     assert(z8_optional_require(Z8p_50726F6265.m_primitiveRun()) == 0);
+    auto otherResult = z8_optional_require(Z8p_50726F6265.m_otherPrimaryRun());
+    assert(otherResult == 0, "otherPrimaryRun failed: " ~ otherResult.to!string);
 }
 ''', encoding="utf-8")
     executable = temp / ("primary-array-bl.exe" if os.name == "nt" else "primary-array-bl")
     subprocess.run(["dmd", "-I" + str(generated), *import_args(), *map(str, generated.rglob("*.d")),
                     str(harness), str(runtime), "-of=" + str(executable)], cwd=temp, check=True)
     subprocess.run([str(executable)], cwd=temp, check=True)
-print("Primitive, string, GUID, file and primary array views share storage")
+    for body in ('int[] values; values.removeAll(null);', 'string[] values; values.removeAll(null);', 'date[] values; values.removeAll(null);',
+                 'primary[] values; values.removeAll(null);'):
+        (bl / "Bad.bl").write_text('public class Bad { static void f() { ' + body + ' } }', encoding="utf-8")
+        if subprocess.run([str(compiler), "project", str(bl), str(generated)], capture_output=True).returncode == 0:
+            raise SystemExit("Unexpectedly accepted ambiguous removeAll(null): " + body)
+print("Base-type and primary array views share storage")

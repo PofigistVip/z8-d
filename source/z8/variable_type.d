@@ -275,6 +275,11 @@ package ValueType mapValueReadType(ValueType type) {
     auto value = mapValueType(type);
     return value == ValueType.stringType ? ValueType.nullableString : storedValueType(value);
 }
+package bool isScalarPrimaryArray(ValueType type) {
+    return [ValueType.stringArray, ValueType.guidArray, ValueType.intArray, ValueType.boolArray,
+        ValueType.decimalArray, ValueType.fileArray, ValueType.binaryArray, ValueType.datespanArray,
+        ValueType.dateArray, ValueType.geometryArray].canFind(type);
+}
 package bool hasObjectClass(ValueType type) { return (isDynamicArray(type) && hasObjectClass(elementType(type))) || (isMap(type) && hasObjectClass(mapValueType(type))) || type == ValueType.selfType || type == ValueType.selfArray || type == ValueType.selfMatrix || type == ValueType.enumType || type == ValueType.enumArray || type == ValueType.enumMatrix; }
 package bool containsUserReference(ValueType type) {
     if (isDynamicArray(type)) return containsUserReference(elementType(type));

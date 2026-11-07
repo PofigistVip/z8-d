@@ -245,6 +245,20 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                                 ('public operator decimal() { return 4.5; }', True),
                                 ('public operator int() { return 4; } public operator decimal() { return 4.5; }', False)):
         name_cases.append((accepted, {"NameA": 'import org.zenframework.z8.lang.Math; public class NameA { ' + operators + ' static void f() { Math.min(new NameA, 3); } }'}))
+    for kind in ("binary", "date", "datespan", "geometry"):
+        declaration = kind + '[] source; primary[] values = source; for (primary item : source) {}'
+        name_cases.append((True, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
+    for declaration, accepted in (("int[] values; values.removeAll(null);", False),
+                                  ("string[] values; values.removeAll(null);", False),
+                                  ("primary[] values; values.removeAll(null);", False),
+                                  ("int[] values; int item = null; values.removeAll(item);", True),
+                                  ("primary[] values; int[] items; values.removeAll(items);", True),
+                                  ("primary[] values; string[] items; values.removeAll(items);", True),
+                                  ("primary[] values; binary[] items; values.removeAll(items);", True),
+                                  ("primary[] values; datespan[] items; values.removeAll(items);", True),
+                                  ("primary[] values; date[] items; values.removeAll(items);", True),
+                                  ("primary[] values; geometry[] items; values.removeAll(items);", True)):
+        name_cases.append((accepted, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
     for case_index, (accepted, files) in enumerate(name_cases):
         names_project = temp / ("name-attribute-project-" + str(case_index))
         names_source = names_project / "src" / "bl"
