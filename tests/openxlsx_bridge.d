@@ -1,6 +1,6 @@
 import z8.xlsx.openxlsx : Workbook, CellType;
 import std.exception : assertThrown;
-import std.file : read;
+import std.file : read, write;
 import std.algorithm.searching : canFind;
 
 void main(string[] args) {
@@ -50,6 +50,7 @@ void main(string[] args) {
     assertThrown!Exception(book.cellString(0, 0, 2));
     assert(book.cellType(0, 0, 2) == CellType.missing);
     assert(book.cellString(1, 1, 2) == "other");
+    assertThrown!Exception(book.save()); // Saving to memory requires an in-memory workbook.
     assertThrown!Exception(book.sheetName(3));
     assertThrown!Exception(book.cellString(0, 1048576, 0));
     book.close();
@@ -61,6 +62,12 @@ void main(string[] args) {
     bytes[] = 0; // The bridge retains its own archive data.
     assert(memoryBook.sheetCount() == 3);
     assert(memoryBook.cellString(0, 0, 0) == "Привет 😀 & text");
+    auto saved = memoryBook.save();
+    auto reopened = new Workbook(saved);
+    assert(reopened.sheetCount() == 3 && reopened.cellNumber(0, 0, 6) == 84);
+    assert(reopened.cellXml(0, 0, 9).canFind("_x0041_"));
+    reopened.close();
+    write(args[2], saved);
     memoryBook.close();
     assertThrown!Exception(new Workbook(cast(ubyte[])[]));
     assertThrown!Exception(new Workbook(cast(ubyte[])[1, 2, 3]));

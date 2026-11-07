@@ -27,6 +27,7 @@ struct MemoryArchiveState {
     bool opened = false;
     std::unordered_map<std::string, std::string> changes;
     std::unordered_set<std::string> removed;
+    std::vector<unsigned char> output;
     ~MemoryArchiveState() { if (opened) mz_zip_reader_end(&zip); }
 };
 
@@ -49,7 +50,35 @@ public:
     void close() {
         if (state->opened) { mz_zip_reader_end(&state->zip); state->opened = false; }
     }
-    void save(const std::string&) { throw std::runtime_error("memory XLSX archive is read-only"); }
+    void save(const std::string&) {
+        if (!state->opened) throw std::runtime_error("XLSX archive is closed");
+        mz_zip_archive writer{};
+        if (!mz_zip_writer_init_heap(&writer, 0, 0)) throw std::runtime_error("cannot create XLSX archive");
+        struct WriterGuard { mz_zip_archive* zip; ~WriterGuard() { mz_zip_writer_end(zip); } } guard{&writer};
+        const auto count = mz_zip_reader_get_num_files(&state->zip);
+        for (mz_uint i = 0; i < count; ++i) {
+            auto length = mz_zip_reader_get_filename(&state->zip, i, nullptr, 0);
+            if (!length) throw std::runtime_error("cannot read XLSX entry name");
+            std::vector<char> name(length);
+            if (mz_zip_reader_get_filename(&state->zip, i, name.data(), length) != length)
+                throw std::runtime_error("cannot read XLSX entry name");
+            std::string key(name.data(), length - 1);
+            if (!state->removed.count(key) && !state->changes.count(key) &&
+                !mz_zip_writer_add_from_zip_reader(&writer, &state->zip, i))
+                throw std::runtime_error("cannot copy XLSX entry: " + key);
+        }
+        for (const auto& entry : state->changes) {
+            if (!mz_zip_writer_add_mem(&writer, entry.first.c_str(), entry.second.data(), entry.second.size(), MZ_DEFAULT_COMPRESSION))
+                throw std::runtime_error("cannot write XLSX entry: " + entry.first);
+        }
+        void* raw = nullptr;
+        size_t size = 0;
+        if (!mz_zip_writer_finalize_heap_archive(&writer, &raw, &size))
+            throw std::runtime_error("cannot finalize XLSX archive");
+        std::unique_ptr<void, decltype(&mz_free)> data(raw, &mz_free);
+        auto first = static_cast<const unsigned char*>(data.get());
+        state->output.assign(first, first + size);
+    }
     void addEntry(const std::string& name, const std::string& data) {
         state->removed.erase(name);
         state->changes[name] = data;
@@ -71,6 +100,12 @@ public:
         std::unique_ptr<void, decltype(&mz_free)> value(raw, &mz_free);
         return std::string(static_cast<const char*>(value.get()), size);
     }
+    std::shared_ptr<MemoryArchiveState> getState() const { return state; }
+};
+
+struct WorkbookHandle {
+    std::shared_ptr<MemoryArchiveState> memory;
+    std::unique_ptr<OpenXLSX::XLDocument> doc;
 };
 
 template<typename F> int protect(F&& function) noexcept {
@@ -82,7 +117,7 @@ template<typename F> int protect(F&& function) noexcept {
 
 OpenXLSX::XLDocument& document(void* handle) {
     if (!handle) throw std::invalid_argument("workbook is closed");
-    return *static_cast<OpenXLSX::XLDocument*>(handle);
+    return *static_cast<WorkbookHandle*>(handle)->doc;
 }
 
 std::string sheetName(OpenXLSX::XLDocument& doc, unsigned index) {
@@ -131,9 +166,10 @@ Z8_EXPORT int z8_xlsx_open(const char* path, void** result) noexcept {
     return protect([&] {
         if (!path || !result) throw std::invalid_argument("missing workbook path or output");
         *result = nullptr;
-        auto doc = std::make_unique<OpenXLSX::XLDocument>();
-        doc->open(path);
-        *result = doc.release();
+        auto book = std::make_unique<WorkbookHandle>();
+        book->doc = std::make_unique<OpenXLSX::XLDocument>();
+        book->doc->open(path);
+        *result = book.release();
     });
 }
 
@@ -142,14 +178,31 @@ Z8_EXPORT int z8_xlsx_open_memory(const void* data, size_t size, void** result) 
         if (!result) throw std::invalid_argument("missing workbook output");
         *result = nullptr;
         MemoryArchive archive(data, size);
-        auto doc = std::make_unique<OpenXLSX::XLDocument>(archive);
-        doc->open("memory.xlsx");
-        *result = doc.release();
+        auto book = std::make_unique<WorkbookHandle>();
+        book->memory = archive.getState();
+        book->doc = std::make_unique<OpenXLSX::XLDocument>(archive);
+        book->doc->open("memory.xlsx");
+        *result = book.release();
     });
 }
 
 Z8_EXPORT void z8_xlsx_close(void* handle) noexcept {
-    delete static_cast<OpenXLSX::XLDocument*>(handle);
+    delete static_cast<WorkbookHandle*>(handle);
+}
+
+Z8_EXPORT int z8_xlsx_save_memory(void* handle, void* buffer, size_t capacity, size_t* length) noexcept {
+    return protect([&] {
+        if (!handle || !length) throw std::invalid_argument("missing workbook or output length");
+        auto& book = *static_cast<WorkbookHandle*>(handle);
+        if (!book.memory) throw std::runtime_error("workbook was not opened from memory");
+        if (!buffer) book.doc->saveAs("memory.xlsx", OpenXLSX::XLForceOverwrite);
+        auto& bytes = book.memory->output;
+        *length = bytes.size();
+        if (buffer) {
+            if (capacity < bytes.size()) throw std::length_error("output buffer is too small");
+            if (!bytes.empty()) std::memcpy(buffer, bytes.data(), bytes.size());
+        }
+    });
 }
 
 Z8_EXPORT int z8_xlsx_sheet_count(void* handle, unsigned* result) noexcept {

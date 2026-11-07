@@ -9,6 +9,7 @@ private extern(C) {
     int z8_xlsx_open(const(char)*, void**);
     int z8_xlsx_open_memory(const(void)*, size_t, void**);
     void z8_xlsx_close(void*);
+    int z8_xlsx_save_memory(void*, void*, size_t, size_t*);
     int z8_xlsx_sheet_count(void*, uint*);
     int z8_xlsx_sheet_name(void*, uint, char*, size_t, size_t*);
     int z8_xlsx_workbook_xml(void*, char*, size_t, size_t*);
@@ -47,6 +48,15 @@ class Workbook {
 
     void close() {
         if (handle !is null) { z8_xlsx_close(handle); handle = null; }
+    }
+
+    /// Serialize a workbook opened from bytes, without writing a temporary file.
+    ubyte[] save() {
+        size_t length;
+        check(z8_xlsx_save_memory(handle, null, 0, &length));
+        auto result = new ubyte[length];
+        check(z8_xlsx_save_memory(handle, result.ptr, result.length, &length));
+        return result;
     }
 
     uint sheetCount() {
