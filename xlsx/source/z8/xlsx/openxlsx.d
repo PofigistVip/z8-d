@@ -18,6 +18,8 @@ private extern(C) {
     int z8_xlsx_cell_type(void*, uint, uint, uint, int*);
     int z8_xlsx_cell_number(void*, uint, uint, uint, double*);
     int z8_xlsx_cell_formula(void*, uint, uint, uint, char*, size_t, size_t*);
+    int z8_xlsx_cell_has_formula(void*, uint, uint, uint, int*);
+    int z8_xlsx_cell_xml(void*, uint, uint, uint, char*, size_t, size_t*);
 }
 
 enum CellType { missing = -1, blank = 0, boolean = 1, integer = 2, floating = 3, error = 4, text = 5 }
@@ -76,6 +78,8 @@ class Workbook {
         return result;
     }
 
+    /// Raw OpenXLSX conversion; rich inline text and OOXML escapes may need
+    /// additional processing using cellXml() for compatibility with POI.
     string cellString(uint sheet, uint row, uint column) {
         size_t length;
         check(z8_xlsx_cell_string(handle, sheet, row, column, null, 0, &length));
@@ -102,6 +106,21 @@ class Workbook {
         check(z8_xlsx_cell_formula(handle, sheet, row, column, null, 0, &length));
         auto result = new char[length];
         check(z8_xlsx_cell_formula(handle, sheet, row, column, result.ptr, result.length, &length));
+        return result.idup;
+    }
+
+    bool cellHasFormula(uint sheet, uint row, uint column) {
+        int result;
+        check(z8_xlsx_cell_has_formula(handle, sheet, row, column, &result));
+        return result != 0;
+    }
+
+    /// OpenXLSX's XML representation, for formula and rich-text compatibility.
+    string cellXml(uint sheet, uint row, uint column) {
+        size_t length;
+        check(z8_xlsx_cell_xml(handle, sheet, row, column, null, 0, &length));
+        auto result = new char[length];
+        check(z8_xlsx_cell_xml(handle, sheet, row, column, result.ptr, result.length, &length));
         return result.idup;
     }
 }

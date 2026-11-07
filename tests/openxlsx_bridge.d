@@ -1,6 +1,7 @@
 import z8.xlsx.openxlsx : Workbook, CellType;
 import std.exception : assertThrown;
 import std.file : read;
+import std.algorithm.searching : canFind;
 
 void main(string[] args) {
     assertThrown!Exception(new Workbook(args[1] ~ ".missing"));
@@ -12,7 +13,7 @@ void main(string[] args) {
     assert(book.rowCount(2) == 0 && !book.rowExists(2, 0));
     assert(!book.rowExists(1, 0) && book.rowExists(1, 1));
     assert(!book.rowExists(1, 2) && book.rowExists(1, 3));
-    assert(book.cellCount(0, 0) == 8 && book.cellCount(0, 1) == 1);
+    assert(book.cellCount(0, 0) == 9 && book.cellCount(0, 1) == 1);
     assert(book.cellCount(1, 1) == 1 && book.cellCount(1, 3) == 0);
     assertThrown!Exception(book.cellCount(1, 0));
     assertThrown!Exception(book.rowExists(0, 1048576));
@@ -29,6 +30,12 @@ void main(string[] args) {
     assert(book.cellNumber(0, 0, 5) == 42.25);
     assert(book.cellNumber(0, 0, 6) == 84);
     assert(book.cellFormula(0, 0, 6) == "B1*2");
+    assert(book.cellHasFormula(0, 0, 6));
+    assert(!book.cellHasFormula(0, 0, 1));
+    assert(book.cellHasFormula(0, 1, 7));
+    assert(book.cellXml(0, 1, 7).canFind("t=\"shared\""));
+    assert(book.cellXml(0, 0, 9).canFind("_x0041_"));
+    assert(book.cellXml(0, 0, 9).canFind("First"));
     assert(book.cellFormula(0, 0, 1) == "");
     assert(book.cellNumber(0, 0, 7) == 43);
     assert(book.cellNumber(0, 1, 7) == 45);

@@ -3,6 +3,7 @@
 #include <cstring>
 #include <exception>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -239,5 +240,22 @@ Z8_EXPORT int z8_xlsx_cell_formula(void* handle, unsigned sheet, unsigned row, u
     return protect([&] {
         auto cell = requireCell(handle, sheet, row, column);
         copyString(cell.formula().get(), buffer, capacity, length);
+    });
+}
+
+Z8_EXPORT int z8_xlsx_cell_has_formula(void* handle, unsigned sheet, unsigned row, unsigned column, int* result) noexcept {
+    return protect([&] {
+        if (!result) throw std::invalid_argument("missing output");
+        *result = requireCell(handle, sheet, row, column).hasFormula();
+    });
+}
+
+Z8_EXPORT int z8_xlsx_cell_xml(void* handle, unsigned sheet, unsigned row, unsigned column,
+                                char* buffer, size_t capacity, size_t* length) noexcept {
+    return protect([&] {
+        auto cell = requireCell(handle, sheet, row, column);
+        std::ostringstream xml;
+        cell.print(xml);
+        copyString(xml.str(), buffer, capacity, length);
     });
 }
