@@ -1,20 +1,20 @@
 module app;
 
-import std.file : readText, dirEntries, SpanMode, tempDir, mkdir, mkdirRecurse, exists, remove, copy, rename, rmdirRecurse, thisExePath, writeFile = write;
+import std.file : readText, dirEntries, SpanMode, tempDir, mkdir, mkdirRecurse, exists, isFile, isSymlink, remove, copy, rename, rmdirRecurse, thisExePath, writeFile = write;
 import std.conv : to;
 import std.algorithm : sort, canFind;
 import std.array : join;
 import std.path : extension, relativePath, stripExtension, absolutePath, buildPath, dirName, baseName;
 import std.process : execute, environment;
-import std.string : replace, startsWith;
+import std.string : replace, startsWith, endsWith, split;
 import std.uuid : randomUUID;
-import std.json : JSONValue;
+import std.json : JSONValue, JSONType, parseJSON;
 import std.stdio : stderr, write, writeln;
 import z8.lexer;
 import z8.compiler : compile, compileSources, SourceUnit, GeneratedModule, CompileException, CompilationOptions;
 import z8.nls : checkResources;
 import z8.library : CompiledLibrary, validLibraryId, loadLibrary, validateLibraries, libraryRoots, serializeLibrary,
-    libraryTreeRevision, libraryFileRevision;
+    libraryTreeRevision, libraryFileRevision, libraryRevision;
 
 private SourceUnit[] readProject(string root) {
     root = fileSystemPath(absolutePath(root));
@@ -73,6 +73,64 @@ private string[] writeModules(GeneratedModule[] modules, string outputRoot) {
         files ~= ioPath;
     }
     return files;
+}
+
+// Only files listed by a previous project generation are candidates for
+// removal. A changed file or a symbolic link is left for the user to inspect.
+private string projectPathKey(string path) {
+    version (Windows) { import std.uni : toLower; return path.toLower; }
+    else return path;
+}
+private void writeProjectModules(GeneratedModule[] modules, string outputRoot) {
+    auto root = absolutePath(outputRoot);
+    auto manifest = fileSystemPath(buildPath(root, ".z8-project-generated.json"));
+    struct PreviousFile { string path, hash; }
+    PreviousFile[string] previous;
+    if (exists(manifest)) {
+        if (isSymlink(manifest) || !isFile(manifest)) throw new Exception("invalid generated project manifest");
+        auto json = parseJSON(readText(manifest));
+        if (json.type != JSONType.object) throw new Exception("invalid generated project manifest");
+        auto format = "format" in json.object, entries = "files" in json.object;
+        if (format is null || format.type != JSONType.string || format.str != "z8-project-generated-1" ||
+            entries is null || entries.type != JSONType.array) throw new Exception("invalid generated project manifest");
+        foreach (entry; entries.array) {
+            if (entry.type != JSONType.object) throw new Exception("invalid generated project manifest entry");
+            auto path = "path" in entry.object, hash = "sha256" in entry.object;
+            if (path is null || path.type != JSONType.string || hash is null || hash.type != JSONType.string || hash.str.length != 64)
+                throw new Exception("invalid generated project manifest entry");
+            auto parts = path.str.split("/");
+            if (parts.length < 2 || parts[0] != "z8gen" || !parts[$ - 1].endsWith(".d"))
+                throw new Exception("invalid generated project manifest path");
+            foreach (part; parts)
+                if (!part.length || part == "." || part == ".." || part.canFind('\\') || part.canFind(':') || part.canFind('\0'))
+                    throw new Exception("invalid generated project manifest path");
+            foreach (c; hash.str) if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F')))
+                throw new Exception("invalid generated project manifest hash");
+            auto key = projectPathKey(path.str);
+            if (key in previous) throw new Exception("duplicate generated project manifest path");
+            previous[key] = PreviousFile(path.str, hash.str);
+        }
+    }
+    bool[string] current;
+    JSONValue[] entries;
+    foreach (module_; modules) {
+        current[projectPathKey(module_.relativePath)] = true;
+        entries ~= JSONValue(["path": JSONValue(module_.relativePath), "sha256": JSONValue(libraryRevision(module_.source))]);
+    }
+    writeModules(modules, root);
+    // Keep the original path spelling for case-sensitive filesystems.
+    foreach (key, entry; previous) {
+        if (key in current) continue;
+        auto file = root;
+        bool safe = true;
+        foreach (part; entry.path.split("/")) {
+            file = fileSystemPath(buildPath(file, part));
+            if (!exists(file) || isSymlink(file)) { safe = false; break; }
+        }
+        if (safe && isFile(file) && libraryFileRevision(file) == entry.hash) remove(file);
+        else if (safe) stderr.writeln("Preserving modified generated file: ", file);
+    }
+    writeFile(manifest, JSONValue(["format": JSONValue("z8-project-generated-1"), "files": JSONValue(entries)]).toPrettyString());
 }
 
 private void cleanupBuild(string directory, string tempRoot, string library) {
@@ -302,7 +360,7 @@ int main(string[] args) {
             auto units = readProjectWithDependencies(args[2], dependencies);
             auto options = libraries.length ? configureLibraries(units, libraries) : null;
             auto modules = compileSources(units, "", options);
-            writeModules(modules, args[3]);
+            writeProjectModules(modules, args[3]);
             writeln("Generated ", modules.length, " D modules in ", absolutePath(args[3]));
             return 0;
         }
