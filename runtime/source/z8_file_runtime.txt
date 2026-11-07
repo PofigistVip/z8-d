@@ -169,7 +169,9 @@ Z8Array!Z8File z8_file_parse(wstring input) {
         value.name = wrapString(field(values, "name"));
         auto size = field(values, "size");
         if (!size.length) throw new Exception("invalid file size");
-        value.size = z8_optional_wrap(size.to!long);
+        // file.set(JsonObject) constructs an integer from the string, which
+        // accepts Java digits and an optional L/l suffix.
+        value.size = z8_optional_wrap(z8_int_parse(size));
         value.id = z8_guid_parse(field(values, "id"));
         value.user = z8_guid_parse(field(values, "user"));
         value.author = wrapString(field(values, "author"));

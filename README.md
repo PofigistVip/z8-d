@@ -166,6 +166,7 @@ python tests/guid_string_comparisons.py path/to/original-z8
 python tests/long_expression_chains.py
 python tests/long_generated_paths.py
 python tests/file_named_conversions.py
+python tests/file_parse_oracle.py path/to/original-z8
 python tests/object_conversion.py
 python tests/value_conversion_operators.py
 python tests/string_user_operator.py path/to/original-z8
