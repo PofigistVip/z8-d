@@ -605,9 +605,19 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                 block.firstColumn >= merge.firstColumn && block.lastColumn <= merge.lastColumn;
             if (withinBlock || !withinBounds || (overlapsBlock && !containsBlock)) continue;
             if (iteration > 1) {
-                if (!containsBlock) throw new Exception("POI report explicit merge expansion is not implemented");
                 auto offset = (iteration - 1) * (horizontal ? width : height);
-                if (horizontal) merge.lastColumn += offset; else merge.lastRow += offset;
+                if (containsBlock) {
+                    if (horizontal) merge.lastColumn += offset; else merge.lastRow += offset;
+                } else {
+                    bool left = merge.lastColumn < block.firstColumn, right = merge.firstColumn > block.lastColumn;
+                    bool top = merge.lastRow < block.firstRow, bottom = merge.firstRow > block.lastRow;
+                    // bands() in Java spans the entire boundary on the other axis;
+                    // side bands take precedence where two bands overlap.
+                    if (!horizontal && (left || right)) merge.lastRow += offset;
+                    else if (horizontal && !left && !right && (top || bottom)) merge.lastColumn += offset;
+                    if (horizontal && right) { merge.firstColumn += offset; merge.lastColumn += offset; }
+                    if (!horizontal && bottom) { merge.firstRow += offset; merge.lastRow += offset; }
+                }
                 if (merge.lastRow >= 1048576 || merge.lastColumn >= 16384)
                     throw new Exception("POI report merged region exceeds worksheet bounds");
             }
