@@ -98,6 +98,7 @@ public class StaticReportProbe {
     public static file expandedMissingSource() { ExpandedMissingSourceReport report; return report.run(guid.Null); }
     public static file expandedTwoRows() { ExpandedTwoRowsReport report; return report.run(guid.Null); }
     public static file expandedEmptyRow() { ExpandedEmptyRowReport report; return report.run(guid.Null); }
+    public static file expandedHorizontal() { ExpandedHorizontalReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -309,6 +310,11 @@ public class ExpandedTwoRowsReport extends Report {
         (source / "ExpandedTwoRowsReport.bl").read_text(encoding="utf-8")
         .replace("ExpandedTwoRowsReport", "ExpandedEmptyRowReport").replace('template = "expanded-two"', 'template = "expanded-empty-row"'),
         encoding="utf-8")
+    (source / "ExpandedHorizontalReport.bl").write_text(
+        (source / "ExpandedTwoRowsReport.bl").read_text(encoding="utf-8")
+        .replace("ExpandedTwoRowsReport", "ExpandedHorizontalReport")
+        .replace('template = "expanded-two"', 'template = "expanded-horizontal"')
+        .replace('[address "A1:B2"]', '[axis "1"] [address "A1:B2"]'), encoding="utf-8")
     (source / "UnsupportedContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.lang.Object;
@@ -584,6 +590,13 @@ public class %s extends Report {
     with zipfile.ZipFile(application / "reports/expanded-empty-row.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in empty_row.items():
             archive.writestr(entry_name, content)
+    horizontal = dict(two_rows)
+    horizontal["xl/worksheets/sheet1.xml"] = horizontal["xl/worksheets/sheet1.xml"].replace(
+        '<c r="B1" t="s"><v>1</v></c></row>', '<c r="B1" t="s"><v>1</v></c><c r="C1"><v>77</v></c></row>').replace(
+        '<c r="B2" t="s"><v>3</v></c></row>', '<c r="B2" t="s"><v>3</v></c><c r="E2" t="s"><v>1</v></c></row>')
+    with zipfile.ZipFile(application / "reports/expanded-horizontal.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in horizontal.items():
+            archive.writestr(entry_name, content)
     merged = dict(entries)
     merged["xl/worksheets/sheet1.xml"] = original_sheet.replace("</worksheet>", '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')
     with zipfile.ZipFile(application / "reports/merged.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -787,7 +800,8 @@ void main(string[] args) {
     bool missingSource; try { P.m_expandedMissingSource(); } catch (Exception) { missingSource = true; } assert(missingSource);
     bool twoRows; try { P.m_expandedTwoRows(); } catch (Exception) { twoRows = true; } assert(twoRows);
     bool emptyRow; try { P.m_expandedEmptyRow(); } catch (Exception) { emptyRow = true; } assert(emptyRow);
-    assert(database.begins == 75 && database.rollbacks == 75);
+    bool horizontal; try { P.m_expandedHorizontal(); } catch (Exception) { horizontal = true; } assert(horizontal);
+    assert(database.begins == 76 && database.rollbacks == 76);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -891,6 +905,9 @@ void main(string[] args) {
         contents = contents.replace(
             'bool twoRows; try { P.m_expandedTwoRows(); } catch (Exception) { twoRows = true; } assert(twoRows);',
             'auto twoRows = P.m_expandedTwoRows(); copy(z8_file_resolve_path(twoRows), buildPath(args[2], "expanded-two.xlsx")); assert(counter.expansions == 9);')
+        contents = contents.replace(
+            'bool horizontal; try { P.m_expandedHorizontal(); } catch (Exception) { horizontal = true; } assert(horizontal);',
+            'auto horizontal = P.m_expandedHorizontal(); copy(z8_file_resolve_path(horizontal), buildPath(args[2], "expanded-horizontal.xlsx")); assert(counter.expansions == 10);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1089,7 +1106,8 @@ class PoiRangeOracle {
       boolean fieldCase = args.length > 3 && "fields".equals(args[3]);
       boolean customCase = args.length > 3 && "custom".equals(args[3]);
       boolean expandedCustomCase = args.length > 3 && "expanded-custom".equals(args[3]);
-      boolean expandedTwoCase = args.length > 3 && "expanded-two".equals(args[3]);
+      boolean horizontalCase = args.length > 3 && "expanded-horizontal".equals(args[3]);
+      boolean expandedTwoCase = horizontalCase || (args.length > 3 && "expanded-two".equals(args[3]));
       boolean expandedCase = expandedCustomCase || expandedTwoCase || (args.length > 3 && "expanded".equals(args[3]));
       boolean jsonInlineCase = args.length > 3 && "json-inline".equals(args[3]);
       boolean repeatCase = args.length > 3 && "repeat".equals(args[3]);
@@ -1205,6 +1223,7 @@ class PoiRangeOracle {
       Range child = new Range().setSource(customCase || jsonCase || queryCase || expandedCustomCase ? customSource : SimpleSource.newDefault())
           .setBlock(expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
           .setBoundaries(expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
+      if (horizontalCase) child.setAxis(1);
       if (multipleCase) {
         report.addRange(0, new Range().setSource(orderedSources[1]).setBlock("C1").setBoundaries("C1"));
         report.addRange(0, new Range().setSource(orderedSources[0]).setBlock("A1").setBoundaries("A1"));
@@ -1213,7 +1232,8 @@ class PoiRangeOracle {
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier); modifier.close();
       if (expandedCase) {
-        for (int row = 0; row < (expandedTwoCase ? 6 : 3); ++row) for (int col = 0; col < (expandedTwoCase ? 2 : 4); ++col) {
+        for (int row = 0; row < (horizontalCase ? 2 : expandedTwoCase ? 6 : 3); ++row)
+          for (int col = 0; col < (horizontalCase ? 6 : expandedTwoCase ? 2 : 4); ++col) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(row).getCell(col);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(row).getCell(col);
           if (expected.getCellType() != result.getCellType() || expected.getCellStyle().getIndex() != result.getCellStyle().getIndex())
@@ -1325,6 +1345,10 @@ class PoiRangeOracle {
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/expanded-two.xlsx"), str(working / "expanded-two.xlsx"), str(config), "expanded-two"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/expanded-horizontal.xlsx"), str(working / "expanded-horizontal.xlsx"), str(config), "expanded-horizontal"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",

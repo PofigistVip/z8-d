@@ -234,21 +234,23 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     auto request = z8_application_request();
     if (request !is null && request.parameters !is null)
         evalState.variables["parameters"w] = Z8EvalVariable(null, null, request.parameters);
-    long iteration, height = block.lastRow - block.firstRow + 1;
+    bool horizontal = axisText !is null && axisText.to!int == 1;
+    long iteration, height = block.lastRow - block.firstRow + 1, width = block.lastColumn - block.firstColumn + 1;
     do {
-        if (iteration > (1048575 - block.lastRow) / height)
+        if (iteration > (horizontal ? (16383 - block.lastColumn) / width : (1048575 - block.lastRow) / height))
             throw new Exception("POI report range expansion exceeds worksheet bounds");
-        auto offset = iteration * height;
+        auto offset = iteration * (horizontal ? width : height);
         if (iteration) {
-            if (!allowExpansion || workbook.sheets.length != 1 ||
-                (axisText !is null && axisText.to!int != 0) || boundariesText is null)
+            if (!allowExpansion || workbook.sheets.length != 1 || boundariesText is null)
                 throw new Exception("POI report range expansion layout is not implemented");
             auto boundaries = z8_poi_report_block(boundariesText);
             if (boundaries.firstRow != block.firstRow || boundaries.lastRow != block.lastRow ||
                 boundaries.firstColumn != block.firstColumn || boundaries.lastColumn != block.lastColumn)
                 throw new Exception("POI report range expansion layout is not implemented");
             foreach (sourceRow; block.firstRow .. block.lastRow + 1) {
-                auto targetRow = sourceRow + offset;
+                auto targetRow = sourceRow + (horizontal ? 0 : offset);
+                auto firstColumn = block.firstColumn + (horizontal ? offset : 0);
+                auto lastColumn = block.lastColumn + (horizontal ? offset : 0);
                 auto existingRow = targetRow in workbook.sheets[sheet].rows;
                 auto templateRow = sourceRow in workbook.sheets[sheet].rows;
                 if (templateRow is null || !(*templateRow).cells.length)
@@ -256,8 +258,9 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                 if (existingRow !is null) {
                     if (!(*existingRow).safeExpansionTarget) throw new Exception("POI report range expansion row is not implemented");
                     foreach (column, cell; (*existingRow).cells) {
-                        if (column < block.firstColumn || column > block.lastColumn) continue;
-                        if ((column in (*templateRow).cells) is null || !cell.safeCopy || cell.hasFormula || cell.rawKind == "inlineStr"w)
+                        if (column < firstColumn || column > lastColumn) continue;
+                        auto sourceColumn = column - (horizontal ? offset : 0);
+                        if ((sourceColumn in (*templateRow).cells) is null || !cell.safeCopy || cell.hasFormula || cell.rawKind == "inlineStr"w)
                             throw new Exception("POI report range expansion target cell is not implemented");
                     }
                 }
@@ -269,12 +272,12 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                         cell.rawKind != "inlineStr"w && cell.rawKind != "n"w && cell.rawKind != "b"w))
                         throw new Exception("POI report range expansion cell is not implemented");
                     copies ~= Z8PoiCellCopy(cast(uint)sheet, cast(uint)sourceRow, cast(uint)column,
-                                            cast(uint)targetRow, cast(uint)column);
+                                            cast(uint)targetRow, cast(uint)(column + (horizontal ? offset : 0)));
                     // POI copies a string's plain value into a new shared-string
                     // cell, even when the template used inline or rich text.
                     if ((cell.rawKind == "s"w || cell.rawKind == "inlineStr"w) && cell.value.indexOf("${"w) < 0) {
                         Z8PoiCellEdit edit;
-                        edit.sheet = cast(uint)sheet; edit.row = cast(uint)targetRow; edit.column = cast(uint)column;
+                        edit.sheet = cast(uint)sheet; edit.row = cast(uint)targetRow; edit.column = cast(uint)(column + (horizontal ? offset : 0));
                         edit.kind = Z8PoiCellEditKind.text; edit.text = cell.value; edits ~= edit;
                     }
                 }
@@ -286,7 +289,8 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                 cell.value.indexOf("${"w) < 0) continue;
             if (rowNumber < block.firstRow || rowNumber > block.lastRow ||
                 columnNumber < block.firstColumn || columnNumber > block.lastColumn) continue;
-            z8_poi_report_evaluate_cell(evalState, workbook, cell, sheet, rowNumber + offset, columnNumber, edits, iteration != 0);
+            z8_poi_report_evaluate_cell(evalState, workbook, cell, sheet, rowNumber + (horizontal ? 0 : offset),
+                                        columnNumber + (horizontal ? offset : 0), edits, iteration != 0);
         }
         ++iteration;
     } while (z8_report_source_next(source));
@@ -361,7 +365,10 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
             if (root.lastRow >= 1000) root.lastRow = 999;
             if (root.lastColumn >= 1000) root.lastColumn = 999;
         }
-        foreach (copy; copies) if (copy.targetRow > root.lastRow) root.lastRow = copy.targetRow;
+        foreach (copy; copies) {
+            if (copy.targetRow > root.lastRow) root.lastRow = copy.targetRow;
+            if (copy.targetColumn > root.lastColumn) root.lastColumn = copy.targetColumn;
+        }
         z8_poi_report_apply_root(report, workbook, renameSheet, root, copies, edits);
         return;
     }
