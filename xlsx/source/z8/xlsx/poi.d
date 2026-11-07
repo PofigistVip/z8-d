@@ -1,7 +1,8 @@
 /// Optional OpenXLSX document provider for the Z8 native POI facade.
 module z8.xlsx.poi;
 
-import z8.runtime : IZ8PoiDocument, IZ8PoiProvider, IZ8PoiReportWriter, Z8PoiHiddenColumn, Z8PoiUnsupportedWorkbook, z8_poi_set_provider;
+import z8.runtime : IZ8PoiDocument, IZ8PoiProvider, IZ8PoiReportWriter, Z8PoiHiddenColumn, Z8PoiCellEdit, Z8PoiCellEditKind,
+    Z8PoiUnsupportedWorkbook, z8_poi_set_provider;
 import z8.xlsx.openxlsx : Workbook;
 import std.conv : to;
 
@@ -45,6 +46,18 @@ private class OpenXlsxProvider : IZ8PoiProvider, IZ8PoiReportWriter {
             auto book = new Workbook(input);
             scope(exit) book.close();
             foreach (column; columns) book.setColumnHidden(column.sheet, column.column, true);
+            return book.save();
+        } catch (Exception error) throw new Z8PoiUnsupportedWorkbook(error.msg);
+    }
+    ubyte[] writeReportCells(const(ubyte)[] input, const(Z8PoiCellEdit)[] cells) {
+        try {
+            auto book = new Workbook(input);
+            scope(exit) book.close();
+            foreach (cell; cells) final switch (cell.kind) {
+                case Z8PoiCellEditKind.text: book.setText(cell.sheet, cell.row, cell.column, cell.text.to!string); break;
+                case Z8PoiCellEditKind.number: book.setNumber(cell.sheet, cell.row, cell.column, cell.number); break;
+                case Z8PoiCellEditKind.boolean: book.setBoolean(cell.sheet, cell.row, cell.column, cell.booleanValue); break;
+            }
             return book.save();
         } catch (Exception error) throw new Z8PoiUnsupportedWorkbook(error.msg);
     }

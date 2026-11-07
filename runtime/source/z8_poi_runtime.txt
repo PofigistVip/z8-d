@@ -18,10 +18,19 @@ interface IZ8PoiDocument {
 }
 interface IZ8PoiProvider { IZ8PoiDocument open(const(ubyte)[] bytes); }
 struct Z8PoiHiddenColumn { uint sheet, column; }
+enum Z8PoiCellEditKind { text, number, boolean }
+struct Z8PoiCellEdit {
+    uint sheet, row, column;
+    Z8PoiCellEditKind kind;
+    wstring text;
+    double number;
+    bool booleanValue;
+}
 /// Optional report mutations supported by the registered workbook provider.
 interface IZ8PoiReportWriter {
     ubyte[] renameReportSheet(const(ubyte)[] input, uint index, wstring name);
     ubyte[] hideReportColumns(const(ubyte)[] input, const(Z8PoiHiddenColumn)[] columns);
+    ubyte[] writeReportCells(const(ubyte)[] input, const(Z8PoiCellEdit)[] cells);
 }
 /// The provider cannot read this workbook; try the built-in compatible reader.
 class Z8PoiUnsupportedWorkbook : Exception {

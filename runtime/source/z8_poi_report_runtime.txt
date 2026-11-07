@@ -7,6 +7,22 @@ private struct Z8PoiColumn {
 }
 
 private struct Z8PoiReportBlock { long firstRow, lastRow, firstColumn, lastColumn; }
+// OpenXLSX may rewrite XML parts on save. Keep the compatible editor for
+// archives whose encoding or ZIP comment it would otherwise change.
+private bool z8_poi_report_openxlsx_safe(ZipArchive archive, size_t sheets) {
+    import std.algorithm.searching : endsWith;
+    import std.string : toLower;
+    if (sheets != 1 || archive.comment.length) return false;
+    foreach (name, member; archive.directory) {
+        if (!name.toLower().endsWith(".xml")) continue;
+        try archive.expand(member);
+        catch (Exception) return false;
+        auto bytes = member.expandedData;
+        if (bytes.length >= 2 && ((bytes[0] == 0xFF && bytes[1] == 0xFE) ||
+            (bytes[0] == 0xFE && bytes[1] == 0xFF) || bytes[0] == 0 || bytes[1] == 0)) return false;
+    }
+    return true;
+}
 private Z8PoiReportBlock z8_poi_report_block(wstring address) {
     import std.string : split;
     auto parts = z8_string_required(address).split(":"w);
@@ -41,7 +57,7 @@ private Z8PoiReportBlock z8_poi_report_block(wstring address) {
 // A single, non-expanding simple source can be applied without editing cells
 // if the sheet contains no report expressions or reserved text delimiters.
 private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z8PoiWorkbook workbook,
-                                              out int renameSheet, out wstring renameName) {
+                                              out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits) {
     import std.algorithm.searching : canFind;
     range = z8_nonnull(range); range.z8_ensure();
     auto rangeState = z8_report_range_state(range);
@@ -78,10 +94,38 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     if (z8_report_source_state(source).kind != Z8ReportSourceKind.simple)
         throw new Exception("expanding POI report data sources are not implemented");
     z8_report_register_data_source(report, source);
-    foreach (row; workbook.sheets[sheet].rows) foreach (cell; row.cells)
-        if (!cell.hasFormula && (cell.kind == "str"w || cell.kind == "inlineStr"w) &&
-            (cell.value.canFind('$') || cell.value.canFind('{') || cell.value.canFind('}')))
+    foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells) {
+        if (cell.hasFormula || (cell.kind != "str"w && cell.kind != "inlineStr"w) ||
+            !(cell.value.canFind('$') || cell.value.canFind('{') || cell.value.canFind('}'))) continue;
+        if (rowNumber < block.firstRow || rowNumber > block.lastRow ||
+            columnNumber < block.firstColumn || columnNumber > block.lastColumn ||
+            cell.value.length < 3 || cell.value[0 .. 2] != "${"w || cell.value[$ - 1] != '}')
             throw new Exception("POI report text expressions are not implemented");
+        auto expression = cell.value[2 .. $ - 1];
+        // The original report grammar accepts single-quoted strings. The Eval
+        // parser also accepts double quotes, which are not equivalent here.
+        if (expression.canFind('"')) throw new Exception("POI report expression syntax is not implemented");
+        auto evaluated = z8_eval_expression(new Z8EvalState(), expression);
+        if (!evaluated.evaluated || evaluated.context != Z8EvalContext.none || evaluated.json !is null)
+            throw new Exception("POI report expression context is not implemented");
+        Z8PoiCellEdit edit;
+        edit.sheet = cast(uint)sheet; edit.row = cast(uint)rowNumber; edit.column = cast(uint)columnNumber;
+        auto value = evaluated.primary;
+        // POI 3.16 leaves an inline-string cell unchanged when assigning a
+        // string result; numeric and boolean results replace its type.
+        if (cell.kind == "inlineStr"w && (value is null || value.kind == Z8PrimaryKind.text)) continue;
+        if (value is null) { edit.kind = Z8PoiCellEditKind.text; edit.text = ""w; }
+        else switch (value.kind) {
+            case Z8PrimaryKind.boolean: edit.kind = Z8PoiCellEditKind.boolean; edit.booleanValue = value.booleanValue; break;
+            // Range.evaluateAndSet uses integer.getInt(), including Java's
+            // 32-bit narrowing for values outside the int range.
+            case Z8PrimaryKind.integer: edit.kind = Z8PoiCellEditKind.number; edit.number = cast(double)cast(int)value.integerValue; break;
+            case Z8PrimaryKind.decimal: edit.kind = Z8PoiCellEditKind.number; edit.number = value.decimalValue.z8_as_double(); break;
+            case Z8PrimaryKind.text: edit.kind = Z8PoiCellEditKind.text; edit.text = value.textValue; break;
+            default: throw new Exception("POI report expression result type is not implemented");
+        }
+        edits ~= edit;
+    }
     z8_report_source_open(source, sheet);
     scope(exit) z8_report_source_close(source);
     if (!z8_report_source_next(source) || z8_report_source_next(source)) throw new Exception("invalid simple POI report source");
@@ -127,9 +171,7 @@ private ubyte[] z8_poi_report_rename_sheet(const(ubyte)[] input, Z8PoiWorkbook w
     IZ8PoiProvider provider;
     synchronized (z8_poi_monitor) provider = z8_poi_provider;
     auto writer = cast(IZ8PoiReportWriter)provider;
-    auto utf16 = original.length >= 2 && ((original[0] == 0xFF && original[1] == 0xFE) ||
-        (original[0] == 0xFE && original[1] == 0xFF) || original[0] == 0 || original[1] == 0);
-    if (writer !is null && !archive.comment.length && workbook.sheets.length == 1 && !utf16 && !selected.name.canFind(':')) {
+    if (writer !is null && !selected.name.canFind(':') && z8_poi_report_openxlsx_safe(archive, workbook.sheets.length)) {
         try return writer.renameReportSheet(input, cast(uint)index, name);
         catch (Z8PoiUnsupportedWorkbook) { /* retain compatibility with uncommon workbook layouts */ }
     }
@@ -206,7 +248,10 @@ private ubyte[] z8_poi_report_hide_columns(const(ubyte)[] input, Z8IntMap!(Z8Arr
         if (target is null) throw new Exception("missing XLSX sheet relationship");
         sheets ~= z8_poi_resolve_path(base, *target);
     }
-    bool plainSheet = sheets.length == 1 && !archive.comment.length;
+    IZ8PoiProvider provider;
+    synchronized (z8_poi_monitor) provider = z8_poi_provider;
+    auto writer = cast(IZ8PoiReportWriter)provider;
+    bool plainSheet = writer !is null && z8_poi_report_openxlsx_safe(archive, sheets.length);
     Z8PoiHiddenColumn[] changes;
     auto keys = hidden.z8_keys();
     foreach (keyIndex; 0 .. keys.z8_size()) {
@@ -228,8 +273,6 @@ private ubyte[] z8_poi_report_hide_columns(const(ubyte)[] input, Z8IntMap!(Z8Arr
         if (member is null) throw new Exception("missing XLSX worksheet");
         archive.expand(*member);
         auto original = (*member).expandedData.dup;
-        if (original.length >= 2 && ((original[0] == 0xFF && original[1] == 0xFE) ||
-            (original[0] == 0xFE && original[1] == 0xFF) || original[0] == 0 || original[1] == 0)) plainSheet = false;
         auto xml = z8_poi_xml_decode(original);
         auto sheet = (new Z8PoiXmlReader(xml)).parseDocument();
         if (z8_poi_xml_local(sheet.name) != "worksheet"w || sheet.empty) throw new Exception("invalid XLSX worksheet");
@@ -361,13 +404,8 @@ private ubyte[] z8_poi_report_hide_columns(const(ubyte)[] input, Z8IntMap!(Z8Arr
         (*member).expandedData = z8_poi_report_encode_xml(xml, original);
     }
     if (plainSheet && changes.length) {
-        IZ8PoiProvider provider;
-        synchronized (z8_poi_monitor) provider = z8_poi_provider;
-        auto writer = cast(IZ8PoiReportWriter)provider;
-        if (writer !is null) {
-            try return writer.hideReportColumns(input, changes);
-            catch (Z8PoiUnsupportedWorkbook) { /* use the compatible column editor */ }
-        }
+        try return writer.hideReportColumns(input, changes);
+        catch (Z8PoiUnsupportedWorkbook) { /* use the compatible column editor */ }
     }
     auto output = new ZipArchive(); output.comment = archive.comment;
     foreach (member; archive.directory.byValue) output.addMember(member);

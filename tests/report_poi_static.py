@@ -51,6 +51,10 @@ public class StaticReportProbe {
     public static file simpleRange() { SimpleRangeReport report; return report.run(guid.Null); }
     public static file invalidRange() { InvalidRangeReport report; return report.run(guid.Null); }
     public static file expressionRange() { ExpressionRangeReport report; return report.run(guid.Null); }
+    public static file constantRange() { ConstantRangeReport report; return report.run(guid.Null); }
+    public static file constantComment() { ConstantCommentRangeReport report; return report.run(guid.Null); }
+    public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
+    public static file doubleQuotedRange() { DoubleQuotedRangeReport report; return report.run(guid.Null); }
     public static file implicitRange() { ImplicitRangeReport report; return report.run(guid.Null); }
     public static file invalidImplicitRange() { InvalidImplicitRangeReport report; return report.run(guid.Null); }
     public static file mergedRange() { MergedRangeReport report; return report.run(guid.Null); }
@@ -65,7 +69,11 @@ public class StaticReportProbe {
     for name, template, address, boundaries in (
             ("SimpleRangeReport", "sample", "$A$1:A1", "A1:B2"),
             ("InvalidRangeReport", "sample", "A1:B2", "A1"),
-            ("ExpressionRangeReport", "expression", "A1", "A1")):
+            ("ExpressionRangeReport", "expression", "A1", "A1"),
+            ("ConstantRangeReport", "constant", "A1:G1", "A1:G1"),
+            ("ConstantCommentRangeReport", "constant-comment", "A1:G1", "A1:G1"),
+            ("MixedRangeReport", "mixed", "A1", "A1"),
+            ("DoubleQuotedRangeReport", "double-quoted", "A1", "A1")):
         (source / (name + ".bl")).write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 public class %s extends Report {
@@ -114,6 +122,12 @@ public class %s extends Report {
     shutil.copy2(workbook, comment_book)
     with zipfile.ZipFile(comment_book, "a") as archive:
         archive.comment = b"preserve ZIP comment"
+    utf16_book = application / "reports/utf16-metadata.xlsx"
+    with zipfile.ZipFile(utf16_book, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in entries.items():
+            if name == "xl/workbook.xml":
+                content = b"\xff\xfe" + ('<?xml version="1.0" encoding="UTF-16"?>' + content).encode("utf-16-le")
+            archive.writestr(name, content)
     original_sheet = entries["xl/worksheets/sheet1.xml"]
     entries["xl/worksheets/sheet1.xml"] = original_sheet.replace("<sheetData>",
         '<cols><col min="1" max="4" width="12" customWidth="1"/><col min="8" max="8" hidden="1" width="9"/></cols><sheetData>')
@@ -161,6 +175,34 @@ public class %s extends Report {
     with zipfile.ZipFile(application / "reports/expression.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in expression.items():
             archive.writestr(name, content)
+    for name, expression_text in (("mixed", "prefix ${1+2}"), ("double-quoted", '${"text"}')):
+        fixture = dict(entries)
+        fixture["xl/worksheets/sheet1.xml"] = original_sheet.replace("Example", expression_text)
+        with zipfile.ZipFile(application / ("reports/" + name + ".xlsx"), "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for entry_name, content in fixture.items():
+                archive.writestr(entry_name, content)
+    constants = dict(entries)
+    constants["[Content_Types].xml"] = constants["[Content_Types].xml"].replace(
+        "</Types>", '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/></Types>')
+    constants["xl/_rels/workbook.xml.rels"] = constants["xl/_rels/workbook.xml.rels"].replace(
+        "</Relationships>", '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>')
+    constants["xl/sharedStrings.xml"] = '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="1" uniqueCount="1"><si><t>${\'literal\'}</t></si></sst>'
+    constants["xl/worksheets/sheet1.xml"] = original_sheet.replace(
+        '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
+        '<c r="A1" t="inlineStr"><is><t>${1+2}</t></is></c>'
+        '<c r="B1" t="inlineStr"><is><t>${true}</t></is></c>'
+        '<c r="C1" t="s"><v>0</v></c>'
+        '<c r="D1" t="inlineStr"><is><t>${2.5}</t></is></c>'
+        "<c r=\"E1\" t=\"inlineStr\"><is><t>${'inline'}</t></is></c>"
+        '<c r="F1" t="inlineStr"><is><t>${2147483648}</t></is></c>'
+        '<c r="G1" t="inlineStr"><is><t>${4294967297}</t></is></c>')
+    with zipfile.ZipFile(application / "reports/constant.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in constants.items():
+            archive.writestr(name, content)
+    constant_comment = application / "reports/constant-comment.xlsx"
+    shutil.copy2(application / "reports/constant.xlsx", constant_comment)
+    with zipfile.ZipFile(constant_comment, "a") as archive:
+        archive.comment = b"preserve expression ZIP comment"
     merged = dict(entries)
     merged["xl/worksheets/sheet1.xml"] = original_sheet.replace("</worksheet>", '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')
     with zipfile.ZipFile(application / "reports/merged.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -236,6 +278,14 @@ void main(string[] args) {
     assert(database.begins == 26 && database.rollbacks == 26);
     auto commentHidden = P.m_hidden("comment"w); copy(z8_file_resolve_path(commentHidden), buildPath(args[2], "comment-hidden.xlsx"));
     assert(database.begins == 27 && database.rollbacks == 27);
+    bool constants; try { P.m_constantRange(); } catch (Exception) { constants = true; } assert(constants);
+    assert(database.begins == 28 && database.rollbacks == 28);
+    bool unsafe; try { P.m_constantComment(); } catch (Exception) { unsafe = true; } assert(unsafe);
+    auto utf16 = P.m_hidden("utf16-metadata"w); copy(z8_file_resolve_path(utf16), buildPath(args[2], "utf16-metadata.xlsx"));
+    assert(database.begins == 30 && database.rollbacks == 30);
+    bool mixed; try { P.m_mixedRange(); } catch (Exception) { mixed = true; } assert(mixed);
+    bool quoted; try { P.m_doubleQuotedRange(); } catch (Exception) { quoted = true; } assert(quoted);
+    assert(database.begins == 32 && database.rollbacks == 32);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -251,7 +301,7 @@ void main(string[] args) {
         contents = contents.replace("void main(string[] args) {", '''class CountingProvider : IZ8PoiProvider, IZ8PoiReportWriter {
     IZ8PoiProvider reader;
     IZ8PoiReportWriter writer;
-    uint renames, hides;
+    uint renames, hides, writes;
     this(IZ8PoiProvider provider) { reader = provider; writer = cast(IZ8PoiReportWriter)provider; assert(writer !is null); }
     IZ8PoiDocument open(const(ubyte)[] input) { return reader.open(input); }
     ubyte[] renameReportSheet(const(ubyte)[] input, uint index, wstring name) {
@@ -262,13 +312,20 @@ void main(string[] args) {
         auto result = writer.hideReportColumns(input, columns);
         ++hides; return result;
     }
+    ubyte[] writeReportCells(const(ubyte)[] input, const(Z8PoiCellEdit)[] cells) {
+        auto result = writer.writeReportCells(input, cells);
+        ++writes; return result;
+    }
 }
 void main(string[] args) {
     z8_openxlsx_configure();
     auto counter = new CountingProvider(z8_poi_set_provider(null));
     z8_poi_set_provider(counter);''')
-        contents = contents.replace("assert(database.begins == 27 && database.rollbacks == 27);",
-                                    "assert(database.begins == 27 && database.rollbacks == 27); assert(counter.renames == 2 && counter.hides == 1);")
+        contents = contents.replace(
+            'bool constants; try { P.m_constantRange(); } catch (Exception) { constants = true; } assert(constants);',
+            'auto constants = P.m_constantRange(); copy(z8_file_resolve_path(constants), buildPath(args[2], "constant.xlsx"));')
+        contents = contents.replace("assert(database.begins == 32 && database.rollbacks == 32);",
+                                    "assert(database.begins == 32 && database.rollbacks == 32); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 1);")
         harness.write_text(contents, encoding="utf-8")
         args.extend(["-I" + str(bridge), str(bridge / "z8/xlsx/openxlsx.d"), str(bridge / "z8/xlsx/poi.d")])
         if os.name == "nt":
@@ -320,6 +377,23 @@ void main(string[] args) {
         assert [item.attrib for item in sheet.findall("x:cols/x:col", namespace)] == [
             {"min": "2", "max": "2", "hidden": "1"}, {"min": "4", "max": "4", "hidden": "1"},
             {"min": "7", "max": "7", "hidden": "1"}]
+    with zipfile.ZipFile(working / "utf16-metadata.xlsx") as archive:
+        assert archive.read("xl/workbook.xml").startswith(b"\xff\xfe")
+    if library_dir:
+        with zipfile.ZipFile(working / "constant.xlsx") as archive:
+            sheet = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+            cells = sheet.findall("x:sheetData/x:row/x:c", namespace)
+            assert len(cells) == 7
+            assert float(cells[0].find("x:v", namespace).text) == 3
+            assert cells[1].attrib["t"] == "b" and cells[1].find("x:v", namespace).text == "1"
+            assert cells[2].attrib["t"] == "s"
+            shared = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+            text_index = int(cells[2].find("x:v", namespace).text)
+            assert shared.findall("x:si", namespace)[text_index].find("x:t", namespace).text == "literal"
+            assert float(cells[3].find("x:v", namespace).text) == 2.5
+            assert cells[4].find("x:is/x:t", namespace).text == "${'inline'}"
+            assert float(cells[5].find("x:v", namespace).text) == -2147483648
+            assert float(cells[6].find("x:v", namespace).text) == 1
     # Apache POI is optional for ordinary D builds; when available, compare
     # visibility and widths with the version used by the original server.
     cache = Path.home() / ".gradle/caches/modules-2/files-2.1"
@@ -399,14 +473,34 @@ class PoiRangeOracle {
     try (XSSFWorkbook original = new XSSFWorkbook(new FileInputStream(args[0]));
          XSSFWorkbook actual = new XSSFWorkbook(new FileInputStream(args[1]))) {
       PoiReport report = new PoiReport(new ReportOptions()).setContext(new OBJECT.CLASS<OBJECT>(null).get());
-      Range child = new Range().setSource(SimpleSource.newDefault()).setBlock("$A$1:A1").setBoundaries("A1:B2");
+      boolean constants = args.length > 3 && "constants".equals(args[3]);
+      Range child = new Range().setSource(SimpleSource.newDefault())
+          .setBlock(constants ? "A1:G1" : "$A$1:A1").setBoundaries(constants ? "A1:G1" : "A1:B2");
       report.addRange(0, child);
-      if (args.length > 3) original.setSheetName(0, "Отчёт \\uD83D\\uDE00");
+      if (args.length > 3 && "rename".equals(args[3])) original.setSheetName(0, "Отчёт \\uD83D\\uDE00");
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier); modifier.close();
-      String expected = original.getSheetAt(0).getRow(0).getCell(0).getStringCellValue();
-      String result = actual.getSheetAt(0).getRow(0).getCell(0).getStringCellValue();
-      if (!expected.equals(result)) throw new AssertionError(expected + " != " + result);
+      if (constants) {
+        for (int i = 0; i < 7; ++i) {
+          org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
+          org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(0).getCell(i);
+          if (expected.getCellType() != result.getCellType()) throw new AssertionError("cell type differs at " + i);
+          switch (expected.getCellType()) {
+            case org.apache.poi.ss.usermodel.Cell.CELL_TYPE_NUMERIC:
+              if (expected.getNumericCellValue() != result.getNumericCellValue()) throw new AssertionError("number differs at " + i); break;
+            case org.apache.poi.ss.usermodel.Cell.CELL_TYPE_BOOLEAN:
+              if (expected.getBooleanCellValue() != result.getBooleanCellValue()) throw new AssertionError("boolean differs at " + i); break;
+            case org.apache.poi.ss.usermodel.Cell.CELL_TYPE_STRING:
+              if (!expected.getStringCellValue().equals(result.getStringCellValue()))
+                throw new AssertionError("text differs at " + i + ": [" + expected.getStringCellValue() + "] != [" + result.getStringCellValue() + "]"); break;
+            default: throw new AssertionError("unexpected result type");
+          }
+        }
+      } else {
+        String expected = original.getSheetAt(0).getRow(0).getCell(0).getStringCellValue();
+        String result = actual.getSheetAt(0).getRow(0).getCell(0).getStringCellValue();
+        if (!expected.equals(result)) throw new AssertionError(expected + " != " + result);
+      }
       if (!original.getSheetName(0).equals(actual.getSheetName(0))) throw new AssertionError("sheet name differs");
     } finally { ApplicationServer.setRequest(null); }
   }
@@ -421,4 +515,9 @@ class PoiRangeOracle {
                                      str(workbook), str(working / "renamed.xlsx"), str(config), "rename"],
                                     cwd=temp, capture_output=True, text=True)
             assert result.returncode == 0, result.stderr
+            if library_dir:
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/constant.xlsx"), str(working / "constant.xlsx"), str(config), "constants"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
 print("POI static report template, naming and transaction verified")
