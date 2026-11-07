@@ -119,7 +119,7 @@ public class EvalOracle {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
         }
-        for (String pattern : new String[]{"${'eval-source.txt'.file().write('archive').exists()}", "${'eval-archive.zip'.file().zip('eval-source.txt'.file()).exists()}", "${'eval-archive.zip'.file().unzip('eval-output'.file()).exists()}", "${'eval-output/eval-source.txt'.file().read()}", "${'eval-output'.file().delete(true)}", "${'eval-source.txt'.file().delete()}", "${'eval-archive.zip'.file().delete()}"}) {
+        for (String pattern : new String[]{"${'eval-source.txt'.file().write('archive').exists()}", "${'eval-archive.zip'.file().zip('eval-source.txt'.file()).exists()}", "${'eval-archive.zip'.file().unzip('eval-output'.file()).exists()}", "${'eval-output'.file().listFiles().size()}", "${'eval-output'.file().listFiles()[0].fileName()}", "${'missing-file-uuid-72e8'.file().listFiles().isEmpty()}", "${'eval-output/eval-source.txt'.file().read()}", "${'eval-output'.file().delete(true)}", "${'eval-source.txt'.file().delete()}", "${'eval-archive.zip'.file().delete()}"}) {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
         }
@@ -278,6 +278,8 @@ void main() {
     foreach (pattern; ["${'eval-source.txt'.file().write('archive').exists()}"w,
                        "${'eval-archive.zip'.file().zip('eval-source.txt'.file()).exists()}"w,
                        "${'eval-archive.zip'.file().unzip('eval-output'.file()).exists()}"w,
+                       "${'eval-output'.file().listFiles().size()}"w, "${'eval-output'.file().listFiles()[0].fileName()}"w,
+                       "${'missing-file-uuid-72e8'.file().listFiles().isEmpty()}"w,
                        "${'eval-output/eval-source.txt'.file().read()}"w, "${'eval-output'.file().delete(true)}"w,
                        "${'eval-source.txt'.file().delete()}"w, "${'eval-archive.zip'.file().delete()}"w])
         try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }

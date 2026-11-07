@@ -368,6 +368,13 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
             return Z8EvalValue(true, z8_primary_box(z8_string_new(z8_file_path(file).replace("\\"w, "/"w))), null, null);
         }
         if (name == "parent"w) return Z8EvalValue(true, z8_primary_box(z8_file_parent(file)), null, null);
+        if (name == "listFiles"w) {
+            auto files = z8_file_listFiles(file);
+            auto result = Z8EvalValue(true);
+            result.collection = new Z8Array!Z8Primary();
+            for (long i; i < files.z8_size(); ++i) result.collection.z8_add(z8_primary_box(files.z8_get(i)));
+            return result;
+        }
         if (name == "lastModified"w) return Z8EvalValue(true, z8_primary_box(z8_file_lastModified(file)), null, null);
         if (name == "read"w) return Z8EvalValue(true, z8_primary_box(z8_string_new(z8_file_read(file))), null, null);
         if (name == "delete"w) { z8_file_delete(file); return Z8EvalValue(true); }
