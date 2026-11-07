@@ -64,6 +64,7 @@ import z8gen.OfficeProbe;
 import std.conv : to;
 import std.path : buildPath;
 import std.algorithm.searching : canFind;
+import std.array : replicate;
 import core.thread : Thread;
 void main(string[] args) {
     alias P = Z8p_4F666669636550726F6265;
@@ -81,6 +82,9 @@ void main(string[] args) {
     auto single = z8_file_from_path(buildPath(args[1], "single.eml").to!wstring);
     auto singleText = z8_email_message_text(z8_file_to_binary(single));
     assert(singleText.canFind("Hello world"w) && singleText.canFind("Привет"w));
+    auto longHtml = "From: x@example.com\\r\\nSubject: HTML\\r\\nContent-Type: text/html; charset=UTF-8\\r\\n\\r\\n"w ~ replicate("<"w, 100_000);
+    auto longResult = z8_email_message_text(z8_binary_from_string(longHtml));
+    assert(longResult.length > 100_000 && longResult.canFind("<<<<"w));
     bool invalidEmail;
     try { z8_email_message_text(z8_binary_from_string("not an email"w)); } catch (Exception) { invalidEmail = true; }
     assert(invalidEmail);

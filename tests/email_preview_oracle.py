@@ -50,6 +50,8 @@ messages = [
     b'Subject: Multiple senders\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nBody',
     b'From: html@example.com\r\nSubject: Partial HTML\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n'
     b'First <not closed\r\nline> Second <b>bold</b> End <unfinished',
+    b'From: html@example.com\r\nSubject: Many open tags\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n'
+    b'<<<unfinished\r\n<<second <b>closed</b>',
 ]
 for encoding, value in (("windows-1250", "Žluťoučký"), ("windows-1253", "Καλημέρα"),
                         ("windows-1254", "İstanbul"), ("windows-1257", "Ąžuolas")):

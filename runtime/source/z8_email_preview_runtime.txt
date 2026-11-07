@@ -185,6 +185,9 @@ private wstring z8_email_part(string message, size_t depth) {
                 auto end = i + 1;
                 while (end < text.length && text[end] != '>' && text[end] != '\r' && text[end] != '\n') ++end;
                 if (end < text.length && text[end] == '>') { i = end; continue; }
+                // No closing delimiter exists on this line. Copy the whole
+                // unfinished segment once instead of rescanning each '<'.
+                plain ~= text[i .. end]; i = end - 1; continue;
             }
             plain ~= text[i];
         }
