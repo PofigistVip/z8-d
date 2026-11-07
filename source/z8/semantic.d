@@ -1366,10 +1366,21 @@ class Checker {
                     }
                     if (e.token.text == "create") {
                         if (!e.arguments.length) e.builtinCall = "z8_guid_create_random";
-                        else if (e.arguments.length == 1 && [ValueType.stringType, ValueType.nullableString, ValueType.guidType].canFind(typeOf(e.arguments[0]))) {
-                            checkArguments(e, [ValueType.stringType]); e.builtinCall = "z8_guid_create_name";
+                        else if (e.arguments.length == 1) {
+                            auto argument = e.arguments[0];
+                            auto actual = typeOf(argument);
+                            if (actual == ValueType.nullType) fail("ambiguous guid.create argument", argument.token);
+                            bool integer = actual == ValueType.intType || actual == ValueType.optionalInt;
+                            if (actual == ValueType.selfType) {
+                                auto intConversion = findConversion(argument.objectClass, ValueType.intType);
+                                auto stringConversion = findConversion(argument.objectClass, ValueType.stringType);
+                                if (intConversion !is null && stringConversion !is null) fail("ambiguous guid.create argument", argument.token);
+                                integer = intConversion !is null;
+                            }
+                            checkArguments(e, [integer ? ValueType.intType : ValueType.stringType]);
+                            e.builtinCall = integer ? "z8_guid_create" : "z8_guid_create_name";
                         } else {
-                            checkArguments(e, e.arguments.length == 1 ? [ValueType.intType] : [ValueType.intType, ValueType.intType]);
+                            checkArguments(e, [ValueType.intType, ValueType.intType]);
                             e.builtinCall = "z8_guid_create";
                         }
                         return ValueType.guidType;

@@ -209,6 +209,16 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         'primary x = null; string[primary] values = {(x, "value")};',
     ):
         name_cases.append((True, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
+    for expression in ('true', '1.5', "'29/02/2024'", "'1 00:00:00'"):
+        name_cases.append((True, {"NameA": 'public class NameA { static void f() { guid value = guid.create(' + expression + '); } }'}))
+    for declaration in ('file value;', 'geometry value;', 'exception value;'):
+        name_cases.append((True, {"NameA": 'public class NameA { static void f() { ' + declaration + ' guid result = guid.create(value); } }'}))
+    for operators, accepted in (('public operator string() { return "abc"; }', True),
+                                ('public operator int() { return 7; }', True),
+                                ('public operator string() { return "abc"; } public operator int() { return 7; }', False)):
+        name_cases.append((accepted, {"NameA": 'public class NameA { ' + operators + ' static void f() { guid result = guid.create(new NameA); } }'}))
+    for declaration in ("guid value = guid.create(null);", "guid value = guid.create('0, 255');", "primary input = 1; guid value = guid.create(input);"):
+        name_cases.append((False, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
     for case_index, (accepted, files) in enumerate(name_cases):
         names_project = temp / ("name-attribute-project-" + str(case_index))
         names_source = names_project / "src" / "bl"
