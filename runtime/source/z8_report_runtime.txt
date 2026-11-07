@@ -86,8 +86,9 @@ private Z8File z8_report_poi_run(Z8Object report, Z8ReportState state) {
     int renameSheet; wstring renameName; Z8PoiCellEdit[] edits;
     if (state.ranges !is null) {
         auto ranges = state.ranges.view().z8_erased_data();
-        if (ranges.z8_size() > 1) throw new Exception("multiple POI report ranges are not implemented");
-        if (ranges.z8_size()) z8_poi_report_apply_simple_range(report, cast(Z8Object)ranges.z8_get(0), workbook, renameSheet, renameName, edits);
+        Z8Object[] selected;
+        for (long i; i < ranges.z8_size(); ++i) selected ~= z8_nonnull(cast(Z8Object)ranges.z8_get(i));
+        z8_poi_report_apply_ranges(report, selected, workbook, renameSheet, renameName, edits);
     }
     auto name = state.name is null ? templateName : state.name.to!string;
     if (state.name is null && name.toLower().endsWith(".xlsx")) name = name[0 .. $ - 5];

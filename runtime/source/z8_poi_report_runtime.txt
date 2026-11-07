@@ -141,7 +141,8 @@ private Z8Object[] z8_poi_report_query_fields(Z8Object report, Z8Object query, Z
 
 // Apply a single, non-expanding simple source to the selected report block.
 private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z8PoiWorkbook workbook,
-                                              out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits) {
+                                              out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits,
+                                              bool multiple = false) {
     import std.algorithm.searching : canFind;
     import std.string : indexOf;
     range = z8_nonnull(range); range.z8_ensure();
@@ -195,8 +196,10 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
         if (cell.hasFormula || (cell.kind != "str"w && cell.kind != "inlineStr"w) ||
             cell.value.indexOf("${"w) < 0) continue;
         if (rowNumber < block.firstRow || rowNumber > block.lastRow ||
-            columnNumber < block.firstColumn || columnNumber > block.lastColumn)
+            columnNumber < block.firstColumn || columnNumber > block.lastColumn) {
+            if (multiple) continue;
             throw new Exception("POI report text expressions are not implemented");
+        }
         auto firstEnd = cell.value.indexOf('}');
         auto single = cell.value.length >= 3 && cell.value[0 .. 2] == "${"w &&
             firstEnd >= 0 && cast(size_t)firstEnd + 1 == cell.value.length;
@@ -239,6 +242,63 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
         edits ~= edit;
     }
     if (z8_report_source_next(source)) throw new Exception("expanding POI report data sources are not implemented");
+}
+
+private struct Z8PoiReportEntry { Z8Object range; Z8PoiReportBlock block, boundaries; }
+// Replicate Block.Comparator's stable ordering for sibling ranges.
+private int z8_poi_report_compare_blocks(Z8PoiReportBlock a, Z8PoiReportBlock b) {
+    int compare(long left, long right) { return left < right ? -1 : left > right ? 1 : 0; }
+    if (a.firstRow <= b.lastRow && b.firstRow <= a.lastRow) return compare(a.firstColumn, b.firstColumn);
+    if (a.firstColumn <= b.lastColumn && b.firstColumn <= a.lastColumn) return compare(a.firstRow, b.firstRow);
+    return compare(a.firstColumn, b.firstColumn) + compare(a.firstRow, b.firstRow);
+}
+private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8PoiWorkbook workbook,
+                                        out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits) {
+    import std.string : indexOf;
+    if (!ranges.length) return;
+    if (ranges.length == 1) {
+        z8_poi_report_apply_simple_range(report, ranges[0], workbook, renameSheet, renameName, edits);
+        return;
+    }
+    Z8PoiReportEntry[] entries;
+    int sheet = -1;
+    foreach (range; ranges) {
+        range = z8_nonnull(range);
+        auto number = range.z8_get_attribute("sheet"w);
+        auto index = number is null ? 0 : number.to!int;
+        if (index < 0 || index >= workbook.sheets.length || (sheet >= 0 && sheet != index))
+            throw new Exception("multiple-sheet POI report ranges are not implemented");
+        sheet = index;
+        auto block = z8_poi_report_block(range.z8_get_attribute("address"w));
+        auto text = range.z8_get_attribute("boundaries"w);
+        auto boundaries = text is null ? block : z8_poi_report_block(text);
+        foreach (previous; entries) if (boundaries.firstRow <= previous.boundaries.lastRow &&
+            previous.boundaries.firstRow <= boundaries.lastRow && boundaries.firstColumn <= previous.boundaries.lastColumn &&
+            previous.boundaries.firstColumn <= boundaries.lastColumn)
+            throw new Exception("overlapping POI report range boundaries");
+        entries ~= Z8PoiReportEntry(range, block, boundaries);
+        if (renameName is null) { renameName = range.z8_get_attribute("sheetName"w); renameSheet = index; }
+    }
+    foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells) {
+        if (cell.hasFormula || (cell.kind != "str"w && cell.kind != "inlineStr"w) || cell.value.indexOf("${"w) < 0) continue;
+        bool found;
+        foreach (entry; entries) if (rowNumber >= entry.block.firstRow && rowNumber <= entry.block.lastRow &&
+            columnNumber >= entry.block.firstColumn && columnNumber <= entry.block.lastColumn) { found = true; break; }
+        if (!found) throw new Exception("POI report text expressions are not implemented");
+    }
+    // Java uses a stable list sort, and source open/close hooks can have effects.
+    for (size_t i = 1; i < entries.length; ++i) {
+        auto entry = entries[i]; auto position = i;
+        while (position && z8_poi_report_compare_blocks(entry.boundaries, entries[position - 1].boundaries) < 0) {
+            entries[position] = entries[position - 1]; --position;
+        }
+        entries[position] = entry;
+    }
+    foreach (entry; entries) {
+        int ignoredSheet; wstring ignoredName; Z8PoiCellEdit[] changes;
+        z8_poi_report_apply_simple_range(report, entry.range, workbook, ignoredSheet, ignoredName, changes, true);
+        edits ~= changes;
+    }
 }
 
 private ubyte[] z8_poi_report_rename_sheet(const(ubyte)[] input, Z8PoiWorkbook workbook, int index, wstring name) {
