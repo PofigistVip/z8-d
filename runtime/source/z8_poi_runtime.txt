@@ -56,14 +56,34 @@ private class Z8PoiXmlReader : Z8NlsReader {
     }
     Z8PoiXmlNode parseDocument() { misc(); auto result = node(); misc(); if (position != text.length) throw new Exception("invalid XLSX XML"); return result; }
 }
+// XSSFRichTextString.utfDecode performs one pass over UTF-16 code units.
+// An escaped underscore such as _x005F_x0041_ must therefore remain _x0041_.
+private wstring z8_poi_decode_text(wstring text) {
+    wchar[] result;
+    size_t i;
+    while (i < text.length) {
+        if (i + 7 <= text.length && text[i] == '_' && text[i + 1] == 'x' && text[i + 6] == '_') {
+            uint code; bool valid = true;
+            foreach (j; i + 2 .. i + 6) {
+                auto c = text[j];
+                int digit = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+                if (digit < 0) { valid = false; break; }
+                code = code * 16 + digit;
+            }
+            if (valid) { result ~= cast(wchar)code; i += 7; continue; }
+        }
+        result ~= text[i++];
+    }
+    return result.length ? result.idup : ""w;
+}
 private wstring z8_poi_rich_text(Z8PoiXmlNode value) {
     wstring result;
-    foreach (child; value.children) {
-        auto name = z8_poi_xml_local(child.name);
-        if (name == "t"w) result ~= child.allText();
-        else if (name == "r"w) { auto text = child.child("t"w); if (text !is null) result ~= text.allText(); }
+    bool hasRuns;
+    foreach (child; value.children) if (z8_poi_xml_local(child.name) == "r"w) {
+        hasRuns = true; auto text = child.child("t"w); if (text !is null) result ~= text.allText();
     }
-    return result.length ? result : ""w;
+    if (!hasRuns) { auto text = value.child("t"w); if (text !is null) result = text.allText(); }
+    return z8_poi_decode_text(result);
 }
 private class Z8PoiCell { wstring kind, value, formula, sharedId; bool hasFormula, unresolvedSharedFormula; long row, column; }
 private class Z8PoiRow { Z8PoiCell[long] cells; }
@@ -322,12 +342,12 @@ private Z8PoiWorkbook z8_poi_parse(Z8Binary input) {
                     }
                 }
                 auto value = cellNode.child("v"w); if (value !is null) cell.value = value.allText();
-                if (cell.kind == "inlineStr"w) { auto inlineValue = cellNode.child("is"w); cell.value = inlineValue is null ? ""w : z8_poi_rich_text(inlineValue); }
+                if (cell.kind == "inlineStr"w) { auto inlineValue = cellNode.child("is"w); cell.value = inlineValue is null ? z8_poi_decode_text(cell.value) : z8_poi_rich_text(inlineValue); }
                 else if (cell.kind == "s"w) {
                     auto index = cell.value.to!long;
                     if (index < 0 || cast(size_t)index >= strings.length) throw new Exception("invalid XLSX shared string index");
                     cell.value = strings[cast(size_t)index]; cell.kind = "str"w;
-                }
+                } else if (cell.kind == "str"w) cell.value = z8_poi_decode_text(cell.value);
                 row.cells[column] = cell;
             }
             sheet.rows[rowIndex] = row;
