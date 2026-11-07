@@ -845,12 +845,15 @@ private wstring z8_poi_report_named_address(wstring address) {
     return cell(first) && cell(last) ? address : null;
 }
 
+private bool z8_poi_report_russian_letter(wchar c) {
+    return (c >= '\u0410' && c <= '\u044F') || c == '\u0401' || c == '\u0451';
+}
 private wstring z8_poi_report_formula_sheet(wstring name) {
     if (!name.length) return null;
     bool quote = name[0] >= '0' && name[0] <= '9';
     foreach (c; name) {
-        if (c > 127) return null; // Java's Unicode character rules need a separate compatibility check.
-        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.')) quote = true;
+        if (c > 127 && !z8_poi_report_russian_letter(c)) return null; // Other Java Unicode character rules need a separate compatibility check.
+        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || z8_poi_report_russian_letter(c))) quote = true;
     }
     if (z8_str_compareNoCase(name, "true"w) == 0 || z8_str_compareNoCase(name, "false"w) == 0) quote = true;
     size_t i; uint column;
@@ -899,7 +902,7 @@ private bool z8_poi_report_rename_names(Z8PoiXmlNode definedNames, int index, ws
             }
             sheet = unquoted;
         } else foreach (c; sheet) {
-            if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.')) return false;
+            if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || z8_poi_report_russian_letter(c))) return false;
         }
         foreach (c; formula[separator + 1 .. $])
             if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '$' || c == ':')) return false;
