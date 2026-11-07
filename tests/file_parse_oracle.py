@@ -1,4 +1,4 @@
-"""Compare file.parse size conversion against the original Java file type."""
+"""Compare file.parse metadata conversion against the original Java file type."""
 from pathlib import Path
 import os
 import subprocess
@@ -21,6 +21,10 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     source.mkdir()
     (source / "Probe.bl").write_text('''public class Probe {
         public static int size(string json) { file[] files = file.parse(json); return files[0].size; }
+        public static string fields(string json) {
+            file[] files = file.parse(json); file value = files[0];
+            return value.name + "|" + value.author + "|" + value.path + "|" + value.details.get("p") + "|" + value.details.get("q");
+        }
     }''', encoding="utf-8")
     subprocess.run([str(compiler), "project", str(source), str(generated)], check=True)
     config = temp / "server.properties"
@@ -28,6 +32,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     java = temp / "FileParseOracle.java"
     java.write_text('''import org.zenframework.z8.server.types.file;
 import org.zenframework.z8.server.config.ServerConfig;
+import org.zenframework.z8.server.types.string;
 class FileParseOracle {
     public static void main(String[] args) throws Exception {
         ServerConfig.load(args[0]);
@@ -37,13 +42,23 @@ class FileParseOracle {
             try { System.out.println("RESULT:" + file.parse("{size:" + value + "}").iterator().next().size.get()); }
             catch (RuntimeException error) { System.out.println("RESULT:error"); }
         }
+        String[] documents = {
+            "{size:0,name:1.5,author:false,path:[1,2],details:{p:{inner:3},q:[true,5]}}",
+            "{size:0,name:1.0,author:12,path:true,details:{p:[1,2],q:{v:false}}}",
+            "{size:0,name:null,author:0.000001,path:{x:5},details:{p:[],q:{}}}"
+        };
+        for (String document : documents) {
+            file metadata = file.parse(document).iterator().next();
+            System.out.println("FIELDS:" + metadata.name.get() + "|" + metadata.author.get() + "|" + metadata.path.get() + "|" +
+                metadata.details.z8_get(new string("p")).get() + "|" + metadata.details.z8_get(new string("q")).get());
+        }
     }
 }''', encoding="utf-8")
     classpath = os.pathsep.join(map(str, [jar, *deps]))
     subprocess.run(["javac", "-encoding", "UTF-8", "-source", "8", "-target", "8", "-cp", classpath, str(java)], cwd=temp, check=True)
     output = subprocess.check_output(["java", "-Dfile.encoding=UTF-8", "-cp", str(temp) + os.pathsep + classpath,
                                       "FileParseOracle", str(config)], cwd=temp, text=True, encoding="utf-8")
-    expected = [line for line in output.splitlines() if line.startswith("RESULT:")]
+    expected = [line for line in output.splitlines() if line.startswith(("RESULT:", "FIELDS:"))]
     harness = temp / "main.d"
     harness.write_text('''import z8.runtime;
 import z8gen.Probe;
@@ -55,10 +70,16 @@ void main() {
         try { writeln("RESULT:", z8_optional_require(Z8p_50726F6265.m_size("{size:"w ~ value ~ "}"w))); }
         catch (Exception) { writeln("RESULT:error"); }
     }
+    wstring[] documents = [
+        "{size:0,name:1.5,author:false,path:[1,2],details:{p:{inner:3},q:[true,5]}}"w,
+        "{size:0,name:1.0,author:12,path:true,details:{p:[1,2],q:{v:false}}}"w,
+        "{size:0,name:null,author:0.000001,path:{x:5},details:{p:[],q:{}}}"w
+    ];
+    foreach (document; documents) writeln("FIELDS:", z8_to_utf8(Z8p_50726F6265.m_fields(document)));
 }''', encoding="utf-8")
     executable = temp / ("file-parse.exe" if os.name == "nt" else "file-parse")
     subprocess.run(["dmd", "-I" + str(generated), *import_args(), *map(str, generated.rglob("*.d")),
                     str(harness), str(runtime), "-of=" + str(executable)], cwd=temp, check=True)
     actual = subprocess.check_output([str(executable)], cwd=temp, text=True, encoding="utf-8").splitlines()
     assert actual == expected, (expected, actual)
-print("file.parse size conversion matches original Z8")
+print("file.parse metadata conversion matches original Z8")

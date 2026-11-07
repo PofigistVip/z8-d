@@ -153,12 +153,9 @@ Z8Array!Z8File z8_file_parse(wstring input) {
     wstring field(JSONValue[string] values, string key, wstring fallback = ""w) {
         auto p = key in values;
         if (p is null || p.type == JSONType.null_) return fallback;
-        if (p.type == JSONType.string) return p.str.to!wstring;
-        if (p.type == JSONType.integer) return p.integer.to!wstring;
-        if (p.type == JSONType.uinteger) return p.uinteger.to!wstring;
-        if (p.type == JSONType.true_) return "true"w;
-        if (p.type == JSONType.false_) return "false"w;
-        throw new Exception("invalid file metadata field");
+        // JsonObject.getString uses the Java value's toString(), including
+        // JSON arrays and objects, rather than requiring a JSON string.
+        return z8_json_value_text(*p);
     }
     auto result = new Z8Array!Z8File();
     wstring wrapString(wstring text) { return z8_string_new(z8_string_or_empty(text)); }
