@@ -23,6 +23,10 @@ for kind in ("i", "d", "b", "s", "g", "date", "binary", "file", "geometry"):
     candidates = [item for item in values if item is not None and item[0] == kind and item != ("geometry", "")]
     for length in (32, 33, 64, 100):
         cases.append([rng.choice(candidates) for _ in range(length)])
+for length in (32, 33, 64, 100):
+    cases.append([rng.choice([("i", -3), ("i", 2), ("d", "-1"), ("d", "2")]) for _ in range(length)])
+    cases.append([rng.choice([("binary", 1), ("file", 1)]) for _ in range(length)])
+    cases.append([None] + [rng.choice([("binary", 1), ("file", 1)]) for _ in range(length - 1)])
 
 def make(value):
     if value is None:
@@ -79,6 +83,9 @@ void main() {
     assert(large.z8_sort() is large);
     large.z8_add(z8_primary_box("mixed"w));
     bool failed; try large.z8_sort(); catch (Exception) failed = true; assert(failed);
+    auto fractional = new Z8Array!Z8Primary(); foreach (_; 0 .. 31) fractional.z8_add(z8_primary_box(1L));
+    fractional.z8_add(z8_primary_box(z8_decimal_parse("1.5"w)));
+    failed = false; try fractional.z8_sort(); catch (Exception) failed = true; assert(failed);
     auto overflow = new Z8Array!Z8Primary(); foreach (_; 0 .. 30) overflow.z8_add(z8_primary_box(0L));
     overflow.z8_add(z8_primary_box(long.min)); overflow.z8_add(z8_primary_box(long.max));
     failed = false; try overflow.z8_sort(); catch (Exception) failed = true; assert(failed);
