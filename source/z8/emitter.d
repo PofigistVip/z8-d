@@ -1706,10 +1706,12 @@ private bool windowsDeviceName(string part) {
     return (suffix.length == 1 && suffix[0] >= '1' && suffix[0] <= '9') || ["¹", "²", "³"].canFind(suffix);
 }
 private string moduleSegment(string part, bool root) {
-    import std.uni : toLower;
+    import std.uni : toLower, unicode;
     auto lower = part.toLower;
     // Reserve the escape namespace, internal generated modules, and D's __ names.
-    if (part.startsWith("__") || lower.startsWith("_z8_") ||
+    auto first = part.to!dstring[0];
+    if ((first != '_' && !(first in unicode.L) && !(first in unicode.Nl)) ||
+        part.startsWith("__") || lower.startsWith("_z8_") ||
         (root && ["native_registry", "project_registry", "entry"].canFind(lower)))
         return escapedModuleSegment(part);
     if (part.endsWith("_") || dModuleKeywords.canFind(part) || windowsDeviceName(part)) return part ~ "_";

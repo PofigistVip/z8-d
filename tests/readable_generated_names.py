@@ -24,6 +24,8 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     (source / "demo/version__.bl").write_text("public class version__ {}", encoding="utf-8")
     (source / "demo/My_Name.bl").write_text("public class My_Name {}", encoding="utf-8")
     (source / "demo/Документ.bl").write_text("public class Документ {}", encoding="utf-8")
+    (source / "demo/\u0301Start.bl").write_text(
+        "public class \u0301Start { public static int e\u0301() { int a\u203Fb = 42; return a\u203Fb; } }", encoding="utf-8")
     (source / "demo/__Hidden.bl").write_text("public class __Hidden {}", encoding="utf-8")
     (source / "demo/_z8_Probe.bl").write_text("public class _z8_Probe {}", encoding="utf-8")
     (source / "demo/p_Thing.bl").write_text("public class p_Thing {}", encoding="utf-8")
@@ -49,6 +51,7 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
     assert (generated / "z8gen/_z8_6E616D6573/Second.d").is_file()
     assert (generated / "z8gen/demo/_z8_5570706572.d").is_file()
     assert (generated / "z8gen/demo/_z8_7570706572.d").is_file()
+    assert (generated / "z8gen/demo/_z8_CC815374617274.d").is_file()
     assert (generated / "z8gen/native_registry.d").is_file()
     assert (generated / "z8gen/project_registry.d").is_file()
     for name in ("native_registry", "project_registry", "entry"):
@@ -70,6 +73,7 @@ import z8gen.alpha.Thing;
 import z8gen.beta.Thing;
 import z8gen.demo.My_Name;
 import z8gen.demo.Документ;
+import z8gen.demo._z8_CC815374617274;
 import z8gen.demo.version__;
 import z8gen.demo.version___;
 import z8gen.demo._z8_5F5F48696464656E;
@@ -87,6 +91,7 @@ import z8gen._z8_656E747279;
 import z8.runtime;
 void main() {
     assert(Z8_Main.m_value() == 34);
+    assert(Z8_\u0301Start.m_e\u0301() == 42);
     assert(Z8_Main.m_create().z8_class_id() == "demo.Документ"w);
     assert(Z8p_64656D6F2E4D61696E.m_value() == 34);
     assert(Z8p_616C7068612E5468696E67.m_value() == 11);

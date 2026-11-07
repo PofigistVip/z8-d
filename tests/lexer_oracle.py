@@ -54,6 +54,9 @@ with tempfile.TemporaryDirectory() as temporary:
                     "guid c = '00112233-4455-6677-8899-aabbccddeeff'; binary x = '0, 0xFF';\n"
                     'bool ok = true && false || a != b; return - 12; }').encode("utf-8"))
     files = [root / "examples" / "math.bl", edge] + sorted((root / "examples" / "project").rglob("*.bl"))
+    unicode_edge = temp / "unicode-identifiers.bl"
+    unicode_edge.write_text("class e\u0301 { int a\u203Fb; int \u0301mark; int \u0661digit; }", encoding="utf-8")
+    files.append(unicode_edge)
     if len(sys.argv) == 3:
         files += sorted((original / "org.zenframework.z8.lang" / "src" / "bl").rglob("*.bl"))
     total = 0

@@ -5,7 +5,7 @@ import std.conv : to;
 import std.format : format;
 import std.regex : matchFirst, regex;
 import std.string : strip, replace;
-import std.uni : isAlpha, isNumber;
+import std.uni : unicode;
 
 enum TokenKind { identifier, keyword, booleanLiteral, integerLiteral, decimalLiteral,
                  stringLiteral, dateLiteral, datespanLiteral, guidLiteral, binaryLiteral,
@@ -52,7 +52,12 @@ private bool digit(wchar c) { return c >= '0' && c <= '9'; }
 private bool hexDigit(wchar c) { return digit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }
 private bool space(wchar c) { return c == ' ' || c == '\t'; }
 private bool newline(wchar c) { return c == '\r' || c == '\n'; }
-private bool identifierChar(wchar c) { return c == '_' || isAlpha(c) || isNumber(c); }
+// These Java identifier-part categories are also valid inside D identifiers.
+// Currency and format characters need a separate escaped-name representation.
+private bool identifierChar(wchar c) {
+    return c == '_' || (c in unicode.L) || (c in unicode.Nl) || (c in unicode.Nd) ||
+        (c in unicode.Mn) || (c in unicode.Mc) || (c in unicode.Pc);
+}
 
 class Lexer {
     private wstring input;

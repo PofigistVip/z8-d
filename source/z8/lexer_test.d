@@ -27,6 +27,15 @@ unittest {
 }
 
 unittest {
+    auto tokens = scan("class e\u0301 { int a\u203Fb; int \u0301mark; int \u0661digit; }");
+    assert(tokens[1].text == "e\u0301");
+    assert(tokens[4].text == "a\u203Fb");
+    assert(tokens[7].text == "\u0301mark");
+    assert(tokens[10].text == "\u0661digit");
+    rejects("a\u00B2"); // Java identifier parts exclude the No category.
+}
+
+unittest {
     auto tokens = scan("return - 0x7f; x-2; .5 2.0e-3 12.");
     assert(tokens[1].kind == TokenKind.integerLiteral && tokens[1].text == "- 0x7f");
     assert(tokens[4].text == "-" && tokens[5].text == "2");
