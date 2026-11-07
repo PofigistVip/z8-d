@@ -49,6 +49,15 @@ class Transport : IZ8LdapTransport {
     }
 }
 void main() {
+    z8_server_config_replace(null); auto options = z8_ldap_server_options();
+    assert(options.connectTimeoutMilliseconds == 3000 && options.pageSize == 500 && !options.sslTrusted);
+    z8_server_config_replace(["ldap.connect.timeout"w: "2500"w, "ldap.read.pageSize"w: "17"w, "ldap.ssl.trusted"w: "TrUe"w]);
+    options = z8_ldap_server_options();
+    assert(options.connectTimeoutMilliseconds == 2500 && options.pageSize == 17 && options.sslTrusted);
+    z8_server_config_replace(["ldap.connect.timeout"w: "bad"w, "ldap.read.pageSize"w: "2147483648"w, "ldap.ssl.trusted"w: "yes"w]);
+    options = z8_ldap_server_options();
+    assert(options.connectTimeoutMilliseconds == 3000 && options.pageSize == 500 && !options.sslTrusted);
+    z8_server_config_replace(null);
     auto transport = new Transport(); auto provider = new Z8LdapConfiguredProvider(transport, 500);
     auto config = `{baseDn:"dc=example",users:{baseDn:"ou=users",loginField:"uid",groupField:"memberOf",expiresField:"accountExpires",fields:{mail:"mail",multi:"multi"}},groups:{baseDn:"ou=groups",nameField:"cn",memberField:"member",fields:{label:"description"}}}`w;
     auto session = provider.open("ldap://test"w, "bind"w, "secret"w, config); auto directory = transport.directory;

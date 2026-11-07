@@ -138,6 +138,20 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
 import z8.ldap.windows;
 import std.conv : to;
 void main(string[] args) {
+    z8_server_config_replace(["ldap.ssl.trusted"w: "true"w]);
+    bool unsupported; try { z8_windows_ldap_configure(); } catch (Exception) { unsupported = true; } assert(unsupported);
+    z8_server_config_replace(["ldap.read.pageSize"w: "-1"w]);
+    bool invalid; try { z8_windows_ldap_configure(); } catch (Exception) { invalid = true; } assert(invalid);
+    z8_server_config_replace(["ldap.read.pageSize"w: "1"w, "ldap.connect.timeout"w: "3000"w]);
+    auto previous = z8_windows_ldap_configure(); auto configured = z8_ldap_set_provider(previous);
+    if (args.length > 2) {
+        auto session = configured.open("ldap://127.0.0.1:"w ~ args[1].to!wstring, "cn=admin"w, "secret"w,
+            `{users:{loginField:"uid",groupField:"memberOf"}}`w);
+        auto users = session.users("dc=example"w, "(objectClass=*)"w);
+        assert(users.length == 2 && users[0].login == "alice"w && users[1].login == "bob"w);
+        assert(users[0].memberOf == ["cn=one"w, "cn=two"w]);
+        session.close(); return;
+    }
     auto transport = new Z8WindowsLdapTransport();
     foreach (url; ["http://host"w, "ldap://"w, "ldap://host:"w, "ldap://host:0"w, "ldap://host:65536"w, "ldap://host/path"w]) {
         bool failed; try { transport.connect(url, ""w, ""w); } catch (Exception) { failed = true; } assert(failed);
@@ -165,4 +179,13 @@ void main(string[] args) {
         raise fixture.failure
     assert fixture.events == [("bind", b"cn=admin", b"secret"), ("search", b"dc=example", None),
                               ("search", b"dc=example", b""), ("search", b"dc=example", b"next"), ("unbind",)]
+    fixture = Fixture()
+    try:
+        subprocess.run([str(exe), str(fixture.port), "provider"], cwd=temp, timeout=20, check=True)
+    finally:
+        fixture.thread.join(20)
+    if fixture.failure:
+        raise fixture.failure
+    assert fixture.events == [("bind", b"cn=admin", b"secret"), ("search", b"dc=example", b""),
+                              ("search", b"dc=example", b"next"), ("unbind",)]
     print("Windows LDAP transport: OK")

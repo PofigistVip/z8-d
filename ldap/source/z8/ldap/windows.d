@@ -2,7 +2,8 @@ module z8.ldap.windows;
 
 version (Windows):
 
-import z8.runtime : IZ8LdapDirectory, IZ8LdapTransport, Z8LdapDirectoryEntry;
+import z8.runtime : IZ8LdapDirectory, IZ8LdapTransport, IZ8LdapProvider, Z8LdapDirectoryEntry,
+    Z8LdapConfiguredProvider, z8_ldap_server_options, z8_ldap_set_provider;
 import core.sys.windows.winldap;
 import core.sys.windows.winber : BerElement, BerValue, ber_free, ber_bvfree;
 import std.algorithm.searching : canFind;
@@ -52,6 +53,17 @@ private Address parseAddress(wstring url) {
     } else if (url[$-1] == ':') throw new Exception("Invalid LDAP server port");
     if (!address.host.length) throw new Exception("Invalid LDAP server address");
     return address;
+}
+
+/// Register after loading server.properties; settings are captured at registration.
+IZ8LdapProvider z8_windows_ldap_configure() {
+    auto options = z8_ldap_server_options();
+    if (options.connectTimeoutMilliseconds < 0 || options.pageSize < 0)
+        throw new Exception("LDAP timeout and page size must be nonnegative");
+    if (options.sslTrusted)
+        throw new Exception("ldap.ssl.trusted is not yet supported by the Windows LDAP transport");
+    return z8_ldap_set_provider(new Z8LdapConfiguredProvider(
+        new Z8WindowsLdapTransport(cast(uint)options.connectTimeoutMilliseconds), options.pageSize));
 }
 
 /// A connection is bound with LDAP simple authentication; ldaps:// uses TLS.

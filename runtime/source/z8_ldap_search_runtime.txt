@@ -13,6 +13,21 @@ interface IZ8LdapDirectory {
 interface IZ8LdapTransport {
     IZ8LdapDirectory connect(wstring url, wstring principal, wstring credentials);
 }
+// Read the three LDAP properties from one consistent server-config snapshot.
+struct Z8LdapServerOptions {
+    int connectTimeoutMilliseconds = 3000;
+    int pageSize = 500;
+    bool sslTrusted;
+}
+Z8LdapServerOptions z8_ldap_server_options() {
+    auto properties = z8_server_config_snapshot();
+    wstring value(wstring key) { auto found = key in properties; return found is null ? null : *found; }
+    Z8LdapServerOptions options;
+    options.connectTimeoutMilliseconds = cast(int)z8_optional_require(z8_server_config_parse_int(value("ldap.connect.timeout"w), z8_optional_wrap(3000L)));
+    options.pageSize = cast(int)z8_optional_require(z8_server_config_parse_int(value("ldap.read.pageSize"w), z8_optional_wrap(500L)));
+    options.sslTrusted = z8_optional_require(z8_server_config_parse_bool(value("ldap.ssl.trusted"w), z8_optional_wrap(false)));
+    return options;
+}
 private struct Z8LdapConfig {
     bool configured;
     bool invalidUserFields, invalidGroupFields;
