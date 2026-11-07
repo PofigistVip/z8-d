@@ -1,9 +1,13 @@
 #include <OpenXLSX.hpp>
+#include <miniz.h>
 #include <cstring>
 #include <exception>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 #ifdef _WIN32
 #define Z8_EXPORT extern "C" __declspec(dllexport)
@@ -13,6 +17,60 @@
 
 namespace {
 thread_local std::string error;
+
+// OpenXLSX operates on an IZipArchive. Keep uploaded binaries in memory and
+// implement the transient entries OpenXLSX adds when optional parts are absent.
+struct MemoryArchiveState {
+    std::vector<unsigned char> bytes;
+    mz_zip_archive zip{};
+    bool opened = false;
+    std::unordered_map<std::string, std::string> changes;
+    std::unordered_set<std::string> removed;
+    ~MemoryArchiveState() { if (opened) mz_zip_reader_end(&zip); }
+};
+
+class MemoryArchive {
+    std::shared_ptr<MemoryArchiveState> state;
+public:
+    MemoryArchive(const void* data, size_t size) : state(std::make_shared<MemoryArchiveState>()) {
+        if (!data || !size) throw std::invalid_argument("empty XLSX binary");
+        auto first = static_cast<const unsigned char*>(data);
+        state->bytes.assign(first, first + size);
+    }
+    bool isValid() const { return true; }
+    bool isOpen() const { return state->opened; }
+    void open(const std::string&) {
+        if (state->opened) throw std::runtime_error("XLSX archive already open");
+        if (!mz_zip_reader_init_mem(&state->zip, state->bytes.data(), state->bytes.size(), 0))
+            throw std::runtime_error("invalid XLSX archive");
+        state->opened = true;
+    }
+    void close() {
+        if (state->opened) { mz_zip_reader_end(&state->zip); state->opened = false; }
+    }
+    void save(const std::string&) { throw std::runtime_error("memory XLSX archive is read-only"); }
+    void addEntry(const std::string& name, const std::string& data) {
+        state->removed.erase(name);
+        state->changes[name] = data;
+    }
+    void addEntryAndCommit(const std::string& name, const std::string& data) { addEntry(name, data); }
+    void deleteEntry(const std::string& name) { state->changes.erase(name); state->removed.insert(name); }
+    bool hasEntry(const std::string& name) const {
+        if (state->removed.count(name)) return false;
+        return state->changes.count(name) ||
+            (state->opened && mz_zip_reader_locate_file(&state->zip, name.c_str(), nullptr, MZ_ZIP_FLAG_CASE_SENSITIVE) >= 0);
+    }
+    std::string getEntry(const std::string& name) {
+        auto changed = state->changes.find(name);
+        if (changed != state->changes.end()) return changed->second;
+        if (!hasEntry(name)) throw std::runtime_error("missing XLSX entry: " + name);
+        size_t size = 0;
+        void* raw = mz_zip_reader_extract_file_to_heap(&state->zip, name.c_str(), &size, MZ_ZIP_FLAG_CASE_SENSITIVE);
+        if (!raw) throw std::runtime_error("cannot read XLSX entry: " + name);
+        std::unique_ptr<void, decltype(&mz_free)> value(raw, &mz_free);
+        return std::string(static_cast<const char*>(value.get()), size);
+    }
+};
 
 template<typename F> int protect(F&& function) noexcept {
     try { function(); error.clear(); return 0; }
@@ -50,6 +108,17 @@ Z8_EXPORT int z8_xlsx_open(const char* path, void** result) noexcept {
         *result = nullptr;
         auto doc = std::make_unique<OpenXLSX::XLDocument>();
         doc->open(path);
+        *result = doc.release();
+    });
+}
+
+Z8_EXPORT int z8_xlsx_open_memory(const void* data, size_t size, void** result) noexcept {
+    return protect([&] {
+        if (!result) throw std::invalid_argument("missing workbook output");
+        *result = nullptr;
+        MemoryArchive archive(data, size);
+        auto doc = std::make_unique<OpenXLSX::XLDocument>(archive);
+        doc->open("memory.xlsx");
         *result = doc.release();
     });
 }

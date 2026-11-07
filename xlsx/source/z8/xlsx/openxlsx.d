@@ -7,6 +7,7 @@ import std.algorithm.searching : canFind;
 private extern(C) {
     const(char)* z8_xlsx_error();
     int z8_xlsx_open(const(char)*, void**);
+    int z8_xlsx_open_memory(const(void)*, size_t, void**);
     void z8_xlsx_close(void*);
     int z8_xlsx_sheet_count(void*, uint*);
     int z8_xlsx_sheet_name(void*, uint, char*, size_t, size_t*);
@@ -23,6 +24,10 @@ class Workbook {
     this(string path) {
         if (path.canFind('\0')) throw new Exception("workbook path contains NUL");
         check(z8_xlsx_open(path.toStringz, &handle));
+    }
+
+    this(const(ubyte)[] bytes) {
+        check(z8_xlsx_open_memory(bytes.ptr, bytes.length, &handle));
     }
 
     ~this() { close(); }

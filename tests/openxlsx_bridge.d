@@ -1,5 +1,6 @@
 import z8.xlsx.openxlsx : Workbook;
 import std.exception : assertThrown;
+import std.file : read;
 
 void main(string[] args) {
     assertThrown!Exception(new Workbook(args[1] ~ ".missing"));
@@ -15,4 +16,13 @@ void main(string[] args) {
     book.close();
     book.close();
     assertThrown!Exception(book.sheetCount());
+
+    auto bytes = cast(ubyte[])read(args[1]);
+    auto memoryBook = new Workbook(bytes);
+    bytes[] = 0; // The bridge retains its own archive data.
+    assert(memoryBook.sheetCount() == 2);
+    assert(memoryBook.cellString(0, 0, 0) == "Привет 😀 & text");
+    memoryBook.close();
+    assertThrown!Exception(new Workbook(cast(ubyte[])[]));
+    assertThrown!Exception(new Workbook(cast(ubyte[])[1, 2, 3]));
 }
