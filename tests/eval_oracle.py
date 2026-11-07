@@ -191,6 +191,12 @@ public class EvalOracle {
         for (String expression : new String[]{"filePath.file().toJson(filePath.file().parse('[]')) == '[]'", "filePath.file().toJson(filePath.file().parse(fileJson)).length() > 2", "filePath.file().toJson('x'.split(',')) == '[]'"})
             try { System.out.println(jsonEval.z8_evaluateBoolean(new string(expression)).get()); }
             catch (Exception error) { System.out.println("error"); }
+        for (String pattern : new String[]{"${'eval-binary-source.txt'.file().write('archive').exists()}", "${'x'.binary().zip('eval-binary-source.txt'.file()).unzip('eval-binary-output'.file())}", "${'eval-binary-output/eval-binary-source.txt'.file().read()}", "${'eval-binary-output'.file().delete(true)}", "${'eval-binary-source.txt'.file().delete()}"})
+            try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
+            catch (Exception error) { System.out.println("error"); }
+        for (String expression : new String[]{"'x'.binary().zip('a'.split('a')).length() > 0", "'x'.binary().zip('a,b'.split(',')) != nil", "'x'.binary().unzip('bad') == nil"})
+            try { System.out.println(jsonEval.z8_evaluateBoolean(new string(expression)).get()); }
+            catch (Exception error) { System.out.println("error"); }
     }
 }
 ''', encoding="utf-8")
@@ -403,6 +409,12 @@ void main() {
         try { writeln(jsonEval.m_evaluateText(pattern).to!string); }
         catch (Exception) { writeln("error"); }
     foreach (expression; ["filePath.file().toJson(filePath.file().parse('[]')) == '[]'"w, "filePath.file().toJson(filePath.file().parse(fileJson)).length() > 2"w, "filePath.file().toJson('x'.split(',')) == '[]'"w])
+        try { writeln(z8_optional_require(jsonEval.m_evaluateBoolean(expression))); }
+        catch (Exception) { writeln("error"); }
+    foreach (pattern; ["${'eval-binary-source.txt'.file().write('archive').exists()}"w, "${'x'.binary().zip('eval-binary-source.txt'.file()).unzip('eval-binary-output'.file())}"w, "${'eval-binary-output/eval-binary-source.txt'.file().read()}"w, "${'eval-binary-output'.file().delete(true)}"w, "${'eval-binary-source.txt'.file().delete()}"w])
+        try { writeln(jsonEval.m_evaluateText(pattern).to!string); }
+        catch (Exception) { writeln("error"); }
+    foreach (expression; ["'x'.binary().zip('a'.split('a')).length() > 0"w, "'x'.binary().zip('a,b'.split(',')) != nil"w, "'x'.binary().unzip('bad') == nil"w])
         try { writeln(z8_optional_require(jsonEval.m_evaluateBoolean(expression))); }
         catch (Exception) { writeln("error"); }
 }
