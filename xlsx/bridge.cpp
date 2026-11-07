@@ -329,6 +329,8 @@ Z8_EXPORT int z8_xlsx_clone_sheet(void* handle, unsigned sheet, const char* name
         // view if the source had none. Z8 also materializes workbookViewId.
         WorksheetXml clone(doc.workbook().worksheet(name));
         OpenXLSX::XMLNode root = clone.xmlDocument().document_element();
+        // XSSFWorkbook.cloneSheet drops pageSetup from the copy.
+        root.remove_child("pageSetup");
         auto views = root.child("sheetViews");
         if (views.empty()) {
             auto before = root.child("sheetFormatPr");
