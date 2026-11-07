@@ -628,7 +628,7 @@ public class %s extends Report {
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0"><v>99</v></c>', '')
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="2"><c r="C2"><v>77</v></c></row></sheetData>')
         if filename == "expanded-static":
-            book["xl/sharedStrings.xml"] = book["xl/sharedStrings.xml"].replace('${rows.item.title}', 'Static')
+            book["xl/sharedStrings.xml"] = book["xl/sharedStrings.xml"].replace('${rows.item.title}', 'Static _x005F_x005F_x0041_')
         if filename == "expanded-formula":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0"><v>99</v></c>', '<c r="C1" s="0"><f>$A$1+1</f><v>2</v></c>')
         if filename == "expanded-shared-formula":
@@ -830,7 +830,7 @@ class QueryExecutor : IZ8QueryExecutor {
 void main(string[] args) {
     z8_resources_set_application_root(args[1]); z8_file_set_roots(args[2]);
     auto request = new Z8ApplicationRequest();
-    request.parameters.z8_add("foo"w, "данные 😀 _x0041_"w);
+    request.parameters.z8_add("foo"w, "данные 😀 _x0041_ _x005F_x0041_"w);
     request.parameters.z8_add("nested"w, "${1+2}"w);
     auto previousRequest = z8_application_set_request(request);
     scope(exit) z8_application_set_request(previousRequest);
@@ -1227,7 +1227,7 @@ void main(string[] args) {
             shared = ET.fromstring(archive.read("xl/sharedStrings.xml")).findall("x:si", namespace)
             cells = sheet.findall("x:sheetData/x:row/x:c", namespace)
             values = [(shared[int(cell.find("x:v", namespace).text)].find("x:t", namespace).text or "") for cell in cells[:4]]
-            assert values == ["данные 😀 _x0041_", "Value: данные 😀 _x0041_!", "", ""], values
+            assert values == ["данные 😀 A _x0041_", "Value: данные 😀 A _x0041_!", "", ""], values
             assert float(cells[4].find("x:v", namespace).text) == 7
         with zipfile.ZipFile(working / "expanded-formula.xlsx") as archive:
             sheet = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
@@ -1346,7 +1346,7 @@ class PoiRangeOracle {
   public static void main(String[] args) throws Exception {
     ServerConfig.load(args[2]);
     Request request = new Request(new Session("test"));
-    request.getParameters().put(new org.zenframework.z8.server.types.string("foo"), new org.zenframework.z8.server.types.string("данные 😀 _x0041_"));
+    request.getParameters().put(new org.zenframework.z8.server.types.string("foo"), new org.zenframework.z8.server.types.string("данные 😀 _x0041_ _x005F_x0041_"));
     request.getParameters().put(new org.zenframework.z8.server.types.string("nested"), new org.zenframework.z8.server.types.string("${1+2}"));
     ApplicationServer.setRequest(request);
     try (XSSFWorkbook original = new XSSFWorkbook(new FileInputStream(args[0]));

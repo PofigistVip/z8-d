@@ -409,10 +409,13 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
             }
         }
         foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells) {
-            if (cell.hasFormula || (cell.kind != "str"w && cell.kind != "inlineStr"w) ||
-                cell.value.indexOf("${"w) < 0) continue;
+            if (cell.hasFormula || (cell.kind != "str"w && cell.kind != "inlineStr"w)) continue;
             if (rowNumber < block.firstRow || rowNumber > block.lastRow ||
                 columnNumber < block.firstColumn || columnNumber > block.lastColumn) continue;
+            // Even a literal string is assigned again by Java's range visitor.
+            // That assignment matters when POI's next read decodes an escape.
+            if (cell.value.indexOf("${"w) < 0 &&
+                (cell.kind == "inlineStr"w || z8_poi_decode_text(cell.value) == cell.value)) continue;
             z8_poi_report_evaluate_cell(evalState, workbook, cell, sheet, rowNumber + (horizontal ? 0 : offset),
                                         columnNumber + (horizontal ? offset : 0), edits, iteration != 0);
         }
@@ -509,7 +512,8 @@ private void z8_poi_report_apply_root(Z8Object report, Z8PoiWorkbook workbook, i
     auto positions = values.keys; sort(positions);
     foreach (position; positions) {
         auto cell = values[position];
-        if (cell.value.indexOf("${"w) < 0) continue;
+        if (cell.value.indexOf("${"w) < 0 &&
+            (cell.kind == "inlineStr"w || z8_poi_decode_text(cell.value) == cell.value)) continue;
         z8_poi_report_evaluate_cell(state, workbook, cell, sheet, cast(long)(position >> 14),
                                     cast(long)(position & 16383), edits);
     }
