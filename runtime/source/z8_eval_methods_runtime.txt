@@ -337,8 +337,23 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
         if (name == "setName"w && arguments.length == 1 && arguments[0].primary !is null && arguments[0].primary.kind == Z8PrimaryKind.text)
             return Z8EvalValue(true, z8_primary_box(z8_binary_set_name(binary, arguments[0].primary.textValue)), null, null);
     }
-    if (object.primary !is null && object.primary.kind == Z8PrimaryKind.file && !arguments.length) {
+    if (object.primary !is null && object.primary.kind == Z8PrimaryKind.file) {
         auto file = object.primary.fileValue;
+        if (arguments.length == 1 && ["write"w, "append"w].canFind(name)) {
+            auto content = arguments[0].primary;
+            if (content is null) throw new Exception("invalid Eval file content");
+            Z8File result;
+            if (content.kind == Z8PrimaryKind.text)
+                result = name == "write"w ? z8_file_write(file, content.textValue) : z8_file_append(file, content.textValue);
+            else if (content.kind == Z8PrimaryKind.binary)
+                result = name == "write"w ? z8_file_write(file, content.binaryValue) : z8_file_append(file, content.binaryValue);
+            else throw new Exception("invalid Eval file content");
+            return Z8EvalValue(true, z8_primary_box(result), null, null);
+        }
+        if (name == "delete"w && arguments.length == 1 && arguments[0].primary !is null && arguments[0].primary.kind == Z8PrimaryKind.boolean) {
+            z8_file_delete(file, arguments[0].primary.booleanValue); return Z8EvalValue(true);
+        }
+        if (arguments.length) throw new Exception("unsupported Eval file method");
         if (name == "fileName"w) return Z8EvalValue(true, z8_primary_box(z8_string_new(z8_file_fileName(file))), null, null);
         if (name == "baseName"w) return Z8EvalValue(true, z8_primary_box(z8_string_new(z8_file_baseName_instance(file))), null, null);
         if (name == "extension"w) return Z8EvalValue(true, z8_primary_box(z8_string_new(z8_file_extension_instance(file))), null, null);
@@ -350,6 +365,8 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
         }
         if (name == "parent"w) return Z8EvalValue(true, z8_primary_box(z8_file_parent(file)), null, null);
         if (name == "lastModified"w) return Z8EvalValue(true, z8_primary_box(z8_file_lastModified(file)), null, null);
+        if (name == "read"w) return Z8EvalValue(true, z8_primary_box(z8_string_new(z8_file_read(file))), null, null);
+        if (name == "delete"w) { z8_file_delete(file); return Z8EvalValue(true); }
         if (name == "isEmpty"w) return Z8EvalValue(true, z8_primary_box(z8_file_isEmpty(file)), null, null);
         if (name == "exists"w) return Z8EvalValue(true, z8_primary_box(z8_file_exists(file)), null, null);
         if (name == "isFolder"w) return Z8EvalValue(true, z8_primary_box(z8_file_isFolder(file)), null, null);
