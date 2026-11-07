@@ -26,19 +26,6 @@ private void z8_application_dispatch_query_report_target(wstring className, Z8Ob
     if (format !is null) state.format = format;
     if (name !is null) state.name = name;
     auto id = params.z8_get("recordId"w);
-    auto result = z8_nonnull(z8_report_run(report, id is null ? null : z8_guid_parse(id)));
-    // A report's local file is not served directly by the HTTP host. Publish a
-    // session-bound copy, as for other generated downloads.
-    wstring existingName;
-    auto input = z8_temporary_archive_get(z8_string_or_empty(result.path), existingName);
-    if (input is null) input = z8_file_to_binary(result);
-    scope(exit) z8_binary_close(input);
-    auto bytes = z8_binary_snapshot(input, z8_temporary_archives_bytes_limit);
-    auto published = new Z8File();
-    published.id = null;
-    published.name = existingName is null ? z8_file_name(z8_string_required(result.name)) : existingName;
-    published.path = z8_temporary_archive_store(bytes, published.name);
-    published.size = z8_optional_wrap(cast(long)bytes.length);
-    published.time = result.time;
-    z8_nonnull(request.monitor).print(published);
+    auto result = z8_report_run(report, id is null ? null : z8_guid_parse(id));
+    z8_nonnull(request.monitor).print(z8_report_publish(result));
 }

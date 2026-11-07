@@ -20,7 +20,10 @@ with tempfile.TemporaryDirectory() as directory, runtime_library() as runtime:
 import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.application.Application;
 public class CustomReport extends Report {
-    virtual protected file execute(guid recordId) { file result = format + "-" + recordId.toString() + "-" + Application.requestParameters()["clientContext"]; return result; }
+    virtual protected file execute(guid recordId) {
+        file result = format + "-" + recordId.toString() + "-" + Application.requestParameters()["clientContext"];
+        result.write("report content"); return result;
+    }
 }
 ''', encoding="utf-8")
     (source / "ReportActionTable.bl").write_text('''
@@ -40,8 +43,28 @@ import org.zenframework.z8.base.form.action.ActionReport;
 import z8.runtime;
 import std.json : parseJSON;
 import std.conv : to;
+import std.string : startsWith;
 import z8gen.ReportActionTable;
-void main() {
+class Database : IZ8DatabaseConnection, IZ8DatabaseSchema {
+    void beginTransaction() {} void commit() {} void rollback() {} void execute(wstring sql) {}
+    void call(wstring name, Z8Array!Z8Primary args) {} void flush() {}
+    IZ8QueryExecutor queryExecutor(Z8Object query) { return null; }
+    wstring databaseSchema() { return "test"w; }
+}
+void checkFile(Z8File file, wstring name, Z8ApplicationSession session) {
+    assert(file.id is null && file.name == name && file.path.startsWith("storage/z8-generated/"w));
+    auto download = new Z8ApplicationRequest(); download.session = session;
+    auto previous = z8_application_set_request(download); scope(exit) z8_application_set_request(previous);
+    z8_application_dispatch_file_download("/"w ~ file.path);
+    auto data = z8_application_response_binary(download); scope(exit) z8_binary_close(data);
+    assert(cast(string)z8_binary_snapshot(data, 1024) == "report content");
+    download.session = new Z8ApplicationSession("different"w, session.user, session.system);
+    bool denied; try { z8_application_dispatch_file_download("/"w ~ file.path); } catch (Exception) { denied = true; }
+    assert(denied);
+}
+void main(string[] args) {
+    z8_file_set_roots(args[1]);
+    auto previousDb = z8_connection_set_current(new Database()); scope(exit) z8_connection_set_current(previousDb);
     auto sample = z8_new!Z8p_5265706F7274416374696F6E5461626C65(); z8_nonnull(sample);
     assert(z8_optional_require(sample.m_parameterCount()) == 1);
     auto user = new Z8UserData(); user.id = z8_guid_create(1);
@@ -66,8 +89,8 @@ void main() {
     z8_application_dispatch_request(); z8_application_finish_response(request, monitor);
     auto response = parseJSON(z8_application_response_text(request).to!string);
     assert(response["success"].boolean && monitor.files().length == 2);
-    assert(z8_file_path(monitor.files()[0]) == "xls-00000000-0000-0000-0000-000000000011-custom"w);
-    assert(z8_file_path(monitor.files()[1]) == "xls-00000000-0000-0000-0000-000000000012-custom"w);
+    checkFile(monitor.files()[0], "xls-00000000-0000-0000-0000-000000000011-custom"w, session);
+    checkFile(monitor.files()[1], "xls-00000000-0000-0000-0000-000000000012-custom"w, session);
     request = new Z8ApplicationRequest(); request.session = session; monitor = new Z8RequestMonitor(); request.monitor = monitor;
     request.parameters.z8_add("request"w, "ReportActionTable"w); request.parameters.z8_add("action"w, "action"w);
     request.parameters.z8_add("name"w, "exportAction"w);
@@ -75,7 +98,8 @@ void main() {
     request.parameters.z8_add("records"w, `["00000000-0000-0000-0000-000000000011"]`w);
     z8_application_set_request(request); z8_application_start_response(request, "ReportActionTable"w);
     z8_application_dispatch_request(); z8_application_finish_response(request, monitor);
-    assert(monitor.files().length == 1 && z8_file_path(monitor.files()[0]) == "pdf-00000000-0000-0000-0000-000000000011-second"w);
+    assert(monitor.files().length == 1);
+    checkFile(monitor.files()[0], "pdf-00000000-0000-0000-0000-000000000011-second"w, session);
 }
 ''', encoding="utf-8")
     executable = temp / ("action-report.exe" if os.name == "nt" else "action-report")
@@ -84,5 +108,5 @@ void main() {
     response = temp / "dmd.rsp"
     response.write_text("\n".join('"' + arg.replace('\\', '/') + '"' for arg in args), encoding="utf-8")
     subprocess.run(["dmd", "@" + str(response)], cwd=temp, check=True)
-    subprocess.run([str(executable)], cwd=temp, check=True)
+    subprocess.run([str(executable), str(temp)], cwd=temp, check=True)
 print("ActionReport metadata, format and selected records verified")

@@ -64,7 +64,7 @@ private void z8_action_default_execute_one(Z8Object self, Z8Guid record, Z8Objec
     auto report = z8_nonnull(state.report);
     auto parameter = z8_action_lookup_parameter(state, "format"w);
     z8_report_state(report).format = parameter is null ? z8_report_pdf : z8_parameter_cast!wstring(parameter);
-    z8_application_print(z8_report_run(report, record));
+    z8_application_print(z8_report_publish(z8_report_run(report, record)));
 }
 private void z8_action_default_execute_many(Z8Object self, Z8Array!Z8Guid records, Z8Object context, Z8Array!Z8Guid selected, Z8Object query) {
     z8_nonnull(self); z8_nonnull(records);
