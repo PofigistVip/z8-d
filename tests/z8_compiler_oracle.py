@@ -230,6 +230,13 @@ with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
         for expression, accepted in (("null", True), ("other", True), ("'65, 66'", False)):
             declaration = 'file destination; file other; encoding charset; destination.' + method + '(' + expression + ', charset);'
             name_cases.append((accepted, {"NameA": 'import org.zenframework.z8.lang.encoding; public class NameA { static void f() { ' + declaration + ' } }'}))
+    for declaration, accepted in (('binary result = binary.zip("folder");', True),
+                                  ("file source; binary result = binary.zip(source);", True),
+                                  ("binary[] source = {'65, 66'}; binary result = binary.zip(source);", True),
+                                  ("binary result = binary.zip(null);", False),
+                                  ("binary result = binary.zip(1);", False)):
+        name_cases.append((accepted, {"NameA": 'public class NameA { static void f() { ' + declaration + ' } }'}))
+    name_cases.append((True, {"NameA": 'public class NameA { public operator file() { file value = "folder"; return value; } static void f() { binary result = binary.zip(new NameA); } }'}))
     for case_index, (accepted, files) in enumerate(name_cases):
         names_project = temp / ("name-attribute-project-" + str(case_index))
         names_source = names_project / "src" / "bl"

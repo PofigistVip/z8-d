@@ -1308,7 +1308,8 @@ class Checker {
                 if (e.left.kind == ExprKind.variable && !isLexicallyBound(e.left.token.text) && e.left.token.text == "binary") {
                     if (e.token.text != "zip" || e.arguments.length != 1) fail("unsupported static binary method", e.token);
                     auto source = typeOf(e.arguments[0]);
-                    auto expectedSource = source == ValueType.fileType ? ValueType.fileType : ValueType.binaryArray;
+                    if (source == ValueType.nullType) fail("ambiguous binary.zip argument", e.arguments[0].token);
+                    auto expectedSource = source == ValueType.binaryArray ? ValueType.binaryArray : ValueType.fileType;
                     checkArguments(e, [expectedSource]); e.builtinCall = "z8_binary_zip"; return ValueType.binaryType;
                 }
                 if (e.left.kind == ExprKind.variable && !isLexicallyBound(e.left.token.text) && e.left.token.text == "geometry") {
