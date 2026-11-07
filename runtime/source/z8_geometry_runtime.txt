@@ -117,7 +117,7 @@ private Z8Geometry z8_geometry_compound(Z8Array!Z8Geometry values, int shape) {
         result.hasChildren = true;
         result.childSource = values;
         result.children = values.items;
-        if (result.children.length) result.srs = cast(int)z8_geometry_srs(result.children[0]);
+        if (values.z8_size()) result.srs = cast(int)z8_geometry_srs(values.z8_get(0));
     }
     return result;
 }
