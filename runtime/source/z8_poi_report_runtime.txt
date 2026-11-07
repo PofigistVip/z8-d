@@ -9,10 +9,10 @@ private struct Z8PoiColumn {
 private struct Z8PoiReportBlock { long firstRow, lastRow, firstColumn, lastColumn; }
 // OpenXLSX may rewrite XML parts on save. Keep the compatible editor for
 // archives whose encoding or ZIP comment it would otherwise change.
-private bool z8_poi_report_openxlsx_safe(ZipArchive archive, size_t sheets) {
+private bool z8_poi_report_openxlsx_safe(ZipArchive archive, size_t sheets, bool allowMultiple = false) {
     import std.algorithm.searching : endsWith;
     import std.string : toLower;
-    if (sheets != 1 || archive.comment.length) return false;
+    if ((!allowMultiple && sheets != 1) || archive.comment.length) return false;
     foreach (name, member; archive.directory) {
         if (!name.toLower().endsWith(".xml")) continue;
         try archive.expand(member);
@@ -664,6 +664,36 @@ private void z8_poi_report_apply_ranges(Z8Object report, Z8Object[] ranges, Z8Po
             if (copy.targetColumn > root.lastColumn) root.lastColumn = copy.targetColumn;
         }
         z8_poi_report_apply_root(report, workbook, renameSheet, root, copies, removals, edits);
+        return;
+    }
+    // A Java PoiReport has a synthetic root per sheet. Process each sheet
+    // independently so its parent pass cannot read edits from another sheet.
+    Z8Object[][] bySheet = new Z8Object[][](workbook.sheets.length);
+    size_t sheetCount;
+    foreach (range; ranges) {
+        range = z8_nonnull(range);
+        auto number = range.z8_get_attribute("sheet"w);
+        auto index = number is null ? 0 : number.to!int;
+        if (index < 0 || index >= workbook.sheets.length) throw new Exception("invalid POI report sheet");
+        if (!bySheet[index].length) ++sheetCount;
+        bySheet[index] ~= range;
+    }
+    if (sheetCount > 1) {
+        foreach (index, group; bySheet) {
+            if (!group.length) continue;
+            // Java iterates integer sheet keys using a HashMap. Restrict the
+            // supported indices to the range whose order is always ascending.
+            if (index >= 16) throw new Exception("POI report sheet ordering is not implemented");
+            foreach (range; group) if (range.z8_get_attribute("sheetName"w) !is null)
+                throw new Exception("multiple-sheet POI report renaming is not implemented");
+        }
+        foreach (index, group; bySheet) {
+            if (!group.length) continue;
+            int ignoredSheet; wstring ignoredName; Z8PoiCellEdit[] sheetEdits; Z8PoiCellCopy[] sheetCopies;
+            Z8PoiMergedRegion[] sheetMerges; Z8PoiCellRemoval[] sheetRemovals;
+            z8_poi_report_apply_ranges(report, group, workbook, ignoredSheet, ignoredName, sheetEdits, sheetCopies, sheetMerges, sheetRemovals);
+            edits ~= sheetEdits; copies ~= sheetCopies; addedMerges ~= sheetMerges; removals ~= sheetRemovals;
+        }
         return;
     }
     Z8PoiReportEntry[] entries;

@@ -107,7 +107,7 @@ private Z8File z8_report_poi_run(Z8Object report, Z8ReportState state) {
             auto writer = cast(IZ8PoiReportWriter)provider;
             if (writer is null) throw new Exception("POI report expressions require the OpenXLSX provider");
             import std.zip : ZipArchive;
-            if (!z8_poi_report_openxlsx_safe(new ZipArchive(bytes.dup), workbook.sheets.length))
+            if (!z8_poi_report_openxlsx_safe(new ZipArchive(bytes.dup), workbook.sheets.length, true))
                 throw new Exception("POI report expressions are unsupported for this workbook layout");
             if (copies.length) {
                 auto expander = cast(IZ8PoiReportExpander)provider;

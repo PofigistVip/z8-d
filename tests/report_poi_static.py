@@ -122,6 +122,9 @@ public class StaticReportProbe {
     public static file expandedHorizontalHeader() { ExpandedHorizontalHeaderReport report; return report.run(guid.Null); }
     public static file expandedSideConflict() { ExpandedSideConflictReport report; return report.run(guid.Null); }
     public static file expandedHorizontalSideConflict() { ExpandedHorizontalSideConflictReport report; return report.run(guid.Null); }
+    public static file multipleSheets() { MultipleSheetReport report; return report.run(guid.Null); }
+    public static file multipleSheetsRename() { MultipleSheetRenameReport report; return report.run(guid.Null); }
+    public static int orderedCount() { return OrderedRows.sequence; }
     public static file emptyFooter() { EmptyFooterReport report; return report.run(guid.Null); }
     public static file emptyHorizontalFooter() { EmptyHorizontalFooterReport report; return report.run(guid.Null); }
     public static file emptyMultiFooter() { EmptyMultiFooterReport report; return report.run(guid.Null); }
@@ -287,6 +290,19 @@ public class %s extends Report {
     first.source = left; second.source = right; ranges = {second, first};
     virtual protected void prepare(guid recordId) { OrderedRows.sequence = 0; }
 }''' % (class_name, template, left_bound, right_bound), encoding="utf-8")
+    (source / "MultipleSheetReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
+import org.zenframework.z8.base.form.report.Range;
+public class MultipleSheetReport extends Report {
+    engine = Report.POI; template = "multi-sheet";
+    OrderedRows left; OrderedRows right; objects = {left, right};
+    [sheet "0"] [address "A1"] [boundaries "A1"] Range first;
+    [sheet "1"] [address "A1"] [boundaries "A1"] Range second;
+    first.source = left; second.source = right; ranges = {second, first};
+    virtual protected void prepare(guid recordId) { OrderedRows.sequence = 0; }
+}''', encoding="utf-8")
+    (source / "MultipleSheetRenameReport.bl").write_text(
+        (source / "MultipleSheetReport.bl").read_text(encoding="utf-8")
+        .replace("MultipleSheetReport", "MultipleSheetRenameReport").replace('[sheet "1"]', '[sheet "1"] [sheetName "Renamed"]'), encoding="utf-8")
     (source / "MissingBoundariesReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 public class MissingBoundariesReport extends Report {
@@ -644,6 +660,20 @@ public class %s extends Report {
         with zipfile.ZipFile(application / ("reports/" + filename + ".xlsx"), "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for entry_name, content in book.items():
                 archive.writestr(entry_name, content)
+    multi_sheet = dict(parameters)
+    for name in ("xl/workbook.xml", "xl/_rels/workbook.xml.rels", "[Content_Types].xml"):
+        if name == "xl/workbook.xml": multi_sheet[name] = multiple[name].replace('r:id="rId2"', 'r:id="rId3"')
+    multi_sheet["xl/_rels/workbook.xml.rels"] = multi_sheet["xl/_rels/workbook.xml.rels"].replace(
+        '</Relationships>', '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/></Relationships>')
+    multi_sheet["[Content_Types].xml"] = multi_sheet["[Content_Types].xml"].replace(
+        '</Types>', '<Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>')
+    multi_sheet["xl/sharedStrings.xml"] = multi["xl/sharedStrings.xml"]
+    for index in range(2):
+        multi_sheet["xl/worksheets/sheet%d.xml" % (index + 1)] = original_sheet.replace(
+            '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>', '<c r="A1" t="s"><v>%d</v></c>' % index)
+    with zipfile.ZipFile(application / "reports/multi-sheet.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry_name, content in multi_sheet.items():
+            archive.writestr(entry_name, content)
     expanded = dict(parameters)
     expanded["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="3" uniqueCount="3"><si><t>${rows.item.amount}</t></si><si><t>${rows.item.title}</t></si><si><t>${rows.index}</t></si></sst>'''
     expanded["xl/worksheets/sheet1.xml"] = original_sheet.replace(
@@ -1082,7 +1112,11 @@ void main(string[] args) {
     bool expandedHorizontalMultiSide; try { P.m_expandedHorizontalMultiSide(); } catch (Exception) { expandedHorizontalMultiSide = true; } assert(expandedHorizontalMultiSide);
     bool emptySideFooter; try { P.m_emptySideFooter(); } catch (Exception) { emptySideFooter = true; } assert(emptySideFooter);
     bool emptyHorizontalSideFooter; try { P.m_emptyHorizontalSideFooter(); } catch (Exception) { emptyHorizontalSideFooter = true; } assert(emptyHorizontalSideFooter);
-    assert(database.begins == 108 && database.rollbacks == 108);
+    bool multipleSheets; try { P.m_multipleSheets(); } catch (Exception) { multipleSheets = true; } assert(multipleSheets);
+    bool multipleSheetsRename; try { P.m_multipleSheetsRename(); } catch (Exception e) {
+        multipleSheetsRename = e.msg == "multiple-sheet POI report renaming is not implemented";
+    } assert(multipleSheetsRename && z8_optional_require(P.m_orderedCount()) == 0);
+    assert(database.begins == 110 && database.rollbacks == 110);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -1286,8 +1320,11 @@ void main(string[] args) {
         contents = contents.replace(
             'bool emptyHorizontalSideFooter; try { P.m_emptyHorizontalSideFooter(); } catch (Exception) { emptyHorizontalSideFooter = true; } assert(emptyHorizontalSideFooter);',
             'auto emptyHorizontalSideFooter = P.m_emptyHorizontalSideFooter(); copy(z8_file_resolve_path(emptyHorizontalSideFooter), buildPath(args[2], "empty-horizontal-side-footer.xlsx"));')
-        contents = contents.replace('assert(database.begins == 108 && database.rollbacks == 108);',
-            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 36); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 37); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 38); assert(database.begins == 108 && database.rollbacks == 108);')
+        contents = contents.replace(
+            'bool multipleSheets; try { P.m_multipleSheets(); } catch (Exception) { multipleSheets = true; } assert(multipleSheets);',
+            'auto multipleSheets = P.m_multipleSheets(); copy(z8_file_resolve_path(multipleSheets), buildPath(args[2], "multi-sheet.xlsx"));')
+        contents = contents.replace('assert(database.begins == 110 && database.rollbacks == 110);',
+            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 36); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 37); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 38); assert(database.begins == 110 && database.rollbacks == 110);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1522,7 +1559,8 @@ class PoiRangeOracle {
       boolean jsonCase = emptyFooterCase || jsonEmptyCase || jsonInlineCase || (expandedCase && !expandedCustomCase) || (args.length > 3 && "json".equals(args[3]));
       boolean queryCase = args.length > 3 && "query".equals(args[3]);
       boolean outsideCase = args.length > 3 && "outside".equals(args[3]);
-      boolean multipleCase = outsideCase || (args.length > 3 && "multiple".equals(args[3]));
+      boolean multipleSheetCase = args.length > 3 && "multi-sheet".equals(args[3]);
+      boolean multipleCase = multipleSheetCase || outsideCase || (args.length > 3 && "multiple".equals(args[3]));
       DataSource customSource = null;
       DataSource[] orderedSources = new DataSource[2];
       if (contextCase) {
@@ -1632,14 +1670,25 @@ class PoiRangeOracle {
           .setBlock(emptySideFooterCase ? "A2:D2" : emptyHorizontalSideFooterCase ? "B1:C2" : emptyVerticalFooterCase ? "A1:D1" : headerFooterCase ? "A2:D2" : horizontalHeaderCase ? "B1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
           .setBoundaries(emptySideFooterCase ? "A1:E3" : emptyHorizontalSideFooterCase ? "A1:D3" : multiSideCase ? "A1:E4" : horizontalMultiSideCase ? "A1:G3" : emptyMultiFooterCase ? "A1:D4" : emptyHorizontalMultiFooterCase ? "A1:G2" : emptyVerticalFooterCase ? "A1:D2" : emptyHorizontalFooterCase ? "A1:C2" : headerFooterCase ? "A1:E3" : horizontalHeaderCase ? "A1:D3" : multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase ? "A1:D1" : fieldCase || jsonCase || queryCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       if (horizontalCase) child.setAxis(1);
-      if (multipleCase) {
+      if (multipleSheetCase) {
+        report.addRange(1, new Range().setSource(orderedSources[1]).setBlock("A1").setBoundaries("A1"));
+        report.addRange(0, new Range().setSource(orderedSources[0]).setBlock("A1").setBoundaries("A1"));
+      } else if (multipleCase) {
         report.addRange(0, new Range().setSource(orderedSources[1]).setBlock("C1").setBoundaries("C1"));
         report.addRange(0, new Range().setSource(orderedSources[0]).setBlock("A1").setBoundaries("A1"));
       } else report.addRange(0, child);
       if (args.length > 3 && "rename".equals(args[3])) original.setSheetName(0, "Отчёт \\uD83D\\uDE00");
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
-      report.getRange(0).apply(modifier); modifier.close();
-      if (emptyFooterCase) {
+      report.getRange(0).apply(modifier);
+      if (multipleSheetCase) report.getRange(1).apply(modifier.setSheet(1));
+      modifier.close();
+      if (multipleSheetCase) {
+        for (int sheet = 0; sheet < 2; ++sheet) {
+          double expected = original.getSheetAt(sheet).getRow(0).getCell(0).getNumericCellValue();
+          double result = actual.getSheetAt(sheet).getRow(0).getCell(0).getNumericCellValue();
+          if (expected != sheet + 1 || expected != result) throw new AssertionError("sheet range value differs at " + sheet);
+        }
+      } else if (emptyFooterCase) {
         for (int row = 0; row < (emptyMultiFooterCase ? 4 : emptySideFooterCase || emptyHorizontalSideFooterCase ? 3 : 2); ++row)
           for (int col = 0; col < (emptySideFooterCase ? 5 : emptyHorizontalSideFooterCase ? 4 : emptyVerticalFooterCase ? 4 : emptyHorizontalMultiFooterCase ? 7 : 3); ++col) {
           org.apache.poi.ss.usermodel.Row expectedRow = original.getSheetAt(0).getRow(row), actualRow = actual.getSheetAt(0).getRow(row);
@@ -1806,6 +1855,10 @@ class PoiRangeOracle {
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/multi-range.xlsx"), str(working / "multi-range.xlsx"), str(config), "multiple"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/multi-sheet.xlsx"), str(working / "multi-sheet.xlsx"), str(config), "multi-sheet"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
