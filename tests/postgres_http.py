@@ -1082,6 +1082,19 @@ int main(string[] args) {
                 result = request(**nested_preview)
                 assert result["success"], result
                 assert download("/" + quote(result["source"], safe="/"), "full", None)[2].startswith(b"%PDF-")
+                parent_id = "00000000-0000-0000-0000-000000000001"
+                result = request(action="update", data=json.dumps([{"recordId": parent_id, "nestedLink": nested_target}]))
+                assert result["success"], result
+                parent_preview = dict(action="preview", field="nested.documents", recordId=parent_id)
+                result = request(session="relation-denied", **parent_preview)
+                assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+                result = request(session="field-denied", **parent_preview)
+                assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result
+                result = request(**parent_preview)
+                assert result["success"], result
+                assert download("/" + quote(result["source"], safe="/"), "full", None)[2].startswith(b"%PDF-")
+                result = request(action="update", data=json.dumps([{"recordId": parent_id, "nestedLink": "00000000-0000-0000-0000-000000000000"}]))
+                assert result["success"], result
             result = request(session="relation-denied", action="detach", link="nestedLink", field="nested.documents",
                              fields='["nested.documents"]', recordId=nested_target, data=json.dumps([nested_file["id"]]))
             assert not result["success"] and "access denied" in result["info"]["messages"][-1]["text"], result

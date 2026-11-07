@@ -16,13 +16,19 @@ private void z8_application_dispatch_query_preview_target(wstring className, Z8O
     if (fieldId is null || !fieldId.length) throw new Exception("preview field is required");
     auto field = z8_query_find_field_id(query, fieldId);
     if (!z8_application_query_field_readable(query, field, privileges)) throw new Exception("preview field access denied");
-    if (field.z8_get_owner() !is query || !["file"w, "attachments"w, "string"w, "text"w].canFind(z8_field_type_id(field)))
-        throw new Exception("preview requires a file field owned by the query");
+    if (!["file"w, "attachments"w, "string"w, "text"w].canFind(z8_field_type_id(field)))
+        throw new Exception("preview requires a file field");
     auto record = params.z8_get("recordId"w);
     if (record is null || !record.length) throw new Exception("preview record ID is required");
     auto id = z8_guid_parse(record);
     if (id is null || id == z8_guid_zero()) throw new Exception("preview record ID is required");
-    auto files = z8_attachment_read_current(field, id);
+    Z8Array!Z8File files;
+    {
+        auto saved = new Z8QuerySavedState(query, [field]); scope(exit) saved.restore();
+        auto fields = new Z8ObjectArray!Z8Object(); fields.z8_add(field);
+        if (!z8_optional_require(z8_query_read_record(query, id, fields))) throw new Exception("preview record was not found");
+        files = z8_file_parse(z8_string_or_empty(z8_primary_cast!wstring(z8_field_primary(field))));
+    }
     if (!files.z8_size()) throw new Exception("preview attachment was not found");
     if (files.z8_size() > 1000) throw new Exception("too many preview attachments");
     string temporary;
