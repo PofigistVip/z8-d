@@ -261,3 +261,9 @@ z8_primary_key_map_view(V)(Z8CovariantMap!(wstring, V, Z8StringValueMap!Object, 
     if (values is null) return null;
     return new Z8CovariantMap!(Z8Primary, V, Z8PrimaryKeyMap!Object, false, true)(z8_primary_key_map_view(values.data));
 }
+
+Z8PrimaryKeyMap!(Z8Array!Z8Primary) z8_primary_nested_map_view(V)(
+    Z8CovariantMap!(Z8Primary, Z8ObjectArray!V, Z8PrimaryKeyMap!Object, false, true) values) if (is(V : Z8Object)) {
+    if (values is null) return null;
+    auto result = new Z8PrimaryKeyMap!(Z8Array!Z8Primary)(); result.nestedData = values.data; return result;
+}

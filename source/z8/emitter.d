@@ -253,7 +253,7 @@ private string emitExprSingle(Expression e) {
         ValueType[] savedBinaryConversions;
         ValueType[] savedStringConversions;
         bool[] savedPromotions;
-        bool[] savedFileConversions, savedExceptionConversions, savedExceptionObjectConversions, savedPrimaryArrayConversions, savedPrimaryMapConversions, savedPrimaryMapKeyConversions, savedDateConversions, savedSqlBoolConversions, savedSqlIntConversions, savedSqlDecimalConversions, savedSqlIntDecimalConversions, savedSqlStringConversions;
+        bool[] savedFileConversions, savedExceptionConversions, savedExceptionObjectConversions, savedPrimaryArrayConversions, savedPrimaryMapConversions, savedPrimaryMapKeyConversions, savedPrimaryNestedMapConversions, savedDateConversions, savedSqlBoolConversions, savedSqlIntConversions, savedSqlDecimalConversions, savedSqlIntDecimalConversions, savedSqlStringConversions;
         Method[] savedUserConversions;
         ValueType[] savedCollectionTypes;
         Program[] savedCollectionClasses;
@@ -271,6 +271,7 @@ private string emitExprSingle(Expression e) {
             savedPrimaryArrayConversions ~= argument.convertScalarPrimaryArray;
             savedPrimaryMapConversions ~= argument.convertPrimaryMapValue;
             savedPrimaryMapKeyConversions ~= argument.convertPrimaryMapKey;
+            savedPrimaryNestedMapConversions ~= argument.convertPrimaryNestedMap;
             savedDateConversions ~= argument.convertToDate;
             savedSqlBoolConversions ~= argument.convertToSqlBool;
             savedSqlIntConversions ~= argument.convertToSqlInt;
@@ -286,7 +287,7 @@ private string emitExprSingle(Expression e) {
             argument.optionalRequired = required; argument.promoteToDecimal = required && promote;
             argument.convertToString = required ? convert : ValueType.voidType;
             argument.convertToBinary = ValueType.voidType;
-            argument.makeFile = false; argument.makeException = false; argument.convertExceptionObject = false; argument.convertScalarPrimaryArray = false; argument.convertPrimaryMapValue = false; argument.convertPrimaryMapKey = false;
+            argument.makeFile = false; argument.makeException = false; argument.convertExceptionObject = false; argument.convertScalarPrimaryArray = false; argument.convertPrimaryMapValue = false; argument.convertPrimaryMapKey = false; argument.convertPrimaryNestedMap = false;
             argument.convertToDate = required ? savedDateConversions[$ - 1] : false;
             argument.convertToSqlBool = required && savedSqlBoolConversions[$ - 1];
             argument.convertToSqlInt = required && savedSqlIntConversions[$ - 1];
@@ -312,6 +313,7 @@ private string emitExprSingle(Expression e) {
             argument.convertScalarPrimaryArray = savedPrimaryArrayConversions[i];
             argument.convertPrimaryMapValue = savedPrimaryMapConversions[i];
             argument.convertPrimaryMapKey = savedPrimaryMapKeyConversions[i];
+            argument.convertPrimaryNestedMap = savedPrimaryNestedMapConversions[i];
             argument.convertToDate = savedDateConversions[i];
             argument.convertToSqlBool = savedSqlBoolConversions[i];
             argument.convertToSqlInt = savedSqlIntConversions[i];
@@ -392,6 +394,7 @@ private string emitExprSingle(Expression e) {
     if (e.makeException) value = "new Z8Exception(z8_to_utf8(z8_string_required(" ~ value ~ ")))";
     if (e.convertExceptionObject) value = "z8_exception_from_object(" ~ value ~ ")";
     if (e.convertScalarPrimaryArray) value = "z8_primary_array_view(" ~ value ~ ")";
+    if (e.convertPrimaryNestedMap) value = "z8_primary_nested_map_view(" ~ value ~ ")";
     if (e.convertPrimaryMapKey) {
         value = "z8_primary_key_map_view(" ~ value ~ ")";
         if (e.primaryMapKeyTargetType != ValueType.voidType)

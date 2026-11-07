@@ -137,6 +137,7 @@ python tests/primary_scalar_key_map_views.py
 python tests/primary_scalar_key_widening.py
 python tests/primary_string_key_widening.py
 python tests/primary_both_map_widening.py
+python tests/primary_nested_map_views.py
 python tests/primary_reference_key_map_views.py
 python tests/primary_reference_key_widening.py
 python tests/primary_key_covariant_values.py

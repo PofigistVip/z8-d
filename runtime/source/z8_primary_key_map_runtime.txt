@@ -7,6 +7,9 @@ class Z8PrimaryKeyMap(V) {
         is(V == Z8Guid) || is(V == Z8Binary) || is(V == Z8Datespan) || is(V == Z8Date) ||
         is(V == Z8Geometry) || is(V == Z8File) || is(V == Object);
     static if (sharePrimary) private Z8PrimaryKeyMap!Z8Primary primaryData;
+    static if (is(V == Z8Array!U, U)) enum shareNestedPrimary = Z8Array!V.shareNestedPrimary;
+    else enum shareNestedPrimary = false;
+    static if (shareNestedPrimary) private Z8PrimaryKeyMap!Object nestedData;
     private struct Entry { Z8Primary key; Element value; ulong token; }
     private Entry[][uint] buckets;
     private size_t count;
@@ -39,6 +42,24 @@ class Z8PrimaryKeyMap(V) {
     }
     override bool opEquals(Object other) {
         auto right = cast(Z8PrimaryKeyMap!V)other;
+        static if (shareNestedPrimary) {
+            if (right !is null && (nestedData !is null || right.nestedData !is null))
+                return z8_nested_erased_map_data(this).opEquals(z8_nested_erased_map_data(right));
+            auto nestedPrimary = cast(Z8PrimaryKeyMap!(Z8Array!Z8Primary))other;
+            if (nestedPrimary !is null) return z8_nested_erased_map_data(this).opEquals(z8_nested_erased_map_data(nestedPrimary));
+            static if (is(V == Z8Array!Z8Primary)) {
+                auto collection = cast(IZ8CollectionView)other;
+                if (collection !is null) {
+                    auto objects = cast(Z8PrimaryKeyMap!Object)collection.z8_erased_storage();
+                    if (objects !is null) return z8_nested_erased_map_data(this).opEquals(objects);
+                }
+                import std.meta : AliasSeq;
+                static foreach (NestedValue; AliasSeq!(long, bool, Z8Decimal, wstring, Z8Guid, Z8Binary, Z8Datespan, Z8Date, Z8Geometry, Z8File)) {{
+                    auto typed = cast(Z8PrimaryKeyMap!(Z8Array!NestedValue))other;
+                    if (typed !is null) return z8_nested_erased_map_data(this).opEquals(z8_nested_erased_map_data(typed));
+                }}
+            }
+        }
         import std.meta : AliasSeq;
         static foreach (ScalarKey; AliasSeq!(long, bool, Z8Decimal)) {{
             auto scalarKeys = cast(Z8ScalarKeyMap!(ScalarKey, V))other;
@@ -84,21 +105,24 @@ class Z8PrimaryKeyMap(V) {
         }
         return right !is null && z8_map_content_equals(this, right);
     }
-    long z8_size() { static if (sharePrimary) if (primaryData !is null) return primaryData.z8_size(); return cast(long)count; }
-    bool z8_isEmpty() { static if (sharePrimary) if (primaryData !is null) return primaryData.z8_isEmpty(); return count == 0; }
-    void z8_clear() { static if (sharePrimary) if (primaryData !is null) { primaryData.z8_clear(); return; } buckets.clear(); tokenHashes.clear(); count = 0; nextToken = 0; if (order !is null) order.clear(); }
+    long z8_size() { static if (shareNestedPrimary) if (nestedData !is null) return nestedData.z8_size(); static if (sharePrimary) if (primaryData !is null) return primaryData.z8_size(); return cast(long)count; }
+    bool z8_isEmpty() { static if (shareNestedPrimary) if (nestedData !is null) return nestedData.z8_isEmpty(); static if (sharePrimary) if (primaryData !is null) return primaryData.z8_isEmpty(); return count == 0; }
+    void z8_clear() { static if (shareNestedPrimary) if (nestedData !is null) { nestedData.z8_clear(); return; } static if (sharePrimary) if (primaryData !is null) { primaryData.z8_clear(); return; } buckets.clear(); tokenHashes.clear(); count = 0; nextToken = 0; if (order !is null) order.clear(); }
     bool z8_containsKey(Z8Primary key) {
+        static if (shareNestedPrimary) if (nestedData !is null) return nestedData.z8_containsKey(key);
         static if (sharePrimary) if (primaryData !is null) return primaryData.z8_containsKey(key);
         auto bucket = keyHash(key) in buckets;
         if (bucket !is null) foreach (entry; *bucket) if (keyEquals(key, entry.key)) return true;
         return false;
     }
     bool z8_containsValue(Element value) {
+        static if (shareNestedPrimary) if (nestedData !is null) return nestedData.z8_containsValue(value);
         static if (sharePrimary) if (primaryData !is null) return primaryData.z8_containsValue(z8_array_primary_box(value));
         foreach (bucket; buckets) foreach (entry; bucket) if (valueEquals(value, entry.value)) return true;
         return false;
     }
     Element z8_add(Z8Primary key, Element value) {
+        static if (shareNestedPrimary) if (nestedData !is null) return z8_nested_primary_cast!V(nestedData.z8_add(key, value));
         static if (sharePrimary) if (primaryData !is null) return z8_array_primary_cast!V(primaryData.z8_add(key, z8_array_primary_box(value)));
         auto hash = keyHash(key);
         auto bucket = hash in buckets;
@@ -113,15 +137,20 @@ class Z8PrimaryKeyMap(V) {
         return Element.init;
     }
     void z8_add_discard(Z8Primary key, Element value) {
+        static if (shareNestedPrimary) if (nestedData !is null) { nestedData.z8_add_discard(key, value); return; }
         static if (sharePrimary) if (primaryData !is null) { primaryData.z8_add(key, z8_array_primary_box(value)); return; }
         z8_add(key, value);
     }
     void z8_remove_discard(Z8Primary key) {
+        static if (shareNestedPrimary) if (nestedData !is null) { nestedData.z8_remove_discard(key); return; }
         static if (sharePrimary) if (primaryData !is null) { primaryData.z8_remove(key); return; }
         z8_remove(key);
     }
     void z8_add(Z8PrimaryKeyMap!V other) {
         z8_nonnull(other);
+        static if (shareNestedPrimary) if (nestedData !is null || other.nestedData !is null) {
+            z8_nested_erased_map_data(this).z8_add(z8_nested_erased_map_data(other)); return;
+        }
         static if (sharePrimary) if (primaryData !is null || other.primaryData !is null) {
             z8_primary_map_view(this).z8_add(z8_primary_map_view(other)); return;
         }
@@ -132,12 +161,14 @@ class Z8PrimaryKeyMap(V) {
         }
     }
     Element z8_get(Z8Primary key) {
+        static if (shareNestedPrimary) if (nestedData !is null) return z8_nested_primary_cast!V(nestedData.z8_get(key));
         static if (sharePrimary) if (primaryData !is null) return z8_array_primary_cast!V(primaryData.z8_get(key));
         auto bucket = keyHash(key) in buckets;
         if (bucket !is null) foreach (entry; *bucket) if (keyEquals(key, entry.key)) return entry.value;
         return Element.init;
     }
     Element z8_remove(Z8Primary key) {
+        static if (shareNestedPrimary) if (nestedData !is null) return z8_nested_primary_cast!V(nestedData.z8_remove(key));
         static if (sharePrimary) if (primaryData !is null) return z8_array_primary_cast!V(primaryData.z8_remove(key));
         auto hash = keyHash(key);
         auto bucket = hash in buckets;
@@ -152,12 +183,14 @@ class Z8PrimaryKeyMap(V) {
         return Element.init;
     }
     Z8Array!Z8Primary z8_keys() {
+        static if (shareNestedPrimary) if (nestedData !is null) return nestedData.z8_keys();
         static if (sharePrimary) if (primaryData !is null) return primaryData.z8_keys();
         auto result = new Z8Array!Z8Primary();
         if (order !is null) foreach (token; order.ordered()) result.z8_add(orderedEntry(token).key);
         return result;
     }
     Z8Array!Z8Primary z8_insertion_keys() {
+        static if (shareNestedPrimary) if (nestedData !is null) return nestedData.z8_insertion_keys();
         static if (sharePrimary) if (primaryData !is null) return primaryData.z8_insertion_keys();
         auto result = new Z8Array!Z8Primary(); bool hasNull;
         if (order !is null) foreach (entry; order.keys) {
@@ -168,6 +201,9 @@ class Z8PrimaryKeyMap(V) {
         return result;
     }
     Z8ValueArray!V z8_values() {
+        static if (shareNestedPrimary) if (nestedData !is null) {
+            auto result = new Z8Array!V(); result.nestedData = nestedData.z8_values(); return result;
+        }
         static if (sharePrimary) if (primaryData !is null) {
             auto result = new Z8Array!V(); result.primaryData = primaryData.z8_values(); return result;
         }
@@ -197,4 +233,26 @@ Z8PrimaryKeyMap!Z8Primary z8_primary_map_view(V)(Z8PrimaryKeyMap!V values) if (Z
         values.buckets = null; values.order = null; values.tokenHashes = null; values.primaryData = result;
     }
     return values.primaryData;
+}
+
+private Z8PrimaryKeyMap!Object z8_nested_erased_map_data(V)(Z8PrimaryKeyMap!V values)
+if (Z8PrimaryKeyMap!V.shareNestedPrimary) {
+    if (values.nestedData is null) {
+        auto result = new Z8PrimaryKeyMap!Object();
+        foreach (hash, bucket; values.buckets) foreach (entry; bucket)
+            result.buckets[hash] ~= typeof(result).Entry(entry.key, entry.value, entry.token);
+        result.count = values.count; result.order = values.order;
+        result.tokenHashes = values.tokenHashes; result.nextToken = values.nextToken;
+        values.buckets = null; values.order = null; values.tokenHashes = null; values.nestedData = result;
+    }
+    return values.nestedData;
+}
+Z8PrimaryKeyMap!(Z8Array!Z8Primary) z8_primary_nested_map_view(T)(Z8PrimaryKeyMap!(Z8Array!T) values)
+if (Z8PrimaryKeyMap!(Z8Array!T).shareNestedPrimary) {
+    if (values is null) return null;
+    static if (is(T == Z8Primary)) return values;
+    else {
+        auto result = new Z8PrimaryKeyMap!(Z8Array!Z8Primary)();
+        result.nestedData = z8_nested_erased_map_data(values); return result;
+    }
 }
