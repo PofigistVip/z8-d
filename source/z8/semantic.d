@@ -284,11 +284,15 @@ class Checker {
     private bool isPrimaryArrayConversion(ValueType type, Expression e) {
         return isScalarPrimaryArray(type) || (type == ValueType.selfArray && extendsBuiltinPrimary(e.objectClass));
     }
+    private bool isPrimaryMatrixConversion(ValueType type) {
+        return isArray(type) && isScalarPrimaryArray(elementType(type));
+    }
     private bool matches(Expression e, ValueType expected, Program expectedClass = null, Program[] expectedKeyClasses = null) {
         if (e.kind == ExprKind.arrayLiteral && hasObjectClass(expected)) e.objectClass = expectedClass;
         if (e.kind == ExprKind.arrayLiteral && hasMapKeyClass(expected)) e.keyObjectClasses = expectedKeyClasses;
         auto actual = typeOf(e, expected);
-        if (expected == ValueType.primaryArray && isPrimaryArrayConversion(actual, e)) {
+        if ((expected == ValueType.primaryArray && isPrimaryArrayConversion(actual, e)) ||
+            (expected == ValueType.primaryMatrix && isPrimaryMatrixConversion(actual))) {
             e.convertScalarPrimaryArray = true;
             return true;
         }
@@ -499,7 +503,8 @@ class Checker {
                         }
                         if (hasMapKeyClass(actual) && e.arguments[i].keyObjectClasses != resolveKeyClasses(candidate.owner, p.keyObjectNames, p.name)) applicable = false;
                     }
-                } else if (isPrimaryArrayConversion(actual, e.arguments[i]) && p.type == ValueType.primaryArray) {
+                } else if (((isPrimaryArrayConversion(actual, e.arguments[i]) && p.type == ValueType.primaryArray) ||
+                           (isPrimaryMatrixConversion(actual) && p.type == ValueType.primaryMatrix))) {
                     ++weight;
                 } else if (actual == ValueType.selfType && p.type == ValueType.primaryType && extendsBuiltinPrimary(e.arguments[i].objectClass)) {
                     if (binaryOperator) ++distance;
@@ -1984,7 +1989,8 @@ class Checker {
                             if (e.arguments.length != 1) fail("incorrect argument count", e.token);
                             auto argType = typeOf(e.arguments[0]);
                             if (argType == ValueType.nullType) fail("ambiguous removeAll argument", e.arguments[0].token);
-                            if (argType == receiver || (receiver == ValueType.primaryArray && isPrimaryArrayConversion(argType, e.arguments[0]))) {
+                            if (argType == receiver || ((receiver == ValueType.primaryArray && isPrimaryArrayConversion(argType, e.arguments[0])) ||
+                                (receiver == ValueType.primaryMatrix && isPrimaryMatrixConversion(argType)))) {
                                 if (!matches(e.arguments[0], receiver, e.left.objectClass, e.left.keyObjectClasses)) fail("removeAll requires an array of the same type", e.token);
                             } else if (!matchesStored(e.arguments[0], elementType(receiver), e.left.objectClass, e.left.keyObjectClasses)) fail("removeAll requires an element or array of the same type", e.token);
                             return receiver;
@@ -2564,6 +2570,8 @@ class Checker {
                     left = ValueType.primaryType;
                 if (right != ValueType.primaryType && left == ValueType.primaryType && matches(e.third, ValueType.primaryType))
                     right = ValueType.primaryType;
+                if (isPrimaryMatrixConversion(left) && right == ValueType.primaryMatrix && matches(e.right, ValueType.primaryMatrix)) left = right;
+                if (isPrimaryMatrixConversion(right) && left == ValueType.primaryMatrix && matches(e.third, ValueType.primaryMatrix)) right = left;
                 if (isPrimaryArrayConversion(left, e.right) && right == ValueType.primaryArray && matches(e.right, ValueType.primaryArray)) left = right;
                 if (isPrimaryArrayConversion(right, e.third) && left == ValueType.primaryArray && matches(e.third, ValueType.primaryArray)) right = left;
                 if (left == ValueType.decimalType && right == ValueType.intType) { e.third.promoteToDecimal = true; right = ValueType.decimalType; }
@@ -2787,6 +2795,7 @@ class Checker {
                 auto old = variables.dup; auto oldObjects = objectVariables.dup; auto oldKeyObjects = keyObjectVariables.dup;
                 auto array = typeOf(s.expression);
                 checkStatement(s.initial);
+                if (isPrimaryMatrixConversion(array) && s.initial.type == ValueType.primaryArray && matches(s.expression, ValueType.primaryMatrix)) array = ValueType.primaryMatrix;
                 if (isPrimaryArrayConversion(array, s.expression) && s.initial.type == ValueType.primaryType && matches(s.expression, ValueType.primaryArray)) array = ValueType.primaryArray;
                 if (!isArray(array) || elementType(array) != s.initial.type) fail("foreach element type mismatch", s.token);
                 if (!matches(s.expression, array, s.initial.objectClass, s.initial.keyObjectClasses)) fail("foreach element type mismatch", s.token);

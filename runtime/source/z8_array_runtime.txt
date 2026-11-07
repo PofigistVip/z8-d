@@ -53,6 +53,11 @@ class Z8Array(T) {
     enum isPrimitive = is(T == long) || is(T == bool) || is(T == Z8Decimal);
     enum sharePrimary = isPrimitive || is(T == wstring) || is(T == Z8Guid) || is(T == Z8File) ||
         is(T == Z8Binary) || is(T == Z8Datespan) || is(T == Z8Date) || is(T == Z8Geometry) || is(T == Object);
+    static if (is(T == Z8Array!U, U))
+        enum shareNestedPrimary = is(U == Z8Primary) || is(U == long) || is(U == bool) || is(U == Z8Decimal) ||
+            is(U == wstring) || is(U == Z8Guid) || is(U == Z8Binary) || is(U == Z8Datespan) ||
+            is(U == Z8Date) || is(U == Z8Geometry) || is(U == Z8File);
+    else enum shareNestedPrimary = false;
     static if (isPrimitive) alias Element = Z8Optional!T;
     else alias Element = T;
     private Element[] items;
@@ -69,7 +74,9 @@ class Z8Array(T) {
         }
     }
     static if (sharePrimary) private Z8Array!Z8Primary primaryData;
+    static if (shareNestedPrimary) private Z8Array!Object nestedData;
     @property ref size_t z8_version() {
+        static if (shareNestedPrimary) if (nestedData !is null) return nestedData.z8_version;
         static if (sharePrimary) if (primaryData !is null) return primaryData.z8_version;
         return arrayVersion;
     }
@@ -82,6 +89,19 @@ class Z8Array(T) {
     override bool opEquals(Object other) {
         if (this is other) return true;
         auto right = cast(Z8Array!T)other;
+        static if (shareNestedPrimary) {
+            if (right !is null && (nestedData !is null || right.nestedData !is null))
+                return z8_nested_erased_data(this).opEquals(z8_nested_erased_data(right));
+            auto primaryMatrix = cast(Z8Array!(Z8Array!Z8Primary))other;
+            if (primaryMatrix !is null) return z8_nested_erased_data(this).opEquals(z8_nested_erased_data(primaryMatrix));
+            static if (is(T == Z8Array!Z8Primary)) {
+                import std.meta : AliasSeq;
+                static foreach (V; AliasSeq!(long, bool, Z8Decimal, wstring, Z8Guid, Z8Binary, Z8Datespan, Z8Date, Z8Geometry, Z8File)) {{
+                    auto matrix = cast(Z8Array!(Z8Array!V))other;
+                    if (matrix !is null) return z8_nested_erased_data(this).opEquals(z8_nested_erased_data(matrix));
+                }}
+            }
+        }
         static if (sharePrimary) {
             if (right !is null && (primaryData !is null || right.primaryData !is null))
                 return z8_primary_array_view(this).opEquals(z8_primary_array_view(right));
@@ -125,8 +145,8 @@ class Z8Array(T) {
         }
         return true;
     }
-    long z8_size() { static if (sharePrimary) if (primaryData !is null) return primaryData.z8_size(); return cast(long)items.length; }
-    bool z8_isEmpty() { static if (sharePrimary) if (primaryData !is null) return primaryData.z8_isEmpty(); return items.length == 0; }
+    long z8_size() { static if (shareNestedPrimary) if (nestedData !is null) return nestedData.z8_size(); static if (sharePrimary) if (primaryData !is null) return primaryData.z8_size(); return cast(long)items.length; }
+    bool z8_isEmpty() { static if (shareNestedPrimary) if (nestedData !is null) return nestedData.z8_isEmpty(); static if (sharePrimary) if (primaryData !is null) return primaryData.z8_isEmpty(); return items.length == 0; }
     static if (is(T == class)) {
         T z8_first() { return z8_isEmpty() ? null : z8_get(0); }
         T z8_last() { return z8_isEmpty() ? null : z8_get(z8_size() - 1); }
@@ -137,17 +157,19 @@ class Z8Array(T) {
         Element z8_first() { return z8_isEmpty() ? Element.init : z8_get(0); }
         Element z8_last() { return z8_isEmpty() ? Element.init : z8_get(z8_size() - 1); }
     }
-    void z8_clear() { static if (sharePrimary) if (primaryData !is null) { primaryData.z8_clear(); return; } ++z8_version; items.length = 0; }
+    void z8_clear() { static if (shareNestedPrimary) if (nestedData !is null) { nestedData.z8_clear(); return; } static if (sharePrimary) if (primaryData !is null) { primaryData.z8_clear(); return; } ++z8_version; items.length = 0; }
     static if (isPrimitive) {
         Z8Array!T z8_add(T value) { return z8_add(z8_optional_wrap(value)); }
         Z8Array!T z8_add(long index, T value) { return z8_add(index, z8_optional_wrap(value)); }
     }
     Z8Array!T z8_add(Element value) {
+        static if (shareNestedPrimary) if (nestedData !is null) { nestedData.z8_add(value); return this; }
         static if (sharePrimary) if (primaryData !is null) { primaryData.z8_add(z8_array_primary_box(value)); return this; }
         static if (is(T == Object)) z8_attach_member(value, true);
         ++z8_version; items ~= value; return this;
     }
     Z8Array!T z8_add(long index, Element value) {
+        static if (shareNestedPrimary) if (nestedData !is null) { nestedData.z8_add(index, value); return this; }
         static if (sharePrimary) if (primaryData !is null) { primaryData.z8_add(index, z8_array_primary_box(value)); return this; }
         auto i = cast(int)index;
         if (i < 0 || cast(size_t)i > items.length) throw new Exception("array index out of bounds");
@@ -160,6 +182,9 @@ class Z8Array(T) {
     }
     void z8_addAll(long index, Z8Array!T other) {
         z8_nonnull(other);
+        static if (shareNestedPrimary) if (nestedData !is null || other.nestedData !is null) {
+            z8_nested_erased_data(this).z8_addAll(index, z8_nested_erased_data(other)); return;
+        }
         static if (sharePrimary) if (primaryData !is null || other.primaryData !is null) {
             z8_primary_array_view(this).z8_addAll(index, z8_primary_array_view(other)); return;
         }
@@ -172,6 +197,7 @@ class Z8Array(T) {
     }
     static if (isPrimitive) long z8_indexOf(T value) { return z8_indexOf(z8_optional_wrap(value)); }
     long z8_indexOf(Element value) {
+        static if (shareNestedPrimary) if (nestedData !is null) return nestedData.z8_indexOf(value);
         static if (sharePrimary) if (primaryData !is null) return primaryData.z8_indexOf(z8_array_primary_box(value));
         foreach (i, item; items) {
             static if (isPrimitive) {
@@ -195,12 +221,15 @@ class Z8Array(T) {
     bool z8_contains(Element value) { return z8_indexOf(value) >= 0; }
     bool z8_isSubsetOf(Z8Array!T other) {
         z8_nonnull(other);
+        static if (shareNestedPrimary) if (nestedData !is null || other.nestedData !is null)
+            return z8_nested_erased_data(this).z8_isSubsetOf(z8_nested_erased_data(other));
         static if (sharePrimary) if (primaryData !is null || other.primaryData !is null)
             return z8_primary_array_view(this).z8_isSubsetOf(z8_primary_array_view(other));
         foreach (item; items) if (!other.z8_contains(item)) return false;
         return true;
     }
     Element z8_removeAt(long index) {
+        static if (shareNestedPrimary) if (nestedData !is null) return z8_nested_primary_cast!T(nestedData.z8_removeAt(index));
         static if (sharePrimary) if (primaryData !is null) return z8_array_primary_cast!T(primaryData.z8_removeAt(index));
         auto i = cast(int)index;
         if (i < 0 || cast(size_t)i >= items.length) throw new Exception("array index out of bounds");
@@ -210,6 +239,7 @@ class Z8Array(T) {
     }
     static if (isPrimitive) bool z8_remove(T value) { return z8_remove(z8_optional_wrap(value)); }
     bool z8_remove(Element value) {
+        static if (shareNestedPrimary) if (nestedData !is null) return nestedData.z8_remove(value);
         static if (sharePrimary) if (primaryData !is null) return primaryData.z8_remove(z8_array_primary_box(value));
         static if (isPrimitive || is(T == class) || is(T == wstring)) {
             foreach (i, item; items) {
@@ -232,6 +262,9 @@ class Z8Array(T) {
     Z8Array!T z8_removeAll(Element value) { z8_remove(value); return this; }
     Z8Array!T z8_removeAll(Z8Array!T values) {
         z8_nonnull(values);
+        static if (shareNestedPrimary) if (nestedData !is null || values.nestedData !is null) {
+            z8_nested_erased_data(this).z8_removeAll(z8_nested_erased_data(values)); return this;
+        }
         static if (sharePrimary) if (primaryData !is null || values.primaryData !is null) {
             z8_primary_array_view(this).z8_removeAll(z8_primary_array_view(values)); return this;
         }
@@ -249,6 +282,7 @@ class Z8Array(T) {
         return this;
     }
     Z8Array!T z8_reverse() {
+        static if (shareNestedPrimary) if (nestedData !is null) { nestedData.z8_reverse(); return this; }
         static if (sharePrimary) if (primaryData !is null) { primaryData.z8_reverse(); return this; }
         for (size_t i = 0; i < items.length / 2; ++i) {
             auto j = items.length - i - 1;
@@ -257,6 +291,11 @@ class Z8Array(T) {
         return this;
     }
     Z8Array!T z8_sort() {
+        static if (shareNestedPrimary) {
+            if (z8_size() > 1) throw new Exception("object array elements are not comparable");
+            ++z8_version;
+            return this;
+        }
         import std.algorithm.sorting : sort;
         import std.algorithm.mutation : SwapStrategy;
         static if (is(T == Z8Fts)) {
@@ -301,6 +340,7 @@ class Z8Array(T) {
     }
     Z8Array!T z8_unique() {
         auto result = new Z8Array!T();
+        static if (shareNestedPrimary) if (nestedData !is null) { result.nestedData = nestedData.z8_unique(); return result; }
         static if (sharePrimary) if (primaryData !is null) { result.primaryData = primaryData.z8_unique(); return result; }
         foreach (item; items) {
             static if (isPrimitive || is(T == class) || is(T == wstring)) {
@@ -378,6 +418,11 @@ class Z8Array(T) {
         return result;
     }
     ref Element z8_at(long index) {
+        static if (shareNestedPrimary) if (nestedData !is null) {
+            ref slot = nestedData.z8_at(index);
+            slot = z8_nested_primary_cast!T(slot);
+            return *cast(T*)&slot;
+        }
         static if (sharePrimary) if (primaryData !is null) {
             static if (isPrimitive) throw new Exception("primitive array element requires checked access");
             else {
@@ -405,8 +450,51 @@ class Z8Array(T) {
     }
     static if (isPrimitive) void z8_set(long index, T value) { z8_set(index, z8_optional_wrap(value)); }
     void z8_set(long index, Element value) {
+        static if (shareNestedPrimary) if (nestedData !is null) { nestedData.z8_set(index, value); return; }
         static if (sharePrimary) if (primaryData !is null) { primaryData.z8_set(index, z8_array_primary_box(value)); return; }
         z8_at(index) = value;
+    }
+}
+// A matrix and its primary view share the erased outer RCollection. Each
+// row is adapted lazily, retaining its own shared primary element storage.
+private Z8Array!Object z8_nested_erased_data(T)(Z8Array!T values) if (Z8Array!T.shareNestedPrimary) {
+    if (values.nestedData is null) {
+        auto data = new Z8Array!Object();
+        foreach (value; values.items) data.z8_add(value);
+        data.z8_version = values.arrayVersion;
+        values.items = null;
+        values.nestedData = data;
+    }
+    return values.nestedData;
+}
+private T z8_nested_primary_cast(T)(Object value) if (is(T == Z8Array!U, U)) {
+    if (value is null) return null;
+    auto exact = cast(T)value;
+    if (exact !is null) return exact;
+    auto primary = cast(Z8Array!Z8Primary)value;
+    if (primary is null) {
+        import std.meta : AliasSeq;
+        static foreach (V; AliasSeq!(long, bool, Z8Decimal, wstring, Z8Guid, Z8Binary, Z8Datespan, Z8Date, Z8Geometry, Z8File)) {{
+            auto typed = cast(Z8Array!V)value;
+            if (primary is null && typed !is null) primary = z8_primary_array_view(typed);
+        }}
+    }
+    if (primary is null) throw new Exception("invalid nested primary array cast");
+    static if (is(T == Z8Array!Z8Primary)) return primary;
+    else {
+        auto result = new T();
+        result.primaryData = primary;
+        return result;
+    }
+}
+Z8Array!(Z8Array!Z8Primary) z8_primary_array_view(T)(Z8Array!(Z8Array!T) values)
+if (Z8Array!(Z8Array!T).shareNestedPrimary) {
+    if (values is null) return null;
+    static if (is(T == Z8Primary)) return values;
+    else {
+        auto result = new Z8Array!(Z8Array!Z8Primary)();
+        result.nestedData = z8_nested_erased_data(values);
+        return result;
     }
 }
 // The JVM shares the same erased RCollection when a scalar array widens to primary[].
