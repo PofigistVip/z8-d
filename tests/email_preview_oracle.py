@@ -93,12 +93,26 @@ for encoding, value in (("windows-1250", "Žluťoučký"), ("windows-1253", "Κ�
     encoded = base64.b64encode(value.encode(encoding)).decode("ascii")
     messages.append(("From: sender@example.com\r\nSubject: =?" + encoding + "?B?" + encoded + "?=\r\n"
                      "Content-Type: text/plain; charset=US-ASCII\r\n\r\nBody").encode("ascii"))
+for encoding, value in (("iso-8859-6", "مرحبا بالعالم"), ("iso-8859-7", "Καλημέρα κόσμε"),
+                        ("iso-8859-8", "שלום עולם"), ("windows-1256", "مرحبا بالعالم"),
+                        ("windows-1258", "Tiếng Việt")):
+    encoded = base64.b64encode(value.encode(encoding)).decode("ascii")
+    messages.append(("From: sender@example.com\r\nSubject: =?" + encoding + "?B?" + encoded + "?=\r\n"
+                     "Content-Type: text/plain; charset=" + encoding + "\r\n\r\n").encode("ascii") + value.encode(encoding))
+for encoding in ("iso-8859-6", "iso-8859-7", "iso-8859-8", "windows-1256", "windows-1258"):
+    first = 0xA0 if encoding.startswith("iso-") else 0x80
+    messages.append(("From: sender@example.com\r\nSubject: all bytes\r\nContent-Type: text/plain; charset=" +
+                     encoding + "\r\nContent-Transfer-Encoding: 8bit\r\n\r\n").encode("ascii") + bytes(range(first, 0x100)))
 for encoding in ("iso-8859-2", "iso-8859-5", "iso-8859-9", "iso-8859-15"):
     messages.append(("From: sender@example.com\r\nSubject: all bytes\r\nContent-Type: text/plain; charset=" +
                      encoding + "\r\nContent-Transfer-Encoding: 8bit\r\n\r\n").encode("ascii") + bytes(range(0xA0, 0x100)))
 for alias, encoding, value in (("iso8859-1", "iso-8859-1", "café"), ("iso8859-2", "iso-8859-2", "Žluťoučký"),
                                ("latin2", "iso-8859-2", "Žluťoučký"), ("iso8859-9", "iso-8859-9", "İstanbul"),
-                               ("latin5", "iso-8859-9", "İstanbul")):
+                               ("latin5", "iso-8859-9", "İstanbul"), ("arabic", "iso-8859-6", "مرحبا"),
+                               ("iso8859-6", "iso-8859-6", "مرحبا"), ("iso8859-7", "iso-8859-7", "Καλημέρα"),
+                               ("greek", "iso-8859-7", "Καλημέρα"), ("greek8", "iso-8859-7", "Καλημέρα"),
+                               ("iso8859-8", "iso-8859-8", "שלום"), ("hebrew", "iso-8859-8", "שלום"),
+                               ("cp1256", "windows-1256", "مرحبا"), ("cp1258", "windows-1258", "Việt")):
     encoded = base64.b64encode(value.encode(encoding)).decode("ascii")
     messages.append(("From: sender@example.com\r\nSubject: =?" + alias + "?B?" + encoded + "?=\r\n"
                      "Content-Type: text/plain; charset=" + alias + "\r\n\r\n").encode("ascii") + value.encode(encoding))
