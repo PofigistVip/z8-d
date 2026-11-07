@@ -16,7 +16,7 @@ void main(string[] args) {
     assert(book.rowCount(2) == 0 && !book.rowExists(2, 0));
     assert(!book.rowExists(1, 0) && book.rowExists(1, 1));
     assert(!book.rowExists(1, 2) && book.rowExists(1, 3));
-    assert(book.cellCount(0, 0) == 9 && book.cellCount(0, 1) == 1);
+    assert(book.cellCount(0, 0) == 10 && book.cellCount(0, 1) == 1);
     assert(book.cellCount(1, 1) == 1 && book.cellCount(1, 3) == 0);
     assertThrown!Exception(book.cellCount(1, 0));
     assertThrown!Exception(book.rowExists(0, 1048576));
@@ -63,6 +63,17 @@ void main(string[] args) {
     assert(memoryBook.sheetCount() == 3);
     assert(memoryBook.cellString(0, 0, 0) == "Привет 😀 & text");
     memoryBook.renameSheet(1, "Второй лист");
+    memoryBook.setText(0, 0, 10, "replaced");
+    assert(!memoryBook.cellHasFormula(0, 0, 10));
+    memoryBook.setText(2, 2, 0, "Русский 😀 _x0041_ _x005F_x0041_ \x01\0\r\n & < >");
+    memoryBook.setNumber(2, 2, 1, 42.25);
+    memoryBook.setBoolean(2, 2, 2, true);
+    memoryBook.setText(2, 2, 3, "");
+    memoryBook.setText(2, 2, 4, "_x00G0_ _X0041_");
+    memoryBook.setText(2, 2, 5, "\uFFFE\uFFFF");
+    assertThrown!Exception(memoryBook.setNumber(0, 0, 0, double.nan));
+    assertThrown!Exception(memoryBook.setText(0, 1048576, 0, "invalid"));
+    assertThrown!Exception(memoryBook.setText(0, 0, 0, cast(string)[cast(ubyte)0xFF]));
     memoryBook.setColumnHidden(0, 1, true);
     memoryBook.setColumnHidden(0, 3, true);
     assertThrown!Exception(memoryBook.setColumnHidden(0, 16384, true));
@@ -71,6 +82,9 @@ void main(string[] args) {
     auto reopened = new Workbook(saved);
     assert(reopened.sheetCount() == 3 && reopened.cellNumber(0, 0, 6) == 84);
     assert(reopened.sheetName(1) == "Второй лист");
+    assert(reopened.cellType(2, 2, 0) == CellType.text);
+    assert(reopened.cellNumber(2, 2, 1) == 42.25);
+    assert(reopened.cellType(2, 2, 2) == CellType.boolean);
     assert(reopened.cellXml(0, 0, 9).canFind("_x0041_"));
     reopened.close();
     memoryBook.setColumnHidden(0, 3, false);

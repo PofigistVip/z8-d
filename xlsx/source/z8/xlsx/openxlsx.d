@@ -20,6 +20,9 @@ private extern(C) {
     int z8_xlsx_row_cell_count(void*, uint, uint, uint*);
     int z8_xlsx_rename_sheet(void*, uint, const(char)*);
     int z8_xlsx_set_column_hidden(void*, uint, uint, int);
+    int z8_xlsx_set_cell_text(void*, uint, uint, uint, const(char)*, size_t);
+    int z8_xlsx_set_cell_number(void*, uint, uint, uint, double);
+    int z8_xlsx_set_cell_boolean(void*, uint, uint, uint, int);
     int z8_xlsx_cell_string(void*, uint, uint, uint, char*, size_t, size_t*);
     int z8_xlsx_cell_type(void*, uint, uint, uint, int*);
     int z8_xlsx_cell_number(void*, uint, uint, uint, double*);
@@ -124,6 +127,20 @@ class Workbook {
 
     void setColumnHidden(uint sheet, uint column, bool hidden) {
         check(z8_xlsx_set_column_hidden(handle, sheet, column, hidden ? 1 : 0));
+    }
+
+    void setText(uint sheet, uint row, uint column, string value) {
+        import std.utf : validate;
+        validate(value);
+        check(z8_xlsx_set_cell_text(handle, sheet, row, column, value.ptr, value.length));
+    }
+
+    void setNumber(uint sheet, uint row, uint column, double value) {
+        check(z8_xlsx_set_cell_number(handle, sheet, row, column, value));
+    }
+
+    void setBoolean(uint sheet, uint row, uint column, bool value) {
+        check(z8_xlsx_set_cell_boolean(handle, sheet, row, column, value ? 1 : 0));
     }
 
     /// Raw OpenXLSX conversion; rich inline text and OOXML escapes may need

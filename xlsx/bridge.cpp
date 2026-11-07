@@ -1,6 +1,7 @@
 #include <OpenXLSX.hpp>
 #include <XLXmlParser.hpp>
 #include <miniz.h>
+#include <cmath>
 #include <cstring>
 #include <exception>
 #include <memory>
@@ -142,6 +143,27 @@ OpenXLSX::XLCell requireCell(void* handle, unsigned sheet, unsigned row, unsigne
 OpenXLSX::XLWorksheet worksheet(void* handle, unsigned sheet) {
     auto& doc = document(handle);
     return doc.workbook().worksheet(sheetName(doc, sheet));
+}
+
+std::string encodeCellText(const char* text, size_t size) {
+    if (!text && size) throw std::invalid_argument("missing cell text");
+    auto hex = [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); };
+    constexpr char digits[] = "0123456789ABCDEF";
+    std::string encoded;
+    for (size_t i = 0; i < size; ++i) {
+        auto c = static_cast<unsigned char>(text[i]);
+        if (c == '_' && i + 6 < size && text[i + 1] == 'x' && hex(text[i + 2]) &&
+            hex(text[i + 3]) && hex(text[i + 4]) && hex(text[i + 5]) && text[i + 6] == '_') {
+            encoded += "_x005F_";
+        } else if (c < 0x20 && c != '\t' && c != '\n') {
+            encoded += "_x00"; encoded += digits[c >> 4]; encoded += digits[c & 15]; encoded += '_';
+        } else if (c == 0xEF && i + 2 < size && static_cast<unsigned char>(text[i + 1]) == 0xBF &&
+                   (static_cast<unsigned char>(text[i + 2]) == 0xBE || static_cast<unsigned char>(text[i + 2]) == 0xBF)) {
+            encoded += static_cast<unsigned char>(text[i + 2]) == 0xBE ? "_xFFFE_" : "_xFFFF_";
+            i += 2;
+        } else encoded += static_cast<char>(c);
+    }
+    return encoded;
 }
 
 OpenXLSX::XLRow findRow(OpenXLSX::XLWorksheet& sheet, unsigned row) {
@@ -320,6 +342,39 @@ Z8_EXPORT int z8_xlsx_set_column_hidden(void* handle, unsigned sheet, unsigned c
             target.columnNode().remove_attribute("width");
             target.columnNode().remove_attribute("customWidth");
         }
+    });
+}
+
+Z8_EXPORT int z8_xlsx_set_cell_text(void* handle, unsigned sheet, unsigned row, unsigned column,
+                                     const char* text, size_t length) noexcept {
+    return protect([&] {
+        if (row >= 1048576 || column >= 16384) throw std::out_of_range("cell index out of bounds");
+        auto value = encodeCellText(text, length);
+        auto page = worksheet(handle, sheet);
+        auto cell = page.cell(row + 1, static_cast<uint16_t>(column + 1));
+        cell.formula().clear();
+        cell.value().set(value);
+    });
+}
+
+Z8_EXPORT int z8_xlsx_set_cell_number(void* handle, unsigned sheet, unsigned row, unsigned column, double value) noexcept {
+    return protect([&] {
+        if (row >= 1048576 || column >= 16384) throw std::out_of_range("cell index out of bounds");
+        if (!std::isfinite(value)) throw std::invalid_argument("XLSX number must be finite");
+        auto page = worksheet(handle, sheet);
+        auto cell = page.cell(row + 1, static_cast<uint16_t>(column + 1));
+        cell.formula().clear();
+        cell.value().set(value);
+    });
+}
+
+Z8_EXPORT int z8_xlsx_set_cell_boolean(void* handle, unsigned sheet, unsigned row, unsigned column, int value) noexcept {
+    return protect([&] {
+        if (row >= 1048576 || column >= 16384) throw std::out_of_range("cell index out of bounds");
+        auto page = worksheet(handle, sheet);
+        auto cell = page.cell(row + 1, static_cast<uint16_t>(column + 1));
+        cell.formula().clear();
+        cell.value().set(value != 0);
     });
 }
 
