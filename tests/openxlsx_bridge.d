@@ -113,13 +113,18 @@ void main(string[] args) {
     reopened.removeCell(0, 9, 9); // A missing row remains absent.
     assert(reopened.rowExists(0, 3) && reopened.cellType(0, 3, 1) == CellType.missing);
     assert(!reopened.rowExists(0, 9));
-    assertThrown!Exception(reopened.removeCell(0, 3, 6));
+    reopened.removeCell(0, 4, 6); // An independent formula can be removed.
+    assert(reopened.rowExists(0, 4) && reopened.cellType(0, 4, 6) == CellType.missing);
+    assertThrown!Exception(reopened.removeCell(0, 0, 7)); // Shared formula anchor.
+    assertThrown!Exception(reopened.removeCell(0, 1, 7)); // Shared formula follower.
+    assertThrown!Exception(reopened.removeCell(0, 0, 8)); // Array formula.
     assertThrown!Exception(reopened.removeCell(0, 1048576, 0));
     auto copiedBytes = reopened.save();
     write(args[6], copiedBytes);
     auto copied = new Workbook(copiedBytes);
     assert(copied.rowExists(0, 3) && copied.cellType(0, 3, 1) == CellType.missing && copied.cellType(0, 3, 9) == CellType.missing);
     assert(copied.cellFormula(0, 3, 6) == "B1*2");
+    assert(copied.rowExists(0, 4) && copied.cellType(0, 4, 6) == CellType.missing);
     assert(copied.cellNumber(2, 4, 1) == 22 && copied.sheetXml(2).canFind("A5:B5"));
     copied.close();
     auto cloned = new Workbook(saved);
@@ -146,6 +151,14 @@ void main(string[] args) {
     styled.setColumnHidden(0, 3, true);
     write(args[5], styled.save());
     styled.close();
+    auto chain = new Workbook(cast(ubyte[])read(args[8]));
+    assertThrown!Exception(chain.removeCell(0, 0, 6));
+    assert(chain.cellFormula(0, 0, 6) == "B1*2");
+    chain.close();
+    auto alternateChain = new Workbook(cast(ubyte[])read(args[9]));
+    assertThrown!Exception(alternateChain.removeCell(0, 0, 6));
+    assert(alternateChain.cellFormula(0, 0, 6) == "B1*2");
+    alternateChain.close();
     assertThrown!Exception(new Workbook(cast(ubyte[])[]));
     assertThrown!Exception(new Workbook(cast(ubyte[])[1, 2, 3]));
 }

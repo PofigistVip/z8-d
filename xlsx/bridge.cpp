@@ -108,6 +108,7 @@ public:
 struct WorkbookHandle {
     std::shared_ptr<MemoryArchiveState> memory;
     std::unique_ptr<OpenXLSX::XLDocument> doc;
+    bool hasCalculationChain = false;
 };
 
 template<typename F> int protect(F&& function) noexcept {
@@ -191,7 +192,7 @@ void copyString(const std::string& value, char* buffer, size_t capacity, size_t*
 }
 
 Z8_EXPORT const char* z8_xlsx_error() noexcept { return error.c_str(); }
-Z8_EXPORT unsigned z8_xlsx_abi_version() noexcept { return 6; }
+Z8_EXPORT unsigned z8_xlsx_abi_version() noexcept { return 7; }
 
 Z8_EXPORT int z8_xlsx_open(const char* path, void** result) noexcept {
     return protect([&] {
@@ -213,6 +214,12 @@ Z8_EXPORT int z8_xlsx_open_memory(const void* data, size_t size, void** result) 
         book->memory = archive.getState();
         book->doc = std::make_unique<OpenXLSX::XLDocument>(archive);
         book->doc->open("memory.xlsx");
+        // OpenXLSX removes its conventional calcChain on save but does not
+        // update every related package entry. Do not alter formulas in a
+        // workbook that declares a calculation chain until it can be updated.
+        book->hasCalculationChain = archive.hasEntry("xl/calcChain.xml") ||
+            (archive.hasEntry("[Content_Types].xml") &&
+             archive.getEntry("[Content_Types].xml").find("spreadsheetml.calcChain+xml") != std::string::npos);
         *result = book.release();
     });
 }
@@ -443,9 +450,16 @@ Z8_EXPORT int z8_xlsx_remove_cell(void* handle, unsigned sheet, unsigned row, un
         auto address = OpenXLSX::XLCellReference(row + 1, static_cast<uint16_t>(column + 1)).address();
         auto cellNode = rowNode.find_child_by_attribute("c", "r", address.c_str());
         if (cellNode.empty()) return;
-        // Removing formula cells also requires updating the workbook's
-        // calculation chain; this operation does not do that yet.
-        if (!cellNode.child("f").empty()) throw std::runtime_error("removing formula cells is not supported");
+        auto formula = cellNode.child("f");
+        if (!formula.empty()) {
+            // Shared and array formulas can depend on the removed cell's
+            // definition, so only independent formulas are safe to delete.
+            auto type = formula.attribute("t").as_string();
+            if (*type && std::strcmp(type, "normal") != 0)
+                throw std::runtime_error("removing shared or array formula cells is not supported");
+            if (static_cast<WorkbookHandle*>(handle)->hasCalculationChain)
+                throw std::runtime_error("removing formula cells with a calculation chain is not supported");
+        }
         if (!rowNode.remove_child(cellNode)) throw std::runtime_error("cannot remove XLSX cell");
     });
 }

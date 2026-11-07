@@ -43,7 +43,7 @@ private void check(int result) {
 }
 
 private void checkAbi() {
-    if (z8_xlsx_abi_version() != 6) throw new Exception("incompatible OpenXLSX bridge; rebuild xlsx");
+    if (z8_xlsx_abi_version() != 7) throw new Exception("incompatible OpenXLSX bridge; rebuild xlsx");
 }
 
 class Workbook {

@@ -37,6 +37,24 @@ with tempfile.TemporaryDirectory() as directory:
             if name == "xl/worksheets/sheet1.xml":
                 contents = contents.replace("<sheetData>", '<cols><col min="1" max="4" width="12" customWidth="1" outlineLevel="2" collapsed="0"/></cols><sheetData>')
             archive.writestr(name, contents.encode("utf-8"))
+    chained = temp / "chained.xlsx"
+    with zipfile.ZipFile(chained, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, contents in entries.items():
+            if name == "[Content_Types].xml":
+                contents = contents.replace("</Types>", '<Override PartName="/xl/calcChain.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml"/></Types>')
+            elif name == "xl/_rels/workbook.xml.rels":
+                contents = contents.replace("</Relationships>", '<Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain" Target="calcChain.xml"/></Relationships>')
+            archive.writestr(name, contents.encode("utf-8"))
+        archive.writestr("xl/calcChain.xml", '<calcChain xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><c r="G1" i="1"/></calcChain>')
+    alternate_chain = temp / "alternate-chain.xlsx"
+    with zipfile.ZipFile(alternate_chain, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, contents in entries.items():
+            if name == "[Content_Types].xml":
+                contents = contents.replace("</Types>", '<Override PartName="/xl/custom-chain.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml"/></Types>')
+            elif name == "xl/_rels/workbook.xml.rels":
+                contents = contents.replace("</Relationships>", '<Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain" Target="custom-chain.xml"/></Relationships>')
+            archive.writestr(name, contents.encode("utf-8"))
+        archive.writestr("xl/custom-chain.xml", '<calcChain xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><c r="G1" i="1"/></calcChain>')
     executable = temp / ("probe.exe" if os.name == "nt" else "probe")
     command = ["dmd", "-I" + str(ROOT / "xlsx/source"), str(ROOT / "tests/openxlsx_bridge.d"),
                str(ROOT / "xlsx/source/z8/xlsx/openxlsx.d"), "-of=" + str(executable)]
@@ -54,7 +72,7 @@ with tempfile.TemporaryDirectory() as directory:
     styled_saved = temp / "styled-saved.xlsx"
     removed_saved = temp / "removed.xlsx"
     cloned_saved = temp / "cloned.xlsx"
-    subprocess.run([str(executable), str(workbook), str(saved), str(saved_again), str(styled), str(styled_saved), str(removed_saved), str(cloned_saved)], check=True, env=environment)
+    subprocess.run([str(executable), str(workbook), str(saved), str(saved_again), str(styled), str(styled_saved), str(removed_saved), str(cloned_saved), str(chained), str(alternate_chain)], check=True, env=environment)
     with zipfile.ZipFile(saved) as archive:
         assert archive.testzip() is None
         assert archive.read("custom/preserved.txt") == b"An unrelated package entry"
@@ -115,6 +133,16 @@ class SavedWorkbookOracle {
           row.getCell(3) != null || row.getCell(9) != null || !row.getCell(6).getCellFormula().equals("B1*2"))
         throw new AssertionError("Removed cells or retained row differ from POI");
       if (book.getSheetAt(0).getRow(9) != null) throw new AssertionError("Missing row was created");
+      if (book.getSheetAt(0).getRow(4) == null || book.getSheetAt(0).getRow(4).getCell(6) != null)
+        throw new AssertionError("Formula cell was not removed or its row was lost");
+    }
+    try (Workbook before = new XSSFWorkbook(new FileInputStream(args[2]));
+         Workbook after = new XSSFWorkbook(new FileInputStream(args[5]))) {
+      Row expected = before.getSheetAt(0).createRow(4);
+      Cell formula = expected.createCell(6); formula.setCellFormula("B1*2"); expected.removeCell(formula);
+      Row actual = after.getSheetAt(0).getRow(4);
+      if (actual == null || expected.getPhysicalNumberOfCells() != actual.getPhysicalNumberOfCells() || actual.getCell(6) != null)
+        throw new AssertionError("Removing an ordinary formula differs from POI");
     }
     try (Workbook book = new XSSFWorkbook(new FileInputStream(args[6]))) {
       if (book.getNumberOfSheets() != 4 || !book.getSheetName(3).equals("Копия") ||
