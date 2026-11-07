@@ -197,6 +197,15 @@ public class EvalOracle {
         for (String expression : new String[]{"'x'.binary().zip('a'.split('a')).length() > 0", "'x'.binary().zip('a,b'.split(',')) != nil", "'x'.binary().unzip('bad') == nil"})
             try { System.out.println(jsonEval.z8_evaluateBoolean(new string(expression)).get()); }
             catch (Exception error) { System.out.println("error"); }
+        jsonEval.z8_setVariable(new string("geo"), new geometry(2, 3, 4326));
+        for (String pattern : new String[]{"${geo.shape()}", "${geo.srs()}", "${geo.x()}", "${geo.y()}", "${geo.x1()}", "${geo.y2()}", "${geo.width()}", "${geo.height()}", "${geo.length()}", "${geo.center().x()}", "${geo.toGeoJson()}", "${geo.x(1)}"})
+            try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
+            catch (Exception error) { System.out.println("error"); }
+        jsonEval.z8_setVariable(new string("geoLine"), geometry.z8_line(new org.zenframework.z8.server.runtime.RCollection<geometry>(new geometry[]{new geometry(0, 0, 4326), new geometry(3, 4, 4326)})));
+        jsonEval.z8_setVariable(new string("geoEmpty"), new geometry(4326));
+        for (String pattern : new String[]{"${geoLine.shape()}", "${geoLine.length()}", "${geoLine.width()}", "${geoLine.height()}", "${geoLine.center().x()}", "${geoLine.points()}", "${geoLine.points().size()}", "${geoLine.points()[1].y()}", "${geoLine.toGeoJson()}", "${geoEmpty.shape()}", "${geoEmpty.length()}", "${geo.points()}", "${geoEmpty.points()}", "${geoLine.points().clear()}", "${geoLine.points().size()}"})
+            try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
+            catch (Exception error) { System.out.println("error"); }
     }
 }
 ''', encoding="utf-8")
@@ -416,6 +425,16 @@ void main() {
         catch (Exception) { writeln("error"); }
     foreach (expression; ["'x'.binary().zip('a'.split('a')).length() > 0"w, "'x'.binary().zip('a,b'.split(',')) != nil"w, "'x'.binary().unzip('bad') == nil"w])
         try { writeln(z8_optional_require(jsonEval.m_evaluateBoolean(expression))); }
+        catch (Exception) { writeln("error"); }
+    jsonEval.m_setVariable("geo"w, z8_primary_box(z8_geometry_point(z8_decimal_from_int(2), z8_decimal_from_int(3), 4326)));
+    foreach (pattern; ["${geo.shape()}"w, "${geo.srs()}"w, "${geo.x()}"w, "${geo.y()}"w, "${geo.x1()}"w, "${geo.y2()}"w, "${geo.width()}"w, "${geo.height()}"w, "${geo.length()}"w, "${geo.center().x()}"w, "${geo.toGeoJson()}"w, "${geo.x(1)}"w])
+        try { writeln(jsonEval.m_evaluateText(pattern).to!string); }
+        catch (Exception) { writeln("error"); }
+    auto points = new Z8Array!Z8Geometry([z8_geometry_point(z8_decimal_from_int(0), z8_decimal_from_int(0), 4326), z8_geometry_point(z8_decimal_from_int(3), z8_decimal_from_int(4), 4326)]);
+    jsonEval.m_setVariable("geoLine"w, z8_primary_box(z8_geometry_line(points)));
+    jsonEval.m_setVariable("geoEmpty"w, z8_primary_box(z8_geometry_none(4326)));
+    foreach (pattern; ["${geoLine.shape()}"w, "${geoLine.length()}"w, "${geoLine.width()}"w, "${geoLine.height()}"w, "${geoLine.center().x()}"w, "${geoLine.points()}"w, "${geoLine.points().size()}"w, "${geoLine.points()[1].y()}"w, "${geoLine.toGeoJson()}"w, "${geoEmpty.shape()}"w, "${geoEmpty.length()}"w, "${geo.points()}"w, "${geoEmpty.points()}"w, "${geoLine.points().clear()}"w, "${geoLine.points().size()}"w])
+        try { writeln(jsonEval.m_evaluateText(pattern).to!string); }
         catch (Exception) { writeln("error"); }
 }
 ''', encoding="utf-8")

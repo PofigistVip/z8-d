@@ -364,6 +364,25 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
     }
     if (object.primary !is null && object.primary.kind == Z8PrimaryKind.text)
         return Z8EvalValue(true, z8_eval_string_method(object.primary, name, arguments), null, null);
+    if (object.primary !is null && object.primary.kind == Z8PrimaryKind.geometry && !arguments.length) {
+        auto geometry = object.primary.geometryValue;
+        if (name == "shape"w) return Z8EvalValue(true, z8_primary_box(z8_geometry_shape(geometry)), null, null);
+        if (name == "srs"w) return Z8EvalValue(true, z8_primary_box(z8_geometry_srs(geometry)), null, null);
+        static foreach (method; ["x", "y", "x1", "y1", "x2", "y2", "width", "height", "length"]) {
+            if (name == method.to!wstring)
+                return Z8EvalValue(true, z8_primary_box(mixin("z8_geometry_" ~ method ~ "(geometry)")), null, null);
+        }
+        if (name == "center"w) return Z8EvalValue(true, z8_primary_box(z8_geometry_center(geometry)), null, null);
+        if (name == "toGeoJson"w) return Z8EvalValue(true, z8_primary_box(z8_string_new(z8_geometry_toGeoJson(geometry))), null, null);
+        if (name == "points"w) {
+            z8_geometry_ensure(geometry);
+            if (!geometry.hasChildren) return Z8EvalValue(true);
+            if (geometry.childSource is null) geometry.childSource = new Z8Array!Z8Geometry(geometry.children.dup);
+            auto result = Z8EvalValue(true);
+            result.collection = z8_primary_array_view(geometry.childSource);
+            return result;
+        }
+    }
     if (object.primary !is null && object.primary.kind == Z8PrimaryKind.binary) {
         auto binary = object.primary.binaryValue;
         if (name == "zip"w && arguments.length == 1) {

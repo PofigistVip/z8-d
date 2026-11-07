@@ -22,7 +22,13 @@ Z8Geometry z8_geometry_fromHexString(wstring text) {
 }
 private void z8_geometry_ensure(Z8Geometry value) {
     z8_nonnull(value);
-    if (value.childSource !is null) value.children = value.childSource.items;
+    if (value.childSource !is null) {
+        if (value.childSource.primaryData is null) value.children = value.childSource.items;
+        else {
+            value.children = null;
+            for (long i; i < value.childSource.z8_size(); ++i) value.children ~= value.childSource.z8_get(i);
+        }
+    }
     if (value.parsed) return;
     auto text = value.rawHex;
     size_t position;
