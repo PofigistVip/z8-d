@@ -353,6 +353,7 @@ void main(string[] args) {
     z8_native_bind("ContextProbe.m_parentTitle"w, &parentTitle);
     wstring[wstring] properties;
     if (auto info = environment.get("Z8_TEST_PDFINFO")) properties["pdf.info.executable"w] = info.to!wstring;
+    if (auto merger = environment.get("Z8_TEST_PDFUNITE")) properties["pdf.merge.executable"w] = merger.to!wstring;
     if (auto office = environment.get("Z8_TEST_OFFICE_HOME")) properties["office.home"w] = office.to!wstring;
     z8_server_config_replace(properties);
     databaseInfo = args[1];
@@ -419,6 +420,33 @@ void main(string[] args) {
         pdfinfo = environment.get("Z8_TEST_PDFINFO") or shutil.which("pdfinfo")
         if pdfinfo:
             environment["Z8_TEST_PDFINFO"] = str(pdfinfo)
+        pdfunite = environment.get("Z8_TEST_PDFUNITE") or shutil.which("pdfunite")
+        fixture_python = environment.get("Z8_TEST_PDF_MERGER_PYTHON")
+        if not pdfunite and fixture_python:
+            merger_script = temp / "test-pdf-merger.py"
+            merger_script.write_text('''import sys
+from pypdf import PdfReader, PdfWriter
+output = PdfWriter()
+for filename in sys.argv[1:-1]:
+    for page in PdfReader(filename).pages:
+        output.add_page(page)
+with open(sys.argv[-1], "wb") as stream:
+    output.write(stream)
+''', encoding="utf-8")
+            merger_source = temp / "test-pdf-merger.d"
+            merger_source.write_text('''module test_pdf_merger;
+import std.process : environment, execute, Config;
+import std.stdio : write;
+int main(string[] args) {
+    auto result = execute([environment.get("Z8_TEST_PDF_MERGER_PYTHON"), environment.get("Z8_TEST_PDF_MERGER_SCRIPT")] ~ args[1 .. $], null, Config.suppressConsole);
+    write(result.output); return result.status;
+}
+''', encoding="utf-8")
+            pdfunite = temp / ("test-pdf-merger.exe" if os.name == "nt" else "test-pdf-merger")
+            subprocess.run(["dmd", str(merger_source), "-of=" + str(pdfunite)], cwd=temp, check=True)
+            environment["Z8_TEST_PDF_MERGER_SCRIPT"] = str(merger_script)
+        if pdfunite:
+            environment["Z8_TEST_PDFUNITE"] = str(pdfunite)
         office = environment.get("Z8_TEST_OFFICE_HOME")
         if not office and os.name == "nt" and Path("C:/Program Files/LibreOffice/program/soffice.com").is_file():
             office = "C:/Program Files/LibreOffice"
@@ -950,10 +978,33 @@ void main(string[] args) {
                 preview_path = "/" + quote(result["source"], safe="/")
                 assert download(preview_path, "full", None)[::2] == (200, bytes(pdf))
                 assert download(preview_path, "full2", None)[0] == 404
-                result = attach_file("full", preview_record, "extra.pdf", bytes(pdf))
+                second_pdf = bytes(pdf).replace(b"200 200", b"300 300")
+                result = attach_file("full", preview_record, "extra.pdf", second_pdf)
                 second_file = json.loads(result["data"][0]["documents"])[1]
                 result = request(**preview_args)
-                assert not result["success"] and "multiple attachments" in result["info"]["messages"][-1]["text"], result
+                if pdfunite:
+                    assert result["success"], result
+                    status, _, merged = download("/" + quote(result["source"], safe="/"), "full", None)
+                    assert status == 200 and merged.startswith(b"%PDF-"), (status, merged[:100])
+                    merged_path = temp / "merged-preview.pdf"; merged_path.write_bytes(merged)
+                    info = subprocess.check_output([str(pdfinfo), "-f", "1", "-l", "2", str(merged_path)], text=True)
+                    assert any(line.split() == ["Pages:", "2"] for line in info.splitlines()), info
+                    assert any("1 size:" in line and "200 x 200" in line for line in info.splitlines()), info
+                    assert any("2 size:" in line and "300 x 300" in line for line in info.splitlines()), info
+                    if office:
+                        result = attach_file("full", preview_record, "converted.txt", b"Third page")
+                        third_file = json.loads(result["data"][0]["documents"])[2]
+                        result = request(**preview_args)
+                        assert result["success"], result
+                        status, _, merged = download("/" + quote(result["source"], safe="/"), "full", None)
+                        assert status == 200, result
+                        merged_path.write_bytes(merged)
+                        info = subprocess.check_output([str(pdfinfo), str(merged_path)], text=True)
+                        assert any(line.split() == ["Pages:", "3"] for line in info.splitlines()), info
+                        result = request(action="detach", field="documents", recordId=preview_record, data=json.dumps([third_file["id"]]))
+                        assert result["success"], result
+                else:
+                    assert not result["success"], result
                 result = request(action="detach", field="documents", recordId=preview_record, data=json.dumps([pdf_file["id"], second_file["id"]]))
                 assert result["success"], result
                 result = attach_file("full", preview_record, "broken.pdf", b"not a PDF")
