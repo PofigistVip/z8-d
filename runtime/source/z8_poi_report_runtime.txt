@@ -145,7 +145,8 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
         auto value = evaluated.primary;
         // POI 3.16 leaves an inline-string cell unchanged when assigning a
         // string result; numeric and boolean results replace its type.
-        if (cell.kind == "inlineStr"w && (value is null || value.kind == Z8PrimaryKind.text)) continue;
+        if (cell.kind == "inlineStr"w && (value is null || value.kind == Z8PrimaryKind.text ||
+            value.kind == Z8PrimaryKind.guid || value.kind == Z8PrimaryKind.datespan)) continue;
         if (value is null) { edit.kind = Z8PoiCellEditKind.text; edit.text = ""w; }
         else switch (value.kind) {
             case Z8PrimaryKind.boolean: edit.kind = Z8PoiCellEditKind.boolean; edit.booleanValue = value.booleanValue; break;
@@ -155,6 +156,8 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
             case Z8PrimaryKind.decimal: edit.kind = Z8PoiCellEditKind.number; edit.number = value.decimalValue.z8_as_double(); break;
             case Z8PrimaryKind.date: edit.kind = Z8PoiCellEditKind.number; edit.number = z8_poi_report_excel_date(value.dateValue, workbook.date1904); break;
             case Z8PrimaryKind.text: edit.kind = Z8PoiCellEditKind.text; edit.text = value.textValue; break;
+            case Z8PrimaryKind.guid: case Z8PrimaryKind.datespan:
+                edit.kind = Z8PoiCellEditKind.text; edit.text = z8_primary_to_string(value); break;
             default: throw new Exception("POI report expression result type is not implemented");
         }
         edits ~= edit;
