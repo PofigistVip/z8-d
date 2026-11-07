@@ -303,7 +303,12 @@ private void z8_poi_report_evaluate_cell(Z8EvalState state, Z8PoiWorkbook workbo
     auto first = z8_eval_text_expression_start(cell.value);
     ptrdiff_t firstEnd = first < 0 ? -1 : cell.value[cast(size_t)first + 2 .. $].indexOf('}');
     if (firstEnd >= 0) firstEnd += first + 2;
-    auto suffix = firstEnd < 0 ? null : cell.value[cast(size_t)firstEnd + 1 .. $];
+    bool recoveredEnd;
+    if (first >= 0 && firstEnd < 0) {
+        auto tail = cell.value[cast(size_t)first + 2 .. $];
+        if (tail.length && !z8_eval_text_has_special(tail)) { firstEnd = cast(ptrdiff_t)cell.value.length; recoveredEnd = true; }
+    }
+    auto suffix = firstEnd < 0 ? null : recoveredEnd ? ""w : cell.value[cast(size_t)firstEnd + 1 .. $];
     auto single = first >= 0 && firstEnd >= 0 && z8_eval_text_literal(cell.value[0 .. cast(size_t)first]).length == 0 &&
         z8_eval_text_expression_start(suffix) < 0 && z8_eval_text_literal(suffix).length == 0;
     Z8PoiCellEdit edit;

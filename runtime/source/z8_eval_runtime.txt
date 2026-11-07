@@ -150,6 +150,21 @@ private wstring z8_eval_text_from_state(Z8EvalState state, wstring source, bool 
     import std.algorithm.searching : canFind;
     import std.string : indexOf;
     if (source is null) return "null"w;
+    // TextParser recovers a missing final '}' when the expression body is a
+    // nonempty TEXT token. Leave more complex malformed input unsupported.
+    size_t scan;
+    while (scan < source.length) {
+        auto next = z8_eval_text_expression_start(source[scan .. $]);
+        if (next < 0) break;
+        auto begin = scan + cast(size_t)next + 2;
+        auto close = source[begin .. $].indexOf('}');
+        if (close < 0) {
+            auto tail = source[begin .. $];
+            if (tail.length && !z8_eval_text_has_special(tail)) source ~= "}"w;
+            break;
+        }
+        scan = begin + cast(size_t)close + 1;
+    }
     auto first = z8_eval_text_expression_start(source);
     if (first < 0) return z8_string_new(z8_eval_text_literal(source));
     auto end = source[cast(size_t)first + 2 .. $].indexOf('}');
