@@ -206,6 +206,9 @@ public class EvalOracle {
         for (String pattern : new String[]{"${geo.point(6.0, 7.0, 4326).x()}", "${geo.none(4326).shape()}", "${geo.fromHexString(geo.toString()).srs()}", "${geo.fromGeoJson(geo.toGeoJson(), 4326).y()}", "${geo.line(geoLine.points()).length()}", "${geo.line(geoLine.points()).srs()}", "${geo.pointOnLine(geoLine, 2.5).x()}", "${geo.perpendicularToLine(geoLine, 2.5, 1.0).length()}", "${geo.point(1, 2, 4326)}", "${geo.line('a,b'.split(','))}"})
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
+        for (String pattern : new String[]{"${geo.fromArray(geoLine.points(), 4326).srs()}", "${geo.fromArray(geoLine.points(), 1234).srs()}", "${geo.fromArray(geoLine.points(), 4326).shape()}", "${geo.fromArray(geoLine.points(), 4326).toGeoJson()}", "${geo.fromArray('a'.split('a'), 1234).srs()}", "${geo.fromArray('a,b'.split(','), 4326)}"})
+            try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
+            catch (Exception error) { System.out.println("error"); }
         for (String pattern : new String[]{"${geoLine.shape()}", "${geoLine.length()}", "${geoLine.width()}", "${geoLine.height()}", "${geoLine.center().x()}", "${geoLine.points()}", "${geoLine.points().size()}", "${geoLine.points()[1].y()}", "${geoLine.toGeoJson()}", "${geoEmpty.shape()}", "${geoEmpty.length()}", "${geo.points()}", "${geoEmpty.points()}", "${geo.line(geoLine.points()).points().clear()}", "${geoLine.points().size()}"})
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
@@ -437,6 +440,9 @@ void main() {
     jsonEval.m_setVariable("geoLine"w, z8_primary_box(z8_geometry_line(points)));
     jsonEval.m_setVariable("geoEmpty"w, z8_primary_box(z8_geometry_none(4326)));
     foreach (pattern; ["${geo.point(6.0, 7.0, 4326).x()}"w, "${geo.none(4326).shape()}"w, "${geo.fromHexString(geo.toString()).srs()}"w, "${geo.fromGeoJson(geo.toGeoJson(), 4326).y()}"w, "${geo.line(geoLine.points()).length()}"w, "${geo.line(geoLine.points()).srs()}"w, "${geo.pointOnLine(geoLine, 2.5).x()}"w, "${geo.perpendicularToLine(geoLine, 2.5, 1.0).length()}"w, "${geo.point(1, 2, 4326)}"w, "${geo.line('a,b'.split(','))}"w])
+        try { writeln(jsonEval.m_evaluateText(pattern).to!string); }
+        catch (Exception) { writeln("error"); }
+    foreach (pattern; ["${geo.fromArray(geoLine.points(), 4326).srs()}"w, "${geo.fromArray(geoLine.points(), 1234).srs()}"w, "${geo.fromArray(geoLine.points(), 4326).shape()}"w, "${geo.fromArray(geoLine.points(), 4326).toGeoJson()}"w, "${geo.fromArray('a'.split('a'), 1234).srs()}"w, "${geo.fromArray('a,b'.split(','), 4326)}"w])
         try { writeln(jsonEval.m_evaluateText(pattern).to!string); }
         catch (Exception) { writeln("error"); }
     foreach (pattern; ["${geoLine.shape()}"w, "${geoLine.length()}"w, "${geoLine.width()}"w, "${geoLine.height()}"w, "${geoLine.center().x()}"w, "${geoLine.points()}"w, "${geoLine.points().size()}"w, "${geoLine.points()[1].y()}"w, "${geoLine.toGeoJson()}"w, "${geoEmpty.shape()}"w, "${geoEmpty.length()}"w, "${geo.points()}"w, "${geoEmpty.points()}"w, "${geo.line(geoLine.points()).points().clear()}"w, "${geoLine.points().size()}"w])

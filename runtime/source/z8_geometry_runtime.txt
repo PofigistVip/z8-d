@@ -126,10 +126,10 @@ Z8Geometry z8_geometry_multiLine(Z8Array!Z8Geometry values) { return z8_geometry
 Z8Geometry z8_geometry_ring(Z8Array!Z8Geometry values) { return z8_geometry_compound(values, 0); }
 Z8Geometry z8_geometry_polygon(Z8Array!Z8Geometry values) { return z8_geometry_compound(values, 3); }
 Z8Geometry z8_geometry_collection(Z8Array!Z8Geometry values) { return z8_geometry_compound(values, 7); }
-Z8Geometry z8_geometry_fromArray(Z8Array!Z8Geometry values) {
+Z8Geometry z8_geometry_fromArray(Z8Array!Z8Geometry values, long srs = 3857) {
     z8_nonnull(values);
     auto result = new Z8Geometry();
-    result.shape = 7; result.srs = 3857; result.hasChildren = true;
+    result.shape = 7; result.srs = cast(int)srs; result.hasChildren = true;
     foreach (i; 0 .. values.z8_size()) {
         auto item = z8_nonnull(values.z8_get(i));
         z8_geometry_ensure(item);
