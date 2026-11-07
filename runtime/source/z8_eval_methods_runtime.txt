@@ -59,7 +59,7 @@ private Z8Primary z8_eval_number_method(Z8Primary value, wstring name, Z8EvalVal
     auto number = integral ? z8_decimal_from_int(value.integerValue) : value.decimalValue;
     if (!arguments.length) {
         if (name == "toString"w) return z8_primary_box(z8_string_new(z8_primary_to_string(value)));
-        if (name == "get"w) return value;
+        if (name == "get"w) return integral || !number.nan ? value : null;
         if (integral) {
             auto n = value.integerValue;
             if (name == "getInt"w) return z8_primary_box(cast(long)cast(int)n);
@@ -71,6 +71,7 @@ private Z8Primary z8_eval_number_method(Z8Primary value, wstring name, Z8EvalVal
             if (name == "toHexString"w) return z8_primary_box(z8_string_new(z8_int_toHexString(n)));
             if (name == "toBinaryString"w) return z8_primary_box(z8_string_new(z8_int_toBinaryString(n)));
         } else {
+            if (name == "getDouble"w) return z8_primary_box(z8_math_result(number.z8_as_double()));
             if (name == "isNaN"w) return z8_primary_box(number.nan);
             if (name == "precision"w) return z8_primary_box(number.nan ? 0L : cast(long)z8_precision(number.coefficient));
             if (name == "scale"w) return z8_primary_box(number.nan ? 0L : cast(long)number.scale);
