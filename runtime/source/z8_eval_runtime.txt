@@ -86,9 +86,9 @@ private Z8Optional!bool z8_eval_boolean(Z8Object self, wstring expression) {
     if (value.primary is null || value.primary.kind != Z8PrimaryKind.boolean) throw new Exception("Eval boolean result expected");
     return z8_optional_wrap(value.primary.booleanValue);
 }
-private wstring z8_eval_text(Z8Object self, wstring source) {
+private wstring z8_eval_text_from_state(Z8EvalState state, wstring source, bool requireResolved = false, bool reportSyntax = false) {
+    import std.algorithm.searching : canFind;
     import std.string : indexOf;
-    auto state = z8_eval_state(self);
     if (source is null) return "null"w;
     auto first = source.indexOf("${"w);
     if (first < 0) return z8_string_new(source);
@@ -99,9 +99,15 @@ private wstring z8_eval_text(Z8Object self, wstring source) {
     Z8EvalValue value; bool failed;
     void evaluatePart() {
         failed = false;
-        try { value = z8_eval_expression(state, source[start + 2 .. last]); }
+        try {
+            auto expression = source[start + 2 .. last];
+            if (reportSyntax && expression.canFind('"')) throw new Exception("POI report expression syntax is not implemented");
+            value = z8_eval_expression(state, expression);
+            if (requireResolved && (!value.evaluated || value.context != Z8EvalContext.none || value.json !is null))
+                throw new Exception("POI report expression context is not implemented");
+        }
         catch (Exception error) {
-            if (single) throw error;
+            if (single || requireResolved) throw error;
             state.errors ~= error.msg.to!wstring; failed = true;
         }
     }
@@ -121,6 +127,9 @@ private wstring z8_eval_text(Z8Object self, wstring source) {
         last = start + 2 + cast(size_t)end;
         evaluatePart();
     }
+}
+private wstring z8_eval_text(Z8Object self, wstring source) {
+    return z8_eval_text_from_state(z8_eval_state(self), source);
 }
 void z8_bind_builtin_eval() {
     enum p = z8_eval_name ~ ".m_"w;

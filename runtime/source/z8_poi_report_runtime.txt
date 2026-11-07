@@ -54,11 +54,11 @@ private Z8PoiReportBlock z8_poi_report_block(wstring address) {
     return result;
 }
 
-// A single, non-expanding simple source can be applied without editing cells
-// if the sheet contains no report expressions or reserved text delimiters.
+// Apply a single, non-expanding simple source to the selected report block.
 private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z8PoiWorkbook workbook,
                                               out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits) {
     import std.algorithm.searching : canFind;
+    import std.string : indexOf;
     range = z8_nonnull(range); range.z8_ensure();
     auto rangeState = z8_report_range_state(range);
     if (rangeState.ranges !is null && rangeState.ranges.view().z8_erased_data().z8_size())
@@ -96,11 +96,21 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
     z8_report_register_data_source(report, source);
     foreach (rowNumber, row; workbook.sheets[sheet].rows) foreach (columnNumber, cell; row.cells) {
         if (cell.hasFormula || (cell.kind != "str"w && cell.kind != "inlineStr"w) ||
-            !(cell.value.canFind('$') || cell.value.canFind('{') || cell.value.canFind('}'))) continue;
+            cell.value.indexOf("${"w) < 0) continue;
         if (rowNumber < block.firstRow || rowNumber > block.lastRow ||
-            columnNumber < block.firstColumn || columnNumber > block.lastColumn ||
-            cell.value.length < 3 || cell.value[0 .. 2] != "${"w || cell.value[$ - 1] != '}')
+            columnNumber < block.firstColumn || columnNumber > block.lastColumn)
             throw new Exception("POI report text expressions are not implemented");
+        auto firstEnd = cell.value.indexOf('}');
+        auto single = cell.value.length >= 3 && cell.value[0 .. 2] == "${"w &&
+            firstEnd >= 0 && cast(size_t)firstEnd + 1 == cell.value.length;
+        if (!single) {
+            auto text = z8_eval_text_from_state(new Z8EvalState(), cell.value, true, true);
+            if (cell.kind == "inlineStr"w) continue;
+            Z8PoiCellEdit edit;
+            edit.sheet = cast(uint)sheet; edit.row = cast(uint)rowNumber; edit.column = cast(uint)columnNumber;
+            edit.kind = Z8PoiCellEditKind.text; edit.text = text; edits ~= edit;
+            continue;
+        }
         auto expression = cell.value[2 .. $ - 1];
         // The original report grammar accepts single-quoted strings. The Eval
         // parser also accepts double quotes, which are not equivalent here.

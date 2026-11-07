@@ -54,6 +54,8 @@ public class StaticReportProbe {
     public static file constantRange() { ConstantRangeReport report; return report.run(guid.Null); }
     public static file constantComment() { ConstantCommentRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
+    public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
+    public static file plainSymbolsRange() { PlainSymbolsRangeReport report; return report.run(guid.Null); }
     public static file doubleQuotedRange() { DoubleQuotedRangeReport report; return report.run(guid.Null); }
     public static file implicitRange() { ImplicitRangeReport report; return report.run(guid.Null); }
     public static file invalidImplicitRange() { InvalidImplicitRangeReport report; return report.run(guid.Null); }
@@ -73,6 +75,8 @@ public class StaticReportProbe {
             ("ConstantRangeReport", "constant", "A1:G1", "A1:G1"),
             ("ConstantCommentRangeReport", "constant-comment", "A1:G1", "A1:G1"),
             ("MixedRangeReport", "mixed", "A1", "A1"),
+            ("UnknownMixedRangeReport", "unknown-mixed", "A1", "A1"),
+            ("PlainSymbolsRangeReport", "plain-symbols", "A1", "A1"),
             ("DoubleQuotedRangeReport", "double-quoted", "A1", "A1")):
         (source / (name + ".bl")).write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
@@ -175,7 +179,8 @@ public class %s extends Report {
     with zipfile.ZipFile(application / "reports/expression.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in expression.items():
             archive.writestr(name, content)
-    for name, expression_text in (("mixed", "prefix ${1+2}"), ("double-quoted", '${"text"}')):
+    for name, expression_text in (("mixed", "prefix ${1+2}"), ("unknown-mixed", "prefix ${value}"),
+                                  ("plain-symbols", "cost $5 {literal}"), ("double-quoted", '${"text"}')):
         fixture = dict(entries)
         fixture["xl/worksheets/sheet1.xml"] = original_sheet.replace("Example", expression_text)
         with zipfile.ZipFile(application / ("reports/" + name + ".xlsx"), "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -186,7 +191,7 @@ public class %s extends Report {
         "</Types>", '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/></Types>')
     constants["xl/_rels/workbook.xml.rels"] = constants["xl/_rels/workbook.xml.rels"].replace(
         "</Relationships>", '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>')
-    constants["xl/sharedStrings.xml"] = '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="1" uniqueCount="1"><si><t>${\'literal\'}</t></si></sst>'
+    constants["xl/sharedStrings.xml"] = '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="1" uniqueCount="1"><si><t>Hello ${\'literal\'} / ${1+2} / ${1.25} / ${true}</t></si></sst>'
     constants["xl/worksheets/sheet1.xml"] = original_sheet.replace(
         '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
         '<c r="A1" t="inlineStr"><is><t>${1+2}</t></is></c>'
@@ -283,9 +288,14 @@ void main(string[] args) {
     bool unsafe; try { P.m_constantComment(); } catch (Exception) { unsafe = true; } assert(unsafe);
     auto utf16 = P.m_hidden("utf16-metadata"w); copy(z8_file_resolve_path(utf16), buildPath(args[2], "utf16-metadata.xlsx"));
     assert(database.begins == 30 && database.rollbacks == 30);
-    bool mixed; try { P.m_mixedRange(); } catch (Exception) { mixed = true; } assert(mixed);
+    auto mixed = P.m_mixedRange();
+    assert(read(z8_file_resolve_path(mixed)) == read(buildPath(args[1], "reports", "mixed.xlsx")));
     bool quoted; try { P.m_doubleQuotedRange(); } catch (Exception) { quoted = true; } assert(quoted);
     assert(database.begins == 32 && database.rollbacks == 32);
+    bool unknown; try { P.m_unknownMixedRange(); } catch (Exception) { unknown = true; } assert(unknown);
+    auto plain = P.m_plainSymbolsRange();
+    assert(read(z8_file_resolve_path(plain)) == read(buildPath(args[1], "reports", "plain-symbols.xlsx")));
+    assert(database.begins == 34 && database.rollbacks == 34);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -324,8 +334,8 @@ void main(string[] args) {
         contents = contents.replace(
             'bool constants; try { P.m_constantRange(); } catch (Exception) { constants = true; } assert(constants);',
             'auto constants = P.m_constantRange(); copy(z8_file_resolve_path(constants), buildPath(args[2], "constant.xlsx"));')
-        contents = contents.replace("assert(database.begins == 32 && database.rollbacks == 32);",
-                                    "assert(database.begins == 32 && database.rollbacks == 32); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 1);")
+        contents = contents.replace("assert(database.begins == 34 && database.rollbacks == 34);",
+                                    "assert(database.begins == 34 && database.rollbacks == 34); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 1);")
         harness.write_text(contents, encoding="utf-8")
         args.extend(["-I" + str(bridge), str(bridge / "z8/xlsx/openxlsx.d"), str(bridge / "z8/xlsx/poi.d")])
         if os.name == "nt":
@@ -389,7 +399,8 @@ void main(string[] args) {
             assert cells[2].attrib["t"] == "s"
             shared = ET.fromstring(archive.read("xl/sharedStrings.xml"))
             text_index = int(cells[2].find("x:v", namespace).text)
-            assert shared.findall("x:si", namespace)[text_index].find("x:t", namespace).text == "literal"
+            actual_text = shared.findall("x:si", namespace)[text_index].find("x:t", namespace).text
+            assert "${" not in actual_text and actual_text.startswith("Hello literal / 3 / "), actual_text
             assert float(cells[3].find("x:v", namespace).text) == 2.5
             assert cells[4].find("x:is/x:t", namespace).text == "${'inline'}"
             assert float(cells[5].find("x:v", namespace).text) == -2147483648
