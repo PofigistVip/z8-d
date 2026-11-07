@@ -35,7 +35,7 @@ class Expression {
     bool convertToSqlGeometry, sqlGeometryPriority, sqlGeometryOperator;
     bool sqlPrimaryCast, sqlPrimaryInstanceOf;
     bool dateBinary, fileBinary;
-    bool primaryCast, primaryInstanceOf, objectInstanceOf, scalarInstanceOf, falseInstanceOf, exceptionInstanceOf, exceptionObjectCast, exceptionObjectInstanceOf;
+    bool primaryCast, primaryInstanceOf, objectInstanceOf, scalarInstanceOf, falseInstanceOf, exceptionInstanceOf, exceptionObjectCast, exceptionObjectInstanceOf, nullObjectCast;
     bool typedInitializer;
     size_t parenthesisCount;
     bool firstParenthesisIsConditional;

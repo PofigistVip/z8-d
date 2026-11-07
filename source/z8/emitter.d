@@ -601,6 +601,13 @@ private string emitExprRaw(Expression e) {
                 return "z8_primitive_array_get(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
             return "z8_array_at(" ~ emitExpr(e.left) ~ ", " ~ emitExpr(e.right) ~ ")";
         case ExprKind.castExpr:
+            if (e.nullObjectCast) {
+                if (e.left.kind == ExprKind.nullLiteral) return "cast(" ~ e.objectClass.emittedName ~ ")null";
+                // Repeated overload analysis can revisit a null-valued conditional
+                // without an expected class; restore its cast context for emission.
+                e.left.inferredType = e.castType; e.left.objectClass = e.objectClass;
+                return "cast(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")";
+            }
             if (e.exceptionObjectCast) return "z8_exception_cast_object!(" ~ e.objectClass.emittedName ~ ")(" ~ emitExpr(e.left) ~ ")";
             if (e.primaryCast) return "z8_primary_cast!(" ~ dType(e.castType, e.objectClass) ~ ")(" ~ emitExpr(e.left) ~ ")";
             if (e.sqlPrimaryCast) return "z8_cast!(" ~ dType(e.castType) ~ ")(" ~ emitExpr(e.left) ~ ")";

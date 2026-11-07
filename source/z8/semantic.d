@@ -2123,6 +2123,7 @@ class Checker {
                             e.left.userConversion = conversion;
                         } else if (source != ValueType.nullType && (source != ValueType.enumType || e.left.objectClass !is target))
                             fail("unsupported enum cast", e.token);
+                        if (source == ValueType.nullType) { e.nullObjectCast = true; matches(e.left, ValueType.enumType, target); }
                         e.castType = ValueType.enumType;
                         e.objectClass = target;
                         return ValueType.enumType;
@@ -2136,6 +2137,10 @@ class Checker {
                         e.exceptionObjectCast = true;
                         e.objectClass = target;
                         return ValueType.selfType;
+                    }
+                    if (typeOf(e.left) == ValueType.nullType) {
+                        e.nullObjectCast = true; matches(e.left, ValueType.selfType, target);
+                        e.objectClass = target; return ValueType.selfType;
                     }
                     if (typeOf(e.left) != ValueType.selfType) fail("unsupported object cast", e.token);
                     if (!isAssignable(e.left.objectClass, target)) {

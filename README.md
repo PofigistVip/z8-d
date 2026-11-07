@@ -130,6 +130,7 @@ python tests/binary_operators.py
 python tests/cast_operators.py
 python tests/cast_container.py
 python tests/exception_subclasses.py
+python tests/null_object_casts.py
 python tests/exception_string_conversion.py path/to/original-z8
 python tests/messageformat_value_oracle.py
 python tests/primary_array_views.py
@@ -362,7 +363,8 @@ Java backend оригинала в проверенных случаях ген�
 табличный адаптер может переопределить `z8_add_static_record`. Полная интеграция
 этих записей с таблицами оригинального сервера ещё не перенесена.
 Поддерживаются явные приведения между базовым и производным классами с проверкой
-типа во время выполнения; другие объектные приведения пока не реализованы.
+типа во время выполнения и приведение `(Тип)(null)` к пользовательским классам и
+перечислениям; другие объектные приведения пока не реализованы.
 Для таких классов также поддерживается проверка типа `instanceof`, включая
 несвязанные типы, для которых она возвращает `false`.
 При первом обращении инициализация проходит стадии ссылочных полей и остальных
