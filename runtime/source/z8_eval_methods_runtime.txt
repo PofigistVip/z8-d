@@ -339,6 +339,10 @@ private Z8EvalValue z8_eval_method(Z8EvalValue object, wstring name, Z8EvalValue
     }
     if (object.primary !is null && object.primary.kind == Z8PrimaryKind.file) {
         auto file = object.primary.fileValue;
+        if ((name == "zip"w || name == "unzip"w) && arguments.length == 1 && arguments[0].primary !is null && arguments[0].primary.kind == Z8PrimaryKind.file) {
+            auto target = arguments[0].primary.fileValue;
+            return Z8EvalValue(true, z8_primary_box(name == "zip"w ? z8_file_zip(file, target) : z8_file_unzip(file, target)), null, null);
+        }
         if (arguments.length == 1 && ["write"w, "append"w].canFind(name)) {
             auto content = arguments[0].primary;
             if (content is null) throw new Exception("invalid Eval file content");

@@ -119,6 +119,10 @@ public class EvalOracle {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
         }
+        for (String pattern : new String[]{"${'eval-source.txt'.file().write('archive').exists()}", "${'eval-archive.zip'.file().zip('eval-source.txt'.file()).exists()}", "${'eval-archive.zip'.file().unzip('eval-output'.file()).exists()}", "${'eval-output/eval-source.txt'.file().read()}", "${'eval-output'.file().delete(true)}", "${'eval-source.txt'.file().delete()}", "${'eval-archive.zip'.file().delete()}"}) {
+            try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
+            catch (Exception error) { System.out.println("error"); }
+        }
         for (String pattern : new String[]{"${1.25.abs()}", "${(-7).abs()}", "${(-7).signum()}", "${(5).not()}", "${(5).and(3)}", "${(5).xor(3)}", "${(8).rightShift(2)}", "${(255).toHexString()}", "${(255).toString(16)}", "${(9).sqrt()}", "${(2).sqrt()}", "${(1).sin()}", "${(2).power(3.0)}", "${(1.25).round(1)}", "${(1.25).round(1, 1)}", "${(1.25).round(1, 7)}", "${(1.5).round()}", "${(0.0 - 1.5).round()}", "${(1.25).abs()}", "${(0.1).abs()}", "${(1.25).ceil()}", "${(1.25).floor()}", "${(5).and('x')}", "${(1.25).round(missing)}"}) {
             try { System.out.println(jsonEval.z8_evaluateText(new string(pattern)).get()); }
             catch (Exception error) { System.out.println("error"); }
@@ -270,6 +274,12 @@ void main() {
     foreach (pattern; ["${'eval-file.txt'.file().write('abc').append('д').read()}"w,
                        "${'eval-file.txt'.file().delete()}"w, "${'eval-file.txt'.file().exists()}"w,
                        "${'eval-file.txt'.file().write('Привет'.binary()).read()}"w, "${'eval-file.txt'.file().delete(false)}"w])
+        try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
+    foreach (pattern; ["${'eval-source.txt'.file().write('archive').exists()}"w,
+                       "${'eval-archive.zip'.file().zip('eval-source.txt'.file()).exists()}"w,
+                       "${'eval-archive.zip'.file().unzip('eval-output'.file()).exists()}"w,
+                       "${'eval-output/eval-source.txt'.file().read()}"w, "${'eval-output'.file().delete(true)}"w,
+                       "${'eval-source.txt'.file().delete()}"w, "${'eval-archive.zip'.file().delete()}"w])
         try { writeln(jsonEval.m_evaluateText(pattern).to!string); } catch (Exception) { writeln("error"); }
     foreach (pattern; ["${1.25.abs()}"w, "${(-7).abs()}"w, "${(-7).signum()}"w, "${(5).not()}"w, "${(5).and(3)}"w,
                        "${(5).xor(3)}"w, "${(8).rightShift(2)}"w, "${(255).toHexString()}"w, "${(255).toString(16)}"w,
