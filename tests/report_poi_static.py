@@ -241,13 +241,16 @@ public class StaticReportProbe {
             ("UnknownMixedRangeReport", "unknown-mixed", "A1", "A1"),
             ("PlainSymbolsRangeReport", "plain-symbols", "A1", "A1"),
             ("DoubleQuotedRangeReport", "double-quoted", "A1", "A1")):
-        (source / (name + ".bl")).write_text('''import org.zenframework.z8.base.form.report.Report;
+        text = '''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 public class %s extends Report {
     engine = Report.POI; template = "%s";
     [address "%s"] [boundaries "%s"] Range region;
     ranges = {region};
-}''' % (name, template, address, boundaries), encoding="utf-8")
+}''' % (name, template, address, boundaries)
+        if name == "SimpleRangeReport":
+            text = text.replace('Range region;', '[merge " , "] [subtotalsMerge " , "] [subtotalsBy ""] Range region;')
+        (source / (name + ".bl")).write_text(text, encoding="utf-8")
     (source / "ContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.base.json.JsonObject;
@@ -443,8 +446,8 @@ import org.zenframework.z8.base.form.report.Range;
 public class NestedSimpleReport extends Report {
     engine = Report.POI; template = "nested-simple";
     OrderedRows rows; objects = {rows};
-    [address "A1:B1"] [boundaries "A1:B1"] Range outer;
-    [sheet "99"] [address "B1"] [boundaries "B1"] Range inner;
+    [merge " , "] [address "A1:B1"] [boundaries "A1:B1"] Range outer;
+    [subtotalsBy ""] [subtotalsMerge " , "] [sheet "99"] [address "B1"] [boundaries "B1"] Range inner;
     inner.source = rows; outer.ranges = {inner}; ranges = {outer};
     virtual protected void prepare(guid recordId) { OrderedRows.sequence = 0; }
 }''', encoding="utf-8")
@@ -2130,9 +2133,10 @@ class PoiRangeOracle {
           }
         };
         PoiReport nested = new PoiReport(new ReportOptions()).setContext(context);
-        Range parent = new Range().setSource(SimpleSource.newDefault()).setBlock("A1:B1").setBoundaries("A1:B1");
-        parent.addRange(singleImplicitCase ? new Range().setSource(childSource).setBlock("A1:B1") : partialImplicitCase ?
-            new Range().setSource(childSource).setBlock("B1") : new Range().setSource(childSource).setBlock("B1").setBoundaries("B1"));
+        Range parent = new Range().setSource(SimpleSource.newDefault()).setBlock("A1:B1").setBoundaries("A1:B1").setMerges(" , ");
+        Range inner = singleImplicitCase ? new Range().setSource(childSource).setBlock("A1:B1") : partialImplicitCase ?
+            new Range().setSource(childSource).setBlock("B1") : new Range().setSource(childSource).setBlock("B1").setBoundaries("B1");
+        parent.addRange(inner.setSubtotalsBy("").setSubtotalMerges(" , "));
         nested.addRange(0, parent);
         SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
         nested.getRange(0).apply(modifier); modifier.close();
@@ -2562,6 +2566,7 @@ class PoiRangeOracle {
       Range child = new Range().setSource(customCase || jsonCase || queryCase || expandedCustomCase ? customSource : SimpleSource.newDefault())
           .setBlock(emptySideFooterCase ? "A2:D2" : emptyHorizontalSideFooterCase ? "B1:C2" : emptyVerticalFooterCase ? "A1:D1" : headerFooterCase ? "A2:D2" : horizontalHeaderCase ? "B1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase || mapValueCase ? "A1:D1" : fieldCase ? "A1:H1" : jsonCase || queryCase ? "A1:E1" : contextCase ? "A1:R1" : dates ? "A1:J1" : collectionCase ? "A1:I1" : constants ? "A1:G1" : parameters ? "A1:E1" : "$A$1:A1")
           .setBoundaries(emptySideFooterCase ? "A1:E3" : emptyHorizontalSideFooterCase ? "A1:D3" : multiSideCase ? "A1:E4" : horizontalMultiSideCase ? "A1:G3" : emptyMultiFooterCase ? "A1:D4" : emptyHorizontalMultiFooterCase ? "A1:G2" : emptyVerticalFooterCase ? "A1:D2" : emptyHorizontalFooterCase ? "A1:C2" : headerFooterCase ? "A1:E3" : horizontalHeaderCase ? "A1:D3" : multiFooterCase ? "A1:D4" : horizontalMultiFooterCase ? "A1:G2" : footerCase ? "A1:D2" : horizontalFooterCase ? "A1:C2" : mergedCase ? "A1:B1" : expandedTwoCase ? "A1:B2" : repeatCase || jsonInlineCase ? "A1" : customCase || expandedCase || mapValueCase ? "A1:D1" : fieldCase ? "A1:H1" : jsonCase || queryCase ? "A1:E1" : contextCase ? "A1:R1" : dates ? "A1:J1" : collectionCase ? "A1:I1" : constants ? "A1:G1" : parameters ? "A1:E1" : "A1:B2");
+      if (args.length <= 3) child.setMerges(" , ").setSubtotalMerges(" , ").setSubtotalsBy("");
       if (horizontalCase) child.setAxis(1);
       if (clonedSheetsCase) {
         int prototype = clonedExistingCase ? 1 : 0;

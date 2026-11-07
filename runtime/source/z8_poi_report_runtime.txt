@@ -351,6 +351,19 @@ private void z8_poi_report_evaluate_cell(Z8EvalState state, Z8PoiWorkbook workbo
     edits ~= edit;
 }
 
+private void z8_poi_report_check_range_options(Z8Object range) {
+    foreach (attribute; ["totals"w, "subtotal"w])
+        if (range.z8_get_attribute(attribute) !is null) throw new Exception("POI report range option is not implemented");
+    auto group = range.z8_get_attribute("subtotalsBy"w);
+    if (group !is null && group.length) throw new Exception("POI report range option is not implemented");
+    foreach (attribute; ["subtotalsMerge"w, "merge"w]) {
+        auto value = range.z8_get_attribute(attribute);
+        // Java splits on commas and applies String.trim() to each block.
+        foreach (unit; value) if (unit != ',' && unit > 0x20)
+            throw new Exception("POI report range option is not implemented");
+    }
+}
+
 // Apply a single, non-expanding source to the selected report block.
 private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z8PoiWorkbook workbook,
                                               out int renameSheet, out wstring renameName, out Z8PoiCellEdit[] edits,
@@ -363,8 +376,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
         z8_poi_report_apply_nested_simple(report, range, workbook, renameSheet, renameName, edits, copies, addedMerges, removals, inheritedSheet, ancestors, inferredBounds);
         return;
     }
-    foreach (attribute; ["totals"w, "subtotal"w, "subtotalsBy"w, "subtotalsMerge"w, "merge"w])
-        if (range.z8_get_attribute(attribute) !is null) throw new Exception("POI report range option is not implemented");
+    z8_poi_report_check_range_options(range);
     auto axisText = range.z8_get_attribute("axis"w);
     if (axisText !is null && axisText.to!int != 0 && axisText.to!int != 1) throw new Exception("invalid POI report range axis");
     auto sheetText = range.z8_get_attribute("sheet"w);
@@ -683,8 +695,7 @@ private void z8_poi_report_apply_nested_simple(Z8Object report, Z8Object range, 
         if (child is range) throw new Exception("cyclic POI report ranges");
         foreach (ancestor; ancestors) if (ancestor is child) throw new Exception("cyclic POI report ranges");
     }
-    foreach (attribute; ["totals"w, "subtotal"w, "subtotalsBy"w, "subtotalsMerge"w, "merge"w])
-        if (range.z8_get_attribute(attribute) !is null) throw new Exception("POI report range option is not implemented");
+    z8_poi_report_check_range_options(range);
     auto axis = range.z8_get_attribute("axis"w);
     if (axis !is null && axis.to!int != 0 && axis.to!int != 1) throw new Exception("invalid POI report range axis");
     auto sheetText = range.z8_get_attribute("sheet"w);
