@@ -325,6 +325,26 @@ Z8_EXPORT int z8_xlsx_clone_sheet(void* handle, unsigned sheet, const char* name
         auto existing = sheetName(doc, sheet);
         (void)doc.workbook().worksheet(existing);
         doc.workbook().cloneSheet(existing, name);
+        // POI clears tabSelected on all cloned views and creates a default
+        // view if the source had none. Z8 also materializes workbookViewId.
+        WorksheetXml clone(doc.workbook().worksheet(name));
+        OpenXLSX::XMLNode root = clone.xmlDocument().document_element();
+        auto views = root.child("sheetViews");
+        if (views.empty()) {
+            auto before = root.child("sheetFormatPr");
+            if (before.empty()) before = root.child("cols");
+            if (before.empty()) before = root.child("sheetData");
+            views = before.empty() ? root.append_child("sheetViews") : root.insert_child_before("sheetViews", before);
+            views.append_child("sheetView");
+        }
+        for (auto view = views.child("sheetView"); !view.empty(); view = view.next_sibling("sheetView")) {
+            auto selected = view.attribute("tabSelected");
+            if (selected.empty()) selected = view.append_attribute("tabSelected");
+            selected.set_value(false);
+            auto workbookView = view.attribute("workbookViewId");
+            if (workbookView.empty()) workbookView = view.append_attribute("workbookViewId");
+            workbookView.set_value(workbookView.as_ullong());
+        }
     });
 }
 
