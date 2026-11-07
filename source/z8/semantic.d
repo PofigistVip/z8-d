@@ -2020,6 +2020,7 @@ class Checker {
                         if (receiver == ValueType.enumArray && e.token.text == "join" && !enumJoin)
                             fail("native enum string representation is unavailable or stale", e.token);
                         auto guidSort = receiver == ValueType.guidArray && e.token.text == "sort";
+                        auto dateSort = receiver == ValueType.dateArray && e.token.text == "sort";
                         auto encodingSort = receiver == ValueType.encodingArray && e.token.text == "sort";
                         auto ftsQuerySort = receiver == ValueType.ftsQueryArray && e.token.text == "sort";
                         auto ftsSort = receiver == ValueType.ftsArray && e.token.text == "sort";
@@ -2030,7 +2031,7 @@ class Checker {
                             enumSortOrder(e.left.objectClass, enumOrder);
                         if (receiver == ValueType.enumArray && e.token.text == "sort" && !enumSort)
                             fail("native enum sort order is unavailable or stale", e.token);
-                        if (!primaryJoin && !enumJoin && !guidSort && !encodingSort && !ftsQuerySort && !ftsSort && !objectSort && !enumSort && !["size", "isEmpty", "clear", "first", "last", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
+                        if (!primaryJoin && !enumJoin && !guidSort && !dateSort && !encodingSort && !ftsQuerySort && !ftsSort && !objectSort && !enumSort && !["size", "isEmpty", "clear", "first", "last", "get", "add", "addAll", "removeAt", "set", "contains", "indexOf", "remove", "removeAll", "isSubsetOf", "reverse", "unique"].canFind(e.token.text))
                             fail("this method is not yet supported for object arrays", e.token);
                     }
                     switch (e.token.text) {

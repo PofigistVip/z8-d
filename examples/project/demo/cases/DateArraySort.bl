@@ -1,0 +1,22 @@
+public class DateArraySort {
+    public static int run() {
+        date first = 2000;
+        date equal = 2000;
+        date[] values = {3000, first, 1000, equal};
+        date[] sorted = values.sort();
+        if (sorted[0].ticks() != 1000 || sorted[1].ticks() != 2000 || sorted[3].ticks() != 3000) return 1;
+        first.setDate(2001, 1, 1);
+        if (sorted[1].year() != 2001 || sorted[2].year() == 2001) return 2;
+        sorted.add(4000);
+        if (values.size() != 5) return 3;
+        date[] empty = {};
+        if (!empty.sort().isEmpty()) return 4;
+        date[] single = {};
+        single.add(null);
+        if (single.sort().size() != 1) return 5;
+        date[] invalid = {first};
+        invalid.add(null);
+        try { invalid.sort(); return 6; } catch (exception expected) {}
+        return 0;
+    }
+}
