@@ -29,6 +29,10 @@ struct Z8PoiCellEdit {
 struct Z8PoiCellCopy { uint sheet, sourceRow, sourceColumn, targetRow, targetColumn; bool clearFormulaCache; }
 struct Z8PoiCellRemoval { uint sheet, row, column; }
 struct Z8PoiMergedRegion { uint sheet, firstRow, firstColumn, lastRow, lastColumn; }
+/// Optional creation of an XLSX export; widths use character units or -1 for default.
+interface IZ8XlsxExportWriter {
+    ubyte[] createExport(const(Z8PoiCellEdit)[] cells, const(double)[] widths);
+}
 /// Optional report mutations supported by the registered workbook provider.
 interface IZ8PoiReportWriter {
     ubyte[] renameReportSheet(const(ubyte)[] input, uint index, wstring name);

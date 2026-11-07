@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 import zipfile
+import xml.etree.ElementTree as ET
 from urllib.parse import quote, urlencode
 
 from postgres_support import postgres_bin, temporary_postgres
@@ -299,6 +300,10 @@ import z8.runtime;
 import z8.database.postgres;
 import z8.database.connection;
 import z8.webserver.civetweb;
+version (Z8HttpOpenXlsx) {
+    import z8.xlsx.poi : z8_openxlsx_configure;
+    import z8.xlsx.openxlsx : Workbook, CellType;
+}
 import std.stdio : writeln, stdout, readln;
 import std.string : startsWith;
 import std.conv : to;
@@ -359,6 +364,22 @@ class Authority : IZ8HttpAuthority, IZ8JobUserResolver {
     }
 }
 void main(string[] args) {
+    version (Z8HttpOpenXlsx) {
+        z8_openxlsx_configure();
+        auto provider = z8_poi_set_provider(null);
+        auto exporter = cast(IZ8XlsxExportWriter)provider;
+        assert(exporter !is null);
+        Z8PoiCellEdit[] cells = [
+            Z8PoiCellEdit(0, 0, 0, Z8PoiCellEditKind.text, "=formula _x0041_ 😀"w),
+            Z8PoiCellEdit(0, 1, 0, Z8PoiCellEditKind.number, null, 42.25),
+            Z8PoiCellEdit(0, 1, 1, Z8PoiCellEditKind.boolean, null, 0, true)];
+        auto book = new Workbook(exporter.createExport(cells, [20.0, -1.0]));
+        // OpenXLSX exposes the OOXML escape; Excel/POI decode it as a literal underscore.
+        assert(book.cellString(0, 0, 0) == "=formula _x005F_x0041_ 😀");
+        assert(book.cellNumber(0, 1, 0) == 42.25 && book.cellType(0, 1, 1) == CellType.boolean);
+        book.close();
+        z8_poi_set_provider(provider);
+    }
     z8_native_bind("ContextProbe.m_parentTitle"w, &parentTitle);
     z8_string_set_resource("Preview.unsupportedFileFormat"w, "Cannot view file {0}: format is not supported."w);
     if (auto font = environment.get("Z8_TEST_PDF_FONT")) z8_export_configure_pdf_font(font);
@@ -424,10 +445,22 @@ void main(string[] args) {
             str(root / "webserver/source/z8/webserver/civetweb.d"), str(harness), str(civet), str(runtime),
             "-of=" + str(exe)]
     args += [str(bin_dir.parent / "lib/libpq.lib")] if os.name == "nt" else ["-L-lpq", "-L-lpthread", "-L-ldl"]
+    xlsx_dir = os.environ.get("Z8_OPENXLSX_DIR")
+    if xlsx_dir:
+        xlsx_dir = Path(xlsx_dir).resolve()
+        args += ["-version=Z8HttpOpenXlsx", "-I" + str(root / "xlsx/source"),
+                 str(root / "xlsx/source/z8/xlsx/openxlsx.d"), str(root / "xlsx/source/z8/xlsx/poi.d")]
+        if os.name == "nt":
+            args.append(str(xlsx_dir / "z8_openxlsx.lib"))
+            shutil.copy2(xlsx_dir / "z8_openxlsx.dll", temp)
+        else:
+            args += ["-L-L" + str(xlsx_dir), "-L-lz8_openxlsx"]
     response_file = temp / "dmd.rsp"
     response_file.write_text("\n".join('"' + arg.replace('"', r'\"') + '"' for arg in args[1:]) + "\n", encoding="utf-8")
     subprocess.run(["dmd", "@" + str(response_file)], cwd=temp, check=True)
     with temporary_postgres(bin_dir) as (connection, environment):
+        if xlsx_dir and os.name != "nt":
+            environment["LD_LIBRARY_PATH"] = str(xlsx_dir) + os.pathsep + environment.get("LD_LIBRARY_PATH", "")
         pdfinfo = environment.get("Z8_TEST_PDFINFO") or shutil.which("pdfinfo")
         if pdfinfo:
             environment["Z8_TEST_PDFINFO"] = str(pdfinfo)
@@ -916,7 +949,30 @@ int main(string[] args) {
                              data=json.dumps(nested_copy_data), verifyCopyContext="true")
             assert result["success"] and result["data"][0]["nested.title"] == "Changed", result
             result = request(action="export", link="nestedLink", format="xls", columns='[{"id":"nested.title"}]')
-            assert result["success"] and result["info"]["files"][0]["name"].endswith(".xlsx"), result
+            if xlsx_dir:
+                assert result["success"] and result["info"]["files"][0]["name"].endswith(".xlsx"), result
+                export_path = "/" + quote(result["info"]["files"][0]["path"], safe="/")
+                status, _, exported = download(export_path, "full", None)
+                assert status == 200 and download(export_path, "full2", None)[0] == 404
+                with zipfile.ZipFile(io.BytesIO(exported)) as workbook:
+                    assert workbook.testzip() is None
+                    assert b"Export" in workbook.read("xl/workbook.xml")
+                    assert b"Changed" in workbook.read("xl/sharedStrings.xml")
+                result = request(action="export", format="xlsx", columns='[{"id":"title","width":105},{"id":"amount"}]')
+                assert result["success"], result
+                export_path = "/" + quote(result["info"]["files"][0]["path"], safe="/")
+                status, _, exported = download(export_path, "full", None)
+                assert status == 200
+                with zipfile.ZipFile(io.BytesIO(exported)) as workbook:
+                    ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+                    sheet = ET.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
+                    columns = sheet.findall("x:cols/x:col", ns)
+                    assert any(c.get("min") == "1" and float(c.get("width")) == 20 for c in columns)
+                    numeric = [c for c in sheet.findall(".//x:sheetData/x:row/x:c", ns)
+                               if c.get("r", "").startswith("B") and c.get("r") != "B1" and c.find("x:v", ns) is not None]
+                    assert numeric and all(c.get("t", "n") == "n" for c in numeric)
+            else:
+                assert not result["success"] and "OpenXLSX provider" in result["info"]["messages"][-1]["text"], result
             result = request(action="export", link="nestedLink", format="doc", columns='[{"id":"nested.missing"},{"id":"nested.title"}]')
             assert result["success"] and result["info"]["files"][0]["name"] == "export.docx", result
             result = request(action="export", link="nestedLink", format="xls", columns='[{"id":"nested.missing"}]')

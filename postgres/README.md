@@ -194,9 +194,11 @@ query read-only. Fields reached through a custom Join have read-only text metada
 other unsupported controls are rejected. Actions can execute with `action=action`,
 `name`, `records`, `selection` and a JSON `parameters` array; `query` or `link`
 selects the query passed to the action, and `useTransaction` controls the transaction.
-Custom BL reports can run through `action=report`, while the BIRT and POI engines
-remain unimplemented. `action=content` runs the selected query's binary callback
-inside a transaction.
+Custom BL reports and the supported subset of POI XLSX reports can run through
+`action=report`; BIRT is out of scope. `action=export` generates an XLSX file via
+the registered OpenXLSX provider for XLS or XLSX requests and reports an error
+when the provider is unavailable. `action=content` runs the selected query's
+binary callback inside a transaction.
 An omitted action combines this metadata with the corresponding table read.
 Executable jobs support synchronous `scheduled` requests and asynchronous jobs
 with `job` status polling. Their JSON `parameters` are an object keyed by parameter
