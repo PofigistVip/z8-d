@@ -102,6 +102,9 @@ public class StaticReportProbe {
     public static file expandedSharedFormula() { ExpandedSharedFormulaReport report; return report.run(guid.Null); }
     public static file expandedComplexFormula() { ExpandedComplexFormulaReport report; return report.run(guid.Null); }
     public static file expandedInvalidFormula() { ExpandedInvalidFormulaReport report; return report.run(guid.Null); }
+    public static file expandedParenthesized() { ExpandedParenthesizedReport report; return report.run(guid.Null); }
+    public static file expandedUnknownFunction() { ExpandedUnknownFunctionReport report; return report.run(guid.Null); }
+    public static file expandedFunctions() { ExpandedFunctionsReport report; return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
     public static file unknownMixedRange() { UnknownMixedRangeReport report; return report.run(guid.Null); }
@@ -270,7 +273,8 @@ public class MissingBoundariesReport extends Report {
                            ("ExpandedOtherColumnsReport", "expanded-other-columns"), ("ExpandedRowHeightReport", "expanded-row-height"),
                            ("ExpandedInlineTargetReport", "expanded-inline-target"), ("ExpandedMissingSourceReport", "expanded-missing-source"),
                            ("ExpandedSharedFormulaReport", "expanded-shared-formula"), ("ExpandedComplexFormulaReport", "expanded-complex-formula"),
-                           ("ExpandedInvalidFormulaReport", "expanded-invalid-formula")):
+                           ("ExpandedInvalidFormulaReport", "expanded-invalid-formula"), ("ExpandedParenthesizedReport", "expanded-parenthesized"),
+                           ("ExpandedUnknownFunctionReport", "expanded-unknown-function"), ("ExpandedFunctionsReport", "expanded-functions")):
         (source / (name + ".bl")).write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.base.json.JsonObject;
@@ -540,7 +544,7 @@ public class %s extends Report {
         '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
         '<c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c>'
         '<c r="C1" s="0"><v>99</v></c><c r="D1" t="s"><v>2</v></c>')
-    for filename in ("expanded", "expanded-inline", "expanded-occupied", "expanded-static", "expanded-formula", "expanded-metadata", "expanded-rich", "expanded-inline-number", "expanded-inline-constant", "expanded-other-columns", "expanded-row-height", "expanded-inline-target", "expanded-missing-source", "expanded-shared-formula", "expanded-complex-formula", "expanded-invalid-formula"):
+    for filename in ("expanded", "expanded-inline", "expanded-occupied", "expanded-static", "expanded-formula", "expanded-metadata", "expanded-rich", "expanded-inline-number", "expanded-inline-constant", "expanded-other-columns", "expanded-row-height", "expanded-inline-target", "expanded-missing-source", "expanded-shared-formula", "expanded-complex-formula", "expanded-invalid-formula", "expanded-parenthesized", "expanded-unknown-function", "expanded-functions"):
         book = dict(expanded)
         if filename == "expanded-inline":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace(
@@ -572,6 +576,12 @@ public class %s extends Report {
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0"><v>99</v></c>', '<c r="C1" s="0"><f>SUM(A1:A2)</f><v>2</v></c>')
         if filename == "expanded-invalid-formula":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0"><v>99</v></c>', '<c r="C1" s="0"><f>XFE1+1</f><v>2</v></c>')
+        if filename == "expanded-parenthesized":
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0"><v>99</v></c>', '<c r="C1" s="0"><f>SUM($A$1:A2,(3+4)*2)</f><v>2</v></c>')
+        if filename == "expanded-unknown-function":
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0"><v>99</v></c>', '<c r="C1" s="0"><f>UNKNOWN(A1)</f><v>2</v></c>')
+        if filename == "expanded-functions":
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0"><v>99</v></c>', '<c r="C1" s="0"><f>MAX(MIN(A1,A2),AVERAGE(A1:A2),COUNT(A1:A2),sum(1,2))</f><v>2</v></c>')
         if filename == "expanded-metadata":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C1" s="0">', '<c r="C1" s="0" cm="1">')
         if filename in ("expanded-other-columns", "expanded-row-height"):
@@ -815,7 +825,10 @@ void main(string[] args) {
     bool sharedFormula; try { P.m_expandedSharedFormula(); } catch (Exception) { sharedFormula = true; } assert(sharedFormula);
     bool complexFormula; try { P.m_expandedComplexFormula(); } catch (Exception) { complexFormula = true; } assert(complexFormula);
     bool invalidFormula; try { P.m_expandedInvalidFormula(); } catch (Exception) { invalidFormula = true; } assert(invalidFormula);
-    assert(database.begins == 79 && database.rollbacks == 79);
+    bool parenthesized; try { P.m_expandedParenthesized(); } catch (Exception) { parenthesized = true; } assert(parenthesized);
+    bool unknownFunction; try { P.m_expandedUnknownFunction(); } catch (Exception) { unknownFunction = true; } assert(unknownFunction);
+    bool functions; try { P.m_expandedFunctions(); } catch (Exception) { functions = true; } assert(functions);
+    assert(database.begins == 82 && database.rollbacks == 82);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -928,6 +941,15 @@ void main(string[] args) {
         contents = contents.replace(
             'bool emptyRow; try { P.m_expandedEmptyRow(); } catch (Exception) { emptyRow = true; } assert(emptyRow);',
             'auto emptyRow = P.m_expandedEmptyRow(); copy(z8_file_resolve_path(emptyRow), buildPath(args[2], "expanded-empty-row.xlsx")); assert(counter.expansions == 11);')
+        contents = contents.replace(
+            'bool complexFormula; try { P.m_expandedComplexFormula(); } catch (Exception) { complexFormula = true; } assert(complexFormula);',
+            'auto complexFormula = P.m_expandedComplexFormula(); copy(z8_file_resolve_path(complexFormula), buildPath(args[2], "expanded-complex-formula.xlsx")); assert(counter.expansions == 13);')
+        contents = contents.replace(
+            'bool parenthesized; try { P.m_expandedParenthesized(); } catch (Exception) { parenthesized = true; } assert(parenthesized);',
+            'auto parenthesized = P.m_expandedParenthesized(); copy(z8_file_resolve_path(parenthesized), buildPath(args[2], "expanded-parenthesized.xlsx")); assert(counter.expansions == 14);')
+        contents = contents.replace(
+            'bool functions; try { P.m_expandedFunctions(); } catch (Exception) { functions = true; } assert(functions);',
+            'auto functions = P.m_expandedFunctions(); copy(z8_file_resolve_path(functions), buildPath(args[2], "expanded-functions.xlsx")); assert(counter.expansions == 15);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -1364,7 +1386,7 @@ class PoiRangeOracle {
                                          str(application / "reports/expanded.xlsx"), str(working / "expanded.xlsx"), str(config), "expanded"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
-                for name in ("expanded-static", "expanded-rich", "expanded-inline-number", "expanded-inline-constant", "expanded-other-columns", "expanded-occupied", "expanded-formula"):
+                for name in ("expanded-static", "expanded-rich", "expanded-inline-number", "expanded-inline-constant", "expanded-other-columns", "expanded-occupied", "expanded-formula", "expanded-complex-formula", "expanded-parenthesized", "expanded-functions"):
                     result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                              str(application / ("reports/" + name + ".xlsx")), str(working / (name + ".xlsx")), str(config), "expanded"],
                                             cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")

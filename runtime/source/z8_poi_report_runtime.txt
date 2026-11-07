@@ -70,26 +70,17 @@ private double z8_poi_report_excel_date(Z8Date input, bool date1904) {
     return cast(double)days + cast(double)milliseconds / 86400000.0;
 }
 
-// POI validates a copied formula. Limit this path to simple arithmetic over
-// numeric literals and A1 references until a full Excel parser is available.
-private bool z8_poi_report_simple_formula(wstring text) {
+// POI validates copied formulas. Accept a deliberately bounded Excel subset
+// until a full formula parser is available.
+private struct Z8PoiFormulaChecker {
+    wstring text;
     size_t position;
+    uint depth;
     void whitespace() { while (position < text.length && (text[position] == ' ' || text[position] == '\t')) ++position; }
     bool digit(wchar c) { return c >= '0' && c <= '9'; }
     bool letter(wchar c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); }
-    bool operand() {
-        whitespace();
-        if (position < text.length && (text[position] == '+' || text[position] == '-')) { ++position; whitespace(); }
-        if (position == text.length) return false;
-        if (digit(text[position])) {
-            while (position < text.length && digit(text[position])) ++position;
-            if (position < text.length && text[position] == '.') {
-                auto first = ++position;
-                while (position < text.length && digit(text[position])) ++position;
-                if (position == first) return false;
-            }
-            return true;
-        }
+    bool take(wchar c) { whitespace(); if (position < text.length && text[position] == c) { ++position; return true; } return false; }
+    bool reference() {
         if (text[position] == '$') ++position;
         auto first = position; uint column;
         while (position < text.length && letter(text[position])) {
@@ -106,14 +97,63 @@ private bool z8_poi_report_simple_formula(wstring text) {
         }
         return position != first && row != 0;
     }
-    if (!operand()) return false;
-    for (;;) {
-        whitespace();
-        if (position == text.length) return true;
-        if (text[position] != '+' && text[position] != '-' && text[position] != '*' && text[position] != '/') return false;
-        ++position;
-        if (!operand()) return false;
+    bool expression() {
+        if (++depth > 128) { --depth; return false; }
+        scope(exit) --depth;
+        if (!atom()) return false;
+        for (;;) {
+            whitespace();
+            if (position == text.length || text[position] == ')' || text[position] == ',') return true;
+            if (text[position] != '+' && text[position] != '-' && text[position] != '*' && text[position] != '/' && text[position] != '^') return false;
+            ++position;
+            if (!atom()) return false;
+        }
     }
+    bool atom() {
+        whitespace();
+        if (position < text.length && (text[position] == '+' || text[position] == '-')) { ++position; whitespace(); }
+        if (position == text.length) return false;
+        if (take('(')) return expression() && take(')');
+        if (digit(text[position])) {
+            while (position < text.length && digit(text[position])) ++position;
+            if (position < text.length && text[position] == '.') {
+                auto first = ++position;
+                while (position < text.length && digit(text[position])) ++position;
+                if (position == first) return false;
+            }
+            return true;
+        }
+        auto start = position;
+        if (letter(text[position])) {
+            wstring name;
+            while (position < text.length && letter(text[position])) {
+                auto c = text[position++]; name ~= c >= 'a' ? cast(wchar)(c - 'a' + 'A') : c;
+            }
+            whitespace();
+            if (position < text.length && text[position] == '(') {
+                if (name != "SUM"w && name != "MIN"w && name != "MAX"w && name != "AVERAGE"w && name != "COUNT"w) return false;
+                ++position;
+                uint count;
+                do { if (!expression() || ++count > 30) return false; } while (take(','));
+                return take(')');
+            }
+        }
+        position = start;
+        if (text[position] != '$' && !letter(text[position])) return false;
+        if (!reference()) return false;
+        if (take(':')) {
+            whitespace();
+            if (position == text.length || (text[position] != '$' && !letter(text[position]))) return false;
+            return reference();
+        }
+        return true;
+    }
+}
+private bool z8_poi_report_simple_formula(wstring text) {
+    auto checker = Z8PoiFormulaChecker(text);
+    if (!checker.expression()) return false;
+    checker.whitespace();
+    return checker.position == text.length;
 }
 
 // Collect directly named Field members before opening a query source, as
