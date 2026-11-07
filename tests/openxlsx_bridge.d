@@ -11,9 +11,12 @@ void main(string[] args) {
     assertThrown!Exception(created.setColumnWidth(0, 0, 0));
     assertThrown!Exception(created.setColumnWidth(0, 0, 256));
     created.setText(0, 0, 0, "Привет 😀");
+    created.setText(0, 0, 1, "=formula _x0041_ 😀");
     created.setNumber(0, 1, 0, 42);
     created.setBoolean(0, 1, 1, true);
-    auto createdCopy = new Workbook(created.save());
+    auto createdBytes = created.save();
+    write(args[10], createdBytes);
+    auto createdCopy = new Workbook(createdBytes);
     assert(createdCopy.sheetName(0) == "Export");
     assert(createdCopy.sheetXml(0).canFind("12.5"));
     assert(createdCopy.cellString(0, 0, 0) == "Привет 😀");
