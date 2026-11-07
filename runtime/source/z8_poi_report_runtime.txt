@@ -10,14 +10,16 @@ private struct Z8PoiReportBlock { long firstRow, lastRow, firstColumn, lastColum
 // OpenXLSX may rewrite XML parts on save. Keep the compatible editor for
 // archives whose encoding or ZIP comment it would otherwise change.
 private bool z8_poi_report_openxlsx_safe(ZipArchive archive, size_t sheets, bool allowMultiple = false) {
-    import std.algorithm.searching : endsWith;
+    import std.algorithm.searching : canFind, endsWith;
     import std.string : toLower;
     if ((!allowMultiple && sheets != 1) || archive.comment.length) return false;
     foreach (name, member; archive.directory) {
+        if (name == "xl/calcChain.xml") return false;
         if (!name.toLower().endsWith(".xml")) continue;
         try archive.expand(member);
         catch (Exception) return false;
         auto bytes = member.expandedData;
+        if (name == "[Content_Types].xml" && (cast(string)bytes).canFind("spreadsheetml.calcChain+xml")) return false;
         if (bytes.length >= 2 && ((bytes[0] == 0xFF && bytes[1] == 0xFE) ||
             (bytes[0] == 0xFE && bytes[1] == 0xFF) || bytes[0] == 0 || bytes[1] == 0)) return false;
     }
@@ -439,7 +441,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                 auto original = sourceRow is null ? null : column in (*sourceRow).cells;
                 if (original is null) {
                     if (destination !is null) {
-                        if (!(*destination).safeCopy || (*destination).hasFormula)
+                        if (!(*destination).safeCopy)
                             throw new Exception("empty POI report footer target cell is not implemented");
                         removals ~= Z8PoiCellRemoval(cast(uint)sheet, cast(uint)targetRow, cast(uint)targetColumn);
                     }
@@ -465,7 +467,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
             if (rowNumber < boundaries.firstRow || rowNumber > boundaries.lastRow ||
                 columnNumber < boundaries.firstColumn || columnNumber > boundaries.lastColumn) continue;
             if (horizontal ? columnNumber <= boundaries.lastColumn - offset : rowNumber <= boundaries.lastRow - offset) continue;
-            if (!cell.safeCopy || cell.hasFormula) throw new Exception("empty POI report target cell is not implemented");
+            if (!cell.safeCopy) throw new Exception("empty POI report target cell is not implemented");
             removals ~= Z8PoiCellRemoval(cast(uint)sheet, cast(uint)rowNumber, cast(uint)columnNumber);
         }
         return;
@@ -502,7 +504,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                 if (templateRow is null) {
                     if (existingRow !is null) foreach (column, cell; (*existingRow).cells)
                         if (column >= firstColumn && column <= lastColumn) {
-                            if (!cell.safeCopy || cell.hasFormula) throw new Exception("POI report range expansion target cell is not implemented");
+                            if (!cell.safeCopy) throw new Exception("POI report range expansion target cell is not implemented");
                             removals ~= Z8PoiCellRemoval(cast(uint)sheet, cast(uint)targetRow, cast(uint)column);
                         }
                     continue;
@@ -512,11 +514,11 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                     foreach (column, cell; (*existingRow).cells) {
                         if (column < firstColumn || column > lastColumn) continue;
                         auto sourceColumn = column - (horizontal ? offset : 0);
-                        if (!cell.safeCopy || cell.hasFormula)
+                        if (!cell.safeCopy)
                             throw new Exception("POI report range expansion target cell is not implemented");
                         if ((sourceColumn in (*templateRow).cells) is null)
                             removals ~= Z8PoiCellRemoval(cast(uint)sheet, cast(uint)targetRow, cast(uint)column);
-                        else if (cell.rawKind == "inlineStr"w)
+                        else if (cell.hasFormula || cell.rawKind == "inlineStr"w)
                             throw new Exception("POI report range expansion target cell is not implemented");
                     }
                 }
@@ -587,7 +589,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                 auto original = sourceRow is null ? null : column in (*sourceRow).cells;
                 if (original is null) {
                     if (destination !is null) {
-                        if (!(*destination).safeCopy || (*destination).hasFormula)
+                        if (!(*destination).safeCopy)
                             throw new Exception("POI report footer target cell is not implemented");
                         removals ~= Z8PoiCellRemoval(cast(uint)sheet, cast(uint)targetRow, cast(uint)destinationColumn);
                     }
@@ -637,7 +639,7 @@ private void z8_poi_report_apply_simple_range(Z8Object report, Z8Object range, Z
                 clear = originalRow is null || (sourceColumn in (*originalRow).cells) is null;
             }
             if (clear) {
-                if (!cell.safeCopy || cell.hasFormula) throw new Exception("POI report side band target cell is not implemented");
+                if (!cell.safeCopy) throw new Exception("POI report side band target cell is not implemented");
                 removals ~= Z8PoiCellRemoval(cast(uint)sheet, cast(uint)rowNumber, cast(uint)columnNumber);
             }
         }

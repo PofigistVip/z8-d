@@ -113,6 +113,9 @@ public class StaticReportProbe {
     public static file expandedMergedFormula() { ExpandedMergedFormulaReport report; return report.run(guid.Null); }
     public static file expandedFooter() { ExpandedFooterReport report; return report.run(guid.Null); }
     public static file expandedSparseFooter() { ExpandedSparseFooterReport report; return report.run(guid.Null); }
+    public static file expandedSparseFormula() { ExpandedSparseFormulaReport report; return report.run(guid.Null); }
+    public static file expandedSparseSharedFormula() { ExpandedSparseSharedFormulaReport report; return report.run(guid.Null); }
+    public static file expandedSparseChainFormula() { ExpandedSparseChainFormulaReport report; return report.run(guid.Null); }
     public static file expandedFooterConflict() { ExpandedFooterConflictReport report; return report.run(guid.Null); }
     public static file expandedHorizontalFooter() { ExpandedHorizontalFooterReport report; return report.run(guid.Null); }
     public static file expandedMultiFooter() { ExpandedMultiFooterReport report; return report.run(guid.Null); }
@@ -445,6 +448,8 @@ public class ExpandedTwoRowsReport extends Report {
         .replace("ExpandedMergedReport", "ExpandedMergedFormulaReport").replace('template = "expanded-merged"', 'template = "expanded-merged-formula"'),
         encoding="utf-8")
     for name, template in (("ExpandedFooterReport", "expanded-footer"), ("ExpandedSparseFooterReport", "expanded-sparse-footer"),
+                           ("ExpandedSparseFormulaReport", "expanded-sparse-formula"), ("ExpandedSparseSharedFormulaReport", "expanded-sparse-shared-formula"),
+                           ("ExpandedSparseChainFormulaReport", "expanded-sparse-chain-formula"),
                            ("ExpandedFooterConflictReport", "expanded-footer-conflict"), ("ExpandedSparseBlockReport", "expanded-sparse-block")):
         (source / (name + ".bl")).write_text(
             (source / "ExpandedReport.bl").read_text(encoding="utf-8")
@@ -902,11 +907,16 @@ public class %s extends Report {
     footer["xl/worksheets/sheet1.xml"] = footer["xl/worksheets/sheet1.xml"].replace(
         '</sheetData>', '<row r="2"><c r="A2" t="s"><v>3</v></c><c r="B2" t="s"><v>4</v></c>'
         '<c r="C2"><v>123</v></c><c r="D2"><v>456</v></c></row></sheetData>')
-    for filename in ("expanded-footer", "expanded-sparse-footer", "expanded-footer-conflict", "expanded-sparse-block"):
+    for filename in ("expanded-footer", "expanded-sparse-footer", "expanded-sparse-formula", "expanded-sparse-shared-formula", "expanded-sparse-chain-formula", "expanded-footer-conflict", "expanded-sparse-block"):
         book = dict(footer)
-        if filename == "expanded-sparse-footer":
+        if filename in ("expanded-sparse-footer", "expanded-sparse-formula", "expanded-sparse-shared-formula", "expanded-sparse-chain-formula"):
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="C2"><v>123</v></c>', '')
-            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="4"><c r="C4"><v>55</v></c></row></sheetData>')
+            formula = '<f>1+1</f><v>2</v>' if filename in ("expanded-sparse-formula", "expanded-sparse-chain-formula") else '<f t="shared" si="0" ref="C4:C4">1+1</f><v>2</v>' if filename == "expanded-sparse-shared-formula" else '<v>55</v>'
+            book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('</sheetData>', '<row r="4"><c r="C4">' + formula + '</c></row></sheetData>')
+        if filename == "expanded-sparse-chain-formula":
+            book["[Content_Types].xml"] = book["[Content_Types].xml"].replace('</Types>', '<Override PartName="/xl/calcChain.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml"/></Types>')
+            book["xl/_rels/workbook.xml.rels"] = book["xl/_rels/workbook.xml.rels"].replace('</Relationships>', '<Relationship Id="rId99" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain" Target="calcChain.xml"/></Relationships>')
+            book["xl/calcChain.xml"] = '<calcChain xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><c r="C4" i="1"/></calcChain>'
         if filename == "expanded-sparse-block":
             book["xl/worksheets/sheet1.xml"] = book["xl/worksheets/sheet1.xml"].replace('<c r="B1" t="s"><v>1</v></c>', '')
         if filename == "expanded-footer-conflict":
@@ -1533,7 +1543,7 @@ void main(string[] args) {
         contents = contents.replace('bool mapDerivedRange; try { P.m_mapDerivedRange(); } catch (Exception) { mapDerivedRange = true; } assert(mapDerivedRange);',
             'auto mapDerivedRange = P.m_mapDerivedRange(); copy(z8_file_resolve_path(mapDerivedRange), buildPath(args[2], "map-derived.xlsx"));')
         contents = contents.replace('assert(database.begins == 133 && database.rollbacks == 133);',
-            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 37); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 38); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 39); assert(database.begins == 133 && database.rollbacks == 133);')
+            'auto missingSource = P.m_expandedMissingSource(); copy(z8_file_resolve_path(missingSource), buildPath(args[2], "expanded-missing-source.xlsx")); assert(counter.expansions == 37); auto sparseFooter = P.m_expandedSparseFooter(); copy(z8_file_resolve_path(sparseFooter), buildPath(args[2], "expanded-sparse-footer.xlsx")); assert(counter.expansions == 38); auto sparseBlock = P.m_expandedSparseBlock(); copy(z8_file_resolve_path(sparseBlock), buildPath(args[2], "expanded-sparse-block.xlsx")); assert(counter.expansions == 39); assert(database.begins == 133 && database.rollbacks == 133); auto sparseFormula = P.m_expandedSparseFormula(); copy(z8_file_resolve_path(sparseFormula), buildPath(args[2], "expanded-sparse-formula.xlsx")); bool sparseSharedBlocked; try { P.m_expandedSparseSharedFormula(); } catch (Exception) { sparseSharedBlocked = true; } assert(sparseSharedBlocked); bool chain; try { P.m_expandedSparseChainFormula(); } catch (Exception) { chain = true; } assert(chain);')
         contents = contents.replace("assert(database.begins == 36 && database.rollbacks == 36);",
                                     "assert(database.begins == 36 && database.rollbacks == 36); assert(counter.renames == 2 && counter.hides == 1 && counter.writes == 2);")
         harness.write_text(contents, encoding="utf-8")
@@ -2232,6 +2242,10 @@ class PoiRangeOracle {
                     assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
                                          str(application / "reports/expanded-sparse-footer.xlsx"), str(working / "expanded-sparse-footer.xlsx"), str(config), "expanded-footer"],
+                                        cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                assert result.returncode == 0, result.stderr
+                result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
+                                         str(application / "reports/expanded-sparse-formula.xlsx"), str(working / "expanded-sparse-formula.xlsx"), str(config), "expanded-footer"],
                                         cwd=temp, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 assert result.returncode == 0, result.stderr
                 result = subprocess.run(["java", "-cp", str(temp) + os.pathsep + range_classpath, "PoiRangeOracle",
