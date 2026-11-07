@@ -61,6 +61,7 @@ public class StaticReportProbe {
     public static file date1904Range() { Date1904RangeReport report; return report.run(guid.Null); }
     public static FieldRangeReport createFieldReport() { FieldRangeReport report; return report; }
     public static IntField field(FieldRangeReport report) { return report.amount; }
+    public static IntField groupField(FieldRangeReport report) { return report.group.count; }
     public static file runFieldReport(FieldRangeReport report) { return report.run(guid.Null); }
     public static file mapOperationRange() { MapOperationRangeReport report; return report.run(guid.Null); }
     public static file mixedRange() { MixedRangeReport report; return report.run(guid.Null); }
@@ -124,9 +125,14 @@ import org.zenframework.z8.base.form.report.Range;
 import org.zenframework.z8.base.table.value.IntField;
 public class FieldRangeReport extends Report {
     engine = Report.POI; template = "fields";
-    public IntField amount; objects = {amount};
-    [address "A1:C1"] [boundaries "A1:C1"] Range region;
+    public IntField amount; public FieldGroup group; objects = {amount, group};
+    [address "A1:E1"] [boundaries "A1:E1"] Range region;
     ranges = {region};
+}''', encoding="utf-8")
+    (source / "FieldGroup.bl").write_text('''import org.zenframework.z8.lang.Object;
+import org.zenframework.z8.base.table.value.IntField;
+public class FieldGroup extends Object {
+    public IntField count; objects = {count};
 }''', encoding="utf-8")
     (source / "UnsupportedContextRangeReport.bl").write_text('''import org.zenframework.z8.base.form.report.Report;
 import org.zenframework.z8.base.form.report.Range;
@@ -289,10 +295,10 @@ public class %s extends Report {
             for entry_name, content in book.items():
                 archive.writestr(entry_name, content)
     fields = dict(parameters)
-    fields["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="3" uniqueCount="3"><si><t>${amount}</t></si><si><t>${amount + 1}</t></si><si><t>Value: ${amount}</t></si></sst>'''
+    fields["xl/sharedStrings.xml"] = '''<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="5" uniqueCount="5"><si><t>${amount}</t></si><si><t>${amount + 1}</t></si><si><t>Value: ${amount}</t></si><si><t>${group.count}</t></si><si><t>${group.count + 1}</t></si></sst>'''
     fields["xl/worksheets/sheet1.xml"] = original_sheet.replace(
         '<c r="A1" t="inlineStr"><is><t>Example</t></is></c>',
-        ''.join('<c r="%s1" t="s"><v>%d</v></c>' % (chr(65 + i), i) for i in range(3)))
+        ''.join('<c r="%s1" t="s"><v>%d</v></c>' % (chr(65 + i), i) for i in range(5)))
     with zipfile.ZipFile(application / "reports/fields.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry_name, content in fields.items():
             archive.writestr(entry_name, content)
@@ -416,6 +422,7 @@ void main(string[] args) {
     assert(database.begins == 42 && database.rollbacks == 42);
     auto fieldReport = P.m_createFieldReport();
     auto fieldCursor = new FieldCursor(); z8_field_set_cursor(P.m_field(fieldReport), fieldCursor);
+    z8_field_set_cursor(P.m_groupField(fieldReport), fieldCursor);
     bool fieldResult; try { P.m_runFieldReport(fieldReport); } catch (Exception) { fieldResult = true; } assert(fieldResult);
     fieldCursor.closed = true;
     bool fieldClosed; try { P.m_runFieldReport(fieldReport); } catch (Exception) { fieldClosed = true; } assert(fieldClosed);
@@ -655,26 +662,32 @@ class PoiRangeOracle {
         org.zenframework.z8.server.base.table.value.IntegerField.CLASS<org.zenframework.z8.server.base.table.value.IntegerField> amount =
             new org.zenframework.z8.server.base.table.value.IntegerField.CLASS<>(context);
         amount.setIndex("amount"); context.members().add(amount);
-        amount.get().setCursor(new org.zenframework.z8.server.db.Select() {
+        org.zenframework.z8.server.db.Select cursor = new org.zenframework.z8.server.db.Select() {
           @Override public boolean isClosed() { return false; }
           @Override public org.zenframework.z8.server.types.primary get(org.zenframework.z8.server.base.table.value.Field field) {
             return new org.zenframework.z8.server.types.integer(42);
           }
-        });
+        };
+        amount.get().setCursor(cursor);
+        OBJECT.CLASS<OBJECT> group = new OBJECT.CLASS<>(context);
+        group.setIndex("group"); context.members().add(group);
+        org.zenframework.z8.server.base.table.value.IntegerField.CLASS<org.zenframework.z8.server.base.table.value.IntegerField> count =
+            new org.zenframework.z8.server.base.table.value.IntegerField.CLASS<>(group.get());
+        count.setIndex("count"); group.get().members().add(count); count.get().setCursor(cursor);
       }
       PoiReport report = new PoiReport(new ReportOptions()).setContext(context);
       boolean constants = args.length > 3 && "constants".equals(args[3]);
       boolean parameters = args.length > 3 && "parameters".equals(args[3]);
       boolean dates = args.length > 3 && "dates".equals(args[3]);
       Range child = new Range().setSource(SimpleSource.newDefault())
-          .setBlock(fieldCase ? "A1:C1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
-          .setBoundaries(fieldCase ? "A1:C1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
+          .setBlock(fieldCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "$A$1:A1")
+          .setBoundaries(fieldCase ? "A1:E1" : dates ? "A1:J1" : constants ? "A1:G1" : parameters || contextCase ? "A1:E1" : "A1:B2");
       report.addRange(0, child);
       if (args.length > 3 && "rename".equals(args[3])) original.setSheetName(0, "Отчёт \\uD83D\\uDE00");
       SheetModifier modifier = new SheetModifier().setWorkbook(original).setSheet(0);
       report.getRange(0).apply(modifier); modifier.close();
       if (constants || parameters || contextCase || dates || fieldCase) {
-        for (int i = 0; i < (fieldCase ? 3 : dates ? 10 : constants ? 7 : 5); ++i) {
+        for (int i = 0; i < (dates ? 10 : constants ? 7 : 5); ++i) {
           org.apache.poi.ss.usermodel.Cell expected = original.getSheetAt(0).getRow(0).getCell(i);
           org.apache.poi.ss.usermodel.Cell result = actual.getSheetAt(0).getRow(0).getCell(i);
           if (expected.getCellType() != result.getCellType()) throw new AssertionError("cell type differs at " + i);

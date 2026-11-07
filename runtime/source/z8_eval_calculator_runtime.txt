@@ -21,7 +21,7 @@ private Z8EvalValue z8_eval_atom(Z8EvalState state, wstring source) {
         throw new Exception("unsupported Eval expression");
     // ObjectContext searches report members before the parent context.
     if (state.reportContext !is null) foreach (member; z8_object_members(state.reportContext))
-        if (member.z8_index() == text) return z8_eval_report_member(member, true);
+        if (member.z8_index() == text) return z8_eval_report_member(member);
     auto found = text in state.variables;
     if (found !is null) return Z8EvalValue(true, found.primary, found.json, null, Z8EvalContext.none, found.requestParameters);
     Z8EvalContext context;
@@ -38,12 +38,11 @@ private Z8EvalValue z8_eval_atom(Z8EvalState state, wstring source) {
     state.errors ~= z8_string_format(pattern, new Z8Array!Z8Primary([z8_primary_box(text)]));
     return Z8EvalValue(false, null, null, text.idup);
 }
-private Z8EvalValue z8_eval_report_member(Z8Object member, bool topLevel = false) {
+private Z8EvalValue z8_eval_report_member(Z8Object member) {
     member.z8_ensure();
-    // ObjectContext returns the Field itself; the report getter unwraps it
-    // only while its cursor is open. Nested CLASS wrappers follow a separate
-    // path in the Java calculator, so do not unwrap those here.
-    if (topLevel && z8_native_is_instance(z8_field_name, member)) {
+    // The Java calculator first unwraps CLASS, then the report getter reads
+    // a Field only while its cursor is open, including for nested members.
+    if (z8_native_is_instance(z8_field_name, member)) {
         auto cursor = z8_field_state(member).cursor;
         if (cursor !is null && !cursor.isClosed()) return Z8EvalValue(true, z8_field_current(member), null, null);
     }
