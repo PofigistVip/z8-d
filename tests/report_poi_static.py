@@ -64,6 +64,12 @@ public class StaticReportProbe {
     with zipfile.ZipFile(application / "reports/styled.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in entries.items():
             archive.writestr(name, content)
+    overlapping = dict(entries)
+    overlapping["xl/worksheets/sheet1.xml"] = original_sheet.replace("<sheetData>",
+        '<cols><col min="3" max="6" width="20" customWidth="1" outlineLevel="2"/><col min="1" max="4" width="12" customWidth="1" outlineLevel="1"/></cols><cols><col min="5" max="8" hidden="1"/></cols><sheetData>')
+    with zipfile.ZipFile(application / "reports/overlap.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in overlapping.items():
+            archive.writestr(name, content)
     multiple = dict(entries)
     multiple["xl/workbook.xml"] = multiple["xl/workbook.xml"].replace('</sheets>', '<sheet name="Second" sheetId="2" r:id="rId2"/></sheets>')
     multiple["xl/_rels/workbook.xml.rels"] = multiple["xl/_rels/workbook.xml.rels"].replace('</Relationships>',
@@ -108,10 +114,12 @@ void main(string[] args) {
     copy(z8_file_resolve_path(styled), buildPath(args[2], "styled.xlsx"));
     auto secondSheet = P.m_secondSheet();
     copy(z8_file_resolve_path(secondSheet), buildPath(args[2], "multiple.xlsx"));
-    assert(database.begins == 6 && database.rollbacks == 6);
+    auto overlap = P.m_hidden("overlap"w);
+    copy(z8_file_resolve_path(overlap), buildPath(args[2], "overlap.xlsx"));
+    assert(database.begins == 7 && database.rollbacks == 7);
     bool badSheet; try { P.m_invalidSheet(); } catch (Exception) { badSheet = true; } assert(badSheet);
     bool badColumn; try { P.m_invalidColumn(); } catch (Exception) { badColumn = true; } assert(badColumn);
-    assert(database.begins == 8 && database.rollbacks == 8);
+    assert(database.begins == 9 && database.rollbacks == 9);
 }
 ''', encoding="utf-8")
     executable = temp / ("report.exe" if os.name == "nt" else "report")
@@ -161,7 +169,8 @@ class PoiHiddenOracle {
       for (int column : new int[]{1, 3, 6}) expected.setColumnHidden(column, true);
       for (int column = 0; column < 10; column++)
         if (expected.isColumnHidden(column) != result.isColumnHidden(column) ||
-            expected.getColumnWidth(column) != result.getColumnWidth(column))
+            expected.getColumnWidth(column) != result.getColumnWidth(column) ||
+            expected.getColumnOutlineLevel(column) != result.getColumnOutlineLevel(column))
           throw new AssertionError("Column " + column + " differs");
       if (!"Example".equals(result.getRow(0).getCell(0).getStringCellValue()))
         throw new AssertionError("Cell was changed");
@@ -171,7 +180,8 @@ class PoiHiddenOracle {
         classpath = os.pathsep.join(map(str, jars))
         subprocess.run(["javac", "-source", "8", "-target", "8", "-cp", classpath, str(oracle)], cwd=temp, check=True)
         for source_path, result_path in ((workbook, working / "hidden.xlsx"),
-                                         (application / "reports/styled.xlsx", working / "styled.xlsx")):
+                                         (application / "reports/styled.xlsx", working / "styled.xlsx"),
+                                         (application / "reports/overlap.xlsx", working / "overlap.xlsx")):
             subprocess.run(["java", "-cp", str(temp) + os.pathsep + classpath, "PoiHiddenOracle",
                             str(source_path), str(result_path)], cwd=temp, check=True)
 print("POI static report template, naming and transaction verified")
