@@ -71,7 +71,7 @@ public class StaticReportProbe {
             archive.writestr(name, content)
     overlapping = dict(entries)
     overlapping["xl/worksheets/sheet1.xml"] = original_sheet.replace("<sheetData>",
-        '<cols><col min="3" max="6" width="20" customWidth="1" outlineLevel="2"/><col min="1" max="4" width="12" customWidth="1" outlineLevel="1"/></cols><cols xmlns:c="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><c:col min="5" max="8" hidden="1"/></cols><sheetData>')
+        '<cols><col min="3" max="6" width="20" customWidth="1" outlineLevel="2" collapsed="0"/><col min="1" max="4" width="12" customWidth="1" outlineLevel="1"/></cols><cols xmlns:c="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><c:col min="5" max="8" hidden="1"/></cols><sheetData>')
     with zipfile.ZipFile(application / "reports/overlap.xlsx", "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in overlapping.items():
             archive.writestr(name, content)
@@ -168,13 +168,14 @@ void main(string[] args) {
     assert columns(working / "hidden.xlsx") == [
         {"min": "2", "max": "2", "hidden": "1"}, {"min": "4", "max": "4", "hidden": "1"},
         {"min": "7", "max": "7", "hidden": "1"}]
-    assert columns(working / "styled.xlsx") == [
-        {"min": "1", "max": "1", "width": "12", "customWidth": "1"},
+    styled_columns = columns(working / "styled.xlsx")
+    assert styled_columns == [
+        {"min": "1", "max": "1", "width": "12", "customWidth": "1", "collapsed": "1"},
         {"min": "2", "max": "2", "width": "12", "customWidth": "1", "hidden": "1"},
-        {"min": "3", "max": "3", "width": "12", "customWidth": "1"},
-        {"min": "4", "max": "4", "width": "12", "customWidth": "1", "hidden": "1"},
+        {"min": "3", "max": "3", "width": "12", "customWidth": "1", "collapsed": "1"},
+        {"min": "4", "max": "4", "width": "12", "customWidth": "1", "hidden": "1", "collapsed": "1"},
         {"min": "7", "max": "7", "hidden": "1"},
-        {"min": "8", "max": "8", "hidden": "1", "width": "9"}]
+        {"min": "8", "max": "8", "hidden": "1", "width": "9"}], styled_columns
     with zipfile.ZipFile(working / "multiple.xlsx") as archive:
         second = archive.read("xl/worksheets/sheet2.xml")
         assert second.startswith(b"\xff\xfe")
@@ -191,6 +192,8 @@ void main(string[] args) {
         oracle.write_text('''import java.io.FileInputStream;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.openxmlformats.schemas.spreadsheetml.x2006.main.CTCol;
 import java.util.HashSet;
 class PoiHiddenOracle {
   public static void main(String[] args) throws Exception {
@@ -201,12 +204,18 @@ class PoiHiddenOracle {
       for (int column : args.length > 2 ? new int[]{16, 1, 17, 3} : new int[]{1, 3, 6}) hidden.add(column);
       for (int column : hidden) expected.setColumnHidden(column, true);
       for (int column = 0; column < 24; column++)
+      {
+        CTCol e = ((XSSFSheet)expected).getColumnHelper().getColumn(column, false);
+        CTCol r = ((XSSFSheet)result).getColumnHelper().getColumn(column, false);
         if (expected.isColumnHidden(column) != result.isColumnHidden(column) ||
             expected.getColumnWidth(column) != result.getColumnWidth(column) ||
-            expected.getColumnOutlineLevel(column) != result.getColumnOutlineLevel(column))
+            expected.getColumnOutlineLevel(column) != result.getColumnOutlineLevel(column) ||
+            (e != null && e.getCollapsed()) != (r != null && r.getCollapsed()))
           throw new AssertionError(args[0] + " column " + column + " expected=" + expected.isColumnHidden(column) +
               "/" + expected.getColumnWidth(column) + "/" + expected.getColumnOutlineLevel(column) + " actual=" +
-              result.isColumnHidden(column) + "/" + result.getColumnWidth(column) + "/" + result.getColumnOutlineLevel(column));
+              result.isColumnHidden(column) + "/" + result.getColumnWidth(column) + "/" + result.getColumnOutlineLevel(column) +
+              " collapsed=" + (e != null && e.getCollapsed()) + "/" + (r != null && r.getCollapsed()));
+      }
       if (!"Example".equals(result.getRow(0).getCell(0).getStringCellValue()))
         throw new AssertionError("Cell was changed");
     }
