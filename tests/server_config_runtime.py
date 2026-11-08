@@ -37,6 +37,7 @@ void main() {
         "true"w:"TrUe"w, "false"w:"yes"w, "min"w:"-2147483648"w,
         "overflow"w:"2147483648"w, "space"w:" 9"w, "signed"w:"+17"w, "unicode"w:"١٢"w]);
     assert(P.m_get("plain"w) == "value"w && P.m_get("missing"w) is null);
+    assert(z8_server_config_value("resource"w) == "$greeting$"w && z8_server_config_value("missing"w) is null);
     assert(P.m_getDefault("missing"w) is null && P.m_get("empty"w) !is null);
     assert(P.m_get("resource"w) == "hello"w);
     assert(z8_optional_require(P.m_getBool("true"w, false)));

@@ -11,7 +11,8 @@ void z8_server_config_replace(wstring[wstring] properties) {
     foreach (key, value; properties) copy[duplicate(key)] = duplicate(value);
     synchronized (z8_server_config_lock) z8_server_config_values = copy;
 }
-private wstring z8_server_config_value(wstring key) {
+// Hosts may read unmodified properties, including credentials, without resource substitution.
+wstring z8_server_config_value(wstring key) {
     key = z8_string_required(key);
     synchronized (z8_server_config_lock) {
         auto value = key in z8_server_config_values;
